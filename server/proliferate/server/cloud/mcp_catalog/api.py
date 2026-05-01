@@ -16,6 +16,6 @@ async def get_cloud_mcp_catalog_endpoint(
     _user: User = Depends(current_active_user),
 ) -> ConnectorCatalogResponse:
     try:
-        return await get_cloud_mcp_catalog()
+        return get_cloud_mcp_catalog()
     except CloudApiError as error:
         raise_cloud_error(error)

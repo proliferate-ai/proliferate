@@ -18,6 +18,7 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { cloudBillingKey } from "@/hooks/cloud/query-keys";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
+import { useIsHotPaintGatePendingForWorkspace } from "./use-hot-paint-gate";
 
 export interface SelectedCloudRuntimeState {
   workspaceId: string | null;
@@ -30,6 +31,7 @@ export interface SelectedCloudRuntimeState {
 export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const queryClient = useQueryClient();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const { data: workspaceCollections } = useWorkspaces();
 
@@ -72,7 +74,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const isWarm = selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
   const connectionQuery = useCloudWorkspaceConnection(
     selectedCloudWorkspace?.id ?? null,
-    persistedStatus === "ready",
+    persistedStatus === "ready" && !hotPaintPending,
   );
 
   const connectionState = useMemo(() => {

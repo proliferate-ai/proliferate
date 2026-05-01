@@ -16,6 +16,7 @@ import {
 } from "@/lib/domain/workspaces/cloud-workspace-settings";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
 const EMPTY_ENV_VAR_KEYS: string[] = [];
 const EMPTY_TRACKED_FILES: CloudRepoFileMetadata[] = [];
@@ -54,6 +55,7 @@ export type CloudWorkspaceSettingsPanelState =
 export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPanelState {
   const navigate = useNavigate();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces();
 
@@ -76,6 +78,7 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
       !!selectedWorkspaceId
       && !!cloudWorkspaceId
       && cloudWorkspace?.status === "ready"
+      && !hotPaintPending
       && setupScript.length > 0,
     refetchWhileRunning: true,
   });

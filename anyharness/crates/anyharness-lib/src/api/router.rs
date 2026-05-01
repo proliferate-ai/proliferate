@@ -12,7 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, replay, repo_roots, sessions, subagents, terminals, workspaces,
+    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
+    workspace_naming, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -54,6 +55,18 @@ pub fn build_router(state: AppState) -> Router {
         .route("/workspaces/resolve", post(workspaces::resolve_workspace))
         .route("/workspaces/worktrees", post(workspaces::create_worktree))
         .route("/workspaces/{workspace_id}", get(workspaces::get_workspace))
+        .route(
+            "/workspaces/{workspace_id}/retire/preflight",
+            get(workspaces::retire_workspace_preflight),
+        )
+        .route(
+            "/workspaces/{workspace_id}/retire",
+            post(workspaces::retire_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/retire/cleanup-retry",
+            post(workspaces::retry_retire_cleanup),
+        )
         .route(
             "/repo-roots",
             get(repo_roots::list_repo_roots).post(repo_roots::resolve_repo_root),
@@ -101,6 +114,15 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp",
             get(subagents::get_subagents_mcp_endpoint).post(subagents::post_subagents_mcp_endpoint),
+        )
+        .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp",
+            get(reviews::get_reviews_mcp_endpoint).post(reviews::post_reviews_mcp_endpoint),
+        )
+        .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/workspace-naming/mcp",
+            get(workspace_naming::get_workspace_naming_mcp_endpoint)
+                .post(workspace_naming::post_workspace_naming_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/display-name",
@@ -155,6 +177,14 @@ pub fn build_router(state: AppState) -> Router {
             post(plans::handoff_plan),
         )
         .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/review",
+            post(reviews::start_plan_review),
+        )
+        .route(
+            "/workspaces/{workspace_id}/reviews/code",
+            post(reviews::start_code_review),
+        )
+        .route(
             "/workspaces/{workspace_id}/mobility/preflight",
             post(mobility::preflight_workspace_mobility),
         )
@@ -207,6 +237,10 @@ pub fn build_router(state: AppState) -> Router {
             get(git::get_git_diff),
         )
         .route(
+            "/workspaces/{workspace_id}/git/diff/branch-files",
+            get(git::list_git_branch_diff_files),
+        )
+        .route(
             "/workspaces/{workspace_id}/git/branches",
             get(git::list_git_branches),
         )
@@ -244,8 +278,20 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/terminals/{terminal_id}", get(terminals::get_terminal))
         .route(
+            "/terminals/{terminal_id}/title",
+            patch(terminals::update_terminal_title),
+        )
+        .route(
             "/terminals/{terminal_id}/resize",
             post(terminals::resize_terminal),
+        )
+        .route(
+            "/terminals/{terminal_id}/commands",
+            post(terminals::start_terminal_command),
+        )
+        .route(
+            "/terminal-command-runs/{command_run_id}",
+            get(terminals::get_terminal_command_run),
         )
         .route(
             "/terminals/{terminal_id}",
@@ -278,6 +324,27 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/subagents",
             get(subagents::get_session_subagents),
+        )
+        .route(
+            "/sessions/{session_id}/reviews",
+            get(reviews::get_session_reviews),
+        )
+        .route(
+            "/reviews/{review_run_id}/assignments/{assignment_id}/critique",
+            get(reviews::get_review_assignment_critique),
+        )
+        .route(
+            "/reviews/{review_run_id}/assignments/{assignment_id}/retry",
+            post(reviews::retry_review_assignment),
+        )
+        .route("/reviews/{review_run_id}/stop", post(reviews::stop_review))
+        .route(
+            "/reviews/{review_run_id}/send-feedback",
+            post(reviews::send_review_feedback),
+        )
+        .route(
+            "/reviews/{review_run_id}/revision-ready",
+            post(reviews::mark_review_revision_ready),
         )
         .route(
             "/sessions/{session_id}/title",

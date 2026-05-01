@@ -57,6 +57,7 @@ def _default_repo_config_response() -> CloudRepoConfigResponse:
         default_branch=None,
         env_vars={},
         setup_script="",
+        run_command="",
         files_version=0,
         tracked_files=[],
     )
@@ -166,6 +167,7 @@ async def save_repo_config(
             default_branch=default_branch,
             env_vars=env_vars,
             setup_script=body.setup_script,
+            run_command=body.run_command,
             files=files,
         )
     except CloudRepoConfigLimitExceededError as error:
@@ -335,7 +337,7 @@ async def run_workspace_setup(
 
     target = await get_workspace_connection(workspace)
     try:
-        command = await run_workspace_saved_setup(
+        started = await run_workspace_saved_setup(
             workspace,
             runtime=_runtime_access_from_target(target),
         )
@@ -355,4 +357,10 @@ async def run_workspace_setup(
     workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
     if workspace is None:
         raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return run_cloud_workspace_setup_payload(workspace, command=command)
+    return run_cloud_workspace_setup_payload(
+        workspace,
+        command=started.command,
+        terminal_id=started.terminal_id,
+        command_run_id=started.command_run_id,
+        status=started.status,
+    )

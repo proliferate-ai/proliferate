@@ -14,6 +14,7 @@ from tests.e2e.cloud.helpers import (
     delete_cloud_workspace_quietly,
     get_cloud_connection,
     load_active_sandbox_record,
+    load_runtime_environment_record,
     load_workspace_record,
     provider_pause_native,
     provider_state,
@@ -22,6 +23,7 @@ from tests.e2e.cloud.helpers import (
     status_for_provider,
     sync_cloud_credential,
     wait_for_cloud_workspace_status,
+    workspace_status,
 )
 
 
@@ -64,19 +66,23 @@ async def test_workspace_reconnect_after_stop_start(
 
     try:
         # Stop the workspace through the control plane and confirm reconnect
-        # metadata stays persisted on the workspace row.
+        # metadata stays persisted on the runtime environment row.
         stop_response = await cloud_client.post(
             f"/v1/cloud/workspaces/{workspace['id']}/stop",
             headers=auth.headers,
         )
         stop_response.raise_for_status()
-        assert stop_response.json()["status"] == "stopped"
+        assert workspace_status(stop_response.json()) == "archived"
 
         workspace_record = await load_workspace_record(db_session, str(workspace["id"]))
-        assert workspace_record.runtime_url
-        assert workspace_record.runtime_token_ciphertext
-        assert workspace_record.anyharness_workspace_id
-        assert workspace_record.active_sandbox_id is not None
+        assert workspace_record.runtime_environment_id is not None
+        runtime_environment = await load_runtime_environment_record(
+            db_session,
+            str(workspace["id"]),
+        )
+        assert runtime_environment.runtime_url
+        assert runtime_environment.runtime_token_ciphertext
+        assert runtime_environment.root_anyharness_workspace_id
 
         # Start the same workspace again and wait until the control plane says
         # the runtime is usable.
@@ -85,7 +91,7 @@ async def test_workspace_reconnect_after_stop_start(
             headers=auth.headers,
         )
         start_response.raise_for_status()
-        if start_response.json()["status"] != "ready":
+        if workspace_status(start_response.json()) != "ready":
             await wait_for_cloud_workspace_status(
                 cloud_client,
                 auth,
@@ -162,7 +168,7 @@ async def test_workspace_recovers_after_native_pause(
             headers=auth.headers,
         )
         start_response.raise_for_status()
-        if start_response.json()["status"] != "ready":
+        if workspace_status(start_response.json()) != "ready":
             await wait_for_cloud_workspace_status(
                 cloud_client,
                 auth,
@@ -250,13 +256,14 @@ async def test_workspace_delete_cleans_up(
             f"/v1/cloud/workspaces/{workspace['id']}",
             headers=auth.headers,
         )
-        assert detail_response.status_code == 404
+        assert detail_response.status_code == 200
+        assert workspace_status(detail_response.json()) == "archived"
 
         connection_response = await cloud_client.get(
             f"/v1/cloud/workspaces/{workspace['id']}/connection",
             headers=auth.headers,
         )
-        assert connection_response.status_code == 404
+        assert connection_response.status_code == 409
 
         terminal_states = {
             "destroyed",

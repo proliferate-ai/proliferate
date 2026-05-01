@@ -92,6 +92,7 @@ describe("runWorkspaceSelection", () => {
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace,
+      reconcileHotWorkspace: vi.fn(),
     }, {
       workspaceId: "workspace-1",
       options: { latencyFlowId: flowId },
@@ -135,6 +136,7 @@ describe("runWorkspaceSelection", () => {
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace: vi.fn(),
+      reconcileHotWorkspace: vi.fn(),
     }, {
       workspaceId: "logical:placeholder",
     })).rejects.toThrow("Workspace is not materialized yet.");
@@ -172,6 +174,7 @@ describe("runWorkspaceSelection", () => {
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace,
+      reconcileHotWorkspace: vi.fn(),
     }, {
       workspaceId: "workspace-1",
       options: { latencyFlowId: flowId },

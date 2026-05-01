@@ -175,6 +175,9 @@ Important install cases:
 - registry-backed installs fall back to local npm/native-subcommand/binary-hint
   rules when needed
 - managed npm installs create a managed launcher surface under runtime home
+- installer mutations are serialized by runtime-home file locks under
+  `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
+  write the same agent at the same time
 
 ### ACP Registry Flow
 
@@ -208,6 +211,81 @@ returning:
 
 This is the “make the runtime ready” bulk path, not the per-agent resolution
 path.
+
+### Bundled Agent Seed Flow
+
+Packaged desktop builds can ship a compressed agent seed so first launch does
+not need to download the most common managed agents before the user can start.
+The seed is a `.tar.zst` resource built by `scripts/build-agent-seed.mjs` from
+`desktop/src-tauri/agent-seed.inputs.json` and hydrated by
+`anyharness/crates/anyharness-lib/src/agents/seed/` at runtime startup.
+The HTTP runtime starts immediately with `agentSeed.status=hydrating`; the heavy
+archive extraction and checksum verification run on a blocking background task
+so `/health` can respond while seed hydration is still in progress.
+
+V1 seeds include:
+
+- `claude`
+- `codex`
+- the target-specific Node runtime under `node/<target>/`
+
+The seed hydrates into the normal runtime home layout. It does not add a
+parallel resolver path:
+
+```text
+<runtime_home>/
+  agents/
+    claude/
+      native/
+      agent_process/
+    codex/
+      native/
+      agent_process/
+  node/
+    <target>/
+```
+
+The seed archive intentionally does not carry generated launchers. After
+hydration, the runtime regenerates launchers in the real runtime home so their
+absolute executable paths and PATH prefixes point at the final location. The
+generated launchers include the managed native CLI directory and the bundled
+Node `bin` directory when present. Managed Claude launchers set
+`DISABLE_AUTOUPDATER=1` so desktop releases, not Claude's own updater, own the
+managed seeded version.
+
+Hydration is ownership-aware:
+
+- missing artifacts are written from the seed and recorded as seed-owned
+- existing artifacts with no seed state are preserved and recorded as
+  user-owned existing files
+- previously seed-owned artifacts are repaired when missing or unchanged from
+  the last seeded checksum
+- seed-owned artifacts that were modified by an install/reinstall path are
+  treated as user-modified and are not overwritten by a later seed
+
+Public health reports low-cardinality seed state only:
+
+- `status`: `not_configured_dev`, `missing_bundled_seed`, `hydrating`,
+  `ready`, `partial`, or `failed`
+- `ownership`: `full_seed`, `partial_seed`, `user_owned_existing`, or
+  `not_configured`
+- `lastAction`: `none`, `hydrated`, or `repaired`
+- artifact counts, target, seeded agent names, and a coarse `failureKind`
+
+Desktop auto-reconcile waits while the seed is `hydrating`, then uses the
+existing reconcile path for non-seeded or still-missing agents after the seed
+reaches `ready`, `partial`, `failed`, or `not_configured_dev`.
+
+Seed hydration verifies the archive `.sha256`, validates the manifest target and
+schema, rejects unsafe tar entries, extracts into a staging directory under the
+same runtime home, preserves executable bits, and strips
+`com.apple.quarantine` from hydrated macOS executables on a best-effort basis.
+External seed dirs are dev-only unless a packaged build sets
+`ANYHARNESS_AGENT_SEED_DIR_UNSAFE=1`.
+
+Claude's compatibility gate also checks the bundled Node binary before falling
+back to global `PATH`, so a machine without system Node can still resolve a
+seeded Claude install.
 
 ## Boundaries
 

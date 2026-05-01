@@ -82,6 +82,10 @@ export function useAddRepo() {
   return {
     addRepoFromPath,
     addRepoFromPicker,
+    canAddRepo,
+    addRepoDisabledReason: canAddRepo
+      ? null
+      : "Add repository is unavailable right now.",
     isAddingRepo,
   };
 }

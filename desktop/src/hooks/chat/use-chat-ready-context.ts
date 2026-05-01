@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import { getProviderDisplayName } from "@/config/providers";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { resolveModelDisplayName } from "@/lib/domain/chat/model-display";
+import {
+  resolveMatchingModelControlLabel,
+  resolveModelDisplayName,
+} from "@/lib/domain/chat/model-display";
 import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
 
 export interface ChatReadyContext {
@@ -33,11 +36,10 @@ export function useChatReadyContext(): ChatReadyContext {
     if (!state.activeSessionId) return null;
     const slot = state.sessionSlots[state.activeSessionId];
     const control = slot?.liveConfig?.normalizedControls.model;
-    if (!control) return null;
-    return (
-      control.values.find((value) => value.value === control.currentValue)?.label
-      ?? null
-    );
+    return resolveMatchingModelControlLabel({
+      modelId: slot?.modelId,
+      control,
+    });
   });
   const { data: workspaceCollections } = useWorkspaces();
 

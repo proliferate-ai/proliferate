@@ -287,6 +287,14 @@ pub(crate) enum PromptProvenance {
         label: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
+    ReviewFeedback {
+        review_run_id: String,
+        review_round_id: String,
+        feedback_job_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
     System {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
@@ -323,6 +331,17 @@ impl PromptProvenance {
                 relation: relation.clone(),
                 session_link_id: session_link_id.clone(),
                 completion_id: completion_id.clone(),
+                label: label.clone(),
+            }),
+            PromptProvenance::ReviewFeedback {
+                review_run_id,
+                review_round_id,
+                feedback_job_id,
+                label,
+            } => Some(PublicPromptProvenance::ReviewFeedback {
+                review_run_id: review_run_id.clone(),
+                review_round_id: review_round_id.clone(),
+                feedback_job_id: feedback_job_id.clone(),
                 label: label.clone(),
             }),
             PromptProvenance::Automation { label, .. } => {

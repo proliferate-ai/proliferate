@@ -13,7 +13,7 @@ use super::service::WorkspaceService;
 use super::store::WorkspaceStore;
 use super::types::{
     CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
-    SetWorkspaceDisplayNameError, SetupScriptExecutionResult, SetupScriptExecutionStatus,
+    SetWorkspaceDisplayNameError,
 };
 use crate::git::service::GitService;
 use crate::origin::OriginContext;
@@ -133,7 +133,7 @@ impl WorkspaceRuntime {
         target_path: &str,
         new_branch_name: &str,
         base_branch: Option<&str>,
-        setup_script: Option<&str>,
+        _setup_script: Option<&str>,
         surface: &str,
         origin: OriginContext,
         creator_context: Option<WorkspaceCreatorContext>,
@@ -173,8 +173,18 @@ impl WorkspaceRuntime {
         }
 
         let existing_lookup_started = Instant::now();
-        if self.store.find_by_path(&canonical_path)?.is_some() {
+        if self.store.find_active_by_path(&canonical_path)?.is_some() {
             anyhow::bail!("a workspace record already exists for path: {canonical_path}");
+        }
+        if let Some(retired) = self
+            .store
+            .find_retired_incomplete_cleanup_by_path_and_kind(&canonical_path, "worktree")?
+        {
+            anyhow::bail!(
+                "workspace path still has pending cleanup from retired workspace {}: {}",
+                retired.id,
+                canonical_path
+            );
         }
         tracing::info!(
             repo_root_id = %repo_root_id,
@@ -216,13 +226,7 @@ impl WorkspaceRuntime {
             "[workspace-latency] workspace.worktree.runtime_create.record_inserted"
         );
 
-        let setup_script = setup_script
-            .map(str::trim)
-            .filter(|script| !script.is_empty())
-            .map(|script| {
-                self.run_setup_script(&record, Some(base_branch.unwrap_or("HEAD")), script)
-            })
-            .transpose()?;
+        let setup_script = None;
 
         tracing::info!(
             workspace_id = %record.id,
@@ -282,7 +286,7 @@ impl WorkspaceRuntime {
             validate_mobility_destination_id(destination_id)?;
             let candidate = base_dir.join(destination_id);
             let candidate_string = candidate.to_string_lossy().to_string();
-            if let Some(existing) = self.store.find_by_path(&candidate_string)? {
+            if let Some(existing) = self.store.find_active_by_path(&candidate_string)? {
                 if existing.current_branch.as_deref() == Some(requested_branch) {
                     return Ok(existing);
                 }
@@ -318,7 +322,7 @@ impl WorkspaceRuntime {
                     !candidate.exists()
                         && self
                             .store
-                            .find_by_path(&candidate_string)
+                            .find_active_by_path(&candidate_string)
                             .ok()
                             .flatten()
                             .is_none()
@@ -420,6 +424,73 @@ impl WorkspaceRuntime {
             .into_iter()
             .map(reconcile_current_branch)
             .collect()
+    }
+
+    pub fn set_lifecycle_cleanup_state(
+        &self,
+        workspace_id: &str,
+        lifecycle_state: &str,
+        cleanup_state: &str,
+        cleanup_error_message: Option<&str>,
+        cleanup_failed_at: Option<&str>,
+        cleanup_attempted_at: Option<&str>,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.store.update_lifecycle_cleanup_state(
+            workspace_id,
+            lifecycle_state,
+            cleanup_state,
+            cleanup_error_message,
+            cleanup_failed_at,
+            cleanup_attempted_at,
+            &now,
+        )?;
+        self.get_workspace(workspace_id)
+    }
+
+    pub fn find_active_workspace_by_path_and_kind(
+        &self,
+        path: &str,
+        kind: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.store.find_active_by_path_and_kind(path, kind)
+    }
+
+    pub fn find_active_workspace_by_path_excluding_id(
+        &self,
+        path: &str,
+        excluded_id: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.store
+            .find_active_by_path_excluding_id(path, excluded_id)
+    }
+
+    pub fn retire_worktree_materialization(
+        &self,
+        workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<()> {
+        if workspace.kind != "worktree" {
+            anyhow::bail!("unsupported workspace kind for retire: {}", workspace.kind);
+        }
+        let worktree = Path::new(&workspace.path);
+        if !worktree.exists() {
+            return Ok(());
+        }
+        let output = Command::new("git")
+            .args([
+                "-C",
+                &workspace.source_repo_root_path,
+                "worktree",
+                "remove",
+                "--force",
+                &workspace.path,
+            ])
+            .output()?;
+        if !output.status.success() && worktree.exists() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            anyhow::bail!("failed to remove worktree materialization: {stderr}");
+        }
+        Ok(())
     }
 
     pub fn workspace_env(
@@ -608,16 +679,28 @@ impl WorkspaceRuntime {
 
         let workspace_kind = if ctx.is_worktree { "worktree" } else { "local" };
         let workspace_path = ctx.repo_root.clone();
-        if allow_existing {
-            if let Some(existing) = self
-                .store
-                .find_by_path_and_kind(&workspace_path, workspace_kind)?
-            {
+        if let Some(existing) = self
+            .store
+            .find_active_by_path_and_kind(&workspace_path, workspace_kind)?
+        {
+            if allow_existing {
                 return Ok(WorkspaceResolution {
                     repo_root,
                     workspace: reconcile_current_branch(existing)?,
                 });
             }
+
+            anyhow::bail!("a workspace record already exists for path: {workspace_path}");
+        }
+        if let Some(retired) = self
+            .store
+            .find_retired_incomplete_cleanup_by_path_and_kind(&workspace_path, workspace_kind)?
+        {
+            anyhow::bail!(
+                "workspace path still has pending cleanup from retired workspace {}: {}",
+                retired.id,
+                workspace_path
+            );
         }
 
         let record = build_workspace_record(
@@ -681,45 +764,6 @@ impl WorkspaceRuntime {
 
         Ok(repo_root)
     }
-
-    fn run_setup_script(
-        &self,
-        workspace: &WorkspaceRecord,
-        base_ref: Option<&str>,
-        script: &str,
-    ) -> anyhow::Result<SetupScriptExecutionResult> {
-        const MAX_OUTPUT_BYTES: usize = 64 * 1024;
-
-        let started = Instant::now();
-        let mut command = setup_shell_command(script);
-        command.current_dir(&workspace.path);
-        for (key, value) in self.build_workspace_env(workspace, base_ref)? {
-            command.env(key, value);
-        }
-
-        match command.output() {
-            Ok(output) => Ok(SetupScriptExecutionResult {
-                command: script.to_string(),
-                status: if output.status.success() {
-                    SetupScriptExecutionStatus::Succeeded
-                } else {
-                    SetupScriptExecutionStatus::Failed
-                },
-                exit_code: output.status.code().unwrap_or(-1),
-                stdout: truncate_output(&String::from_utf8_lossy(&output.stdout), MAX_OUTPUT_BYTES),
-                stderr: truncate_output(&String::from_utf8_lossy(&output.stderr), MAX_OUTPUT_BYTES),
-                duration_ms: started.elapsed().as_millis() as u64,
-            }),
-            Err(error) => Ok(SetupScriptExecutionResult {
-                command: script.to_string(),
-                status: SetupScriptExecutionStatus::Failed,
-                exit_code: -1,
-                stdout: String::new(),
-                stderr: format!("failed to run setup script: {error}"),
-                duration_ms: started.elapsed().as_millis() as u64,
-            }),
-        }
-    }
 }
 
 fn build_workspace_record(
@@ -750,6 +794,9 @@ fn build_workspace_record(
         creator_context,
         lifecycle_state: "active".to_string(),
         cleanup_state: "none".to_string(),
+        cleanup_error_message: None,
+        cleanup_failed_at: None,
+        cleanup_attempted_at: None,
         created_at: now.clone(),
         updated_at: now,
     }
@@ -898,36 +945,6 @@ fn git_ref_exists(repo_root: &Path, ref_name: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn truncate_output(output: &str, max_bytes: usize) -> String {
-    if output.len() <= max_bytes {
-        return output.to_string();
-    }
-
-    let mut end = max_bytes;
-    while end > 0 && !output.is_char_boundary(end) {
-        end -= 1;
-    }
-
-    let mut truncated = output[..end].to_string();
-    truncated.push_str("\n[output truncated]");
-    truncated
-}
-
-#[cfg(windows)]
-fn setup_shell_command(script: &str) -> Command {
-    let mut command = Command::new("cmd");
-    command.args(["/C", script]);
-    command
-}
-
-#[cfg(not(windows))]
-fn setup_shell_command(script: &str) -> Command {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    let mut command = Command::new(shell);
-    command.args(["-lc", script]);
-    command
-}
-
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -1060,6 +1077,68 @@ mod tests {
 
         assert_eq!(local_head.trim(), remote_head.trim());
         assert_eq!(upstream.trim(), "origin/feature/mobility-pushed");
+    }
+
+    #[test]
+    fn create_workspace_rejects_existing_active_path() {
+        let source = TempDirGuard::new("runtime-create-existing-source");
+        let runtime_home = TempDirGuard::new("runtime-create-existing-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let path = source.path().display().to_string();
+
+        let first = runtime.create_workspace(&path).expect("create workspace");
+        let error = match runtime.create_workspace(&path) {
+            Ok(_) => panic!("second create should reject existing path"),
+            Err(error) => error,
+        };
+
+        assert!(error
+            .to_string()
+            .contains("a workspace record already exists for path"));
+        let resolved = runtime.resolve_from_path(&path).expect("resolve existing");
+        assert_eq!(resolved.workspace.id, first.workspace.id);
+    }
+
+    #[test]
+    fn create_workspace_rejects_existing_active_worktree_path() {
+        let remote = TempDirGuard::new("runtime-create-existing-worktree-remote");
+        let source = TempDirGuard::new("runtime-create-existing-worktree-source");
+        let target = TempDirGuard::new("runtime-create-existing-worktree-target");
+        let runtime_home = TempDirGuard::new("runtime-create-existing-worktree-home");
+        let _ = fs::remove_dir_all(target.path());
+
+        run_git(remote.path(), ["init", "--bare", "-b", "main"]);
+        init_repo(source.path());
+        let remote_path = remote.path().display().to_string();
+        run_git(source.path(), ["remote", "add", "origin", &remote_path]);
+        run_git(source.path(), ["push", "-u", "origin", "main"]);
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create source workspace");
+        let worktree = runtime
+            .create_worktree(
+                &source_workspace.repo_root.id,
+                &target.path().display().to_string(),
+                "feature/existing-worktree",
+                Some("main"),
+                None,
+            )
+            .expect("create worktree");
+
+        let error = match runtime.create_workspace(&worktree.workspace.path) {
+            Ok(_) => panic!("create should reject existing worktree path"),
+            Err(error) => error,
+        };
+
+        assert!(error
+            .to_string()
+            .contains("a workspace record already exists for path"));
     }
 
     fn init_repo(path: &Path) {

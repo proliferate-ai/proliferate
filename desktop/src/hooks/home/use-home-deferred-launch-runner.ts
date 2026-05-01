@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {
   resolveChatLaunchRetryMode,
@@ -111,9 +112,13 @@ export function useHomeDeferredLaunchRunner() {
         // Clear even if the hook re-ran mid-flight; the prompt was sent, so a remount must not retry it.
         clear(readyLaunch.id);
         useChatLaunchIntentStore.getState().clearIfActive(readyLaunch.launchIntentId);
-      } catch {
+      } catch (error) {
         if (cancelled) {
           markPending(readyLaunch.id);
+          return;
+        }
+        if (isSessionModelAvailabilityInterruption(error)) {
+          clear(readyLaunch.id);
           return;
         }
 

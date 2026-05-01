@@ -19,7 +19,7 @@ use super::mcp::{
     SessionMcpBindingsError, SessionMcpServer, SessionMcpSummaryError,
     SESSION_RESTART_REQUIRED_DETAIL,
 };
-use super::model::SessionRecord;
+use super::model::{SessionMcpBindingPolicy, SessionRecord};
 use super::replay::{
     derive_source_agent_kind, export_recording, list_recordings, load_recording, validate_speed,
     ReplayError,
@@ -110,8 +110,14 @@ pub enum SendPromptError {
 
 #[derive(Debug)]
 pub enum SendPromptOutcome {
-    Running { session: SessionRecord },
-    Queued { session: SessionRecord, seq: i64 },
+    Running {
+        session: SessionRecord,
+        turn_id: String,
+    },
+    Queued {
+        session: SessionRecord,
+        seq: i64,
+    },
 }
 
 #[derive(Debug)]
@@ -383,6 +389,7 @@ impl SessionRuntime {
             system_prompt_append,
             mcp_servers,
             mcp_binding_summaries,
+            SessionMcpBindingPolicy::InheritWorkspace,
             subagents_enabled,
             origin,
         )?;
@@ -431,7 +438,7 @@ impl SessionRuntime {
             .ok_or_else(|| ReplayError::SessionNotFound(session_id.to_string()))?;
         let records = self
             .session_service
-            .list_session_event_records(session_id, None)
+            .list_session_event_records(session_id, None, None, None, None)
             .map_err(ReplayError::Internal)?
             .ok_or_else(|| ReplayError::SessionNotFound(session_id.to_string()))?;
 
@@ -492,6 +499,7 @@ impl SessionRuntime {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
+            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             origin: Some(OriginContext::system_local_runtime()),
@@ -542,6 +550,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        mcp_binding_policy: SessionMcpBindingPolicy,
         subagents_enabled: bool,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
@@ -559,6 +568,7 @@ impl SessionRuntime {
                 mode_id,
                 mcp_bindings_ciphertext,
                 mcp_binding_summaries_json,
+                mcp_binding_policy,
                 system_prompt_append,
                 subagents_enabled,
                 origin,
@@ -915,7 +925,9 @@ impl SessionRuntime {
             .unwrap_or(record);
 
         Ok(match acceptance {
-            PromptAcceptance::Started => SendPromptOutcome::Running { session },
+            PromptAcceptance::Started { turn_id } => {
+                SendPromptOutcome::Running { session, turn_id }
+            }
             PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
         })
     }
@@ -974,7 +986,9 @@ impl SessionRuntime {
             .map_err(SendPromptError::Internal)?
             .unwrap_or(record);
         Ok(match acceptance {
-            PromptAcceptance::Started => SendPromptOutcome::Running { session },
+            PromptAcceptance::Started { turn_id } => {
+                SendPromptOutcome::Running { session, turn_id }
+            }
             PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
         })
     }
@@ -1524,22 +1538,29 @@ impl SessionRuntime {
 
         let mut record = record.clone();
         if let Some(refresh) = mcp_refresh {
-            let mcp_bindings_ciphertext =
-                encrypt_bindings(self.session_data_cipher.as_ref(), &refresh.mcp_servers)
-                    .map_err(map_encrypt_bindings_error_to_start)?;
-            let mcp_binding_summaries_json =
-                serialize_binding_summaries(refresh.mcp_binding_summaries)
-                    .map_err(map_mcp_summary_error_to_start)?;
-            self.session_service
-                .store()
-                .update_mcp_bindings(
-                    &record.id,
-                    mcp_bindings_ciphertext.clone(),
-                    mcp_binding_summaries_json.clone(),
-                )
-                .map_err(StartSessionError::Internal)?;
-            record.mcp_bindings_ciphertext = mcp_bindings_ciphertext;
-            record.mcp_binding_summaries_json = mcp_binding_summaries_json;
+            if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
+                tracing::debug!(
+                    session_id = %record.id,
+                    "ignoring MCP refresh for internal-only MCP binding policy"
+                );
+            } else {
+                let mcp_bindings_ciphertext =
+                    encrypt_bindings(self.session_data_cipher.as_ref(), &refresh.mcp_servers)
+                        .map_err(map_encrypt_bindings_error_to_start)?;
+                let mcp_binding_summaries_json =
+                    serialize_binding_summaries(refresh.mcp_binding_summaries)
+                        .map_err(map_mcp_summary_error_to_start)?;
+                self.session_service
+                    .store()
+                    .update_mcp_bindings(
+                        &record.id,
+                        mcp_bindings_ciphertext.clone(),
+                        mcp_binding_summaries_json.clone(),
+                    )
+                    .map_err(StartSessionError::Internal)?;
+                record.mcp_bindings_ciphertext = mcp_bindings_ciphertext;
+                record.mcp_binding_summaries_json = mcp_binding_summaries_json;
+            }
         }
 
         let session_store = self.session_service.store().clone();
@@ -1668,14 +1689,21 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
-        let mut mcp_servers = decrypt_bindings(
-            self.session_data_cipher.as_ref(),
-            record.mcp_bindings_ciphertext.as_deref(),
-        )
-        .map_err(map_decrypt_bindings_error_to_start)?;
+        let mut mcp_servers = if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly
+        {
+            Vec::new()
+        } else {
+            decrypt_bindings(
+                self.session_data_cipher.as_ref(),
+                record.mcp_bindings_ciphertext.as_deref(),
+            )
+            .map_err(map_decrypt_bindings_error_to_start)?
+        };
         let launch_extras = self
             .resolve_extension_launch_extras(&workspace, record)
             .map_err(StartSessionError::Internal)?;
+        let first_prompt_system_prompt_append =
+            join_system_prompt_append(Some(launch_extras.first_prompt_system_prompt_append));
         let system_prompt_append =
             merge_system_prompt_append(system_prompt_append, launch_extras.system_prompt_append);
         self.persist_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries)
@@ -1694,6 +1722,7 @@ impl SessionRuntime {
                 mcp_servers,
                 startup_strategy,
                 system_prompt_append,
+                first_prompt_system_prompt_append,
                 Some(Arc::new({
                     let extensions = self.session_extensions.clone();
                     let workspace = workspace.clone();
@@ -1706,6 +1735,7 @@ impl SessionRuntime {
                                 outcome: result.outcome,
                                 stop_reason: result.stop_reason.clone(),
                                 last_event_seq: result.last_event_seq,
+                                error_details: result.error_details.clone(),
                             });
                         }
                     }
@@ -1757,6 +1787,9 @@ impl SessionRuntime {
             combined
                 .system_prompt_append
                 .append(&mut extras.system_prompt_append);
+            combined
+                .first_prompt_system_prompt_append
+                .append(&mut extras.first_prompt_system_prompt_append);
             combined.mcp_servers.append(&mut extras.mcp_servers);
             combined
                 .mcp_binding_summaries
@@ -2073,6 +2106,7 @@ mod tests {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
+            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             origin: None,

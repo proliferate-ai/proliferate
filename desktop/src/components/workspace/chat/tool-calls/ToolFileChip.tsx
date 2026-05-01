@@ -1,7 +1,10 @@
 import { useCallback } from "react";
+import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Copy, ExternalLink } from "@/components/ui/icons";
+import { useFilePathNativeContextMenu } from "@/hooks/editor/use-file-path-native-context-menu";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 
@@ -40,9 +43,14 @@ export function ToolFileChip({
   const handleCopy = useCallback(() => {
     void copyPath(absolute ?? workspacePath ?? pathLabel);
   }, [absolute, workspacePath, pathLabel, copyPath]);
+  const { onContextMenuCapture } = useFilePathNativeContextMenu({
+    canOpen: !!absolute,
+    onOpen: handleOpen,
+    onCopy: handleCopy,
+  });
 
   const chipClass =
-    "inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-sm leading-none text-foreground/90 transition-colors";
+    "inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 transition-colors";
 
   const content = (
     <>
@@ -65,17 +73,21 @@ export function ToolFileChip({
   }
 
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
+      data-chat-transcript-ignore
       title={pathLabel}
+      onContextMenuCapture={onContextMenuCapture}
       onClick={(event) => {
         event.stopPropagation();
         handleOpen();
       }}
-      className={`${chipClass} cursor-pointer hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border`}
+      className={`${chipClass} h-auto justify-start hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border`}
     >
       {content}
-    </button>
+    </Button>
   );
 
   return (
@@ -87,29 +99,25 @@ export function ToolFileChip({
     >
       {(close) => (
         <div className="flex flex-col gap-px">
-          <button
-            type="button"
+          <PopoverMenuItem
+            data-chat-transcript-ignore
+            icon={<ExternalLink className="size-3.5 shrink-0" />}
+            label="Open file"
             disabled={!absolute}
             onClick={() => {
               handleOpen();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground/80"
-          >
-            <ExternalLink className="size-3.5 shrink-0" />
-            <span>Open file</span>
-          </button>
-          <button
-            type="button"
+          />
+          <PopoverMenuItem
+            data-chat-transcript-ignore
+            icon={<Copy className="size-3.5 shrink-0" />}
+            label="Copy path"
             onClick={() => {
               handleCopy();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground"
-          >
-            <Copy className="size-3.5 shrink-0" />
-            <span>Copy path</span>
-          </button>
+          />
         </div>
       )}
     </PopoverButton>

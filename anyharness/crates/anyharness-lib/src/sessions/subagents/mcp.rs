@@ -272,6 +272,7 @@ async fn create_subagent(
             None,
             Vec::new(),
             None,
+            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             OriginContext::system_local_runtime(),
         )

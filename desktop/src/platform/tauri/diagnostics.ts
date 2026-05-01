@@ -13,6 +13,13 @@ export interface RendererDiagnosticPayload {
   route?: string | null;
 }
 
+export interface RendererEventPayload {
+  source: string;
+  message: string;
+  route?: string | null;
+  elapsedMs?: number | null;
+}
+
 export async function logRendererDiagnostic(
   payload: RendererDiagnosticPayload,
 ): Promise<void> {
@@ -21,6 +28,14 @@ export async function logRendererDiagnostic(
   }
 
   await invoke("log_renderer_diagnostic", { input: payload });
+}
+
+export async function logRendererEvent(payload: RendererEventPayload): Promise<void> {
+  if (!isTauriDesktop()) {
+    return;
+  }
+
+  await invoke("log_renderer_event", { input: payload });
 }
 
 export async function exportDebugBundle(): Promise<string | null> {

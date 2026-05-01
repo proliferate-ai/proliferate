@@ -4,6 +4,36 @@ use utoipa::ToSchema;
 pub type WorkspaceId = String;
 pub type SessionId = String;
 
+/// Runtime-owned lifecycle status for a model catalog row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelCatalogStatus {
+    Candidate,
+    Active,
+    Deprecated,
+    Hidden,
+}
+
+/// Product-owned remediation hint shown when a live harness cannot apply a
+/// selected catalog model at launch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelLaunchRemediationKind {
+    ManagedReinstall,
+    ExternalUpdate,
+    Restart,
+}
+
+/// Catalog metadata for the app-owned action shown after live-apply mismatch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelLaunchRemediation {
+    /// App-owned action class for remediation.
+    pub kind: ModelLaunchRemediationKind,
+    /// Short detail text from the catalog. Button labels remain app-owned.
+    pub message: String,
+}
+
 /// A known model in the AnyHarness catalog for a given provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -12,8 +42,22 @@ pub struct ModelEntry {
     pub id: String,
     /// Human-readable name (e.g. "Claude Opus 4.6")
     pub display_name: String,
+    /// Optional descriptive copy surfaced in launch/settings UIs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Whether this is the default model for the provider
     pub is_default: bool,
+    /// Runtime-owned lifecycle status for this model
+    pub status: ModelCatalogStatus,
+    /// Legacy or provider-native selectors that resolve to this model ID
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
+    /// Minimum AnyHarness runtime version required for this model, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_runtime_version: Option<String>,
+    /// Optional app-owned remediation hint for launch-time live-apply mismatch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launch_remediation: Option<ModelLaunchRemediation>,
 }
 
 /// A model row in the backend-owned registry for a given harness.
@@ -29,6 +73,17 @@ pub struct ModelRegistryModel {
     pub description: Option<String>,
     /// Whether this is the default model for the registry
     pub is_default: bool,
+    /// Runtime-owned lifecycle status for this model
+    pub status: ModelCatalogStatus,
+    /// Legacy or provider-native selectors that resolve to this model ID
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
+    /// Minimum AnyHarness runtime version required for this model, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_runtime_version: Option<String>,
+    /// Optional app-owned remediation hint for launch-time live-apply mismatch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub launch_remediation: Option<ModelLaunchRemediation>,
 }
 
 /// Backend-owned model registry for a harness.
@@ -68,7 +123,12 @@ mod tests {
         let model = ModelEntry {
             id: "default".to_string(),
             display_name: "Default".to_string(),
+            description: None,
             is_default: true,
+            status: ModelCatalogStatus::Active,
+            aliases: vec![],
+            min_runtime_version: None,
+            launch_remediation: None,
         };
 
         let json = serde_json::to_value(&model).expect("serialize model entry");
@@ -78,7 +138,8 @@ mod tests {
             serde_json::json!({
                 "id": "default",
                 "displayName": "Default",
-                "isDefault": true
+                "isDefault": true,
+                "status": "active"
             })
         );
     }
@@ -114,6 +175,13 @@ mod tests {
                 display_name: "Sonnet".to_string(),
                 description: Some("Sonnet 4.6".to_string()),
                 is_default: true,
+                status: ModelCatalogStatus::Active,
+                aliases: vec!["claude-sonnet-4-6".to_string()],
+                min_runtime_version: None,
+                launch_remediation: Some(ModelLaunchRemediation {
+                    kind: ModelLaunchRemediationKind::ManagedReinstall,
+                    message: "Update Claude tools and retry.".to_string(),
+                }),
             }],
         };
 
@@ -129,7 +197,13 @@ mod tests {
                     "id": "sonnet",
                     "displayName": "Sonnet",
                     "description": "Sonnet 4.6",
-                    "isDefault": true
+                    "isDefault": true,
+                    "status": "active",
+                    "aliases": ["claude-sonnet-4-6"],
+                    "launchRemediation": {
+                        "kind": "managed_reinstall",
+                        "message": "Update Claude tools and retry."
+                    }
                 }]
             })
         );

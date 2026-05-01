@@ -7,6 +7,7 @@ import {
   workspaceFileTreeStateKey,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
+  workspaceCollectionsNeedActivityRefresh,
 } from "./collections";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -73,11 +74,11 @@ function makeCloudWorkspace(overrides: Partial<CloudWorkspaceSummary> = {}): Clo
     actionBlockKind: overrides.actionBlockKind ?? null,
     createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
-    postReadyPhase: "idle",
-    postReadyFilesTotal: 0,
-    postReadyFilesApplied: 0,
-    postReadyStartedAt: null,
-    postReadyCompletedAt: null,
+    postReadyPhase: overrides.postReadyPhase ?? "idle",
+    postReadyFilesTotal: overrides.postReadyFilesTotal ?? 0,
+    postReadyFilesApplied: overrides.postReadyFilesApplied ?? 0,
+    postReadyStartedAt: overrides.postReadyStartedAt ?? null,
+    postReadyCompletedAt: overrides.postReadyCompletedAt ?? null,
   };
 }
 
@@ -189,6 +190,127 @@ describe("upsertCloudWorkspaceCollections", () => {
     expect(
       upsertCloudWorkspaceCollections(undefined, makeCloudWorkspace()),
     ).toBeUndefined();
+  });
+});
+
+describe("buildWorkspaceCollections", () => {
+  it("splits active, retired, all, and cleanup-attention local workspaces", () => {
+    const active = makeWorkspace({ id: "workspace-active" });
+    const retiredComplete = makeWorkspace({
+      id: "workspace-retired-complete",
+      lifecycleState: "retired",
+      cleanupState: "complete",
+      updatedAt: "2026-04-06T11:00:00.000Z",
+    });
+    const retiredFailed = makeWorkspace({
+      id: "workspace-retired-failed",
+      lifecycleState: "retired",
+      cleanupState: "failed",
+      updatedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    const collections = buildWorkspaceCollections([
+      active,
+      retiredComplete,
+      retiredFailed,
+    ]);
+
+    expect(collections.localWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-active",
+    ]);
+    expect(collections.workspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-active",
+    ]);
+    expect(collections.retiredLocalWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-retired-failed",
+      "workspace-retired-complete",
+    ]);
+    expect(collections.allWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-retired-failed",
+      "workspace-retired-complete",
+      "workspace-active",
+    ]);
+    expect(collections.cleanupAttentionWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-retired-failed",
+    ]);
+  });
+
+  it("does not request activity refresh for retired rows", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        lifecycleState: "retired",
+        cleanupState: "failed",
+        executionSummary: {
+          phase: "running",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 1,
+          awaitingInteractionCount: 0,
+          idleCount: 0,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
+  });
+});
+
+describe("workspaceCollectionsNeedActivityRefresh", () => {
+  it("requests refresh while a local workspace execution summary is active", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        executionSummary: {
+          phase: "running",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 1,
+          awaitingInteractionCount: 0,
+          idleCount: 0,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(true);
+  });
+
+  it("stops refreshing once all local workspace summaries are idle", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        executionSummary: {
+          phase: "idle",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 0,
+          awaitingInteractionCount: 0,
+          idleCount: 1,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
+  });
+
+  it("requests refresh while cloud post-ready setup is still running", () => {
+    const collections = buildWorkspaceCollections(
+      [],
+      [],
+      [makeCloudWorkspace({ status: "ready", postReadyPhase: "starting_setup" })],
+    );
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(true);
+  });
+
+  it("stops refreshing after cloud post-ready work completes", () => {
+    const collections = buildWorkspaceCollections(
+      [],
+      [],
+      [makeCloudWorkspace({ status: "ready", postReadyPhase: "completed" })],
+    );
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
   });
 });
 

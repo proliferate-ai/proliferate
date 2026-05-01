@@ -8,11 +8,20 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
+import {
+  rightPanelTerminalHeaderKey,
+  type RightPanelTool,
+} from "@/lib/domain/workspaces/right-panel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
 } from "./use-main-screen-state";
+import {
+  CLOSED_PUBLISH_DIALOG_STATE,
+  openPublishDialogState,
+  reviewDiffsFromPublishState,
+} from "./publish-dialog-state";
+import type { PublishIntent } from "@/lib/domain/workspaces/publish-workflow";
 
 interface UseMainScreenActionsArgs {
   layout: MainScreenLayoutState;
@@ -24,86 +33,108 @@ export function useMainScreenActions({
   existingPr,
 }: UseMainScreenActionsArgs) {
   const queryClient = useQueryClient();
-  const renameBranchMutation = useRenameGitBranchMutation();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const {
     rightPanelOpen,
-    setRightPanelMode,
+    rightPanelState,
+    setRightPanelState,
     setSidebarOpen,
     setRightPanelOpen,
-    setTerminalCollapsed,
-    setTerminalFocusRequestToken,
-    setCommitOpen,
-    setFilePaletteOpen,
-    setPushOpen,
-    setPrOpen,
+    setTerminalActivationRequestToken,
+    setCommandPaletteOpen,
+    setPublishDialog,
   } = layout;
 
-  const openRightPanelMode = useCallback((mode: RightPanelMode) => {
-    setRightPanelMode(mode);
+  const openRightPanelTool = useCallback((tool: RightPanelTool, terminalId?: string) => {
+    setRightPanelState((previous) => ({
+      ...previous,
+      activeTool: tool,
+      activeTerminalId: terminalId ?? previous.activeTerminalId,
+    }));
     setRightPanelOpen(true);
-  }, [setRightPanelMode, setRightPanelOpen]);
+  }, [setRightPanelOpen, setRightPanelState]);
 
-  const openTerminalPanel = useCallback(() => {
+  const openTerminalPanel = useCallback((terminalId?: string) => {
     if (!selectedWorkspaceId) {
       return false;
     }
 
-    setRightPanelOpen(true);
-    setTerminalCollapsed(false);
-    setTerminalFocusRequestToken((token) => token + 1);
+    if (terminalId) {
+      const terminalKey = rightPanelTerminalHeaderKey(terminalId);
+      setRightPanelState((previous) => ({
+        ...previous,
+        activeTool: "terminal",
+        terminalOrder: previous.terminalOrder.includes(terminalId)
+          ? previous.terminalOrder
+          : [...previous.terminalOrder, terminalId],
+        headerOrder: previous.headerOrder.includes(terminalKey)
+          ? previous.headerOrder
+          : [...previous.headerOrder, terminalKey],
+        activeTerminalId: terminalId,
+      }));
+      setRightPanelOpen(true);
+      setTerminalActivationRequestToken((token) => token + 1);
+      return true;
+    }
+
+    openRightPanelTool("terminal", terminalId);
+    setTerminalActivationRequestToken((token) => token + 1);
     return true;
   }, [
+    openRightPanelTool,
     selectedWorkspaceId,
-    setRightPanelOpen,
-    setTerminalCollapsed,
-    setTerminalFocusRequestToken,
+    setTerminalActivationRequestToken,
   ]);
 
   const toggleRightPanel = useCallback(() => {
     if (rightPanelOpen) {
       setRightPanelOpen(false);
     } else {
-      openRightPanelMode("changes");
+      openRightPanelTool(rightPanelState.activeTool ?? "git");
     }
-  }, [openRightPanelMode, rightPanelOpen, setRightPanelOpen]);
+  }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeTool, setRightPanelOpen]);
 
-  const openPrInBrowser = useCallback(() => {
-    if (existingPr?.url) {
-      void openExternal(existingPr.url);
+  const openPrInBrowser = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
+    const url = pullRequest?.url ?? existingPr?.url;
+    if (url) {
+      void openExternal(url);
     }
   }, [existingPr]);
 
-  const handleCommitOpen = useCallback(() => {
-    openRightPanelMode("changes");
-    setCommitOpen(true);
-  }, [openRightPanelMode, setCommitOpen]);
+  const handleCommandPaletteOpen = useCallback(() => {
+    setCommandPaletteOpen(true);
+  }, [setCommandPaletteOpen]);
 
-  const handlePushOpen = useCallback(() => {
-    openRightPanelMode("changes");
-    setPushOpen(true);
-  }, [openRightPanelMode, setPushOpen]);
+  const handleViewPr = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
+    openRightPanelTool("git");
+    openPrInBrowser(pullRequest);
+  }, [openPrInBrowser, openRightPanelTool]);
 
-  const handlePrOpen = useCallback(() => {
-    openRightPanelMode("changes");
-    setPrOpen(true);
-  }, [openRightPanelMode, setPrOpen]);
+  const openPublishDialog = useCallback((intent: PublishIntent) => {
+    openRightPanelTool("git");
+    setPublishDialog(openPublishDialogState(
+      selectedWorkspaceId,
+      intent,
+    ));
+  }, [
+    openRightPanelTool,
+    selectedWorkspaceId,
+    setPublishDialog,
+  ]);
 
-  const handleFilePaletteOpen = useCallback(() => {
-    setFilePaletteOpen(true);
-  }, [setFilePaletteOpen]);
+  const closePublishDialog = useCallback(() => {
+    setPublishDialog(CLOSED_PUBLISH_DIALOG_STATE);
+  }, [setPublishDialog]);
 
-  const handleViewPr = useCallback(() => {
-    openRightPanelMode("changes");
-    openPrInBrowser();
-  }, [openPrInBrowser, openRightPanelMode]);
-
-  const openPrDialog = useCallback(() => {
-    setPrOpen(true);
-  }, [setPrOpen]);
+  const reviewDiffsFromPublish = useCallback(() => {
+    const next = reviewDiffsFromPublishState();
+    setPublishDialog(next.publishDialog);
+    openRightPanelTool(next.rightPanelTool);
+  }, [openRightPanelTool, setPublishDialog]);
 
   const renameBranch = useCallback(async (newName: string) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
@@ -133,16 +164,14 @@ export function useMainScreenActions({
     onToggleSidebar: () => setSidebarOpen((value) => !value),
     toggleRightPanel,
     openTerminalPanel,
-    onSetRightPanelMode: setRightPanelMode,
-    handleCommitOpen,
-    handlePushOpen,
-    handlePrOpen,
-    handleFilePaletteOpen,
+    onSetRightPanelTool: openRightPanelTool,
+    handleCommitOpen: () => openPublishDialog("commit"),
+    handlePushOpen: () => openPublishDialog("publish"),
+    handlePrOpen: () => openPublishDialog("pull_request"),
+    handleCommandPaletteOpen,
     handleViewPr,
-    openPrDialog,
-    onCommitClose: () => setCommitOpen(false),
-    onFilePaletteClose: () => setFilePaletteOpen(false),
-    onPushClose: () => setPushOpen(false),
-    onPrClose: () => setPrOpen(false),
+    closePublishDialog,
+    reviewDiffsFromPublish,
+    onCommandPaletteClose: () => setCommandPaletteOpen(false),
   };
 }

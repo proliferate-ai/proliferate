@@ -33,6 +33,9 @@ The main git models are:
 - `GitChangedFile`
 - `GitActionAvailability`
 - `GitDiffResult`
+- `GitDiffScope`
+- `GitDiffFile`
+- `GitBranchDiffFilesResult`
 - `GitBranch`
 
 These are runtime-owned normalized summaries built from git CLI output.
@@ -77,14 +80,35 @@ then adds higher-level behavior like:
 
 ### Diff Flow
 
-`diff_for_path(...)`
+`diff_for_path(...)` remains the compatibility entrypoint and delegates to
+`diff_for_path_with_scope(...)` with `GitDiffScope::WorkingTree`.
+
+`diff_for_path_with_scope(...)`
 (`anyharness/crates/anyharness-lib/src/git/service.rs`):
 
 1. resolves the repo root
-2. loads numstat for additions/deletions/binary detection
-3. loads unstaged diff first
-4. falls back to staged diff if needed
-5. truncates oversized patch bodies
+2. validates scope-specific arguments
+3. loads patch and numstat from the same comparison
+4. truncates oversized patch bodies
+
+Scopes are explicit:
+
+- `working_tree`: public compatibility fallback. It returns unstaged patch and
+  stats when present, otherwise staged patch and stats, otherwise an empty diff.
+- `unstaged`: `git diff -- <path>`.
+- `staged`: `git diff --cached -- <path>`.
+- `branch`: committed branch changes from
+  `git diff --find-renames --find-copies <merge-base> HEAD -- <path> [oldPath]`.
+
+`branch_diff_files(...)` lists committed files for the branch comparison using
+matching `--name-status -z` and `--numstat -z` commands. Rename/copy rows keep
+both `oldPath` and `path`; per-file branch diffs should pass both paths so git
+can preserve rename/copy detection.
+
+Branch base refs are intentionally concrete branch refs only. The resolver
+accepts local heads and remote-tracking refs, validates them to commit OIDs, and
+uses OIDs for merge-base and diff commands. It does not accept tags, raw OIDs,
+or revision expressions.
 
 ### Mutating Flows
 

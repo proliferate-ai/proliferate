@@ -1012,6 +1012,259 @@
         }
       }
     },
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/critique": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "get_review_assignment_critique",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "description": "Review assignment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review assignment critique",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCritiqueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review or assignment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/retry": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "retry_review_assignment",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "description": "Review assignment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryReviewAssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Retried review assignment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review or assignment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Review assignment cannot be retried",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/revision-ready": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "mark_review_revision_ready",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReviewRevisionReadyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Started next review round",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Revision is not ready or max rounds reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/send-feedback": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "send_review_feedback",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent review feedback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Review feedback is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/stop": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "stop_review",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stopped review run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions": {
       "get": {
         "tags": [
@@ -1334,6 +1587,36 @@
               "type": "integer",
               "format": "int64"
             }
+          },
+          {
+            "name": "before_seq",
+            "in": "query",
+            "description": "Return only events with seq less than this value",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Return at most this many newest matching events, or use as the event budget when turn_limit is set",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "turn_limit",
+            "in": "query",
+            "description": "Return complete newest turns, bounded by the limit event budget",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         ],
         "responses": {
@@ -1346,6 +1629,16 @@
                   "items": {
                     "$ref": "#/components/schemas/SessionEventEnvelope"
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported event history window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1842,6 +2135,47 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/reviews": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "get_session_reviews",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session review runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionReviewsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/subagents": {
       "get": {
         "tags": [
@@ -1933,6 +2267,293 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/terminal-command-runs/{command_run_id}": {
+      "get": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "get_terminal_command_run",
+        "parameters": [
+          {
+            "name": "command_run_id",
+            "in": "path",
+            "description": "Terminal command run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terminal command run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalCommandRunDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Command run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/terminals/{terminal_id}": {
+      "get": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "get_terminal",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "delete_terminal",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Terminal closed"
+          },
+          "404": {
+            "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/terminals/{terminal_id}/commands": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "start_terminal_command",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartTerminalCommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal command started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartTerminalCommandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/terminals/{terminal_id}/resize": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "resize_terminal",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResizeTerminalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal resized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/terminals/{terminal_id}/title": {
+      "patch": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "update_terminal_title",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTerminalTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal title updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2478,6 +3099,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Diff scope. Defaults to working_tree.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/GitDiffScope"
+            }
+          },
+          {
+            "name": "baseRef",
+            "in": "query",
+            "description": "Branch base ref. Only valid for scope=branch.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "oldPath",
+            "in": "query",
+            "description": "Old path for branch rename/copy rows. Only valid for scope=branch.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2487,6 +3135,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GitDiffResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/diff/branch-files": {
+      "get": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "list_git_branch_diff_files",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "baseRef",
+            "in": "query",
+            "description": "Branch base ref. Defaults to runtime default branch resolution.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch diff file list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitBranchDiffFilesResponse"
                 }
               }
             }
@@ -3332,6 +4030,76 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/review": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "start_plan_review",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPlanReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Started plan review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid review request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Plan or session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/processes/run": {
       "post": {
         "tags": [
@@ -3392,6 +4160,180 @@
           },
           "500": {
             "description": "Command execution failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/retire": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retire_workspace",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retire workspace result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetireResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/retire/cleanup-retry": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retry_retire_cleanup",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cleanup retry result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetireResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/retire/preflight": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retire_workspace_preflight",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retire preflight",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetirePreflightResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/reviews/code": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "start_code_review",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartCodeReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Started code review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid review request",
             "content": {
               "application/json": {
                 "schema": {
@@ -3634,6 +4576,109 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{workspace_id}/terminals": {
+      "get": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "list_terminals",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace terminals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TerminalRecord"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "create_terminal",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTerminalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Terminal creation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3676,6 +4721,124 @@
           "login_required",
           "unsupported",
           "error"
+        ]
+      },
+      "AgentSeedFailureKind": {
+        "type": "string",
+        "enum": [
+          "missing_archive",
+          "invalid_checksum",
+          "invalid_manifest",
+          "invalid_archive",
+          "io",
+          "unsupported_target",
+          "verification_failed"
+        ]
+      },
+      "AgentSeedHealth": {
+        "type": "object",
+        "required": [
+          "status",
+          "source",
+          "ownership",
+          "seededAgents",
+          "lastAction",
+          "seedOwnedArtifactCount",
+          "skippedExistingArtifactCount",
+          "repairedArtifactCount"
+        ],
+        "properties": {
+          "failureKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentSeedFailureKind"
+              }
+            ]
+          },
+          "lastAction": {
+            "$ref": "#/components/schemas/AgentSeedLastAction"
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/AgentSeedOwnership"
+          },
+          "repairedArtifactCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "seedOwnedArtifactCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "seedVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seededAgents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skippedExistingArtifactCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "source": {
+            "$ref": "#/components/schemas/AgentSeedSource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentSeedStatus"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AgentSeedLastAction": {
+        "type": "string",
+        "enum": [
+          "none",
+          "hydrated",
+          "repaired"
+        ]
+      },
+      "AgentSeedOwnership": {
+        "type": "string",
+        "enum": [
+          "full_seed",
+          "partial_seed",
+          "user_owned_existing",
+          "not_configured"
+        ]
+      },
+      "AgentSeedSource": {
+        "type": "string",
+        "enum": [
+          "bundled",
+          "external_dev",
+          "none"
+        ]
+      },
+      "AgentSeedStatus": {
+        "type": "string",
+        "enum": [
+          "not_configured_dev",
+          "missing_bundled_seed",
+          "hydrating",
+          "ready",
+          "partial",
+          "failed"
         ]
       },
       "AgentSummary": {
@@ -5133,6 +6296,79 @@
           }
         }
       },
+      "CreateTerminalRequest": {
+        "type": "object",
+        "required": [
+          "cols",
+          "rows"
+        ],
+        "properties": {
+          "cols": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TerminalPurpose"
+              }
+            ]
+          },
+          "rows": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "shell": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startupCommand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startupCommandEnv": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "startupCommandTimeoutMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "CreateWorkspaceRequest": {
         "type": "object",
         "required": [
@@ -5338,10 +6574,60 @@
               "null"
             ]
           },
+          "details": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ErrorEventDetails"
+              }
+            ]
+          },
           "message": {
             "type": "string"
           }
         }
+      },
+      "ErrorEventDetails": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "provider",
+              "providerModel",
+              "limit",
+              "unit",
+              "fallbackModelId",
+              "kind"
+            ],
+            "properties": {
+              "fallbackModelId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "provider_rate_limit"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "provider": {
+                "type": "string"
+              },
+              "providerModel": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
+          }
+        ]
       },
       "ExportReplayRecordingRequest": {
         "type": "object",
@@ -5434,6 +6720,12 @@
           "command": {
             "type": "string"
           },
+          "commandRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "durationMs": {
             "type": [
               "integer",
@@ -5459,6 +6751,12 @@
             ]
           },
           "stdout": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "terminalId": {
             "type": [
               "string",
               "null"
@@ -5500,6 +6798,36 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "GitBranchDiffFilesResponse": {
+        "type": "object",
+        "required": [
+          "baseRef",
+          "resolvedBaseOid",
+          "mergeBaseOid",
+          "headOid",
+          "files"
+        ],
+        "properties": {
+          "baseRef": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitDiffFile"
+            }
+          },
+          "headOid": {
+            "type": "string"
+          },
+          "mergeBaseOid": {
+            "type": "string"
+          },
+          "resolvedBaseOid": {
+            "type": "string"
           }
         }
       },
@@ -5573,14 +6901,14 @@
           }
         }
       },
-      "GitDiffResponse": {
+      "GitDiffFile": {
         "type": "object",
         "required": [
           "path",
-          "binary",
-          "truncated",
+          "status",
           "additions",
-          "deletions"
+          "deletions",
+          "binary"
         ],
         "properties": {
           "additions": {
@@ -5596,6 +6924,62 @@
             "format": "int32",
             "minimum": 0
           },
+          "oldPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitFileStatus"
+          }
+        }
+      },
+      "GitDiffResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "scope",
+          "binary",
+          "truncated",
+          "additions",
+          "deletions"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "baseRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "headOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mergeBaseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "patch": {
             "type": [
               "string",
@@ -5605,10 +6989,28 @@
           "path": {
             "type": "string"
           },
+          "resolvedBaseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "$ref": "#/components/schemas/GitDiffScope"
+          },
           "truncated": {
             "type": "boolean"
           }
         }
+      },
+      "GitDiffScope": {
+        "type": "string",
+        "enum": [
+          "working_tree",
+          "unstaged",
+          "staged",
+          "branch"
+        ]
       },
       "GitFileStatus": {
         "type": "string",
@@ -5849,9 +7251,13 @@
           "status",
           "version",
           "runtimeHome",
-          "capabilities"
+          "capabilities",
+          "agentSeed"
         ],
         "properties": {
+          "agentSeed": {
+            "$ref": "#/components/schemas/AgentSeedHealth"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/RuntimeCapabilities"
           },
@@ -6310,6 +7716,17 @@
           },
           "program": {
             "type": "string"
+          }
+        }
+      },
+      "MarkReviewRevisionReadyRequest": {
+        "type": "object",
+        "properties": {
+          "revisedPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -7293,15 +8710,40 @@
           }
         }
       },
+      "ModelCatalogStatus": {
+        "type": "string",
+        "description": "Runtime-owned lifecycle status for a model catalog row.",
+        "enum": [
+          "candidate",
+          "active",
+          "deprecated",
+          "hidden"
+        ]
+      },
       "ModelEntry": {
         "type": "object",
         "description": "A known model in the AnyHarness catalog for a given provider.",
         "required": [
           "id",
           "displayName",
-          "isDefault"
+          "isDefault",
+          "status"
         ],
         "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Legacy or provider-native selectors that resolve to this model ID"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional descriptive copy surfaced in launch/settings UIs"
+          },
           "displayName": {
             "type": "string",
             "description": "Human-readable name (e.g. \"Claude Opus 4.6\")"
@@ -7313,8 +8755,57 @@
           "isDefault": {
             "type": "boolean",
             "description": "Whether this is the default model for the provider"
+          },
+          "launchRemediation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelLaunchRemediation",
+                "description": "Optional app-owned remediation hint for launch-time live-apply mismatch"
+              }
+            ]
+          },
+          "minRuntimeVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Minimum AnyHarness runtime version required for this model, if any"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelCatalogStatus",
+            "description": "Runtime-owned lifecycle status for this model"
           }
         }
+      },
+      "ModelLaunchRemediation": {
+        "type": "object",
+        "description": "Catalog metadata for the app-owned action shown after live-apply mismatch.",
+        "required": [
+          "kind",
+          "message"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ModelLaunchRemediationKind",
+            "description": "App-owned action class for remediation."
+          },
+          "message": {
+            "type": "string",
+            "description": "Short detail text from the catalog. Button labels remain app-owned."
+          }
+        }
+      },
+      "ModelLaunchRemediationKind": {
+        "type": "string",
+        "description": "Product-owned remediation hint shown when a live harness cannot apply a\nselected catalog model at launch.",
+        "enum": [
+          "managed_reinstall",
+          "external_update",
+          "restart"
+        ]
       },
       "ModelRegistry": {
         "type": "object",
@@ -7355,9 +8846,17 @@
         "required": [
           "id",
           "displayName",
-          "isDefault"
+          "isDefault",
+          "status"
         ],
         "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Legacy or provider-native selectors that resolve to this model ID"
+          },
           "description": {
             "type": [
               "string",
@@ -7376,6 +8875,28 @@
           "isDefault": {
             "type": "boolean",
             "description": "Whether this is the default model for the registry"
+          },
+          "launchRemediation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelLaunchRemediation",
+                "description": "Optional app-owned remediation hint for launch-time live-apply mismatch"
+              }
+            ]
+          },
+          "minRuntimeVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Minimum AnyHarness runtime version required for this model, if any"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelCatalogStatus",
+            "description": "Runtime-owned lifecycle status for this model"
           }
         }
       },
@@ -8376,6 +9897,38 @@
           {
             "type": "object",
             "required": [
+              "reviewRunId",
+              "reviewRoundId",
+              "feedbackJobId",
+              "type"
+            ],
+            "properties": {
+              "feedbackJobId": {
+                "type": "string"
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reviewRoundId": {
+                "type": "string"
+              },
+              "reviewRunId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reviewFeedback"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
               "type"
             ],
             "properties": {
@@ -9017,6 +10570,25 @@
           "managed"
         ]
       },
+      "ResizeTerminalRequest": {
+        "type": "object",
+        "required": [
+          "cols",
+          "rows"
+        ],
+        "properties": {
+          "cols": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "rows": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
       "ResolveInteractionRequest": {
         "oneOf": [
           {
@@ -9218,6 +10790,572 @@
             "items": {
               "$ref": "#/components/schemas/SessionMcpServer"
             }
+          }
+        }
+      },
+      "RetryReviewAssignmentRequest": {
+        "type": "object",
+        "properties": {
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReviewAssignmentDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "reviewRunId",
+          "reviewRoundId",
+          "personaId",
+          "personaLabel",
+          "agentKind",
+          "modeVerificationStatus",
+          "status",
+          "hasCritique",
+          "deadlineAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "actualModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agentKind": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "critiqueArtifactPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deadlineAt": {
+            "type": "string"
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasCritique": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modeVerificationStatus": {
+            "$ref": "#/components/schemas/ReviewModeVerificationStatus"
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pass": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaLabel": {
+            "type": "string"
+          },
+          "requestedModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reviewRoundId": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "reviewerSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewAssignmentStatus"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewAssignmentStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "launching",
+          "reviewing",
+          "reminded",
+          "retryable_failed",
+          "submitted",
+          "cancelled",
+          "timed_out",
+          "system_failed"
+        ]
+      },
+      "ReviewCritiqueResponse": {
+        "type": "object",
+        "required": [
+          "assignmentId",
+          "reviewRunId",
+          "reviewRoundId",
+          "personaId",
+          "personaLabel"
+        ],
+        "properties": {
+          "assignmentId": {
+            "type": "string"
+          },
+          "critiqueArtifactPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "critiqueMarkdown": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pass": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaLabel": {
+            "type": "string"
+          },
+          "reviewRoundId": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReviewFeedbackDeliveryDetail": {
+        "type": "object",
+        "required": [
+          "state",
+          "attemptCount"
+        ],
+        "properties": {
+          "attemptCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ReviewFeedbackDeliveryState"
+          }
+        }
+      },
+      "ReviewFeedbackDeliveryState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "sending",
+          "sent",
+          "failed"
+        ]
+      },
+      "ReviewKind": {
+        "type": "string",
+        "enum": [
+          "plan",
+          "code"
+        ]
+      },
+      "ReviewModeVerificationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "verified",
+          "mismatch",
+          "not_checked"
+        ]
+      },
+      "ReviewPersonaRequest": {
+        "type": "object",
+        "required": [
+          "personaId",
+          "label",
+          "prompt",
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewRoundDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "reviewRunId",
+          "roundNumber",
+          "status",
+          "assignments",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewAssignmentDetail"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedbackDelivery": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewFeedbackDeliveryDetail"
+              }
+            ]
+          },
+          "feedbackJobId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedbackPromptSentAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "roundNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewRoundStatus"
+          },
+          "targetPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetPlanSnapshotHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewRoundStatus": {
+        "type": "string",
+        "enum": [
+          "reviewing",
+          "completing",
+          "passed",
+          "feedback_pending",
+          "feedback_sent",
+          "completed_with_drift",
+          "cancelled",
+          "system_failed"
+        ]
+      },
+      "ReviewRunDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "parentSessionId",
+          "kind",
+          "status",
+          "title",
+          "maxRounds",
+          "currentRoundNumber",
+          "autoIterate",
+          "parentCanSignalRevisionViaMcp",
+          "childSessionIds",
+          "rounds",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "activeRoundId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoIterate": {
+            "type": "boolean"
+          },
+          "childSessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "currentRoundNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReviewKind"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentCanSignalRevisionViaMcp": {
+            "type": "boolean"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "rounds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewRoundDetail"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewRunStatus"
+          },
+          "targetPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetPlanSnapshotHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewRunResponse": {
+        "type": "object",
+        "required": [
+          "run"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ReviewRunDetail"
+          }
+        }
+      },
+      "ReviewRunStatus": {
+        "type": "string",
+        "enum": [
+          "reviewing",
+          "feedback_ready",
+          "parent_revising",
+          "waiting_for_revision",
+          "passed",
+          "stopped",
+          "system_failed"
+        ]
+      },
+      "ReviewRunUpdatedPayload": {
+        "type": "object",
+        "required": [
+          "reviewRunId",
+          "parentSessionId",
+          "kind",
+          "status",
+          "currentRoundNumber",
+          "maxRounds",
+          "autoIterate",
+          "updatedAt"
+        ],
+        "properties": {
+          "activeRoundId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoIterate": {
+            "type": "boolean"
+          },
+          "currentRoundNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReviewKind"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         }
       },
@@ -9732,6 +11870,27 @@
                     "type": "string",
                     "enum": [
                       "session_link_turn_completed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRunUpdatedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "review_run_updated"
                     ]
                   }
                 }
@@ -10292,6 +12451,20 @@
           }
         }
       },
+      "SessionReviewsResponse": {
+        "type": "object",
+        "required": [
+          "reviews"
+        ],
+        "properties": {
+          "reviews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewRunDetail"
+            }
+          }
+        }
+      },
       "SessionStartedEvent": {
         "type": "object",
         "required": [
@@ -10545,6 +12718,110 @@
           }
         }
       },
+      "StartCodeReviewRequest": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "reviewers"
+        ],
+        "properties": {
+          "autoIterate": {
+            "type": "boolean"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewPersonaRequest"
+            }
+          }
+        }
+      },
+      "StartPlanReviewRequest": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "reviewers"
+        ],
+        "properties": {
+          "autoIterate": {
+            "type": "boolean"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewPersonaRequest"
+            }
+          }
+        }
+      },
+      "StartTerminalCommandRequest": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "env": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "interrupt": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "timeoutMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "StartTerminalCommandResponse": {
+        "type": "object",
+        "required": [
+          "terminal",
+          "commandRun"
+        ],
+        "properties": {
+          "commandRun": {
+            "$ref": "#/components/schemas/TerminalCommandRunSummary"
+          },
+          "terminal": {
+            "$ref": "#/components/schemas/TerminalRecord"
+          }
+        }
+      },
       "StartWorkspaceSetupRequest": {
         "type": "object",
         "required": [
@@ -10664,12 +12941,203 @@
           "cancelled"
         ]
       },
+      "TerminalCommandOutputMode": {
+        "type": "string",
+        "enum": [
+          "separate",
+          "combined"
+        ]
+      },
+      "TerminalCommandRunDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TerminalCommandRunSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "outputMode"
+            ],
+            "properties": {
+              "combinedOutput": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "outputMode": {
+                "$ref": "#/components/schemas/TerminalCommandOutputMode"
+              },
+              "stderr": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "stdout": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "TerminalCommandRunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "interrupted",
+          "timed_out"
+        ]
+      },
+      "TerminalCommandRunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "purpose",
+          "command",
+          "status",
+          "outputTruncated"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outputTruncated": {
+            "type": "boolean"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/TerminalPurpose"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/TerminalCommandRunStatus"
+          },
+          "terminalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
       "TerminalLifecycleEvent": {
         "type": "string",
         "enum": [
           "start",
           "output",
           "exit"
+        ]
+      },
+      "TerminalPurpose": {
+        "type": "string",
+        "enum": [
+          "general",
+          "run",
+          "setup"
+        ]
+      },
+      "TerminalRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "title",
+          "purpose",
+          "cwd",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "commandRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TerminalCommandRunSummary"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/TerminalPurpose"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TerminalStatus"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "TerminalStatus": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "running",
+          "exited",
+          "failed"
         ]
       },
       "TranscriptItemDeltaPayload": {
@@ -10872,6 +13340,17 @@
           }
         }
       },
+      "UpdateTerminalTitleRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateWorkspaceDisplayNameRequest": {
         "type": "object",
         "properties": {
@@ -11017,6 +13496,24 @@
           "updatedAt"
         ],
         "properties": {
+          "cleanupAttemptedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupErrorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupFailedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "cleanupState": {
             "$ref": "#/components/schemas/WorkspaceCleanupState"
           },
@@ -11248,6 +13745,12 @@
           "totalSessionCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -11554,6 +14057,203 @@
           },
           "supported": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkspaceRetireBlocker": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "severity",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/WorkspaceRetireBlockerCode"
+          },
+          "commandRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "operation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitOperation"
+              }
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "severity": {
+            "$ref": "#/components/schemas/WorkspaceRetireBlockerSeverity"
+          },
+          "terminalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "WorkspaceRetireBlockerCode": {
+        "type": "string",
+        "enum": [
+          "unsupported_workspace",
+          "workspace_access_blocked",
+          "dirty_working_tree",
+          "conflicted_files",
+          "active_git_operation",
+          "live_session",
+          "pending_prompt",
+          "pending_interaction",
+          "active_terminal",
+          "running_command"
+        ]
+      },
+      "WorkspaceRetireBlockerSeverity": {
+        "type": "string",
+        "enum": [
+          "blocking"
+        ]
+      },
+      "WorkspaceRetireOutcome": {
+        "type": "string",
+        "enum": [
+          "retired",
+          "already_retired",
+          "blocked",
+          "cleanup_failed"
+        ]
+      },
+      "WorkspaceRetirePreflightResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "workspaceKind",
+          "lifecycleState",
+          "cleanupState",
+          "canRetire",
+          "materialized",
+          "mergedIntoBase",
+          "headMatchesBase",
+          "readinessFingerprint",
+          "blockers"
+        ],
+        "properties": {
+          "baseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "baseRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRetireBlocker"
+            }
+          },
+          "canRetire": {
+            "type": "boolean"
+          },
+          "cleanupState": {
+            "$ref": "#/components/schemas/WorkspaceCleanupState"
+          },
+          "headMatchesBase": {
+            "type": "boolean"
+          },
+          "headOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/WorkspaceLifecycleState"
+          },
+          "materialized": {
+            "type": "boolean"
+          },
+          "mergedIntoBase": {
+            "type": "boolean"
+          },
+          "readinessFingerprint": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspaceKind": {
+            "$ref": "#/components/schemas/WorkspaceKind"
+          }
+        }
+      },
+      "WorkspaceRetireResponse": {
+        "type": "object",
+        "required": [
+          "workspace",
+          "outcome",
+          "preflight",
+          "cleanupAttempted",
+          "cleanupSucceeded"
+        ],
+        "properties": {
+          "cleanupAttempted": {
+            "type": "boolean"
+          },
+          "cleanupMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupSucceeded": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WorkspaceRetireOutcome"
+          },
+          "preflight": {
+            "$ref": "#/components/schemas/WorkspaceRetirePreflightResponse"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
           }
         }
       },

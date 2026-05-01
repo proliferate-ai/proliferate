@@ -123,6 +123,20 @@ Rate-limit thresholds (`SESSION_TITLE_RATE_LIMIT_REQUESTS`,
 The billing reconciler interval (`BILLING_RECONCILE_INTERVAL_SECONDS`) now
 lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 
+## Cloud MCP
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `CLOUD_MCP_ENABLED` | No | No | Enables cloud-owned MCP catalog, connection, OAuth, and materialization APIs |
+| `CLOUD_MCP_OAUTH_CALLBACK_BASE_URL` | No | Required for public OAuth deployments unless `API_BASE_URL` is set | Public base URL used to build MCP OAuth callback URLs |
+| `CLOUD_MCP_SLACK_ENABLED` | No | No | Shows the Slack MCP connector when static Slack OAuth config is also present |
+| `CLOUD_MCP_SLACK_CLIENT_ID` | Yes | Only when Slack MCP is enabled for this deployment | Static Slack OAuth client ID |
+| `CLOUD_MCP_SLACK_CLIENT_SECRET` | Yes | Only when Slack MCP is enabled for this deployment | Static Slack OAuth client secret |
+| `CLOUD_MCP_SLACK_TOKEN_ENDPOINT_AUTH_METHOD` | No | No | Slack token endpoint auth method (`client_secret_post` or `client_secret_basic`) |
+
+Static OAuth MCP connectors are hidden from the catalog when their required
+deployment config is missing or their explicit connector enable flag is false.
+
 ## Sandbox Provider Settings
 
 | Variable | Secret | Required | Used for |

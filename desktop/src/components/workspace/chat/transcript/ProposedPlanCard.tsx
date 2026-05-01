@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/Button";
+import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
 import {
   Check,
   FileText,
   ArrowRight,
+  Shield,
   X,
 } from "@/components/ui/icons";
 
@@ -32,9 +34,11 @@ interface ProposedPlanCardProps {
   onReject?: () => void;
   onImplementHere?: () => void;
   onHandOffToNewSession?: () => void;
+  onReview?: (anchorRect?: ReviewSetupAnchorRect | null) => void;
   isApproving?: boolean;
   isRejecting?: boolean;
   isImplementingHere?: boolean;
+  isStartingReview?: boolean;
 }
 
 export function ProposedPlanCard({
@@ -49,16 +53,21 @@ export function ProposedPlanCard({
   onReject,
   onImplementHere,
   onHandOffToNewSession,
+  onReview,
   isApproving = false,
   isRejecting = false,
   isImplementingHere = false,
+  isStartingReview = false,
 }: ProposedPlanCardProps) {
   const canDecide =
     decisionState === "pending"
     && decisionVersion !== null
     && onApprove
     && onReject;
-  const hasFooterActions = !!decisionState || !!onHandOffToNewSession;
+  const canReview =
+    !!onReview
+    && (decisionState === null || decisionState === "pending" || decisionState === "approved");
+  const hasFooterActions = !!decisionState || !!onHandOffToNewSession || canReview;
 
   return (
     <CollapsiblePlanCard
@@ -74,7 +83,10 @@ export function ProposedPlanCard({
       collapseLabel="Collapse plan summary"
       expandLabel="Expand plan summary"
       footer={hasFooterActions ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2">
+        <div
+          data-chat-transcript-ignore
+          className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2"
+        >
           {canDecide && decisionState && (
             <>
               <Button
@@ -116,6 +128,20 @@ export function ProposedPlanCard({
               Carry out & exit plan mode
             </Button>
           )}
+          {canReview && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={(event) => onReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()))}
+              loading={isStartingReview}
+              title="Starts review agents for this plan."
+              className="rounded-xl px-2.5 text-sm"
+            >
+              <Shield className="size-3.5" />
+              Review plan
+            </Button>
+          )}
           {onHandOffToNewSession && (
             <Button
               type="button"
@@ -133,6 +159,17 @@ export function ProposedPlanCard({
       ) : undefined}
     />
   );
+}
+
+function rectToReviewAnchor(rect: DOMRect): ReviewSetupAnchorRect {
+  return {
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 function formatDecisionState(

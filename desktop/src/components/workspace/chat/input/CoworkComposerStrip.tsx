@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
+import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import type {
   CoworkComposerSessionRow,
   CoworkComposerWorkspaceRow,
@@ -27,55 +28,68 @@ export function CoworkComposerStrip({
   onOpenSession,
 }: CoworkComposerStripProps) {
   return (
-    <div
-      className="flex items-center rounded-t-2xl border-x border-t border-border/70 bg-card/70 px-2 py-1.5 backdrop-blur-sm"
-      data-telemetry-mask
-      aria-label="Cowork coding workspaces"
+    <DelegatedWorkComposerPanel>
+      <CoworkComposerControl
+        rows={rows}
+        summary={summary}
+        onOpenWorkspace={onOpenWorkspace}
+        onOpenSession={onOpenSession}
+      />
+    </DelegatedWorkComposerPanel>
+  );
+}
+
+export function CoworkComposerControl({
+  rows,
+  summary,
+  onOpenWorkspace,
+  onOpenSession,
+}: CoworkComposerStripProps) {
+  return (
+    <PopoverButton
+      side="top"
+      align="start"
+      offset={6}
+      className="w-auto border-0 bg-transparent p-0 shadow-none"
+      trigger={(
+        <ComposerControlButton
+          icon={<ProliferateIcon className="size-4" />}
+          label={summary.label}
+          detail={summary.detail}
+          trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}
+          active={summary.active}
+          className="max-w-full"
+          aria-label="Cowork coding workspaces"
+        />
+      )}
     >
-      <PopoverButton
-        side="top"
-        align="start"
-        offset={6}
-        className="w-auto border-0 bg-transparent p-0 shadow-none"
-        trigger={(
-          <ComposerControlButton
-            icon={<ProliferateIcon className="size-4" />}
-            label={summary.label}
-            detail={summary.detail}
-            trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}
-            active={summary.active}
-            className="max-w-full"
-          />
-        )}
-      >
-        {(close) => (
-          <ComposerPopoverSurface className="w-[min(30rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
-            <div className="border-b border-border px-3 py-2">
-              <div className="text-sm font-medium text-foreground">{summary.label}</div>
-              {summary.detail && (
-                <div className="text-xs text-muted-foreground">{summary.detail}</div>
-              )}
-            </div>
-            <div className="max-h-80 overflow-y-auto p-1">
-              {rows.map((workspace) => (
-                <CoworkWorkspaceGroup
-                  key={workspace.ownershipId}
-                  workspace={workspace}
-                  onOpenWorkspace={(workspaceId) => {
-                    onOpenWorkspace(workspaceId);
-                    close();
-                  }}
-                  onOpenSession={(input) => {
-                    onOpenSession(input);
-                    close();
-                  }}
-                />
-              ))}
-            </div>
-          </ComposerPopoverSurface>
-        )}
-      </PopoverButton>
-    </div>
+      {(close) => (
+        <ComposerPopoverSurface className="w-[min(30rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
+          <div className="border-b border-border px-3 py-2">
+            <div className="text-sm font-medium text-foreground">{summary.label}</div>
+            {summary.detail && (
+              <div className="text-xs text-muted-foreground">{summary.detail}</div>
+            )}
+          </div>
+          <div className="max-h-80 overflow-y-auto p-1">
+            {rows.map((workspace) => (
+              <CoworkWorkspaceGroup
+                key={workspace.ownershipId}
+                workspace={workspace}
+                onOpenWorkspace={(workspaceId) => {
+                  onOpenWorkspace(workspaceId);
+                  close();
+                }}
+                onOpenSession={(input) => {
+                  onOpenSession(input);
+                  close();
+                }}
+              />
+            ))}
+          </div>
+        </ComposerPopoverSurface>
+      )}
+    </PopoverButton>
   );
 }
 

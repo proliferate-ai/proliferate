@@ -5,7 +5,8 @@ import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-acti
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import {
-  isCloudWorkspacePending,
+  isCloudWorkspacePostReadyPending,
+  shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
 } from "@/lib/domain/workspaces/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
@@ -31,7 +32,9 @@ export function useCloudWorkspacePolling() {
   const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
     (workspace) => workspace.id === cloudWorkspaceId,
   ) ?? null;
-  const shouldPollCloudWorkspace = Boolean(cloudWorkspace && isCloudWorkspacePending(cloudWorkspace.status));
+  const shouldPollCloudWorkspace = Boolean(
+    cloudWorkspace && shouldPollCloudWorkspaceForUpdates(cloudWorkspace),
+  );
 
   useEffect(() => {
     const shouldPauseForFailedPending = pendingWorkspaceEntry?.workspaceId === selectedWorkspaceId
@@ -71,7 +74,7 @@ export function useCloudWorkspacePolling() {
           return;
         }
 
-        if (workspace.status === "ready") {
+        if (workspace.status === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
           shouldScheduleNextPoll = false;
           const pending = useHarnessStore.getState().pendingWorkspaceEntry;
           const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId

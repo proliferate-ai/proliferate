@@ -14,8 +14,8 @@ export function isSettingsSection(value: string | null): value is SettingsSectio
 }
 
 export function normalizeSettingsSection(value: string | null): SettingsSection {
-  if (value === "configuration") {
-    return "defaults";
+  if (value === "configuration" || value === "defaults" || value === "advanced") {
+    return "general";
   }
 
   return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;
@@ -104,13 +104,7 @@ export function resolveSettingsSelection({
 
   if (section === "repo") {
     if (!repoSourceRoot || !repositoryRoots.has(repoSourceRoot)) {
-      const fallbackRepo = repositories[0]?.sourceRoot ?? null;
-      if (fallbackRepo) {
-        repoSourceRoot = fallbackRepo;
-      } else {
-        section = SETTINGS_DEFAULT_SECTION;
-        repoSourceRoot = null;
-      }
+      repoSourceRoot = null;
     }
   }
 

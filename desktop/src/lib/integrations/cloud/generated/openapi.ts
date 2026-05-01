@@ -439,6 +439,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/{workspace_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Cloud Workspace Endpoint */
+        post: operations["stop_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/{workspace_id}/branch": {
         parameters: {
             query?: never;
@@ -1746,6 +1763,8 @@ export interface components {
             };
             /** Setupscript */
             setupScript: string;
+            /** Runcommand */
+            runCommand: string;
             /** Filesversion */
             filesVersion: number;
             /** Trackedfiles */
@@ -1814,9 +1833,7 @@ export interface components {
         /** ConnectorArgTemplateModel */
         ConnectorArgTemplateModel: {
             /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["ConnectorStaticTemplateSourceModel"] | components["schemas"]["ConnectorWorkspacePathTemplateSourceModel"] | components["schemas"]["ConnectorFieldTemplateSourceModel"];
         };
         /** ConnectorCatalogEntryModel */
         ConnectorCatalogEntryModel: {
@@ -1849,6 +1866,8 @@ export interface components {
              * @enum {string}
              */
             authKind: "secret" | "oauth" | "none";
+            /** Oauthclientmode */
+            oauthClientMode?: ("dcr" | "static") | null;
             authStyle?: components["schemas"]["ConnectorHttpAuthStyleModel"] | null;
             /** Authfieldid */
             authFieldId?: string | null;
@@ -1902,9 +1921,17 @@ export interface components {
             /** Name */
             name: string;
             /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["ConnectorStaticTemplateSourceModel"] | components["schemas"]["ConnectorFieldTemplateSourceModel"];
+        };
+        /** ConnectorFieldTemplateSourceModel */
+        ConnectorFieldTemplateSourceModel: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "secret" | "setting";
+            /** Fieldid */
+            fieldId: string;
         };
         /** ConnectorHttpAuthStyleModel */
         ConnectorHttpAuthStyleModel: {
@@ -1954,6 +1981,24 @@ export interface components {
             value: string;
             /** Label */
             label: string;
+        };
+        /** ConnectorStaticTemplateSourceModel */
+        ConnectorStaticTemplateSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "static";
+            /** Value */
+            value: string;
+        };
+        /** ConnectorWorkspacePathTemplateSourceModel */
+        ConnectorWorkspacePathTemplateSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "workspace_path";
         };
         /** CreateAutomationRequest */
         CreateAutomationRequest: {
@@ -2232,9 +2277,7 @@ export interface components {
         /** LocalStdioArgTemplateModel */
         LocalStdioArgTemplateModel: {
             /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["LocalStdioStaticSourceModel"] | components["schemas"]["LocalStdioWorkspacePathSourceModel"];
         };
         /** LocalStdioCandidateModel */
         LocalStdioCandidateModel: {
@@ -2257,10 +2300,25 @@ export interface components {
         LocalStdioEnvTemplateModel: {
             /** Name */
             name: string;
-            /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["LocalStdioStaticSourceModel"];
+        };
+        /** LocalStdioStaticSourceModel */
+        LocalStdioStaticSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "static";
+            /** Value */
+            value: string;
+        };
+        /** LocalStdioWorkspacePathSourceModel */
+        LocalStdioWorkspacePathSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "workspace_path";
         };
         /** MaterializeCloudMcpRequest */
         MaterializeCloudMcpRequest: {
@@ -2545,6 +2603,12 @@ export interface components {
             workspaceId: string;
             /** Command */
             command: string;
+            /** Terminalid */
+            terminalId?: string | null;
+            /** Commandrunid */
+            commandRunId?: string | null;
+            /** Status */
+            status: string;
         };
         /** SaveCloudRepoConfigFile */
         SaveCloudRepoConfigFile: {
@@ -2568,6 +2632,11 @@ export interface components {
              * @default
              */
             setupScript: string;
+            /**
+             * Runcommand
+             * @default
+             */
+            runCommand: string;
             /** Files */
             files?: components["schemas"]["SaveCloudRepoConfigFile"][];
         };
@@ -2590,7 +2659,7 @@ export interface components {
              */
             outcome: "applied" | "not_applied";
             /** Reason */
-            reason?: ("missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error") | null;
+            reason?: ("missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error" | "invalid_settings") | null;
         };
         /** SessionMcpEnvVarModel */
         SessionMcpEnvVarModel: {
@@ -4160,6 +4229,37 @@ export interface operations {
         };
     };
     start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__stop_post: {
         parameters: {
             query?: never;
             header?: never;

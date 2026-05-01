@@ -34,8 +34,11 @@ and the desktop file-backed app home. AnyHarness runtime state lives in:
 ```
 
 The default database is `proliferate_dev_<name>` on the local Docker Postgres
-server. Use `DATABASE_URL=... make dev PROFILE=<name>` when you intentionally
-want to bypass the profile database for a one-off run.
+server. On macOS, profile database URLs default to `::1` so Docker Desktop's
+Postgres listener is not confused with a Homebrew Postgres bound to
+`127.0.0.1:5432`. Use `DATABASE_URL=... make dev PROFILE=<name>` when you
+intentionally want to bypass the profile database for a one-off run, or
+`LOCAL_PGHOST=127.0.0.1` when you intentionally want a separate local Postgres.
 
 Desktop auth sessions and pending-auth entries are profile-scoped in the dev
 Keychain so per-profile databases do not reuse each other's login tokens.
@@ -65,3 +68,29 @@ default-port shortcuts.
 OAuth and deep-link login flows are still single-profile-at-a-time in v1 because
 the OS URL scheme is shared. Concurrent git operations against the same checkout
 can still race on git locks.
+
+## Bundled Agent Seed Testing
+
+Packaged desktop builds resolve bundled agent seeds from Tauri resources and
+pass the resolved seed directory to the AnyHarness sidecar. Local development can
+exercise the same hydration path by setting:
+
+```bash
+ANYHARNESS_AGENT_SEED_DIR=/absolute/path/to/agent-seeds make dev PROFILE=<name>
+```
+
+The directory should contain the generated target archive and checksum:
+
+```text
+agent-seed-<target>.tar.zst
+agent-seed-<target>.sha256
+```
+
+For normal dev/debug builds, `ANYHARNESS_AGENT_SEED_DIR` is trusted as a local
+developer override and health reports the source as `external_dev`. In packaged
+builds, arbitrary external seed dirs are ignored unless
+`ANYHARNESS_AGENT_SEED_DIR_UNSAFE=1` is also set. That keeps production packaged
+apps on signed Tauri resources by default.
+
+Each profile has its own AnyHarness runtime home, so seed hydration state lives
+under `~/.proliferate-local/runtimes/<name>/` and does not cross profiles.

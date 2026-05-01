@@ -215,7 +215,14 @@ function SubagentFlyout({
           label={child.title}
           trailing={renderSubagentTrailing(child)}
           className={child.isActive ? "bg-accent/70" : ""}
-          onClick={() => onOpenSession(child.sessionId)}
+          disabled={child.source === "review"}
+          title={child.source === "review" ? "Review agents are managed by the review run" : undefined}
+          onClick={() => {
+            if (child.source === "review") {
+              return;
+            }
+            onOpenSession(child.sessionId);
+          }}
         >
           {child.meta && (
             <span className="block truncate text-xs text-muted-foreground">

@@ -34,7 +34,7 @@ def oauth_flow_start_payload(flow: CloudMcpOAuthFlowRecord) -> StartCloudMcpOAut
     return StartCloudMcpOAuthFlowResponse(
         flow_id=flow.id,
         authorization_url=flow.authorization_url,
-        status=flow.status,  # type: ignore[arg-type]
+        status=flow.status,
         expires_at=flow.expires_at.isoformat(),
     )
 
@@ -46,7 +46,7 @@ def oauth_flow_status_payload(
 ) -> CloudMcpOAuthFlowStatusResponse:
     return CloudMcpOAuthFlowStatusResponse(
         flow_id=flow.id,
-        status=flow.status,  # type: ignore[arg-type]
+        status=flow.status,
         authorization_url=flow.authorization_url if include_authorization_url else None,
         expires_at=flow.expires_at.isoformat(),
         failure_code=flow.failure_code,

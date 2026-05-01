@@ -28,7 +28,6 @@ use crate::workspaces::access_model::WorkspaceAccessMode;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
-use crate::workspaces::setup_execution::SetupExecutionService;
 use crate::{files::safety::resolve_safe_path, git::GitService};
 
 #[derive(Debug, thiserror::Error)]
@@ -63,7 +62,6 @@ pub struct MobilityService {
     session_runtime: Arc<SessionRuntime>,
     subagent_service: Arc<SubagentService>,
     access_gate: Arc<WorkspaceAccessGate>,
-    setup_execution_service: Arc<SetupExecutionService>,
     terminal_service: Arc<TerminalService>,
 }
 
@@ -76,7 +74,6 @@ impl MobilityService {
         session_runtime: Arc<SessionRuntime>,
         subagent_service: Arc<SubagentService>,
         access_gate: Arc<WorkspaceAccessGate>,
-        setup_execution_service: Arc<SetupExecutionService>,
         terminal_service: Arc<TerminalService>,
     ) -> Self {
         Self {
@@ -87,7 +84,6 @@ impl MobilityService {
             session_runtime,
             subagent_service,
             access_gate,
-            setup_execution_service,
             terminal_service,
         }
     }
@@ -230,7 +226,7 @@ impl MobilityService {
             None
         };
 
-        if self.setup_execution_service.is_running(workspace_id).await {
+        if self.terminal_service.is_setup_running(workspace_id).await {
             blockers.push(MobilityBlocker {
                 code: "setup_running".to_string(),
                 message: "Workspace setup is still running".to_string(),
@@ -678,8 +674,8 @@ impl MobilityService {
             .assert_can_mutate_for_workspace(&workspace.id)
             .map_err(map_access_error)?;
         if self
-            .setup_execution_service
-            .is_running_blocking(&workspace.id)
+            .terminal_service
+            .is_setup_running_blocking(&workspace.id)
         {
             return Err(MobilityError::Invalid(
                 "destination workspace setup is still running".to_string(),
@@ -806,6 +802,9 @@ fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
                 "workspace {workspace_id} cannot start live sessions while mode={}",
                 mode.as_str()
             ))
+        }
+        WorkspaceAccessError::WorkspaceRetired(workspace_id) => {
+            MobilityError::Invalid(format!("workspace {workspace_id} is retired"))
         }
     }
 }

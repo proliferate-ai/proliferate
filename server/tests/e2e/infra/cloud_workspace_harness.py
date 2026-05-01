@@ -73,12 +73,12 @@ class CloudWorkspaceHarness:
         if response.status_code >= 400:
             detail = response.text.strip() or "<empty response body>"
             raise RuntimeError(f"Cloud workspace create failed ({response.status_code}): {detail}")
-        return response.json()
+        return _unwrap_workspace_payload(response.json())
 
     async def get_workspace(self, workspace_id: str) -> dict[str, Any]:
         response = await self.client.get(f"/v1/cloud/workspaces/{workspace_id}")
         response.raise_for_status()
-        return response.json()
+        return _unwrap_workspace_payload(response.json())
 
     async def wait_for_status(
         self,
@@ -91,9 +91,10 @@ class CloudWorkspaceHarness:
         while asyncio.get_running_loop().time() < deadline:
             payload = await self.get_workspace(workspace_id)
             last_payload = payload
-            if payload["status"] == status:
+            current_status = _workspace_status(payload)
+            if current_status == status:
                 return payload
-            if payload["status"] == "error":
+            if current_status == "error":
                 last_error = payload.get("lastError") or "unknown error"
                 raise RuntimeError(
                     "Workspace "
@@ -101,7 +102,7 @@ class CloudWorkspaceHarness:
                     f"{status!r}: {last_error}"
                 )
             await asyncio.sleep(2.0)
-        last_status = last_payload.get("status") if last_payload else "unknown"
+        last_status = _workspace_status(last_payload) if last_payload else "unknown"
         last_error = last_payload.get("lastError") if last_payload else None
         raise TimeoutError(
             f"Workspace {workspace_id} did not reach status '{status}' within "
@@ -136,10 +137,7 @@ class CloudWorkspaceHarness:
         async with self.runtime_client(connection) as client:
             response = await client.post("/v1/workspaces", json={"path": path})
             response.raise_for_status()
-            payload = response.json()
-            if isinstance(payload, dict) and isinstance(payload.get("workspace"), dict):
-                return payload["workspace"]
-            return payload
+            return _unwrap_workspace_payload(response.json())
 
     async def run_runtime_command(
         self,
@@ -196,6 +194,17 @@ class CloudWorkspaceHarness:
 def _slugify(value: str) -> str:
     slug = "".join(character.lower() if character.isalnum() else "-" for character in value)
     return slug.strip("-") or "fixture"
+
+
+def _unwrap_workspace_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    workspace = payload.get("workspace")
+    if isinstance(workspace, dict):
+        return workspace
+    return payload
+
+
+def _workspace_status(payload: dict[str, Any]) -> Any:
+    return payload.get("status") or payload.get("workspaceStatus")
 
 
 def _provider_env(name: str, provider: CloudProviderKind, *, default: str | None = None) -> str:

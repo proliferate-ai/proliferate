@@ -43,6 +43,35 @@ describe("SessionsClient.resume", () => {
     }]);
   });
 
+  it("treats timing-only options as request options", async () => {
+    const calls: Array<{
+      body: unknown;
+      options: AnyHarnessRequestOptions | undefined;
+      path: string;
+    }> = [];
+    const transport = {
+      post: async (path: string, body: unknown, options?: AnyHarnessRequestOptions) => {
+        calls.push({ path, body, options });
+        return sessionResponse();
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new SessionsClient(transport);
+
+    await client.resume("session-1", {
+      measurementOperationId: "mop_test",
+      timingCategory: "session.stream",
+    });
+
+    expect(calls).toEqual([{
+      path: "/v1/sessions/session-1/resume",
+      body: {},
+      options: {
+        measurementOperationId: "mop_test",
+        timingCategory: "session.stream",
+      },
+    }]);
+  });
+
   it("keeps explicit resume body and request options distinct", async () => {
     const calls: Array<{
       body: unknown;

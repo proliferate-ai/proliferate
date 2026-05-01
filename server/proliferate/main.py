@@ -36,6 +36,10 @@ from proliferate.server.billing.reconciler import (
     stop_billing_reconciler,
 )
 from proliferate.server.cloud.api import router as cloud_router
+from proliferate.server.cloud.runtime.setup_monitor import (
+    start_cloud_setup_monitor,
+    stop_cloud_setup_monitor,
+)
 from proliferate.server.health import router as health_router
 from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
@@ -103,11 +107,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "enforce",
     }:
         start_billing_reconciler()
+    start_cloud_setup_monitor()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
+        await stop_cloud_setup_monitor()
         await stop_billing_reconciler()
         flush_server_sentry()
 

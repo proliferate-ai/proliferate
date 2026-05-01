@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  includeVisibleLinkedChildSessionIds,
   MAX_RECENTLY_HIDDEN_CHAT_TABS,
   rememberHiddenChatSessionId,
   resolveFallbackAfterHidingChatTabs,
@@ -44,6 +45,30 @@ describe("chat tab visibility", () => {
 
     expect(result.prunedPersistedVisibleIds).toEqual(["live"]);
     expect(result.prunedRecentlyHiddenIds).toEqual(["live"]);
+  });
+
+  it("includes linked child sessions for visible parents without waiting for persisted visibility", () => {
+    const result = includeVisibleLinkedChildSessionIds({
+      visibleSessionIds: ["parent", "other"],
+      linkedChildrenByParentSessionId: new Map([
+        ["parent", ["reviewer-1", "reviewer-2"]],
+        ["hidden-parent", ["hidden-child"]],
+      ]),
+    });
+
+    expect(result).toEqual(["parent", "reviewer-1", "reviewer-2", "other"]);
+  });
+
+  it("does not revive recently hidden linked child sessions", () => {
+    const result = includeVisibleLinkedChildSessionIds({
+      visibleSessionIds: ["parent"],
+      linkedChildrenByParentSessionId: new Map([
+        ["parent", ["reviewer-1", "reviewer-2"]],
+      ]),
+      recentlyHiddenIds: ["reviewer-1"],
+    });
+
+    expect(result).toEqual(["parent", "reviewer-2"]);
   });
 
   it("chooses the nearest visible fallback after hiding the active tab", () => {

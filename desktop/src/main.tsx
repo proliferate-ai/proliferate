@@ -10,12 +10,28 @@ import {
   getDesktopTelemetryRootHandlers,
   initializeDesktopTelemetry,
 } from "./lib/integrations/telemetry/client";
+import { elapsedStartupMs, startStartupTimer } from "./lib/infra/debug-startup";
+import { installDebugMeasurement } from "./lib/infra/debug-measurement-install";
+import { logRendererEvent } from "./platform/tauri/diagnostics";
 import { AppProviders } from "./providers/AppProviders";
 import "./index.css";
 
 const IS_TAURI_DESKTOP =
   typeof window !== "undefined"
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
+
+const rendererStartupStartedAt = startStartupTimer();
+installDebugMeasurement();
+
+function recordRendererStartupEvent(message: string): void {
+  void logRendererEvent({
+    source: "renderer_startup",
+    message,
+    elapsedMs: elapsedStartupMs(rendererStartupStartedAt),
+  }).catch(() => {
+    // Native logging is diagnostic-only; app startup should never depend on it.
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Block webview reload in production.
@@ -67,6 +83,7 @@ if (!import.meta.env.DEV) {
 }
 
 function renderApp() {
+  recordRendererStartupEvent("render.start");
   ReactDOM.createRoot(
     document.getElementById("root") as HTMLElement,
     getDesktopTelemetryRootHandlers(),
@@ -79,30 +96,74 @@ function renderApp() {
       </BrowserRouter>
     </React.StrictMode>,
   );
+  recordRendererStartupEvent("render.scheduled");
+}
+
+let appRendered = false;
+
+function renderAppOnce() {
+  if (appRendered) {
+    return;
+  }
+  appRendered = true;
+  renderApp();
+}
+
+function warnStartupFailure(message: string, error: unknown): void {
+  if (import.meta.env.DEV) {
+    console.warn(message, error);
+  }
+}
+
+function startAnonymousTelemetry(): void {
+  let runtimeState: ReturnType<typeof getDesktopTelemetryRuntimeState>;
+  try {
+    runtimeState = getDesktopTelemetryRuntimeState();
+  } catch (error) {
+    warnStartupFailure("Failed to resolve desktop telemetry runtime state", error);
+    return;
+  }
+
+  if (!runtimeState.anonymousEnabled) {
+    return;
+  }
+
+  void initializeAnonymousTelemetry({
+    endpoint: getAnonymousTelemetryEndpoint(),
+    telemetryMode: runtimeState.telemetryMode,
+  }).catch((error) => {
+    warnStartupFailure("Failed to initialize anonymous telemetry", error);
+  });
 }
 
 void (async () => {
+  recordRendererStartupEvent("startup.start");
+  renderAppOnce();
+
   try {
+    recordRendererStartupEvent("api_config.start");
     await bootstrapProliferateApiConfig();
-  } catch {
+    recordRendererStartupEvent("api_config.completed");
+  } catch (error) {
     // Fall back to env/default resolution when no runtime override is available.
+    recordRendererStartupEvent("api_config.failed");
+    warnStartupFailure("Failed to bootstrap Proliferate API config", error);
   }
 
-  initializeDesktopTelemetry();
-
-  const runtimeState = getDesktopTelemetryRuntimeState();
-  if (runtimeState.anonymousEnabled) {
-    try {
-      await initializeAnonymousTelemetry({
-        endpoint: getAnonymousTelemetryEndpoint(),
-        telemetryMode: runtimeState.telemetryMode,
-      });
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.warn("Failed to initialize anonymous telemetry", error);
-      }
-    }
+  try {
+    recordRendererStartupEvent("telemetry.start");
+    initializeDesktopTelemetry();
+    recordRendererStartupEvent("telemetry.completed");
+  } catch (error) {
+    recordRendererStartupEvent("telemetry.failed");
+    warnStartupFailure("Failed to initialize desktop telemetry", error);
   }
 
-  renderApp();
-})();
+  recordRendererStartupEvent("anonymous_telemetry.start");
+  startAnonymousTelemetry();
+  recordRendererStartupEvent("startup.completed");
+})().catch((error) => {
+  recordRendererStartupEvent("startup.failed");
+  warnStartupFailure("Failed to start desktop app", error);
+  renderAppOnce();
+});

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "builderVersion": 1,
+  "node": {
+    "version": "22.21.1",
+    "baseUrl": "https://nodejs.org/dist/v22.21.1",
+    "targets": {
+      "aarch64-apple-darwin": {
+        "archive": "node-v22.21.1-darwin-arm64.tar.gz",
+        "sha256": "c170d6554fba83d41d25a76cdbad85487c077e51fa73519e41ac885aa429d8af"
+      },
+      "x86_64-apple-darwin": {
+        "archive": "node-v22.21.1-darwin-x64.tar.gz",
+        "sha256": "8e3dc89614debe66c2a6ad2313a1adb06eb37db6cd6c40d7de6f7d987f7d1afd"
+      }
+    }
+  },
+  "agents": {
+    "claude": {
+      "nativeVersion": "latest",
+      "agentProcessPackage": "git+https://github.com/proliferate-ai/claude-agent-acp.git#906204b3cd798180df75502783a587bad19614ec"
+    },
+    "codex": {
+      "nativeVersion": "latest",
+      "agentProcessPackage": "@proliferateai/codex-acp@0.11.7"
+    }
+  }
+}

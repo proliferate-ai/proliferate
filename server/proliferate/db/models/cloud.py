@@ -138,6 +138,10 @@ class CloudWorkspace(Base):
     repo_post_ready_phase: Mapped[str] = mapped_column(String(32), default="idle")
     repo_post_ready_files_total: Mapped[int] = mapped_column(Integer, default=0)
     repo_post_ready_files_applied: Mapped[int] = mapped_column(Integer, default=0)
+    repo_post_ready_apply_token: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
     repo_files_last_failed_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     repo_files_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -168,6 +172,50 @@ class CloudWorkspace(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cleanup_state: Mapped[str] = mapped_column(String(32), default="none")
     cleanup_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CloudWorkspaceSetupRun(Base):
+    __tablename__ = "cloud_workspace_setup_run"
+    __table_args__ = (
+        Index(
+            "ix_cloud_workspace_setup_run_reconciler",
+            "status",
+            "deadline_at",
+            "claim_until",
+            "next_poll_at",
+        ),
+        Index(
+            "ix_cloud_workspace_setup_run_workspace_token",
+            "workspace_id",
+            "apply_token",
+            "setup_script_version",
+        ),
+        UniqueConstraint("command_run_id", name="uq_cloud_workspace_setup_run_command_run_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_workspace.id", ondelete="CASCADE"),
+        index=True,
+    )
+    anyharness_workspace_id: Mapped[str] = mapped_column(String(255))
+    terminal_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    command_run_id: Mapped[str] = mapped_column(String(255))
+    setup_script_version: Mapped[int] = mapped_column(Integer)
+    apply_token: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    claim_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claim_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
 
 
 class CloudWorkspaceMobility(Base):
@@ -438,6 +486,7 @@ class CloudRepoConfig(Base):
     env_vars_version: Mapped[int] = mapped_column(Integer, default=0)
     setup_script: Mapped[str] = mapped_column(Text, default="")
     setup_script_version: Mapped[int] = mapped_column(Integer, default=0)
+    run_command: Mapped[str] = mapped_column(Text, default="")
     files_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

@@ -67,4 +67,39 @@ describe("deriveAnonymousTelemetryDirectives", () => {
       }),
     ).toEqual([]);
   });
+
+  it("maps full agent seed hydration into an activation milestone", () => {
+    expect(
+      deriveAnonymousTelemetryDirectives("agent_seed_hydrated", {
+        status: "ready",
+        source: "bundled",
+        ownership: "full_seed",
+        last_action: "hydrated",
+        seeded_agent_count: 2,
+        seed_owned_artifact_count: 12,
+        skipped_existing_artifact_count: 0,
+        repaired_artifact_count: 0,
+      }),
+    ).toEqual([
+      {
+        kind: "mark_activation",
+        milestone: "first_bundled_agent_seed_hydrated",
+      },
+    ]);
+  });
+
+  it("does not mark activation for partial agent seed hydration", () => {
+    expect(
+      deriveAnonymousTelemetryDirectives("agent_seed_hydrated", {
+        status: "partial",
+        source: "bundled",
+        ownership: "partial_seed",
+        last_action: "hydrated",
+        seeded_agent_count: 2,
+        seed_owned_artifact_count: 8,
+        skipped_existing_artifact_count: 4,
+        repaired_artifact_count: 0,
+      }),
+    ).toEqual([]);
+  });
 });

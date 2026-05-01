@@ -44,7 +44,6 @@ export function CollapsiblePlanCard({
 
   return (
     <div
-      data-chat-selection-unit
       data-telemetry-mask
       className="relative overflow-clip rounded-lg bg-foreground/5 text-left"
     >
@@ -61,6 +60,7 @@ export function CollapsiblePlanCard({
               type="button"
               variant="ghost"
               size="icon-sm"
+              data-chat-transcript-ignore
               onClick={handleCopy}
               aria-label={copyLabel}
               className="size-6 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -71,6 +71,7 @@ export function CollapsiblePlanCard({
               type="button"
               variant="ghost"
               size="icon-sm"
+              data-chat-transcript-ignore
               onClick={() => setExpanded((value) => !value)}
               aria-label={expanded ? collapseLabel : expandLabel}
               className="size-6 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -107,6 +108,7 @@ export function CollapsiblePlanCard({
               type="button"
               variant="inverted"
               size="pill"
+              data-chat-transcript-ignore
               onClick={() => setExpanded(true)}
               className="pointer-events-auto px-3 py-0.5 text-sm"
             >

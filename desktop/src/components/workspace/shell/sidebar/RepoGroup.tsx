@@ -2,8 +2,17 @@ import { type ReactNode, useState } from "react";
 import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { Button } from "@/components/ui/Button";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import {
+  confirmRepoRemoval,
+  repoRemovalConfirmationCopy,
+  requestRepoRemovalConfirmation,
+} from "@/lib/domain/workspaces/repo-context-menu";
+import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/use-repo-group-native-context-menu";
 import { SidebarActionButton } from "./SidebarActionButton";
 
 interface RepoGroupProps {
@@ -23,7 +32,7 @@ interface RepoGroupProps {
 }
 
 const POPOVER_ROW =
-  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
+  "h-auto w-full justify-start gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
 
 export function RepoGroup({
   name,
@@ -40,6 +49,24 @@ export function RepoGroup({
   onRemoveRepo,
   onOpenSettings,
 }: RepoGroupProps) {
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const handleRequestRemove = () => requestRepoRemovalConfirmation(
+    () => setRemoveConfirmOpen(true),
+  );
+  const handleConfirmRemove = () => {
+    confirmRepoRemoval({
+      closeConfirmation: () => setRemoveConfirmOpen(false),
+      removeRepo: onRemoveRepo,
+    });
+  };
+  const removeConfirmationCopy = repoRemovalConfirmationCopy(name);
+  const { onContextMenuCapture } = useRepoGroupNativeContextMenu({
+    canOpenSettings: !!onOpenSettings,
+    canRemoveRepo: !!onRemoveRepo,
+    onOpenSettings: () => onOpenSettings?.(),
+    onRequestRemove: handleRequestRemove,
+  });
+
   const headerRow = (
     <div
       role="button"
@@ -51,6 +78,7 @@ export function RepoGroup({
           onToggleCollapsed();
         }
       }}
+      onContextMenuCapture={onContextMenuCapture}
       className="group/folder-row flex cursor-pointer select-none items-center justify-between overflow-x-hidden text-sm rounded-lg hover:bg-sidebar-accent py-0.5 h-[30px] focus-visible:outline focus-visible:outline-offset-2"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
@@ -71,7 +99,7 @@ export function RepoGroup({
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className="absolute inset-0 flex items-center justify-center font-mono text-sm text-foreground/40 transition-opacity group-hover/folder-row:opacity-0">
+          <span className="absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-foreground/40 transition-opacity group-hover/folder-row:opacity-0">
             {count}
           </span>
           <PopoverButton
@@ -90,50 +118,58 @@ export function RepoGroup({
           >
             {(close) => (
               <>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => { close(); onNewLocalWorkspace?.(); }}
                   className={POPOVER_ROW}
                 >
                   <Folder className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate text-left">New local workspace</span>
-                  <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newLocal.label}</span>
-                </button>
-                <button
+                  <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{SHORTCUTS.newLocal.label}</span>
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => { close(); onNewWorkspace?.(); }}
                   className={POPOVER_ROW}
                 >
                   <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate text-left">New worktree</span>
-                  <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newWorktree.label}</span>
-                </button>
+                  <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{SHORTCUTS.newWorktree.label}</span>
+                </Button>
                 {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                   cloudWorkspaceEnabled ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => { close(); onCloudWorkspaceAction(); }}
                       className={POPOVER_ROW}
                     >
                       <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
-                    </button>
+                      <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
+                    </Button>
                   ) : (
                     <Tooltip
                       content={cloudWorkspaceTooltip ?? "Cloud workspaces require a reachable control plane."}
                       className="block w-full"
                     >
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         aria-disabled="true"
                         onClick={(event) => { event.preventDefault(); }}
                         className={`${POPOVER_ROW} cursor-not-allowed opacity-60`}
                       >
                         <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
-                      </button>
+                        <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
+                      </Button>
                     </Tooltip>
                   )
                 )}
@@ -157,11 +193,20 @@ export function RepoGroup({
         {(close) => (
           <RepoContextMenuContent
             onOpenSettings={onOpenSettings}
-            onRemoveRepo={onRemoveRepo}
+            onRequestRemove={handleRequestRemove}
             onClose={close}
           />
         )}
       </PopoverButton>
+      <ConfirmationDialog
+        open={removeConfirmOpen}
+        title={removeConfirmationCopy.title}
+        description={removeConfirmationCopy.description}
+        confirmLabel={removeConfirmationCopy.confirmLabel}
+        confirmVariant={removeConfirmationCopy.confirmVariant}
+        onClose={() => setRemoveConfirmOpen(false)}
+        onConfirm={handleConfirmRemove}
+      />
 
       {/* Workspace items */}
       {!collapsed && <div className="flex w-full min-w-0 flex-col gap-px">{children}</div>}
@@ -171,49 +216,34 @@ export function RepoGroup({
 
 function RepoContextMenuContent({
   onOpenSettings,
-  onRemoveRepo,
+  onRequestRemove,
   onClose,
 }: {
   onOpenSettings?: () => void;
-  onRemoveRepo?: () => void;
+  onRequestRemove?: () => void;
   onClose: () => void;
 }) {
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
-
   return (
     <>
       {onOpenSettings && (
-        <button
-          type="button"
+        <PopoverMenuItem
+          icon={<Settings className="size-3.5 shrink-0 text-muted-foreground" />}
+          label="Settings"
+          variant="sidebar"
           onClick={() => { onClose(); onOpenSettings(); }}
-          className={POPOVER_ROW}
-        >
-          <Settings className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="flex-1 truncate text-left">Settings</span>
-        </button>
+        />
       )}
-      {onOpenSettings && onRemoveRepo && (
+      {onOpenSettings && onRequestRemove && (
         <div className="my-1 h-px bg-border" />
       )}
-      {onRemoveRepo && !confirmingRemove && (
-        <button
-          type="button"
-          onClick={() => setConfirmingRemove(true)}
-          className={`${POPOVER_ROW} text-destructive hover:text-destructive`}
-        >
-          <Trash className="size-3.5 shrink-0" />
-          <span className="flex-1 truncate text-left">Remove repository</span>
-        </button>
-      )}
-      {onRemoveRepo && confirmingRemove && (
-        <button
-          type="button"
-          onClick={() => { onClose(); onRemoveRepo(); }}
-          className={`${POPOVER_ROW} text-destructive hover:text-destructive`}
-        >
-          <Trash className="size-3.5 shrink-0" />
-          <span className="flex-1 truncate text-left">Confirm remove?</span>
-        </button>
+      {onRequestRemove && (
+        <PopoverMenuItem
+          icon={<Trash className="size-3.5 shrink-0" />}
+          label="Remove repository"
+          variant="sidebar"
+          className="text-destructive hover:text-destructive"
+          onClick={() => { onClose(); onRequestRemove(); }}
+        />
       )}
     </>
   );

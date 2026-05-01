@@ -40,6 +40,21 @@ interface PendingInteractionLike {
   } | null;
 }
 
+interface SessionErrorAttentionSnapshot {
+  sessionId: string;
+  status: SessionStatus | null;
+  executionSummary?: SessionExecutionSummary | null;
+  transcript: {
+    itemsById: Record<string, ErrorAttentionTranscriptItem>;
+  };
+}
+
+interface ErrorAttentionTranscriptItem {
+  kind: string;
+  itemId: string;
+  startedSeq: number;
+}
+
 export function resolveStatusFromExecutionSummary(
   executionSummary: SessionExecutionSummary | null | undefined,
   fallbackStatus: SessionStatus | null | undefined,
@@ -122,6 +137,17 @@ export function isSessionEffectivelyStreaming(
 
 interface WorkspaceSessionActivitySnapshot extends SessionActivitySnapshot {
   workspaceId: string | null;
+}
+
+interface WorkspaceSessionSidebarAttentionSnapshot
+  extends WorkspaceSessionActivitySnapshot {
+  sessionId: string;
+  errorAttentionKey: string | null;
+}
+
+interface SessionActivityReconciliationSnapshot
+  extends SessionActivitySnapshot {
+  sessionId: string;
 }
 
 export function resolveSessionExecutionPhase(
@@ -222,6 +248,45 @@ export function resolveSessionSidebarActivityState(
   }
 }
 
+export function resolveSessionErrorAttentionKey(
+  slot: SessionErrorAttentionSnapshot | null | undefined,
+): string | null {
+  if (!slot) {
+    return null;
+  }
+
+  const hasCurrentError =
+    slot.executionSummary?.phase === "errored" || slot.status === "errored";
+  if (!hasCurrentError) {
+    return null;
+  }
+
+  let latestErrorItem: ErrorAttentionTranscriptItem | null = null;
+  for (const item of Object.values(slot.transcript.itemsById)) {
+    if (item.kind !== "error") {
+      continue;
+    }
+    if (
+      !latestErrorItem
+      || item.startedSeq > latestErrorItem.startedSeq
+      || (item.startedSeq === latestErrorItem.startedSeq
+        && item.itemId > latestErrorItem.itemId)
+    ) {
+      latestErrorItem = item;
+    }
+  }
+
+  if (latestErrorItem) {
+    return `error-item:${latestErrorItem.itemId}`;
+  }
+
+  if (slot.executionSummary?.phase === "errored") {
+    return `summary-terminal:${slot.sessionId}`;
+  }
+
+  return null;
+}
+
 export function shouldSkipColdIdleSessionStream(
   slot: SessionActivitySnapshot | null | undefined,
   allowColdIdleNoStream?: boolean,
@@ -301,14 +366,6 @@ export function sessionSlotBelongsToWorkspace(
   return !!slot && !!workspaceId && slot.workspaceId === workspaceId;
 }
 
-export function closeSessionSlotHandles(
-  slots: Record<string, { sseHandle: { close(): void } | null }>,
-): void {
-  for (const slot of Object.values(slots)) {
-    slot.sseHandle?.close();
-  }
-}
-
 export function collectWorkspaceSessionViewStates(
   sessionSlots: Record<string, WorkspaceSessionActivitySnapshot>,
 ): Record<string, SessionViewState> {
@@ -350,6 +407,55 @@ export function collectWorkspaceSidebarActivityStates(
   }
 
   return states;
+}
+
+export function collectWorkspaceSidebarActivityStatesWithErrorAttention(
+  sessionSlots: Record<string, WorkspaceSessionSidebarAttentionSnapshot>,
+  lastViewedSessionErrorAtBySession: Record<string, string>,
+): Record<string, SidebarSessionActivityState> {
+  const states: Record<string, SidebarSessionActivityState> = {};
+
+  for (const slot of Object.values(sessionSlots)) {
+    if (!slot.workspaceId) {
+      continue;
+    }
+
+    const nextState = resolveSessionSidebarActivityState(slot);
+    const attentionState =
+      nextState === "error"
+        && slot.errorAttentionKey !== null
+        && lastViewedSessionErrorAtBySession[slot.sessionId] === slot.errorAttentionKey
+        ? "idle"
+        : nextState;
+    const currentState = states[slot.workspaceId];
+    if (
+      !currentState
+      || sidebarSessionActivityPriority(attentionState) > sidebarSessionActivityPriority(currentState)
+    ) {
+      states[slot.workspaceId] = attentionState;
+    }
+  }
+
+  return states;
+}
+
+export function collectSessionActivityReconciliationIds(
+  sessionSlots: Record<string, SessionActivityReconciliationSnapshot>,
+): string[] {
+  const ids: string[] = [];
+
+  for (const slot of Object.values(sessionSlots)) {
+    const sidebarState = resolveSessionSidebarActivityState(slot);
+    if (
+      sidebarState === "iterating"
+      || sidebarState === "waiting_input"
+      || sidebarState === "waiting_plan"
+    ) {
+      ids.push(slot.sessionId);
+    }
+  }
+
+  return ids.sort();
 }
 
 function sessionViewStatePriority(state: SessionViewState): number {

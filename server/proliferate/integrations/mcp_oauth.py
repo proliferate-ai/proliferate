@@ -31,6 +31,7 @@ class AuthorizationServerMetadata:
     authorization_endpoint: str
     token_endpoint: str
     registration_endpoint: str | None
+    token_endpoint_auth_methods_supported: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -243,6 +244,9 @@ async def discover_authorization_server_metadata(
                     if payload.get("registration_endpoint")
                     else None
                 ),
+                token_endpoint_auth_methods_supported=_string_tuple(
+                    payload.get("token_endpoint_auth_methods_supported")
+                ),
             )
     raise McpOAuthProviderError(
         "discovery_failed",
@@ -268,7 +272,7 @@ async def register_client(
                 "redirect_uris": [redirect_uri],
                 "grant_types": ["authorization_code", "refresh_token"],
                 "response_types": ["code"],
-                "token_endpoint_auth_method": "none",
+                "token_endpoint_auth_method": _registration_token_auth_method(metadata),
             },
         )
         response.raise_for_status()
@@ -282,6 +286,25 @@ async def register_client(
         token_endpoint_auth_method=payload.get("token_endpoint_auth_method"),
         registration_client_uri=payload.get("registration_client_uri"),
         registration_access_token=payload.get("registration_access_token"),
+    )
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(item for item in value if isinstance(item, str))
+
+
+def _registration_token_auth_method(metadata: AuthorizationServerMetadata) -> str:
+    supported = metadata.token_endpoint_auth_methods_supported
+    if not supported:
+        return "none"
+    for method in ("none", "client_secret_post", "client_secret_basic"):
+        if method in supported:
+            return method
+    raise McpOAuthProviderError(
+        "unsupported_client_auth",
+        "OAuth provider does not support a client authentication method Proliferate can use.",
     )
 
 

@@ -6,6 +6,7 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspace
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;
+  forceCold?: boolean;
   preservePending?: boolean;
   initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
@@ -44,6 +45,16 @@ export interface WorkspaceSelectionDeps {
     latencyFlowId?: string | null;
     isCurrent: () => boolean;
   }) => Promise<{ sessions: WorkspaceSession[] }>;
+  reconcileHotWorkspace: (input: {
+    workspaceId: string;
+    logicalWorkspaceId: string;
+    runtimeUrl: string;
+    workspaceConnection: AnyHarnessResolvedConnection;
+    sessionId: string;
+    selectionNonce: number;
+    latencyFlowId?: string | null;
+    isCurrent: () => boolean;
+  }) => Promise<"completed" | "stale" | "session_missing">;
 }
 
 export type CloudReadinessResult =

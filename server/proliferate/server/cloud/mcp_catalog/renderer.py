@@ -8,6 +8,7 @@ from proliferate.server.cloud.mcp_catalog.types import (
     CatalogConfigurationError,
     CatalogEntry,
     CatalogSettingField,
+    LaunchUrlContext,
     QueryTemplate,
     RenderedHeader,
     RenderedHttpLaunch,
@@ -100,7 +101,7 @@ def render_http_launch(
     settings: dict[str, object],
     *,
     secrets: dict[str, str] | None = None,
-    allow_insecure_launch_urls: bool = False,
+    launch_context: LaunchUrlContext = "catalog",
 ) -> RenderedHttpLaunch:
     if entry.http is None:
         raise CatalogConfigurationError(f"{entry.name} does not have an HTTP launch template.")
@@ -112,7 +113,7 @@ def render_http_launch(
         normalized_settings,
         secrets or {},
     )
-    _validate_launch_url(rendered_url, allow_insecure_launch_urls=allow_insecure_launch_urls)
+    _validate_launch_url(rendered_url, entry=entry, launch_context=launch_context)
     headers: list[RenderedHeader] = []
     for template in entry.http.headers:
         rendered = _render_template_value(
@@ -132,14 +133,12 @@ def render_http_launch(
 def render_oauth_resource_url(
     entry: CatalogEntry,
     settings: dict[str, object],
-    *,
-    allow_insecure_launch_urls: bool = False,
 ) -> str:
     return render_http_launch(
         entry,
         settings,
         secrets=None,
-        allow_insecure_launch_urls=allow_insecure_launch_urls,
+        launch_context="oauth_resource",
     ).url
 
 
@@ -171,7 +170,7 @@ def _validate_setting_value(field: CatalogSettingField, value: object) -> None:
         if value not in allowed:
             raise CatalogConfigurationError(f"'{field.id}' must be one of: {', '.join(allowed)}.")
     if field.kind == "url" and value:
-        _validate_launch_url(value, allow_insecure_launch_urls=False)
+        _validate_https_url(value)
 
 
 def _render_launch_url(
@@ -261,16 +260,30 @@ def _stringify_template_value(value: object) -> str:
     return str(value)
 
 
+def _validate_https_url(value: str) -> None:
+    parsed = urlparse(value)
+    if parsed.scheme == "https" and parsed.netloc:
+        return
+    raise CatalogConfigurationError("MCP launch URL must use https.")
+
+
 def _validate_launch_url(
     value: str,
     *,
-    allow_insecure_launch_urls: bool,
+    entry: CatalogEntry,
+    launch_context: LaunchUrlContext,
 ) -> None:
     parsed = urlparse(value)
     if parsed.scheme == "https" and parsed.netloc:
         return
+    # Localhost launch URLs are only valid when materializing a local-only
+    # connector into the desktop runtime; catalog, cloud, and OAuth paths stay
+    # on public HTTPS endpoints.
     if (
-        allow_insecure_launch_urls
+        launch_context == "local_materialization"
+        and entry.http is not None
+        and entry.availability == "local_only"
+        and entry.auth_kind != "oauth"
         and parsed.scheme == "http"
         and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
     ):

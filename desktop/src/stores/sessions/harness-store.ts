@@ -13,6 +13,10 @@ import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
+import {
+  isDebugMeasurementEnabled,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
 
 type ConnectionState = "connecting" | "healthy" | "failed";
 
@@ -21,6 +25,14 @@ export type SessionStreamConnectionState =
   | "connecting"
   | "open"
   | "ended";
+
+export interface HotPaintGate {
+  workspaceId: string;
+  sessionId: string;
+  nonce: number;
+  operationId: MeasurementOperationId | null;
+  kind: "workspace_hot_reopen" | "session_hot_switch";
+}
 
 export interface SessionSlot {
   sessionId: string;
@@ -56,12 +68,15 @@ interface HarnessState {
     id: string,
     opts?: { initialActiveSessionId?: string | null; clearPending?: boolean },
   ) => void;
+  deselectWorkspacePreservingSlots: () => void;
   removeWorkspaceSlots: (workspaceId: string) => void;
   clearSelection: () => void;
   putSessionSlot: (sessionId: string, slot: SessionSlot) => void;
   patchSessionSlot: (sessionId: string, patch: Partial<SessionSlot>) => void;
   removeSessionSlot: (sessionId: string) => void;
   setActiveSessionId: (sessionId: string | null) => void;
+  setHotPaintGate: (gate: HotPaintGate | null) => void;
+  clearHotPaintGate: (nonce: number) => void;
 
   pendingWorkspaceEntry: PendingWorkspaceEntry | null;
   selectedWorkspaceId: string | null;
@@ -70,6 +85,7 @@ interface HarnessState {
 
   activeSessionId: string | null;
   sessionSlots: Record<string, SessionSlot>;
+  hotPaintGate: HotPaintGate | null;
 }
 
 export const useHarnessStore = create<HarnessState>((set) => ({
@@ -105,6 +121,15 @@ export const useHarnessStore = create<HarnessState>((set) => ({
     activeSessionId: opts?.initialActiveSessionId ?? null,
   })),
 
+  deselectWorkspacePreservingSlots: () => set(s => ({
+    pendingWorkspaceEntry: null,
+    selectedWorkspaceId: null,
+    workspaceSelectionNonce: s.workspaceSelectionNonce + 1,
+    workspaceArrivalEvent: null,
+    activeSessionId: null,
+    hotPaintGate: null,
+  })),
+
   removeWorkspaceSlots: (workspaceId) => set(s => ({
     sessionSlots: Object.fromEntries(
       Object.entries(s.sessionSlots).filter(([, slot]) => slot.workspaceId !== workspaceId),
@@ -112,6 +137,7 @@ export const useHarnessStore = create<HarnessState>((set) => ({
     activeSessionId: s.activeSessionId && s.sessionSlots[s.activeSessionId]?.workspaceId !== workspaceId
       ? s.activeSessionId
       : null,
+    hotPaintGate: s.hotPaintGate?.workspaceId === workspaceId ? null : s.hotPaintGate,
   })),
 
   clearSelection: () => set(s => ({
@@ -121,6 +147,7 @@ export const useHarnessStore = create<HarnessState>((set) => ({
     workspaceArrivalEvent: null,
     activeSessionId: null,
     sessionSlots: {},
+    hotPaintGate: null,
   })),
 
   putSessionSlot: (sessionId, slot) => set((state) => ({
@@ -154,6 +181,14 @@ export const useHarnessStore = create<HarnessState>((set) => ({
 
   setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
 
+  setHotPaintGate: (hotPaintGate) => set({ hotPaintGate }),
+
+  clearHotPaintGate: (nonce) => set((state) => (
+    state.hotPaintGate?.nonce === nonce
+      ? { hotPaintGate: null }
+      : state
+  )),
+
   pendingWorkspaceEntry: null,
   selectedWorkspaceId: null,
   workspaceSelectionNonce: 0,
@@ -161,4 +196,40 @@ export const useHarnessStore = create<HarnessState>((set) => ({
 
   activeSessionId: null,
   sessionSlots: {},
+  hotPaintGate: null,
 }));
+
+const RETAINED_SESSION_SLOT_WARNING_THRESHOLD = 50;
+const retainedSessionSlotWarningEnabled = isDebugMeasurementEnabled();
+let lastRetainedSlotWarningBucket = 0;
+
+if (retainedSessionSlotWarningEnabled) {
+  const unsubscribeRetainedSlotWarning = useHarnessStore.subscribe((state) => {
+    const retainedSlotCount = Object.keys(state.sessionSlots).length;
+    const warningBucket = Math.floor(
+      retainedSlotCount / RETAINED_SESSION_SLOT_WARNING_THRESHOLD,
+    );
+    if (warningBucket <= 0 || warningBucket === lastRetainedSlotWarningBucket) {
+      return;
+    }
+    lastRetainedSlotWarningBucket = warningBucket;
+    console.warn("[debug-measurement] retained session slot warning", {
+      tag: "retained_session_slot_warning",
+      retainedSlotCount,
+      threshold: RETAINED_SESSION_SLOT_WARNING_THRESHOLD,
+    });
+  });
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      unsubscribeRetainedSlotWarning();
+    });
+  }
+}
+
+export function isHotPaintGatePendingForWorkspace(
+  gate: HotPaintGate | null,
+  workspaceId: string | null | undefined,
+): boolean {
+  return !!workspaceId && gate?.workspaceId === workspaceId;
+}

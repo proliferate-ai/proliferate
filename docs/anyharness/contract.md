@@ -63,6 +63,11 @@ endpoints.
 
 Owns health-check response types.
 
+`HealthResponse.agentSeed` is a public packaging/readiness diagnostic. It must
+stay low-cardinality: status, source, ownership, action, counts, target, seeded
+agent names, and coarse failure kind are allowed; absolute paths, raw errors,
+archive names, checksums, and install logs are not.
+
 ### `models.rs`
 
 Owns provider configuration metadata:

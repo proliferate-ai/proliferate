@@ -1,4 +1,5 @@
 import type {
+  GitDiffScope,
   WorkspaceFileEntry,
   ReadWorkspaceFileResponse,
 } from "@anyharness/sdk";
@@ -6,6 +7,13 @@ import { create } from "zustand";
 
 type FileLoadState = "idle" | "loading" | "loaded" | "error";
 type FileSaveState = "idle" | "saving" | "saved" | "error" | "conflict";
+
+export interface WorkspaceFileRestoreMarker {
+  workspaceUiKey: string;
+  materializedWorkspaceId: string;
+  initVersion: number;
+  ready: boolean;
+}
 
 export interface WorkspaceFileBuffer {
   path: string;
@@ -20,44 +28,62 @@ export interface WorkspaceFileBuffer {
   lastError?: string | null;
 }
 
-export type MainTab = { kind: "chat" } | { kind: "file"; path: string };
+export interface WorkspaceFileDiffDescriptor {
+  scope?: GitDiffScope | null;
+  baseRef?: string | null;
+  oldPath?: string | null;
+}
+
+export interface NormalizedWorkspaceFileDiffDescriptor {
+  scope: GitDiffScope;
+  baseRef: string | null;
+  oldPath: string | null;
+}
 
 interface WorkspaceFilesState {
-  workspaceId: string | null;
-  runtimeWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  materializedWorkspaceId: string | null;
+  anyharnessWorkspaceId: string | null;
   runtimeUrl: string | null;
   authToken: string | null;
   treeStateKey: string | null;
   initVersion: number;
+  fileRestoreMarker: WorkspaceFileRestoreMarker | null;
 
   directoryEntriesByPath: Record<string, WorkspaceFileEntry[]>;
   directoryLoadStateByPath: Record<string, FileLoadState>;
 
   openTabs: string[];
-  activeMainTab: MainTab;
   activeFilePath: string | null;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, "edit" | "diff">;
   tabPatches: Record<string, string | null>;
+  tabDiffDescriptorsByPath: Record<string, NormalizedWorkspaceFileDiffDescriptor>;
 
   // Actions
-  prepareWorkspace: (
-    workspaceId: string,
-    runtimeUrl: string,
-    treeStateKey: string,
-    runtimeWorkspaceId?: string,
-    authToken?: string,
-  ) => number;
+  prepareWorkspace: (args: {
+    workspaceUiKey: string;
+    materializedWorkspaceId: string;
+    anyharnessWorkspaceId: string;
+    runtimeUrl: string;
+    treeStateKey: string;
+    authToken?: string | null;
+    initialOpenTabs?: string[];
+    initialActiveFilePath?: string | null;
+  }) => number;
   reset: () => void;
   setDirectoryLoadState: (dirPath: string, state: FileLoadState) => void;
   setDirectoryEntries: (dirPath: string, entries: WorkspaceFileEntry[]) => void;
   focusFileTab: (filePath: string) => void;
-  setDiffTab: (filePath: string, patch: string | null) => void;
+  setDiffTab: (
+    filePath: string,
+    patch: string | null,
+    descriptor?: WorkspaceFileDiffDescriptor,
+  ) => void;
   closeTab: (filePath: string) => void;
   reorderOpenTabs: (orderedPaths: string[]) => void;
   setActiveTab: (filePath: string) => void;
   setTabMode: (filePath: string, mode: "edit" | "diff") => void;
-  activateChatTab: () => void;
   setBufferLoading: (filePath: string) => void;
   setBufferLoaded: (filePath: string, result: ReadWorkspaceFileResponse) => void;
   setBufferLoadError: (filePath: string, error: string) => void;
@@ -75,12 +101,49 @@ function emptyFilesState() {
     directoryEntriesByPath: {} as Record<string, WorkspaceFileEntry[]>,
     directoryLoadStateByPath: {} as Record<string, FileLoadState>,
     openTabs: [] as string[],
-    activeMainTab: { kind: "chat" } as MainTab,
     activeFilePath: null as string | null,
     buffersByPath: {} as Record<string, WorkspaceFileBuffer>,
     tabModes: {} as Record<string, "edit" | "diff">,
     tabPatches: {} as Record<string, string | null>,
+    tabDiffDescriptorsByPath: {} as Record<string, NormalizedWorkspaceFileDiffDescriptor>,
   };
+}
+
+export function normalizeWorkspaceFileDiffDescriptor(
+  descriptor?: WorkspaceFileDiffDescriptor,
+): NormalizedWorkspaceFileDiffDescriptor {
+  return {
+    scope: descriptor?.scope ?? "working_tree",
+    baseRef: normalizeNullableDiffPart(descriptor?.baseRef),
+    oldPath: normalizeNullableDiffPart(descriptor?.oldPath),
+  };
+}
+
+export function workspaceFileDiffPatchKey(
+  filePath: string,
+  descriptor?: WorkspaceFileDiffDescriptor,
+): string {
+  const normalized = normalizeWorkspaceFileDiffDescriptor(descriptor);
+  return [
+    "diff",
+    encodeDiffKeyPart(filePath),
+    normalized.scope,
+    encodeDiffKeyPart(normalized.baseRef),
+    encodeDiffKeyPart(normalized.oldPath),
+  ].join(":");
+}
+
+function workspaceFileDiffPatchKeyPrefix(filePath: string): string {
+  return `diff:${encodeDiffKeyPart(filePath)}:`;
+}
+
+function encodeDiffKeyPart(value: string | null): string {
+  return encodeURIComponent(value ?? "");
+}
+
+function normalizeNullableDiffPart(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function createLoadingBuffer(filePath: string): WorkspaceFileBuffer {
@@ -117,32 +180,41 @@ function bufferFromResponse(
 }
 
 export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => ({
-  workspaceId: null,
-  runtimeWorkspaceId: null,
+  workspaceUiKey: null,
+  materializedWorkspaceId: null,
+  anyharnessWorkspaceId: null,
   runtimeUrl: null,
   authToken: null,
   treeStateKey: null,
   initVersion: 0,
+  fileRestoreMarker: null,
   ...emptyFilesState(),
 
-  prepareWorkspace: (
-    workspaceId,
-    runtimeUrl,
-    treeStateKey,
-    runtimeWorkspaceId,
-    authToken,
-  ) => {
-    const resolvedRuntimeWorkspaceId = runtimeWorkspaceId ?? workspaceId;
+  prepareWorkspace: (args) => {
     const initVersion = get().initVersion + 1;
+    const initialOpenTabs = args.initialOpenTabs ?? [];
+    const initialActiveFilePath = args.initialActiveFilePath
+      && initialOpenTabs.includes(args.initialActiveFilePath)
+      ? args.initialActiveFilePath
+      : null;
     set({
-      workspaceId,
-      runtimeWorkspaceId: resolvedRuntimeWorkspaceId,
-      runtimeUrl,
-      authToken: authToken ?? null,
-      treeStateKey,
+      workspaceUiKey: args.workspaceUiKey,
+      materializedWorkspaceId: args.materializedWorkspaceId,
+      anyharnessWorkspaceId: args.anyharnessWorkspaceId,
+      runtimeUrl: args.runtimeUrl,
+      authToken: args.authToken ?? null,
+      treeStateKey: args.treeStateKey,
       initVersion,
       ...emptyFilesState(),
+      openTabs: initialOpenTabs,
+      activeFilePath: initialActiveFilePath,
       directoryLoadStateByPath: { "": "loading" },
+      fileRestoreMarker: {
+        workspaceUiKey: args.workspaceUiKey,
+        materializedWorkspaceId: args.materializedWorkspaceId,
+        initVersion,
+        ready: true,
+      },
     });
     return initVersion;
   },
@@ -150,12 +222,14 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
   reset: () => {
     const initVersion = get().initVersion + 1;
     set({
-      workspaceId: null,
-      runtimeWorkspaceId: null,
+      workspaceUiKey: null,
+      materializedWorkspaceId: null,
+      anyharnessWorkspaceId: null,
       runtimeUrl: null,
       authToken: null,
       treeStateKey: null,
       initVersion,
+      fileRestoreMarker: null,
       ...emptyFilesState(),
     });
   },
@@ -189,42 +263,36 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
     set({
       openTabs,
       activeFilePath: filePath,
-      activeMainTab: { kind: "file", path: filePath },
     });
   },
 
   closeTab: (filePath) => {
-    const { openTabs, activeFilePath, activeMainTab, buffersByPath } = get();
+    const { openTabs, activeFilePath, buffersByPath } = get();
     const nextTabs = openTabs.filter((t) => t !== filePath);
-
-    const wasActive =
-      activeMainTab.kind === "file" && activeMainTab.path === filePath;
 
     const nextActive = activeFilePath === filePath
       ? nextTabs[nextTabs.length - 1] ?? null
       : activeFilePath;
-
-    const nextMainTab: MainTab = wasActive
-      ? nextActive
-        ? { kind: "file", path: nextActive }
-        : { kind: "chat" }
-      : activeMainTab;
 
     const nextBuffers = { ...buffersByPath };
     delete nextBuffers[filePath];
 
     const nextModes = { ...get().tabModes };
     delete nextModes[filePath];
-    const nextPatches = { ...get().tabPatches };
-    delete nextPatches[filePath];
+    const nextDescriptors = { ...get().tabDiffDescriptorsByPath };
+    delete nextDescriptors[filePath];
+    const patchKeyPrefix = workspaceFileDiffPatchKeyPrefix(filePath);
+    const nextPatches = Object.fromEntries(
+      Object.entries(get().tabPatches).filter(([key]) => !key.startsWith(patchKeyPrefix)),
+    );
 
     set({
       openTabs: nextTabs,
       activeFilePath: nextActive,
-      activeMainTab: nextMainTab,
       buffersByPath: nextBuffers,
       tabModes: nextModes,
       tabPatches: nextPatches,
+      tabDiffDescriptorsByPath: nextDescriptors,
     });
   },
 
@@ -239,16 +307,21 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
     set({ openTabs: next });
   },
 
-  setDiffTab: (filePath, patch) => {
+  setDiffTab: (filePath, patch, descriptor) => {
     const openTabs = get().openTabs.includes(filePath)
       ? get().openTabs
       : [...get().openTabs, filePath];
+    const normalizedDescriptor = normalizeWorkspaceFileDiffDescriptor(descriptor);
+    const patchKey = workspaceFileDiffPatchKey(filePath, normalizedDescriptor);
     set({
       openTabs,
       activeFilePath: filePath,
-      activeMainTab: { kind: "file", path: filePath },
       tabModes: { ...get().tabModes, [filePath]: "diff" },
-      tabPatches: { ...get().tabPatches, [filePath]: patch },
+      tabDiffDescriptorsByPath: {
+        ...get().tabDiffDescriptorsByPath,
+        [filePath]: normalizedDescriptor,
+      },
+      tabPatches: { ...get().tabPatches, [patchKey]: patch },
     });
   },
 
@@ -272,15 +345,11 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
   },
 
   setActiveTab: (filePath) => {
-    set({ activeFilePath: filePath, activeMainTab: { kind: "file", path: filePath } });
+    set({ activeFilePath: filePath });
   },
 
   setTabMode: (filePath, mode) => {
     set({ tabModes: { ...get().tabModes, [filePath]: mode } });
-  },
-
-  activateChatTab: () => {
-    set({ activeMainTab: { kind: "chat" } });
   },
 
   setBufferLoaded: (filePath, result) => {

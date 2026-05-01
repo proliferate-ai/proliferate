@@ -14,9 +14,7 @@ import {
   type TabDragController,
 } from "@/lib/domain/workspaces/tabs/drag-controller";
 import {
-  buildChatDragUnit,
-  reorderChatTabsByDrag,
-  reorderFileTabsByDrag,
+  reorderShellTabsByDrag,
   resolveDragOffsetX,
   resolveDropTarget,
   type DragLayoutRow,
@@ -50,39 +48,27 @@ interface TabDragApi {
   shouldSuppressClick: (rowId: string) => boolean;
 }
 
-export function useChatTabDrag(args: BaseTabDragArgs & {
-  childToParent: Map<string, string>;
-}): TabDragApi {
-  const childToParentRef = useLatestRef(args.childToParent);
-  return useTabDrag({
-    ...args,
-    getUnit: (sourceId) =>
-      buildChatDragUnit({
-        sourceId,
-        orderedIds: args.orderedIds,
-        childToParent: childToParentRef.current,
-      }),
-    reorder: ({ orderedIds, draggedId, targetId, side }) =>
-      reorderChatTabsByDrag({
-        orderedIds,
-        draggedId,
-        targetId,
-        side,
-        childToParent: childToParentRef.current,
-      }),
-  });
-}
+const EMPTY_SHELL_DRAG_UNITS = new Map<string, readonly string[]>();
 
-export function useFileTabDrag(args: BaseTabDragArgs): TabDragApi {
+export function useShellTabDrag(args: BaseTabDragArgs & {
+  unitsBySourceId?: ReadonlyMap<string, readonly string[]>;
+}): TabDragApi {
+  const unitsBySourceIdRef = useLatestRef(
+    args.unitsBySourceId ?? EMPTY_SHELL_DRAG_UNITS,
+  );
   return useTabDrag({
     ...args,
-    getUnit: (sourceId) => ({ kind: "topLevel", ids: [sourceId] }),
+    getUnit: (sourceId) => ({
+      kind: "topLevel",
+      ids: [...(unitsBySourceIdRef.current.get(sourceId) ?? [sourceId])],
+    }),
     reorder: ({ orderedIds, draggedId, targetId, side }) =>
-      reorderFileTabsByDrag({
-        orderedPaths: orderedIds,
-        draggedPath: draggedId,
-        targetPath: targetId,
+      reorderShellTabsByDrag({
+        orderedKeys: orderedIds,
+        draggedKey: draggedId,
+        targetKey: targetId,
         side,
+        unitsBySourceId: unitsBySourceIdRef.current,
       }),
   });
 }
@@ -308,10 +294,7 @@ function useTabDrag(args: BaseTabDragArgs & {
       return false;
     }
     const unit = getUnitRef.current(draggingSourceId);
-    if (unit?.kind === "topLevel") {
-      return unit.ids.includes(rowSourceId);
-    }
-    return unit?.childId === rowSourceId;
+    return unit?.ids.includes(rowSourceId) ?? false;
   }, [dragVisual, getUnitRef, rowsById]);
 
   const getRowDragOffset = useCallback((rowId: string) => {

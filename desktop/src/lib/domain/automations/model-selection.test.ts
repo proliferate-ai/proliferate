@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentSummary, ModelRegistry } from "@anyharness/sdk";
+import type { AgentSummary, ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
 import {
   buildAutomationModelGroups,
   resolveAutomationModelSelection,
@@ -29,18 +29,23 @@ function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRe
     displayName: overrides.displayName ?? overrides.kind,
     defaultModelId: overrides.defaultModelId ?? "default-model",
     models: overrides.models ?? [
-      {
-        id: "default-model",
-        displayName: "Default Model",
-        isDefault: true,
-      },
+      model("default-model", "Default Model", true),
     ],
+  };
+}
+
+function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+  return {
+    id,
+    displayName,
+    isDefault,
+    status: "active",
   };
 }
 
 const EMPTY_PREFERENCES = {
   defaultChatAgentKind: "",
-  defaultChatModelId: "",
+  defaultChatModelIdByAgentKind: {},
 };
 
 describe("buildAutomationModelGroups", () => {
@@ -75,11 +80,7 @@ describe("resolveAutomationModelSelection", () => {
         displayName: "Claude",
         defaultModelId: "claude-default",
         models: [
-          {
-            id: "claude-default",
-            displayName: "Claude Default",
-            isDefault: true,
-          },
+          model("claude-default", "Claude Default", true),
         ],
       }),
       registry({
@@ -87,16 +88,8 @@ describe("resolveAutomationModelSelection", () => {
         displayName: "Codex",
         defaultModelId: "codex-default",
         models: [
-          {
-            id: "codex-default",
-            displayName: "Codex Default",
-            isDefault: true,
-          },
-          {
-            id: "codex-fast",
-            displayName: "Codex Fast",
-            isDefault: false,
-          },
+          model("codex-default", "Codex Default", true),
+          model("codex-fast", "Codex Fast", false),
         ],
       }),
     ],
@@ -110,7 +103,9 @@ describe("resolveAutomationModelSelection", () => {
       override: null,
       preferences: {
         defaultChatAgentKind: "codex",
-        defaultChatModelId: "codex-fast",
+        defaultChatModelIdByAgentKind: {
+          codex: "codex-fast",
+        },
       },
       isEditing: false,
     });
@@ -130,7 +125,9 @@ describe("resolveAutomationModelSelection", () => {
       override: null,
       preferences: {
         defaultChatAgentKind: "missing",
-        defaultChatModelId: "missing",
+        defaultChatModelIdByAgentKind: {
+          missing: "missing",
+        },
       },
       isEditing: false,
     });
@@ -149,8 +146,8 @@ describe("resolveAutomationModelSelection", () => {
           kind: "codex",
           defaultModelId: null,
           models: [
-            { id: "first", displayName: "First", isDefault: false },
-            { id: "second", displayName: "Second", isDefault: false },
+            model("first", "First", false),
+            model("second", "Second", false),
           ],
         }),
       ],
@@ -167,6 +164,29 @@ describe("resolveAutomationModelSelection", () => {
     expect(firstModel.submission).toMatchObject({
       agentKind: "codex",
       modelId: "first",
+      canSubmit: true,
+    });
+  });
+
+  it("falls back within automation-supported groups when the primary harness is unsupported", () => {
+    const resolution = resolveAutomationModelSelection({
+      groups,
+      saved: { agentKind: null, modelId: null },
+      override: null,
+      preferences: {
+        defaultChatAgentKind: "cursor",
+        defaultChatModelIdByAgentKind: {
+          cursor: "cursor-model",
+          codex: "codex-fast",
+        },
+      },
+      isEditing: false,
+    });
+
+    expect(resolution.state).toBe("default");
+    expect(resolution.submission).toMatchObject({
+      agentKind: "claude",
+      modelId: "claude-default",
       canSubmit: true,
     });
   });

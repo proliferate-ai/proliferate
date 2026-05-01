@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SupportDialog } from "@/components/support/SupportDialog";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 import { SidebarActionButton } from "./SidebarActionButton";
@@ -10,6 +11,7 @@ import {
   DEFAULT_REPO_GROUP_ITEM_LIMIT,
   SidebarWorkspaceContent,
 } from "./SidebarWorkspaceContent";
+import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
@@ -36,20 +38,24 @@ import {
   CircleQuestion,
 } from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/config/capabilities";
+import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarSupportContext } from "@/hooks/support/use-sidebar-support-context";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
+import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   label: string;
@@ -77,6 +83,8 @@ function removeRepoKeys(current: Set<string>, keys: Iterable<string>): Set<strin
 }
 
 export function MainSidebar() {
+  useDebugRenderCount("workspace-sidebar");
+  useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
   const supportContext = useSidebarSupportContext();
   const {
@@ -95,15 +103,16 @@ export function MainSidebar() {
     groups,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
+    cleanupAttentionWorkspaces,
     emptyState,
     isLoading,
   } = useWorkspaceSidebarState({ showArchived });
 
   const navigate = useNavigate();
   const location = useLocation();
-  const isOnPowers = location.pathname === "/powers";
-  const isOnAutomations = location.pathname.startsWith("/automations");
-  const isOnHome = location.pathname === "/";
+  const isOnPlugins = location.pathname === APP_ROUTES.plugins;
+  const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
+  const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
@@ -125,6 +134,15 @@ export function MainSidebar() {
       updateWorkspaceDisplayName({ workspaceId, displayName }),
     [updateWorkspaceDisplayName],
   );
+  const handleWorkspaceHover = useCallback(() => {
+    startMeasurementOperation({
+      kind: "hover_sample",
+      sampleKey: "sidebar_workspace_row",
+      surfaces: ["sidebar-workspace-row", "workspace-sidebar"],
+      maxDurationMs: 750,
+      cooldownMs: 2000,
+    });
+  }, []);
   const repoSetupModal = useRepoSetupModalStore((s) => s.modal);
   const closeRepoSetupModal = useRepoSetupModalStore((s) => s.close);
   const configuredCloudRepoKeys = useMemo(
@@ -224,7 +242,8 @@ export function MainSidebar() {
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 
   return (
-    <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
+    <DebugProfiler id="workspace-sidebar">
+      <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
       <SupportDialog
         open={supportOpen}
         onClose={() => setSupportOpen(false)}
@@ -247,15 +266,15 @@ export function MainSidebar() {
               </div>
             </SidebarRowSurface>
             <SidebarRowSurface
-              active={isOnPowers}
-              onPress={actions.handleGoPowers}
+              active={isOnPlugins}
+              onPress={actions.handleGoPlugins}
               className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
             >
               <div className="flex w-4 shrink-0 items-center justify-center">
                 <Grid className="size-4" />
               </div>
               <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-                <span className="truncate">Powers</span>
+                <span className="truncate">Plugins</span>
               </div>
             </SidebarRowSurface>
             <SidebarRowSurface
@@ -292,6 +311,10 @@ export function MainSidebar() {
             contentClassName="w-full min-w-0 flex flex-col gap-px"
           >
             <CoworkThreadsSection />
+            <WorkspaceCleanupAttentionSection
+              workspaces={cleanupAttentionWorkspaces}
+              onRetryCleanup={actions.handleRetryWorkspaceCleanup}
+            />
 
             {/* Repositories heading — text left-aligned with the row icon column (8px row-pl inside the 8px viewport gutter). */}
             <div className="text-foreground/50 text-base opacity-75 pl-2 pt-3 pb-1">
@@ -385,6 +408,8 @@ export function MainSidebar() {
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+              onWorkspaceHover={handleWorkspaceHover}
               onArchiveWorkspace={archiveWorkspace}
               onUnarchiveWorkspace={unarchiveWorkspace}
               onRenameWorkspace={handleRenameWorkspace}
@@ -405,6 +430,7 @@ export function MainSidebar() {
           onClose={closeRepoSetupModal}
         />
       )}
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }

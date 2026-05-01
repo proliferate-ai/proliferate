@@ -23,6 +23,8 @@ type SubagentTurnCompletedPayload =
   components["schemas"]["SubagentTurnCompletedPayload"];
 type SessionLinkTurnCompletedPayload =
   components["schemas"]["SessionLinkTurnCompletedPayload"];
+type ReviewRunUpdatedPayload =
+  components["schemas"]["ReviewRunUpdatedPayload"];
 type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
 type PendingPromptAddedPayload =
   components["schemas"]["PendingPromptAddedPayload"];
@@ -80,6 +82,9 @@ export type SubagentTurnCompletedEvent = SubagentTurnCompletedPayload & {
 };
 export type SessionLinkTurnCompletedEvent = SessionLinkTurnCompletedPayload & {
   type: "session_link_turn_completed";
+};
+export type ReviewRunUpdatedEvent = ReviewRunUpdatedPayload & {
+  type: "review_run_updated";
 };
 export type UsageUpdateEvent = UsageUpdatePayload & {
   type: "usage_update";
@@ -157,6 +162,7 @@ export type InteractionResolvedEvent =
 export type ErrorEvent = components["schemas"]["ErrorEvent"] & {
   type: "error";
 };
+export type ErrorEventDetails = components["schemas"]["ErrorEventDetails"];
 
 export type SessionEvent =
   | SessionStartedEvent
@@ -173,6 +179,7 @@ export type SessionEvent =
   | SessionInfoUpdateEvent
   | SubagentTurnCompletedEvent
   | SessionLinkTurnCompletedEvent
+  | ReviewRunUpdatedEvent
   | UsageUpdateEvent
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent

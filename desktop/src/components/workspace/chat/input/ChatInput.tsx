@@ -1,18 +1,15 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent,
-  type DragEvent,
 } from "react";
 import {
-  CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-  CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM,
   CHAT_COMPOSER_LABELS,
+  WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
@@ -21,33 +18,42 @@ import { useChatComposerKeyboard } from "@/hooks/chat/use-chat-composer-keyboard
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
-import { usePromptAttachments } from "@/hooks/chat/use-prompt-attachments";
+import type { PromptAttachmentController } from "@/hooks/chat/use-chat-prompt-attachments";
 import { usePlanDraftAttachments } from "@/hooks/plans/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
+import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
+import { useReviewActions } from "@/hooks/reviews/use-review-actions";
+import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
-import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { Button } from "@/components/ui/Button";
-import { AddMessage } from "@/components/ui/icons";
+import { Input } from "@/components/ui/Input";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ChatComposerActions } from "./ChatComposerActions";
+import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
+import { ComposerTextarea } from "./ComposerTextarea";
+import { ComposerTextareaFrame } from "./ComposerTextareaFrame";
 import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
-import { Textarea } from "@/components/ui/Textarea";
 import { ChatComposerSurface } from "./ChatComposerSurface";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { ComposerControlButton } from "./ComposerControlButton";
-import { PlanPickerPopover } from "./PlanPickerPopover";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
- * send button. The outer dock shell (backdrop, padding, max-width, top-slot
+ * send button. The outer dock shell (backdrop, padding, max-width, dock-slot
  * area) is owned by ChatComposerDock so it can be shared with the dev
  * playground.
  */
-export function ChatInput() {
+export function ChatInput({
+  attachments,
+}: {
+  attachments: PromptAttachmentController;
+}) {
+  useDebugRenderCount("chat-composer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
@@ -55,14 +61,16 @@ export function ChatInput() {
   const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
   const {
     activeSessionId,
-    activeSlot,
     isRunning,
   } = useActiveChatSessionState();
-  const { selectedWorkspaceId, draft, setDraft, isEmpty } = useChatDraftState();
+  const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
+    useChatDraftState();
   const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState();
   const modelSelectorProps = useChatModelSelectorState();
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
   const { handleSubmit, handleCancel } = useChatPromptActions();
+  const reviewActions = useReviewActions();
+  const activeReview = useActiveReviewRun();
   const {
     isEditing: isEditingQueuedPrompt,
     editDraft,
@@ -70,24 +78,62 @@ export function ChatInput() {
     cancelEdit,
     commitEdit,
   } = useQueuedPromptEdit();
-  const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
-  const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
-  const planAttachments = usePlanDraftAttachments(selectedWorkspaceId);
-  const supportsAttachments = canAttachPromptContent(promptCapabilities);
-  const canAttach = !isEditingQueuedPrompt && !isDisabled && supportsAttachments;
+  const planAttachments = usePlanDraftAttachments({
+    workspaceUiKey,
+    sdkWorkspaceId: materializedWorkspaceId,
+  });
+  const canUseUtilityActions =
+    !isEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
+  const canAttach = canUseUtilityActions && attachments.canAttachFiles;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
-  const canAttachPlan = !isEditingQueuedPrompt && !isDisabled && !!selectedWorkspaceId;
-  const attachControlTitle = supportsAttachments
-    ? "Attach file"
-    : activeSessionId
-      ? "Attachments are not supported by this agent"
-      : "Attachments are available after a session starts";
+  const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!materializedWorkspaceId;
+  const canStartReview = canUseUtilityActions
+    && reviewActions.canStartCodeReview
+    && !activeReview.run
+    && !activeReview.startingReview;
+  const attachFileDetail = (() => {
+    if (canAttach) {
+      return "Upload image or text context.";
+    }
+    if (!attachments.supportsAttachments) {
+      return activeSessionId
+        ? "Attachments are not supported by this agent"
+        : "Attachments are available after a session starts";
+    }
+    return "Chat is unavailable right now";
+  })();
+  const attachPlanDetail = canAttachPlan
+    ? "Attach an existing plan snapshot."
+    : workspaceUiKey
+      ? "Chat is unavailable right now"
+      : "Select a workspace before attaching a plan";
+  const reviewDetail = (() => {
+    if (canStartReview) {
+      return "Start review agents for the current implementation.";
+    }
+    if (activeReview.run || activeReview.startingReview) {
+      return "A review is already active for this session";
+    }
+    if (!activeSessionId) {
+      return "Review is available after a session starts";
+    }
+    return "Review agents are unavailable right now";
+  })();
   const promptText = serializeChatDraftToPrompt(draft);
+  const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !attachments.hasAttachments && !planAttachments.hasPlans;
+    : isEmpty && !hasDraftAttachments;
   const canSubmit = !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans;
+  useComposerTextareaAutosize({
+    textareaRef,
+    value: editDraft,
+    lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+    minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
+    maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
+    minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
+  });
 
   const onSubmit = useCallback(async () => {
     if (isEditingQueuedPrompt) {
@@ -158,16 +204,8 @@ export function ChatInput() {
     attachments.addFiles(event.clipboardData.files);
   }, [attachments, canAttach]);
 
-  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!canAttach || event.dataTransfer.files.length === 0) {
-      return;
-    }
-    event.preventDefault();
-    attachments.addFiles(event.dataTransfer.files);
-  }, [attachments, canAttach]);
-
   useEffect(() => {
-    if (!selectedWorkspaceId && !activeSessionId) {
+    if (!workspaceUiKey && !activeSessionId) {
       return;
     }
 
@@ -178,7 +216,7 @@ export function ChatInput() {
   }, [
     activeSessionId,
     focusComposer,
-    selectedWorkspaceId,
+    workspaceUiKey,
     workspaceSelectionNonce,
   ]);
 
@@ -210,34 +248,12 @@ export function ChatInput() {
     };
   }, [focusComposer, focusRequestNonce]);
 
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) {
-      return;
-    }
-
-    const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) {
-      return;
-    }
-
-    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const codexMinHeightPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM
-      : lineHeightPx * CHAT_COMPOSER_INPUT.minRows;
-    const minPx = Math.max(lineHeightPx * CHAT_COMPOSER_INPUT.minRows, codexMinHeightPx);
-    const maxPx = lineHeightPx * CHAT_COMPOSER_INPUT.maxRows;
-    el.style.height = "auto";
-    const contentHeight = el.scrollHeight;
-    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
-    el.style.height = `${next}px`;
-    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [editDraft, isEditingQueuedPrompt]);
-
   return (
-    <div className="relative">
+    <DebugProfiler id="chat-composer">
+      <div className="relative">
       <div ref={setMentionSearchHost} className="relative z-20 flex flex-col px-5" />
       <ChatComposerSurface
+        overflowMode="clip"
         onClick={() => {
           if (isEditingQueuedPrompt) {
             textareaRef.current?.focus();
@@ -246,15 +262,9 @@ export function ChatInput() {
           focusChatInput();
         }}
         onPaste={handlePaste}
-        onDrop={handleDrop}
-        onDragOver={(event) => {
-          if (canAttach) {
-            event.preventDefault();
-          }
-        }}
       >
         <form className="relative flex flex-col">
-          <input
+          <Input
             ref={fileInputRef}
             type="file"
             multiple
@@ -275,9 +285,6 @@ export function ChatInput() {
               </Button>
             </div>
           )}
-          {!isEditingQueuedPrompt && !attachments.hasAttachments && !planAttachments.hasPlans && (
-            <div className="h-5" aria-hidden="true" />
-          )}
           {!isEditingQueuedPrompt && (
             <DraftAttachmentPreviewList
               attachments={[...attachments.attachments, ...planAttachments.attachments]}
@@ -285,18 +292,12 @@ export function ChatInput() {
             />
           )}
           {isEditingQueuedPrompt ? (
-            <div
-              className="mb-2 flex-grow select-text overflow-y-auto px-3"
-              style={{
-                minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
-                maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
-              }}
-            >
-              <Textarea
+            <ComposerTextareaFrame topInset="none">
+              <ComposerTextarea
+                data-chat-composer-editor
                 data-telemetry-mask
                 ref={textareaRef}
-                variant="ghost"
-                rows={CHAT_COMPOSER_INPUT.minRows}
+                rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
                 value={editDraft}
                 onChange={(event) => setEditDraftText(event.target.value)}
                 onKeyDown={handleKeyDown}
@@ -305,13 +306,8 @@ export function ChatInput() {
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
-                style={{
-                  minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
-                  maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
-                }}
-                className="min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)]"
               />
-            </div>
+            </ComposerTextareaFrame>
           ) : (
             <ComposerMentionEditor
               draft={draft}
@@ -321,8 +317,7 @@ export function ChatInput() {
               disabled={isDisabled}
               onSubmit={onSubmit}
               onKeyDown={handleKeyDown}
-              minHeightRem={CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}
-              maxHeightRem={CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}
+              topInset={hasDraftAttachments ? "none" : "standard"}
               searchHostElement={mentionSearchHost}
             />
           )}
@@ -339,25 +334,20 @@ export function ChatInput() {
 
             <div className="flex items-center gap-[5px]">
               {!isEditingQueuedPrompt && (
-                <div
-                  className={`flex items-center gap-[5px] ${
-                    areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-                  }`}
-                >
-                  <ComposerControlButton
-                    iconOnly
-                    disabled={!canAttach}
-                    icon={<AddMessage className="size-4" />}
-                    label="Attach file"
-                    title={attachControlTitle}
-                    onClick={() => fileInputRef.current?.click()}
-                    aria-label="Attach file"
-                  />
-                  <PlanPickerPopover
-                    draftWorkspaceId={selectedWorkspaceId}
-                    disabled={!canAttachPlan}
-                  />
-                </div>
+                <ComposerAddActionPopover
+                  canAttachFile={canAttach}
+                  attachFileDetail={attachFileDetail}
+                  canAttachPlan={canAttachPlan}
+                  attachPlanDetail={attachPlanDetail}
+                  canStartReview={canStartReview}
+                  reviewDetail={reviewDetail}
+                  workspaceUiKey={workspaceUiKey}
+                  sdkWorkspaceId={materializedWorkspaceId}
+                  onAttachFile={() => fileInputRef.current?.click()}
+                  onStartReview={(anchor) => {
+                    reviewActions.startCodeReview(anchor);
+                  }}
+                />
               )}
               <ChatComposerActions
                 isRunning={isRunning}
@@ -371,6 +361,7 @@ export function ChatInput() {
           </div>
         </form>
       </ChatComposerSurface>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }

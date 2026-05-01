@@ -35,11 +35,14 @@ export type ConnectorHttpAuthStyle =
 
 export type ConnectorArgTemplate =
   | { source: { kind: "static"; value: string } }
-  | { source: { kind: "workspace_path" } };
+  | { source: { kind: "workspace_path" } }
+  | { source: { kind: "secret"; fieldId: string } }
+  | { source: { kind: "setting"; fieldId: string } };
 
 export type ConnectorEnvTemplate =
   | { name: string; source: { kind: "static"; value: string } }
-  | { name: string; source: { kind: "field"; fieldId: string } };
+  | { name: string; source: { kind: "secret"; fieldId: string } }
+  | { name: string; source: { kind: "setting"; fieldId: string } };
 
 export type ConnectorIconId = string;
 
@@ -62,6 +65,7 @@ interface ConnectorCatalogEntryBase {
   serverNameBase: string;
   iconId: ConnectorIconId;
   displayUrl: string;
+  oauthClientMode?: "dcr" | "static";
   secretFields: readonly ConnectorCatalogField[];
   requiredFields: readonly ConnectorCatalogField[];
   settingsSchema: readonly ConnectorSettingsField[];
@@ -82,9 +86,16 @@ export interface OAuthHttpConnectorCatalogEntry extends ConnectorCatalogEntryBas
   url: string;
 }
 
+export interface NoAuthHttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {
+  transport: "http";
+  authKind: "none";
+  url: string;
+}
+
 export type HttpConnectorCatalogEntry =
   | SecretHttpConnectorCatalogEntry
-  | OAuthHttpConnectorCatalogEntry;
+  | OAuthHttpConnectorCatalogEntry
+  | NoAuthHttpConnectorCatalogEntry;
 
 export interface StdioConnectorCatalogEntry extends ConnectorCatalogEntryBase {
   transport: "stdio";

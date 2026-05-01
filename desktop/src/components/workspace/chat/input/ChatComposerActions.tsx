@@ -1,7 +1,9 @@
 import { CHAT_COMPOSER_LABELS } from "@/config/chat";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import { ArrowUp, StopSquare } from "@/components/ui/icons";
+import { Button } from "@/components/ui/Button";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
 export function ChatComposerActions({
   isRunning,
@@ -18,19 +20,38 @@ export function ChatComposerActions({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  const buttonClassName =
+    "size-7 rounded-full bg-[var(--color-composer-send-background)] px-0 text-[color:var(--color-composer-send-foreground)] shadow-none hover:bg-[var(--color-composer-send-background)] hover:opacity-90 disabled:cursor-default disabled:opacity-50";
+  const startHoverSample = (sampleKey: "send_button" | "stop_button") => {
+    startMeasurementOperation({
+      kind: "hover_sample",
+      sampleKey,
+      surfaces: [
+        sampleKey === "send_button" ? "send-button" : "stop-button",
+        "chat-composer",
+      ],
+      maxDurationMs: 750,
+      cooldownMs: 2000,
+    });
+  };
+
   // While editing a queued prompt, the Save action takes over the primary
   // button slot regardless of `isRunning` — the user must cancel the edit
   // before they can reach the Stop control.
   if (isRunning && !isEditingQueuedPrompt) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         onClick={onCancel}
+        onPointerEnter={() => startHoverSample("stop_button")}
         title={CHAT_COMPOSER_LABELS.stop}
-        className="flex size-7 items-center justify-center rounded-full bg-[var(--color-composer-send-background)] text-[color:var(--color-composer-send-foreground)] transition-opacity hover:opacity-90"
+        aria-label={CHAT_COMPOSER_LABELS.stop}
+        className={buttonClassName}
       >
         <StopSquare className="size-3.5" />
-      </button>
+      </Button>
     );
   }
 
@@ -41,18 +62,18 @@ export function ChatComposerActions({
     : `${CHAT_COMPOSER_LABELS.send} (${submitShortcutLabel})`;
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-sm"
       onClick={canSubmit ? onSubmit : undefined}
+      onPointerEnter={() => startHoverSample("send_button")}
       disabled={!canSubmit}
       title={title}
-      className={`flex size-7 items-center justify-center rounded-full bg-[var(--color-composer-send-background)] text-[color:var(--color-composer-send-foreground)] transition-opacity disabled:cursor-default ${
-        canSubmit
-          ? "hover:opacity-90"
-          : "opacity-50"
-      }`}
+      aria-label={title}
+      className={buttonClassName}
     >
       <ArrowUp className="size-3.5" />
-    </button>
+    </Button>
   );
 }

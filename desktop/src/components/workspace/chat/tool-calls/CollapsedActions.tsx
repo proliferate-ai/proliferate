@@ -35,16 +35,17 @@ export function CollapsedActions({
   const expanded = userExpansionOverride === "collapsed"
     ? false
     : shouldForceExpanded || userExpansionOverride === "expanded";
-  const summary = formatCollapsedActionsSummary(
-    summarizeCollapsedActions(itemIds, transcript),
-  );
+  const actionSummary = summarizeCollapsedActions(itemIds, transcript);
+  const summary = formatCollapsedActionsSummary(actionSummary);
+  const containsEdits = actionSummary.edits > 0;
 
   return (
-    <div className="min-w-0 text-chat">
+    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
       <Button
         type="button"
         variant="ghost"
         size="sm"
+        data-chat-transcript-ignore
         aria-expanded={expanded}
         className={`group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
         onClick={() => {
@@ -64,6 +65,7 @@ export function CollapsedActions({
             itemIds={itemIds}
             transcript={transcript}
             autoFollow={shouldForceExpanded}
+            containsEdits={containsEdits}
           />
         </div>
       )}
@@ -73,8 +75,29 @@ export function CollapsedActions({
 
 export function InlineToolAction({ item }: { item: ToolCallItem }) {
   return (
-    <div className="min-w-0 text-chat">
+    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
       <CollapsedActionRows item={item} />
+    </div>
+  );
+}
+
+export function InlineToolActions({
+  itemIds,
+  transcript,
+}: {
+  itemIds: string[];
+  transcript: TranscriptState;
+}) {
+  const actionSummary = summarizeCollapsedActions(itemIds, transcript);
+  const containsEdits = actionSummary.edits > 0;
+
+  return (
+    <div className={containsEdits ? "flex flex-col gap-0" : "flex flex-col gap-1"}>
+      {itemIds.map((itemId) => {
+        const item = transcript.itemsById[itemId];
+        if (item?.kind !== "tool_call") return null;
+        return <InlineToolAction key={itemId} item={item} />;
+      })}
     </div>
   );
 }
@@ -83,27 +106,31 @@ function CollapsedActionsLedger({
   itemIds,
   transcript,
   autoFollow,
-}: CollapsedActionsProps & { autoFollow: boolean }) {
+  containsEdits,
+}: CollapsedActionsProps & { autoFollow: boolean; containsEdits: boolean }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const itemSignature = itemIds.join("|");
+  const shouldScrollLedger = !containsEdits;
 
   useEffect(() => {
-    if (!autoFollow) return;
+    if (!autoFollow || !shouldScrollLedger) return;
     const viewport = viewportRef.current;
     if (!viewport) return;
     viewport.scrollTop = viewport.scrollHeight;
-  }, [autoFollow, itemSignature, transcript]);
+  }, [autoFollow, itemSignature, shouldScrollLedger, transcript]);
 
   return (
     <div className="-mx-2.5">
       <div
         ref={viewportRef}
         data-collapsed-actions-ledger
-        className={`overflow-y-auto overflow-x-hidden px-2.5 ${
-          autoFollow ? "max-h-[7.5rem]" : "max-h-80"
-        }`}
+        className={containsEdits
+          ? "px-2.5"
+          : `overflow-y-auto overflow-x-hidden px-2.5 ${
+            autoFollow ? "max-h-[7.5rem]" : "max-h-80"
+          }`}
       >
-        <div className="flex flex-col gap-1">
+        <div className={containsEdits ? "flex flex-col gap-0" : "flex flex-col gap-1"}>
           {itemIds.map((itemId) => {
             const item = transcript.itemsById[itemId];
             if (item?.kind !== "tool_call") return null;

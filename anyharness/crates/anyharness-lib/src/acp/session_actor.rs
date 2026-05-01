@@ -9,17 +9,21 @@ use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate};
-use super::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
+use super::event_sink::{
+    AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSink,
+};
 use super::mcp_elicitation::McpElicitationOutcome;
 use super::permission_broker::{
     InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionDecision,
     PermissionOutcome, ResolveInteractionError, UserInputOutcome,
 };
+use super::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
 use super::runtime_client::RuntimeClient;
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::model::{NewPlan, PlanRecord};
 use crate::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
+use crate::reviews::service::ReviewService;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, option_matches_key, snapshot_from_record,
@@ -34,13 +38,13 @@ use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjecte
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
-    CurrentModeUpdatePayload, InteractionKind, InteractionOutcome, McpElicitationSubmittedField,
-    NormalizedSessionControl, PendingInteractionSummary, PendingPromptAddedPayload,
-    PendingPromptRemovalReason, PendingPromptRemovedPayload, PendingPromptUpdatedPayload,
-    ProposedPlanDecisionState, ProposedPlanNativeResolutionState, SessionEndReason,
-    SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
-    SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
-    UserInputSubmittedAnswer,
+    CurrentModeUpdatePayload, ErrorEventDetails, InteractionKind, InteractionOutcome,
+    McpElicitationSubmittedField, NormalizedSessionControl, PendingInteractionSummary,
+    PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
+    PendingPromptUpdatedPayload, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
+    SessionEndReason, SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary,
+    SessionInfoUpdatePayload, SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason,
+    UsageUpdatePayload, UserInputSubmittedAnswer,
 };
 
 #[derive(Debug)]
@@ -49,9 +53,9 @@ pub enum PromptAcceptError {
     EnqueueFailed(String),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum PromptAcceptance {
-    Started,
+    Started { turn_id: String },
     Queued { seq: i64 },
 }
 
@@ -209,6 +213,7 @@ const IDLE_RESUME_REPLAY_QUIET_WINDOW: Duration = Duration::from_millis(100);
 enum ResumeReplayNotificationClass {
     UserEcho,
     Transcript,
+    ConfigState,
     Other,
 }
 
@@ -306,12 +311,13 @@ impl ResumeReplayFilter {
     fn new(
         source_agent_kind: &str,
         startup_disposition: NativeSessionStartupDisposition,
-        session_status: &str,
+        _session_status: &str,
     ) -> Self {
         let state = if startup_disposition == NativeSessionStartupDisposition::LoadedExisting
-            && source_agent_kind == "claude"
-            && session_status == "idle"
-        {
+            && matches!(
+                source_agent_kind,
+                kind if kind == AgentKind::Claude.as_str() || kind == AgentKind::Codex.as_str()
+            ) {
             ResumeReplayFilterState::Monitoring
         } else {
             ResumeReplayFilterState::Disabled
@@ -348,7 +354,9 @@ impl ResumeReplayFilter {
             }
             (
                 ResumeReplayFilterState::Suppressing { .. },
-                ResumeReplayNotificationClass::UserEcho | ResumeReplayNotificationClass::Transcript,
+                ResumeReplayNotificationClass::UserEcho
+                | ResumeReplayNotificationClass::Transcript
+                | ResumeReplayNotificationClass::ConfigState,
             ) => {
                 self.state = ResumeReplayFilterState::Suppressing {
                     last_transcript_at: now,
@@ -405,6 +413,7 @@ fn classify_resume_replay_notification(
         AgentMessageChunk(_) | AgentThoughtChunk(_) | ToolCall(_) | ToolCallUpdate(_) | Plan(_) => {
             ResumeReplayNotificationClass::Transcript
         }
+        CurrentModeUpdate(_) | ConfigOptionUpdate(_) => ResumeReplayNotificationClass::ConfigState,
         _ => ResumeReplayNotificationClass::Other,
     }
 }
@@ -515,6 +524,11 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    pub async fn mark_activity_at(&self, updated_at: String) {
+        let mut execution = self.execution.write().await;
+        execution.updated_at = updated_at;
+    }
+
     pub async fn execution_snapshot(&self) -> LiveSessionExecutionSnapshot {
         self.execution.read().await.clone()
     }
@@ -564,12 +578,14 @@ pub struct SessionActorConfig {
     pub session_launch_env: std::collections::BTreeMap<String, String>,
     pub interaction_broker: Arc<InteractionBroker>,
     pub plan_service: Arc<PlanService>,
+    pub review_service: Option<Arc<ReviewService>>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup_strategy: SessionStartupStrategy,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
+    pub first_prompt_system_prompt_append: Option<String>,
     pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
     pub latency: Option<LatencyRequestContext>,
     /// Called after the actor loop exits (normal or error). The bool indicates
@@ -638,6 +654,7 @@ pub struct SessionTurnFinishResult {
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,
     pub last_event_seq: i64,
+    pub error_details: Option<ErrorEventDetails>,
 }
 
 #[derive(Debug, Clone)]
@@ -1537,12 +1554,12 @@ async fn run_actor(
                     Some(SessionCommand::Prompt { payload, prompt_id, latency, from_queue_seq, respond_to }) => {
                         // Invariant 2: the actor is the sole writer of `busy`.
                         busy.store(true, Ordering::Release);
-                        let _ = respond_to.send(Ok(PromptAcceptance::Started));
 
                         let mut current_payload = payload;
                         let mut current_prompt_id = prompt_id;
                         let mut current_latency = latency;
                         let mut current_queue_seq: Option<i64> = from_queue_seq;
+                        let mut current_respond_to = Some(respond_to);
                         let mut exit_after_prompt: Option<ActorExitDisposition> = None;
                         let mut broken_session = false;
 
@@ -1556,22 +1573,48 @@ async fn run_actor(
                                     prompt_id = latency_fields.prompt_id,
                                     "[workspace-latency] session.actor.prompt.received"
                                 );
-                                let acp_blocks = match current_payload.to_acp_blocks(&store, &session_id) {
+                                let mut acp_blocks = match current_payload.to_acp_blocks(&store, &session_id) {
                                     Ok(blocks) => blocks,
                                     Err(error) => {
+                                        let detail = error.detail.clone();
                                         tracing::warn!(
                                             session_id = %session_id,
                                             code = error.code,
                                             detail = %error.detail,
                                             "failed to build ACP prompt blocks",
                                         );
+                                        if let Some(respond_to) = current_respond_to.take() {
+                                            let _ = respond_to.send(Err(PromptAcceptError::EnqueueFailed(detail)));
+                                        }
                                         break 'drain;
                                     }
                                 };
+                                match store.has_turn_started_event(&session_id) {
+                                    Ok(has_turn_started) => {
+                                        if let Some(append) = first_prompt_system_prompt_append_for_codex_prompt(
+                                            &source_agent_kind,
+                                            config.first_prompt_system_prompt_append.as_deref(),
+                                            has_turn_started,
+                                        ) {
+                                            prepend_system_prompt_append_to_acp_blocks(
+                                                &mut acp_blocks,
+                                                append,
+                                            );
+                                        }
+                                    }
+                                    Err(error) => {
+                                        tracing::warn!(
+                                            session_id = %session_id,
+                                            error = %error,
+                                            "failed to determine whether prompt should inline system prompt append"
+                                        );
+                                    }
+                                }
+                                let turn_id;
                                 {
                                     let mut sink = event_sink.lock().await;
                                     let content_parts = current_payload.content_parts();
-                                    sink.begin_turn(
+                                    turn_id = sink.begin_turn(
                                         current_payload.text_summary.clone(),
                                         content_parts,
                                         current_payload.public_provenance(),
@@ -1605,6 +1648,11 @@ async fn run_actor(
                                         reason: PendingPromptRemovalReason::Executed,
                                     });
                                 }
+                            }
+                            if let Some(respond_to) = current_respond_to.take() {
+                                let _ = respond_to.send(Ok(PromptAcceptance::Started {
+                                    turn_id: turn_id.clone(),
+                                }));
                             }
 
                             let now = chrono::Utc::now().to_rfc3339();
@@ -1692,6 +1740,7 @@ async fn run_actor(
                                                 &workspace_id,
                                                 &source_agent_kind,
                                                 config.plan_service.clone(),
+                                                config.review_service.clone(),
                                                 &mut persisted_config_state,
                                                 &mut startup_state,
                                             ).await;
@@ -1759,7 +1808,13 @@ async fn run_actor(
                                                 let _ = respond_to.send(result);
                                             }
                                             Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
+                                                let touch_session_activity = event.updates_session_activity_at();
                                                 let result = event_sink.lock().await.inject_runtime_event(event);
+                                                if touch_session_activity {
+                                                    if let Ok(envelope) = &result {
+                                                        handle.mark_activity_at(envelope.timestamp.clone()).await;
+                                                    }
+                                                }
                                                 let _ = respond_to.send(result);
                                             }
                                             Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
@@ -1889,6 +1944,7 @@ async fn run_actor(
                                             &workspace_id,
                                             &source_agent_kind,
                                             config.plan_service.clone(),
+                                            config.review_service.clone(),
                                             &mut persisted_config_state,
                                             &mut startup_state,
                                         ).await;
@@ -1963,6 +2019,7 @@ async fn run_actor(
                                             outcome,
                                             stop_reason: Some(stop_reason),
                                             last_event_seq,
+                                            error_details: None,
                                         });
                                     }
                                     if let Err(error) = apply_pending_config_changes_if_idle(
@@ -2004,8 +2061,18 @@ async fn run_actor(
                                         background_work_count = background_work_registry.tracker_count(),
                                         "session.actor.prompt.conn_failed"
                                     );
+                                    let error_message = e.to_string();
+                                    let error_details =
+                                        classify_provider_rate_limit_error(&error_message);
+                                    let error_code = error_details
+                                        .as_ref()
+                                        .map(|_| PROVIDER_RATE_LIMIT_CODE.to_string());
                                     let mut sink = event_sink.lock().await;
-                                    sink.error(e.to_string(), None);
+                                    sink.error_with_details(
+                                        error_message,
+                                        error_code,
+                                        error_details.clone(),
+                                    );
                                     let last_event_seq = sink.debug_snapshot().next_seq - 1;
                                     drop(sink);
                                     let now = chrono::Utc::now().to_rfc3339();
@@ -2021,6 +2088,7 @@ async fn run_actor(
                                             outcome: SessionTurnOutcome::Failed,
                                             stop_reason: None,
                                             last_event_seq,
+                                            error_details,
                                         });
                                     }
                                     broken_session = true;
@@ -2100,7 +2168,13 @@ async fn run_actor(
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
+                        let touch_session_activity = event.updates_session_activity_at();
                         let result = event_sink.lock().await.inject_runtime_event(event);
+                        if touch_session_activity {
+                            if let Ok(envelope) = &result {
+                                handle.mark_activity_at(envelope.timestamp.clone()).await;
+                            }
+                        }
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::SetConfigOption {
@@ -2180,6 +2254,7 @@ async fn run_actor(
                         &workspace_id,
                         &source_agent_kind,
                         config.plan_service.clone(),
+                        config.review_service.clone(),
                         &mut persisted_config_state,
                         &mut startup_state,
                     ).await;
@@ -2741,6 +2816,7 @@ async fn handle_notification(
     workspace_id: &str,
     source_agent_kind: &str,
     plan_service: Arc<PlanService>,
+    review_service: Option<Arc<ReviewService>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -2755,6 +2831,7 @@ async fn handle_notification(
         workspace_id,
         source_agent_kind,
         plan_service,
+        review_service,
         persisted_config_state,
         startup_state,
     )
@@ -2771,6 +2848,7 @@ async fn handle_notification_with_resume_replay_filter(
     workspace_id: &str,
     source_agent_kind: &str,
     plan_service: Arc<PlanService>,
+    review_service: Option<Arc<ReviewService>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -2809,6 +2887,7 @@ async fn handle_notification_with_resume_replay_filter(
         workspace_id,
         source_agent_kind,
         plan_service,
+        review_service,
         persisted_config_state,
         startup_state,
     )
@@ -2824,6 +2903,7 @@ async fn normalize_notification(
     workspace_id: &str,
     source_agent_kind: &str,
     plan_service: Arc<PlanService>,
+    review_service: Option<Arc<ReviewService>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -2838,6 +2918,7 @@ async fn normalize_notification(
             if maybe_ingest_codex_completed_plan(
                 event_sink,
                 plan_service.as_ref(),
+                review_service.as_deref(),
                 session_id,
                 workspace_id,
                 source_agent_kind,
@@ -2847,8 +2928,20 @@ async fn normalize_notification(
             {
                 return;
             }
-            let mut sink = event_sink.lock().await;
-            sink.agent_message_chunk(payload);
+            let completed = {
+                let mut sink = event_sink.lock().await;
+                sink.agent_message_chunk(payload)
+            };
+            maybe_ingest_tagged_completed_plan(
+                event_sink,
+                plan_service.as_ref(),
+                review_service.as_deref(),
+                session_id,
+                workspace_id,
+                source_agent_kind,
+                completed,
+            )
+            .await;
         }
         AgentThoughtChunk(chunk) => {
             let mut sink = event_sink.lock().await;
@@ -2901,6 +2994,7 @@ async fn normalize_notification(
             maybe_ingest_claude_exit_plan(
                 event_sink,
                 plan_service.as_ref(),
+                review_service.as_deref(),
                 session_id,
                 workspace_id,
                 source_agent_kind,
@@ -2958,6 +3052,7 @@ async fn normalize_notification(
             maybe_ingest_claude_exit_plan(
                 event_sink,
                 plan_service.as_ref(),
+                review_service.as_deref(),
                 session_id,
                 workspace_id,
                 source_agent_kind,
@@ -3112,6 +3207,7 @@ struct ProposedPlanClaudeMeta {
 async fn maybe_ingest_codex_completed_plan(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     plan_service: &PlanService,
+    review_service: Option<&ReviewService>,
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
@@ -3143,6 +3239,7 @@ async fn maybe_ingest_codex_completed_plan(
     ingest_completed_plan(
         event_sink,
         plan_service,
+        review_service,
         NewPlan {
             workspace_id: workspace_id.to_string(),
             session_id: session_id.to_string(),
@@ -3159,9 +3256,46 @@ async fn maybe_ingest_codex_completed_plan(
     true
 }
 
+async fn maybe_ingest_tagged_completed_plan(
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    plan_service: &PlanService,
+    review_service: Option<&ReviewService>,
+    session_id: &str,
+    workspace_id: &str,
+    source_agent_kind: &str,
+    completed: Option<CompletedAssistantMessage>,
+) -> bool {
+    let Some(completed) = completed else {
+        return false;
+    };
+    let Some(body) = extract_tagged_proposed_plan(&completed.text) else {
+        return false;
+    };
+    let title = title_from_markdown(&body).unwrap_or_else(|| "Plan".to_string());
+    ingest_completed_plan(
+        event_sink,
+        plan_service,
+        review_service,
+        NewPlan {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            title,
+            body_markdown: body,
+            source_agent_kind: source_agent_kind.to_string(),
+            source_kind: "tagged_proposed_plan".to_string(),
+            source_turn_id: None,
+            source_item_id: completed.message_id,
+            source_tool_call_id: None,
+        },
+    )
+    .await;
+    true
+}
+
 async fn maybe_ingest_claude_exit_plan(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     plan_service: &PlanService,
+    review_service: Option<&ReviewService>,
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
@@ -3190,6 +3324,7 @@ async fn maybe_ingest_claude_exit_plan(
     ingest_completed_plan(
         event_sink,
         plan_service,
+        review_service,
         NewPlan {
             workspace_id: workspace_id.to_string(),
             session_id: session_id.to_string(),
@@ -3208,6 +3343,7 @@ async fn maybe_ingest_claude_exit_plan(
 async fn ingest_completed_plan(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     plan_service: &PlanService,
+    review_service: Option<&ReviewService>,
     input: NewPlan,
 ) {
     let mut sink = event_sink.lock().await;
@@ -3218,7 +3354,12 @@ async fn ingest_completed_plan(
         ..input
     };
     match plan_service.create_completed_plan(input, context) {
-        Ok(batch) => sink.publish_persisted_events(batch.envelopes),
+        Ok(batch) => {
+            if let Some(review_service) = review_service {
+                review_service.record_candidate_plan(&batch.plan);
+            }
+            sink.publish_persisted_events(batch.envelopes);
+        }
         Err(PlanCreateError::EmptyBody) => {}
         Err(error) => {
             tracing::warn!(error = %error, "failed to ingest proposed plan");
@@ -3257,6 +3398,14 @@ fn extract_string_field(value: Option<&serde_json::Value>, key: &str) -> Option<
         .map(str::trim)
         .filter(|text| !text.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn extract_tagged_proposed_plan(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let body = trimmed.strip_prefix("<proposed_plan>")?;
+    let body = body.strip_suffix("</proposed_plan>")?;
+    let body = body.trim();
+    (!body.is_empty()).then(|| body.to_string())
 }
 
 fn title_from_markdown(value: &str) -> Option<String> {
@@ -3309,6 +3458,31 @@ fn build_system_prompt_meta(system_prompt_append: Option<&str>) -> Option<acp::M
             "append": append,
         }),
     )]))
+}
+
+fn first_prompt_system_prompt_append_for_codex_prompt<'a>(
+    source_agent_kind: &str,
+    first_prompt_system_prompt_append: Option<&'a str>,
+    has_turn_started: bool,
+) -> Option<&'a str> {
+    if source_agent_kind != AgentKind::Codex.as_str() || has_turn_started {
+        return None;
+    }
+
+    let append = first_prompt_system_prompt_append?.trim();
+    if append.is_empty() {
+        return None;
+    }
+    Some(append)
+}
+
+fn prepend_system_prompt_append_to_acp_blocks(blocks: &mut Vec<acp::ContentBlock>, append: &str) {
+    blocks.insert(
+        0,
+        acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "System instruction from AnyHarness, not user content:\n{append}"
+        ))),
+    );
 }
 
 async fn start_new_session(
@@ -4418,7 +4592,7 @@ fn should_try_direct_claude_model_setter(
 fn is_curated_claude_model_id(model_id: &str) -> bool {
     matches!(
         model_id,
-        "default" | "sonnet" | "sonnet[1m]" | "haiku" | "opus"
+        "default" | "sonnet" | "sonnet[1m]" | "haiku" | "opus" | "claude-opus-4-6"
     )
 }
 
@@ -4457,10 +4631,12 @@ mod tests {
 
     use super::{
         build_client_capabilities, build_system_prompt_meta, classify_agent_stderr_line,
-        finalize_established_actor_exit, find_select_option_for_request, handle_notification,
-        handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
-        is_mode_config_request, is_model_config_request, load_startup_restore_snapshot,
-        merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
+        extract_tagged_proposed_plan, finalize_established_actor_exit,
+        find_select_option_for_request, first_prompt_system_prompt_append_for_codex_prompt,
+        handle_notification, handle_notification_with_resume_replay_filter,
+        is_missing_load_session_resource, is_mode_config_request, is_model_config_request,
+        load_startup_restore_snapshot, merge_spawn_env, normalized_key_rank, pending_config_rank,
+        persisted_control_values, prepend_system_prompt_append_to_acp_blocks,
         resolve_pending_interactions, sanitize_agent_stderr_line, serialize_meta,
         should_try_direct_claude_model_setter, title_from_markdown, tracked_config_purpose,
         ActorExitDisposition, AgentStderrSeverity, InteractionResolution,
@@ -4516,6 +4692,19 @@ mod tests {
             title_from_markdown("# Repo Issue Investigation\n\n## Goal\nFind issues"),
             Some("Repo Issue Investigation".to_string())
         );
+    }
+
+    #[test]
+    fn extract_tagged_proposed_plan_requires_complete_wrapper() {
+        assert_eq!(
+            extract_tagged_proposed_plan(
+                "\n<proposed_plan>\n# Plan: Tighten review\n\nDo the work.\n</proposed_plan>\n"
+            )
+            .as_deref(),
+            Some("# Plan: Tighten review\n\nDo the work.")
+        );
+        assert!(extract_tagged_proposed_plan("# Plan\n\nNo wrapper").is_none());
+        assert!(extract_tagged_proposed_plan("<proposed_plan># Plan").is_none());
     }
 
     #[test]
@@ -4637,6 +4826,8 @@ mod tests {
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 origin: None,
@@ -4681,6 +4872,7 @@ mod tests {
             "workspace-1",
             "claude",
             test_plan_service(&db),
+            None,
             &mut persisted_config_state,
             &mut startup_state,
         )
@@ -4702,9 +4894,9 @@ mod tests {
     #[test]
     fn resume_replay_filter_suppresses_after_user_echo_until_quiet_gap() {
         let mut filter = ResumeReplayFilter::new(
-            "claude",
+            "codex",
             NativeSessionStartupDisposition::LoadedExisting,
-            "idle",
+            "running",
         );
         let base = Instant::now();
 
@@ -4715,6 +4907,10 @@ mod tests {
         let replay_assistant = acp::SessionNotification::new(
             "native-1",
             acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("older answer".into())),
+        );
+        let replay_config = acp::SessionNotification::new(
+            "native-1",
+            acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![])),
         );
         let available_commands = acp::SessionNotification::new(
             "native-1",
@@ -4727,10 +4923,13 @@ mod tests {
 
         assert!(filter.should_suppress(&user_echo, base));
         assert!(filter.should_suppress(&replay_assistant, base + Duration::from_millis(10)));
-        assert!(!filter.should_suppress(&available_commands, base + Duration::from_millis(20)));
+        assert!(filter.should_suppress(&replay_config, base + Duration::from_millis(20)));
+        assert!(!filter.should_suppress(&available_commands, base + Duration::from_millis(30)));
         assert!(!filter.should_suppress(
             &fresh_assistant,
-            base + IDLE_RESUME_REPLAY_QUIET_WINDOW + Duration::from_millis(10),
+            base + Duration::from_millis(20)
+                + IDLE_RESUME_REPLAY_QUIET_WINDOW
+                + Duration::from_millis(10),
         ));
     }
 
@@ -4801,6 +5000,8 @@ mod tests {
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 origin: None,
@@ -4850,6 +5051,7 @@ mod tests {
             "workspace-1",
             "claude",
             test_plan_service(&db),
+            None,
             &mut persisted_config_state,
             &mut startup_state,
         )
@@ -4863,6 +5065,38 @@ mod tests {
             1
         );
         assert!(store.list_events("session-1").expect("events").is_empty());
+
+        let replay_config = acp::SessionNotification::new(
+            "native-1",
+            acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![])),
+        );
+        handle_notification_with_resume_replay_filter(
+            &replay_config,
+            &mut replay_filter,
+            &event_sink,
+            &mut background_work_registry,
+            &store,
+            "session-1",
+            "workspace-1",
+            "claude",
+            test_plan_service(&db),
+            None,
+            &mut persisted_config_state,
+            &mut startup_state,
+        )
+        .await;
+
+        assert_eq!(
+            store
+                .list_raw_notifications("session-1")
+                .expect("raw after config replay")
+                .len(),
+            2
+        );
+        assert!(store
+            .list_events("session-1")
+            .expect("events after config replay")
+            .is_empty());
 
         let available_commands = acp::SessionNotification::new(
             "native-1",
@@ -4878,6 +5112,7 @@ mod tests {
             "workspace-1",
             "claude",
             test_plan_service(&db),
+            None,
             &mut persisted_config_state,
             &mut startup_state,
         )
@@ -4889,7 +5124,7 @@ mod tests {
         let events = store
             .list_events("session-1")
             .expect("events after passthrough");
-        assert_eq!(raw.len(), 2);
+        assert_eq!(raw.len(), 3);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "available_commands_update");
     }
@@ -4929,6 +5164,8 @@ mod tests {
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 origin: None,
@@ -5411,6 +5648,11 @@ mod tests {
         assert!(should_try_direct_claude_model_setter(
             "claude", "opus", &available
         ));
+        assert!(should_try_direct_claude_model_setter(
+            "claude",
+            "claude-opus-4-6",
+            &available
+        ));
         assert!(!should_try_direct_claude_model_setter(
             "claude", "sonnet", &available
         ));
@@ -5526,6 +5768,54 @@ mod tests {
     }
 
     #[test]
+    fn codex_prompt_inlines_first_prompt_append_only_before_first_turn() {
+        assert_eq!(
+            first_prompt_system_prompt_append_for_codex_prompt(
+                "codex",
+                Some("  Name workspace  "),
+                false
+            ),
+            Some("Name workspace")
+        );
+        assert!(first_prompt_system_prompt_append_for_codex_prompt(
+            "codex",
+            Some("Name workspace"),
+            true
+        )
+        .is_none());
+        assert!(first_prompt_system_prompt_append_for_codex_prompt(
+            "claude",
+            Some("Name workspace"),
+            false
+        )
+        .is_none());
+        assert!(
+            first_prompt_system_prompt_append_for_codex_prompt("codex", Some("   "), false)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn prepend_system_prompt_append_adds_hidden_instruction_block() {
+        let mut blocks = vec![acp::ContentBlock::Text(acp::TextContent::new(
+            "Build a product".to_string(),
+        ))];
+
+        prepend_system_prompt_append_to_acp_blocks(&mut blocks, "Name the workspace first.");
+
+        assert_eq!(blocks.len(), 2);
+        let acp::ContentBlock::Text(first) = &blocks[0] else {
+            panic!("first block should be text");
+        };
+        assert!(first.text.contains("System instruction from AnyHarness"));
+        assert!(first.text.contains("Name the workspace first."));
+        let acp::ContentBlock::Text(second) = &blocks[1] else {
+            panic!("second block should be text");
+        };
+        assert_eq!(second.text, "Build a product");
+    }
+
+    #[test]
     fn missing_load_session_resource_matches_expected_uri() {
         let error = acp::Error::resource_not_found(Some("session-123".to_string()));
         assert!(is_missing_load_session_resource(&error, "session-123"));
@@ -5587,6 +5877,8 @@ mod tests {
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 origin: None,

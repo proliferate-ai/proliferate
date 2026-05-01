@@ -1,7 +1,5 @@
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { Label } from "@/components/ui/Label";
-import { Select } from "@/components/ui/Select";
+import { EnvironmentField } from "@/components/settings/EnvironmentSettingsLayout";
+import { EnvironmentSearchSelect } from "@/components/settings/EnvironmentSearchSelect";
 
 interface CloudDefaultBranchCardProps {
   value: string | null;
@@ -23,56 +21,61 @@ export function CloudDefaultBranchCard({
   const hasStaleSavedBranch = Boolean(
     value && !branches.includes(value),
   );
-  const selectValue = value ?? "";
+  const options = [
+    {
+      id: "__github__",
+      label: githubDefaultBranch
+        ? `GitHub default (${githubDefaultBranch})`
+        : "GitHub default",
+      detail: githubDefaultBranch ? `Follows ${githubDefaultBranch}` : "Follows the repo's current default branch",
+      selected: value === null,
+      onSelect: () => onChange(null),
+    },
+    ...(hasStaleSavedBranch && value ? [{
+      id: value,
+      label: value,
+      detail: "Saved branch missing on GitHub",
+      selected: true,
+      onSelect: () => onChange(value),
+    }] : []),
+    ...branches.map((branch) => ({
+      id: branch,
+      label: branch,
+      detail: null,
+      selected: value === branch,
+      onSelect: () => onChange(branch),
+    })),
+  ];
+  const buttonLabel = value ?? (githubDefaultBranch ? `GitHub default (${githubDefaultBranch})` : "GitHub default");
 
   return (
-    <SettingsCard>
-      <SettingsCardRow
-        label="Cloud default branch"
-        description="Base branch for new cloud workspaces when create runs without an explicit branch override."
-      >
-        <div className="w-[32rem] max-w-full space-y-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="cloud-default-branch">Default branch</Label>
-            <Select
-              id="cloud-default-branch"
-              value={selectValue}
-              onChange={(event) => onChange(
-                event.target.value === "" ? null : event.target.value,
-              )}
-              disabled={isLoading}
-            >
-              <option value="">
-                {githubDefaultBranch
-                  ? `GitHub default (${githubDefaultBranch})`
-                  : "GitHub default"}
-              </option>
-              {hasStaleSavedBranch && value && (
-                <option value={value}>
-                  {`Saved branch (missing on GitHub): ${value}`}
-                </option>
-              )}
-              {branches.map((branch) => (
-                <option key={branch} value={branch}>
-                  {branch}
-                </option>
-              ))}
-            </Select>
-          </div>
+    <EnvironmentField
+      label="Default branch"
+      description="Base branch for new cloud workspaces when create runs without an explicit branch override."
+    >
+      <div className="space-y-2">
+        <EnvironmentSearchSelect
+          label={buttonLabel}
+          options={options}
+          searchPlaceholder="Search branches"
+          emptyLabel="No branches found"
+          className="w-64"
+          menuClassName="w-80"
+          disabled={isLoading}
+        />
 
-          {errorMessage ? (
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          ) : isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading GitHub branches...</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {githubDefaultBranch
-                ? `Leaving this on GitHub default follows ${githubDefaultBranch}.`
-                : "Leaving this on GitHub default follows the repo's current default branch."}
-            </p>
-          )}
-        </div>
-      </SettingsCardRow>
-    </SettingsCard>
+        {errorMessage ? (
+          <p className="text-sm text-destructive">{errorMessage}</p>
+        ) : isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading GitHub branches...</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {githubDefaultBranch
+              ? `Leaving this on GitHub default follows ${githubDefaultBranch}.`
+              : "Leaving this on GitHub default follows the repo's current default branch."}
+          </p>
+        )}
+      </div>
+    </EnvironmentField>
   );
 }

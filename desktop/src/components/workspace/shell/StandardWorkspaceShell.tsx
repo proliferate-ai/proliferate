@@ -1,27 +1,35 @@
 import { HomeNextScreen } from "@/components/home/HomeNextScreen";
-import { CommitDialog } from "@/components/workspace/git/CommitDialog";
-import { PullRequestDialog } from "@/components/workspace/git/PullRequestDialog";
-import { PushDialog } from "@/components/workspace/git/PushDialog";
-import { WorkspaceFilePalette } from "@/components/workspace/files/palette/WorkspaceFilePalette";
+import { useEffect, useMemo } from "react";
+import { PublishDialog } from "@/components/workspace/git/PublishDialog";
+import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
+import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
+import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/WorkspaceShellActionsContext";
+import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
 import { IconButton } from "@/components/ui/IconButton";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SplitPanel } from "@/components/ui/icons";
 import { useMainScreenActions } from "@/hooks/main/use-main-screen-actions";
 import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
 import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useUpdater } from "@/hooks/updater/use-updater";
+import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
-
-const GLASS_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
-const SOLID_HEADER_CLASS = "flex h-10 shrink-0 items-center";
+import {
+  buildCloudRepoSettingsHref,
+  buildSettingsHref,
+} from "@/lib/domain/settings/navigation";
 
 export function StandardWorkspaceShell() {
+  useDebugRenderCount("workspace-shell");
   const { layout, data } = useMainScreenState();
   const actions = useMainScreenActions({
     layout,
@@ -32,7 +40,9 @@ export function StandardWorkspaceShell() {
     shouldKeepRuntimePanelsVisible,
     hasWorkspaceShell,
     isCloudWorkspaceSelected,
+    selectedWorkspaceId,
     selectedWorkspace,
+    selectedCloudWorkspace,
     gitStatus,
     existingPr,
   } = data;
@@ -40,36 +50,91 @@ export function StandardWorkspaceShell() {
     sidebarOpen,
     sidebarWidth,
     rightPanelOpen,
-    rightPanelMode,
+    rightPanelState,
     rightPanelWidth,
-    terminalCollapsed,
-    terminalFocusRequestToken,
-    commitOpen,
-    pushOpen,
-    prOpen,
-    filePaletteOpen,
+    terminalActivationRequestToken,
+    publishDialog,
+    commandPaletteOpen,
     onLeftSeparatorDown,
     onRightSeparatorDown,
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveStandardWorkspaceChromeClasses({
+    transparent: transparentChromeEnabled,
+    sidebarOpen,
+  });
+  const activePublishWorkspaceId = selectedWorkspaceId;
   const {
     phase: updaterPhase,
     downloadProgress,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
+  const runCommand = useRunWorkspaceCommand({
+    selectedWorkspaceId,
+    selectedWorkspace,
+    selectedCloudWorkspace,
+    isRuntimeReady: hasRuntimeReadyWorkspace,
+    openTerminalPanel: actions.openTerminalPanel,
+  });
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
+  const shellActions = useMemo(() => ({
+    openTerminalPanel: actions.openTerminalPanel,
+  }), [actions.openTerminalPanel]);
+  const repoSettingsHref = useMemo(() => {
+    const cloudOwner = selectedCloudWorkspace?.repo?.owner?.trim() ?? "";
+    const cloudName = selectedCloudWorkspace?.repo?.name?.trim() ?? "";
+    if (cloudOwner && cloudName) {
+      return buildCloudRepoSettingsHref(cloudOwner, cloudName);
+    }
+    const localRepoPath = selectedWorkspace?.sourceRepoRootPath?.trim()
+      || selectedWorkspace?.path?.trim()
+      || "";
+    if (!localRepoPath) {
+      return null;
+    }
+    return buildSettingsHref({
+      section: "repo",
+      repo: localRepoPath,
+    });
+  }, [selectedCloudWorkspace?.repo?.name, selectedCloudWorkspace?.repo?.owner, selectedWorkspace]);
+  const canOpenRepositorySettings = repoSettingsHref !== null;
+  const repositorySettingsDisabledReason = canOpenRepositorySettings
+    ? null
+    : "Repository settings are unavailable.";
 
   useMainScreenShortcuts({
-    onOpenFilePalette: actions.handleFilePaletteOpen,
+    canOpenCommandPalette: hasWorkspaceShell,
+    onOpenCommandPalette: actions.handleCommandPaletteOpen,
     onOpenTerminal: actions.openTerminalPanel,
   });
 
+  useEffect(() => {
+    if (!publishDialog.open) {
+      return;
+    }
+    if (
+      !hasRuntimeReadyWorkspace
+      || !activePublishWorkspaceId
+      || publishDialog.workspaceId !== activePublishWorkspaceId
+    ) {
+      actions.closePublishDialog();
+    }
+  }, [
+    actions,
+    activePublishWorkspaceId,
+    hasRuntimeReadyWorkspace,
+    publishDialog.open,
+    publishDialog.workspaceId,
+  ]);
+
   return (
-    <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
-      <div
-        className={`h-screen flex overflow-hidden ${
-          transparentChromeEnabled ? "bg-transparent" : "bg-sidebar"
-        }`}
+    <DebugProfiler id="workspace-shell">
+      <WorkspaceShellActionsProvider value={shellActions}>
+        <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
+          <div
+        className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
         data-telemetry-block
       >
         <div
@@ -111,12 +176,10 @@ export function StandardWorkspaceShell() {
         )}
 
         <div
-          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
-            transparentChromeEnabled ? "bg-transparent" : "bg-background"
-          } ${sidebarOpen && !transparentChromeEnabled ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : ""}`}
+          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
         >
           <div
-            className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}
+            className={chromeClasses.header}
             data-tauri-drag-region="true"
           >
             {!sidebarOpen && (
@@ -139,13 +202,15 @@ export function StandardWorkspaceShell() {
             )}
             {hasWorkspaceShell && (
               <GlobalHeader
-                branchName={gitStatus?.currentBranch ?? undefined}
-                additions={gitStatus?.summary.additions}
-                deletions={gitStatus?.summary.deletions}
                 existingPr={existingPr}
                 selectedWorkspace={selectedWorkspace}
                 rightPanelOpen={rightPanelOpen}
                 disableGitActions={!hasRuntimeReadyWorkspace}
+                runDisabled={!runCommand.canRun}
+                runLoading={runCommand.isLaunching}
+                runLabel={runCommand.runLabel}
+                runTitle={runCommand.runTitle}
+                onRun={runCommand.onRun}
                 onTogglePanel={actions.toggleRightPanel}
                 onCommit={actions.handleCommitOpen}
                 onPush={actions.handlePushOpen}
@@ -182,37 +247,49 @@ export function StandardWorkspaceShell() {
                 >
                   <div className="h-full" style={{ minWidth: 260 }}>
                     <RightPanel
+                      workspaceId={selectedWorkspaceId}
                       isWorkspaceReady={hasRuntimeReadyWorkspace}
                       shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
                       isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                      mode={rightPanelMode}
-                      onModeChange={actions.onSetRightPanelMode}
-                      terminalCollapsed={terminalCollapsed}
-                      onTerminalCollapsedChange={layout.setTerminalCollapsed}
-                      terminalFocusRequestToken={terminalFocusRequestToken}
+                      state={rightPanelState}
+                      repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
+                        section: "repo",
+                        repo: null,
+                      })}
+                      onStateChange={layout.setRightPanelState}
+                      terminalActivationRequestToken={terminalActivationRequestToken}
                     />
                   </div>
                 </div>
 
+                <WorkspaceCommandPalette
+                  open={commandPaletteOpen}
+                  onClose={actions.onCommandPaletteClose}
+                  hasWorkspaceShell={hasWorkspaceShell}
+                  selectedWorkspaceId={selectedWorkspaceId}
+                  hasRuntimeReadyWorkspace={hasRuntimeReadyWorkspace}
+                  runtimeBlockedReason={runtimeBlockedReason}
+                  repoSettingsHref={repoSettingsHref}
+                  canOpenRepositorySettings={canOpenRepositorySettings}
+                  repositorySettingsDisabledReason={repositorySettingsDisabledReason}
+                  runCommand={runCommand}
+                  openTerminalPanel={actions.openTerminalPanel}
+                />
+
                 {hasRuntimeReadyWorkspace && (
                   <>
-                    <CommitDialog
-                      open={commitOpen}
-                      onClose={actions.onCommitClose}
-                      onOpenPrDialog={actions.openPrDialog}
+                    <PublishDialog
+                      open={publishDialog.open}
+                      workspaceId={publishDialog.workspaceId}
+                      initialIntent={publishDialog.initialIntent}
+                      selectedWorkspace={selectedWorkspace}
+                      runtimeBlockedReason={runtimeBlockedReason}
+                      onClose={actions.closePublishDialog}
+                      onReviewDiffs={actions.reviewDiffsFromPublish}
+                      onViewPr={actions.handleViewPr}
                     />
-                    <PushDialog
-                      open={pushOpen}
-                      onClose={actions.onPushClose}
-                    />
-                    <PullRequestDialog
-                      open={prOpen}
-                      onClose={actions.onPrClose}
-                    />
-                    <WorkspaceFilePalette
-                      open={filePaletteOpen}
-                      onClose={actions.onFilePaletteClose}
-                    />
+                    <ConnectedReviewSetupDialog />
+                    <ConnectedReviewCritiqueDialog />
                   </>
                 )}
               </>
@@ -221,7 +298,9 @@ export function StandardWorkspaceShell() {
             )}
           </div>
         </div>
-      </div>
-    </WorkspacePathProvider>
+          </div>
+        </WorkspacePathProvider>
+      </WorkspaceShellActionsProvider>
+    </DebugProfiler>
   );
 }

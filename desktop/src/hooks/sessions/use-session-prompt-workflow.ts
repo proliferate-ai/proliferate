@@ -1,7 +1,10 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
+import {
+  createOptimisticPendingPrompt,
+  shouldClearOptimisticPromptAfterPromptResponse,
+} from "@/lib/domain/chat/pending-prompts";
 import { getSessionClientAndWorkspace, isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
 import {
   finishLatencyFlow,
@@ -20,7 +23,7 @@ interface PromptSessionInput {
   workspaceId?: string | null;
   latencyFlowId?: string | null;
   promptId?: string | null;
-  onBeforePrompt?: (workspaceId: string) => Promise<void> | void;
+  onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   onBeforePromptRequest?: (workspaceId: string) => Promise<void> | void;
 }
 
@@ -38,7 +41,7 @@ export function useSessionPromptWorkflow() {
     workspaceId,
     latencyFlowId,
     promptId,
-    onBeforePrompt,
+    onBeforeOptimisticPrompt,
     onBeforePromptRequest,
   }: PromptSessionInput) => {
     const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
@@ -51,6 +54,10 @@ export function useSessionPromptWorkflow() {
     }
 
     try {
+      if (resolvedWorkspaceId && onBeforeOptimisticPrompt) {
+        await onBeforeOptimisticPrompt(resolvedWorkspaceId);
+      }
+
       useHarnessStore.getState().patchSessionSlot(sessionId, {
         optimisticPrompt:
           slot?.optimisticPrompt
@@ -64,9 +71,6 @@ export function useSessionPromptWorkflow() {
       finishLatencyFlow(latencyFlowId, "optimistic_visible");
 
       const shouldGenerateTitle = !slot?.lastPromptAt;
-      if (resolvedWorkspaceId && onBeforePrompt) {
-        await onBeforePrompt(resolvedWorkspaceId);
-      }
 
       const { connection, workspaceId: promptWorkspaceId } = await getSessionClientAndWorkspace(
         sessionId,
@@ -82,6 +86,11 @@ export function useSessionPromptWorkflow() {
 
       applySessionSummary(sessionId, response.session, promptWorkspaceId);
       upsertWorkspaceSessionRecord(promptWorkspaceId, response.session);
+      if (shouldClearOptimisticPromptAfterPromptResponse(response.status)) {
+        useHarnessStore.getState().patchSessionSlot(sessionId, {
+          optimisticPrompt: null,
+        });
+      }
 
       if (shouldGenerateTitle) {
         void maybeGenerateSessionTitle({

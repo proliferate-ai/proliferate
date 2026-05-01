@@ -3,6 +3,7 @@ import type { CoworkThread } from "@anyharness/sdk";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
 import { useCoworkManagedWorkspaces } from "@/hooks/cowork/use-cowork-managed-workspaces";
+import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/use-cowork-session-native-context-menu";
 import { useCoworkSessionActions } from "@/hooks/cowork/use-cowork-session-actions";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
@@ -51,6 +52,14 @@ export function CoworkThreadItem({
   const { renameThread, archiveThread } = useCoworkSessionActions();
 
   const currentTitle = coworkThreadTitle(thread);
+  const handleRename = () => setRenaming(true);
+  const handleArchive = () => {
+    void archiveThread(thread.sessionId, thread.workspaceId);
+  };
+  const { onContextMenuCapture } = useCoworkSessionNativeContextMenu({
+    onRename: handleRename,
+    onArchive: handleArchive,
+  });
 
   const row = (
     <CoworkThreadRow
@@ -70,7 +79,7 @@ export function CoworkThreadItem({
         triggerMode="contextMenu"
         className="w-44 rounded-lg border border-border bg-popover p-1 shadow-floating"
         trigger={
-          <div className="min-w-0" data-telemetry-mask="true">
+          <div className="min-w-0" data-telemetry-mask="true" onContextMenuCapture={onContextMenuCapture}>
             <SessionTitleRenamePopover
               currentTitle={currentTitle}
               trigger={<div className="min-w-0">{row}</div>}
@@ -86,11 +95,11 @@ export function CoworkThreadItem({
           <CoworkSessionActionsMenu
             onRename={() => {
               close();
-              setRenaming(true);
+              handleRename();
             }}
             onArchive={() => {
               close();
-              void archiveThread(thread.sessionId, thread.workspaceId);
+              handleArchive();
             }}
           />
         )}

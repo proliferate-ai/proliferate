@@ -2,7 +2,6 @@ import { useCallback, useState, type ReactNode } from "react";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import {
   FileChangeInlineRow,
-  FileChangesCard,
   FileDiffCard,
 } from "@/components/ui/content/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
@@ -82,7 +81,7 @@ export function FileChangeCall({
     const nextDeletions = deletions ?? 0;
 
     return (
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-col">
         <FileChangeInlineRow
           label={actionLabel}
           filePath={displayPath}
@@ -93,7 +92,7 @@ export function FileChangeCall({
           onOpenFile={absolutePath ? handleOpenFile : undefined}
         />
         {rowExpanded && (
-          <FileChangesCard fileCount={1} className="mt-1 mb-1">
+          <div className="mt-1.5 mb-1">
             <FileDiffCard
               filePath={displayPath}
               additions={nextAdditions}
@@ -101,16 +100,16 @@ export function FileChangeCall({
               isExpanded={diffExpanded}
               onToggleExpand={() => setDiffExpanded((expanded) => !expanded)}
               onOpenFile={absolutePath ? handleOpenFile : undefined}
-              embedded
             >
               <DiffViewer
                 patch={patch!}
                 filePath={displayPath}
                 className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
                 variant="chat"
               />
             </FileDiffCard>
-          </FileChangesCard>
+          </div>
         )}
       </div>
     );

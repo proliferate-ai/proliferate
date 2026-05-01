@@ -19,6 +19,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use std::time::Instant;
 
+use super::access::assert_workspace_not_retired;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
@@ -41,6 +42,7 @@ use crate::sessions::model::{
 use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
 use crate::workspaces::access_gate::WorkspaceAccessError;
 use crate::workspaces::access_model::WorkspaceAccessMode;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize =
     crate::mobility::model::MAX_MOBILITY_ARCHIVE_BODY_BYTES;
@@ -72,6 +74,11 @@ pub async fn preflight_workspace_mobility(
         prompt_id = ?latency_fields.prompt_id,
         "[workspace-latency] mobility.http.preflight.request_received"
     );
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let result = state
         .mobility_service
         .preflight_workspace(&workspace_id, &[])
@@ -110,6 +117,11 @@ pub async fn update_workspace_mobility_runtime_state(
     Path(workspace_id): Path<String>,
     Json(req): Json<UpdateWorkspaceMobilityRuntimeStateRequest>,
 ) -> Result<Json<WorkspaceMobilityRuntimeState>, ApiError> {
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let record = state
         .workspace_access_gate
         .set_runtime_state(
@@ -137,6 +149,10 @@ pub async fn export_workspace_mobility_archive(
     Path(workspace_id): Path<String>,
     Json(req): Json<ExportWorkspaceMobilityArchiveRequest>,
 ) -> Result<Json<WorkspaceMobilityArchive>, ApiError> {
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
+        .await;
     assert_workspace_mode(&state, &workspace_id, WorkspaceAccessMode::FrozenForHandoff)?;
     let mobility_service = state.mobility_service.clone();
     let archive = run_blocking("mobility_export", move || {
@@ -164,6 +180,10 @@ pub async fn install_workspace_mobility_archive(
     Path(workspace_id): Path<String>,
     Json(req): Json<InstallWorkspaceMobilityArchiveRequest>,
 ) -> Result<Json<InstallWorkspaceMobilityArchiveResponse>, ApiError> {
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
+        .await;
     state
         .workspace_access_gate
         .assert_can_mutate_for_workspace(&workspace_id)
@@ -196,6 +216,10 @@ pub async fn destroy_workspace_mobility_source(
     Path(workspace_id): Path<String>,
     Json(_req): Json<DestroyWorkspaceMobilitySourceRequest>,
 ) -> Result<Json<DestroyWorkspaceMobilitySourceResponse>, ApiError> {
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
+        .await;
     assert_workspace_mode(&state, &workspace_id, WorkspaceAccessMode::RemoteOwned)?;
     let mobility_service = state.mobility_service.clone();
     let workspace_id_for_destroy = workspace_id.clone();
@@ -238,6 +262,10 @@ fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ),
             "WORKSPACE_LIVE_SESSION_BLOCKED",
         ),
+        WorkspaceAccessError::WorkspaceRetired(workspace_id) => ApiError::conflict(
+            format!("workspace {workspace_id} is retired"),
+            "WORKSPACE_RETIRED",
+        ),
     }
 }
 
@@ -246,6 +274,7 @@ fn assert_workspace_mode(
     workspace_id: &str,
     expected_mode: WorkspaceAccessMode,
 ) -> Result<(), ApiError> {
+    assert_workspace_not_retired(state, workspace_id)?;
     let runtime_state = state
         .workspace_access_gate
         .runtime_state(workspace_id)
@@ -695,6 +724,7 @@ fn from_contract_session_record(
         // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
         mcp_bindings_ciphertext: None,
         mcp_binding_summaries_json: None,
+        mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
         system_prompt_append: record.system_prompt_append,
         subagents_enabled: record.subagents_enabled,
         origin: record

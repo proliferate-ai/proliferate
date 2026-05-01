@@ -11,8 +11,6 @@ import type { useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
 
 type CloudBillingActions = ReturnType<typeof useCloudBillingActions>;
 
-const PAID_CLOUD_REPO_LIMIT_COPY = 4;
-
 interface CloudBillingSummaryProps {
   billingPlan: BillingPlanInfo;
   billingActions: CloudBillingActions;
@@ -31,17 +29,6 @@ function formatSandboxHours(value: number | null | undefined): string {
   return `${formatted} ${rounded === 1 ? "hour" : "hours"}`;
 }
 
-function formatActiveSandboxes(
-  activeSandboxCount: number,
-  concurrentSandboxLimit: number | null,
-): string {
-  if (concurrentSandboxLimit === null) {
-    return `${activeSandboxCount.toLocaleString()} active`;
-  }
-
-  return `${activeSandboxCount.toLocaleString()} of ${concurrentSandboxLimit.toLocaleString()}`;
-}
-
 function formatCloudRepoUsage(
   activeCloudRepoCount: number,
   cloudRepoLimit: number | null,
@@ -53,13 +40,14 @@ function formatCloudRepoUsage(
   return `${activeCloudRepoCount.toLocaleString()} of ${cloudRepoLimit.toLocaleString()}`;
 }
 
-function formatCloudRepoLimit(value: number | null): string {
-  if (value === null) {
-    return "unlimited cloud repos";
+function cloudAccessStatusLabel(billingPlan: BillingPlanInfo): string {
+  if (billingPlan.hasUnlimitedCloudHours) {
+    return "Unlimited";
   }
-
-  const formatted = value.toLocaleString();
-  return `${formatted} ${value === 1 ? "cloud repo" : "cloud repos"}`;
+  if (billingPlan.isPaidCloud) {
+    return "$200/month Cloud";
+  }
+  return "Limited free cloud";
 }
 
 export function CloudBillingSummary({
@@ -71,70 +59,12 @@ export function CloudBillingSummary({
   return (
     <div className="space-y-3">
       <SettingsCard>
-        <div className="p-3 text-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-medium text-foreground">
-                {hasUnlimitedHours
-                  ? "Unlimited cloud"
-                  : billingPlan.isPaidCloud
-                    ? "$200/month Cloud"
-                    : "Limited free cloud"}
-              </p>
-              <p className="mt-1 text-muted-foreground">
-                {hasUnlimitedHours
-                  ? `Unlimited usage across ${formatCloudRepoLimit(billingPlan.cloudRepoLimit)}.`
-                  : billingPlan.isPaidCloud
-                    ? "Monthly credits and refills are consumed before overage."
-                    : `Free includes limited sandbox-hours for ${formatCloudRepoLimit(
-                        billingPlan.cloudRepoLimit,
-                      )}. Upgrade for unlimited usage across ${formatCloudRepoLimit(
-                        PAID_CLOUD_REPO_LIMIT_COPY,
-                      )}.`}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {billingPlan.isPaidCloud ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    loading={billingActions.creatingBillingPortal}
-                    onClick={() => {
-                      void billingActions.createBillingPortal().catch(() => undefined);
-                    }}
-                  >
-                    Manage billing
-                  </Button>
-                  {!hasUnlimitedHours && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      loading={billingActions.creatingRefillCheckout}
-                      onClick={() => {
-                        void billingActions.createRefillCheckout().catch(() => undefined);
-                      }}
-                    >
-                      Refill 10h
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <Button
-                  type="button"
-                  variant="primary"
-                  loading={billingActions.creatingCloudCheckout}
-                  onClick={() => {
-                    void billingActions.createCloudCheckout().catch(() => undefined);
-                  }}
-                >
-                  Upgrade to unlimited
-                </Button>
-              )}
-            </div>
-          </div>
+        <div className="space-y-4 p-3 text-sm">
+          <p className="text-sm font-medium text-foreground">
+            {cloudAccessStatusLabel(billingPlan)}
+          </p>
 
-          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="min-w-0">
               <dt className="text-xs text-muted-foreground">
                 {hasUnlimitedHours
@@ -154,18 +84,6 @@ export function CloudBillingSummary({
               </dd>
             </div>
             <div className="min-w-0">
-              <dt className="text-xs text-muted-foreground">
-                {hasUnlimitedHours
-                  ? "Included total"
-                  : billingPlan.isPaidCloud
-                    ? "Prepaid total"
-                    : "Free hour limit"}
-              </dt>
-              <dd className="mt-1 font-medium text-foreground">
-                {formatSandboxHours(billingPlan.freeSandboxHours)}
-              </dd>
-            </div>
-            <div className="min-w-0">
               <dt className="text-xs text-muted-foreground">Cloud repos</dt>
               <dd className="mt-1 font-medium text-foreground">
                 {formatCloudRepoUsage(
@@ -174,16 +92,47 @@ export function CloudBillingSummary({
                 )}
               </dd>
             </div>
-            <div className="min-w-0">
-              <dt className="text-xs text-muted-foreground">Active sandboxes</dt>
-              <dd className="mt-1 font-medium text-foreground">
-                {formatActiveSandboxes(
-                  billingPlan.activeSandboxCount,
-                  billingPlan.concurrentSandboxLimit,
-                )}
-              </dd>
-            </div>
           </dl>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            {billingPlan.isPaidCloud ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  loading={billingActions.creatingBillingPortal}
+                  onClick={() => {
+                    void billingActions.createBillingPortal().catch(() => undefined);
+                  }}
+                >
+                  Manage billing
+                </Button>
+                {!hasUnlimitedHours && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={billingActions.creatingRefillCheckout}
+                    onClick={() => {
+                      void billingActions.createRefillCheckout().catch(() => undefined);
+                    }}
+                  >
+                    Refill 10h
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                loading={billingActions.creatingCloudCheckout}
+                onClick={() => {
+                  void billingActions.createCloudCheckout().catch(() => undefined);
+                }}
+              >
+                Upgrade to unlimited
+              </Button>
+            )}
+          </div>
         </div>
       </SettingsCard>
 
@@ -192,14 +141,7 @@ export function CloudBillingSummary({
           <div className="p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium text-foreground">
-                  {billingPlan.overageEnabled ? "Overage billing on" : "Overage billing off"}
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {billingPlan.overageEnabled
-                    ? "Additional usage is billed at $2/hour in 10-hour blocks."
-                    : "Cloud pauses when included/refill hours run out."}
-                </p>
+                <p className="font-medium text-foreground">Overage billing</p>
               </div>
               <Switch
                 aria-label="Toggle cloud overage billing"

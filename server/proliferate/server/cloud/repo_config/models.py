@@ -44,6 +44,7 @@ class CloudRepoConfigResponse(BaseModel):
     default_branch: str | None = Field(serialization_alias="defaultBranch")
     env_vars: dict[str, str] = Field(serialization_alias="envVars")
     setup_script: str = Field(serialization_alias="setupScript")
+    run_command: str = Field(serialization_alias="runCommand")
     files_version: int = Field(serialization_alias="filesVersion")
     tracked_files: list[CloudRepoFileMetadata] = Field(serialization_alias="trackedFiles")
 
@@ -58,6 +59,7 @@ class SaveCloudRepoConfigRequest(BaseModel):
     default_branch: str | None = Field(default=None, alias="defaultBranch")
     env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
     setup_script: str = Field(default="", alias="setupScript")
+    run_command: str = Field(default="", alias="runCommand")
     files: list[SaveCloudRepoConfigFile] = Field(default_factory=list)
 
 
@@ -89,6 +91,9 @@ class ResyncCloudWorkspaceFilesResponse(CloudWorkspaceRepoConfigStatusResponse):
 class RunCloudWorkspaceSetupResponse(BaseModel):
     workspace_id: str = Field(serialization_alias="workspaceId")
     command: str
+    terminal_id: str | None = Field(default=None, serialization_alias="terminalId")
+    command_run_id: str | None = Field(default=None, serialization_alias="commandRunId")
+    status: str
 
 
 def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepoConfigSummary:
@@ -118,6 +123,7 @@ def repo_config_payload(value: CloudRepoConfigValue) -> CloudRepoConfigResponse:
         default_branch=value.default_branch,
         env_vars=value.env_vars,
         setup_script=value.setup_script,
+        run_command=value.run_command,
         files_version=value.files_version,
         tracked_files=[repo_file_metadata_payload(item) for item in value.tracked_files],
     )
@@ -178,8 +184,14 @@ def run_cloud_workspace_setup_payload(
     workspace: CloudWorkspace,
     *,
     command: str,
+    terminal_id: str | None,
+    command_run_id: str | None,
+    status: str,
 ) -> RunCloudWorkspaceSetupResponse:
     return RunCloudWorkspaceSetupResponse(
         workspace_id=str(workspace.id),
         command=command,
+        terminal_id=terminal_id,
+        command_run_id=command_run_id,
+        status=status,
     )

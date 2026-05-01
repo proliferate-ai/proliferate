@@ -25,6 +25,7 @@ export {
 export type TurnDisplayBlock =
   | { kind: "item"; itemId: string }
   | { kind: "inline_tool"; itemId: string }
+  | { kind: "inline_tools"; blockId: string; itemIds: string[] }
   | { kind: "collapsed_actions"; blockId: string; itemIds: string[] };
 
 export interface CompletedHistorySummary {
@@ -40,6 +41,83 @@ export interface TurnPresentation {
   finalAssistantItemId: string | null;
   completedHistoryRootIds: string[];
   completedHistorySummary: CompletedHistorySummary | null;
+}
+
+export function buildTranscriptDisplayBlocks({
+  rootIds,
+  transcript,
+  childrenByParentId,
+  isComplete,
+}: {
+  rootIds: readonly string[];
+  transcript: TranscriptState;
+  childrenByParentId: Map<string, string[]>;
+  isComplete: boolean;
+}): TurnDisplayBlock[] {
+  const blocks: TurnDisplayBlock[] = [];
+  let pendingActionIds: string[] = [];
+  let pendingInlineActionIds: string[] = [];
+  const trailingInlineActionIds = collectTrailingInlineActionIds(
+    rootIds,
+    transcript,
+    childrenByParentId,
+    isComplete,
+  );
+
+  const flushActions = () => {
+    if (pendingActionIds.length === 0) return;
+    const firstId = pendingActionIds[0] ?? "actions";
+    const lastId = pendingActionIds[pendingActionIds.length - 1] ?? firstId;
+    blocks.push({
+      kind: "collapsed_actions",
+      blockId: `${firstId}-${lastId}`,
+      itemIds: pendingActionIds,
+    });
+    pendingActionIds = [];
+  };
+  const flushInlineActions = () => {
+    if (pendingInlineActionIds.length === 0) return;
+    const firstId = pendingInlineActionIds[0];
+    if (!firstId) return;
+    if (pendingInlineActionIds.length === 1) {
+      blocks.push({ kind: "inline_tool", itemId: firstId });
+    } else {
+      const lastId = pendingInlineActionIds[pendingInlineActionIds.length - 1] ?? firstId;
+      blocks.push({
+        kind: "inline_tools",
+        blockId: `${firstId}-${lastId}`,
+        itemIds: pendingInlineActionIds,
+      });
+    }
+    pendingInlineActionIds = [];
+  };
+
+  for (const itemId of rootIds) {
+    const item = transcript.itemsById[itemId];
+    if (!item) continue;
+
+    if (item.kind === "tool_call" && isCollapsibleAction(item, childrenByParentId)) {
+      if (
+        trailingInlineActionIds.has(itemId)
+        || (isActiveToolCall(item) && (isKnownRealAction(item) || isPendingCommand(item)))
+      ) {
+        flushActions();
+        pendingInlineActionIds.push(itemId);
+      } else {
+        flushInlineActions();
+        pendingActionIds.push(itemId);
+      }
+      continue;
+    }
+
+    flushActions();
+    flushInlineActions();
+    blocks.push({ kind: "item", itemId });
+  }
+
+  flushActions();
+  flushInlineActions();
+  return blocks;
 }
 
 export function buildTurnPresentation(
@@ -88,12 +166,12 @@ export function buildTurnPresentation(
   return {
     rootIds,
     childrenByParentId,
-    displayBlocks: buildDisplayBlocks(
+    displayBlocks: buildTranscriptDisplayBlocks({
       rootIds,
       transcript,
       childrenByParentId,
-      !!turn.completedAt,
-    ),
+      isComplete: !!turn.completedAt,
+    }),
     finalAssistantItemId,
     completedHistoryRootIds,
     completedHistorySummary: summarizeCompletedHistory(
@@ -139,7 +217,7 @@ function getStartedSeq(item: TranscriptItem | undefined): number {
 }
 
 function buildCompletedHistoryRootIds(
-  rootIds: string[],
+  rootIds: readonly string[],
   transcript: TranscriptState,
   completedAt: string | null,
   finalAssistantItemId: string | null,
@@ -159,7 +237,7 @@ function buildCompletedHistoryRootIds(
 }
 
 function summarizeCompletedHistory(
-  rootIds: string[],
+  rootIds: readonly string[],
   transcript: TranscriptState,
   childrenByParentId: Map<string, string[]>,
 ): CompletedHistorySummary | null {
@@ -198,7 +276,7 @@ function summarizeCompletedHistory(
 }
 
 function flattenItemIds(
-  rootIds: string[],
+  rootIds: readonly string[],
   childrenByParentId: Map<string, string[]>,
 ): string[] {
   const flattened: string[] = [];
@@ -210,60 +288,8 @@ function flattenItemIds(
   return flattened;
 }
 
-function buildDisplayBlocks(
-  rootIds: string[],
-  transcript: TranscriptState,
-  childrenByParentId: Map<string, string[]>,
-  isTurnComplete: boolean,
-): TurnDisplayBlock[] {
-  const blocks: TurnDisplayBlock[] = [];
-  let pendingActionIds: string[] = [];
-  const trailingInlineActionIds = collectTrailingInlineActionIds(
-    rootIds,
-    transcript,
-    childrenByParentId,
-    isTurnComplete,
-  );
-
-  const flushActions = () => {
-    if (pendingActionIds.length === 0) return;
-    const firstId = pendingActionIds[0] ?? "actions";
-    const lastId = pendingActionIds[pendingActionIds.length - 1] ?? firstId;
-    blocks.push({
-      kind: "collapsed_actions",
-      blockId: `${firstId}-${lastId}`,
-      itemIds: pendingActionIds,
-    });
-    pendingActionIds = [];
-  };
-
-  for (const itemId of rootIds) {
-    const item = transcript.itemsById[itemId];
-    if (!item) continue;
-
-    if (item.kind === "tool_call" && isCollapsibleAction(item, childrenByParentId)) {
-      if (
-        trailingInlineActionIds.has(itemId)
-        || (isActiveToolCall(item) && (isKnownRealAction(item) || isPendingCommand(item)))
-      ) {
-        flushActions();
-        blocks.push({ kind: "inline_tool", itemId });
-      } else {
-        pendingActionIds.push(itemId);
-      }
-      continue;
-    }
-
-    flushActions();
-    blocks.push({ kind: "item", itemId });
-  }
-
-  flushActions();
-  return blocks;
-}
-
 function collectTrailingInlineActionIds(
-  rootIds: string[],
+  rootIds: readonly string[],
   transcript: TranscriptState,
   childrenByParentId: Map<string, string[]>,
   isTurnComplete: boolean,

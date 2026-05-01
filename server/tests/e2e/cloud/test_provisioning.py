@@ -15,6 +15,7 @@ from tests.e2e.cloud.helpers import (
     seed_linked_github_account,
     status_for_provider,
     sync_cloud_credential,
+    workspace_status,
 )
 
 
@@ -74,7 +75,7 @@ async def test_provisioned_workspace_is_sane(
     try:
         # First assert the control plane's view of the runtime connection, then
         # probe the runtime itself for git and one-message sanity.
-        assert workspace["status"] == "ready"
+        assert workspace_status(workspace) == "ready"
         assert connection["runtimeUrl"]
         assert connection["accessToken"]
         assert connection["anyharnessWorkspaceId"]

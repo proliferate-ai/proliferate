@@ -45,6 +45,8 @@ interface SidebarWorkspaceContentProps {
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
+  onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
+  onWorkspaceHover?: () => void;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -83,6 +85,8 @@ export function SidebarWorkspaceContent({
   onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
+  onMarkWorkspaceDone,
+  onWorkspaceHover,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
@@ -143,6 +147,8 @@ export function SidebarWorkspaceContent({
       isInitialConfigLoad: cloudRepoConfigsInitialLoading,
     });
     const cloudRepoTarget = group.cloudRepoTarget;
+    const hasArchivedHiddenItems =
+      group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;
 
     return (
       <RepoGroup
@@ -176,7 +182,9 @@ export function SidebarWorkspaceContent({
       >
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
-            This repository has no workspaces yet.
+            {hasArchivedHiddenItems
+              ? "Archived workspaces are hidden."
+              : "This repository has no workspaces yet."}
           </p>
         ) : (
           <>
@@ -196,6 +204,12 @@ export function SidebarWorkspaceContent({
                 lastInteracted={item.lastInteracted}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onIndicatorAction={onIndicatorAction}
+                onMarkDone={
+                  item.variant === "worktree" && !item.archived && item.localWorkspaceId
+                    ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)
+                    : undefined
+                }
+                onHover={onWorkspaceHover}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
                 onRename={

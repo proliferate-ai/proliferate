@@ -32,7 +32,7 @@ export interface AgentModelInfo {
 
 export interface AgentModelPreferences {
   defaultAgentKind: string;
-  defaultModelId: string;
+  defaultModelIdByAgentKind: Record<string, string>;
 }
 
 interface BuildAgentModelGroupsInput {
@@ -115,6 +115,16 @@ export function defaultAgentModelForGroup(
   ) ?? group.models[0] ?? null;
 }
 
+export function preferredAgentModelForGroup(
+  group: AgentModelGroup,
+  defaultModelIdByAgentKind: Record<string, string>,
+): AgentModelOption | null {
+  const preferredModelId = defaultModelIdByAgentKind[group.kind];
+  return preferredModelId
+    ? group.models.find((candidate) => candidate.modelId === preferredModelId) ?? null
+    : null;
+}
+
 export function resolveEffectiveAgentModelSelection(
   groups: AgentModelGroup[],
   override: AgentModelSelection | null | undefined,
@@ -128,25 +138,51 @@ export function resolveEffectiveAgentModelSelection(
     };
   }
 
-  const preferredSelection = findAgentModelSelection(groups, {
-    kind: preferences.defaultAgentKind,
-    modelId: preferences.defaultModelId,
-  });
-  if (preferredSelection) {
-    return {
-      kind: preferredSelection.group.kind,
-      modelId: preferredSelection.model.modelId,
-    };
+  const preferredGroup = preferences.defaultAgentKind
+    ? groups.find((group) => group.kind === preferences.defaultAgentKind) ?? null
+    : null;
+  if (preferredGroup) {
+    const model = preferredAgentModelForGroup(
+      preferredGroup,
+      preferences.defaultModelIdByAgentKind,
+    ) ?? defaultAgentModelForGroup(preferredGroup);
+    return model
+      ? { kind: preferredGroup.kind, modelId: model.modelId }
+      : null;
   }
 
   for (const group of groups) {
-    const model = defaultAgentModelForGroup(group);
+    const model = preferredAgentModelForGroup(
+      group,
+      preferences.defaultModelIdByAgentKind,
+    ) ?? defaultAgentModelForGroup(group);
     if (model) {
       return { kind: group.kind, modelId: model.modelId };
     }
   }
 
   return null;
+}
+
+export function withUpdatedDefaultModelIdByAgentKind(
+  defaultsByAgentKind: Record<string, string>,
+  agentKind: string,
+  modelId: string | null | undefined,
+): Record<string, string> {
+  const trimmedAgentKind = agentKind.trim();
+  const trimmedModelId = modelId?.trim() ?? "";
+  if (!trimmedAgentKind || !trimmedModelId) {
+    return defaultsByAgentKind;
+  }
+
+  if (defaultsByAgentKind[trimmedAgentKind] === trimmedModelId) {
+    return defaultsByAgentKind;
+  }
+
+  return {
+    ...defaultsByAgentKind,
+    [trimmedAgentKind]: trimmedModelId,
+  };
 }
 
 export function resolveAgentModelInfo(

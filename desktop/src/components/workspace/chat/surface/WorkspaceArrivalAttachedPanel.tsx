@@ -13,6 +13,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { ArrowUpRight, LoaderCircle, X } from "@/components/ui/icons";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import { useWorkspaceShellActions } from "@/components/workspace/shell/WorkspaceShellActionsContext";
 
 function SectionRow({
   label,
@@ -91,14 +92,16 @@ export function WorkspaceArrivalAttachedPanelView({
               </span>
             )}
           </span>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onSetupAction}
-            className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="ml-auto h-6 shrink-0 px-1.5"
           >
             {viewModel.setupActionLabel}
             {viewModel.setupTone !== "destructive" && <ArrowUpRight className="size-3" />}
-          </button>
+          </Button>
         </div>
       </SectionRow>
     </ComposerAttachedPanel>
@@ -133,6 +136,7 @@ export function WorkspaceArrivalAttachedPanel() {
     mode: panelState?.kind === "cloud-status" ? panelState.model.mode : "pending",
   });
   const rerunSetup = useRerunSetupMutation();
+  const shellActions = useWorkspaceShellActions();
 
   if (!panelState) {
     return null;
@@ -147,9 +151,9 @@ export function WorkspaceArrivalAttachedPanel() {
         onToggleExpanded={() => setExpanded((v) => !v)}
         onDismiss={arrivalActions.handleDismiss}
         onSetupAction={
-          viewModel.setupTone === "destructive"
+          viewModel.setupTerminalId
             ? () => {
-                void rerunSetup.mutateAsync(viewModel.workspaceId);
+                shellActions?.openTerminalPanel(viewModel.setupTerminalId ?? undefined);
               }
             : arrivalActions.handleOpenRepositorySettings
         }
@@ -177,20 +181,35 @@ export function WorkspaceArrivalAttachedPanel() {
               )}
             </span>
             <div className="ml-auto flex shrink-0 items-center gap-1">
-              <button
+              {panelState.terminalId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => {
+                    shellActions?.openTerminalPanel(panelState.terminalId ?? undefined);
+                  }}
+                >
+                  Open terminal
+                </Button>
+              )}
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
-                  clearSetupFailureDismissal(panelState.workspaceId);
-                  void rerunSetup.mutateAsync(panelState.workspaceId);
+                  clearSetupFailureDismissal(panelState.workspaceUiKey);
+                  void rerunSetup.mutateAsync(panelState.materializedWorkspaceId);
                 }}
-                className="rounded-md px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                className="h-6 px-2"
               >
                 Rerun
-              </button>
+              </Button>
               <IconButton
                 title="Dismiss"
                 size="sm"
-                onClick={() => dismissSetupFailure(panelState.workspaceId)}
+                onClick={() => dismissSetupFailure(panelState.workspaceUiKey)}
               >
                 <X className="size-3.5" />
               </IconButton>

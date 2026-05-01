@@ -273,7 +273,7 @@ export function AssistantMessage({
   isStreaming = false,
 }: AssistantMessageProps) {
   return (
-    <div className="text-chat leading-relaxed select-text text-foreground">
+    <div className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
       <AssistantMessageContent content={content} isStreaming={isStreaming} />
     </div>
   );

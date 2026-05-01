@@ -71,6 +71,16 @@ export function resolveSubagentExecutionState(
   return wasLaunchedInBackground(item) ? "completed_background" : "completed";
 }
 
+export function isSubagentExecutionStateRunning(
+  state: SubagentExecutionState,
+): boolean {
+  return state === "running" || state === "background";
+}
+
+export function isSubagentWorkComplete(item: ToolCallItem): boolean {
+  return !isSubagentExecutionStateRunning(resolveSubagentExecutionState(item));
+}
+
 export function resolveSubagentLaunchDisplay(
   item: ToolCallItem,
 ): SubagentLaunchDisplay {

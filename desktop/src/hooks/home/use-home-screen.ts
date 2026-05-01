@@ -10,6 +10,7 @@ import {
   buildHomeActionCards,
   buildHomeStatusMessage,
 } from "@/lib/domain/home/home-screen";
+import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/recency";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
@@ -43,11 +44,7 @@ export function useHomeScreen() {
           && hiddenRepoRootIdSet.has(workspace.localWorkspace.repoRootId)
         )
       )
-      .sort((a, b) => {
-        const aTime = new Date(workspaceLastInteracted[a.id] ?? a.updatedAt).getTime();
-        const bTime = new Date(workspaceLastInteracted[b.id] ?? b.updatedAt).getTime();
-        return bTime - aTime;
-      })
+      .sort((a, b) => compareLogicalWorkspaceRecency(a, b, workspaceLastInteracted))
       .slice(0, 4);
   }, [archivedWorkspaceIds, hiddenRepoRootIds, logicalWorkspaces, workspaceLastInteracted]);
 
@@ -101,7 +98,7 @@ export function useHomeScreen() {
           navigate(`/settings?section=repo&repo=${encodeURIComponent(firstRepository.sourceRoot)}`);
           return;
         }
-        navigate("/settings?section=defaults");
+        navigate("/settings?section=general");
       }
     }
   }

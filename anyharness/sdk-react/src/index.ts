@@ -11,6 +11,10 @@ export type {
 
 export { getAnyHarnessClient } from "./lib/client-cache.js";
 export type { AnyHarnessClientConnection } from "./lib/client-cache.js";
+export type {
+  AnyHarnessCacheDecisionEvent,
+  AnyHarnessQueryTimingOptions,
+} from "./lib/timing-options.js";
 
 export {
   anyHarnessRuntimeKey,
@@ -22,6 +26,7 @@ export {
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
+  anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessRepoRootsKey,
   anyHarnessRepoRootGitBranchesKey,
   anyHarnessRepoRootDetectSetupKey,
@@ -40,12 +45,14 @@ export {
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
   anyHarnessSessionSubagentsKey,
+  anyHarnessSessionReviewsKey,
   anyHarnessPlansKey,
   anyHarnessPlanKey,
   anyHarnessPlanDocumentKey,
   anyHarnessGitStatusKey,
   anyHarnessGitDiffScopeKey,
   anyHarnessGitDiffKey,
+  anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitBranchesKey,
   anyHarnessPullRequestKey,
   anyHarnessWorkspaceFilesScopeKey,
@@ -107,6 +114,9 @@ export {
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
+  useRetireWorkspacePreflightQuery,
+  useRetireWorkspaceMutation,
+  useRetryRetireCleanupMutation,
 } from "./hooks/workspaces.js";
 export {
   useWorkspaceSessionsQuery,
@@ -139,8 +149,19 @@ export {
   useHandoffPlanMutation,
 } from "./hooks/plans.js";
 export {
+  useSessionReviewsQuery,
+  useReviewAssignmentCritiqueQuery,
+  useStartPlanReviewMutation,
+  useStartCodeReviewMutation,
+  useStopReviewMutation,
+  useRetryReviewAssignmentMutation,
+  useSendReviewFeedbackMutation,
+  useMarkReviewRevisionReadyMutation,
+} from "./hooks/reviews.js";
+export {
   useGitStatusQuery,
   useGitDiffQuery,
+  useGitBranchDiffFilesQuery,
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
@@ -163,5 +184,7 @@ export {
   useTerminalsQuery,
   useCreateTerminalMutation,
   useResizeTerminalMutation,
+  useUpdateTerminalTitleMutation,
   useCloseTerminalMutation,
+  useRunTerminalCommandMutation,
 } from "./hooks/terminals.js";

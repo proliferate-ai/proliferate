@@ -171,3 +171,59 @@ async def test_anonymous_telemetry_endpoint_records_activation_payload(
     assert event_row.payload_json == {
         "milestone": "first_prompt_submitted",
     }
+
+
+@pytest.mark.asyncio
+async def test_anonymous_telemetry_endpoint_records_agent_seed_activation_payload(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    install_uuid = uuid.uuid4()
+
+    response = await client.post(
+        "/v1/telemetry/anonymous",
+        json={
+            "installUuid": str(install_uuid),
+            "surface": "desktop",
+            "telemetryMode": "hosted_product",
+            "recordType": "ACTIVATION",
+            "payload": {
+                "milestone": "first_bundled_agent_seed_hydrated",
+            },
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {"accepted": True}
+
+    event_row = (
+        await db_session.execute(
+            select(AnonymousTelemetryEventRecord).where(
+                AnonymousTelemetryEventRecord.install_uuid == install_uuid,
+                AnonymousTelemetryEventRecord.record_type == "ACTIVATION",
+            )
+        )
+    ).scalar_one()
+    assert event_row.payload_json == {
+        "milestone": "first_bundled_agent_seed_hydrated",
+    }
+
+
+@pytest.mark.asyncio
+async def test_anonymous_telemetry_endpoint_rejects_invalid_activation_payload(
+    client: AsyncClient,
+) -> None:
+    response = await client.post(
+        "/v1/telemetry/anonymous",
+        json={
+            "installUuid": str(uuid.uuid4()),
+            "surface": "desktop",
+            "telemetryMode": "hosted_product",
+            "recordType": "ACTIVATION",
+            "payload": {
+                "milestone": "not_a_real_milestone",
+            },
+        },
+    )
+
+    assert response.status_code == 422

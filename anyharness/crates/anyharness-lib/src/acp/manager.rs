@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Instant;
 
 use tokio::sync::{broadcast, oneshot, watch, RwLock};
@@ -14,6 +14,7 @@ use super::session_actor::{
 use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::service::PlanService;
+use crate::reviews::service::ReviewService;
 use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{
@@ -29,6 +30,7 @@ pub struct AcpManager {
     pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
     interaction_broker: Arc<InteractionBroker>,
     plan_service: Arc<PlanService>,
+    review_service: Arc<StdRwLock<Option<Arc<ReviewService>>>>,
 }
 
 impl AcpManager {
@@ -39,11 +41,18 @@ impl AcpManager {
             pending_startups: Arc::new(RwLock::new(HashMap::new())),
             interaction_broker,
             plan_service,
+            review_service: Arc::new(StdRwLock::new(None)),
         }
     }
 
     pub fn interaction_broker(&self) -> &Arc<InteractionBroker> {
         &self.interaction_broker
+    }
+
+    pub fn set_review_service(&self, review_service: Arc<ReviewService>) {
+        if let Ok(mut guard) = self.review_service.write() {
+            *guard = Some(review_service);
+        }
     }
 
     pub async fn start_session(
@@ -57,6 +66,7 @@ impl AcpManager {
         mcp_servers: Vec<SessionMcpServer>,
         startup_strategy: SessionStartupStrategy,
         system_prompt_append: Option<String>,
+        first_prompt_system_prompt_append: Option<String>,
         on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
         latency: Option<LatencyRequestContext>,
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
@@ -140,12 +150,18 @@ impl AcpManager {
             session_launch_env,
             interaction_broker: self.interaction_broker.clone(),
             plan_service: self.plan_service.clone(),
+            review_service: self
+                .review_service
+                .read()
+                .ok()
+                .and_then(|guard| guard.clone()),
             event_tx,
             session_store,
             mcp_servers,
             startup_strategy,
             last_seq,
             system_prompt_append,
+            first_prompt_system_prompt_append,
             on_turn_finish,
             latency,
             on_exit: Some(on_exit),
@@ -303,8 +319,13 @@ fn append_offline_runtime_event(
     session_store: &SessionStore,
     event: RuntimeInjectedSessionEvent,
 ) -> RuntimeEventInjectionResult {
+    let touch_session_activity = event.updates_session_activity_at();
     session_store
-        .append_event_with_next_seq(session_id, event.into_session_event())
+        .append_event_with_next_seq(
+            session_id,
+            event.into_session_event(),
+            touch_session_activity,
+        )
         .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))
 }
 
@@ -315,6 +336,7 @@ impl Clone for AcpManager {
             pending_startups: self.pending_startups.clone(),
             interaction_broker: self.interaction_broker.clone(),
             plan_service: self.plan_service.clone(),
+            review_service: self.review_service.clone(),
         }
     }
 }
@@ -410,6 +432,7 @@ mod tests {
     use crate::sessions::store::SessionStore;
     use anyharness_contract::v1::{
         SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
+        SubagentTurnCompletedPayload, SubagentTurnOutcome,
     };
 
     fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
@@ -463,6 +486,7 @@ mod tests {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
+            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             origin: None,
@@ -483,6 +507,19 @@ mod tests {
         let store = SessionStore::new(db);
         store.insert(&session_record()).expect("insert session");
         store
+    }
+
+    fn subagent_turn_completed_event() -> RuntimeInjectedSessionEvent {
+        RuntimeInjectedSessionEvent::SubagentTurnCompleted(SubagentTurnCompletedPayload {
+            completion_id: "completion-1".to_string(),
+            session_link_id: "link-1".to_string(),
+            parent_session_id: "session-1".to_string(),
+            child_session_id: "child-session-1".to_string(),
+            child_turn_id: "turn-1".to_string(),
+            child_last_event_seq: 4,
+            outcome: SubagentTurnOutcome::Completed,
+            label: Some("worker".to_string()),
+        })
     }
 
     #[tokio::test]
@@ -514,6 +551,7 @@ mod tests {
                 SessionStore::new(Db::open_in_memory().expect("open db")),
                 vec![],
                 SessionStartupStrategy::ResumeSeqFreshNative,
+                None,
                 None,
                 None,
                 None,
@@ -562,6 +600,7 @@ mod tests {
                     SessionStore::new(Db::open_in_memory().expect("open db")),
                     vec![],
                     SessionStartupStrategy::ResumeSeqFreshNative,
+                    None,
                     None,
                     None,
                     None,
@@ -623,6 +662,32 @@ mod tests {
             vec![1, 2]
         );
         assert_eq!(events[1].event_type, "session_info_update");
+        let session = store
+            .find_by_id("session-1")
+            .expect("find session")
+            .expect("session exists");
+        assert_eq!(session.updated_at, "2026-03-25T00:00:00Z");
+    }
+
+    #[tokio::test]
+    async fn offline_runtime_activity_event_touches_session_updated_at() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let store = seeded_session_store();
+
+        let envelope = manager
+            .emit_runtime_event("session-1", store.clone(), subagent_turn_completed_event())
+            .await
+            .expect("emit runtime event");
+
+        let session = store
+            .find_by_id("session-1")
+            .expect("find session")
+            .expect("session exists");
+        assert_eq!(session.updated_at, envelope.timestamp);
+
+        let events = store.list_events("session-1").expect("list events");
+        assert_eq!(events[0].event_type, "subagent_turn_completed");
     }
 
     #[tokio::test]

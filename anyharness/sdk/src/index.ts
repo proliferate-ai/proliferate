@@ -1,9 +1,28 @@
-export { AnyHarnessClient, AnyHarnessError } from "./client/core.js";
-export type { AnyHarnessClientOptions, AnyHarnessRequestOptions } from "./client/core.js";
+export {
+  AnyHarnessClient,
+  AnyHarnessError,
+  hashTimingScope,
+  setAnyHarnessTimingObserver,
+} from "./client/core.js";
+export type {
+  AnyHarnessClientOptions,
+  AnyHarnessMeasurementOperationId,
+  AnyHarnessRequestOptions,
+  AnyHarnessTimingCategory,
+  AnyHarnessTimingEvent,
+  AnyHarnessTimingObserver,
+  AnyHarnessTimingScope,
+} from "./client/core.js";
 
 export type {
   HealthResponse,
   RuntimeCapabilities,
+  AgentSeedHealth,
+  AgentSeedStatus,
+  AgentSeedSource,
+  AgentSeedOwnership,
+  AgentSeedLastAction,
+  AgentSeedFailureKind,
   ProblemDetails,
 } from "./types/runtime.js";
 
@@ -35,6 +54,9 @@ export type {
 } from "./types/agents.js";
 
 export type {
+  ModelCatalogStatus,
+  ModelLaunchRemediation,
+  ModelLaunchRemediationKind,
   ModelRegistry,
   ModelRegistryModel,
 } from "./types/model-registries.js";
@@ -118,6 +140,12 @@ export type {
   GetSetupStatusResponse,
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
+  WorkspaceRetireBlockerCode,
+  WorkspaceRetireBlockerSeverity,
+  WorkspaceRetireBlocker,
+  WorkspaceRetireOutcome,
+  WorkspaceRetirePreflightResponse,
+  WorkspaceRetireResponse,
 } from "./types/workspaces.js";
 
 export type {
@@ -181,6 +209,27 @@ export type {
   ProposedPlanDecisionState,
   ProposedPlanNativeResolutionState,
 } from "./types/plans.js";
+
+export type {
+  ReviewKind,
+  ReviewRunStatus,
+  ReviewRoundStatus,
+  ReviewAssignmentStatus,
+  ReviewFeedbackDeliveryState,
+  ReviewModeVerificationStatus,
+  ReviewPersonaRequest,
+  StartPlanReviewRequest,
+  StartCodeReviewRequest,
+  MarkReviewRevisionReadyRequest,
+  RetryReviewAssignmentRequest,
+  ReviewAssignmentDetail,
+  ReviewCritiqueResponse,
+  ReviewFeedbackDeliveryDetail,
+  ReviewRoundDetail,
+  ReviewRunDetail,
+  ReviewRunResponse,
+  SessionReviewsResponse,
+} from "./types/reviews.js";
 
 export type {
   SessionEventEnvelope,
@@ -260,6 +309,7 @@ export type {
   InteractionRequestedEvent,
   InteractionResolvedEvent,
   ErrorEvent,
+  ErrorEventDetails,
 } from "./types/events.js";
 
 export type {
@@ -329,7 +379,12 @@ export type {
   GitActionAvailability,
   GitChangedFile,
   GitStatusSnapshot,
+  GitDiffScope,
+  GitDiffFile,
   GitDiffResponse,
+  GitBranchDiffFilesResponse,
+  GitDiffOptions,
+  ListBranchDiffFilesOptions,
   GitBranchRef,
   RenameBranchRequest,
   RenameBranchResponse,
@@ -350,10 +405,18 @@ export type {
 } from "./types/hosting.js";
 
 export type {
+  TerminalPurpose,
   TerminalStatus,
+  TerminalCommandRunStatus,
+  TerminalCommandOutputMode,
+  TerminalCommandRunSummary,
+  TerminalCommandRunDetail,
   TerminalRecord,
   CreateTerminalRequest,
+  StartTerminalCommandRequest,
+  StartTerminalCommandResponse,
   ResizeTerminalRequest,
+  UpdateTerminalTitleRequest,
 } from "./types/terminals.js";
 
 export type {
@@ -362,7 +425,13 @@ export type {
 } from "./types/processes.js";
 
 export { connectTerminal } from "./streams/terminals.js";
-export type { TerminalStreamOptions, TerminalStreamHandle } from "./streams/terminals.js";
+export type {
+  TerminalDataFrame,
+  TerminalExitFrame,
+  TerminalReplayGapFrame,
+  TerminalStreamOptions,
+  TerminalStreamHandle,
+} from "./streams/terminals.js";
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";

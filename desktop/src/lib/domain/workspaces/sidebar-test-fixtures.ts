@@ -16,9 +16,12 @@ export function makeWorkspace(args: {
   sourceRoot?: string;
   kind?: Workspace["kind"];
   branch?: string;
+  currentBranch?: string | null;
+  originalBranch?: string | null;
   displayName?: string | null;
   origin?: Workspace["origin"];
   creatorContext?: Workspace["creatorContext"];
+  executionSummary?: Workspace["executionSummary"];
   updatedAt?: string;
 }): Workspace {
   const {
@@ -27,9 +30,12 @@ export function makeWorkspace(args: {
     sourceRoot = `/tmp/${repoName}`,
     kind = "local",
     branch = kind === "worktree" ? `feature/${id}` : "main",
+    currentBranch = branch,
+    originalBranch = branch,
     displayName = null,
     origin = null,
     creatorContext = null,
+    executionSummary = null,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
 
@@ -44,12 +50,12 @@ export function makeWorkspace(args: {
     gitProvider: "github",
     gitOwner: "proliferate-ai",
     gitRepoName: repoName,
-    originalBranch: "main",
-    currentBranch: branch,
+    originalBranch,
+    currentBranch,
     displayName,
     origin,
     creatorContext,
-    executionSummary: null,
+    executionSummary,
     lifecycleState: "active",
     cleanupState: "none",
     createdAt: updatedAt,
@@ -149,6 +155,7 @@ export function makeLocalLogicalWorkspace(args: {
   branch?: string;
   origin?: Workspace["origin"];
   creatorContext?: Workspace["creatorContext"];
+  executionSummary?: Workspace["executionSummary"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -159,6 +166,7 @@ export function makeLocalLogicalWorkspace(args: {
     branch,
     origin,
     creatorContext,
+    executionSummary,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const localWorkspace = makeWorkspace({
@@ -169,6 +177,7 @@ export function makeLocalLogicalWorkspace(args: {
     branch,
     origin,
     creatorContext,
+    executionSummary,
     updatedAt,
   });
 
@@ -251,6 +260,10 @@ export function buildGroups(args: {
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
   workspaceLastInteracted?: Record<string, string>;
+  finishSuggestionsByWorkspaceId?: Record<
+    string,
+    { workspaceId: string; readinessFingerprint: string }
+  >;
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
@@ -267,5 +280,6 @@ export function buildGroups(args: {
     activeSessionTitle: null,
     lastViewedAt: args.lastViewedAt ?? {},
     workspaceLastInteracted: args.workspaceLastInteracted ?? {},
+    finishSuggestionsByWorkspaceId: args.finishSuggestionsByWorkspaceId,
   });
 }

@@ -5,13 +5,11 @@ import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu
 import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
 import {
   FILE_TAB_CONTEXT_MENU_ITEMS,
-  resolveFileTabContextMenuPaths,
   type WorkspaceTabContextMenuCommand,
 } from "@/lib/domain/workspaces/tabs/context-menu";
 
 export function FileTabWithMenu({
   path,
-  openTabs,
   isActive,
   isDirty,
   isDiff,
@@ -19,10 +17,11 @@ export function FileTabWithMenu({
   hideLeftDivider,
   hideRightDivider,
   onSelect,
-  onClosePaths,
+  onClose,
+  onCloseOthers,
+  onCloseRight,
 }: {
   path: string;
-  openTabs: readonly string[];
   isActive: boolean;
   isDirty: boolean;
   isDiff: boolean;
@@ -30,7 +29,9 @@ export function FileTabWithMenu({
   hideLeftDivider: boolean;
   hideRightDivider: boolean;
   onSelect: () => void;
-  onClosePaths: (paths: string[]) => void;
+  onClose: () => void;
+  onCloseOthers: () => void;
+  onCloseRight: () => void;
 }) {
   const basename = path.split("/").pop() ?? path;
   const { onContextMenuCapture } = useWorkspaceTabNativeContextMenu({
@@ -39,9 +40,25 @@ export function FileTabWithMenu({
   });
 
   function handleContextMenuCommand(command: WorkspaceTabContextMenuCommand) {
-    const paths = resolveFileTabContextMenuPaths(openTabs, path, command);
-    if (paths.length > 0) {
-      onClosePaths(paths);
+    switch (command) {
+      case "close":
+        onClose();
+        return;
+      case "close-others":
+        onCloseOthers();
+        return;
+      case "close-right":
+        onCloseRight();
+        return;
+      case "create-group":
+      case "dismiss":
+      case "collapse-group":
+      case "expand-group":
+      case "rename-group":
+      case "change-group-color":
+      case "ungroup":
+      case "rename":
+        return;
     }
   }
 
@@ -70,7 +87,7 @@ export function FileTabWithMenu({
             )}
             label={basename}
             onSelect={onSelect}
-            onClose={() => onClosePaths([path])}
+            onClose={onClose}
             badge={(
               <>
                 {isDiff && (

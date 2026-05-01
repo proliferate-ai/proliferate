@@ -92,7 +92,7 @@ function ArtifactChip({
     return (
       <span
         title={pathLabel}
-        className="inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-sm leading-none text-foreground/90"
+        className="inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90"
       >
         {chipContent}
       </span>
@@ -104,12 +104,13 @@ function ArtifactChip({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       title={pathLabel}
       onClick={(event) => {
         event.stopPropagation();
         onClick();
       }}
-      className="h-auto max-w-full rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-sm leading-none text-foreground/90 hover:bg-muted"
+      className="h-auto max-w-full rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 hover:bg-muted"
     >
       {chipContent}
     </Button>

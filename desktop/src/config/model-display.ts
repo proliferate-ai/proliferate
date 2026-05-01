@@ -4,10 +4,12 @@ export const HIDDEN_MODEL_IDS = new Set([
 
 export const MODEL_DISPLAY_ALIASES: Record<string, string> = {
   "claude:sonnet": "Sonnet 4.6",
-  "claude:sonnet[1m]": "Sonnet 4.6 (1M context)",
-  "claude:opus": "Opus 4.6",
-  "claude:opus[1m]": "Opus 4.6 (1M context)",
+  "claude:sonnet[1m]": "Sonnet 4.6",
+  "claude:opus": "Opus 4.7",
+  "claude:opus[1m]": "Opus 4.7",
+  "claude:claude-opus-4-6": "Opus 4.6",
   "claude:haiku": "Haiku 4.5",
+  "codex:gpt-5.5": "GPT 5.5",
   "codex:gpt-5.4": "GPT 5.4",
   "codex:gpt-5.4-mini": "GPT 5.4 Mini",
   "codex:gpt-5.3-codex": "GPT 5.3 Codex",

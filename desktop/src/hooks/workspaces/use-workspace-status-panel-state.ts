@@ -12,8 +12,12 @@ import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-s
 import { useWorkspaceArrivalState } from "@/hooks/workspaces/use-workspace-arrival-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
 export type WorkspaceStatusPanelState =
   | {
@@ -35,13 +39,16 @@ export type WorkspaceStatusPanelState =
     viewModel: WorkspaceArrivalViewModel;
     workspacePath: string | null;
     sourceRepoRootPath: string | null;
+    setupTerminalId: string | null;
   }
   | {
     kind: "setup-failure";
-    workspaceId: string;
+    workspaceUiKey: string;
+    materializedWorkspaceId: string;
     command: string;
     summary: string;
     detail: string | null;
+    terminalId: string | null;
   };
 
 function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
@@ -88,6 +95,14 @@ function buildPendingDetail(entry: PendingWorkspaceEntry): string | null {
 
 export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const { data: workspaceCollections } = useWorkspaces();
   const arrival = useWorkspaceArrivalState();
@@ -106,10 +121,11 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   // Query setup status for the selected workspace. Used to show persistent
   // failure banners on workspace re-entry (after the arrival event is gone).
   const { data: setupStatus } = useSetupStatusQuery({
-    workspaceId: selectedWorkspaceId,
+    workspaceId: materializedWorkspaceId,
     enabled:
-      !!selectedWorkspaceId
+      !!materializedWorkspaceId
       && !arrival.viewModel
+      && !hotPaintPending
       && configuredSetupScript.length > 0,
     refetchWhileRunning: false,
   });
@@ -156,6 +172,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         viewModel: arrival.viewModel,
         workspacePath: arrival.workspacePath,
         sourceRepoRootPath: arrival.sourceRepoRootPath,
+        setupTerminalId: arrival.setupTerminalId,
       };
     }
 
@@ -163,14 +180,20 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     // arrival event is gone but the runtime still has a failed setup result
     // and the user hasn't dismissed it yet.
     if (
-      selectedWorkspaceId
+      workspaceUiKey
+      && materializedWorkspaceId
       && setupStatus?.status === "failed"
-      && !dismissedSetupFailures[selectedWorkspaceId]
+      && !resolveWithWorkspaceFallback(
+        dismissedSetupFailures,
+        workspaceUiKey,
+        materializedWorkspaceId,
+      ).value
     ) {
       const fullOutput = `${setupStatus.stderr ?? ""}\n${setupStatus.stdout ?? ""}`.trim();
       return {
         kind: "setup-failure",
-        workspaceId: selectedWorkspaceId,
+        workspaceUiKey,
+        materializedWorkspaceId,
         command: setupStatus.command,
         summary: summarizeSetupFailure({
           command: setupStatus.command,
@@ -181,6 +204,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
           durationMs: setupStatus.durationMs ?? 0,
         }),
         detail: fullOutput || null,
+        terminalId: setupStatus.terminalId ?? null,
       };
     }
 
@@ -195,5 +219,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     selectedWorkspace,
     selectedWorkspaceId,
     setupStatus,
+    workspaceUiKey,
+    materializedWorkspaceId,
   ]);
 }

@@ -9,7 +9,8 @@ import {
   type StoredAuthSession,
   type StoredPendingAuthSession,
 } from "@/platform/tauri/auth";
-import { closeSessionSlotHandles } from "@/lib/domain/sessions/activity";
+import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
+import { detachAndCloseSessionSlotStreams } from "@/lib/integrations/anyharness/session-runtime";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -164,7 +165,7 @@ async function applyAnonymousState(options?: {
   if (options?.clearPendingAuth) {
     await clearStoredPendingAuthSession();
   }
-  closeSessionSlotHandles(useHarnessStore.getState().sessionSlots);
+  detachAndCloseSessionSlotStreams(Object.keys(useHarnessStore.getState().sessionSlots));
   useHarnessStore.getState().clearSelection();
   useRepoSetupModalStore.getState().close();
   useAuthStore.setState({
@@ -198,28 +199,6 @@ function reportBackgroundAuthError(message: string): void {
       provider: "github",
     },
   });
-}
-
-function desktopNavigationTarget(url: string): string | null {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "proliferate:" && parsed.protocol !== "proliferate-local:") {
-    return null;
-  }
-
-  if (parsed.hostname !== "settings" || parsed.pathname !== "/cloud") {
-    return null;
-  }
-
-  const params = new URLSearchParams(parsed.search);
-  params.set("section", "cloud");
-  return `/settings?${params.toString()}`;
 }
 
 function handleDesktopNavigationUrl(url: string): boolean {
@@ -277,7 +256,7 @@ export async function bootstrapAuth(): Promise<void> {
   const controlPlaneReachable = await checkControlPlaneReachable();
   if (!controlPlaneReachable) {
     await clearStoredPendingAuthSession();
-    closeSessionSlotHandles(useHarnessStore.getState().sessionSlots);
+    detachAndCloseSessionSlotStreams(Object.keys(useHarnessStore.getState().sessionSlots));
     useHarnessStore.getState().clearSelection();
 
     if (storedSession) {

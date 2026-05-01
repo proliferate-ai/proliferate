@@ -1,9 +1,14 @@
-import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type MouseEventHandler,
+  type ReactNode,
+} from "react";
 
 type IconButtonTone = "default" | "sidebar";
-type IconButtonSize = "sm" | "md";
+type IconButtonSize = "xs" | "sm" | "md";
 
-interface IconButtonProps {
+interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   className?: string;
@@ -20,8 +25,9 @@ const toneClasses: Record<IconButtonTone, string> = {
 };
 
 const sizeClasses: Record<IconButtonSize, string> = {
-  sm: "size-6",
-  md: "size-7",
+  xs: "size-5 p-0",
+  sm: "size-6 px-2",
+  md: "size-7 px-2",
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
@@ -34,21 +40,25 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       tone = "default",
       size = "sm",
       disabled = false,
+      type = "button",
+      "aria-label": ariaLabel,
+      ...props
     },
     ref,
   ) {
     const base =
-      "inline-flex cursor-pointer px-2 items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
+      "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
 
     return (
       <button
         ref={ref}
-        type="button"
+        type={type}
         onClick={onClick}
         title={title}
-        aria-label={title}
+        aria-label={ariaLabel ?? title}
         disabled={disabled}
         className={`${base} ${sizeClasses[size]} ${toneClasses[tone]} ${className}`}
+        {...props}
       >
         {children}
       </button>

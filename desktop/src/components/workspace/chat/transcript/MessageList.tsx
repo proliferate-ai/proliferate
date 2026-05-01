@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -15,16 +16,13 @@ import { SystemMessage } from "./SystemMessage";
 import { UserMessage } from "./UserMessage";
 import { StreamingIndicator } from "./StreamingIndicator";
 import { TurnSeparator } from "./TurnSeparator";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import { Button } from "@/components/ui/Button";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
 import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
 import { ToolActionLeadingAffordance } from "@/components/workspace/chat/tool-calls/ToolActionRow";
 import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
-import {
-  CollapsedActions,
-  InlineToolAction,
-} from "@/components/workspace/chat/tool-calls/CollapsedActions";
 import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
@@ -45,10 +43,12 @@ import {
   Sparkles,
   Terminal,
 } from "@/components/ui/icons";
+import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "@/config/chat-layout";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
-import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
+import { useChatTranscriptSelection } from "@/hooks/chat/use-chat-transcript-selection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
@@ -61,9 +61,13 @@ import {
 } from "@/lib/domain/chat/tool-call-display";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
 import {
+  buildTranscriptDisplayBlocks,
   buildTurnPresentation,
   summarizeCollapsedActions,
+  type TurnDisplayBlock,
 } from "@/lib/domain/chat/transcript-presentation";
+import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript-copy";
+import { normalizeToolResultText } from "@/lib/domain/chat/tool-result-text";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
@@ -74,28 +78,54 @@ import {
   parseSubagentProvisioningStatus,
   resolveSubagentLaunchDisplay,
   resolveSubagentExecutionState,
+  isSubagentExecutionStateRunning,
+  isSubagentWorkComplete,
   type SubagentExecutionState,
 } from "@/lib/domain/chat/subagent-launch";
 import {
-  buildSubagentBrailleColorMap,
+  finishOrCancelMeasurementOperation,
+  markOperationForNextCommit,
+  startMeasurementOperation,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
+import {
   resolveSubagentColor,
-  resolveSubagentBrailleColor,
 } from "@/lib/domain/chat/subagent-braille-color";
-import { isAgentSessionProvenance, isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
+import {
+  isAgentSessionProvenance,
+  resolveReviewFeedbackPromptReference,
+  isSubagentWakeProvenance,
+} from "@/lib/domain/chat/subagents/provenance";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
+import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
+import { SessionErrorItem } from "@/components/workspace/chat/transcript/SessionErrorItem";
 import { UserMessageProvenanceChrome } from "@/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import {
+  getTurnDisplayBlockKey,
+  ScopedTranscriptBlocks,
+  TurnDisplayBlockNode,
+} from "@/components/workspace/chat/transcript/ScopedTranscriptBlocks";
+import {
   turnHasAssistantRenderableTranscriptContent,
-  resolveVisibleTranscriptPendingPrompt,
+  resolveVisibleOptimisticPrompt,
   shouldShowPendingPromptActivity,
 } from "@/lib/domain/chat/pending-prompts";
+import {
+  buildTranscriptVirtualRows,
+  type TranscriptVirtualRow,
+} from "@/lib/domain/chat/transcript-virtual-rows";
 import {
   lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@/lib/domain/chat/transcript-trailing-status";
+import {
+  resolveAssistantTurnActionTime,
+  resolveOptimisticPromptActionTime,
+  resolveUserMessageActionTime,
+} from "@/lib/domain/chat/transcript-action-time";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -109,15 +139,17 @@ import type {
   TerminalOutputContentPart,
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import { VirtualTurnList } from "@/components/workspace/chat/transcript/VirtualTurnList";
 
-const TURN_HORIZONTAL_PADDING = "px-7";
+const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 const EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS = new Set<string>();
-const ProposedPlanToolCallIdsContext = createContext<Set<string>>(
+const ProposedPlanToolCallIdsContext = createContext<ReadonlySet<string>>(
   EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
 );
 const TranscriptSessionIdContext = createContext<string | null>(null);
 const TranscriptOpenSessionContext = createContext<((sessionId: string) => void) | null>(null);
+const noop = () => {};
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
 /**
@@ -125,7 +157,7 @@ type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
  * the trailing status should stay compact instead of creating an empty block
  * between the prose and future tool activity.
  */
-const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
+const TRAILING_STATUS_MIN_HEIGHT = "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
 const LIVE_STATUS_GRACE_MS = 700;
 
 interface MessageListProps {
@@ -134,6 +166,10 @@ interface MessageListProps {
   optimisticPrompt: PendingPromptEntry | null;
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
+  hasOlderHistory?: boolean;
+  isLoadingOlderHistory?: boolean;
+  bottomInsetPx?: number;
+  onLoadOlderHistory?: () => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   onOpenSession?: (sessionId: string) => void;
 }
@@ -144,56 +180,59 @@ export function MessageList({
   optimisticPrompt,
   transcript,
   sessionViewState,
+  hasOlderHistory = false,
+  isLoadingOlderHistory = false,
+  bottomInsetPx = CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
+  onLoadOlderHistory,
   onHandOffPlanToNewSession,
   onOpenSession,
 }: MessageListProps) {
+  useDebugRenderCount("transcript-list");
+  const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
   const { openFileDiff } = useWorkspaceFileActions();
   const { openArtifact } = useOpenCoworkArtifact();
-  const subagentBrailleColors = useMemo(
-    () => buildSubagentBrailleColorMap(transcript),
-    [transcript],
-  );
-  const toolCallIdsWithProposedPlan = useMemo(
-    () => collectToolCallIdsWithProposedPlan(transcript),
-    [transcript.itemsById],
-  );
-
-  const totalItems = transcript.turnOrder.reduce(
-    (sum, tid) => sum + (transcript.turnsById[tid]?.itemOrder.length ?? 0),
-    0,
-  );
   const latestTurnHasAssistantRenderableContent = turnHasAssistantRenderableTranscriptContent(
     latestTurn,
     transcript,
   );
-  const visiblePendingPrompt = resolveVisibleTranscriptPendingPrompt({
-    pendingPrompts: transcript.pendingPrompts,
+  const visibleOptimisticPrompt = resolveVisibleOptimisticPrompt({
     optimisticPrompt,
     latestTurnStartedAt: latestTurn?.startedAt ?? null,
     latestTurnHasAssistantRenderableContent,
   });
-  const pendingPromptTrailingStatus = visiblePendingPrompt
-    && shouldShowPendingPromptActivity({ optimisticPrompt, sessionViewState })
-    ? resolvePendingPromptTrailingStatus(
-      visiblePendingPrompt.queuedAt,
+  const optimisticPromptTrailingStatus = visibleOptimisticPrompt
+    && shouldShowPendingPromptActivity({
+      optimisticPrompt: visibleOptimisticPrompt,
       sessionViewState,
-      optimisticPrompt !== null,
+    })
+    ? resolvePendingPromptTrailingStatus(
+      visibleOptimisticPrompt.queuedAt,
+      sessionViewState,
+      true,
     )
     : null;
-  const visibleTurnIds = transcript.turnOrder.filter((turnId) => {
-    const turn = transcript.turnsById[turnId];
-    if (!turn) return false;
-
-    const isLatestTurn = turnId === latestTurnId;
-    const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
-    return !(
-      visiblePendingPrompt !== null
-      && isLatestTurnInProgress
-      && !latestTurnHasAssistantRenderableContent
-    );
-  });
+  const virtualRows = useMemo(
+    () => buildTranscriptVirtualRows({
+      activeSessionId,
+      transcript,
+      visibleOptimisticPrompt,
+      latestTurnId,
+      latestTurnHasAssistantRenderableContent,
+    }),
+    [
+      activeSessionId,
+      latestTurnHasAssistantRenderableContent,
+      latestTurnId,
+      transcript,
+      visibleOptimisticPrompt,
+    ],
+  );
+  const visibleTurnIds = useMemo(
+    () => virtualRows.flatMap((row) => row.kind === "turn" ? [row.turnId] : []),
+    [virtualRows],
+  );
   const latestTurnInProgress = !!latestTurn && !latestTurn.completedAt;
   const latestTurnPresentation = useMemo(
     () => latestTurn ? buildTurnPresentation(latestTurn, transcript) : null,
@@ -202,7 +241,7 @@ export function MessageList({
   const latestLiveExplorationBlock = useMemo(
     () => latestTurnPresentation
       ? findTrailingLiveExplorationBlock(
-          latestTurnPresentation,
+          latestTurnPresentation.displayBlocks,
           transcript,
           latestTurnInProgress,
         )
@@ -212,7 +251,7 @@ export function MessageList({
   const latestLiveWorkBlock = useMemo(
     () => latestTurnPresentation
       ? findTrailingLiveWorkBlock(
-          latestTurnPresentation,
+          latestTurnPresentation.displayBlocks,
           transcript,
           latestTurnInProgress,
         )
@@ -260,128 +299,223 @@ export function MessageList({
           latestTransientText,
         )
       : null;
-  const { scrollRef, contentRef } = useMessageListScroll({
-    totalItems,
-    pendingPromptText: visiblePendingPrompt?.text ?? null,
-    isSessionBusy: sessionViewState === "working" || sessionViewState === "needs_input",
-    selectedWorkspaceId,
-    activeSessionId,
+  const selectionRootRef = useRef<HTMLDivElement>(null);
+  const getTranscriptCopyText = useCallback(() => buildTranscriptCopyText({
+    transcript,
+    visibleTurnIds,
+    visibleOptimisticPrompt,
+    proposedPlanToolCallIds: collectToolCallIdsWithProposedPlan(transcript),
+  }), [
+    transcript,
+    visibleTurnIds,
+    visibleOptimisticPrompt,
+  ]);
+
+  useChatTranscriptSelection({
+    rootRef: selectionRootRef,
+    getCopyText: getTranscriptCopyText,
   });
+  const handleTranscriptScroll = useCallback(() => {
+    const operationId = startMeasurementOperation({
+      kind: "transcript_scroll",
+      sampleKey: "transcript",
+      surfaces: ["transcript-list", "session-transcript-pane", "chat-surface"],
+      idleTimeoutMs: 750,
+      maxDurationMs: 8000,
+      cooldownMs: 1500,
+    });
+    if (operationId) {
+      scrollSampleOperationRef.current = operationId;
+      markOperationForNextCommit(operationId, [
+        "transcript-list",
+        "session-transcript-pane",
+        "chat-surface",
+      ]);
+    }
+  }, []);
+
+  useEffect(() => () => {
+    finishOrCancelMeasurementOperation(scrollSampleOperationRef.current, "unmount");
+    scrollSampleOperationRef.current = null;
+  }, []);
+
+  const renderVirtualRow = useCallback((row: TranscriptVirtualRow, rowIndex: number) => {
+    if (row.kind === "pending_prompt") {
+      if (!visibleOptimisticPrompt) {
+        return null;
+      }
+      return (
+        <TurnShell isFirst={rowIndex === 0}>
+          <div className="flex flex-col gap-2">
+            {(() => {
+              const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
+                visibleOptimisticPrompt.promptProvenance,
+                visibleOptimisticPrompt.text,
+              );
+              if (isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance)) {
+                return (
+                  <div className="flex justify-end">
+                    <SubagentWakeBadge
+                      label={visibleOptimisticPrompt.promptProvenance.label ?? null}
+                      color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
+                    />
+                  </div>
+                );
+              }
+              if (reviewFeedbackReference) {
+                return (
+                  <ReviewFeedbackSummary
+                    reference={reviewFeedbackReference}
+                    sessionId={activeSessionId}
+                    state="queued"
+                    onOpenSession={onOpenSession}
+                  />
+                );
+              }
+              return (
+                <UserMessage
+                  sessionId={activeSessionId}
+                  content={visibleOptimisticPrompt.text}
+                  contentParts={visibleOptimisticPrompt.contentParts}
+                  showCopyButton
+                  timestampLabel={resolveOptimisticPromptActionTime(visibleOptimisticPrompt)}
+                />
+              );
+            })()}
+            {optimisticPromptTrailingStatus && (
+              <div className={TRAILING_STATUS_MIN_HEIGHT}>{optimisticPromptTrailingStatus}</div>
+            )}
+          </div>
+        </TurnShell>
+      );
+    }
+
+    const turn = transcript.turnsById[row.turnId];
+    if (!turn) {
+      return null;
+    }
+
+    const isLatestTurn = row.turnId === latestTurnId;
+    const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
+    const hasFileBadges = turn.fileBadges.length > 0;
+    const presentation = isLatestTurn && latestTurnPresentation
+      ? latestTurnPresentation
+      : buildTurnPresentation(turn, transcript);
+    const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
+    const tailAssistantProseRootId = findTailAssistantProseRootId(
+      presentation,
+      transcript,
+    );
+    const tailAssistantCopyContent = getAssistantProseContent(
+      tailAssistantProseRootId,
+      transcript,
+    );
+    const tailAssistantItem = tailAssistantProseRootId
+      ? transcript.itemsById[tailAssistantProseRootId]
+      : null;
+    const tailAssistantActionTime = resolveAssistantTurnActionTime({
+      assistantItem: tailAssistantItem?.kind === "assistant_prose" ? tailAssistantItem : null,
+      turn,
+    });
+    // Hide the trailing indicator only while the assistant prose item
+    // itself is actively streaming. If Codex closes the prose item but
+    // keeps working internally, the trailing indicator should return.
+    const trailingStatus = isLatestTurn
+      ? latestLiveStatus
+      : shouldAllowTurnTrailingStatus({
+          turn,
+          transcript,
+          isLatestTurnInProgress,
+        })
+          ? resolveTurnTrailingStatus(
+              turn.startedAt,
+              sessionViewState,
+              latestTransientStatusText(turn, transcript),
+            )
+          : null;
+    const shouldReserveTurnAssistantActionSlot =
+      isLatestTurnInProgress
+      && !!tailAssistantCopyContent
+      && !trailingStatus
+      && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+    const trailingStatusClassName = tailAssistantCopyContent
+      ? undefined
+      : TRAILING_STATUS_MIN_HEIGHT;
+
+    return (
+      <TurnShell isFirst={rowIndex === 0}>
+        <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+          <TurnItemSequence
+            turn={turn}
+            transcript={transcript}
+            isTurnComplete={!!turn.completedAt}
+            presentation={presentation}
+            forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
+            tailAssistantProseRootId={tailAssistantProseRootId}
+            workspaceId={selectedWorkspaceId}
+            onOpenArtifact={openArtifact}
+            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+          />
+          {turn.completedAt && hasFileBadges && (
+            <TurnDiffPanel
+              turn={turn}
+              transcript={transcript}
+              onOpenFile={(filePath) => void openFileDiff(filePath)}
+            />
+          )}
+          <TurnAssistantActionRow
+            content={tailAssistantCopyContent}
+            showCopyButton={!!turn.completedAt}
+            reserveSlot={shouldReserveTurnAssistantActionSlot}
+            timestampLabel={tailAssistantActionTime}
+          />
+          {trailingStatus && (
+            <div className={trailingStatusClassName}>{trailingStatus}</div>
+          )}
+        </div>
+      </TurnShell>
+    );
+  }, [
+    activeSessionId,
+    latestLiveExplorationBlock,
+    latestLiveStatus,
+    latestTurnId,
+    latestTurnPresentation,
+    onHandOffPlanToNewSession,
+    onOpenSession,
+    openArtifact,
+    openFileDiff,
+    optimisticPromptTrailingStatus,
+    selectedWorkspaceId,
+    sessionViewState,
+    transcript,
+    visibleOptimisticPrompt,
+  ]);
+
   return (
-    <div className="flex-1 min-h-0" data-telemetry-block>
-      <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
+    <DebugProfiler id="transcript-list">
+      <div className="flex-1 min-h-0" data-telemetry-block>
         <TranscriptSessionIdContext.Provider value={activeSessionId}>
           <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
-            <AutoHideScrollArea className="h-full" ref={scrollRef}>
-            <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
-              {visibleTurnIds.map((turnId, turnIdx) => {
-                const turn = transcript.turnsById[turnId];
-                if (!turn) return null;
-                const isLatestTurn = turnId === latestTurnId;
-                const isLatestTurnInProgress =
-                  isLatestTurn && !turn.completedAt;
-                const hasFileBadges = turn.fileBadges.length > 0;
-                const presentation = isLatestTurn && latestTurnPresentation
-                  ? latestTurnPresentation
-                  : buildTurnPresentation(turn, transcript);
-                const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
-                const tailAssistantProseRootId = findTailAssistantProseRootId(
-                  presentation,
-                  transcript,
-                );
-                const tailAssistantCopyContent = getAssistantProseContent(
-                  tailAssistantProseRootId,
-                  transcript,
-                );
-                // Hide the trailing indicator only while the assistant prose item
-                // itself is actively streaming. If Codex closes the prose item but
-                // keeps working internally, the trailing indicator should return.
-                const trailingStatus = isLatestTurn
-                  ? latestLiveStatus
-                  : shouldAllowTurnTrailingStatus({
-                      turn,
-                      transcript,
-                      isLatestTurnInProgress,
-                    })
-                      ? resolveTurnTrailingStatus(
-                          turn.startedAt,
-                          sessionViewState,
-                          latestTransientStatusText(turn, transcript),
-                        )
-                      : null;
-                const shouldReserveTurnAssistantActionSlot =
-                  isLatestTurnInProgress
-                  && !!tailAssistantCopyContent
-                  && !trailingStatus
-                  && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
-                const trailingStatusClassName = tailAssistantCopyContent
-                  ? undefined
-                  : TRAILING_STATUS_MIN_HEIGHT;
-
-                return (
-                  <TurnShell key={turnId} isFirst={turnIdx === 0}>
-                    <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
-                      <TurnItemSequence
-                        turn={turn}
-                        transcript={transcript}
-                        isTurnComplete={!!turn.completedAt}
-                        presentation={presentation}
-                        forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
-                        tailAssistantProseRootId={tailAssistantProseRootId}
-                        workspaceId={selectedWorkspaceId}
-                        onOpenArtifact={openArtifact}
-                        subagentBrailleColors={subagentBrailleColors}
-                        onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-                      />
-                      {turn.completedAt && hasFileBadges && (
-                        <TurnDiffPanel
-                          turn={turn}
-                          transcript={transcript}
-                          onOpenFile={(filePath) => void openFileDiff(filePath)}
-                        />
-                      )}
-                      <TurnAssistantActionRow
-                        content={tailAssistantCopyContent}
-                        showCopyButton={!!turn.completedAt}
-                        reserveSlot={shouldReserveTurnAssistantActionSlot}
-                      />
-                      {trailingStatus && (
-                        <div className={trailingStatusClassName}>{trailingStatus}</div>
-                      )}
-                    </div>
-                  </TurnShell>
-                );
-              })}
-              {visiblePendingPrompt && (
-                <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
-                  <div className="flex flex-col gap-2">
-                    {isSubagentWakeProvenance(visiblePendingPrompt.promptProvenance) ? (
-                      <div className="flex justify-end">
-                        <SubagentWakeBadge
-                          label={visiblePendingPrompt.promptProvenance.label ?? null}
-                          color={resolveSubagentColor(visiblePendingPrompt.promptProvenance.sessionLinkId)}
-                        />
-                      </div>
-                    ) : (
-                      <UserMessage
-                        sessionId={activeSessionId}
-                        content={visiblePendingPrompt.text}
-                        contentParts={visiblePendingPrompt.contentParts}
-                        showCopyButton
-                      />
-                    )}
-                    {pendingPromptTrailingStatus && (
-                      <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
-                    )}
-                  </div>
-                </TurnShell>
-              )}
-            </div>
-            </AutoHideScrollArea>
+            <VirtualTurnList
+              key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
+              rows={virtualRows}
+              selectionRootRef={selectionRootRef}
+              hasOlderHistory={hasOlderHistory}
+              isLoadingOlderHistory={isLoadingOlderHistory}
+              bottomInsetPx={bottomInsetPx}
+              selectedWorkspaceId={selectedWorkspaceId}
+              activeSessionId={activeSessionId}
+              isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
+              pendingPromptText={visibleOptimisticPrompt?.text ?? null}
+              onLoadOlderHistory={onLoadOlderHistory ?? noop}
+              onScrollSample={handleTranscriptScroll}
+              renderRow={renderVirtualRow}
+            />
           </TranscriptOpenSessionContext.Provider>
         </TranscriptSessionIdContext.Provider>
-      </ProposedPlanToolCallIdsContext.Provider>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }
 
@@ -475,13 +609,61 @@ function collectToolCallIdsWithProposedPlan(
 }
 
 function hasProposedPlanForToolCall(
-  toolCallIdsWithProposedPlan: Set<string>,
+  toolCallIdsWithProposedPlan: ReadonlySet<string>,
   toolCallId: string | null,
 ): boolean {
   if (!toolCallId) {
     return false;
   }
   return toolCallIdsWithProposedPlan.has(toolCallId);
+}
+
+function collectToolCallIdsWithProposedPlanForBlocks(
+  displayBlocks: readonly TurnDisplayBlock[],
+  transcript: TranscriptState,
+  childrenByParentId: Map<string, string[]>,
+): Set<string> {
+  const toolCallIds = new Set<string>();
+  for (const block of displayBlocks) {
+    if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+      for (const itemId of block.itemIds) {
+        collectToolCallIdsWithProposedPlanFromItem(
+          itemId,
+          transcript,
+          childrenByParentId,
+          toolCallIds,
+        );
+      }
+      continue;
+    }
+    collectToolCallIdsWithProposedPlanFromItem(
+      block.itemId,
+      transcript,
+      childrenByParentId,
+      toolCallIds,
+    );
+  }
+  return toolCallIds;
+}
+
+function collectToolCallIdsWithProposedPlanFromItem(
+  itemId: string,
+  transcript: TranscriptState,
+  childrenByParentId: Map<string, string[]>,
+  output: Set<string>,
+): void {
+  const item = transcript.itemsById[itemId];
+  if (item?.kind === "proposed_plan" && item.plan.sourceToolCallId) {
+    output.add(item.plan.sourceToolCallId);
+  }
+  for (const childId of childrenByParentId.get(itemId) ?? []) {
+    collectToolCallIdsWithProposedPlanFromItem(
+      childId,
+      transcript,
+      childrenByParentId,
+      output,
+    );
+  }
 }
 
 function TurnItemSequence({
@@ -493,7 +675,6 @@ function TurnItemSequence({
   tailAssistantProseRootId,
   workspaceId,
   onOpenArtifact,
-  subagentBrailleColors,
   onHandOffPlanToNewSession,
 }: {
   turn: TurnRecord;
@@ -504,7 +685,6 @@ function TurnItemSequence({
   tailAssistantProseRootId: string | null;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
-  subagentBrailleColors: Map<string, string>;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
@@ -512,10 +692,18 @@ function TurnItemSequence({
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
   const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
+  const toolCallIdsWithProposedPlan = useMemo(
+    () => collectToolCallIdsWithProposedPlanForBlocks(
+      presentation.displayBlocks,
+      transcript,
+      presentation.childrenByParentId,
+    ),
+    [presentation.childrenByParentId, presentation.displayBlocks, transcript],
+  );
   let hasRenderedCompletedHistory = false;
 
   return (
-    <>
+    <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
       {presentation.displayBlocks.map((block) => {
         if (presentation.completedHistorySummary && blockBelongsToCompletedHistory(block, completedHistoryRootIdSet)) {
           if (hasRenderedCompletedHistory) {
@@ -530,77 +718,56 @@ function TurnItemSequence({
               summary={formatCollapsedSummary(presentation.completedHistorySummary)}
               typeIcons={buildCollapsedSummaryIcons(presentation.completedHistorySummary)}
               showFinalSeparator={tailAssistantProseRootId !== null}
-            >
-              <div className="space-y-1">
-                {presentation.displayBlocks
-                  .filter((historyBlock) =>
-                    blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
-                  )
-                  .map((historyBlock) => (
-                    <TurnDisplayBlockNode
-                      key={`history-${getTurnDisplayBlockKey(historyBlock)}`}
-                      block={historyBlock}
-                      transcript={transcript}
-                      forceExpanded={false}
-                      childrenByParentId={presentation.childrenByParentId}
-                      subagentBrailleColors={subagentBrailleColors}
-                      workspaceId={workspaceId}
-                      onOpenArtifact={onOpenArtifact}
-                      onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-                    />
-                  ))}
-              </div>
-            </ToolCallSummary>
-          );
-        }
-
-        if (block.kind === "collapsed_actions") {
-          return (
-            <TurnDisplayBlockNode
-              key={`collapsed-actions-${block.itemIds[0] ?? block.blockId}`}
-              block={block}
-              transcript={transcript}
-              forceExpanded={block.blockId === forceExpandedCollapsedActionBlockId}
-              childrenByParentId={presentation.childrenByParentId}
-              subagentBrailleColors={subagentBrailleColors}
-              workspaceId={workspaceId}
-              onOpenArtifact={onOpenArtifact}
-              onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+              renderChildren={() => (
+                <div className="space-y-1">
+                  {presentation.displayBlocks
+                    .filter((historyBlock) =>
+                      blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
+                    )
+                    .map((historyBlock) => (
+                      <TurnDisplayBlockNode
+                        key={`history-${getTurnDisplayBlockKey(historyBlock)}`}
+                        block={historyBlock}
+                        transcript={transcript}
+                        forceExpandedCollapsedActionBlockId={null}
+                        renderItem={(itemId) => (
+                          <FragmentWithArtifacts
+                            itemId={itemId}
+                            transcript={transcript}
+                            childrenByParentId={presentation.childrenByParentId}
+                            artifactToolCalls={null}
+                            workspaceId={workspaceId}
+                            onOpenArtifact={onOpenArtifact}
+                            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+                          />
+                        )}
+                      />
+                    ))}
+                </div>
+              )}
             />
           );
         }
-
-        if (block.kind === "inline_tool") {
-          return (
-            <TurnDisplayBlockNode
-              key={`inline-tool-${block.itemId}`}
-              block={block}
-              transcript={transcript}
-              forceExpanded={false}
-              childrenByParentId={presentation.childrenByParentId}
-              subagentBrailleColors={subagentBrailleColors}
-              workspaceId={workspaceId}
-              onOpenArtifact={onOpenArtifact}
-              onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-            />
-          );
-        }
-
-        const itemId = block.itemId;
 
         return (
-          <FragmentWithArtifacts
-            key={`${block.kind}-${itemId}`}
-            itemId={itemId}
+          <TurnDisplayBlockNode
+            key={getTurnDisplayBlockKey(block)}
+            block={block}
             transcript={transcript}
-            childrenByParentId={presentation.childrenByParentId}
-            subagentBrailleColors={subagentBrailleColors}
-            artifactToolCalls={
-              itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
-            }
-            workspaceId={workspaceId}
-            onOpenArtifact={onOpenArtifact}
-            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+            forceExpandedCollapsedActionBlockId={forceExpandedCollapsedActionBlockId}
+            renderItem={(itemId) => (
+              <FragmentWithArtifacts
+                itemId={itemId}
+                transcript={transcript}
+                childrenByParentId={presentation.childrenByParentId}
+                artifactToolCalls={
+                  itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
+                }
+                workspaceId={workspaceId}
+                onOpenArtifact={onOpenArtifact}
+                onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+              />
+            )}
           />
         );
       })}
@@ -617,57 +784,7 @@ function TurnItemSequence({
           ))}
         </div>
       )}
-    </>
-  );
-}
-
-function TurnDisplayBlockNode({
-  block,
-  transcript,
-  forceExpanded = false,
-  childrenByParentId,
-  subagentBrailleColors,
-  workspaceId,
-  onOpenArtifact,
-  onHandOffPlanToNewSession,
-}: {
-  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number];
-  transcript: TranscriptState;
-  forceExpanded?: boolean;
-  childrenByParentId: Map<string, string[]>;
-  subagentBrailleColors: Map<string, string>;
-  workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
-  onHandOffPlanToNewSession?: PlanHandoffHandler;
-}) {
-  if (block.kind === "collapsed_actions") {
-    return (
-      <CollapsedActions
-        itemIds={block.itemIds}
-        transcript={transcript}
-        forceExpanded={forceExpanded}
-      />
-    );
-  }
-
-  if (block.kind === "inline_tool") {
-    const item = transcript.itemsById[block.itemId];
-    if (item?.kind === "tool_call") {
-      return <InlineToolAction item={item} />;
-    }
-  }
-
-  return (
-    <FragmentWithArtifacts
-      itemId={block.itemId}
-      transcript={transcript}
-      childrenByParentId={childrenByParentId}
-      subagentBrailleColors={subagentBrailleColors}
-      artifactToolCalls={null}
-      workspaceId={workspaceId}
-      onOpenArtifact={onOpenArtifact}
-      onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-    />
+    </ProposedPlanToolCallIdsContext.Provider>
   );
 }
 
@@ -688,15 +805,15 @@ function shouldForceExpandActionBlock(
 }
 
 function findTrailingLiveExplorationBlock(
-  presentation: ReturnType<typeof buildTurnPresentation>,
+  displayBlocks: readonly TurnDisplayBlock[],
   transcript: TranscriptState,
-  isLatestTurnInProgress: boolean,
-): Extract<ReturnType<typeof buildTurnPresentation>["displayBlocks"][number], { kind: "collapsed_actions" }> | null {
-  if (!isLatestTurnInProgress) {
+  isInProgress: boolean,
+): Extract<TurnDisplayBlock, { kind: "collapsed_actions" }> | null {
+  if (!isInProgress) {
     return null;
   }
 
-  const block = presentation.displayBlocks[presentation.displayBlocks.length - 1];
+  const block = displayBlocks[displayBlocks.length - 1];
   if (block?.kind !== "collapsed_actions") {
     return null;
   }
@@ -707,16 +824,16 @@ function findTrailingLiveExplorationBlock(
 }
 
 function findTrailingLiveWorkBlock(
-  presentation: ReturnType<typeof buildTurnPresentation>,
+  displayBlocks: readonly TurnDisplayBlock[],
   transcript: TranscriptState,
   isLatestTurnInProgress: boolean,
-): ReturnType<typeof buildTurnPresentation>["displayBlocks"][number] | null {
+): TurnDisplayBlock | null {
   if (!isLatestTurnInProgress) {
     return null;
   }
 
-  for (let index = presentation.displayBlocks.length - 1; index >= 0; index--) {
-    const block = presentation.displayBlocks[index];
+  for (let index = displayBlocks.length - 1; index >= 0; index--) {
+    const block = displayBlocks[index];
     if (blockContainsActiveToolWork(block, transcript)) {
       return block;
     }
@@ -726,7 +843,7 @@ function findTrailingLiveWorkBlock(
 }
 
 function blockContainsActiveToolWork(
-  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number] | undefined,
+  block: TurnDisplayBlock | undefined,
   transcript: TranscriptState,
 ): boolean {
   if (!block) {
@@ -734,6 +851,9 @@ function blockContainsActiveToolWork(
   }
 
   if (block.kind === "collapsed_actions") {
+    return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
+  }
+  if (block.kind === "inline_tools") {
     return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
   }
 
@@ -746,17 +866,14 @@ function isActiveToolItem(item: TranscriptItem | undefined): boolean {
     && item.status !== "failed";
 }
 
-function getTurnDisplayBlockKey(
-  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number],
-): string {
-  return block.kind === "collapsed_actions" ? block.blockId : block.itemId;
-}
-
 function blockBelongsToCompletedHistory(
-  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number],
+  block: TurnDisplayBlock,
   completedHistoryRootIds: Set<string>,
 ): boolean {
   if (block.kind === "collapsed_actions") {
+    return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
+  }
+  if (block.kind === "inline_tools") {
     return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
   return completedHistoryRootIds.has(block.itemId);
@@ -766,7 +883,6 @@ function FragmentWithArtifacts({
   itemId,
   transcript,
   childrenByParentId,
-  subagentBrailleColors,
   artifactToolCalls,
   workspaceId,
   onOpenArtifact,
@@ -775,7 +891,6 @@ function FragmentWithArtifacts({
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
-  subagentBrailleColors: Map<string, string>;
   artifactToolCalls: ToolCallItem[] | null;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
@@ -789,7 +904,6 @@ function FragmentWithArtifacts({
         childrenByParentId={childrenByParentId}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
-        subagentBrailleColors={subagentBrailleColors}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
       {artifactToolCalls && artifactToolCalls.length > 0 && (
@@ -869,6 +983,20 @@ function TranscriptItemBlock({
         );
       }
 
+      const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
+        item.promptProvenance,
+        item.text,
+      );
+      if (reviewFeedbackReference) {
+        return (
+          <ReviewFeedbackSummary
+            reference={reviewFeedbackReference}
+            sessionId={sessionId}
+            onOpenSession={openSession ?? undefined}
+          />
+        );
+      }
+
       if (isAgentSessionProvenance(item.promptProvenance)) {
         return (
           <UserMessage
@@ -876,6 +1004,7 @@ function TranscriptItemBlock({
             content={item.text}
             contentParts={item.contentParts}
             showCopyButton
+            timestampLabel={resolveUserMessageActionTime(item)}
             footer={(
               <UserMessageProvenanceChrome
                 sourceSessionId={item.promptProvenance.sourceSessionId}
@@ -894,6 +1023,7 @@ function TranscriptItemBlock({
           content={item.text}
           contentParts={item.contentParts}
           showCopyButton
+          timestampLabel={resolveUserMessageActionTime(item)}
         />
       );
     }
@@ -903,10 +1033,7 @@ function TranscriptItemBlock({
 
       return (
         <div className="flex justify-start relative">
-          <div
-            data-chat-selection-unit
-            className="flex flex-col w-full min-w-0 max-w-full break-words"
-          >
+          <div className="flex flex-col w-full min-w-0 max-w-full break-words">
             <AssistantMessage
               content={item.text}
               isStreaming={item.isStreaming}
@@ -919,7 +1046,7 @@ function TranscriptItemBlock({
     case "thought":
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
             <ReasoningBlock content={item.text || undefined} />
           </div>
         </div>
@@ -933,7 +1060,7 @@ function TranscriptItemBlock({
         const body = extractClaudePlanBody(item) ?? "";
         return (
           <div className="flex justify-start relative">
-            <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+            <div className="flex flex-col w-full max-w-full space-y-1 break-words">
               <ClaudePlanCard
                 content={body}
                 isStreaming={item.status === "in_progress"}
@@ -944,7 +1071,7 @@ function TranscriptItemBlock({
       }
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
             <ToolCallItemBlock
               item={item}
               workspaceId={workspaceId}
@@ -971,7 +1098,7 @@ function TranscriptItemBlock({
 
     case "error":
       return (
-        <p className="text-xs text-destructive py-1">{item.message}</p>
+        <SessionErrorItem item={item} sessionId={sessionId} />
       );
 
     case "unknown":
@@ -990,7 +1117,6 @@ function TranscriptTreeNode({
   childrenByParentId,
   workspaceId,
   onOpenArtifact,
-  subagentBrailleColors,
   onHandOffPlanToNewSession,
 }: {
   itemId: string;
@@ -998,7 +1124,6 @@ function TranscriptTreeNode({
   childrenByParentId: Map<string, string[]>;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
-  subagentBrailleColors: Map<string, string>;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const item = transcript.itemsById[itemId];
@@ -1014,7 +1139,6 @@ function TranscriptTreeNode({
         childrenByParentId={childrenByParentId}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
-        subagentBrailleColors={subagentBrailleColors}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
     );
@@ -1035,10 +1159,12 @@ function TurnAssistantActionRow({
   content,
   showCopyButton = false,
   reserveSlot = false,
+  timestampLabel = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
+  timestampLabel?: string | null;
 }) {
   if (!content || (!showCopyButton && !reserveSlot)) {
     return null;
@@ -1050,6 +1176,7 @@ function TurnAssistantActionRow({
         {showCopyButton && (
           <CopyMessageButton
             content={content}
+            timestampLabel={timestampLabel}
             visibilityClassName="opacity-0 group-hover/turn:opacity-100"
           />
         )}
@@ -1229,7 +1356,16 @@ function ToolCallItemBlock({
     );
   }
 
-  return rows.length === 1 ? <>{rows[0]}</> : <div className="space-y-1.5">{rows}</div>;
+  if (rows.length === 1) {
+    return <>{rows[0]}</>;
+  }
+
+  const hasOnlyFileChangeRows = rows.length === fileChanges.length;
+  return (
+    <div className={hasOnlyFileChangeRows ? "flex flex-col" : "space-y-1.5"}>
+      {rows}
+    </div>
+  );
 }
 
 function ToolCallGroupBlock({
@@ -1239,7 +1375,6 @@ function ToolCallGroupBlock({
   childrenByParentId,
   workspaceId,
   onOpenArtifact,
-  subagentBrailleColors,
   onHandOffPlanToNewSession,
 }: {
   item: ToolCallItem;
@@ -1248,7 +1383,6 @@ function ToolCallGroupBlock({
   childrenByParentId: Map<string, string[]>;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
-  subagentBrailleColors: Map<string, string>;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const isAgent = isSubagentItem(item);
@@ -1262,7 +1396,6 @@ function ToolCallGroupBlock({
         childrenByParentId={childrenByParentId}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
-        subagentBrailleColors={subagentBrailleColors}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
     );
@@ -1301,31 +1434,31 @@ function ToolCallGroupBlock({
         toolCalls: toolCallCount,
         subagents: subagentCount,
       })}
-    >
-      <div className="space-y-1.5">
-        {hasRenderableToolDetails(item) && (
-          <ToolCallItemBlock
-            item={item}
-            workspaceId={workspaceId}
-            onOpenArtifact={onOpenArtifact}
-          />
-        )}
-        <div className="ml-1 space-y-1.5">
-          {childIds.map((childId) => (
-            <TranscriptTreeNode
-              key={childId}
-              itemId={childId}
-              transcript={transcript}
-              childrenByParentId={childrenByParentId}
+      renderChildren={() => (
+        <div className="space-y-1.5">
+          {hasRenderableToolDetails(item) && (
+            <ToolCallItemBlock
+              item={item}
               workspaceId={workspaceId}
               onOpenArtifact={onOpenArtifact}
-              subagentBrailleColors={subagentBrailleColors}
-              onHandOffPlanToNewSession={onHandOffPlanToNewSession}
             />
-          ))}
+          )}
+          <div className="ml-1 space-y-1.5">
+            {childIds.map((childId) => (
+              <TranscriptTreeNode
+                key={childId}
+                itemId={childId}
+                transcript={transcript}
+                childrenByParentId={childrenByParentId}
+                workspaceId={workspaceId}
+                onOpenArtifact={onOpenArtifact}
+                onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </ToolCallSummary>
+      )}
+    />
   );
 }
 
@@ -1336,7 +1469,6 @@ function AgentGroupBlock({
   childrenByParentId,
   workspaceId,
   onOpenArtifact,
-  subagentBrailleColors,
   onHandOffPlanToNewSession,
 }: {
   item: ToolCallItem;
@@ -1345,7 +1477,6 @@ function AgentGroupBlock({
   childrenByParentId: Map<string, string[]>;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
-  subagentBrailleColors: Map<string, string>;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const executionState = resolveSubagentExecutionState(item);
@@ -1354,10 +1485,27 @@ function AgentGroupBlock({
   const launchResult = parseSubagentLaunchResult(item);
   const brailleColor = launchResult?.sessionLinkId
     ? resolveSubagentColor(launchResult.sessionLinkId)
-    : resolveSubagentBrailleColor(subagentBrailleColors, item);
+    : resolveSubagentColor(item.toolCallId ?? item.itemId);
   const openSession = useContext(TranscriptOpenSessionContext);
-  const isRunning =
-    executionState === "running" || executionState === "background";
+  const isRunning = isSubagentExecutionStateRunning(executionState);
+  const isWorkComplete = isSubagentWorkComplete(item);
+  const scopedDisplayBlocks = useMemo(
+    () => buildTranscriptDisplayBlocks({
+      rootIds: childIds,
+      transcript,
+      childrenByParentId,
+      isComplete: isWorkComplete,
+    }),
+    [childIds, childrenByParentId, isWorkComplete, transcript],
+  );
+  const liveExplorationBlock = useMemo(
+    () => findTrailingLiveExplorationBlock(
+      scopedDisplayBlocks,
+      transcript,
+      !isWorkComplete,
+    ),
+    [isWorkComplete, scopedDisplayBlocks, transcript],
+  );
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
 
@@ -1391,6 +1539,25 @@ function AgentGroupBlock({
   const hasWork = childIds.length > 0;
   const hasLaunchLedger = !!normalizedPrompt || !!provisioningStatus;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
+  const renderScopedWork = (
+    forceExpandedCollapsedActionBlockId: string | null,
+  ) => (
+    <ScopedTranscriptBlocks
+      displayBlocks={scopedDisplayBlocks}
+      transcript={transcript}
+      forceExpandedCollapsedActionBlockId={forceExpandedCollapsedActionBlockId}
+      renderItem={(childId) => (
+        <TranscriptTreeNode
+          itemId={childId}
+          transcript={transcript}
+          childrenByParentId={childrenByParentId}
+          workspaceId={workspaceId}
+          onOpenArtifact={onOpenArtifact}
+          onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+        />
+      )}
+    />
+  );
   const headerVerb = executionState === "failed"
     ? "Subagent launch failed"
     : isRunning
@@ -1416,8 +1583,9 @@ function AgentGroupBlock({
     <div className="py-0.5">
       {/* Agent header — clickable to collapse/expand */}
       <div
+        {...(headerExpandable ? { "data-chat-transcript-ignore": true } : {})}
         onClick={() => headerExpandable && setExpanded(!expanded)}
-        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-base leading-5 transition-colors ${
+        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat leading-[var(--text-chat--line-height)] transition-colors ${
           headerExpandable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"
@@ -1458,18 +1626,7 @@ function AgentGroupBlock({
         {hasWork && (
           isRunning ? (
             <div className="space-y-1">
-              {childIds.map((childId) => (
-                <TranscriptTreeNode
-                  key={childId}
-                  itemId={childId}
-                  transcript={transcript}
-                  childrenByParentId={childrenByParentId}
-                  workspaceId={workspaceId}
-                  onOpenArtifact={onOpenArtifact}
-                  subagentBrailleColors={subagentBrailleColors}
-                  onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-                />
-              ))}
+              {renderScopedWork(liveExplorationBlock?.blockId ?? null)}
             </div>
           ) : (
             <div className="py-0.5">
@@ -1481,18 +1638,7 @@ function AgentGroupBlock({
               />
               {workExpanded && (
                 <div className="mt-1.5 space-y-1">
-                  {childIds.map((childId) => (
-                    <TranscriptTreeNode
-                      key={childId}
-                      itemId={childId}
-                      transcript={transcript}
-                      childrenByParentId={childrenByParentId}
-                      workspaceId={workspaceId}
-                      onOpenArtifact={onOpenArtifact}
-                      subagentBrailleColors={subagentBrailleColors}
-                      onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-                    />
-                  ))}
+                  {renderScopedWork(null)}
                 </div>
               )}
             </div>
@@ -1555,7 +1701,7 @@ function AsyncAgentLaunchBlock({
         <AgentHeaderRunningIcon color={color} />
         <span>Running in background</span>
       </div>
-      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+      <p className="mt-1 text-sm leading-[var(--text-sm--line-height)] text-muted-foreground">
         Async subagent launched successfully. You&apos;ll be notified automatically when it completes.
       </p>
       {hasLaunchDetails && (
@@ -1564,6 +1710,7 @@ function AsyncAgentLaunchBlock({
             type="button"
             variant="ghost"
             size="sm"
+            data-chat-transcript-ignore
             className="-ml-2 h-auto px-2 py-1 text-xs"
             onClick={() => setDetailsExpanded((expanded) => !expanded)}
           >
@@ -1575,7 +1722,7 @@ function AsyncAgentLaunchBlock({
                 className="w-full"
                 viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               >
-                <div className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                <div className="whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
                   {launch.rawText}
                 </div>
               </AutoHideScrollArea>
@@ -1599,12 +1746,12 @@ function AgentResultBlock({ content }: { content: string }) {
   }, [content]);
 
   return (
-    <div data-chat-selection-unit className="mt-1">
+    <div className="mt-1">
       <div
         className={`relative ${!resultExpanded && needsTruncation ? "overflow-hidden" : ""}`}
         style={!resultExpanded && needsTruncation ? { maxHeight: AGENT_RESULT_COLLAPSED_HEIGHT } : undefined}
       >
-        <div ref={contentRef} className="text-chat leading-relaxed select-text text-foreground">
+        <div ref={contentRef} className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
           <MarkdownRenderer
             content={content}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
@@ -1617,6 +1764,7 @@ function AgentResultBlock({ content }: { content: string }) {
               <Button
                 variant="inverted"
                 size="pill"
+                data-chat-transcript-ignore
                 onClick={() => setResultExpanded(true)}
                 className="pointer-events-auto"
               >
@@ -1687,12 +1835,6 @@ function buildCollapsedSummaryIcons(summary: {
     icons.push(<ClipboardList key="subagents" className="size-3.5" />);
   }
   return icons;
-}
-
-function normalizeToolResultText(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:console|text|bash|sh)?\n([\s\S]*?)\n```$/);
-  return match ? match[1] : text;
 }
 
 function isSubagentItem(item: ToolCallItem): boolean {

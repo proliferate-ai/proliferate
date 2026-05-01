@@ -18,13 +18,22 @@ export function isConnectorCatalogEntryAvailable(
 
 export function getConnectorAuthStyleLabel(entry: ConnectorCatalogEntry): string {
   if (entry.transport === "http") {
-    return entry.authKind === "oauth" ? "oauth" : entry.authStyle?.kind ?? "secret";
+    if (entry.authKind === "oauth") {
+      return "oauth";
+    }
+    if (entry.authKind === "none") {
+      return "none";
+    }
+    return entry.authStyle?.kind ?? "secret";
   }
   return "none";
 }
 
 export function getPrimarySecretField(catalogEntry: ConnectorCatalogEntry) {
-  if (catalogEntry.transport === "http" && catalogEntry.authKind === "oauth") {
+  if (
+    catalogEntry.transport === "http"
+    && (catalogEntry.authKind === "oauth" || catalogEntry.authKind === "none")
+  ) {
     return null;
   }
   return (catalogEntry.secretFields[0] ?? catalogEntry.requiredFields[0]) ?? null;
@@ -79,4 +88,10 @@ export function isSecretHttpConnectorCatalogEntry(
   entry: ConnectorCatalogEntry,
 ): entry is Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "secret" }> {
   return entry.transport === "http" && entry.authKind === "secret";
+}
+
+export function isNoAuthHttpConnectorCatalogEntry(
+  entry: ConnectorCatalogEntry,
+): entry is Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "none" }> {
+  return entry.transport === "http" && entry.authKind === "none";
 }

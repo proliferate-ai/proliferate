@@ -7,6 +7,7 @@ import {
 } from "@/platform/tauri/shell";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 interface UseWorkspaceArrivalActionsArgs {
   workspacePath: string | null;
@@ -64,11 +65,7 @@ export function useWorkspaceArrivalActions({
   }, [showToast, workspacePath]);
 
   const handleOpenRepositorySettings = useCallback(() => {
-    const params = new URLSearchParams({ section: "Repositories" });
-    if (sourceRepoRootPath) {
-      params.set("repo", sourceRepoRootPath);
-    }
-    navigate(`/settings?${params.toString()}`);
+    navigate(buildSettingsHref({ section: "repo", repo: sourceRepoRootPath }));
   }, [navigate, sourceRepoRootPath]);
 
   const handleDismiss = useCallback(() => {

@@ -97,13 +97,15 @@ def cloud_mcp_connection_payload(
     )
 
 
-def cloud_mcp_connection_status_payload(record: object) -> CloudMcpConnectionSyncStatus:
-    auth = getattr(record, "auth", None)
-    payload_ciphertext = getattr(record, "payload_ciphertext", None)
+def cloud_mcp_connection_status_payload(
+    record: CloudMcpConnectionRecord,
+) -> CloudMcpConnectionSyncStatus:
+    auth = record.auth
+    payload_ciphertext = record.payload_ciphertext
     synced = bool((auth is not None and auth.auth_status == "ready") or payload_ciphertext)
     return CloudMcpConnectionSyncStatus(
         connection_id=str(record.connection_id),
         catalog_entry_id=str(record.catalog_entry_id),
         synced=synced,
-        last_synced_at=_to_iso(getattr(record, "last_synced_at", None)),
+        last_synced_at=_to_iso(record.last_synced_at),
     )

@@ -6,6 +6,7 @@ use crate::api::http::access::assert_workspace_mutable;
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::processes::types::{ProcessServiceError, RunProcessRequest, RunProcessResult};
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,
@@ -25,6 +26,10 @@ pub async fn run_command(
     Path(workspace_id): Path<String>,
     Json(request): Json<RunCommandRequest>,
 ) -> Result<Json<RunCommandResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::ProcessRun)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let ws = state
         .workspace_runtime

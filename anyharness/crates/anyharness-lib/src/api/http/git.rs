@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
     CommitRequest, CommitResponse, GitActionAvailability as ContractGitActionAvailability,
-    GitBranchRef, GitChangedFile as ContractGitChangedFile, GitDiffResponse,
+    GitBranchDiffFilesResponse, GitBranchRef, GitChangedFile as ContractGitChangedFile,
+    GitDiffFile as ContractGitDiffFile, GitDiffResponse, GitDiffScope as ContractGitDiffScope,
     GitFileStatus as ContractGitFileStatus, GitIncludedState as ContractGitIncludedState,
     GitOperation as ContractGitOperation, GitStatusSnapshot,
     GitStatusSummary as ContractGitStatusSummary, PushRequest, PushResponse, RenameBranchRequest,
@@ -12,18 +13,20 @@ use axum::{
 };
 use serde::Deserialize;
 
-use super::access::assert_workspace_mutable;
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::git::types::{
     CommitError, GitActionAvailability as InternalGitActionAvailability,
-    GitBranch as InternalGitBranch, GitChangedFile as InternalGitChangedFile,
-    GitDiffResult as InternalGitDiffResult, GitFileStatus as InternalGitFileStatus,
-    GitIncludedState as InternalGitIncludedState, GitOperation as InternalGitOperation,
-    GitStatusSnapshot as InternalGitStatusSnapshot, GitStatusSummary as InternalGitStatusSummary,
-    PushError,
+    GitBranch as InternalGitBranch, GitBranchDiffFilesResult as InternalGitBranchDiffFilesResult,
+    GitChangedFile as InternalGitChangedFile, GitDiffError, GitDiffFile as InternalGitDiffFile,
+    GitDiffResult as InternalGitDiffResult, GitDiffScope as InternalGitDiffScope,
+    GitFileStatus as InternalGitFileStatus, GitIncludedState as InternalGitIncludedState,
+    GitOperation as InternalGitOperation, GitStatusSnapshot as InternalGitStatusSnapshot,
+    GitStatusSummary as InternalGitStatusSummary, PushError,
 };
 use crate::git::GitService;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
     workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
@@ -37,9 +40,16 @@ fn resolve_workspace_path(
     Ok(std::path::PathBuf::from(workspace.path))
 }
 
+#[derive(Clone, Copy)]
+enum GitTaskAccess {
+    Read,
+    Write,
+}
+
 async fn run_git_task<T, F>(
     state: &AppState,
     workspace_id: String,
+    access: GitTaskAccess,
     task_label: &'static str,
     task: F,
 ) -> Result<T, ApiError>
@@ -47,6 +57,20 @@ where
     T: Send + 'static,
     F: FnOnce(String, std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
 {
+    // Acquire exactly one operation lease per request. Nested read leases can
+    // deadlock behind a queued exclusive retire lease.
+    let operation_kind = match access {
+        GitTaskAccess::Read => WorkspaceOperationKind::MaterializationRead,
+        GitTaskAccess::Write => WorkspaceOperationKind::GitWrite,
+    };
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, operation_kind)
+        .await;
+    match access {
+        GitTaskAccess::Read => assert_workspace_not_retired(state, &workspace_id)?,
+        GitTaskAccess::Write => assert_workspace_mutable(state, &workspace_id)?,
+    }
     let workspace_runtime = state.workspace_runtime.clone();
     tokio::task::spawn_blocking(move || {
         let workspace_path = resolve_workspace_path(&workspace_runtime, &workspace_id)?;
@@ -77,6 +101,7 @@ pub async fn get_git_status(
     let snapshot = run_git_task(
         &state,
         workspace_id,
+        GitTaskAccess::Read,
         "git status",
         |workspace_id, ws_path| {
             GitService::status(&workspace_id, &ws_path)
@@ -94,8 +119,18 @@ pub async fn get_git_status(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffQuery {
     pub path: String,
+    pub scope: Option<ContractGitDiffScope>,
+    pub base_ref: Option<String>,
+    pub old_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchDiffFilesQuery {
+    pub base_ref: Option<String>,
 }
 
 #[utoipa::path(
@@ -104,6 +139,9 @@ pub struct DiffQuery {
     params(
         ("workspace_id" = String, Path, description = "Workspace ID"),
         ("path" = String, Query, description = "File path relative to repo root"),
+        ("scope" = Option<ContractGitDiffScope>, Query, description = "Diff scope. Defaults to working_tree."),
+        ("baseRef" = Option<String>, Query, description = "Branch base ref. Only valid for scope=branch."),
+        ("oldPath" = Option<String>, Query, description = "Old path for branch rename/copy rows. Only valid for scope=branch."),
     ),
     responses(
         (status = 200, description = "File diff", body = GitDiffResponse),
@@ -117,14 +155,67 @@ pub async fn get_git_diff(
     Query(query): Query<DiffQuery>,
 ) -> Result<Json<GitDiffResponse>, ApiError> {
     let diff_path = query.path;
-    let diff = run_git_task(&state, workspace_id, "git diff", move |_, ws_path| {
-        GitService::diff_for_path(&ws_path, &diff_path)
+    let scope = query
+        .scope
+        .map(git_diff_scope_to_internal)
+        .unwrap_or(InternalGitDiffScope::WorkingTree);
+    let base_ref = normalize_query_string(query.base_ref);
+    let old_path = normalize_query_string(query.old_path);
+    let diff = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Read,
+        "git diff",
+        move |_, ws_path| {
+            GitService::diff_for_path_with_scope(
+                &ws_path,
+                &diff_path,
+                scope,
+                base_ref.as_deref(),
+                old_path.as_deref(),
+            )
             .map(git_diff_to_contract)
-            .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_DIFF_FAILED"))
-    })
+            .map_err(git_diff_error_to_api)
+        },
+    )
     .await?;
 
     Ok(Json(diff))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/git/diff/branch-files",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("baseRef" = Option<String>, Query, description = "Branch base ref. Defaults to runtime default branch resolution."),
+    ),
+    responses(
+        (status = 200, description = "Branch diff file list", body = GitBranchDiffFilesResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "git"
+)]
+pub async fn list_git_branch_diff_files(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Query(query): Query<BranchDiffFilesQuery>,
+) -> Result<Json<GitBranchDiffFilesResponse>, ApiError> {
+    let base_ref = normalize_query_string(query.base_ref);
+    let response = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Read,
+        "git branch diff files",
+        move |_, ws_path| {
+            GitService::branch_diff_files(&ws_path, base_ref.as_deref())
+                .map(git_branch_diff_files_to_contract)
+                .map_err(git_diff_error_to_api)
+        },
+    )
+    .await?;
+
+    Ok(Json(response))
 }
 
 // ---------------------------------------------------------------------------
@@ -145,11 +236,17 @@ pub async fn list_git_branches(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<Vec<GitBranchRef>>, ApiError> {
-    let branches = run_git_task(&state, workspace_id, "git branches", move |_, ws_path| {
-        GitService::list_branches(&ws_path)
-            .map(|branches| branches.into_iter().map(git_branch_to_contract).collect())
-            .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_BRANCHES_FAILED"))
-    })
+    let branches = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Read,
+        "git branches",
+        move |_, ws_path| {
+            GitService::list_branches(&ws_path)
+                .map(|branches| branches.into_iter().map(git_branch_to_contract).collect())
+                .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_BRANCHES_FAILED"))
+        },
+    )
     .await?;
 
     Ok(Json(branches))
@@ -176,11 +273,11 @@ pub async fn rename_branch(
     Path(workspace_id): Path<String>,
     Json(req): Json<RenameBranchRequest>,
 ) -> Result<Json<RenameBranchResponse>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
     let new_name = req.new_name;
     let response = run_git_task(
         &state,
         workspace_id,
+        GitTaskAccess::Write,
         "git rename branch",
         move |_, ws_path| {
             GitService::rename_branch(&ws_path, &new_name)
@@ -213,13 +310,18 @@ pub async fn stage_paths(
     Path(workspace_id): Path<String>,
     Json(req): Json<StagePathsRequest>,
 ) -> Result<Json<()>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
     let paths = req.paths;
-    run_git_task(&state, workspace_id, "git stage", move |_, ws_path| {
-        GitService::stage_paths(&ws_path, &paths)
-            .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STAGE_FAILED"))?;
-        Ok(())
-    })
+    run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git stage",
+        move |_, ws_path| {
+            GitService::stage_paths(&ws_path, &paths)
+                .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STAGE_FAILED"))?;
+            Ok(())
+        },
+    )
     .await?;
 
     Ok(Json(()))
@@ -245,13 +347,18 @@ pub async fn unstage_paths(
     Path(workspace_id): Path<String>,
     Json(req): Json<UnstagePathsRequest>,
 ) -> Result<Json<()>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
     let paths = req.paths;
-    run_git_task(&state, workspace_id, "git unstage", move |_, ws_path| {
-        GitService::unstage_paths(&ws_path, &paths)
-            .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_UNSTAGE_FAILED"))?;
-        Ok(())
-    })
+    run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git unstage",
+        move |_, ws_path| {
+            GitService::unstage_paths(&ws_path, &paths)
+                .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_UNSTAGE_FAILED"))?;
+            Ok(())
+        },
+    )
     .await?;
 
     Ok(Json(()))
@@ -279,24 +386,29 @@ pub async fn commit(
     Path(workspace_id): Path<String>,
     Json(req): Json<CommitRequest>,
 ) -> Result<Json<CommitResponse>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
     let summary = req.summary;
     let body = req.body;
-    let response = run_git_task(&state, workspace_id, "git commit", move |_, ws_path| {
-        GitService::commit_staged(&ws_path, &summary, body.as_deref())
-            .map(|(oid, summary)| CommitResponse { oid, summary })
-            .map_err(|error| match error {
-                CommitError::NothingStaged => {
-                    ApiError::conflict("Nothing staged to commit", "GIT_NOTHING_STAGED")
-                }
-                CommitError::Failed { message } => {
-                    ApiError::bad_request(message, "GIT_COMMIT_FAILED")
-                }
-                CommitError::Internal(error) => {
-                    ApiError::bad_request(error.to_string(), "GIT_COMMIT_FAILED")
-                }
-            })
-    })
+    let response = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git commit",
+        move |_, ws_path| {
+            GitService::commit_staged(&ws_path, &summary, body.as_deref())
+                .map(|(oid, summary)| CommitResponse { oid, summary })
+                .map_err(|error| match error {
+                    CommitError::NothingStaged => {
+                        ApiError::conflict("Nothing staged to commit", "GIT_NOTHING_STAGED")
+                    }
+                    CommitError::Failed { message } => {
+                        ApiError::bad_request(message, "GIT_COMMIT_FAILED")
+                    }
+                    CommitError::Internal(error) => {
+                        ApiError::bad_request(error.to_string(), "GIT_COMMIT_FAILED")
+                    }
+                })
+        },
+    )
     .await?;
 
     Ok(Json(response))
@@ -324,26 +436,35 @@ pub async fn push(
     Path(workspace_id): Path<String>,
     Json(req): Json<PushRequest>,
 ) -> Result<Json<PushResponse>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
     let remote = req.remote;
-    let response = run_git_task(&state, workspace_id, "git push", move |_, ws_path| {
-        GitService::push_current_branch(&ws_path, remote.as_deref())
-            .map(|(remote, branch, published)| PushResponse {
-                remote,
-                branch,
-                published,
-            })
-            .map_err(|error| match error {
-                PushError::DetachedHead => {
-                    ApiError::bad_request("cannot push a detached HEAD", "GIT_DETACHED_HEAD")
-                }
-                PushError::Rejected { message } => ApiError::conflict(message, "GIT_PUSH_REJECTED"),
-                PushError::Failed { message } => ApiError::bad_request(message, "GIT_PUSH_FAILED"),
-                PushError::Internal(error) => {
-                    ApiError::bad_request(error.to_string(), "GIT_PUSH_FAILED")
-                }
-            })
-    })
+    let response = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git push",
+        move |_, ws_path| {
+            GitService::push_current_branch(&ws_path, remote.as_deref())
+                .map(|(remote, branch, published)| PushResponse {
+                    remote,
+                    branch,
+                    published,
+                })
+                .map_err(|error| match error {
+                    PushError::DetachedHead => {
+                        ApiError::bad_request("cannot push a detached HEAD", "GIT_DETACHED_HEAD")
+                    }
+                    PushError::Rejected { message } => {
+                        ApiError::conflict(message, "GIT_PUSH_REJECTED")
+                    }
+                    PushError::Failed { message } => {
+                        ApiError::bad_request(message, "GIT_PUSH_FAILED")
+                    }
+                    PushError::Internal(error) => {
+                        ApiError::bad_request(error.to_string(), "GIT_PUSH_FAILED")
+                    }
+                })
+        },
+    )
     .await?;
 
     Ok(Json(response))
@@ -413,11 +534,43 @@ fn git_changed_file_to_contract(file: InternalGitChangedFile) -> ContractGitChan
 fn git_diff_to_contract(diff: InternalGitDiffResult) -> GitDiffResponse {
     GitDiffResponse {
         path: diff.path,
+        scope: git_diff_scope_to_contract(diff.scope),
         binary: diff.binary,
         truncated: diff.truncated,
         additions: diff.additions,
         deletions: diff.deletions,
+        base_ref: diff.base_ref,
+        resolved_base_oid: diff.resolved_base_oid,
+        merge_base_oid: diff.merge_base_oid,
+        head_oid: diff.head_oid,
         patch: diff.patch,
+    }
+}
+
+fn git_branch_diff_files_to_contract(
+    response: InternalGitBranchDiffFilesResult,
+) -> GitBranchDiffFilesResponse {
+    GitBranchDiffFilesResponse {
+        base_ref: response.base_ref,
+        resolved_base_oid: response.resolved_base_oid,
+        merge_base_oid: response.merge_base_oid,
+        head_oid: response.head_oid,
+        files: response
+            .files
+            .into_iter()
+            .map(git_diff_file_to_contract)
+            .collect(),
+    }
+}
+
+fn git_diff_file_to_contract(file: InternalGitDiffFile) -> ContractGitDiffFile {
+    ContractGitDiffFile {
+        path: file.path,
+        old_path: file.old_path,
+        status: git_file_status_to_contract(file.status),
+        additions: file.additions,
+        deletions: file.deletions,
+        binary: file.binary,
     }
 }
 
@@ -451,6 +604,50 @@ fn git_file_status_to_contract(status: InternalGitFileStatus) -> ContractGitFile
         InternalGitFileStatus::Untracked => ContractGitFileStatus::Untracked,
         InternalGitFileStatus::Conflicted => ContractGitFileStatus::Conflicted,
     }
+}
+
+fn git_diff_scope_to_internal(scope: ContractGitDiffScope) -> InternalGitDiffScope {
+    match scope {
+        ContractGitDiffScope::WorkingTree => InternalGitDiffScope::WorkingTree,
+        ContractGitDiffScope::Unstaged => InternalGitDiffScope::Unstaged,
+        ContractGitDiffScope::Staged => InternalGitDiffScope::Staged,
+        ContractGitDiffScope::Branch => InternalGitDiffScope::Branch,
+    }
+}
+
+fn git_diff_scope_to_contract(scope: InternalGitDiffScope) -> ContractGitDiffScope {
+    match scope {
+        InternalGitDiffScope::WorkingTree => ContractGitDiffScope::WorkingTree,
+        InternalGitDiffScope::Unstaged => ContractGitDiffScope::Unstaged,
+        InternalGitDiffScope::Staged => ContractGitDiffScope::Staged,
+        InternalGitDiffScope::Branch => ContractGitDiffScope::Branch,
+    }
+}
+
+fn git_diff_error_to_api(error: GitDiffError) -> ApiError {
+    match error {
+        GitDiffError::InvalidBaseRef => {
+            ApiError::bad_request("invalid git diff base ref", "GIT_DIFF_INVALID_BASE_REF")
+        }
+        GitDiffError::BaseRefNotFound | GitDiffError::MergeBaseNotFound => {
+            ApiError::bad_request("git diff base ref not found", "GIT_DIFF_BASE_NOT_FOUND")
+        }
+        GitDiffError::GitFailed { message } => ApiError::bad_request(message, "GIT_DIFF_FAILED"),
+        GitDiffError::Internal(error) => {
+            ApiError::bad_request(error.to_string(), "GIT_DIFF_FAILED")
+        }
+    }
+}
+
+fn normalize_query_string(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 fn git_included_state_to_contract(state: InternalGitIncludedState) -> ContractGitIncludedState {

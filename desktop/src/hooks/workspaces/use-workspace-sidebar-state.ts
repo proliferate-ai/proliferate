@@ -1,8 +1,10 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
+import type { Workspace } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  collectWorkspaceSidebarActivityStates,
+  collectWorkspaceSidebarActivityStatesWithErrorAttention,
+  resolveSessionErrorAttentionKey,
   type SidebarSessionActivityState,
 } from "@/lib/domain/sessions/activity";
 import {
@@ -14,7 +16,9 @@ import {
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
-import { useWorkspaceBranchRenameMonitor } from "@/hooks/workspaces/use-workspace-branch-rename-monitor";
+import { useWorkspaceMetadataSync } from "@/hooks/workspaces/use-workspace-metadata-sync";
+import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/use-workspace-finish-suggestions";
+import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
@@ -33,16 +37,44 @@ interface WorkspaceSidebarState {
   gitStatus: GitStatusSnapshot | undefined;
   transcriptTitle: string | null;
   emptyState: SidebarEmptyState;
+  cleanupAttentionWorkspaces: Workspace[];
   isLoading: boolean;
 }
+
+const EMPTY_WORKSPACES: Workspace[] = [];
+
+const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};
 
 export function useWorkspaceSidebarState({
   showArchived,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const lastViewedSessionErrorAtBySession = useWorkspaceUiStore((state) =>
+    state.lastViewedSessionErrorAtBySession
+    ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION
+  );
   const workspaceActivities = useHarnessStore(useShallow((state) =>
-    collectWorkspaceSidebarActivityStates(state.sessionSlots)
+    collectWorkspaceSidebarActivityStatesWithErrorAttention(
+      Object.fromEntries(
+        Object.entries(state.sessionSlots).map(([sessionId, slot]) => [
+          sessionId,
+          {
+            sessionId: slot.sessionId,
+            workspaceId: slot.workspaceId,
+            status: slot.status,
+            executionSummary: slot.executionSummary,
+            streamConnectionState: slot.streamConnectionState,
+            transcript: {
+              isStreaming: slot.transcript.isStreaming,
+              pendingInteractions: slot.transcript.pendingInteractions,
+            },
+            errorAttentionKey: resolveSessionErrorAttentionKey(slot),
+          },
+        ]),
+      ),
+      lastViewedSessionErrorAtBySession,
+    )
   ));
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const activeSessionTitle = useHarnessStore((state) => {
@@ -66,8 +98,12 @@ export function useWorkspaceSidebarState({
   })));
 
   const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
+  const { data: workspaceCollections } = useWorkspaces();
+  const cleanupAttentionWorkspaces =
+    workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
+  const finishSuggestionsByWorkspaceId = useWorkspaceFinishSuggestions(workspaceCollections);
   const { repoRoots } = useStandardRepoProjection();
-  const { data: gitStatus } = useWorkspaceBranchRenameMonitor();
+  const { data: gitStatus } = useWorkspaceMetadataSync();
 
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
@@ -105,6 +141,7 @@ export function useWorkspaceSidebarState({
     activeSessionTitle,
     lastViewedAt,
     workspaceLastInteracted,
+    finishSuggestionsByWorkspaceId,
   }), [
     activeSessionTitle,
     archivedSet,
@@ -120,6 +157,7 @@ export function useWorkspaceSidebarState({
     showArchived,
     workspaceActivities,
     workspaceLastInteracted,
+    finishSuggestionsByWorkspaceId,
   ]);
   const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
 
@@ -132,6 +170,7 @@ export function useWorkspaceSidebarState({
     gitStatus,
     transcriptTitle: activeSessionTitle,
     emptyState,
+    cleanupAttentionWorkspaces,
     isLoading: workspacesLoading,
   };
 }

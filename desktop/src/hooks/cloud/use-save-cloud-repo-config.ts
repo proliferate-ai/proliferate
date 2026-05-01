@@ -21,6 +21,7 @@ interface SaveCloudRepoConfigInput {
   envVars: Record<string, string>;
   trackedFilePaths: string[];
   setupScript: string;
+  runCommand: string;
 }
 
 export async function buildTrackedFilesPayload(
@@ -64,6 +65,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       envVars,
       trackedFilePaths,
       setupScript,
+      runCommand,
     }) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
@@ -78,6 +80,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
         defaultBranch,
         envVars,
         setupScript,
+        runCommand,
         files,
       });
     },
@@ -103,6 +106,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
           ? { tracked_file_source: repository.localWorkspaceId ? "workspace" : "repo_root" }
           : {}),
         has_setup_script: response.setupScript.trim().length > 0,
+        has_run_command: response.runCommand.trim().length > 0,
       });
       if ((repository.localWorkspaceId || repository.repoRootId) && repository.gitOwner && repository.gitRepoName) {
         const { gitOwner, gitRepoName, localWorkspaceId, repoRootId } = repository;
@@ -129,6 +133,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
           envVarCount: Object.keys(variables.envVars).length,
           trackedFileCount: variables.trackedFilePaths.length,
           hasSetupScript: variables.setupScript.trim().length > 0,
+          hasRunCommand: variables.runCommand.trim().length > 0,
         },
       });
     },

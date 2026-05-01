@@ -10,6 +10,7 @@ use axum::{
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::sessions::replay::ReplayError;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     get,
@@ -68,6 +69,10 @@ pub async fn create_replay_session(
     State(state): State<AppState>,
     Json(req): Json<CreateReplaySessionRequest>,
 ) -> Result<Json<CreateReplaySessionResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&req.workspace_id, WorkspaceOperationKind::SessionStart)
+        .await;
     let record = state
         .session_runtime
         .create_and_start_replay_session(&req.workspace_id, &req.recording_id, req.speed)

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use uuid::Uuid;
@@ -5,10 +6,11 @@ use uuid::Uuid;
 use super::live_config::snapshot_from_record;
 use super::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+    SessionLiveConfigSnapshotRecord, SessionMcpBindingPolicy, SessionRawNotificationRecord,
+    SessionRecord,
 };
 use super::store::SessionStore;
-use crate::agents::catalog::model_registries;
+use crate::agents::catalog::ModelCatalogService;
 use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
 use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
@@ -19,6 +21,7 @@ pub struct SessionService {
     session_store: SessionStore,
     workspace_store: WorkspaceStore,
     runtime_home: std::path::PathBuf,
+    model_catalog_service: Arc<ModelCatalogService>,
 }
 
 #[derive(Debug)]
@@ -72,11 +75,13 @@ impl SessionService {
         session_store: SessionStore,
         workspace_store: WorkspaceStore,
         runtime_home: std::path::PathBuf,
+        model_catalog_service: Arc<ModelCatalogService>,
     ) -> Self {
         Self {
             session_store,
             workspace_store,
             runtime_home,
+            model_catalog_service,
         }
     }
 
@@ -88,6 +93,7 @@ impl SessionService {
         mode_id: Option<&str>,
         mcp_bindings_ciphertext: Option<String>,
         mcp_binding_summaries_json: Option<String>,
+        mcp_binding_policy: SessionMcpBindingPolicy,
         system_prompt_append: Option<String>,
         subagents_enabled: bool,
         origin: OriginContext,
@@ -171,7 +177,7 @@ impl SessionService {
         );
 
         let model_resolution_started = Instant::now();
-        let registries = model_registries();
+        let registries = self.model_catalog_service.registries();
         let model_registry = find_model_registry(&registries, agent_kind)
             .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
         let resolved_model_id = resolve_model_id(model_registry, model_id)
@@ -210,6 +216,7 @@ impl SessionService {
             dismissed_at: None,
             mcp_bindings_ciphertext,
             mcp_binding_summaries_json,
+            mcp_binding_policy,
             system_prompt_append,
             subagents_enabled,
             origin: Some(origin),
@@ -248,17 +255,55 @@ impl SessionService {
         &self,
         session_id: &str,
         after_seq: Option<i64>,
+        before_seq: Option<i64>,
+        limit: Option<i64>,
+        turn_limit: Option<i64>,
     ) -> anyhow::Result<Option<Vec<SessionEventRecord>>> {
         if self.session_store.find_by_id(session_id)?.is_none() {
             return Ok(None);
         }
 
-        match after_seq {
-            Some(seq) => self
+        match (after_seq, before_seq, limit, turn_limit) {
+            (Some(_), Some(_), _, _) | (Some(_), _, _, Some(_)) => {
+                anyhow::bail!("after_seq cannot be combined with before_seq or turn_limit")
+            }
+            (Some(seq), None, Some(limit), None) => self
+                .session_store
+                .list_events_after_limited(session_id, seq, limit)
+                .map(Some),
+            (Some(seq), None, None, None) => self
                 .session_store
                 .list_events_after(session_id, seq)
                 .map(Some),
-            None => self.session_store.list_events(session_id).map(Some),
+            (None, Some(seq), Some(limit), Some(turn_limit)) => self
+                .session_store
+                .list_events_before_for_latest_turns(session_id, seq, turn_limit, limit)
+                .map(Some),
+            (None, Some(seq), Some(limit), None) => self
+                .session_store
+                .list_events_before_limited(session_id, seq, limit)
+                .map(Some),
+            (None, Some(seq), None, Some(turn_limit)) => self
+                .session_store
+                .list_events_before_for_latest_turns(session_id, seq, turn_limit, 5_000)
+                .map(Some),
+            (None, Some(seq), None, None) => self
+                .session_store
+                .list_events_before_limited(session_id, seq, 5_000)
+                .map(Some),
+            (None, None, Some(limit), Some(turn_limit)) => self
+                .session_store
+                .list_events_for_latest_turns(session_id, turn_limit, limit)
+                .map(Some),
+            (None, None, None, Some(turn_limit)) => self
+                .session_store
+                .list_events_for_latest_turns(session_id, turn_limit, 5_000)
+                .map(Some),
+            (None, None, Some(limit), None) => self
+                .session_store
+                .list_events_limited(session_id, limit)
+                .map(Some),
+            (None, None, None, None) => self.session_store.list_events(session_id).map(Some),
         }
     }
 
@@ -388,7 +433,9 @@ impl SessionService {
             .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
 
         let registry = built_in_registry();
-        let agents = model_registries()
+        let agents = self
+            .model_catalog_service
+            .registries()
             .into_iter()
             .filter_map(|model_registry| {
                 let descriptor = registry
@@ -437,22 +484,37 @@ fn resolve_model_id(
     model_registry: &ModelRegistryMetadata,
     provided_model_id: Option<&str>,
 ) -> anyhow::Result<Option<String>> {
-    let normalized_model_id = provided_model_id.map(|model_id| {
-        normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id)
-    });
-
-    let valid_model_ids = model_registry
+    let valid_ids = model_registry
         .models
         .iter()
         .map(|model| model.id.as_str())
         .collect::<Vec<_>>();
+    let resolved_model_id = provided_model_id.map(|model_id| {
+        if valid_ids.contains(&model_id) {
+            return model_id;
+        }
+        let normalized_model_id =
+            normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id);
+        resolve_model_alias(model_registry, normalized_model_id).unwrap_or(normalized_model_id)
+    });
 
     resolve_catalog_id(
-        normalized_model_id,
-        &valid_model_ids,
+        resolved_model_id,
+        &valid_ids,
         model_registry.default_model_id.as_deref(),
         "model",
     )
+}
+
+fn resolve_model_alias<'a>(
+    model_registry: &'a ModelRegistryMetadata,
+    provided_model_id: &str,
+) -> Option<&'a str> {
+    model_registry
+        .models
+        .iter()
+        .find(|model| model.aliases.iter().any(|alias| alias == provided_model_id))
+        .map(|model| model.id.as_str())
 }
 
 fn resolve_catalog_id(
@@ -480,7 +542,7 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
     match model_id {
         "claude-sonnet-4-5" | "claude-sonnet-4-6" => Some("sonnet"),
         "claude-sonnet-4-5-1m" | "claude-sonnet-4-6-1m" => Some("sonnet[1m]"),
-        "claude-opus-4-5" | "claude-opus-4-6" | "claude-opus-4-6-1m" | "opus" => Some("opus[1m]"),
+        "claude-opus-4-5" | "claude-opus-4-6-1m" | "opus" => Some("opus[1m]"),
         "claude-haiku-4-5" => Some("haiku"),
         _ => None,
     }
@@ -489,7 +551,7 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::model::ModelRegistryModelMetadata;
+    use crate::agents::model::{ModelCatalogStatus, ModelRegistryModelMetadata};
 
     fn plain_model(id: &str, is_default: bool) -> ModelRegistryModelMetadata {
         ModelRegistryModelMetadata {
@@ -497,6 +559,10 @@ mod tests {
             display_name: id.to_string(),
             description: None,
             is_default,
+            status: ModelCatalogStatus::Active,
+            aliases: vec![],
+            min_runtime_version: None,
+            launch_remediation: None,
         }
     }
 
@@ -547,5 +613,45 @@ mod tests {
             resolve_model_id(&registry, Some("opus")).expect("legacy model id should normalize");
 
         assert_eq!(resolved.as_deref(), Some("opus[1m]"));
+    }
+
+    #[test]
+    fn resolves_catalog_aliases_to_canonical_model_id() {
+        let mut opus = plain_model("opus[1m]", false);
+        opus.aliases = vec!["claude-opus-4-7".to_string()];
+        let registry = ModelRegistryMetadata {
+            kind: "claude".to_string(),
+            display_name: "Claude".to_string(),
+            default_model_id: Some("sonnet".to_string()),
+            models: vec![plain_model("sonnet", true), opus],
+        };
+
+        let resolved = resolve_model_id(&registry, Some("claude-opus-4-7"))
+            .expect("catalog alias should resolve");
+
+        assert_eq!(resolved.as_deref(), Some("opus[1m]"));
+    }
+
+    #[test]
+    fn preserves_pinned_claude_opus_4_6_model_id() {
+        let registry = ModelRegistryMetadata {
+            kind: "claude".to_string(),
+            display_name: "Claude".to_string(),
+            default_model_id: Some("sonnet".to_string()),
+            models: {
+                let mut opus = plain_model("opus[1m]", false);
+                opus.aliases = vec!["claude-opus-4-6".to_string()];
+                vec![
+                    plain_model("sonnet", true),
+                    opus,
+                    plain_model("claude-opus-4-6", false),
+                ]
+            },
+        };
+
+        let resolved = resolve_model_id(&registry, Some("claude-opus-4-6"))
+            .expect("pinned Opus 4.6 model id should resolve directly");
+
+        assert_eq!(resolved.as_deref(), Some("claude-opus-4-6"));
     }
 }

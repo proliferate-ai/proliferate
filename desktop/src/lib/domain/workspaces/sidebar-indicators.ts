@@ -20,6 +20,16 @@ export type SidebarIndicatorAction =
     kind: "open_source_session";
     workspaceId: string;
     sessionId: string;
+  }
+  | {
+    kind: "mark_workspace_done";
+    workspaceId: string;
+    logicalWorkspaceId?: string | null;
+  }
+  | {
+    kind: "keep_workspace_active";
+    workspaceId: string;
+    readinessFingerprint: string;
   };
 
 export type SidebarStatusIndicator =
@@ -45,7 +55,7 @@ export type SidebarStatusIndicator =
     tooltip: string;
   }
   | {
-    kind: "unread";
+    kind: "needs_review";
     tooltip: string;
   };
 
@@ -63,6 +73,13 @@ export type SidebarDetailIndicator =
   | {
     kind: "materialization";
     variant: SidebarWorkspaceVariant;
+    tooltip: string;
+  }
+  | {
+    kind: "finish_suggestion";
+    workspaceId: string;
+    logicalWorkspaceId: string;
+    readinessFingerprint: string;
     tooltip: string;
   };
 
@@ -108,13 +125,13 @@ export function sidebarWorkspaceVariantForLogicalWorkspace(
 
 export function sidebarStatusIndicatorFromActivity(args: {
   activity: SidebarSessionActivityState;
-  unread?: boolean;
+  needsReview?: boolean;
   pendingPromptCount?: number;
   errorAction?: SidebarIndicatorAction | null;
 }): SidebarStatusIndicator | null {
   const {
     activity,
-    unread = false,
+    needsReview = false,
     pendingPromptCount = 0,
     errorAction = null,
   } = args;
@@ -155,10 +172,10 @@ export function sidebarStatusIndicatorFromActivity(args: {
     };
   }
 
-  return unread
+  return needsReview
     ? {
-      kind: "unread",
-      tooltip: "Unread",
+      kind: "needs_review",
+      tooltip: "Needs review",
     }
     : null;
 }
@@ -188,17 +205,29 @@ export function activeWorkspaceActivity(
     return "idle";
   }
 
-  return workspaceActivities[localWorkspace.id]
-    ?? resolveWorkspaceExecutionSidebarActivityState(localWorkspace.executionSummary ?? null);
+  return mergeLocalWorkspaceActivity(
+    workspaceActivities[localWorkspace.id],
+    localWorkspace.executionSummary ?? null,
+  );
 }
 
 export function detailIndicatorsForWorkspace(
   workspace: LogicalWorkspace,
   variant: SidebarWorkspaceVariant,
+  finishSuggestion?: { workspaceId: string; readinessFingerprint: string } | null,
 ): SidebarDetailIndicator[] {
   const creator = creatorDetailIndicator(workspace);
   return [
     ...(creator ? [creator] : []),
+    ...(finishSuggestion
+      ? [{
+        kind: "finish_suggestion" as const,
+        workspaceId: finishSuggestion.workspaceId,
+        logicalWorkspaceId: workspace.id,
+        readinessFingerprint: finishSuggestion.readinessFingerprint,
+        tooltip: "Ready to mark done",
+      }]
+      : []),
     {
       kind: "materialization" as const,
       variant,
@@ -212,6 +241,30 @@ function higherPrioritySidebarActivity(
   b: SidebarSessionActivityState,
 ): SidebarSessionActivityState {
   return sidebarActivityPriority(a) >= sidebarActivityPriority(b) ? a : b;
+}
+
+function mergeLocalWorkspaceActivity(
+  mountedActivity: SidebarSessionActivityState | undefined,
+  executionSummary: Workspace["executionSummary"] | null,
+): SidebarSessionActivityState {
+  if (mountedActivity === undefined) {
+    return resolveWorkspaceExecutionSidebarActivityState(executionSummary);
+  }
+
+  if (
+    (mountedActivity === "idle" || mountedActivity === "closed")
+    && workspaceSummaryHasRunningSession(executionSummary)
+  ) {
+    return "iterating";
+  }
+
+  return mountedActivity;
+}
+
+function workspaceSummaryHasRunningSession(
+  summary: Workspace["executionSummary"] | null,
+): boolean {
+  return (summary?.runningCount ?? 0) > 0 || summary?.phase === "running";
 }
 
 function sidebarActivityPriority(activity: SidebarSessionActivityState): number {

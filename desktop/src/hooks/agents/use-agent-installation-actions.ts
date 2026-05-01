@@ -5,6 +5,7 @@ import {
   anyHarnessProviderConfigsKey,
   useInstallAgentMutation,
   useReconcileAgentsMutation,
+  useRuntimeHealthQuery,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
@@ -19,6 +20,12 @@ function assertHealthyRuntime(runtimeUrl: string, isHealthy: boolean): void {
   }
 }
 
+function assertAgentSeedReady(isAgentSeedHydrating: boolean): void {
+  if (isAgentSeedHydrating) {
+    throw new Error("Agent setup is still finishing. Try again in a moment.");
+  }
+}
+
 export function useAgentInstallationActions() {
   const queryClient = useQueryClient();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
@@ -28,6 +35,8 @@ export function useAgentInstallationActions() {
 
   const isHealthy =
     connectionState === "healthy" && runtimeUrl.trim().length > 0;
+  const { data: runtimeHealth } = useRuntimeHealthQuery({ enabled: isHealthy });
+  const isAgentSeedHydrating = runtimeHealth?.agentSeed?.status === "hydrating";
 
   const refreshAgentResources = useCallback(async () => {
     const normalizedRuntimeUrl = runtimeUrl.trim();
@@ -51,21 +60,24 @@ export function useAgentInstallationActions() {
   const installAgent = useCallback(
     async (kind: string, request?: InstallAgentRequest) => {
       assertHealthyRuntime(runtimeUrl, isHealthy);
+      assertAgentSeedReady(isAgentSeedHydrating);
       return installMutation.mutateAsync({ kind, request });
     },
-    [installMutation, isHealthy, runtimeUrl],
+    [installMutation, isAgentSeedHydrating, isHealthy, runtimeUrl],
   );
 
   const reconcileAgents = useCallback(
     async (options?: ReconcileAgentsRequest) => {
       assertHealthyRuntime(runtimeUrl, isHealthy);
+      assertAgentSeedReady(isAgentSeedHydrating);
       return reconcileMutation.mutateAsync(options ?? {});
     },
-    [isHealthy, reconcileMutation, runtimeUrl],
+    [isAgentSeedHydrating, isHealthy, reconcileMutation, runtimeUrl],
   );
 
   return {
     installAgent,
+    isAgentSeedHydrating,
     isInstallingAgent: installMutation.isPending,
     reconcileAgents,
     refreshAgentResources,

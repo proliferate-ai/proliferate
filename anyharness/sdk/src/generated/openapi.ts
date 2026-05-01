@@ -372,6 +372,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/critique": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_review_assignment_critique"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retry_review_assignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/revision-ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mark_review_revision_ready"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/send-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["send_review_feedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stop_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -612,6 +692,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_session_reviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/subagents": {
         parameters: {
             query?: never;
@@ -642,6 +738,86 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["update_session_title"];
+        trace?: never;
+    };
+    "/v1/terminal-command-runs/{command_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_terminal_command_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/terminals/{terminal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_terminal"];
+        put?: never;
+        post?: never;
+        delete: operations["delete_terminal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/terminals/{terminal_id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_terminal_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/terminals/{terminal_id}/resize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resize_terminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/terminals/{terminal_id}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_terminal_title"];
         trace?: never;
     };
     "/v1/workspaces": {
@@ -812,6 +988,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_git_diff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/git/diff/branch-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_git_branch_diff_files"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1092,6 +1284,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_plan_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/processes/run": {
         parameters: {
             query?: never;
@@ -1102,6 +1310,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["run_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retire_workspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/retire/cleanup-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retry_retire_cleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/retire/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["retire_workspace_preflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/reviews/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_code_review"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1188,6 +1460,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/terminals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_terminals"];
+        put?: never;
+        post: operations["create_terminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1201,6 +1489,32 @@ export interface components {
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
         /** @enum {string} */
         AgentReadinessState: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
+        /** @enum {string} */
+        AgentSeedFailureKind: "missing_archive" | "invalid_checksum" | "invalid_manifest" | "invalid_archive" | "io" | "unsupported_target" | "verification_failed";
+        AgentSeedHealth: {
+            failureKind?: null | components["schemas"]["AgentSeedFailureKind"];
+            lastAction: components["schemas"]["AgentSeedLastAction"];
+            ownership: components["schemas"]["AgentSeedOwnership"];
+            /** Format: int32 */
+            repairedArtifactCount: number;
+            /** Format: int32 */
+            seedOwnedArtifactCount: number;
+            seedVersion?: string | null;
+            seededAgents: string[];
+            /** Format: int32 */
+            skippedExistingArtifactCount: number;
+            source: components["schemas"]["AgentSeedSource"];
+            status: components["schemas"]["AgentSeedStatus"];
+            target?: string | null;
+        };
+        /** @enum {string} */
+        AgentSeedLastAction: "none" | "hydrated" | "repaired";
+        /** @enum {string} */
+        AgentSeedOwnership: "full_seed" | "partial_seed" | "user_owned_existing" | "not_configured";
+        /** @enum {string} */
+        AgentSeedSource: "bundled" | "external_dev" | "none";
+        /** @enum {string} */
+        AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
             credentialState: components["schemas"]["AgentCredentialState"];
@@ -1519,6 +1833,22 @@ export interface components {
             systemPromptAppend?: string[] | null;
             workspaceId: string;
         };
+        CreateTerminalRequest: {
+            /** Format: int32 */
+            cols: number;
+            cwd?: string | null;
+            purpose?: null | components["schemas"]["TerminalPurpose"];
+            /** Format: int32 */
+            rows: number;
+            shell?: string | null;
+            startupCommand?: string | null;
+            startupCommandEnv?: {
+                [key: string]: string;
+            } | null;
+            /** Format: int64 */
+            startupCommandTimeoutMs?: number | null;
+            title?: string | null;
+        };
         CreateWorkspaceRequest: {
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             origin?: null | components["schemas"]["OriginContext"];
@@ -1559,7 +1889,18 @@ export interface components {
         };
         ErrorEvent: {
             code?: string | null;
+            details?: null | components["schemas"]["ErrorEventDetails"];
             message: string;
+        };
+        ErrorEventDetails: {
+            fallbackModelId: string;
+            /** @enum {string} */
+            kind: "provider_rate_limit";
+            /** Format: int64 */
+            limit: number;
+            provider: string;
+            providerModel: string;
+            unit: string;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;
@@ -1583,6 +1924,7 @@ export interface components {
         };
         GetSetupStatusResponse: {
             command: string;
+            commandRunId?: string | null;
             /** Format: int64 */
             durationMs?: number | null;
             /** Format: int32 */
@@ -1590,6 +1932,7 @@ export interface components {
             status: components["schemas"]["SetupScriptStatus"];
             stderr?: string | null;
             stdout?: string | null;
+            terminalId?: string | null;
         };
         GitActionAvailability: {
             canCommit: boolean;
@@ -1599,6 +1942,13 @@ export interface components {
             canPush: boolean;
             pushLabel: string;
             reasonIfBlocked?: string | null;
+        };
+        GitBranchDiffFilesResponse: {
+            baseRef: string;
+            files: components["schemas"]["GitDiffFile"][];
+            headOid: string;
+            mergeBaseOid: string;
+            resolvedBaseOid: string;
         };
         GitBranchRef: {
             isDefault: boolean;
@@ -1618,16 +1968,33 @@ export interface components {
             path: string;
             status: components["schemas"]["GitFileStatus"];
         };
-        GitDiffResponse: {
+        GitDiffFile: {
             /** Format: int32 */
             additions: number;
             binary: boolean;
             /** Format: int32 */
             deletions: number;
+            oldPath?: string | null;
+            path: string;
+            status: components["schemas"]["GitFileStatus"];
+        };
+        GitDiffResponse: {
+            /** Format: int32 */
+            additions: number;
+            baseRef?: string | null;
+            binary: boolean;
+            /** Format: int32 */
+            deletions: number;
+            headOid?: string | null;
+            mergeBaseOid?: string | null;
             patch?: string | null;
             path: string;
+            resolvedBaseOid?: string | null;
+            scope: components["schemas"]["GitDiffScope"];
             truncated: boolean;
         };
+        /** @enum {string} */
+        GitDiffScope: "working_tree" | "unstaged" | "staged" | "branch";
         /** @enum {string} */
         GitFileStatus: "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked" | "conflicted";
         /** @enum {string} */
@@ -1683,6 +2050,7 @@ export interface components {
             targetSessionId: string;
         };
         HealthResponse: {
+            agentSeed: components["schemas"]["AgentSeedHealth"];
             capabilities: components["schemas"]["RuntimeCapabilities"];
             runtimeHome: string;
             status: string;
@@ -1785,6 +2153,9 @@ export interface components {
         LoginCommand: {
             args: string[];
             program: string;
+        };
+        MarkReviewRevisionReadyRequest: {
+            revisedPlanId?: string | null;
         };
         McpElicitationBooleanField: components["schemas"]["McpElicitationFieldBase"];
         McpElicitationField: (components["schemas"]["McpElicitationTextField"] & {
@@ -2000,15 +2371,42 @@ export interface components {
             title?: string | null;
             updatedAt: string;
         };
+        /**
+         * @description Runtime-owned lifecycle status for a model catalog row.
+         * @enum {string}
+         */
+        ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
         /** @description A known model in the AnyHarness catalog for a given provider. */
         ModelEntry: {
+            /** @description Legacy or provider-native selectors that resolve to this model ID */
+            aliases?: string[];
+            /** @description Optional descriptive copy surfaced in launch/settings UIs */
+            description?: string | null;
             /** @description Human-readable name (e.g. "Claude Opus 4.6") */
             displayName: string;
             /** @description Session-level model ID exposed by the harness (e.g. "opus[1m]") */
             id: string;
             /** @description Whether this is the default model for the provider */
             isDefault: boolean;
+            launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
+            /** @description Minimum AnyHarness runtime version required for this model, if any */
+            minRuntimeVersion?: string | null;
+            /** @description Runtime-owned lifecycle status for this model */
+            status: components["schemas"]["ModelCatalogStatus"];
         };
+        /** @description Catalog metadata for the app-owned action shown after live-apply mismatch. */
+        ModelLaunchRemediation: {
+            /** @description App-owned action class for remediation. */
+            kind: components["schemas"]["ModelLaunchRemediationKind"];
+            /** @description Short detail text from the catalog. Button labels remain app-owned. */
+            message: string;
+        };
+        /**
+         * @description Product-owned remediation hint shown when a live harness cannot apply a
+         *     selected catalog model at launch.
+         * @enum {string}
+         */
+        ModelLaunchRemediationKind: "managed_reinstall" | "external_update" | "restart";
         /** @description Backend-owned model registry for a harness. */
         ModelRegistry: {
             /** @description Default session-level model selector ID for this harness */
@@ -2022,6 +2420,8 @@ export interface components {
         };
         /** @description A model row in the backend-owned registry for a given harness. */
         ModelRegistryModel: {
+            /** @description Legacy or provider-native selectors that resolve to this model ID */
+            aliases?: string[];
             /** @description Optional descriptive copy surfaced in launch/settings UIs */
             description?: string | null;
             /** @description Human-readable name for the model */
@@ -2030,6 +2430,11 @@ export interface components {
             id: string;
             /** @description Whether this is the default model for the registry */
             isDefault: boolean;
+            launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
+            /** @description Minimum AnyHarness runtime version required for this model, if any */
+            minRuntimeVersion?: string | null;
+            /** @description Runtime-owned lifecycle status for this model */
+            status: components["schemas"]["ModelCatalogStatus"];
         };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
@@ -2279,6 +2684,13 @@ export interface components {
             /** @enum {string} */
             type: "linkWake";
         } | {
+            feedbackJobId: string;
+            label?: string | null;
+            reviewRoundId: string;
+            reviewRunId: string;
+            /** @enum {string} */
+            type: "reviewFeedback";
+        } | {
             label?: string | null;
             /** @enum {string} */
             type: "system";
@@ -2447,6 +2859,12 @@ export interface components {
         };
         /** @enum {string} */
         RepoRootKind: "external" | "managed";
+        ResizeTerminalRequest: {
+            /** Format: int32 */
+            cols: number;
+            /** Format: int32 */
+            rows: number;
+        };
         ResolveInteractionRequest: {
             optionId: string;
             /** @enum {string} */
@@ -2488,6 +2906,129 @@ export interface components {
         ResumeSessionRequest: {
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
+        };
+        RetryReviewAssignmentRequest: {
+            modelId?: string | null;
+        };
+        ReviewAssignmentDetail: {
+            actualModeId?: string | null;
+            agentKind: string;
+            createdAt: string;
+            critiqueArtifactPath?: string | null;
+            deadlineAt: string;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            hasCritique: boolean;
+            id: string;
+            modeVerificationStatus: components["schemas"]["ReviewModeVerificationStatus"];
+            modelId?: string | null;
+            pass?: boolean | null;
+            personaId: string;
+            personaLabel: string;
+            requestedModeId?: string | null;
+            reviewRoundId: string;
+            reviewRunId: string;
+            reviewerSessionId?: string | null;
+            sessionLinkId?: string | null;
+            status: components["schemas"]["ReviewAssignmentStatus"];
+            summary?: string | null;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ReviewAssignmentStatus: "queued" | "launching" | "reviewing" | "reminded" | "retryable_failed" | "submitted" | "cancelled" | "timed_out" | "system_failed";
+        ReviewCritiqueResponse: {
+            assignmentId: string;
+            critiqueArtifactPath?: string | null;
+            critiqueMarkdown?: string | null;
+            pass?: boolean | null;
+            personaId: string;
+            personaLabel: string;
+            reviewRoundId: string;
+            reviewRunId: string;
+            submittedAt?: string | null;
+            summary?: string | null;
+        };
+        ReviewFeedbackDeliveryDetail: {
+            /** Format: int32 */
+            attemptCount: number;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            nextAttemptAt?: string | null;
+            state: components["schemas"]["ReviewFeedbackDeliveryState"];
+        };
+        /** @enum {string} */
+        ReviewFeedbackDeliveryState: "pending" | "sending" | "sent" | "failed";
+        /** @enum {string} */
+        ReviewKind: "plan" | "code";
+        /** @enum {string} */
+        ReviewModeVerificationStatus: "pending" | "verified" | "mismatch" | "not_checked";
+        ReviewPersonaRequest: {
+            agentKind: string;
+            label: string;
+            modeId?: string | null;
+            modelId?: string | null;
+            personaId: string;
+            prompt: string;
+        };
+        ReviewRoundDetail: {
+            assignments: components["schemas"]["ReviewAssignmentDetail"][];
+            createdAt: string;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            feedbackDelivery?: null | components["schemas"]["ReviewFeedbackDeliveryDetail"];
+            feedbackJobId?: string | null;
+            feedbackPromptSentAt?: string | null;
+            id: string;
+            reviewRunId: string;
+            /** Format: int32 */
+            roundNumber: number;
+            status: components["schemas"]["ReviewRoundStatus"];
+            targetPlanId?: string | null;
+            targetPlanSnapshotHash?: string | null;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ReviewRoundStatus: "reviewing" | "completing" | "passed" | "feedback_pending" | "feedback_sent" | "completed_with_drift" | "cancelled" | "system_failed";
+        ReviewRunDetail: {
+            activeRoundId?: string | null;
+            autoIterate: boolean;
+            childSessionIds: string[];
+            createdAt: string;
+            /** Format: int32 */
+            currentRoundNumber: number;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            id: string;
+            kind: components["schemas"]["ReviewKind"];
+            /** Format: int32 */
+            maxRounds: number;
+            parentCanSignalRevisionViaMcp: boolean;
+            parentSessionId: string;
+            rounds: components["schemas"]["ReviewRoundDetail"][];
+            status: components["schemas"]["ReviewRunStatus"];
+            targetPlanId?: string | null;
+            targetPlanSnapshotHash?: string | null;
+            title: string;
+            updatedAt: string;
+            workspaceId: string;
+        };
+        ReviewRunResponse: {
+            run: components["schemas"]["ReviewRunDetail"];
+        };
+        /** @enum {string} */
+        ReviewRunStatus: "reviewing" | "feedback_ready" | "parent_revising" | "waiting_for_revision" | "passed" | "stopped" | "system_failed";
+        ReviewRunUpdatedPayload: {
+            activeRoundId?: string | null;
+            autoIterate: boolean;
+            /** Format: int32 */
+            currentRoundNumber: number;
+            kind: components["schemas"]["ReviewKind"];
+            /** Format: int32 */
+            maxRounds: number;
+            parentSessionId: string;
+            reviewRunId: string;
+            status: components["schemas"]["ReviewRunStatus"];
+            updatedAt: string;
         };
         RunCommandRequest: {
             command: string[];
@@ -2579,6 +3120,9 @@ export interface components {
         }) | (components["schemas"]["SessionLinkTurnCompletedPayload"] & {
             /** @enum {string} */
             type: "session_link_turn_completed";
+        }) | (components["schemas"]["ReviewRunUpdatedPayload"] & {
+            /** @enum {string} */
+            type: "review_run_updated";
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
@@ -2707,6 +3251,9 @@ export interface components {
             sessionId: string;
             timestamp: string;
         };
+        SessionReviewsResponse: {
+            reviews: components["schemas"]["ReviewRunDetail"][];
+        };
         SessionStartedEvent: {
             nativeSessionId: string;
             sourceAgentKind: string;
@@ -2771,6 +3318,33 @@ export interface components {
             mode: string;
             reusesUserState: boolean;
         };
+        StartCodeReviewRequest: {
+            autoIterate?: boolean;
+            /** Format: int32 */
+            maxRounds?: number;
+            parentSessionId: string;
+            reviewers: components["schemas"]["ReviewPersonaRequest"][];
+        };
+        StartPlanReviewRequest: {
+            autoIterate?: boolean;
+            /** Format: int32 */
+            maxRounds?: number;
+            parentSessionId: string;
+            reviewers: components["schemas"]["ReviewPersonaRequest"][];
+        };
+        StartTerminalCommandRequest: {
+            command: string;
+            env?: {
+                [key: string]: string;
+            } | null;
+            interrupt?: boolean | null;
+            /** Format: int64 */
+            timeoutMs?: number | null;
+        };
+        StartTerminalCommandResponse: {
+            commandRun: components["schemas"]["TerminalCommandRunSummary"];
+            terminal: components["schemas"]["TerminalRecord"];
+        };
         StartWorkspaceSetupRequest: {
             baseRef?: string | null;
             command: string;
@@ -2803,7 +3377,49 @@ export interface components {
         /** @enum {string} */
         SubagentTurnOutcome: "completed" | "failed" | "cancelled";
         /** @enum {string} */
+        TerminalCommandOutputMode: "separate" | "combined";
+        TerminalCommandRunDetail: components["schemas"]["TerminalCommandRunSummary"] & {
+            combinedOutput?: string | null;
+            outputMode: components["schemas"]["TerminalCommandOutputMode"];
+            stderr?: string | null;
+            stdout?: string | null;
+        };
+        /** @enum {string} */
+        TerminalCommandRunStatus: "queued" | "running" | "succeeded" | "failed" | "interrupted" | "timed_out";
+        TerminalCommandRunSummary: {
+            command: string;
+            completedAt?: string | null;
+            /** Format: int64 */
+            durationMs?: number | null;
+            /** Format: int32 */
+            exitCode?: number | null;
+            id: string;
+            outputTruncated: boolean;
+            purpose: components["schemas"]["TerminalPurpose"];
+            startedAt?: string | null;
+            status: components["schemas"]["TerminalCommandRunStatus"];
+            terminalId?: string | null;
+            workspaceId: string;
+        };
+        /** @enum {string} */
         TerminalLifecycleEvent: "start" | "output" | "exit";
+        /** @enum {string} */
+        TerminalPurpose: "general" | "run" | "setup";
+        TerminalRecord: {
+            commandRun?: null | components["schemas"]["TerminalCommandRunSummary"];
+            createdAt: string;
+            cwd: string;
+            /** Format: int32 */
+            exitCode?: number | null;
+            id: string;
+            purpose: components["schemas"]["TerminalPurpose"];
+            status: components["schemas"]["TerminalStatus"];
+            title: string;
+            updatedAt: string;
+            workspaceId: string;
+        };
+        /** @enum {string} */
+        TerminalStatus: "starting" | "running" | "exited" | "failed";
         TranscriptItemDeltaPayload: {
             appendContentParts?: components["schemas"]["ContentPart"][] | null;
             appendReasoning?: string | null;
@@ -2846,6 +3462,9 @@ export interface components {
         UpdateSessionTitleRequest: {
             title: string;
         };
+        UpdateTerminalTitleRequest: {
+            title: string;
+        };
         UpdateWorkspaceDisplayNameRequest: {
             /**
              * @description New display name. `null` or an empty string clears the override and
@@ -2885,6 +3504,9 @@ export interface components {
             text?: string | null;
         };
         Workspace: {
+            cleanupAttemptedAt?: string | null;
+            cleanupErrorMessage?: string | null;
+            cleanupFailedAt?: string | null;
             cleanupState: components["schemas"]["WorkspaceCleanupState"];
             createdAt: string;
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
@@ -2932,6 +3554,7 @@ export interface components {
             phase: components["schemas"]["WorkspaceExecutionPhase"];
             runningCount: number;
             totalSessionCount: number;
+            updatedAt?: string | null;
         };
         /** @enum {string} */
         WorkspaceFileKind: "file" | "directory" | "symlink";
@@ -2999,6 +3622,47 @@ export interface components {
             reason?: string | null;
             sessionId: string;
             supported: boolean;
+        };
+        WorkspaceRetireBlocker: {
+            code: components["schemas"]["WorkspaceRetireBlockerCode"];
+            commandRunId?: string | null;
+            message: string;
+            operation?: null | components["schemas"]["GitOperation"];
+            path?: string | null;
+            paths?: string[] | null;
+            retryable: boolean;
+            sessionId?: string | null;
+            severity: components["schemas"]["WorkspaceRetireBlockerSeverity"];
+            terminalId?: string | null;
+        };
+        /** @enum {string} */
+        WorkspaceRetireBlockerCode: "unsupported_workspace" | "workspace_access_blocked" | "dirty_working_tree" | "conflicted_files" | "active_git_operation" | "live_session" | "pending_prompt" | "pending_interaction" | "active_terminal" | "running_command";
+        /** @enum {string} */
+        WorkspaceRetireBlockerSeverity: "blocking";
+        /** @enum {string} */
+        WorkspaceRetireOutcome: "retired" | "already_retired" | "blocked" | "cleanup_failed";
+        WorkspaceRetirePreflightResponse: {
+            baseOid?: string | null;
+            baseRef?: string | null;
+            blockers: components["schemas"]["WorkspaceRetireBlocker"][];
+            canRetire: boolean;
+            cleanupState: components["schemas"]["WorkspaceCleanupState"];
+            headMatchesBase: boolean;
+            headOid?: string | null;
+            lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
+            materialized: boolean;
+            mergedIntoBase: boolean;
+            readinessFingerprint: string;
+            workspaceId: string;
+            workspaceKind: components["schemas"]["WorkspaceKind"];
+        };
+        WorkspaceRetireResponse: {
+            cleanupAttempted: boolean;
+            cleanupMessage?: string | null;
+            cleanupSucceeded: boolean;
+            outcome: components["schemas"]["WorkspaceRetireOutcome"];
+            preflight: components["schemas"]["WorkspaceRetirePreflightResponse"];
+            workspace: components["schemas"]["Workspace"];
         };
         WorkspaceSessionLaunchAgent: {
             defaultModelId?: string | null;
@@ -3848,6 +4512,187 @@ export interface operations {
             };
         };
     };
+    get_review_assignment_critique: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+                /** @description Review assignment ID */
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review assignment critique */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewCritiqueResponse"];
+                };
+            };
+            /** @description Review or assignment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retry_review_assignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+                /** @description Review assignment ID */
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryReviewAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Retried review assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Review or assignment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Review assignment cannot be retried */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    mark_review_revision_ready: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReviewRevisionReadyRequest"];
+            };
+        };
+        responses: {
+            /** @description Started next review round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Revision is not ready or max rounds reached */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    send_review_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent review feedback */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Review feedback is not ready */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    stop_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped review run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Review run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_sessions: {
         parameters: {
             query?: {
@@ -4082,6 +4927,12 @@ export interface operations {
             query?: {
                 /** @description Return only events with seq greater than this value */
                 after_seq?: number;
+                /** @description Return only events with seq less than this value */
+                before_seq?: number;
+                /** @description Return at most this many newest matching events, or use as the event budget when turn_limit is set */
+                limit?: number;
+                /** @description Return complete newest turns, bounded by the limit event budget */
+                turn_limit?: number;
             };
             header?: never;
             path: {
@@ -4099,6 +4950,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionEventEnvelope"][];
+                };
+            };
+            /** @description Unsupported event history window */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Session not found */
@@ -4443,6 +5303,38 @@ export interface operations {
             };
         };
     };
+    get_session_reviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session review runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionReviewsResponse"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_session_subagents: {
         parameters: {
             query?: never;
@@ -4510,6 +5402,226 @@ export interface operations {
                 };
             };
             /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_terminal_command_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal command run ID */
+                command_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal command run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalCommandRunDetail"];
+                };
+            };
+            /** @description Command run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalRecord"];
+                };
+            };
+            /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_terminal_command: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartTerminalCommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal command started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartTerminalCommandResponse"];
+                };
+            };
+            /** @description Invalid command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resize_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResizeTerminalRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal resized */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalRecord"];
+                };
+            };
+            /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_terminal_title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTerminalTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal title updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalRecord"];
+                };
+            };
+            /** @description Invalid title */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Terminal not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4923,6 +6035,12 @@ export interface operations {
             query: {
                 /** @description File path relative to repo root */
                 path: string;
+                /** @description Diff scope. Defaults to working_tree. */
+                scope?: components["schemas"]["GitDiffScope"];
+                /** @description Branch base ref. Only valid for scope=branch. */
+                baseRef?: string;
+                /** @description Old path for branch rename/copy rows. Only valid for scope=branch. */
+                oldPath?: string;
             };
             header?: never;
             path: {
@@ -4940,6 +6058,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitDiffResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_git_branch_diff_files: {
+        parameters: {
+            query?: {
+                /** @description Branch base ref. Defaults to runtime default branch resolution. */
+                baseRef?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branch diff file list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitBranchDiffFilesResponse"];
                 };
             };
             /** @description Workspace not found */
@@ -5538,6 +6691,53 @@ export interface operations {
             };
         };
     };
+    start_plan_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartPlanReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Started plan review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Invalid review request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Plan or session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     run_command: {
         parameters: {
             query?: never;
@@ -5583,6 +6783,138 @@ export interface operations {
             };
             /** @description Command execution failed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retire_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retire workspace result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRetireResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retry_retire_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup retry result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRetireResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retire_workspace_preflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retire preflight */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRetirePreflightResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_code_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartCodeReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Started code review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Invalid review request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5756,6 +7088,83 @@ export interface operations {
             };
             /** @description No setup execution found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_terminals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace terminals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalRecord"][];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTerminalRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalRecord"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Terminal creation failed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

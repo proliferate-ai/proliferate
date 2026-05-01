@@ -106,6 +106,155 @@ export function Search({ className, ...props }: IconProps) {
   );
 }
 
+export type CommandPaletteGlyphName =
+  | "arrow-left"
+  | "arrow-right"
+  | "chat"
+  | "chat-plus"
+  | "cloud-plus"
+  | "command"
+  | "folder-plus"
+  | "git-branch"
+  | "panel-bottom"
+  | "pencil"
+  | "play"
+  | "rotate-ccw"
+  | "search"
+  | "settings"
+  | "terminal";
+
+export function CommandPaletteGlyph({
+  name,
+  className,
+  ...props
+}: IconProps & { name: CommandPaletteGlyphName }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      {renderCommandPaletteGlyph(name)}
+    </svg>
+  );
+}
+
+function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
+  switch (name) {
+    case "arrow-left":
+      return (
+        <>
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </>
+      );
+    case "arrow-right":
+      return (
+        <>
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </>
+      );
+    case "chat":
+      return <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />;
+    case "chat-plus":
+      return (
+        <>
+          <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+          <path d="M12 8v6" />
+          <path d="M9 11h6" />
+        </>
+      );
+    case "cloud-plus":
+      return (
+        <>
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 0 1 .5 8.97" />
+          <path d="M18 14v6" />
+          <path d="M15 17h6" />
+        </>
+      );
+    case "command":
+      return (
+        <>
+          <path d="M9 6v12" />
+          <path d="M15 6v12" />
+          <path d="M6 9h12" />
+          <path d="M6 15h12" />
+          <path d="M9 6a3 3 0 1 0-3 3" />
+          <path d="M15 6a3 3 0 1 1 3 3" />
+          <path d="M9 18a3 3 0 1 1-3-3" />
+          <path d="M15 18a3 3 0 1 0 3-3" />
+        </>
+      );
+    case "folder-plus":
+      return (
+        <>
+          <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+          <path d="M12 10v6" />
+          <path d="M9 13h6" />
+        </>
+      );
+    case "git-branch":
+      return (
+        <>
+          <path d="M6 3v12" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </>
+      );
+    case "panel-bottom":
+      return (
+        <>
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M3 14h18" />
+        </>
+      );
+    case "pencil":
+      return (
+        <>
+          <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+          <path d="m15 5 4 4" />
+        </>
+      );
+    case "play":
+      return <path d="m6 3 15 9-15 9Z" />;
+    case "rotate-ccw":
+      return (
+        <>
+          <path d="M3 12a9 9 0 1 0 3-6.7" />
+          <path d="M3 4v6h6" />
+        </>
+      );
+    case "search":
+      return (
+        <>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </>
+      );
+    case "settings":
+      return (
+        <>
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+          <circle cx="12" cy="12" r="3" />
+        </>
+      );
+    case "terminal":
+      return (
+        <>
+          <path d="m4 17 6-6-6-6" />
+          <path d="M12 19h8" />
+        </>
+      );
+  }
+}
+
 export function Keyboard({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -147,6 +296,16 @@ export function Archive({ className, ...props }: IconProps) {
       <rect width="20" height="5" x="2" y="3" rx="1" />
       <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
       <path d="M10 12h4" />
+    </svg>
+  );
+}
+
+export function GitMerge({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="18" cy="18" r="3" />
+      <circle cx="6" cy="6" r="3" />
+      <path d="M6 21V9a9 9 0 0 0 9 9" />
     </svg>
   );
 }
@@ -307,6 +466,43 @@ export function CircleQuestion({ className, ...props }: IconProps) {
       <circle cx="12" cy="12" r="10" />
       <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
       <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+export function ReadModeFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M6.5 3C5.12 3 4 4.12 4 5.5v13C4 19.88 5.12 21 6.5 21h5.76a6.48 6.48 0 0 1-1.16-2H6.5a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 .5-.5h7.09L18 9.41v1.33a6.44 6.44 0 0 1 2 .57V9a1 1 0 0 0-.29-.71l-5-5A1 1 0 0 0 14 3H6.5Z" />
+      <path d="M13 4.5V9a1 1 0 0 0 1 1h4.5L13 4.5Z" />
+      <path d="M8 10.25A.75.75 0 0 1 8.75 9h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 8 10.25Z" />
+      <path d="M8.75 12.5a.75.75 0 0 0 0 1.5h2.5a.75.75 0 0 0 0-1.5h-2.5Z" />
+      <path fillRule="evenodd" clipRule="evenodd" d="M17.25 12.5a4.75 4.75 0 0 0-3.62 7.83l-1.1 1.1a.75.75 0 1 0 1.06 1.06l1.1-1.1a4.75 4.75 0 1 0 2.56-8.89Zm0 1.5a3.25 3.25 0 1 0 0 6.5a3.25 3.25 0 0 0 0-6.5Z" />
+    </svg>
+  );
+}
+
+export function EditModeFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M5.5 3A2.5 2.5 0 0 0 3 5.5v13A2.5 2.5 0 0 0 5.5 21h8.37a2.5 2.5 0 0 0 1.77-.73l4.63-4.63a2.5 2.5 0 0 0 .73-1.77V5.5A2.5 2.5 0 0 0 18.5 3h-13Zm3.25 5h6.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5Zm0 3.5h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1 0-1.5Z" />
+      <path d="M17.44 11.66a1.5 1.5 0 0 1 2.12 2.12l-4.8 4.8a2 2 0 0 1-.86.5l-2.03.58a.75.75 0 0 1-.93-.93l.58-2.03a2 2 0 0 1 .5-.86l5.42-5.42Z" />
+    </svg>
+  );
+}
+
+export function ShieldCheckFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path fillRule="evenodd" clipRule="evenodd" d="M11.67 2.08a1 1 0 0 1 .66 0l7 2.5A1 1 0 0 1 20 5.52V11c0 5.2-3.25 8.85-7.65 10.9a.82.82 0 0 1-.7 0C7.25 19.85 4 16.2 4 11V5.52a1 1 0 0 1 .67-.94l7-2.5Zm4.86 7.7a.75.75 0 0 0-1.06-1.06L10.75 13.44l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.75 2.75c.3.3.77.3 1.06 0l5.25-5.25Z" />
+    </svg>
+  );
+}
+
+export function MessageSquareFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M5.5 4A3.5 3.5 0 0 0 2 7.5v7A3.5 3.5 0 0 0 5.5 18H6v2.25a.75.75 0 0 0 1.2.6L11 18h7.5a3.5 3.5 0 0 0 3.5-3.5v-7A3.5 3.5 0 0 0 18.5 4h-13Z" />
     </svg>
   );
 }
@@ -511,6 +707,18 @@ export function Brain({ className, ...props }: IconProps) {
       />
     </svg>
   );
+}
+
+export function BrainOutline({ className, ...props }: IconProps) {
+  return (
+    <svg
+      className={className}
+
+      xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24"
+      {...props}>
+      <path fill="currentColor" d="M19.864 8.465a3.505 3.505 0 0 0-3.03-4.449A3.005 3.005 0 0 0 14 2a2.98 2.98 0 0 0-2 .78A2.98 2.98 0 0 0 10 2c-1.301 0-2.41.831-2.825 2.015a3.505 3.505 0 0 0-3.039 4.45A4.028 4.028 0 0 0 2 12c0 1.075.428 2.086 1.172 2.832A4.067 4.067 0 0 0 3 16c0 1.957 1.412 3.59 3.306 3.934A3.515 3.515 0 0 0 9.5 22c.979 0 1.864-.407 2.5-1.059A3.484 3.484 0 0 0 14.5 22a3.51 3.51 0 0 0 3.19-2.06a4.006 4.006 0 0 0 3.138-5.108A4.003 4.003 0 0 0 22 12a4.028 4.028 0 0 0-2.136-3.535zM9.5 20c-.711 0-1.33-.504-1.47-1.198L7.818 18H7c-1.103 0-2-.897-2-2c0-.352.085-.682.253-.981l.456-.816l-.784-.51A2.019 2.019 0 0 1 4 12c0-.977.723-1.824 1.682-1.972l1.693-.26l-1.059-1.346a1.502 1.502 0 0 1 1.498-2.39L9 6.207V5a1 1 0 0 1 2 0v13.5c0 .827-.673 1.5-1.5 1.5zm9.575-6.308l-.784.51l.456.816c.168.3.253.63.253.982c0 1.103-.897 2-2.05 2h-.818l-.162.802A1.502 1.502 0 0 1 14.5 20c-.827 0-1.5-.673-1.5-1.5V5c0-.552.448-1 1-1s1 .448 1 1.05v1.207l1.186-.225a1.502 1.502 0 0 1 1.498 2.39l-1.059 1.347l1.693.26A2.002 2.002 0 0 1 20 12c0 .683-.346 1.315-.925 1.692z" />
+    </svg>
+  )
 }
 
 export function PlanningIcon({ className, ...props }: IconProps) {

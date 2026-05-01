@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import {
+  anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
   getAnyHarnessClient,
   resolveWorkspaceConnectionFromContext,
@@ -9,11 +10,17 @@ import {
 import type {
   ChildSubagentSummary,
   ParentSubagentLinkSummary,
+  ReviewRunDetail,
   SessionSubagentsResponse,
+  SessionReviewsResponse,
 } from "@anyharness/sdk";
 import { getProviderDisplayName } from "@/config/providers";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
+import {
+  reviewAssignmentHeaderStatusLabel,
+  reviewKindLabel,
+} from "@/lib/domain/reviews/review-runs";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 export interface HeaderSubagentParentRow {
@@ -28,6 +35,7 @@ export interface HeaderSubagentChildRow {
   sessionId: string;
   title: string;
   agentKind: string;
+  source: "subagent" | "review";
   meta: string | null;
   statusLabel: string;
   wakeScheduled: boolean;
@@ -54,7 +62,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     [args.sessionIds],
   );
 
-  const queries = useQueries({
+  const subagentQueries = useQueries({
     queries: uniqueSessionIds.map((sessionId) => ({
       queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, args.workspaceId, sessionId),
       enabled: !!args.workspaceId && !!sessionId,
@@ -69,6 +77,21 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       staleTime: 5_000,
     })),
   });
+  const reviewQueries = useQueries({
+    queries: uniqueSessionIds.map((sessionId) => ({
+      queryKey: anyHarnessSessionReviewsKey(runtimeUrl, args.workspaceId, sessionId),
+      enabled: !!args.workspaceId && !!sessionId,
+      queryFn: async (): Promise<SessionReviewsResponse> => {
+        const resolved = await resolveWorkspaceConnectionFromContext(
+          workspace,
+          args.workspaceId,
+        );
+        const client = getAnyHarnessClient(resolved.connection);
+        return client.reviews.listForSession(sessionId);
+      },
+      staleTime: 2_500,
+    })),
+  });
 
   return useMemo(() => {
     const childToParent = new Map<string, string>();
@@ -78,7 +101,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
 
     for (let index = 0; index < uniqueSessionIds.length; index += 1) {
       const sessionId = uniqueSessionIds[index];
-      const query = queries[index];
+      const query = subagentQueries[index];
       const data = query?.data;
       if (query?.isSuccess) {
         resolvedSessionIds.add(sessionId);
@@ -106,6 +129,22 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           childToParent.set(child.childSessionId, sessionId);
         }
       }
+
+      const reviewQuery = reviewQueries[index];
+      const reviewData = reviewQuery?.data;
+      if (reviewQuery?.isSuccess) {
+        resolvedSessionIds.add(sessionId);
+      }
+      const reviewChildren = reviewData
+        ? buildReviewChildRows(reviewData.reviews, args.activeSessionId)
+        : [];
+      if (reviewChildren.length > 0) {
+        const existing = childrenByParentSessionId.get(sessionId) ?? [];
+        childrenByParentSessionId.set(sessionId, [...existing, ...reviewChildren]);
+        for (const child of reviewChildren) {
+          childToParent.set(child.sessionId, sessionId);
+        }
+      }
     }
 
     return {
@@ -114,7 +153,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       childrenByParentSessionId,
       resolvedSessionIds,
     };
-  }, [args.activeSessionId, queries, uniqueSessionIds]);
+  }, [args.activeSessionId, reviewQueries, subagentQueries, uniqueSessionIds]);
 }
 
 function buildParentRow(parent: ParentSubagentLinkSummary): HeaderSubagentParentRow {
@@ -138,12 +177,45 @@ function buildChildRow(
     sessionId: child.childSessionId,
     title: formatSubagentLabel(child.label ?? child.title, ordinal),
     agentKind: child.agentKind,
+    source: "subagent",
     meta: formatMeta([child.modelId, child.modeId]),
     statusLabel: formatSessionStatus(child.status),
     wakeScheduled: child.wakeScheduled,
     color: resolveSubagentColor(child.sessionLinkId),
     isActive: child.childSessionId === activeSessionId,
   };
+}
+
+function buildReviewChildRows(
+  reviews: readonly ReviewRunDetail[],
+  activeSessionId: string | null,
+): HeaderSubagentChildRow[] {
+  const rowsBySessionId = new Map<string, HeaderSubagentChildRow>();
+  for (const run of reviews) {
+    for (const round of run.rounds) {
+      for (const assignment of round.assignments) {
+        const sessionId = assignment.reviewerSessionId;
+        if (!sessionId) continue;
+        rowsBySessionId.set(sessionId, {
+          sessionLinkId: assignment.sessionLinkId ?? assignment.id,
+          sessionId,
+          title: assignment.personaLabel || reviewKindLabel(run.kind),
+          agentKind: assignment.agentKind,
+          source: "review",
+          meta: formatMeta([
+            reviewKindLabel(run.kind),
+            assignment.modelId,
+            assignment.requestedModeId,
+          ]),
+          statusLabel: reviewAssignmentHeaderStatusLabel(assignment),
+          wakeScheduled: false,
+          color: resolveSubagentColor(assignment.sessionLinkId ?? assignment.id),
+          isActive: sessionId === activeSessionId,
+        });
+      }
+    }
+  }
+  return [...rowsBySessionId.values()];
 }
 
 function formatMeta(parts: Array<string | null | undefined>): string | null {

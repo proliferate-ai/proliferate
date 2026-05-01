@@ -7,8 +7,8 @@ import type {
   TranscriptState,
   UserInputQuestion,
 } from "@anyharness/sdk";
-import type { PendingPromptListEntry } from "@/components/workspace/chat/input/PendingPromptList";
 import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
+import type { PendingPromptQueueEntry } from "@/lib/domain/chat/pending-prompt-queue";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
 import {
   buildCloudWorkspaceStatusScreenModel,
@@ -62,6 +62,29 @@ export const FILE_MENTION_SEARCH_RESULTS: SearchWorkspaceFilesResponse["results"
   },
 ];
 
+export const PLAYGROUND_LONG_COMPOSER_DRAFT = [
+  "Clean up the workspace chat composer expansion behavior.",
+  "",
+  "The first line should stay pinned to the same visual top inset while the composer grows upward.",
+  "The surface should not become a nested scroll area.",
+  "The editor frame should not scroll.",
+  "The textarea should keep growing until the configured workspace cap.",
+  "After sixteen rows, only the textarea should scroll internally.",
+  "Model controls and send/cancel actions need to remain visible.",
+  "Attachment preview rows should not add a second top gap above the editor.",
+  "Plan reference rows should follow the same spacing rule as file attachments.",
+  "Queued-prompt editing should use the same autosize workflow.",
+  "The Home composer remains intentionally capped at eight rows.",
+  "The file mention search tray still renders above the composer surface.",
+  "Focus behavior still depends on data-chat-composer-editor.",
+  "Telemetry masking stays on the editable text surface.",
+  "This scenario exists to make long prompt regressions visible in the playground.",
+  "It should be long enough to exceed the workspace cap.",
+  "It should make internal scrolling observable.",
+  "It should not require a live AnyHarness session.",
+  "It should share the production frame and autosize hook.",
+].join("\n");
+
 export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
   workspaceId: "workspace-arrival-created",
   source: "worktree-created",
@@ -81,6 +104,7 @@ export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
   setupStatusLabel: "Optional",
   setupTone: "default",
   setupDetail: null,
+  setupTerminalId: null,
   branchName: "prism",
   baseBranchName: "main",
 };
@@ -233,6 +257,200 @@ With the single-list migration, the header no longer needs its own \`Sheet\`/\`S
 - Manual: every existing shortcut still fires, the new Settings shortcut opens settings, and the menu shows the accelerator
 - Manual: \`Esc\` in the composer still clears focus without triggering workspace-level shortcuts
 `;
+
+export const PLAYGROUND_PATCH_README = [
+  "@@ -1,4 +1,5 @@",
+  " Proliferate",
+  "-Old transcript rows",
+  "+Codex-style transcript rows",
+  "+Shared diff cards",
+  " Runtime orchestration",
+].join("\n");
+
+export const PLAYGROUND_PATCH_GIT_PANEL = [
+  "@@ -24,7 +24,8 @@ export function GitPanel() {",
+  "   const isBranchMode = changesFilter === \"branch\";",
+  "-  const defaultOpen = true;",
+  "+  const defaultOpen = false;",
+  "+  const surface = \"sidebar\";",
+  "   return <Panel />;",
+].join("\n");
+
+export const PLAYGROUND_PATCH_MESSAGE_LIST = [
+  "@@ -1040,7 +1040,7 @@ function TranscriptItemBlock() {",
+  "   return (",
+  "-    <div className=\"max-w-xl lg:max-w-3xl\">",
+  "+    <div className=\"max-w-full\">",
+  "       <ToolCallItemBlock />",
+  "     </div>",
+].join("\n");
+
+export interface PlaygroundSidebarGitDiffFile {
+  key: string;
+  section: "Unstaged" | "Staged" | "Branch" | "Binary" | "Truncated" | "Empty";
+  displayPath: string;
+  additions: number;
+  deletions: number;
+  patch: string | null;
+  binary?: boolean;
+  truncated?: boolean;
+}
+
+export const PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS: PlaygroundSidebarGitDiffFile["section"][] = [
+  "Unstaged",
+  "Staged",
+  "Branch",
+  "Binary",
+  "Truncated",
+  "Empty",
+];
+
+export const PLAYGROUND_SIDEBAR_GIT_DIFF_FILES: PlaygroundSidebarGitDiffFile[] = [
+  {
+    key: "unstaged-readme",
+    section: "Unstaged",
+    displayPath: "README.md",
+    additions: 2,
+    deletions: 1,
+    patch: PLAYGROUND_PATCH_README,
+  },
+  {
+    key: "staged-git-panel",
+    section: "Staged",
+    displayPath: "desktop/src/components/workspace/git/GitPanel.tsx",
+    additions: 2,
+    deletions: 1,
+    patch: PLAYGROUND_PATCH_GIT_PANEL,
+  },
+  {
+    key: "branch-message-list",
+    section: "Branch",
+    displayPath: "desktop/src/components/workspace/chat/transcript/MessageList.tsx",
+    additions: 1,
+    deletions: 1,
+    patch: PLAYGROUND_PATCH_MESSAGE_LIST,
+  },
+  {
+    key: "binary-image",
+    section: "Binary",
+    displayPath: "desktop/src/assets/onboarding-preview.png",
+    additions: 0,
+    deletions: 0,
+    patch: null,
+    binary: true,
+  },
+  {
+    key: "truncated-large",
+    section: "Truncated",
+    displayPath: "desktop/src/index.css",
+    additions: 24,
+    deletions: 12,
+    patch: PLAYGROUND_PATCH_README,
+    truncated: true,
+  },
+];
+
+export const PLAYGROUND_END_TURN_DIFF_TRANSCRIPT: TranscriptState = {
+  sessionMeta: {
+    sessionId: "playground-end-turn-diff",
+    title: "End-turn diff playground",
+    updatedAt: "2026-04-29T12:00:03Z",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+  },
+  turnOrder: ["turn-end-diff"],
+  turnsById: {
+    "turn-end-diff": {
+      turnId: "turn-end-diff",
+      itemOrder: ["assistant-end-diff", "tool-end-diff-readme", "tool-end-diff-git"],
+      startedAt: "2026-04-29T12:00:00Z",
+      completedAt: "2026-04-29T12:00:03Z",
+      stopReason: "end_turn",
+      fileBadges: [
+        { path: "README.md", additions: 2, deletions: 1 },
+        {
+          path: "desktop/src/components/workspace/git/GitPanel.tsx",
+          additions: 2,
+          deletions: 1,
+        },
+      ],
+    },
+  },
+  itemsById: {
+    "assistant-end-diff": {
+      kind: "assistant_prose",
+      itemId: "assistant-end-diff",
+      turnId: "turn-end-diff",
+      status: "completed",
+      sourceAgentKind: "codex",
+      messageId: null,
+      title: null,
+      nativeToolName: null,
+      parentToolCallId: null,
+      rawInput: undefined,
+      rawOutput: undefined,
+      contentParts: [],
+      timestamp: "2026-04-29T12:00:00Z",
+      startedSeq: 1,
+      lastUpdatedSeq: 1,
+      completedSeq: 1,
+      completedAt: "2026-04-29T12:00:00Z",
+      text: "I updated the chat and git diff surfaces to share the Codex-style contract.",
+      isStreaming: false,
+    },
+    "tool-end-diff-readme": toolCallItem({
+      itemId: "tool-end-diff-readme",
+      toolCallId: "tool-end-diff-readme",
+      turnId: "turn-end-diff",
+      title: "Edit README.md",
+      nativeToolName: "Edit",
+      toolKind: "edit",
+      semanticKind: "file_change",
+      contentParts: [{
+        type: "file_change",
+        operation: "edit",
+        path: "/Users/pablo/proliferate/README.md",
+        workspacePath: "README.md",
+        basename: "README.md",
+        additions: 2,
+        deletions: 1,
+        patch: PLAYGROUND_PATCH_README,
+      }],
+    }),
+    "tool-end-diff-git": toolCallItem({
+      itemId: "tool-end-diff-git",
+      toolCallId: "tool-end-diff-git",
+      turnId: "turn-end-diff",
+      title: "Edit GitPanel.tsx",
+      nativeToolName: "Edit",
+      toolKind: "edit",
+      semanticKind: "file_change",
+      contentParts: [{
+        type: "file_change",
+        operation: "edit",
+        path: "/Users/pablo/proliferate/desktop/src/components/workspace/git/GitPanel.tsx",
+        workspacePath: "desktop/src/components/workspace/git/GitPanel.tsx",
+        basename: "GitPanel.tsx",
+        additions: 2,
+        deletions: 1,
+        patch: PLAYGROUND_PATCH_GIT_PANEL,
+      }],
+    }),
+  },
+  openAssistantItemId: null,
+  openThoughtItemId: null,
+  pendingInteractions: [],
+  availableCommands: [],
+  liveConfig: null,
+  currentModeId: null,
+  usageState: null,
+  unknownEvents: [],
+  isStreaming: false,
+  lastSeq: 4,
+  pendingPrompts: [],
+  linkCompletionsByCompletionId: {},
+  latestLinkCompletionBySessionLinkId: {},
+};
 
 const PLAYGROUND_ARTIFACT_SUMMARY: CoworkArtifactSummary = {
   id: "artifact-playground",
@@ -508,7 +726,7 @@ export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] = [
   }),
 ];
 
-export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptListEntry[] = [{
+export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptQueueEntry[] = [{
   seq: 7,
   text: [
     'Subagent "runtime-server-sdk-survey" completed a turn.',
@@ -664,11 +882,11 @@ export const PLAN_OPTIONS: PermissionOptionAction[] = [
   { optionId: "plan", label: "No, keep planning", kind: "reject_once" },
 ];
 
-export const PENDING_PROMPTS_SINGLE: PendingPromptListEntry[] = [
+export const PENDING_PROMPTS_SINGLE: PendingPromptQueueEntry[] = [
   { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: false },
 ];
 
-export const PENDING_PROMPTS_MULTI: PendingPromptListEntry[] = [
+export const PENDING_PROMPTS_MULTI: PendingPromptQueueEntry[] = [
   { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: false },
   { seq: 2, text: "and rerun the server test suite after", contentParts: [], isBeingEdited: false },
   {
@@ -679,10 +897,66 @@ export const PENDING_PROMPTS_MULTI: PendingPromptListEntry[] = [
   },
 ];
 
-export const PENDING_PROMPTS_WITH_EDITING: PendingPromptListEntry[] = [
+export const PENDING_PROMPTS_WITH_EDITING: PendingPromptQueueEntry[] = [
   { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: true },
   { seq: 2, text: "and rerun the server test suite after", contentParts: [], isBeingEdited: false },
 ];
+
+export const PENDING_REVIEW_FEEDBACK_READY: PendingPromptQueueEntry[] = [{
+  seq: 8,
+  text: [
+    "Review feedback is ready.",
+    "",
+    "Review run: review-run-ready",
+    "Round: 1",
+    "Target: plan",
+    "",
+    "Address the feedback you agree with, ignore feedback you can justify ignoring, and finish the revised target normally.",
+    "",
+    "## Reviewer",
+    "Status: submitted",
+    "Pass: false",
+    "",
+    "Summary:",
+    "Hidden critique body that should not render in the composer queue.",
+  ].join("\n"),
+  contentParts: [],
+  isBeingEdited: false,
+  promptProvenance: {
+    type: "reviewFeedback",
+    reviewRunId: "review-run-ready",
+    reviewRoundId: "review-round-ready",
+    feedbackJobId: "feedback-job-ready",
+  },
+}];
+
+export const PENDING_REVIEW_COMPLETE: PendingPromptQueueEntry[] = [{
+  seq: 9,
+  text: [
+    "Review is complete.",
+    "",
+    "Review run: review-run-complete",
+    "Round: 2",
+    "Target: plan",
+    "",
+    "All reviewers approved. Use the final reviewer feedback below to present the final plan.",
+    "",
+    "## Reviewer",
+    "Status: submitted",
+    "Pass: true",
+    "",
+    "Summary:",
+    "Final hidden reviewer note that should not render in the composer queue.",
+  ].join("\n"),
+  contentParts: [],
+  isBeingEdited: false,
+  promptProvenance: {
+    type: "reviewFeedback",
+    reviewRunId: "review-run-complete",
+    reviewRoundId: "review-round-complete",
+    feedbackJobId: "feedback-job-complete",
+  },
+}];
 
 export const USER_INPUT_SINGLE_OPTION: UserInputQuestion[] = [{
   questionId: "provider",

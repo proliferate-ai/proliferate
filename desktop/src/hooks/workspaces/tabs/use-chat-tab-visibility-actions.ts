@@ -6,14 +6,17 @@ import {
   resolveMostRecentHiddenChatTab,
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
+import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
+import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 
 interface ChatTabVisibilityContext {
   visibleIds: string[];
@@ -31,12 +34,22 @@ interface HideOptions {
 
 export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
   const setActiveSessionId = useHarnessStore((state) => state.setActiveSessionId);
-  const activateChatTab = useWorkspaceFilesStore((state) => state.activateChatTab);
+  const setActiveShellTabKey = useWorkspaceUiStore(
+    (state) => state.setActiveShellTabKeyForWorkspace,
+  );
   const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
     (state) => state.setVisibleChatSessionIdsForWorkspace,
   );
+  const markSessionErrorViewed = useWorkspaceUiStore((state) => state.markSessionErrorViewed);
   const rememberHiddenChatSessionForWorkspace = useWorkspaceUiStore(
     (state) => state.rememberHiddenChatSessionForWorkspace,
   );
@@ -50,14 +63,14 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   const { restoreLastDismissedSession, selectSession } = useSessionActions();
 
   const selectSessionId = useCallback((sessionId: string, source: string) => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
-    activateChatTab();
+    setActiveShellTabKey(workspaceUiKey, chatWorkspaceShellTabKey(sessionId));
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_switch",
       source,
-      targetWorkspaceId: selectedWorkspaceId,
+      targetWorkspaceId: materializedWorkspaceId,
       targetSessionId: sessionId,
     });
     void selectSession(sessionId, { latencyFlowId }).catch((error) => {
@@ -65,18 +78,34 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       const message = error instanceof Error ? error.message : String(error);
       showToast(message);
     });
-  }, [activateChatTab, selectSession, selectedWorkspaceId, showToast]);
+  }, [materializedWorkspaceId, selectSession, setActiveShellTabKey, showToast, workspaceUiKey]);
+
+  const markErroredSessionsViewedBeforeHide = useCallback((idsToHide: string[]) => {
+    if (idsToHide.length === 0) {
+      return;
+    }
+
+    const { sessionSlots } = useHarnessStore.getState();
+    for (const sessionId of idsToHide) {
+      const errorAttentionKey = resolveSessionErrorAttentionKey(
+        sessionSlots[sessionId] ?? null,
+      );
+      if (errorAttentionKey) {
+        markSessionErrorViewed(sessionId, errorAttentionKey);
+      }
+    }
+  }, [markSessionErrorViewed]);
 
   const showChatSessionTab = useCallback((sessionId: string, options?: ShowOptions) => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return false;
     }
 
     const parentId = context.childToParent.get(sessionId);
     const idsToShow = parentId ? [parentId, sessionId] : [sessionId];
     const nextVisible = uniqueIds([...context.visibleIds, ...idsToShow]);
-    setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, nextVisible);
-    clearHiddenChatSessionsForWorkspace(selectedWorkspaceId, idsToShow);
+    setVisibleChatSessionIdsForWorkspace(workspaceUiKey, nextVisible);
+    clearHiddenChatSessionsForWorkspace(workspaceUiKey, idsToShow);
     if (options?.select) {
       selectSessionId(sessionId, "header_tab");
     }
@@ -86,12 +115,12 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     context.childToParent,
     context.visibleIds,
     selectSessionId,
-    selectedWorkspaceId,
     setVisibleChatSessionIdsForWorkspace,
+    workspaceUiKey,
   ]);
 
   const hideChatSessionTabs = useCallback((sessionIds: string[], options?: HideOptions) => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return false;
     }
 
@@ -107,8 +136,9 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     }
     const idsToHide = [...expandedHideSet];
     const nextVisible = context.visibleIds.filter((id) => !expandedHideSet.has(id));
-    setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, nextVisible);
-    idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(selectedWorkspaceId, id));
+    markErroredSessionsViewedBeforeHide(idsToHide);
+    setVisibleChatSessionIdsForWorkspace(workspaceUiKey, nextVisible);
+    idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(workspaceUiKey, id));
 
     if (options?.selectFallback) {
       const fallbackId = resolveFallbackAfterHidingChatTabs({
@@ -120,6 +150,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
         selectSessionId(fallbackId, "header_tab");
       } else if (activeSessionId && expandedHideSet.has(activeSessionId)) {
         setActiveSessionId(null);
+        setActiveShellTabKey(workspaceUiKey, null);
       }
     }
 
@@ -128,15 +159,17 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     activeSessionId,
     context.childToParent,
     context.visibleIds,
+    markErroredSessionsViewedBeforeHide,
     rememberHiddenChatSessionForWorkspace,
     selectSessionId,
-    selectedWorkspaceId,
     setActiveSessionId,
+    setActiveShellTabKey,
     setVisibleChatSessionIdsForWorkspace,
+    workspaceUiKey,
   ]);
 
   const closeOtherChatSessionTabs = useCallback((anchorSessionId: string) => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return false;
     }
 
@@ -151,8 +184,9 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       });
     const keepSet = new Set(keepIds);
     const idsToHide = context.visibleIds.filter((id) => !keepSet.has(id));
-    setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, keepIds);
-    idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(selectedWorkspaceId, id));
+    markErroredSessionsViewedBeforeHide(idsToHide);
+    setVisibleChatSessionIdsForWorkspace(workspaceUiKey, keepIds);
+    idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(workspaceUiKey, id));
     if (activeSessionId && !keepSet.has(activeSessionId)) {
       selectSessionId(anchorSessionId, "header_tab");
     }
@@ -161,14 +195,15 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     activeSessionId,
     context.childToParent,
     context.visibleIds,
+    markErroredSessionsViewedBeforeHide,
     rememberHiddenChatSessionForWorkspace,
     selectSessionId,
-    selectedWorkspaceId,
     setVisibleChatSessionIdsForWorkspace,
+    workspaceUiKey,
   ]);
 
   const closeChatSessionTabsToRight = useCallback((anchorSessionId: string) => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return false;
     }
 
@@ -180,8 +215,9 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     const idsToHide = context.visibleIds.slice(anchorIndex + 1);
     const hideSet = new Set(idsToHide);
     const nextVisible = context.visibleIds.filter((id) => !hideSet.has(id));
-    setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, nextVisible);
-    idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(selectedWorkspaceId, id));
+    markErroredSessionsViewedBeforeHide(idsToHide);
+    setVisibleChatSessionIdsForWorkspace(workspaceUiKey, nextVisible);
+    idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(workspaceUiKey, id));
     if (activeSessionId && hideSet.has(activeSessionId)) {
       selectSessionId(anchorSessionId, "header_tab");
     }
@@ -189,19 +225,20 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   }, [
     activeSessionId,
     context.visibleIds,
+    markErroredSessionsViewedBeforeHide,
     rememberHiddenChatSessionForWorkspace,
     selectSessionId,
-    selectedWorkspaceId,
     setVisibleChatSessionIdsForWorkspace,
+    workspaceUiKey,
   ]);
 
   const restoreHiddenOrDismissedChatTab = useCallback(() => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return false;
     }
 
     const hiddenId = resolveMostRecentHiddenChatTab({
-      recentlyHiddenIds: recentlyHiddenChatSessionIdsByWorkspace[selectedWorkspaceId] ?? [],
+      recentlyHiddenIds: recentlyHiddenChatSessionIdsByWorkspace[workspaceUiKey] ?? [],
       liveIds: context.liveIds,
       visibleIds: context.visibleIds,
     });
@@ -212,7 +249,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_restore",
       source: "workspace_tab",
-      targetWorkspaceId: selectedWorkspaceId,
+      targetWorkspaceId: materializedWorkspaceId,
     });
     void restoreLastDismissedSession({ latencyFlowId }).catch((error) => {
       failLatencyFlow(latencyFlowId, "session_restore_failed");
@@ -225,9 +262,10 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     context.visibleIds,
     recentlyHiddenChatSessionIdsByWorkspace,
     restoreLastDismissedSession,
-    selectedWorkspaceId,
+    materializedWorkspaceId,
     showChatSessionTab,
     showToast,
+    workspaceUiKey,
   ]);
 
   return {

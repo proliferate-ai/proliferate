@@ -107,7 +107,11 @@ export function AgentSetupModal({
               onClick={() => {
                 void state.handleInstall();
               }}
-              disabled={state.isBusy || reconcileState === "reconciling"}
+              disabled={
+                state.isBusy
+                || state.isAgentSeedHydrating
+                || reconcileState === "reconciling"
+              }
               className="w-full"
             >
               {state.installButtonLabel}
@@ -159,7 +163,7 @@ export function AgentSetupModal({
                   {field.isConfigured && !field.isEditing ? (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="h-2 w-2 rounded-full bg-success/70" />
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground/60" />
                         {AGENT_SETUP_COPY.savedInKeychain}
                       </div>
                       <Button
@@ -232,7 +236,7 @@ export function AgentSetupModal({
                     {state.loginMessage}
                   </p>
                 )}
-                <code className="block rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+                <code className="block rounded-md bg-muted px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
                   {state.loginCommand}
                 </code>
               </>
@@ -247,7 +251,7 @@ export function AgentSetupModal({
         )}
 
         {state.shouldRestartRuntime && (
-          <div className="rounded-md border border-link/40 bg-link/10 px-3 py-2 text-xs text-link-foreground">
+          <div className="rounded-md border border-foreground/15 bg-foreground/5 px-3 py-2 text-xs text-foreground">
             {AGENT_SETUP_COPY.savedChangesNotice}
           </div>
         )}

@@ -136,8 +136,8 @@ PROVISIONING_STATUSES: frozenset[str] = frozenset(
 )
 
 # Valid status transitions.  Each key lists the statuses that may follow it.
-# Every active or terminal state allows ``stopped`` so that workspace deletion
-# (destroy) is always permitted, and ``error`` is reachable from any state.
+# Every active or terminal state allows archive so that workspace stop/delete is
+# always permitted, and explicit start can revive an archived workspace.
 VALID_TRANSITIONS: dict[str, frozenset[str]] = {
     CloudWorkspaceStatus.pending.value: frozenset(
         {
@@ -160,7 +160,12 @@ VALID_TRANSITIONS: dict[str, frozenset[str]] = {
             CloudWorkspaceStatus.error.value,
         }
     ),
-    CloudWorkspaceStatus.archived.value: frozenset({CloudWorkspaceStatus.error.value}),
+    CloudWorkspaceStatus.archived.value: frozenset(
+        {
+            CloudWorkspaceStatus.materializing.value,
+            CloudWorkspaceStatus.error.value,
+        }
+    ),
     CloudWorkspaceStatus.error.value: frozenset(
         {CloudWorkspaceStatus.materializing.value, CloudWorkspaceStatus.archived.value}
     ),

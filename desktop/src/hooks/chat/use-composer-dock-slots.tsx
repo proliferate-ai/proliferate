@@ -5,27 +5,35 @@ import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerP
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
-import { CoworkComposerStrip } from "@/components/workspace/chat/input/CoworkComposerStrip";
-import { SubagentComposerStrip } from "@/components/workspace/chat/input/SubagentComposerStrip";
+import { CoworkComposerControl } from "@/components/workspace/chat/input/CoworkComposerStrip";
+import { ConnectedComposerReviewRunControl } from "@/components/workspace/chat/input/ComposerReviewRunPanel";
+import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
+import { SubagentComposerControl } from "@/components/workspace/chat/input/SubagentComposerStrip";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { useCoworkComposerStrip } from "@/hooks/cowork/use-cowork-composer-strip";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useActiveTodoTracker } from "@/hooks/chat/use-active-todo-tracker";
+import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
 
 export interface ComposerDockSlots {
-  upperSlot: ReactNode | null;
-  subagentSlot: ReactNode | null;
+  contextSlot: ReactNode | null;
   queueSlot: ReactNode | null;
+  interactionSlot: ReactNode | null;
+  delegationSlot: ReactNode | null;
 }
 
 export function useComposerDockSlots(): ComposerDockSlots {
   const { primaryPendingInteraction, pendingPrompts } = useActiveChatSessionState();
   const activeTodoTracker = useActiveTodoTracker();
+  const activeReviewRun = useActiveReviewRun();
   const subagentComposerStrip = useSubagentComposerStrip();
   const coworkComposerStrip = useCoworkComposerStrip();
+  const reviewComposerStrip = activeReviewRun.run || activeReviewRun.startingReview
+    ? <ConnectedComposerReviewRunControl />
+    : null;
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
 
@@ -37,20 +45,27 @@ export function useComposerDockSlots(): ComposerDockSlots {
         ? <ConnectedMcpElicitationCard />
         : null;
 
-  const upperSlot: ReactNode | null = interactionPanel
-    ? interactionPanel
-    : activeTodoTracker
-      ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
-      : workspaceStatusPanel
-        ? <WorkspaceArrivalAttachedPanel />
-        : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
-          ? <CloudRuntimeAttachedPanel />
-          : null;
-  const delegatedWorkSlot: ReactNode | null = subagentComposerStrip || coworkComposerStrip
+  const contextSlot: ReactNode | null = workspaceStatusPanel
+    ? <WorkspaceArrivalAttachedPanel />
+    : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
+      ? <CloudRuntimeAttachedPanel />
+      : activeTodoTracker
+        ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
+        : null;
+  const delegatedWorkSlot: ReactNode | null = reviewComposerStrip || subagentComposerStrip || coworkComposerStrip
     ? (
-      <div className="flex flex-col gap-px">
+      <DelegatedWorkComposerPanel>
+        {reviewComposerStrip}
+        {coworkComposerStrip && (
+          <CoworkComposerControl
+            rows={coworkComposerStrip.rows}
+            summary={coworkComposerStrip.summary}
+            onOpenWorkspace={coworkComposerStrip.openWorkspace}
+            onOpenSession={coworkComposerStrip.openSession}
+          />
+        )}
         {subagentComposerStrip && (
-          <SubagentComposerStrip
+          <SubagentComposerControl
             rows={subagentComposerStrip.rows}
             parent={subagentComposerStrip.parent}
             summary={subagentComposerStrip.summary}
@@ -58,21 +73,14 @@ export function useComposerDockSlots(): ComposerDockSlots {
             onOpenParent={subagentComposerStrip.openParent}
           />
         )}
-        {coworkComposerStrip && (
-          <CoworkComposerStrip
-            rows={coworkComposerStrip.rows}
-            summary={coworkComposerStrip.summary}
-            onOpenWorkspace={coworkComposerStrip.openWorkspace}
-            onOpenSession={coworkComposerStrip.openSession}
-          />
-        )}
-      </div>
+      </DelegatedWorkComposerPanel>
     )
     : null;
 
   return {
-    upperSlot,
-    subagentSlot: delegatedWorkSlot,
+    contextSlot,
     queueSlot: pendingPrompts.length > 0 ? <ConnectedPendingPromptList /> : null,
+    interactionSlot: interactionPanel,
+    delegationSlot: delegatedWorkSlot,
   };
 }

@@ -12,12 +12,14 @@ import {
 } from "@/config/plans";
 
 interface PlanPickerPopoverProps {
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   disabled?: boolean;
 }
 
 export function PlanPickerPopover({
-  draftWorkspaceId,
+  workspaceUiKey,
+  sdkWorkspaceId,
   disabled = false,
 }: PlanPickerPopoverProps) {
   return (
@@ -38,8 +40,9 @@ export function PlanPickerPopover({
       className="w-auto border-0 bg-transparent p-0 shadow-none"
     >
       {(close) => (
-        <PlanPickerPopoverContent
-          draftWorkspaceId={draftWorkspaceId}
+        <PlanPickerPopoverSurface
+          workspaceUiKey={workspaceUiKey}
+          sdkWorkspaceId={sdkWorkspaceId}
           onClose={close}
         />
       )}
@@ -47,17 +50,39 @@ export function PlanPickerPopover({
   );
 }
 
-function PlanPickerPopoverContent({
-  draftWorkspaceId,
+export function PlanPickerPopoverSurface({
+  workspaceUiKey,
+  sdkWorkspaceId,
   onClose,
 }: {
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   onClose: () => void;
 }) {
-  const picker = usePlanPicker({ draftWorkspaceId, open: true, onAttached: onClose });
-
   return (
     <ComposerPopoverSurface className="w-[min(24rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
+      <PlanPickerContentBody
+        workspaceUiKey={workspaceUiKey}
+        sdkWorkspaceId={sdkWorkspaceId}
+        onClose={onClose}
+      />
+    </ComposerPopoverSurface>
+  );
+}
+
+export function PlanPickerContentBody({
+  workspaceUiKey,
+  sdkWorkspaceId,
+  onClose,
+}: {
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
+  onClose: () => void;
+}) {
+  const picker = usePlanPicker({ workspaceUiKey, sdkWorkspaceId, open: true, onAttached: onClose });
+
+  return (
+    <div data-telemetry-mask>
       <div className="border-b border-border px-2 pb-2 pt-2">
         <Input
           value={picker.search}
@@ -110,6 +135,6 @@ function PlanPickerPopoverContent({
           </Button>
         ))}
       </div>
-    </ComposerPopoverSurface>
+    </div>
   );
 }

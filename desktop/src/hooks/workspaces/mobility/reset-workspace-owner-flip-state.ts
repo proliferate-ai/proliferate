@@ -11,7 +11,7 @@ export async function resetWorkspaceOwnerFlipState(args: {
   nextCloudWorkspaceId?: string | null;
   clearWorkspaceRuntimeState: (
     workspaceId: string,
-    options?: { clearSelection?: boolean },
+    options?: { clearSelection?: boolean; clearDraftUiKey?: string | null },
   ) => void;
 }) {
   if (args.previousCloudWorkspaceId) {

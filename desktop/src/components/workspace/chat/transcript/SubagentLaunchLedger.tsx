@@ -44,6 +44,7 @@ export function SubagentLaunchLedger({
             type="button"
             variant="ghost"
             size="sm"
+            data-chat-transcript-ignore
             className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
             aria-expanded={promptExpanded}
             onClick={() => setPromptExpanded((next) => !next)}
@@ -113,6 +114,7 @@ function SubagentSessionActionRow({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={() => onOpenChild(childSessionId)}
     >

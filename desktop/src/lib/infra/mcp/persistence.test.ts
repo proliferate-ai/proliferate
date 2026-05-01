@@ -144,6 +144,29 @@ function stdioCatalogEntry() {
   };
 }
 
+function noAuthHttpCatalogEntry() {
+  return {
+    id: "local_http",
+    name: "Local HTTP",
+    oneLiner: "Local HTTP",
+    description: "Local HTTP",
+    docsUrl: "https://example.com",
+    availability: "local_only",
+    cloudSecretSync: false,
+    transport: "http",
+    authKind: "none",
+    url: "https://example.com/mcp",
+    displayUrl: "https://example.com/mcp",
+    serverNameBase: "local_http",
+    iconId: "globe",
+    secretFields: [],
+    requiredFields: [],
+    settingsSchema: [],
+    capabilities: ["Run without credentials"],
+    version: 1,
+  };
+}
+
 function cloudConnection() {
   return {
     connectionId: "conn_1",
@@ -171,7 +194,12 @@ describe("cloud MCP connector persistence", () => {
     mocks.deleteCloudMcpConnectionV2Mock.mockReset();
     mocks.getCloudMcpCatalogMock.mockResolvedValue({
       catalogVersion: "test",
-      entries: [secretCatalogEntry(), posthogCatalogEntry(), stdioCatalogEntry()],
+      entries: [
+        secretCatalogEntry(),
+        posthogCatalogEntry(),
+        stdioCatalogEntry(),
+        noAuthHttpCatalogEntry(),
+      ],
     });
     mocks.listCloudMcpConnectionsMock.mockResolvedValue({
       connections: [cloudConnection()],
@@ -186,7 +214,28 @@ describe("cloud MCP connector persistence", () => {
     expect(mocks.listCloudMcpConnectionsMock).toHaveBeenCalledTimes(1);
     expect(paneData.installed).toHaveLength(1);
     expect(paneData.installed[0]?.catalogEntry.id).toBe("context7");
-    expect(paneData.available.map((entry) => entry.id)).toEqual(["posthog", "filesystem"]);
+    expect(paneData.available.map((entry) => entry.id)).toEqual([
+      "posthog",
+      "filesystem",
+      "local_http",
+    ]);
+  });
+
+  it("drops installed rows whose catalog entry was removed", async () => {
+    mocks.listCloudMcpConnectionsMock.mockResolvedValue({
+      connections: [
+        cloudConnection(),
+        {
+          ...cloudConnection(),
+          connectionId: "conn_removed",
+          catalogEntryId: "removed_connector",
+        },
+      ],
+    });
+
+    const paneData = await loadConnectorPaneData();
+
+    expect(paneData.installed.map((record) => record.metadata.connectionId)).toEqual(["conn_1"]);
   });
 
   it("installs API-key connectors by creating cloud connection auth", async () => {
@@ -216,6 +265,17 @@ describe("cloud MCP connector persistence", () => {
     expect(
       mocks.createCloudMcpConnectionMock.mock.invocationCallOrder[0],
     ).toBeLessThan(mocks.putCloudMcpSecretAuthMock.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it("installs no-auth HTTP connectors without writing secret auth", async () => {
+    await installConnector("local_http", {});
+
+    expect(mocks.createCloudMcpConnectionMock).toHaveBeenCalledWith({
+      catalogEntryId: "local_http",
+      settings: undefined,
+      enabled: true,
+    });
+    expect(mocks.putCloudMcpSecretAuthMock).not.toHaveBeenCalled();
   });
 
   it("updates connector secret in cloud", async () => {

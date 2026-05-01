@@ -21,5 +21,6 @@ pub async fn get_health(
         capabilities: RuntimeCapabilities {
             replay: crate::sessions::replay::replay_enabled(),
         },
+        agent_seed: state.agent_seed_store.health(),
     })
 }

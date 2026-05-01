@@ -41,6 +41,13 @@ export function anyHarnessRuntimeWorkspacesKey(runtimeUrl: string | null | undef
   return [...anyHarnessRuntimeKey(runtimeUrl), "workspaces"] as const;
 }
 
+export function anyHarnessWorkspaceRetirePreflightKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeWorkspacesKey(runtimeUrl), workspaceId ?? null, "retire", "preflight"] as const;
+}
+
 export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
 }
@@ -159,8 +166,31 @@ export function anyHarnessSessionEventsKey(
   workspaceId: string | null | undefined,
   sessionId: string | null | undefined,
   afterSeq?: number,
+  limit?: number,
+  beforeSeq?: number,
+  turnLimit?: number,
 ) {
-  return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "events", afterSeq ?? null] as const;
+  const scopeKey = [
+    ...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId),
+    "events",
+  ] as const;
+  if (
+    afterSeq == null
+    && beforeSeq == null
+    && limit == null
+    && turnLimit == null
+  ) {
+    return scopeKey;
+  }
+  return [
+    ...scopeKey,
+    {
+      afterSeq: afterSeq ?? null,
+      beforeSeq: beforeSeq ?? null,
+      limit: limit ?? null,
+      turnLimit: turnLimit ?? null,
+    },
+  ] as const;
 }
 
 export function anyHarnessSessionSubagentsKey(
@@ -169,6 +199,29 @@ export function anyHarnessSessionSubagentsKey(
   sessionId: string | null | undefined,
 ) {
   return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "subagents"] as const;
+}
+
+export function anyHarnessSessionReviewsKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  sessionId: string | null | undefined,
+) {
+  return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "reviews"] as const;
+}
+
+export function anyHarnessReviewAssignmentCritiqueKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  reviewRunId: string | null | undefined,
+  assignmentId: string | null | undefined,
+) {
+  return [
+    ...anyHarnessRuntimeKey(runtimeUrl),
+    "review-critique",
+    workspaceId ?? null,
+    reviewRunId ?? null,
+    assignmentId ?? null,
+  ] as const;
 }
 
 export function anyHarnessPlansKey(
@@ -206,8 +259,17 @@ export function anyHarnessGitDiffKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
   path: string | null | undefined,
+  scope: string | null | undefined = "working_tree",
+  baseRef: string | null | undefined = null,
+  oldPath: string | null | undefined = null,
 ) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "git-diff", workspaceId ?? null, path ?? null] as const;
+  return [
+    ...anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+    normalizeGitDiffScope(scope),
+    normalizeNullableGitArg(baseRef),
+    normalizeNullableGitArg(oldPath),
+    path ?? null,
+  ] as const;
 }
 
 export function anyHarnessGitDiffScopeKey(
@@ -215,6 +277,27 @@ export function anyHarnessGitDiffScopeKey(
   workspaceId: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "git-diff", workspaceId ?? null] as const;
+}
+
+export function anyHarnessGitBranchDiffFilesKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  baseRef: string | null | undefined = null,
+) {
+  return [
+    ...anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+    "branch-files",
+    normalizeNullableGitArg(baseRef),
+  ] as const;
+}
+
+function normalizeGitDiffScope(scope: string | null | undefined) {
+  return scope?.trim() || "working_tree";
+}
+
+function normalizeNullableGitArg(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 export function anyHarnessGitBranchesKey(

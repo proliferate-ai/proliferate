@@ -68,22 +68,22 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm]}
         components={{
           h1: (props) =>
-            mdHtmlElement("h1", "mb-2 mt-3 text-chat leading-relaxed font-bold text-foreground", props),
+            mdHtmlElement("h1", "mb-2 mt-3 text-chat leading-[var(--text-chat--line-height)] font-bold text-foreground", props),
           h2: (props) =>
-            mdHtmlElement("h2", "mb-2 mt-3 text-chat leading-relaxed font-bold text-foreground", props),
+            mdHtmlElement("h2", "mb-2 mt-3 text-chat leading-[var(--text-chat--line-height)] font-bold text-foreground", props),
           h3: (props) =>
-            mdHtmlElement("h3", "mb-1 mt-2 text-chat leading-relaxed font-semibold text-foreground", props),
+            mdHtmlElement("h3", "mb-1 mt-2 text-chat leading-[var(--text-chat--line-height)] font-semibold text-foreground", props),
           p: (props) =>
-            mdHtmlElement("p", "my-2 text-chat leading-relaxed text-foreground", props),
+            mdHtmlElement("p", "my-2 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
           ul: (props) =>
-            mdHtmlElement("ul", "mt-0 mb-4 list-disc pl-4 text-chat leading-relaxed text-foreground", props),
+            mdHtmlElement("ul", "mt-0 mb-4 list-disc pl-4 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
           ol: (props) =>
-            mdHtmlElement("ol", "mt-1.5 mb-3 list-decimal pl-8 text-chat leading-relaxed text-foreground", props),
-          li: (props) => mdHtmlElement("li", "mb-1.5 text-chat leading-relaxed", props),
+            mdHtmlElement("ol", "mt-1.5 mb-3 list-decimal pl-8 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
+          li: (props) => mdHtmlElement("li", "mb-1.5 text-chat leading-[var(--text-chat--line-height)]", props),
           blockquote: (props) =>
             mdHtmlElement(
               "blockquote",
-              "my-2 border-l-2 border-border pl-3 text-chat leading-relaxed text-muted-foreground",
+              "my-3 border-l-2 border-border pl-4 text-chat leading-[var(--text-chat--line-height)] italic text-foreground",
               props,
             ),
           a: (props) => {
@@ -96,7 +96,7 @@ export function MarkdownRenderer({
               ...rest
             } = props;
             const merged =
-              `underline text-foreground hover:text-muted-foreground transition-colors${className ? ` ${className}` : ""}`;
+              `text-link-foreground underline decoration-current decoration-[0.5px] decoration-opacity-50 transition-colors hover:decoration-opacity-100${className ? ` ${className}` : ""}`;
             if (dangerouslySetInnerHTML) {
               return (
                 <a
@@ -123,13 +123,23 @@ export function MarkdownRenderer({
           },
           hr: () => <hr className="my-3 border-border" />,
           table: (props) => (
-            <div className="overflow-x-auto my-2">
-              {mdHtmlElement("table", "table-auto w-full", props)}
+            <div
+              className="my-4 overflow-hidden rounded-lg border border-border"
+              data-wide-markdown-block="true"
+              data-wide-markdown-block-kind="table"
+            >
+              <div className="overflow-x-auto">
+                {mdHtmlElement(
+                  "table",
+                  "min-w-full w-max border-collapse text-chat leading-[var(--text-chat--line-height)]",
+                  props,
+                )}
+              </div>
             </div>
           ),
           th: (props) =>
-            mdHtmlElement("th", "border border-border px-3 py-1 text-[11px] leading-relaxed font-medium text-left", props),
-          td: (props) => mdHtmlElement("td", "border border-border px-3 py-1 text-[11px] leading-relaxed", props),
+            mdHtmlElement("th", "border-b border-border bg-foreground/5 p-1 text-left text-chat leading-[var(--text-chat--line-height)] font-semibold text-foreground", props),
+          td: (props) => mdHtmlElement("td", "border-b border-border p-1 text-chat leading-[var(--text-chat--line-height)]", props),
           code: ({
             className: codeClassName,
             children,
@@ -141,7 +151,7 @@ export function MarkdownRenderer({
               return (
                 <code
                   {...rest}
-                  className="rounded-sm bg-foreground/[0.06] px-1 py-0 align-baseline font-mono text-[inherit] leading-[inherit] font-medium text-foreground"
+                  className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1.5 py-0.5 align-baseline font-mono text-[length:var(--readable-code-font-size)] leading-none text-foreground"
                   dangerouslySetInnerHTML={dangerouslySetInnerHTML}
                 />
               );
@@ -174,7 +184,7 @@ export function MarkdownRenderer({
             return (
               <code
                 {...rest}
-                className="rounded-sm bg-foreground/[0.06] px-1 py-0 align-baseline font-mono text-[inherit] leading-[inherit] font-medium text-foreground"
+                className="rounded-sm bg-[var(--color-code-block-background,var(--color-muted))] px-1.5 py-0.5 align-baseline font-mono text-[length:var(--readable-code-font-size)] leading-none text-foreground"
               >
                 {children}
               </code>

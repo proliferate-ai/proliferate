@@ -22,12 +22,27 @@ export function getWorkspaceCollectionsFromCache(
 
   return matchingQueries
     .map((query) => ({
-      data: query.state.data as WorkspaceCollections | undefined,
+      data: query.state.data,
       dataUpdatedAt: query.state.dataUpdatedAt,
     }))
     .filter((entry): entry is { data: WorkspaceCollections; dataUpdatedAt: number } => (
-      entry.data !== undefined
+      isWorkspaceCollections(entry.data)
     ))
     .sort((left, right) => right.dataUpdatedAt - left.dataUpdatedAt)[0]
     ?.data;
+}
+
+function isWorkspaceCollections(value: unknown): value is WorkspaceCollections {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<Record<keyof WorkspaceCollections, unknown>>;
+  return Array.isArray(candidate.localWorkspaces)
+    && Array.isArray(candidate.retiredLocalWorkspaces)
+    && Array.isArray(candidate.repoRoots)
+    && Array.isArray(candidate.cloudWorkspaces)
+    && Array.isArray(candidate.workspaces)
+    && Array.isArray(candidate.allWorkspaces)
+    && Array.isArray(candidate.cleanupAttentionWorkspaces);
 }

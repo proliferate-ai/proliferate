@@ -1,13 +1,11 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   captureTelemetryException,
-  trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -19,38 +17,14 @@ import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
 } from "@/lib/domain/chat/file-mentions";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
-
-function createPromptId(): string {
-  return `prompt:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function isSetupActive(
-  queryClient: ReturnType<typeof useQueryClient>,
-  runtimeUrl: string,
-  workspaceId: string | null,
-): boolean {
-  if (!workspaceId) return false;
-  const arrival = useHarnessStore.getState().workspaceArrivalEvent;
-  if (!arrival || arrival.workspaceId !== workspaceId) return false;
-
-  const cachedStatus = queryClient.getQueryData<{ status?: string }>(
-    anyHarnessWorkspaceSetupStatusKey(runtimeUrl, workspaceId),
-  );
-  const status = cachedStatus?.status ?? arrival.setupScript?.status ?? null;
-  // For async-setup sources the creation endpoint returns setupScript: null
-  // and setup runs in the background. Treat a cache miss (no poll result yet)
-  // as potentially active so the panel isn't prematurely dismissed before the
-  // first setup-status poll returns.
-  const isAsyncSetupSource =
-    arrival.source === "worktree-created" || arrival.source === "local-created";
-  if (isAsyncSetupSource && status === null) return true;
-  return status === "running" || status === "queued";
-}
+import { completeChatPromptSubmitSideEffects } from "./chat-submit-effects";
 
 export function useChatPromptActions() {
   const queryClient = useQueryClient();
@@ -78,7 +52,7 @@ export function useChatPromptActions() {
       return;
     }
 
-    const draftKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+    const draftKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;
@@ -101,11 +75,17 @@ export function useChatPromptActions() {
       })
       : null;
 
-    // Optimistically clear the draft immediately so the input empties at the
-    // same instant the pending user bubble appears in the transcript.
-    // If the send fails, the error toast below covers the failure path.
-    if (draftKey) {
+    const clearDraftIfNeeded = () => {
+      if (!draftKey) {
+        return;
+      }
       clearDraft(draftKey);
+    };
+
+    // Existing-session sends can still clear immediately because there is no
+    // launch validation gate. New-session sends clear only after validation.
+    if (targetSessionId) {
+      clearDraftIfNeeded();
     }
 
     try {
@@ -123,23 +103,25 @@ export function useChatPromptActions() {
           launchSelection.modelId,
           blocks,
           input?.optimisticContentParts,
+          clearDraftIfNeeded,
         );
       } else {
         showToast("Choose a ready model before sending a message.");
         return;
       }
-      // Keep the arrival panel visible while a setup script is still
-      // running/queued — the user needs to see setup progress even after
-      // sending their first message. Only dismiss when setup is idle.
-      if (!isSetupActive(queryClient, runtimeUrl, selectedWorkspaceId)) {
-        setWorkspaceArrivalEvent(null);
-      }
-      trackProductEvent("chat_prompt_submitted", {
-        workspace_kind: parseCloudWorkspaceSyntheticId(selectedWorkspaceId) ? "cloud" : "local",
-        agent_kind: launchSelection?.kind ?? "unknown",
-        reuse_session: targetSessionId !== null,
+      completeChatPromptSubmitSideEffects({
+        queryClient,
+        runtimeUrl,
+        workspaceId: selectedWorkspaceId,
+        agentKind: launchSelection?.kind ?? "unknown",
+        reuseSession: targetSessionId !== null,
+        setWorkspaceArrivalEvent,
       });
     } catch (error) {
+      if (isSessionModelAvailabilityInterruption(error)) {
+        return;
+      }
+
       if (latencyFlowId) {
         failLatencyFlow(latencyFlowId, "prompt_submit_failed");
       }

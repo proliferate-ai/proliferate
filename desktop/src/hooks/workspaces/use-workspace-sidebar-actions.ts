@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import type { WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
@@ -14,15 +16,21 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceRetireActions } from "./use-workspace-retire-actions";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceSidebarActions() {
   const location = useLocation();
   const navigate = useNavigate();
   const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
+  const deselectWorkspacePreservingSlots = useHarnessStore(
+    (state) => state.deselectWorkspacePreservingSlots,
+  );
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const mobility = useWorkspaceMobilityState();
-  const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
+  const { selectWorkspace } = useWorkspaceSelection();
   const {
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
@@ -34,6 +42,8 @@ export function useWorkspaceSidebarActions() {
   } = useCreateCloudWorkspace();
   const { addRepoFromPicker } = useAddRepo();
   const showToast = useToastStore((state) => state.show);
+  const { markDone, retryCleanup } = useWorkspaceRetireActions();
+  const dismissFinishSuggestion = useWorkspaceUiStore((state) => state.dismissFinishSuggestion);
 
   const handleAddRepo = useCallback(() => {
     void addRepoFromPicker();
@@ -52,14 +62,15 @@ export function useWorkspaceSidebarActions() {
     }
 
     if (selectedWorkspaceId) {
-      clearWorkspaceRuntimeState(selectedWorkspaceId, { clearSelection: true });
+      deselectWorkspacePreservingSlots();
+      useWorkspaceFilesStore.getState().reset();
     } else if (pendingWorkspaceEntry) {
       setPendingWorkspaceEntry(null);
       useWorkspaceFilesStore.getState().reset();
     }
     navigate(path);
   }, [
-    clearWorkspaceRuntimeState,
+    deselectWorkspacePreservingSlots,
     mobility.selectionLocked,
     navigate,
     pendingWorkspaceEntry,
@@ -69,15 +80,15 @@ export function useWorkspaceSidebarActions() {
   ]);
 
   const handleGoHome = useCallback(() => {
-    goToTopLevelRoute("/");
+    goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
 
-  const handleGoPowers = useCallback(() => {
-    goToTopLevelRoute("/powers");
+  const handleGoPlugins = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.plugins);
   }, [goToTopLevelRoute]);
 
   const handleGoAutomations = useCallback(() => {
-    goToTopLevelRoute("/automations");
+    goToTopLevelRoute(APP_ROUTES.automations);
   }, [goToTopLevelRoute]);
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
@@ -87,6 +98,9 @@ export function useWorkspaceSidebarActions() {
     }
 
     navigateToWorkspaceShell();
+    if (workspaceId === mobility.selectedLogicalWorkspaceId) {
+      markWorkspaceViewed(workspaceId);
+    }
     const latencyFlowId = startLatencyFlow({
       flowKind: "workspace_switch",
       source: "sidebar",
@@ -129,17 +143,63 @@ export function useWorkspaceSidebarActions() {
           const message = error instanceof Error ? error.message : String(error);
           showToast(`Failed to open source session: ${message}`);
         });
+        return;
       }
+      case "mark_workspace_done":
+        void markDone(action.workspaceId, {
+          logicalWorkspaceId: action.logicalWorkspaceId ?? null,
+        }).then((result) => {
+          if (result.outcome === "blocked") {
+            showToast(workspaceRetireBlockedMessage(result));
+          } else if (result.outcome === "cleanup_failed") {
+            showToast("Workspace marked done, but cleanup needs attention.");
+          }
+        }).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          showToast(`Failed to mark done: ${message}`);
+        });
+        return;
+      case "keep_workspace_active":
+        dismissFinishSuggestion(action.workspaceId, action.readinessFingerprint);
+        return;
     }
   }, [
+    dismissFinishSuggestion,
     goToTopLevelRoute,
     handleSelectWorkspace,
+    markDone,
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
     navigateToWorkspaceShell,
     selectWorkspace,
     showToast,
   ]);
+
+  const handleMarkWorkspaceDone = useCallback((workspaceId: string, logicalWorkspaceId: string) => {
+    void markDone(workspaceId, { logicalWorkspaceId }).then((result) => {
+      if (result.outcome === "blocked") {
+        showToast(workspaceRetireBlockedMessage(result));
+      } else if (result.outcome === "cleanup_failed") {
+        showToast("Workspace marked done, but cleanup needs attention.");
+      }
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Failed to mark done: ${message}`);
+    });
+  }, [markDone, showToast]);
+
+  const handleRetryWorkspaceCleanup = useCallback((workspaceId: string) => {
+    void retryCleanup(workspaceId).then((result) => {
+      if (result.outcome === "blocked") {
+        showToast(workspaceRetireBlockedMessage(result));
+      } else if (result.outcome === "cleanup_failed") {
+        showToast("Cleanup still needs attention.");
+      }
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Failed to retry cleanup: ${message}`);
+    });
+  }, [retryCleanup, showToast]);
 
   const handleCreateLocalWorkspace = useCallback((
     sourceRoot: string | null,
@@ -223,12 +283,26 @@ export function useWorkspaceSidebarActions() {
   return {
     handleAddRepo,
     handleGoHome,
-    handleGoPowers,
+    handleGoPlugins,
     handleGoAutomations,
     handleSidebarIndicatorAction,
+    handleMarkWorkspaceDone,
+    handleRetryWorkspaceCleanup,
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,
     handleCreateCloudWorkspace,
   };
+}
+
+function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse): string {
+  const blocker = result.preflight.blockers[0];
+  if (blocker) {
+    const extraCount = result.preflight.blockers.length - 1;
+    return extraCount > 0
+      ? `${blocker.message} (+${extraCount} more)`
+      : blocker.message;
+  }
+
+  return result.cleanupMessage?.trim() || "Workspace is not ready to mark done.";
 }

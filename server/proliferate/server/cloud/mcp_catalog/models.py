@@ -30,13 +30,37 @@ class ConnectorHttpAuthStyleModel(BaseModel):
     parameter_name: str | None = Field(default=None, serialization_alias="parameterName")
 
 
+class ConnectorStaticTemplateSourceModel(BaseModel):
+    kind: Literal["static"]
+    value: str
+
+
+class ConnectorWorkspacePathTemplateSourceModel(BaseModel):
+    kind: Literal["workspace_path"]
+
+
+class ConnectorFieldTemplateSourceModel(BaseModel):
+    kind: Literal["secret", "setting"]
+    field_id: str = Field(serialization_alias="fieldId")
+
+
+ConnectorArgTemplateSourceModel = (
+    ConnectorStaticTemplateSourceModel
+    | ConnectorWorkspacePathTemplateSourceModel
+    | ConnectorFieldTemplateSourceModel
+)
+ConnectorEnvTemplateSourceModel = (
+    ConnectorStaticTemplateSourceModel | ConnectorFieldTemplateSourceModel
+)
+
+
 class ConnectorArgTemplateModel(BaseModel):
-    source: dict[str, str]
+    source: ConnectorArgTemplateSourceModel
 
 
 class ConnectorEnvTemplateModel(BaseModel):
     name: str
-    source: dict[str, str]
+    source: ConnectorEnvTemplateSourceModel
 
 
 class ConnectorSettingsOptionModel(BaseModel):
@@ -67,6 +91,10 @@ class ConnectorCatalogEntryModel(BaseModel):
     cloud_secret_sync: bool = Field(serialization_alias="cloudSecretSync")
     transport: Literal["http", "stdio"]
     auth_kind: Literal["secret", "oauth", "none"] = Field(serialization_alias="authKind")
+    oauth_client_mode: Literal["dcr", "static"] | None = Field(
+        default=None,
+        serialization_alias="oauthClientMode",
+    )
     auth_style: ConnectorHttpAuthStyleModel | None = Field(
         default=None,
         serialization_alias="authStyle",
@@ -125,19 +153,39 @@ def _auth_style_model(entry: CatalogEntry) -> ConnectorHttpAuthStyleModel | None
 
 def _arg_model(template: ArgTemplate) -> ConnectorArgTemplateModel:
     if template.kind == "static":
-        return ConnectorArgTemplateModel(source={"kind": "static", "value": template.value or ""})
-    return ConnectorArgTemplateModel(source={"kind": "workspace_path"})
+        return ConnectorArgTemplateModel(
+            source=ConnectorStaticTemplateSourceModel(
+                kind="static",
+                value=template.value or "",
+            )
+        )
+    if template.kind == "workspace_path":
+        return ConnectorArgTemplateModel(
+            source=ConnectorWorkspacePathTemplateSourceModel(kind="workspace_path")
+        )
+    return ConnectorArgTemplateModel(
+        source=ConnectorFieldTemplateSourceModel(
+            kind=template.kind,
+            field_id=template.field_id or "",
+        )
+    )
 
 
 def _env_model(template: EnvTemplate) -> ConnectorEnvTemplateModel:
     if template.kind == "static":
         return ConnectorEnvTemplateModel(
             name=template.name,
-            source={"kind": "static", "value": template.value or ""},
+            source=ConnectorStaticTemplateSourceModel(
+                kind="static",
+                value=template.value or "",
+            ),
         )
     return ConnectorEnvTemplateModel(
         name=template.name,
-        source={"kind": "field", "fieldId": template.field_id or ""},
+        source=ConnectorFieldTemplateSourceModel(
+            kind=template.kind,
+            field_id=template.field_id or "",
+        ),
     )
 
 
@@ -175,6 +223,7 @@ def catalog_entry_payload(entry: CatalogEntry) -> ConnectorCatalogEntryModel:
         cloud_secret_sync=entry.cloud_secret_sync,
         transport=entry.transport,
         auth_kind=entry.auth_kind,
+        oauth_client_mode=entry.oauth_client_mode,
         auth_style=_auth_style_model(entry),
         auth_field_id=entry.secret_fields[0].id if len(entry.secret_fields) == 1 else None,
         url=entry.display_url,

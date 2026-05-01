@@ -18,6 +18,7 @@ import {
   CLAUDE_PLAN_LONG,
   CLAUDE_PLAN_SHORT,
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
+  PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground";
@@ -27,11 +28,16 @@ import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 interface PlaygroundTranscriptProps {
+  stickyBottomInsetPx: number;
   selection: PlaygroundScenarioSelection;
   replay: PlaygroundReplayState;
 }
 
-export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscriptProps) {
+export function PlaygroundTranscript({
+  stickyBottomInsetPx,
+  selection,
+  replay,
+}: PlaygroundTranscriptProps) {
   const replaySlot = useHarnessStore((state) =>
     replay.sessionId ? state.sessionSlots[replay.sessionId] ?? null : null
   );
@@ -67,6 +73,7 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           optimisticPrompt={replaySlot.optimisticPrompt}
           transcript={replaySlot.transcript}
           sessionViewState={resolveSessionViewState(replaySlot)}
+          bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
     );
@@ -355,6 +362,21 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           optimisticPrompt={null}
           transcript={PLAYGROUND_SUBAGENT_TRANSCRIPT}
           sessionViewState="idle"
+          bottomInsetPx={stickyBottomInsetPx}
+        />
+      </div>
+    );
+  }
+  if (scenario === "end-turn-multi-file-diff") {
+    return (
+      <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
+        <MessageList
+          activeSessionId="playground-end-turn-diff"
+          selectedWorkspaceId={selectedWorkspaceId ?? "playground-workspace"}
+          optimisticPrompt={null}
+          transcript={PLAYGROUND_END_TURN_DIFF_TRANSCRIPT}
+          sessionViewState="idle"
+          bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
     );
@@ -368,6 +390,7 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           optimisticPrompt={null}
           transcript={PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT}
           sessionViewState="idle"
+          bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
     );
@@ -390,7 +413,7 @@ function TranscriptPreviewShell({ children }: { children: ReactNode }) {
 
 function TransientStatusRow({ text }: { text: string }) {
   return (
-    <div className="flex min-h-[2.625rem] items-start gap-2 py-1 text-xs text-muted-foreground">
+    <div className="flex min-h-[calc(var(--text-chat--line-height)+1.5rem)] items-start gap-2 py-1 text-xs text-muted-foreground">
       <Sparkles className="mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{text}</span>
     </div>
@@ -421,7 +444,7 @@ function HookPreview({
           className="w-full"
           viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
         >
-          <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-xs text-foreground">
+          <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
             {body}
           </pre>
         </AutoHideScrollArea>

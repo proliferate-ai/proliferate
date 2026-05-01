@@ -170,10 +170,10 @@ export const SHORTCUTS = {
     match: { kind: "fixed", key: "j", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
-  openFilePalette: {
-    id: "workspace.open-file-palette",
+  openCommandPalette: {
+    id: "workspace.open-command-palette",
     label: "⌘K",
-    description: "Open file palette",
+    description: "Open command palette",
     owner: "js",
     match: { kind: "fixed", key: "k", meta: true, shift: false, alt: false },
     allowInInputs: true,
@@ -257,7 +257,7 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "focusChat",
       "openTerminal",
-      "openFilePalette",
+      "openCommandPalette",
       "renameSession",
     ],
   },

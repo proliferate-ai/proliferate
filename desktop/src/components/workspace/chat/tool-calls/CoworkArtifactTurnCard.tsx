@@ -44,7 +44,7 @@ export function CoworkArtifactTurnCard({
               {displayTitle}
             </div>
             {displayPath && (
-              <div className="truncate pt-0.5 font-mono text-xs text-muted-foreground">
+              <div className="truncate pt-0.5 font-mono text-[0.5rem] text-muted-foreground">
                 {displayPath}
               </div>
             )}
@@ -71,6 +71,7 @@ export function CoworkArtifactTurnCard({
             <Button
               variant="ghost"
               size="sm"
+              data-chat-transcript-ignore
               onClick={() => onOpenArtifact?.(presentation.summary!.id)}
               className="shrink-0"
             >

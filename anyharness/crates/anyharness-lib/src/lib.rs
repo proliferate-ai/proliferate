@@ -12,6 +12,7 @@ pub mod persistence;
 pub mod plans;
 pub mod processes;
 pub mod repo_roots;
+pub mod reviews;
 pub mod sessions;
 pub mod terminals;
 pub mod workspaces;

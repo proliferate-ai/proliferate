@@ -1,14 +1,91 @@
 import { useMemo } from "react";
+import type { SetupHint } from "@anyharness/sdk";
 import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
-import { SetupCommandEditor } from "@/components/workspace/repo-setup/SetupCommandEditor";
+import {
+  EnvironmentAdvancedDisclosure,
+  EnvironmentField,
+  EnvironmentSection,
+} from "@/components/settings/EnvironmentSettingsLayout";
+import { EnvironmentSearchSelect } from "@/components/settings/EnvironmentSearchSelect";
+import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Monitor } from "@/components/ui/icons";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
+import { Textarea } from "@/components/ui/Textarea";
 import { useRepositorySettings } from "@/hooks/settings/use-repository-settings";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
 interface LocalRepoSectionProps {
   repository: SettingsRepositoryEntry;
+}
+
+function isHintEnabled(script: string, command: string): boolean {
+  return script.split("\n").some(
+    (line) => line.trim() === command.trim(),
+  );
+}
+
+function toggleHint(script: string, command: string, enable: boolean): string {
+  const trimmedCommand = command.trim();
+  if (enable) {
+    const existing = script.trim();
+    return existing ? `${existing}\n${trimmedCommand}` : trimmedCommand;
+  }
+  return script
+    .split("\n")
+    .filter((line) => line.trim() !== trimmedCommand)
+    .join("\n");
+}
+
+function SetupHintRows({
+  title,
+  hints,
+  currentScript,
+  onChange,
+}: {
+  title: string;
+  hints: SetupHint[];
+  currentScript: string;
+  onChange: (script: string) => void;
+}) {
+  if (hints.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      <div className="flex flex-col gap-1">
+        {hints.map((hint) => {
+          const checked = isHintEnabled(currentScript, hint.suggestedCommand);
+          return (
+            <Label
+              key={hint.id}
+              className="mb-0 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-foreground/5"
+            >
+              <Checkbox
+                checked={checked}
+                onChange={(event) => onChange(toggleHint(
+                  currentScript,
+                  hint.suggestedCommand,
+                  event.target.checked,
+                ))}
+                className="size-3.5 shrink-0 accent-foreground"
+              />
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                {hint.suggestedCommand}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {hint.detectedFile}
+              </span>
+            </Label>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
@@ -17,8 +94,14 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
     explicitDefaultBranch,
     effectiveAutoDetectedBranch,
     setupDraft,
+    runCommandDraft,
     setSetupDraft,
+    setRunCommandDraft,
     setExplicitDefaultBranch,
+    canSave,
+    canRevert,
+    save,
+    revert,
   } = useRepositorySettings(repository);
 
   const { data: detectionResult, isLoading: isDetecting } = useDetectRepoRootSetupQuery({
@@ -47,57 +130,124 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
       detail: null,
     })),
   ], [branches, effectiveAutoDetectedBranch]);
+  const buildToolHints = detectionResult?.hints.filter((hint) => hint.category === "build_tool") ?? [];
+  const secretSyncHints = detectionResult?.hints.filter((hint) => hint.category === "secret_sync") ?? [];
+  const hasHints = buildToolHints.length > 0 || secretSyncHints.length > 0;
 
   return (
-    <SettingsCard>
-      <div className="space-y-1.5 p-3">
-        <p className="text-sm font-medium text-foreground">Local configuration</p>
-        <p className="text-sm text-muted-foreground">
-          Stored on this desktop and used when creating local worktrees for this repository.
-        </p>
-      </div>
-
-      <SettingsCardRow
-        label="Local default branch"
+    <EnvironmentSection
+      title="Local environment"
+      description="Stored on this desktop and used when creating local worktrees for this repo."
+      icon={Monitor}
+      action={(
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!canRevert}
+            onClick={revert}
+          >
+            Revert
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!canSave}
+            onClick={save}
+          >
+            Save
+          </Button>
+        </>
+      )}
+    >
+      <EnvironmentField
+        label="Default branch"
         description={`Base branch for new worktrees and pull requests. Effective branch: ${effectiveBranchLabel}`}
       >
-        <SettingsMenu
+        <EnvironmentSearchSelect
           label={branchButtonLabel}
-          className="w-56"
-          menuClassName="w-64"
-          groups={[{
-            id: "branches",
-            options: branchOptions.map((option) => ({
-              id: option.id,
-              label: option.label,
-              detail: option.detail,
-              selected: option.id === "__auto__"
-                ? explicitDefaultBranch === null
-                : explicitDefaultBranch === option.id,
-              onSelect: () => setExplicitDefaultBranch(option.id === "__auto__" ? null : option.id),
-            })),
-          }]}
+          searchPlaceholder="Search branches"
+          emptyLabel="No branches found"
+          className="w-64"
+          menuClassName="w-80"
+          options={branchOptions.map((option) => ({
+            id: option.id,
+            label: option.label,
+            detail: option.detail,
+            selected: option.id === "__auto__"
+              ? explicitDefaultBranch === null
+              : explicitDefaultBranch === option.id,
+            onSelect: () => setExplicitDefaultBranch(option.id === "__auto__" ? null : option.id),
+          }))}
         />
-      </SettingsCardRow>
+      </EnvironmentField>
 
-      <SettingsCardRow
-        label="Local setup commands"
+      <EnvironmentField
+        label="Local action command"
+        description="Command launched by the workspace header Run button for this environment"
+      >
+        <div className="space-y-2">
+          <Input
+            value={runCommandDraft}
+            onChange={(event) => setRunCommandDraft(event.target.value)}
+            placeholder="make dev PROFILE=my-profile"
+            className="h-8 max-w-xl px-2.5 py-1.5 font-mono text-sm leading-[var(--readable-code-line-height)]"
+          />
+          <RunCommandHelp scope="selected workspace" className="text-sm text-muted-foreground/80" />
+        </div>
+      </EnvironmentField>
+
+      <EnvironmentField
+        label="Setup script"
         description="Commands to run after creating a new worktree (one per line)"
       >
-        <div className="w-[24rem] max-w-full">
-          <SetupCommandEditor
-            hints={detectionResult?.hints ?? []}
-            currentScript={setupDraft}
-            onChange={setSetupDraft}
-            isLoading={isDetecting}
+        <div className="space-y-2">
+          <Textarea
+            variant="code"
+            rows={6}
+            value={setupDraft}
+            onChange={(event) => setSetupDraft(event.target.value)}
+            placeholder={"pnpm install\npnpm prisma generate"}
+            className="min-h-36 px-2.5 py-2 text-sm"
           />
-          <p className="mt-2 text-sm text-muted-foreground/80">
+          <p className="text-sm text-muted-foreground/80">
             Runs inside the new worktree. Available vars include{" "}
             <code>PROLIFERATE_WORKTREE_DIR</code>, <code>PROLIFERATE_REPO_DIR</code>,{" "}
             <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.
           </p>
         </div>
-      </SettingsCardRow>
-    </SettingsCard>
+      </EnvironmentField>
+
+      <EnvironmentAdvancedDisclosure
+        title="Advanced"
+        description="Detected setup commands and ignored-file sync helpers."
+      >
+        {isDetecting ? (
+          <div className="flex animate-pulse flex-col gap-2">
+            <div className="h-4 w-32 rounded bg-muted" />
+            <div className="h-4 w-56 rounded bg-muted" />
+          </div>
+        ) : hasHints ? (
+          <div className="space-y-4">
+            <SetupHintRows
+              title="Detected"
+              hints={buildToolHints}
+              currentScript={setupDraft}
+              onChange={setSetupDraft}
+            />
+            <SetupHintRows
+              title="Sync ignored files"
+              hints={secretSyncHints}
+              currentScript={setupDraft}
+              onChange={setSetupDraft}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No setup suggestions were detected for this environment.
+          </p>
+        )}
+      </EnvironmentAdvancedDisclosure>
+    </EnvironmentSection>
   );
 }

@@ -8,6 +8,7 @@ use tower_http::request_id::{
 };
 use tower_http::trace::TraceLayer;
 
+use anyharness_lib::agents::seed::{configured_agent_seed_store, hydrate_configured_agent_seed};
 use anyharness_lib::api::router::build_router;
 use anyharness_lib::app::{default_runtime_home, ensure_runtime_home, AppState};
 use anyharness_lib::persistence::Db;
@@ -37,6 +38,14 @@ pub async fn run(args: ServeArgs) -> Result<()> {
         .unwrap_or_else(default_runtime_home);
 
     ensure_runtime_home(&runtime_home)?;
+    let agent_seed_store = configured_agent_seed_store();
+    if agent_seed_store.hydration_pending() {
+        let hydration_runtime_home = runtime_home.clone();
+        let hydration_store = agent_seed_store.clone();
+        tokio::task::spawn_blocking(move || {
+            hydrate_configured_agent_seed(&hydration_runtime_home, &hydration_store);
+        });
+    }
 
     let db = Db::open(&runtime_home)?;
     let runtime_base_url = runtime_base_url(&args.host, args.port);
@@ -45,6 +54,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
         runtime_base_url,
         db,
         args.require_bearer_auth,
+        agent_seed_store,
     )?;
     let app = build_app(state, args.disable_cors);
 
@@ -123,7 +133,7 @@ mod tests {
     };
     use tower::Service;
 
-    use anyharness_lib::{app::AppState, persistence::Db};
+    use anyharness_lib::{agents::seed::AgentSeedStore, app::AppState, persistence::Db};
 
     use super::build_app;
 
@@ -138,6 +148,7 @@ mod tests {
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
+            AgentSeedStore::not_configured_dev(),
         )
         .expect("expected app state")
     }

@@ -52,11 +52,19 @@ pub fn summarize_workspace_sessions<'a>(
     let mut idle_count = 0usize;
     let mut errored_count = 0usize;
     let mut phase = WorkspaceExecutionPhase::Idle;
+    let mut updated_at: Option<String> = None;
 
     for summary in summaries {
         total_session_count += 1;
         if summary.has_live_handle {
             live_session_count += 1;
+        }
+        if updated_at
+            .as_deref()
+            .map(|current| summary.updated_at.as_str() > current)
+            .unwrap_or(true)
+        {
+            updated_at = Some(summary.updated_at.clone());
         }
 
         match summary.phase {
@@ -91,6 +99,7 @@ pub fn summarize_workspace_sessions<'a>(
         awaiting_interaction_count,
         idle_count,
         errored_count,
+        updated_at,
     }
 }
 
@@ -103,6 +112,7 @@ pub fn idle_workspace_execution_summary() -> WorkspaceExecutionSummary {
         awaiting_interaction_count: 0,
         idle_count: 0,
         errored_count: 0,
+        updated_at: None,
     }
 }
 
@@ -136,6 +146,7 @@ mod tests {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
+            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             origin: None,
@@ -243,5 +254,6 @@ mod tests {
         assert_eq!(summary.running_count, 1);
         assert_eq!(summary.awaiting_interaction_count, 1);
         assert_eq!(summary.errored_count, 1);
+        assert_eq!(summary.updated_at.as_deref(), Some("2026-04-06T00:00:03Z"));
     }
 }

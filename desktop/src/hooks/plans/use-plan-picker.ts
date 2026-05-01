@@ -8,31 +8,29 @@ import {
 import {
   planAttachmentDescriptorFromDetail,
 } from "@/lib/domain/chat/prompt-content";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useAddPlanDraftAttachment } from "@/hooks/plans/use-add-plan-draft-attachment";
 
 const EMPTY_PLANS: ProposedPlanSummary[] = [];
 
 export function usePlanPicker(options: {
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   open: boolean;
   onAttached?: () => void;
 }) {
-  const { draftWorkspaceId, open, onAttached } = options;
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const workspaceId = draftWorkspaceId ?? selectedWorkspaceId;
+  const { workspaceUiKey, sdkWorkspaceId, open, onAttached } = options;
   const showToast = useToastStore((state) => state.show);
   const [search, setSearch] = useState("");
   const [attachingPlanId, setAttachingPlanId] = useState<string | null>(null);
-  const { addPlan } = useAddPlanDraftAttachment(draftWorkspaceId);
+  const { addPlan } = useAddPlanDraftAttachment(workspaceUiKey);
   const plansQuery = useWorkspacePlansQuery({
-    workspaceId,
-    enabled: open && !!workspaceId,
+    workspaceId: sdkWorkspaceId,
+    enabled: open && !!sdkWorkspaceId,
   });
   const detailQuery = usePlanDetailQuery(attachingPlanId, {
-    workspaceId,
-    enabled: open && !!attachingPlanId && !!workspaceId,
+    workspaceId: sdkWorkspaceId,
+    enabled: open && !!attachingPlanId && !!sdkWorkspaceId,
   });
 
   const plans: ProposedPlanSummary[] = plansQuery.data ?? EMPTY_PLANS;

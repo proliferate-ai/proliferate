@@ -9,9 +9,11 @@ import type {
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
+  WorkspaceRetirePreflightResponse,
+  WorkspaceRetireResponse,
   WorkspaceSessionLaunchCatalog,
 } from "../types/workspaces.js";
-import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
+import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
 export class WorkspacesClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
@@ -43,24 +45,29 @@ export class WorkspacesClient {
     );
   }
 
-  async list(): Promise<Workspace[]> {
-    return this.transport.get<Workspace[]>("/v1/workspaces");
+  async list(options?: AnyHarnessRequestOptions): Promise<Workspace[]> {
+    return this.transport.get<Workspace[]>(
+      "/v1/workspaces",
+      withTimingCategory(options, "workspace.list"),
+    );
   }
 
   async get(workspaceId: string, options?: AnyHarnessRequestOptions): Promise<Workspace> {
     return this.transport.get<Workspace>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}`,
-      options,
+      withTimingCategory(options, "workspace.get"),
     );
   }
 
   async updateDisplayName(
     workspaceId: string,
     input: UpdateWorkspaceDisplayNameRequest,
+    options?: AnyHarnessRequestOptions,
   ): Promise<Workspace> {
     return this.transport.patch<Workspace>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/display-name`,
       input,
+      withTimingCategory(options, "workspace.display_name.update"),
     );
   }
 
@@ -70,42 +77,82 @@ export class WorkspacesClient {
   ): Promise<WorkspaceSessionLaunchCatalog> {
     return this.transport.get<WorkspaceSessionLaunchCatalog>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/session-launch`,
-      options,
+      withTimingCategory(options, "workspace.session_launch"),
     );
   }
 
   async detectSetup(
     workspaceId: string,
+    options?: AnyHarnessRequestOptions,
   ): Promise<DetectProjectSetupResponse> {
     return this.transport.get<DetectProjectSetupResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/detect-setup`,
+      withTimingCategory(options, "workspace.detect_setup"),
     );
   }
 
   async getSetupStatus(
     workspaceId: string,
+    options?: AnyHarnessRequestOptions,
   ): Promise<GetSetupStatusResponse> {
     return this.transport.get<GetSetupStatusResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/setup-status`,
+      withTimingCategory(options, "workspace.setup_status"),
     );
   }
 
   async rerunSetup(
     workspaceId: string,
+    options?: AnyHarnessRequestOptions,
   ): Promise<GetSetupStatusResponse> {
     return this.transport.post<GetSetupStatusResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/setup-rerun`,
       {},
+      withTimingCategory(options, "workspace.setup_rerun"),
     );
   }
 
   async startSetup(
     workspaceId: string,
     input: StartWorkspaceSetupRequest,
+    options?: AnyHarnessRequestOptions,
   ): Promise<GetSetupStatusResponse> {
     return this.transport.post<GetSetupStatusResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/setup-start`,
       input,
+      withTimingCategory(options, "workspace.setup_start"),
+    );
+  }
+
+  async retirePreflight(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceRetirePreflightResponse> {
+    return this.transport.get<WorkspaceRetirePreflightResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/preflight`,
+      withTimingCategory(options, "workspace.retire.preflight"),
+    );
+  }
+
+  async retire(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceRetireResponse> {
+    return this.transport.post<WorkspaceRetireResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire`,
+      {},
+      withTimingCategory(options, "workspace.retire"),
+    );
+  }
+
+  async retryRetireCleanup(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceRetireResponse> {
+    return this.transport.post<WorkspaceRetireResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/cleanup-retry`,
+      {},
+      withTimingCategory(options, "workspace.retire.cleanup_retry"),
     );
   }
 }

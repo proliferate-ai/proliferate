@@ -56,6 +56,7 @@ export function useAgentSetupWorkflow({
   const loginMutation = useStartAgentLoginMutation();
   const {
     installAgent,
+    isAgentSeedHydrating,
     refreshAgentResources,
   } = useAgentInstallationActions();
   const {
@@ -100,11 +101,13 @@ export function useAgentSetupWorkflow({
   );
 
   const installButtonLabel =
-    reconcileState === "reconciling"
-      ? AGENT_SETUP_COPY.installing
-      : isRetry
-        ? AGENT_SETUP_COPY.retryInstall
-        : AGENT_SETUP_COPY.install;
+    isAgentSeedHydrating
+      ? AGENT_SETUP_COPY.seedHydrating
+      : reconcileState === "reconciling"
+        ? AGENT_SETUP_COPY.installing
+        : isRetry
+          ? AGENT_SETUP_COPY.retryInstall
+          : AGENT_SETUP_COPY.install;
 
   const loginButtonLabel = state.loginCommand
     ? AGENT_SETUP_COPY.refreshLoginAction
@@ -200,6 +203,7 @@ export function useAgentSetupWorkflow({
     hasNewlySavedKeys,
     shouldRestartRuntime,
     isRetry,
+    isAgentSeedHydrating,
     isInstallBusy,
     isLoginBusy,
     isApplyBusy,

@@ -3,8 +3,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use super::acp_registry::{self, ResolvedRegistryDistribution};
+use super::install_lock::AgentInstallLock;
 use super::model::*;
+use super::registry::built_in_registry;
 use super::resolver::artifact_root;
+use super::seed;
 use uuid::Uuid;
 
 const CURL_CONNECT_TIMEOUT: &str = "10";
@@ -51,6 +54,7 @@ pub fn install_agent(
     runtime_home: &Path,
     options: &InstallOptions,
 ) -> Result<Vec<InstalledArtifactResult>, InstallError> {
+    let _install_lock = AgentInstallLock::acquire_agent(runtime_home, &descriptor.kind)?;
     let mut installed = Vec::new();
     let mut has_installable = false;
 
@@ -106,7 +110,29 @@ pub fn install_agent(
         return Err(InstallError::NotInstallable);
     }
 
+    seed::mark_installed_artifacts_user_modified(runtime_home, &descriptor.kind, &installed);
+
     Ok(installed)
+}
+
+pub(crate) fn regenerate_seeded_agent_launchers(
+    runtime_home: &Path,
+    seeded_agents: &[String],
+) -> Result<Vec<InstalledArtifactResult>, InstallError> {
+    let registry = built_in_registry();
+    let mut regenerated = Vec::new();
+    for agent in seeded_agents {
+        let Some(kind) = AgentKind::parse(agent) else {
+            continue;
+        };
+        let Some(descriptor) = registry.iter().find(|descriptor| descriptor.kind == kind) else {
+            continue;
+        };
+        if let Some(result) = regenerate_agent_process_launcher(descriptor, runtime_home)? {
+            regenerated.push(result);
+        }
+    }
+    Ok(regenerated)
 }
 
 fn is_native_installable(spec: &NativeInstallSpec) -> bool {
@@ -122,6 +148,44 @@ fn is_agent_process_installable(spec: &AgentProcessInstallSpec) -> bool {
         AgentProcessInstallSpec::RegistryBacked { .. }
             | AgentProcessInstallSpec::ManagedNpmPackage { .. }
     )
+}
+
+fn regenerate_agent_process_launcher(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+) -> Result<Option<InstalledArtifactResult>, InstallError> {
+    let kind = &descriptor.kind;
+    let managed_dir = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess);
+    let launcher_path = managed_dir.join(format!("{}-launcher", kind.as_str()));
+    let path_prefixes = launcher_path_prefixes(runtime_home, kind);
+    let env = managed_launcher_env(kind);
+
+    let executable_relpath = match &descriptor.agent_process.install {
+        AgentProcessInstallSpec::ManagedNpmPackage {
+            executable_relpath, ..
+        } => executable_relpath,
+        AgentProcessInstallSpec::RegistryBacked {
+            fallback:
+                AgentProcessFallback::NpmPackage {
+                    executable_relpath, ..
+                },
+            ..
+        } => executable_relpath,
+        _ => return Ok(None),
+    };
+
+    let exec_path = managed_dir.join(executable_relpath);
+    if !exec_path.exists() {
+        return Err(InstallError::MissingManagedArtifact(exec_path));
+    }
+
+    generate_launcher_script(&launcher_path, &exec_path, &[], &env, &path_prefixes)?;
+    Ok(Some(InstalledArtifactResult {
+        role: ArtifactRole::AgentProcess,
+        path: launcher_path,
+        source: "seed_launcher".into(),
+        version: None,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -233,13 +297,10 @@ fn install_agent_process_artifact(
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let managed_dir = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess);
     let launcher_path = managed_dir.join(format!("{}-launcher", kind.as_str()));
-    let managed_native_dir = artifact_root(runtime_home, kind, &ArtifactRole::NativeCli);
-    let managed_native_binary = managed_native_dir.join(kind.as_str());
-    let launcher_path_prefixes = if is_valid_executable(&managed_native_binary) {
-        vec![managed_native_dir.clone()]
-    } else {
-        Vec::new()
-    };
+    let managed_native_binary =
+        artifact_root(runtime_home, kind, &ArtifactRole::NativeCli).join(kind.as_str());
+    let launcher_path_prefixes = launcher_path_prefixes(runtime_home, kind);
+    let launcher_env = managed_launcher_env(kind);
 
     if launcher_path.exists() && !options.reinstall {
         return Ok(None);
@@ -257,6 +318,7 @@ fn install_agent_process_artifact(
                 &launcher_path,
                 options.agent_process_version.as_deref(),
                 &launcher_path_prefixes,
+                &launcher_env,
             ) {
                 Ok(result) => return Ok(Some(result)),
                 Err(e) => {
@@ -276,6 +338,7 @@ fn install_agent_process_artifact(
                 &launcher_path,
                 options,
                 &launcher_path_prefixes,
+                &launcher_env,
                 if is_valid_executable(&managed_native_binary) {
                     Some(managed_native_binary)
                 } else {
@@ -298,12 +361,34 @@ fn install_agent_process_artifact(
             options.agent_process_version.as_deref(),
             options.reinstall,
             &launcher_path_prefixes,
+            &launcher_env,
             "managed_npm",
         ),
         AgentProcessInstallSpec::PathOnly { .. } | AgentProcessInstallSpec::Manual { .. } => {
             Ok(None)
         }
     }
+}
+
+fn launcher_path_prefixes(runtime_home: &Path, kind: &AgentKind) -> Vec<PathBuf> {
+    let mut prefixes = Vec::new();
+    let managed_native_dir = artifact_root(runtime_home, kind, &ArtifactRole::NativeCli);
+    let managed_native_binary = managed_native_dir.join(kind.as_str());
+    if is_valid_executable(&managed_native_binary) {
+        prefixes.push(managed_native_dir);
+    }
+    if let Some(node_dir) = seed::bundled_node_bin_dir(runtime_home) {
+        prefixes.push(node_dir);
+    }
+    prefixes
+}
+
+fn managed_launcher_env(kind: &AgentKind) -> HashMap<String, String> {
+    let mut env = HashMap::new();
+    if *kind == AgentKind::Claude {
+        env.insert("DISABLE_AUTOUPDATER".into(), "1".into());
+    }
+    env
 }
 
 fn install_from_registry(
@@ -313,6 +398,7 @@ fn install_from_registry(
     launcher_path: &Path,
     version_override: Option<&str>,
     path_prefixes: &[PathBuf],
+    launcher_env: &HashMap<String, String>,
 ) -> Result<InstalledArtifactResult, InstallError> {
     let resolved = acp_registry::resolve_from_registry(registry_id, version_override)
         .map_err(|e| InstallError::RegistryFailed(e.to_string()))?;
@@ -347,6 +433,11 @@ fn install_from_registry(
                     .ok_or_else(|| InstallError::MissingManagedArtifact(npm_bin))?
             };
 
+            let env = {
+                let mut merged = env.clone();
+                merged.extend(launcher_env.clone());
+                merged
+            };
             generate_launcher_script(launcher_path, &cmd_path, &args, &env, path_prefixes)?;
 
             Ok(InstalledArtifactResult {
@@ -370,6 +461,11 @@ fn install_from_registry(
                     message: e,
                 })?;
 
+            let env = {
+                let mut merged = env.clone();
+                merged.extend(launcher_env.clone());
+                merged
+            };
             generate_launcher_script(launcher_path, &cmd_path, &args, &env, path_prefixes)?;
 
             Ok(InstalledArtifactResult {
@@ -411,6 +507,7 @@ fn install_managed_npm_package(
     version_override: Option<&str>,
     force_reinstall: bool,
     path_prefixes: &[PathBuf],
+    launcher_env: &HashMap<String, String>,
     source: &str,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     let exec_path = if let Some(binary_name) = source_build_binary_name {
@@ -457,13 +554,11 @@ fn install_managed_npm_package(
         return Err(InstallError::MissingManagedArtifact(exec_path));
     }
 
-    generate_launcher_script(
-        launcher_path,
-        &exec_path,
-        &[],
-        &HashMap::new(),
-        path_prefixes,
-    )?;
+    generate_launcher_script(launcher_path, &exec_path, &[], launcher_env, path_prefixes)?;
+
+    let versioned_package = apply_npm_version_override(package, version_override);
+    let version = installed_npm_package_version(&versioned_package, managed_dir)
+        .or_else(|| npm_package_version(&versioned_package));
 
     Ok(Some(InstalledArtifactResult {
         role: ArtifactRole::AgentProcess,
@@ -473,7 +568,7 @@ fn install_managed_npm_package(
         } else {
             source.into()
         },
-        version: npm_package_version(&apply_npm_version_override(package, version_override)),
+        version,
     }))
 }
 
@@ -840,6 +935,39 @@ fn npm_package_version(package: &str) -> Option<String> {
         .map(|(_, version)| version.to_string())
 }
 
+fn installed_npm_package_version(package: &str, managed_dir: &Path) -> Option<String> {
+    let package_name = npm_package_name(package)?;
+    let package_json = managed_dir
+        .join("node_modules")
+        .join(PathBuf::from(package_name))
+        .join("package.json");
+    let text = std::fs::read_to_string(package_json).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+    json.get("version")?.as_str().map(ToString::to_string)
+}
+
+fn npm_package_name(package: &str) -> Option<&str> {
+    if is_npm_non_registry_spec(package) {
+        return None;
+    }
+
+    let package = package.split_once('#').map_or(package, |(name, _)| name);
+    if package.starts_with('@') {
+        let mut at_positions = package.match_indices('@').map(|(index, _)| index);
+        at_positions.next();
+        return at_positions.next().map_or(Some(package), |index| {
+            let candidate = &package[..index];
+            if candidate.contains('/') {
+                Some(candidate)
+            } else {
+                Some(package)
+            }
+        });
+    }
+
+    Some(package.split_once('@').map_or(package, |(name, _)| name))
+}
+
 fn is_npm_non_registry_spec(package: &str) -> bool {
     package.starts_with("git+")
         || package.starts_with("github:")
@@ -855,6 +983,7 @@ fn install_agent_process_fallback(
     launcher_path: &Path,
     options: &InstallOptions,
     path_prefixes: &[PathBuf],
+    launcher_env: &HashMap<String, String>,
     managed_native_binary: Option<PathBuf>,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
     match fallback {
@@ -873,6 +1002,7 @@ fn install_agent_process_fallback(
             options.agent_process_version.as_deref(),
             options.reinstall,
             path_prefixes,
+            launcher_env,
             "fallback_npm",
         ),
         AgentProcessFallback::NativeSubcommand { args } => {
@@ -882,7 +1012,7 @@ fn install_agent_process_fallback(
                 launcher_path,
                 &native_exec,
                 args,
-                &HashMap::new(),
+                launcher_env,
                 path_prefixes,
             )?;
 
@@ -906,7 +1036,7 @@ fn install_agent_process_fallback(
                 launcher_path,
                 &PathBuf::from(&bin),
                 args,
-                &HashMap::new(),
+                launcher_env,
                 path_prefixes,
             )?;
 
@@ -1193,6 +1323,24 @@ mod tests {
     }
 
     #[test]
+    fn extracts_registry_package_names() {
+        assert_eq!(
+            npm_package_name("@proliferateai/codex-acp@latest"),
+            Some("@proliferateai/codex-acp")
+        );
+        assert_eq!(
+            npm_package_name("@proliferateai/codex-acp"),
+            Some("@proliferateai/codex-acp")
+        );
+        assert_eq!(npm_package_name("amp-acp@1.2.3"), Some("amp-acp"));
+        assert_eq!(npm_package_name("amp-acp"), Some("amp-acp"));
+        assert_eq!(
+            npm_package_name("git+https://github.com/proliferate-ai/codex-acp.git#main"),
+            None
+        );
+    }
+
+    #[test]
     fn managed_npm_package_without_subdir_still_installs_directly() {
         let package_root = TempDirGuard::new("npm-direct-package").expect("temp dir");
         write_test_npm_package(
@@ -1213,6 +1361,7 @@ mod tests {
             None,
             true,
             &[],
+            &HashMap::new(),
             "managed_npm",
         )
         .expect("direct install should succeed");
@@ -1239,6 +1388,7 @@ mod tests {
             None,
             true,
             &[],
+            &HashMap::new(),
             "managed_npm",
         )
         .expect_err("registry package with subdir should be rejected");
@@ -1323,6 +1473,7 @@ mod tests {
             None,
             true,
             &[],
+            &HashMap::new(),
             "managed_npm",
         )
         .expect("git subdir install should succeed");
@@ -1370,6 +1521,7 @@ path = "src/main.rs"
             None,
             true,
             &[],
+            &HashMap::new(),
             "managed_npm",
         )
         .expect("source build install should succeed");

@@ -6,7 +6,6 @@ from contextlib import suppress
 from typing import NoReturn
 from uuid import UUID
 
-from proliferate.config import settings as app_settings
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.compat import (
     legacy_delete_connection,
@@ -22,6 +21,7 @@ from proliferate.db.store.cloud_mcp.connections import (
 )
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import (
     CatalogConfigurationError,
     CatalogEntry,
@@ -168,6 +168,8 @@ async def create_cloud_mcp_connection(
     entry = get_catalog_entry(catalog_entry_id)
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")
+    if not catalog_entry_is_configured(entry):
+        _invalid_payload("Connector catalog entry is not configured for this deployment.")
     settings = _validate_settings(entry, body.settings)
     existing = await list_user_connections(user_id)
     if any(record.catalog_entry_id == entry.id for record in existing):
@@ -194,9 +196,10 @@ async def create_cloud_mcp_connection(
             payload_ciphertext=None,
             payload_format="json-v1",
         )
-        record = await get_user_connection(user_id, record.connection_id)
-        if record is None:
+        refreshed = await get_user_connection(user_id, record.connection_id)
+        if refreshed is None:
             _not_found()
+        record = refreshed
     return _connection_payload(record)
 
 
@@ -312,7 +315,6 @@ def _oauth_resource_url(entry: CatalogEntry, settings: dict[str, object]) -> str
         return render_oauth_resource_url(
             entry,
             settings,
-            allow_insecure_launch_urls=app_settings.cloud_mcp_allow_insecure_launch_urls,
         )
     except CatalogConfigurationError as exc:
         _invalid_payload(str(exc))

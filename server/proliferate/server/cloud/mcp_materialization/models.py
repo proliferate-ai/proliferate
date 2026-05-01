@@ -4,8 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from proliferate.server.cloud.mcp_catalog.catalog import ArgTemplate, EnvTemplate
-
 McpWarningKind = Literal[
     "needs_reconnect",
     "unsupported_target",
@@ -24,6 +22,7 @@ McpNotAppliedReason = Literal[
     "workspace_path_unresolved",
     "policy_disabled",
     "resolver_error",
+    "invalid_settings",
 ]
 
 
@@ -34,12 +33,12 @@ class MaterializeCloudMcpRequest(BaseModel):
 
 class SessionMcpHeaderModel(BaseModel):
     name: str
-    value: str
+    value: str = Field(repr=False)
 
 
 class SessionMcpEnvVarModel(BaseModel):
     name: str
-    value: str
+    value: str = Field(repr=False)
 
 
 class SessionMcpHttpServerModel(BaseModel):
@@ -47,8 +46,8 @@ class SessionMcpHttpServerModel(BaseModel):
     connection_id: str = Field(serialization_alias="connectionId")
     catalog_entry_id: str | None = Field(default=None, serialization_alias="catalogEntryId")
     server_name: str = Field(serialization_alias="serverName")
-    url: str
-    headers: list[SessionMcpHeaderModel] = Field(default_factory=list)
+    url: str = Field(repr=False)
+    headers: list[SessionMcpHeaderModel] = Field(default_factory=list, repr=False)
 
 
 class SessionMcpStdioServerModel(BaseModel):
@@ -57,8 +56,8 @@ class SessionMcpStdioServerModel(BaseModel):
     catalog_entry_id: str | None = Field(default=None, serialization_alias="catalogEntryId")
     server_name: str = Field(serialization_alias="serverName")
     command: str
-    args: list[str] = Field(default_factory=list)
-    env: list[SessionMcpEnvVarModel] = Field(default_factory=list)
+    args: list[str] = Field(default_factory=list, repr=False)
+    env: list[SessionMcpEnvVarModel] = Field(default_factory=list, repr=False)
 
 
 SessionMcpServerModel = SessionMcpHttpServerModel | SessionMcpStdioServerModel
@@ -73,13 +72,22 @@ class SessionMcpBindingSummaryModel(BaseModel):
     reason: McpNotAppliedReason | None = None
 
 
+class LocalStdioStaticSourceModel(BaseModel):
+    kind: Literal["static"]
+    value: str = Field(repr=False)
+
+
+class LocalStdioWorkspacePathSourceModel(BaseModel):
+    kind: Literal["workspace_path"]
+
+
 class LocalStdioArgTemplateModel(BaseModel):
-    source: dict[str, str]
+    source: LocalStdioStaticSourceModel | LocalStdioWorkspacePathSourceModel
 
 
 class LocalStdioEnvTemplateModel(BaseModel):
     name: str
-    source: dict[str, str]
+    source: LocalStdioStaticSourceModel
 
 
 class LocalStdioCandidateModel(BaseModel):
@@ -88,8 +96,8 @@ class LocalStdioCandidateModel(BaseModel):
     server_name: str = Field(serialization_alias="serverName")
     connector_name: str = Field(serialization_alias="connectorName")
     command: str
-    args: list[LocalStdioArgTemplateModel]
-    env: list[LocalStdioEnvTemplateModel]
+    args: list[LocalStdioArgTemplateModel] = Field(repr=False)
+    env: list[LocalStdioEnvTemplateModel] = Field(repr=False)
 
 
 class CloudMcpMaterializationWarningModel(BaseModel):
@@ -102,29 +110,34 @@ class CloudMcpMaterializationWarningModel(BaseModel):
 
 class MaterializeCloudMcpResponse(BaseModel):
     catalog_version: str = Field(serialization_alias="catalogVersion")
-    mcp_servers: list[SessionMcpServerModel] = Field(serialization_alias="mcpServers")
+    mcp_servers: list[SessionMcpServerModel] = Field(
+        serialization_alias="mcpServers",
+        repr=False,
+    )
     mcp_binding_summaries: list[SessionMcpBindingSummaryModel] = Field(
         serialization_alias="mcpBindingSummaries"
     )
     local_stdio_candidates: list[LocalStdioCandidateModel] = Field(
-        serialization_alias="localStdioCandidates"
+        serialization_alias="localStdioCandidates",
+        repr=False,
     )
     warnings: list[CloudMcpMaterializationWarningModel]
 
 
-def arg_template_payload(template: ArgTemplate) -> LocalStdioArgTemplateModel:
-    if template.kind == "static":
-        return LocalStdioArgTemplateModel(source={"kind": "static", "value": template.value or ""})
-    return LocalStdioArgTemplateModel(source={"kind": "workspace_path"})
+def local_stdio_static_arg_payload(value: str) -> LocalStdioArgTemplateModel:
+    return LocalStdioArgTemplateModel(
+        source=LocalStdioStaticSourceModel(kind="static", value=value)
+    )
 
 
-def env_template_payload(template: EnvTemplate) -> LocalStdioEnvTemplateModel:
-    if template.kind == "static":
-        return LocalStdioEnvTemplateModel(
-            name=template.name,
-            source={"kind": "static", "value": template.value or ""},
-        )
+def local_stdio_workspace_path_arg_payload() -> LocalStdioArgTemplateModel:
+    return LocalStdioArgTemplateModel(
+        source=LocalStdioWorkspacePathSourceModel(kind="workspace_path")
+    )
+
+
+def local_stdio_static_env_payload(name: str, value: str) -> LocalStdioEnvTemplateModel:
     return LocalStdioEnvTemplateModel(
-        name=template.name,
-        source={"kind": "field", "fieldId": template.field_id or ""},
+        name=name,
+        source=LocalStdioStaticSourceModel(kind="static", value=value),
     )

@@ -1,7 +1,11 @@
 import type {
   CreateTerminalRequest,
   ResizeTerminalRequest,
+  StartTerminalCommandRequest,
+  StartTerminalCommandResponse,
+  TerminalCommandRunDetail,
   TerminalRecord,
+  UpdateTerminalTitleRequest,
 } from "../types/terminals.js";
 import type { AnyHarnessTransport } from "./core.js";
 
@@ -30,12 +34,38 @@ export class TerminalsClient {
     );
   }
 
+  async runCommand(
+    terminalId: string,
+    input: StartTerminalCommandRequest,
+  ): Promise<StartTerminalCommandResponse> {
+    return this.transport.post<StartTerminalCommandResponse>(
+      `/v1/terminals/${encodeURIComponent(terminalId)}/commands`,
+      input,
+    );
+  }
+
+  async getCommandRun(commandRunId: string): Promise<TerminalCommandRunDetail> {
+    return this.transport.get<TerminalCommandRunDetail>(
+      `/v1/terminal-command-runs/${encodeURIComponent(commandRunId)}`,
+    );
+  }
+
   async resize(
     terminalId: string,
     input: ResizeTerminalRequest,
   ): Promise<TerminalRecord> {
     return this.transport.post<TerminalRecord>(
       `/v1/terminals/${encodeURIComponent(terminalId)}/resize`,
+      input,
+    );
+  }
+
+  async updateTitle(
+    terminalId: string,
+    input: UpdateTerminalTitleRequest,
+  ): Promise<TerminalRecord> {
+    return this.transport.patch<TerminalRecord>(
+      `/v1/terminals/${encodeURIComponent(terminalId)}/title`,
       input,
     );
   }

@@ -199,6 +199,7 @@ impl CoworkSessionHooks {
 
         Ok(SessionLaunchExtras {
             system_prompt_append: cowork_artifact_system_prompt_append(),
+            first_prompt_system_prompt_append: Vec::new(),
             mcp_servers: vec![SessionMcpServer::Http(SessionMcpHttpServer {
                 connection_id: "cowork".to_string(),
                 catalog_entry_id: None,
@@ -551,6 +552,7 @@ impl CoworkRuntime {
             None,
             mcp_servers,
             mcp_binding_summaries,
+            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             OriginContext::cowork(),
         ) {
@@ -1161,6 +1163,7 @@ impl CoworkRuntime {
             None,
             Vec::new(),
             None,
+            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             OriginContext::cowork(),
         )

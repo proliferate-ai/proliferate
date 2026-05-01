@@ -9,6 +9,8 @@ import type {
 } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
+import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
+import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ChevronRight } from "@/components/ui/icons";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
@@ -21,6 +23,7 @@ import {
 } from "@/lib/domain/chat/transcript-presentation";
 import { describeToolCallDisplay } from "@/lib/domain/chat/tool-call-display";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { normalizeToolResultText } from "@/lib/domain/chat/tool-result-text";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
@@ -124,7 +127,7 @@ function PlainActionRow({
   return (
     <div
       title={label}
-      className={`truncate text-chat leading-relaxed ${
+      className={`truncate text-chat leading-[var(--text-chat--line-height)] ${
         tone === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
       }`}
     >
@@ -155,7 +158,7 @@ function CommandActionRow({ item }: { item: ToolCallItem }) {
             <span>Shell</span>
           </div>
           <div className="px-2 pb-2">
-            <code className="block whitespace-pre-wrap break-words font-mono text-sm leading-relaxed text-muted-foreground">
+            <code className="block whitespace-pre-wrap break-words font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
               $ {command}
             </code>
           </div>
@@ -164,7 +167,7 @@ function CommandActionRow({ item }: { item: ToolCallItem }) {
             viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
             allowHorizontal
           >
-            <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
+            <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
               <code>{output || "No output"}</code>
             </pre>
           </AutoHideScrollArea>
@@ -182,19 +185,29 @@ function EditActionRow({
   failed: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [diffExpanded, setDiffExpanded] = useState(true);
   const pathLabel = part.newWorkspacePath ?? part.workspacePath ?? part.newPath ?? part.path;
   const displayName = part.newBasename ?? part.basename ?? basename(pathLabel);
   const action = failed ? "Failed editing" : formatEditVerb(part.operation);
   const additions = part.additions ?? 0;
   const deletions = part.deletions ?? 0;
   const hasDetails = !!part.patch || !!part.preview;
+  const { resolveAbsolute } = useWorkspacePath();
+  const { openInDefaultEditor } = useOpenInDefaultEditor();
+  const workspacePath = part.newWorkspacePath ?? part.workspacePath ?? null;
+  const absolute = workspacePath ? resolveAbsolute(workspacePath) : null;
+  const handleOpen = useCallback(() => {
+    if (!absolute) return;
+    void openInDefaultEditor(absolute);
+  }, [absolute, openInDefaultEditor]);
 
   return (
     <div>
       <div
         role={hasDetails ? "button" : undefined}
         tabIndex={hasDetails ? 0 : undefined}
-        className="group/action-row flex min-w-0 items-center gap-1 text-chat leading-relaxed text-muted-foreground/80"
+        {...(hasDetails ? { "data-chat-transcript-ignore": true } : {})}
+        className="group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80"
         onClick={() => {
           if (hasDetails) setExpanded((value) => !value);
         }}
@@ -232,32 +245,34 @@ function EditActionRow({
         )}
       </div>
       {expanded && hasDetails && (
-        <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-foreground/[0.04]">
-          <div className="flex min-w-0 items-center gap-2 border-b border-border/60 bg-foreground/[0.04] px-2.5 py-1 text-sm text-muted-foreground/80">
-            <span className="min-w-0 truncate">{displayName}</span>
-            {(additions > 0 || deletions > 0) && (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1 tabular-nums tracking-tight">
-                {additions > 0 && <span className="text-git-green">+{additions}</span>}
-                {deletions > 0 && <span className="text-git-red">-{deletions}</span>}
-              </span>
-            )}
-          </div>
-          {part.patch ? (
-            <DiffViewer
-              patch={part.patch}
+        part.patch ? (
+          <div className="mt-1.5">
+            <FileDiffCard
               filePath={pathLabel}
-              className="w-full"
-              viewportClassName="max-h-60"
-              variant="chat"
-            />
-          ) : part.preview ? (
-            <AutoHideScrollArea viewportClassName="max-h-60">
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
-                <code>{part.preview}</code>
-              </pre>
-            </AutoHideScrollArea>
-          ) : null}
-        </div>
+              additions={additions}
+              deletions={deletions}
+              isExpanded={diffExpanded}
+              onToggleExpand={() => setDiffExpanded((value) => !value)}
+              onOpenFile={absolute ? handleOpen : undefined}
+            >
+              <DiffViewer
+                patch={part.patch}
+                filePath={pathLabel}
+                className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+                variant="chat"
+              />
+            </FileDiffCard>
+          </div>
+        ) : part.preview ? (
+          <HighlightedCodePanel
+            code={part.preview}
+            filename={pathLabel}
+            showLanguageLabel={false}
+            className="mt-1.5 border-border/60 bg-foreground/[0.04]"
+            contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+          />
+        ) : null
       )}
     </div>
   );
@@ -279,6 +294,7 @@ function ActionDisclosureRow({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent focus-visible:ring-0 ${
         failed ? "text-destructive/80 hover:text-destructive" : "text-muted-foreground/80 hover:text-foreground"
       }`}
@@ -327,7 +343,7 @@ function GenericActionRow({ item }: { item: ToolCallItem }) {
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               allowHorizontal
             >
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
+              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
                 <code>{output}</code>
               </pre>
             </AutoHideScrollArea>
@@ -375,6 +391,7 @@ function ActionFileLink({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       title={pathLabel}
       className={`h-auto min-w-0 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-link-foreground hover:bg-transparent hover:underline focus-visible:ring-0 focus-visible:underline`}
       onClick={(event) => {
@@ -538,12 +555,6 @@ function formatEditVerb(operation: FileChangeContentPart["operation"]): string {
     default:
       return "Edited";
   }
-}
-
-function normalizeToolResultText(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:console|text|bash|sh)?\n([\s\S]*?)\n```$/);
-  return match ? match[1] : text;
 }
 
 function basename(path: string): string {

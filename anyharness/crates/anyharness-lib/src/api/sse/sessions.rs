@@ -59,7 +59,7 @@ pub async fn stream_session(
 
     let backlog_records = state
         .session_service
-        .list_session_event_records(&session_id, Some(after_seq))
+        .list_session_event_records(&session_id, Some(after_seq), None, None, None)
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {
             ApiError::not_found(
@@ -105,9 +105,13 @@ pub async fn stream_session(
                     return stream::empty().boxed();
                 };
                 let after_seq = max_sent_seq.load(Ordering::Acquire);
-                let replay = match session_service
-                    .list_session_event_records(&session_id, Some(after_seq))
-                {
+                let replay = match session_service.list_session_event_records(
+                    &session_id,
+                    Some(after_seq),
+                    None,
+                    None,
+                    None,
+                ) {
                     Ok(Some(records)) => records
                         .into_iter()
                         .filter_map(event_record_to_envelope)

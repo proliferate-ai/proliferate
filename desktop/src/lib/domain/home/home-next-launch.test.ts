@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { AgentSummary, GitBranchRef, ModelRegistry, Workspace } from "@anyharness/sdk";
+import type {
+  AgentSummary,
+  GitBranchRef,
+  ModelRegistry,
+  ModelRegistryModel,
+  Workspace,
+} from "@anyharness/sdk";
 import {
   buildHomeNextModelGroups,
   buildHomeNextAgentOptions,
@@ -61,12 +67,17 @@ function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRe
     displayName: overrides.displayName ?? overrides.kind,
     defaultModelId: overrides.defaultModelId ?? "default-model",
     models: overrides.models ?? [
-      {
-        id: "default-model",
-        displayName: "Default Model",
-        isDefault: true,
-      },
+      model("default-model", "Default Model", true),
     ],
+  };
+}
+
+function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+  return {
+    id,
+    displayName,
+    isDefault,
+    status: "active",
   };
 }
 
@@ -185,13 +196,13 @@ describe("home-next agent helpers", () => {
           kind: "codex",
           displayName: "Codex",
           defaultModelId: "gpt-5.4",
-          models: [{ id: "gpt-5.4", displayName: "GPT-5.4", isDefault: true }],
+          models: [model("gpt-5.4", "GPT-5.4", true)],
         }),
         registry({
           kind: "claude",
           displayName: "Claude",
           defaultModelId: "opus",
-          models: [{ id: "opus", displayName: "Opus", isDefault: true }],
+          models: [model("opus", "Opus", true)],
         }),
       ],
     );
@@ -228,18 +239,14 @@ describe("home-next model helpers", () => {
           displayName: "Cursor",
           defaultModelId: "default[]",
           models: [
-            { id: "default[]", displayName: "Auto", isDefault: true },
-            {
-              id: "gpt-5.4[reasoning=medium,fast=false]",
-              displayName: "GPT 5.4",
-              isDefault: false,
-            },
+            model("default[]", "Auto", true),
+            model("gpt-5.4[reasoning=medium,fast=false]", "GPT 5.4", false),
           ],
         }),
         registry({
           kind: "missing",
           displayName: "Missing",
-          models: [{ id: "missing-model", displayName: "Missing", isDefault: true }],
+          models: [model("missing-model", "Missing", true)],
         }),
       ],
       { kind: "cursor", modelId: "gpt-5.4[reasoning=medium,fast=false]" },
@@ -261,14 +268,14 @@ describe("home-next model helpers", () => {
           kind: "codex",
           defaultModelId: "gpt-5.4",
           models: [
-            { id: "gpt-5.4-mini", displayName: "Mini", isDefault: false },
-            { id: "gpt-5.4", displayName: "GPT 5.4", isDefault: true },
+            model("gpt-5.4-mini", "Mini", false),
+            model("gpt-5.4", "GPT 5.4", true),
           ],
         }),
         registry({
           kind: "claude",
           defaultModelId: null,
-          models: [{ id: "sonnet", displayName: "Sonnet", isDefault: false }],
+          models: [model("sonnet", "Sonnet", false)],
         }),
       ],
       null,
@@ -276,11 +283,15 @@ describe("home-next model helpers", () => {
 
     expect(resolveEffectiveHomeModelSelection(groups, null, {
       defaultChatAgentKind: "claude",
-      defaultChatModelId: "sonnet",
+      defaultChatModelIdByAgentKind: {
+        claude: "sonnet",
+      },
     })).toEqual({ kind: "claude", modelId: "sonnet" });
     expect(resolveEffectiveHomeModelSelection(groups, null, {
       defaultChatAgentKind: "missing",
-      defaultChatModelId: "missing",
+      defaultChatModelIdByAgentKind: {
+        missing: "missing",
+      },
     })).toEqual({ kind: "claude", modelId: "sonnet" });
   });
 });

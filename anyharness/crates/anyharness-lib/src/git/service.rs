@@ -1,13 +1,16 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use super::default_branch::detect_default_branch;
+use super::diff;
 use super::executor::{
     resolve_git_repo_root, run_git, run_git_ok, run_git_with_timeout, TimedGitOutput,
 };
 use super::parse_status::parse_porcelain_v2;
 use super::types::{
-    CommitError, GitActionAvailability, GitBranch, GitChangedFile, GitDiffResult, GitFileStatus,
-    GitIncludedState, GitOperation, GitStatusSnapshot, GitStatusSummary, PushError,
+    CommitError, GitActionAvailability, GitBranch, GitBranchDiffFilesResult, GitChangedFile,
+    GitDiffError, GitDiffResult, GitDiffScope, GitFileStatus, GitIncludedState, GitOperation,
+    GitStatusSnapshot, GitStatusSummary, PushError,
 };
 
 pub struct GitService;
@@ -105,43 +108,31 @@ impl GitService {
     }
 
     pub fn diff_for_path(workspace_path: &Path, file_path: &str) -> anyhow::Result<GitDiffResult> {
-        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
-            .trim()
-            .to_string();
-        let repo_root_path = PathBuf::from(&repo_root);
+        Self::diff_for_path_with_scope(
+            workspace_path,
+            file_path,
+            GitDiffScope::WorkingTree,
+            None,
+            None,
+        )
+        .map_err(anyhow::Error::from)
+    }
 
-        let numstat_output = run_git_ok(&repo_root_path, &["diff", "--numstat", "--", file_path])?;
-        let (additions, deletions, binary) = parse_numstat_line(&numstat_output);
+    pub fn diff_for_path_with_scope(
+        workspace_path: &Path,
+        file_path: &str,
+        scope: GitDiffScope,
+        base_ref: Option<&str>,
+        old_path: Option<&str>,
+    ) -> Result<GitDiffResult, GitDiffError> {
+        diff::diff_for_path_with_scope(workspace_path, file_path, scope, base_ref, old_path)
+    }
 
-        let diff_output = run_git(&repo_root_path, &["diff", "--", file_path])?;
-        let patch = if diff_output.success && !diff_output.stdout.is_empty() {
-            Some(diff_output.stdout)
-        } else {
-            let staged = run_git(&repo_root_path, &["diff", "--cached", "--", file_path])?;
-            if staged.success && !staged.stdout.is_empty() {
-                Some(staged.stdout)
-            } else {
-                None
-            }
-        };
-
-        let truncated = patch.as_ref().map_or(false, |p| p.len() > 500_000);
-        let patch = patch.map(|p| {
-            if p.len() > 500_000 {
-                p[..500_000].to_string()
-            } else {
-                p
-            }
-        });
-
-        Ok(GitDiffResult {
-            path: file_path.to_string(),
-            binary,
-            truncated,
-            additions,
-            deletions,
-            patch,
-        })
+    pub fn branch_diff_files(
+        workspace_path: &Path,
+        base_ref: Option<&str>,
+    ) -> Result<GitBranchDiffFilesResult, GitDiffError> {
+        diff::branch_diff_files(workspace_path, base_ref)
     }
 
     pub fn list_branches(workspace_path: &Path) -> anyhow::Result<Vec<GitBranch>> {
@@ -190,6 +181,37 @@ impl GitService {
         }
 
         Ok(branches)
+    }
+
+    pub fn head_is_ancestor_of(workspace_path: &Path, base_ref: &str) -> anyhow::Result<bool> {
+        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
+            .trim()
+            .to_string();
+        let repo_root_path = PathBuf::from(&repo_root);
+        let output = std::process::Command::new("git")
+            .args(["merge-base", "--is-ancestor", "HEAD", base_ref])
+            .current_dir(&repo_root_path)
+            .output()?;
+        if output.status.success() {
+            return Ok(true);
+        }
+        if output.status.code() == Some(1) {
+            return Ok(false);
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("{}", git_command_message(&stderr, "merge-base failed"))
+    }
+
+    pub fn resolve_ref_oid(workspace_path: &Path, ref_name: &str) -> anyhow::Result<String> {
+        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
+            .trim()
+            .to_string();
+        let repo_root_path = PathBuf::from(&repo_root);
+        Ok(
+            run_git_ok(&repo_root_path, &["rev-parse", "--verify", ref_name])?
+                .trim()
+                .to_string(),
+        )
     }
 
     pub fn rename_branch(
@@ -413,29 +435,6 @@ fn detect_operation(repo_root: &Path) -> GitOperation {
     }
 }
 
-fn detect_default_branch(repo_root: &Path) -> Option<String> {
-    let out = run_git(repo_root, &["symbolic-ref", "refs/remotes/origin/HEAD"]).ok()?;
-    if out.success {
-        let refname = out.stdout.trim();
-        return refname
-            .strip_prefix("refs/remotes/origin/")
-            .map(|s| s.to_string());
-    }
-
-    for candidate in &["main", "master", "develop"] {
-        let check = run_git(
-            repo_root,
-            &["rev-parse", "--verify", &format!("refs/heads/{candidate}")],
-        );
-        if let Ok(o) = check {
-            if o.success {
-                return Some((*candidate).to_string());
-            }
-        }
-    }
-    None
-}
-
 fn enrich_file_stats(repo_root: &Path, files: &mut [GitChangedFile]) {
     let numstat = run_git(repo_root, &["diff", "--numstat", "-z"]);
     let staged_numstat = run_git(repo_root, &["diff", "--cached", "--numstat", "-z"]);
@@ -473,20 +472,6 @@ fn enrich_file_stats(repo_root: &Path, files: &mut [GitChangedFile]) {
             apply_numstats(&o.stdout, files);
         }
     }
-}
-
-fn parse_numstat_line(raw: &str) -> (u32, u32, bool) {
-    let line = raw.lines().next().unwrap_or("");
-    let parts: Vec<&str> = line.split('\t').collect();
-    if parts.len() < 2 {
-        return (0, 0, false);
-    }
-    if parts[0] == "-" && parts[1] == "-" {
-        return (0, 0, true);
-    }
-    let add = parts[0].parse().unwrap_or(0);
-    let del = parts[1].parse().unwrap_or(0);
-    (add, del, false)
 }
 
 fn git_command_message(stderr: &str, fallback: &str) -> String {

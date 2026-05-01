@@ -47,21 +47,20 @@ export async function finalizeLocalStdioCandidates(
       warnings.push(buildWarning(candidate, "command_missing"));
       continue;
     }
+    const resolved = resolveCandidateLaunchValues(candidate, context);
+    if (!resolved) {
+      summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
+      warnings.push(buildWarning(candidate, "resolver_error"));
+      continue;
+    }
     mcpServers.push({
       transport: "stdio",
       connectionId: candidate.connectionId,
       catalogEntryId: candidate.catalogEntryId,
       serverName: candidate.serverName,
       command: candidate.command,
-      args: candidate.args.map((arg) => (
-        arg.source.kind === "workspace_path"
-          ? context.workspacePath ?? ""
-          : arg.source.value ?? ""
-      )),
-      env: candidate.env.map((env) => ({
-        name: env.name,
-        value: env.source.kind === "static" ? env.source.value ?? "" : "",
-      })),
+      args: resolved.args,
+      env: resolved.env,
     });
     summaries.push({
       id: candidate.connectionId,
@@ -73,6 +72,33 @@ export async function finalizeLocalStdioCandidates(
   }
 
   return { mcpServers, summaries, warnings };
+}
+
+function resolveCandidateLaunchValues(
+  candidate: LocalStdioCandidate,
+  context: LocalStdioFinalizationContext,
+): Pick<Extract<SessionMcpServer, { transport: "stdio" }>, "args" | "env"> | null {
+  const args: string[] = [];
+  for (const arg of candidate.args) {
+    if (arg.source.kind === "workspace_path") {
+      args.push(context.workspacePath ?? "");
+      continue;
+    }
+    if (arg.source.kind === "static") {
+      args.push(arg.source.value ?? "");
+      continue;
+    }
+    return null;
+  }
+
+  const env: { name: string; value: string }[] = [];
+  for (const item of candidate.env) {
+    if (item.source.kind !== "static") {
+      return null;
+    }
+    env.push({ name: item.name, value: item.source.value ?? "" });
+  }
+  return { args, env };
 }
 
 function buildWarning(

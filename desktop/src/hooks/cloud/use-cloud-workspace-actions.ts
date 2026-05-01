@@ -20,11 +20,24 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import { cloudBillingKey } from "./query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
+import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+
+interface DeleteCloudWorkspaceContext {
+  viewedSessionErrorIdsToClear: string[];
+}
+
+const EMPTY_SESSION_IDS: string[] = [];
+
+function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
+  return workspaceId.startsWith("cloud:")
+    ? workspaceId
+    : cloudWorkspaceSyntheticId(workspaceId);
+}
 
 export function useCloudWorkspaceActions() {
   const queryClient = useQueryClient();
@@ -123,9 +136,17 @@ export function useCloudWorkspaceActions() {
     },
   });
 
-  const deleteMutation = useMutation<void, Error, string>({
+  const deleteMutation = useMutation<void, Error, string, DeleteCloudWorkspaceContext>({
     meta: {
       telemetryHandled: true,
+    },
+    onMutate: (workspaceId) => {
+      const runtimeWorkspaceId = resolveCloudWorkspaceRuntimeId(workspaceId);
+      return {
+        viewedSessionErrorIdsToClear: Object.values(useHarnessStore.getState().sessionSlots)
+          .filter((slot) => slot.workspaceId === runtimeWorkspaceId)
+          .map((slot) => slot.sessionId),
+      };
     },
     mutationFn: async (workspaceId) => {
       const cloudWorkspaceId = workspaceId.startsWith("cloud:")
@@ -134,11 +155,14 @@ export function useCloudWorkspaceActions() {
       await deleteCloudWorkspace(cloudWorkspaceId);
       await clearCachedCloudConnections(cloudWorkspaceId);
     },
-    onSuccess: async (_, workspaceId) => {
-      clearWorkspaceRuntimeState(workspaceId, { clearSelection: true });
-      clearDeferredLaunchesForWorkspace(
-        workspaceId.startsWith("cloud:") ? workspaceId : cloudWorkspaceSyntheticId(workspaceId),
-      );
+    onSuccess: async (_, workspaceId, context) => {
+      const runtimeWorkspaceId = resolveCloudWorkspaceRuntimeId(workspaceId);
+      clearViewedSessionErrors(context?.viewedSessionErrorIdsToClear ?? EMPTY_SESSION_IDS);
+      clearWorkspaceRuntimeState(runtimeWorkspaceId, {
+        clearSelection: true,
+        clearDraftUiKey: workspaceId,
+      });
+      clearDeferredLaunchesForWorkspace(runtimeWorkspaceId);
       await invalidateCloudResources();
       trackProductEvent("cloud_workspace_deleted", {
         workspace_kind: "cloud",

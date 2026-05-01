@@ -7,6 +7,7 @@ import type {
   PromptProvenance,
   ProposedPlanContentPart,
   ProposedPlanDecisionContentPart,
+  ErrorEventDetails,
   SessionEventEnvelope,
   SessionLinkTurnCompletedEvent,
   SubagentTurnCompletedEvent,
@@ -164,6 +165,7 @@ export interface ErrorItem extends TranscriptBaseItem {
   kind: "error";
   message: string;
   code: string | null;
+  details: ErrorEventDetails | null;
 }
 
 export interface UnknownItem {

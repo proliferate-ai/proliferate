@@ -1,27 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
-import type { ContentPart, PromptProvenance } from "@anyharness/sdk";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
-import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
-import { isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
-
-export interface PendingPromptListEntry {
-  seq: number;
-  text: string;
-  contentParts: ContentPart[];
-  isBeingEdited: boolean;
-  promptProvenance?: PromptProvenance | null;
-}
+import {
+  derivePendingPromptQueueRow,
+  type PendingPromptQueueRow,
+} from "@/lib/domain/chat/pending-prompt-queue";
 
 export interface PendingPromptListProps {
-  sessionId: string | null;
-  entries: PendingPromptListEntry[];
-  onBeginEdit: (args: { seq: number; text: string }) => void;
+  entries: PendingPromptQueueRow[];
+  onBeginEdit: (seq: number) => void;
   onDelete: (seq: number) => void;
 }
 
@@ -32,7 +22,6 @@ export interface PendingPromptListProps {
  * store and the pending-prompt projection.
  */
 export function PendingPromptList({
-  sessionId,
   entries,
   onBeginEdit,
   onDelete,
@@ -50,7 +39,6 @@ export function PendingPromptList({
       {entries.map((entry) => (
         <PendingPromptRow
           key={entry.seq}
-          sessionId={sessionId}
           entry={entry}
           onBeginEdit={onBeginEdit}
           onDelete={onDelete}
@@ -64,6 +52,10 @@ export function ConnectedPendingPromptList() {
   const { activeSessionId } = useActiveChatSessionState();
   const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
   const deletePendingPrompt = useDeletePendingPrompt();
+  const rows = useMemo(
+    () => visiblePendingPrompts.map(derivePendingPromptQueueRow),
+    [visiblePendingPrompts],
+  );
 
   const handleDelete = useCallback(
     (seq: number) => {
@@ -72,6 +64,14 @@ export function ConnectedPendingPromptList() {
     },
     [activeSessionId, deletePendingPrompt],
   );
+  const handleBeginEdit = useCallback(
+    (seq: number) => {
+      const entry = visiblePendingPrompts.find((candidate) => candidate.seq === seq);
+      if (!entry) return;
+      beginEdit({ seq: entry.seq, text: entry.text });
+    },
+    [beginEdit, visiblePendingPrompts],
+  );
 
   if (!activeSessionId) {
     return null;
@@ -79,100 +79,73 @@ export function ConnectedPendingPromptList() {
 
   return (
     <PendingPromptList
-      entries={visiblePendingPrompts}
-      sessionId={activeSessionId}
-      onBeginEdit={beginEdit}
+      entries={rows}
+      onBeginEdit={handleBeginEdit}
       onDelete={handleDelete}
     />
   );
 }
 
 interface PendingPromptRowProps {
-  entry: PendingPromptListEntry;
-  sessionId: string | null;
-  onBeginEdit: (args: { seq: number; text: string }) => void;
+  entry: PendingPromptQueueRow;
+  onBeginEdit: (seq: number) => void;
   onDelete: (seq: number) => void;
 }
 
-function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPromptRowProps) {
-  const { seq, text, isBeingEdited } = entry;
-  const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
-  const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
-    ? entry.promptProvenance
-    : null;
+function PendingPromptRow({
+  entry,
+  onBeginEdit,
+  onDelete,
+}: PendingPromptRowProps) {
+  const { seq, label, isBeingEdited, canEdit, canDelete } = entry;
+  const showEditAction = canEdit && !isBeingEdited;
 
   const handleBeginEdit = useCallback(() => {
-    if (hasStructuredAttachments) {
-      return;
-    }
-    onBeginEdit({ seq, text });
-  }, [hasStructuredAttachments, onBeginEdit, seq, text]);
+    if (!showEditAction) return;
+    onBeginEdit(seq);
+  }, [onBeginEdit, seq, showEditAction]);
 
   const handleDelete = useCallback(() => {
     onDelete(seq);
   }, [onDelete, seq]);
 
-  if (wakeProvenance) {
-    return (
-      <div className="flex justify-end">
-        <SubagentWakeBadge
-          label={wakeProvenance.label ?? null}
-          color={resolveSubagentColor(wakeProvenance.sessionLinkId)}
-          titleFallback={
-            wakeProvenance.type === "linkWake"
-            && wakeProvenance.relation === "cowork_coding_session"
-              ? "Coding session"
-              : "Subagent"
-          }
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">
       <div
-        className={`min-w-0 flex-1 text-sm leading-snug text-foreground/90 ${
+        className={`min-w-0 flex-1 truncate text-sm leading-snug text-foreground/90 ${
           isBeingEdited ? "pointer-events-none opacity-60" : ""
         }`}
+        title={label}
       >
-        <PromptContentRenderer
-          sessionId={sessionId}
-          parts={entry.contentParts}
-          fallbackText={text}
-          compact
-        />
+        {label}
       </div>
       {isBeingEdited ? (
         <div className="shrink-0 text-xs italic text-muted-foreground">
           editing in composer…
         </div>
-      ) : (
+      ) : showEditAction ? (
         <Button
           variant="ghost"
           size="icon-sm"
-          disabled={hasStructuredAttachments}
           onClick={handleBeginEdit}
           className="shrink-0 opacity-60 hover:opacity-100"
-          aria-label={hasStructuredAttachments
-            ? "Queued messages with attachments cannot be edited"
-            : "Edit queued message"}
-          title={hasStructuredAttachments
-            ? "Queued messages with attachments cannot be edited"
-            : "Edit queued message"}
+          aria-label="Edit queued message"
+          title="Edit queued message"
         >
           <Pencil className="size-3.5" />
         </Button>
+      ) : null}
+      {canDelete && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleDelete}
+          className="shrink-0 opacity-60 hover:opacity-100"
+          aria-label="Delete queued message"
+        >
+          <X className="size-3.5" />
+        </Button>
       )}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={handleDelete}
-        className="shrink-0 opacity-60 hover:opacity-100"
-        aria-label="Delete queued message"
-      >
-        <X className="size-3.5" />
-      </Button>
     </div>
   );
 }

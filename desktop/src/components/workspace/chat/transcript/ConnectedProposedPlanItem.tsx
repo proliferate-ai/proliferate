@@ -22,16 +22,17 @@ export function ConnectedProposedPlanItem({
     approvePlan,
     rejectPlan,
     implementPlanHere,
+    reviewPlan,
     isApprovingPlan,
     isRejectingPlan,
-    isPreparingPlanReference,
+    isImplementingPlan,
   } = useProposedPlanActions();
   const decision = item.decision;
   const plan = useMemo(() => proposedPlanItemToAttachment(item), [item]);
 
   return (
     <div className="flex justify-start relative">
-      <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+      <div className="flex flex-col w-full max-w-full space-y-1 break-words">
         <ProposedPlanCard
           title={item.plan.title}
           content={item.plan.bodyMarkdown}
@@ -51,12 +52,13 @@ export function ConnectedProposedPlanItem({
               : undefined
           }
           onImplementHere={() => implementPlanHere(plan)}
+          onReview={(anchorRect) => reviewPlan(plan, anchorRect)}
           onHandOffToNewSession={
             onHandOffToNewSession ? () => onHandOffToNewSession(plan) : undefined
           }
           isApproving={isApprovingPlan}
           isRejecting={isRejectingPlan}
-          isImplementingHere={isPreparingPlanReference}
+          isImplementingHere={isImplementingPlan}
         />
       </div>
     </div>

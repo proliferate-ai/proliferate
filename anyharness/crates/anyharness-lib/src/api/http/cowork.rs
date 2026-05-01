@@ -11,6 +11,7 @@ use axum::{
 };
 use serde_json::Value;
 
+use super::access::assert_workspace_mutable;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract_with_summary;
@@ -22,6 +23,7 @@ use crate::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
 use crate::workspaces::model::WorkspaceRecord;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     get,
@@ -214,6 +216,11 @@ pub async fn post_cowork_mcp_endpoint(
             "COWORK_MCP_UNAUTHORIZED",
         ));
     }
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::CoworkWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
 
     let artifact_runtime = state.cowork_artifact_runtime.clone();
     let cowork_runtime = state.cowork_runtime.clone();

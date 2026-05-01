@@ -4,6 +4,7 @@ import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persis
 export interface RepoConfig {
   defaultBranch: string | null;
   setupScript: string;
+  runCommand: string;
 }
 
 export interface RepoPreferencesState {
@@ -17,10 +18,15 @@ const REPO_PREFERENCES_KEY = "repo_preferences";
 const DEFAULT_REPO_CONFIG: RepoConfig = {
   defaultBranch: null,
   setupScript: "",
+  runCommand: "",
 };
 
 function normalizeRepoConfigs(
-  repoConfigs: Record<string, { defaultBranch?: string | null; setupScript?: string }>,
+  repoConfigs: Record<string, {
+    defaultBranch?: string | null;
+    setupScript?: string;
+    runCommand?: string;
+  }>,
 ): Record<string, RepoConfig> {
   return Object.fromEntries(
     Object.entries(repoConfigs).map(([sourceRoot, config]) => [
@@ -28,6 +34,7 @@ function normalizeRepoConfigs(
       {
         defaultBranch: config.defaultBranch?.trim() ? config.defaultBranch.trim() : null,
         setupScript: config.setupScript ?? "",
+        runCommand: config.runCommand ?? "",
       },
     ]),
   );
@@ -40,7 +47,11 @@ async function readAll(): Promise<Record<string, RepoConfig>> {
   }
 
   const legacyRepoConfigs =
-    await readPersistedValue<Record<string, { defaultBranch?: string | null; setupScript?: string }>>("repoConfigs");
+    await readPersistedValue<Record<string, {
+      defaultBranch?: string | null;
+      setupScript?: string;
+      runCommand?: string;
+    }>>("repoConfigs");
   return normalizeRepoConfigs(legacyRepoConfigs ?? {});
 }
 
@@ -61,6 +72,10 @@ export const useRepoPreferencesStore = create<RepoPreferencesState>((set, get) =
         patch.setupScript === undefined
           ? current.setupScript
           : patch.setupScript,
+      runCommand:
+        patch.runCommand === undefined
+          ? current.runCommand
+          : patch.runCommand,
     };
     set({
       repoConfigs: {

@@ -11,6 +11,7 @@ import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-
 import { useChatLaunchCatalog } from "@/hooks/chat/use-chat-launch-catalog";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import {
@@ -263,6 +264,9 @@ export async function executePlanHandoff({
     });
     onCompleted();
   } catch (error) {
+    if (isSessionModelAvailabilityInterruption(error)) {
+      return;
+    }
     if (createdSessionId) {
       await dismissSession(createdSessionId).catch(() => undefined);
       if (previousActiveSessionId && hasSession(previousActiveSessionId)) {

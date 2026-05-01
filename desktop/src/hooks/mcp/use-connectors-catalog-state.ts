@@ -166,7 +166,7 @@ type InternalModalState =
   | null;
 
 export function useConnectorsCatalogState() {
-  const { data } = useConnectors();
+  const connectorsQuery = useConnectors();
   const [searchQuery, setSearchQuery] = useState("");
   const [modal, setModal] = useState<InternalModalState>(null);
 
@@ -174,8 +174,8 @@ export function useConnectorsCatalogState() {
     trackProductEvent("connectors_pane_viewed", undefined);
   }, []);
 
-  const installed = data?.installed ?? EMPTY_INSTALLED;
-  const available = data?.available ?? EMPTY_AVAILABLE;
+  const installed = connectorsQuery.data?.installed ?? EMPTY_INSTALLED;
+  const available = connectorsQuery.data?.available ?? EMPTY_AVAILABLE;
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -268,16 +268,27 @@ export function useConnectorsCatalogState() {
     });
   }, []);
 
+  const retryLoad = useCallback(() => {
+    void connectorsQuery.refetch();
+  }, [connectorsQuery.refetch]);
+
   return {
     availableCards,
     closeModal,
     connected,
     firstRunEmpty,
     isSearching,
+    isLoading: connectorsQuery.isLoading,
+    loadError: connectorsQuery.error instanceof Error
+      ? connectorsQuery.error.message
+      : connectorsQuery.error
+        ? "Couldn't load integrations."
+        : null,
     modal: resolvedModal,
     openConnect,
     openManage,
     openRecovery,
+    retryLoad,
     searchEmpty,
     searchQuery,
     setActiveTab,

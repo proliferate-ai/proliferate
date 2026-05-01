@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::acp::manager::AcpManager;
+use crate::agents::catalog::ModelCatalogService;
 use crate::agents::reconcile_execution::AgentReconcileService;
+use crate::agents::seed::AgentSeedStore;
 use crate::cowork::artifacts::CoworkArtifactRuntime;
 use crate::cowork::delegation::service::CoworkDelegationService;
 use crate::cowork::mcp_auth::CoworkMcpAuth;
@@ -20,6 +22,11 @@ use crate::plans::store::PlanStore;
 use crate::processes::ProcessService;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
+use crate::reviews::hooks::ReviewSessionHooks;
+use crate::reviews::mcp_auth::ReviewMcpAuth;
+use crate::reviews::runtime::ReviewRuntime;
+use crate::reviews::service::ReviewService;
+use crate::reviews::store::ReviewStore;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
@@ -31,12 +38,15 @@ use crate::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::sessions::subagents::mcp_auth::SubagentMcpAuth;
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
+use crate::sessions::workspace_naming::hooks::WorkspaceNamingSessionHooks;
+use crate::sessions::workspace_naming::mcp_auth::WorkspaceNamingMcpAuth;
+use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
+use crate::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
-use crate::workspaces::setup_execution::SetupExecutionService;
 use crate::workspaces::store::WorkspaceStore;
 
 #[derive(Debug, thiserror::Error)]
@@ -56,7 +66,9 @@ pub struct AppState {
     pub runtime_base_url: String,
     pub db: Db,
     pub bearer_token: Option<String>,
+    pub agent_seed_store: AgentSeedStore,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
+    pub model_catalog_service: Arc<ModelCatalogService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
@@ -68,15 +80,19 @@ pub struct AppState {
     pub cowork_runtime: Arc<CoworkRuntime>,
     pub subagent_service: Arc<SubagentService>,
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
+    pub review_service: Arc<ReviewService>,
+    pub review_session_hooks: Arc<ReviewSessionHooks>,
+    pub review_runtime: Arc<ReviewRuntime>,
+    pub workspace_naming_session_hooks: Arc<WorkspaceNamingSessionHooks>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
+    pub workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
     pub acp_manager: AcpManager,
     pub terminal_service: Arc<TerminalService>,
-    pub setup_execution_service: Arc<SetupExecutionService>,
 }
 
 impl AppState {
@@ -85,6 +101,7 @@ impl AppState {
         runtime_base_url: String,
         db: Db,
         require_bearer_auth: bool,
+        agent_seed_store: AgentSeedStore,
     ) -> Result<Self, AppStateInitError> {
         let bearer_token = load_bearer_token(require_bearer_auth)?;
         let session_data_cipher =
@@ -101,7 +118,11 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
+        let model_catalog_service = Arc::new(ModelCatalogService::new(runtime_home.clone()));
+        #[cfg(not(test))]
+        model_catalog_service.spawn_refresh();
         let process_service = Arc::new(ProcessService::new());
+        let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
         let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
@@ -115,10 +136,14 @@ impl AppState {
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
+            model_catalog_service.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
         let acp_manager = AcpManager::new(plan_service.clone());
-        let terminal_service = Arc::new(TerminalService::new());
+        let terminal_service = Arc::new(TerminalService::new(
+            TerminalStore::new(db.clone()),
+            runtime_home.clone(),
+        ));
         let workspace_access_gate = Arc::new(WorkspaceAccessGate::new(
             WorkspaceStore::new(db.clone()),
             SessionStore::new(db.clone()),
@@ -147,11 +172,19 @@ impl AppState {
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
-            session_link_service,
+            session_link_service.clone(),
             SubagentStore::new(db.clone()),
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
         ));
+        let review_service = Arc::new(ReviewService::new(
+            ReviewStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            session_link_service,
+            plan_service.clone(),
+        ));
+        acp_manager.set_review_service(review_service.clone());
+        let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
         let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
         let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
             runtime_base_url.clone(),
@@ -161,8 +194,26 @@ impl AppState {
             acp_manager.clone(),
             SessionStore::new(db.clone()),
         ));
-        let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> =
-            vec![cowork_session_hooks.clone(), subagent_session_hooks.clone()];
+        let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
+        let review_session_hooks = Arc::new(ReviewSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            review_mcp_auth,
+            review_hook_event_tx,
+        ));
+        let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
+        let workspace_naming_session_hooks = Arc::new(WorkspaceNamingSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            workspace_naming_mcp_auth,
+            SessionStore::new(db.clone()),
+        ));
+        let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> = vec![
+            cowork_session_hooks.clone(),
+            subagent_session_hooks.clone(),
+            review_session_hooks.clone(),
+            workspace_naming_session_hooks.clone(),
+        ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             workspace_runtime.clone(),
@@ -182,7 +233,6 @@ impl AppState {
             session_runtime.clone(),
             runtime_home.clone(),
         ));
-        let setup_execution_service = Arc::new(SetupExecutionService::new());
         let mobility_service = Arc::new(MobilityService::new(
             workspace_service.clone(),
             workspace_runtime.clone(),
@@ -191,7 +241,6 @@ impl AppState {
             session_runtime.clone(),
             subagent_service.clone(),
             workspace_access_gate.clone(),
-            setup_execution_service.clone(),
             terminal_service.clone(),
         ));
         let plan_runtime = Arc::new(PlanRuntime::new(
@@ -200,12 +249,23 @@ impl AppState {
             session_service.clone(),
             runtime_home.clone(),
         ));
+        let review_runtime = Arc::new(ReviewRuntime::new(
+            review_service.clone(),
+            session_runtime.clone(),
+            workspace_runtime.clone(),
+            runtime_home.clone(),
+        ));
+        review_runtime
+            .clone()
+            .spawn_background_tasks(review_hook_event_rx);
         Ok(Self {
             runtime_home,
             runtime_base_url,
             db,
             bearer_token,
+            agent_seed_store,
             agent_reconcile_service,
+            model_catalog_service,
             repo_root_service,
             workspace_runtime,
             files_runtime,
@@ -217,15 +277,19 @@ impl AppState {
             cowork_runtime,
             subagent_service,
             subagent_session_hooks,
+            review_service,
+            review_session_hooks,
+            review_runtime,
+            workspace_naming_session_hooks,
             session_service,
             session_runtime,
             workspace_access_gate,
+            workspace_operation_gate,
             mobility_service,
             plan_service,
             plan_runtime,
             acp_manager,
             terminal_service,
-            setup_execution_service,
         })
     }
 }
@@ -360,10 +424,10 @@ mod tests {
     use std::sync::Mutex;
 
     use super::{proliferate_home_dir_name, test_support, AppState};
-    use crate::persistence::Db;
+    use crate::{agents::seed::AgentSeedStore, persistence::Db};
 
-    #[test]
-    fn app_state_allows_missing_bearer_token_when_not_required() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_allows_missing_bearer_token_when_not_required() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -376,14 +440,15 @@ mod tests {
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
+            AgentSeedStore::not_configured_dev(),
         )
         .expect("expected app state");
 
         assert_eq!(state.bearer_token, None);
     }
 
-    #[test]
-    fn app_state_rejects_missing_bearer_token_when_required() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_rejects_missing_bearer_token_when_required() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -396,6 +461,7 @@ mod tests {
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             true,
+            AgentSeedStore::not_configured_dev(),
         )
         .err()
         .expect("expected missing bearer token error");
@@ -407,8 +473,8 @@ environment variable is missing or empty. Refusing to start without authenticati
         );
     }
 
-    #[test]
-    fn app_state_rejects_blank_bearer_token_when_required() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_rejects_blank_bearer_token_when_required() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -421,6 +487,7 @@ environment variable is missing or empty. Refusing to start without authenticati
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             true,
+            AgentSeedStore::not_configured_dev(),
         )
         .err()
         .expect("expected blank bearer token error");
@@ -432,8 +499,8 @@ environment variable is missing or empty. Refusing to start without authenticati
         );
     }
 
-    #[test]
-    fn app_state_rejects_invalid_data_key() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_rejects_invalid_data_key() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -446,6 +513,7 @@ environment variable is missing or empty. Refusing to start without authenticati
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
+            AgentSeedStore::not_configured_dev(),
         )
         .err()
         .expect("expected invalid data key error");

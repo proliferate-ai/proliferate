@@ -68,13 +68,8 @@ export function useActiveChatSessionState() {
   const transcript = activeSlot?.transcript ?? createTranscriptState(activeSessionId ?? "");
   const pendingPrompts = transcript.pendingPrompts;
   const optimisticPrompt = activeSlot?.optimisticPrompt ?? null;
-  const totalItems = useMemo(() => transcript.turnOrder.reduce(
-    (sum, turnId) => sum + (transcript.turnsById[turnId]?.itemOrder.length ?? 0),
-    0,
-  ), [transcript]);
   const hasContent = hasVisibleTranscriptContent({
     transcript,
-    pendingPrompts,
     optimisticPrompt,
   });
   const sessionViewState = resolveSessionViewState(activeSlot);
@@ -99,7 +94,6 @@ export function useActiveChatSessionState() {
     hasPendingApproval: pendingApproval !== null,
     hasPendingUserInput: pendingUserInput !== null,
     hasPendingMcpElicitation: pendingMcpElicitation !== null,
-    totalItems,
     hasContent,
     hasSlot: activeSlot !== null,
     transcriptHydrated: activeSlot?.transcriptHydrated ?? false,

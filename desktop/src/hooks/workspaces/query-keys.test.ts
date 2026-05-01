@@ -4,18 +4,27 @@ import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,
+  workspaceCollectionsScopeKey,
 } from "./query-keys";
+
+function makeCollections(overrides: Partial<WorkspaceCollections> = {}): WorkspaceCollections {
+  return {
+    localWorkspaces: [],
+    retiredLocalWorkspaces: [],
+    repoRoots: [],
+    cloudWorkspaces: [],
+    workspaces: [],
+    allWorkspaces: [],
+    cleanupAttentionWorkspaces: [],
+    ...overrides,
+  };
+}
 
 describe("getWorkspaceCollectionsFromCache", () => {
   it("returns workspace collections stored under a scoped key variant", () => {
     const queryClient = new QueryClient();
     const runtimeUrl = "http://127.0.0.1:7007";
-    const collections = {
-      localWorkspaces: [],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      workspaces: [],
-    } satisfies WorkspaceCollections;
+    const collections = makeCollections();
 
     queryClient.setQueryData(workspaceCollectionsKey(runtimeUrl, true), collections);
 
@@ -25,18 +34,12 @@ describe("getWorkspaceCollectionsFromCache", () => {
   it("prefers the most recently updated scoped query", () => {
     const queryClient = new QueryClient();
     const runtimeUrl = "http://127.0.0.1:7007";
-    const staleCollections = {
+    const staleCollections = makeCollections({
       localWorkspaces: [{ id: "stale" }],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      workspaces: [],
-    } as unknown as WorkspaceCollections;
-    const freshCollections = {
+    } as unknown as Partial<WorkspaceCollections>);
+    const freshCollections = makeCollections({
       localWorkspaces: [{ id: "fresh" }],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      workspaces: [],
-    } as unknown as WorkspaceCollections;
+    } as unknown as Partial<WorkspaceCollections>);
 
     queryClient.setQueryData(
       workspaceCollectionsKey(runtimeUrl, false),
@@ -50,5 +53,26 @@ describe("getWorkspaceCollectionsFromCache", () => {
     );
 
     expect(getWorkspaceCollectionsFromCache(queryClient, runtimeUrl)).toEqual(freshCollections);
+  });
+
+  it("ignores non-collection data sharing the workspace cache prefix", () => {
+    const queryClient = new QueryClient();
+    const runtimeUrl = "http://127.0.0.1:7007";
+    const collections = makeCollections({
+      localWorkspaces: [{ id: "workspace-1" }],
+    } as unknown as Partial<WorkspaceCollections>);
+
+    queryClient.setQueryData(
+      workspaceCollectionsKey(runtimeUrl, true),
+      collections,
+      { updatedAt: 100 },
+    );
+    queryClient.setQueryData(
+      [...workspaceCollectionsScopeKey(runtimeUrl), "workspace-1", "finish-suggestion"],
+      { workspaceId: "workspace-1", canRetire: true },
+      { updatedAt: 200 },
+    );
+
+    expect(getWorkspaceCollectionsFromCache(queryClient, runtimeUrl)).toEqual(collections);
   });
 });

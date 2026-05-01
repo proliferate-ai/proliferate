@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="400" viewBox="0 0 660 400">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fafaf8"/>
+      <stop offset="1" stop-color="#ecefea"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#1b1b1b" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="660" height="400" rx="0" fill="url(#bg)"/>
+  <path d="M0 340 C120 300 206 370 330 332 C466 290 520 320 660 282 L660 400 L0 400 Z" fill="#dfe8df"/>
+  <path d="M0 310 C115 276 212 324 330 294 C470 258 545 284 660 244 L660 400 L0 400 Z" fill="#ffffff" opacity="0.5"/>
+
+  <text x="330" y="66" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#1b1b1b">Proliferate</text>
+  <text x="330" y="94" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="14" font-weight="500" fill="#5a5f58">Drag the app into Applications</text>
+
+  <g filter="url(#softShadow)">
+    <path d="M252 178 L388 178" stroke="#1b1b1b" stroke-width="6" stroke-linecap="round"/>
+    <path d="M374 158 L400 178 L374 198" fill="none" stroke="#1b1b1b" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+</svg>

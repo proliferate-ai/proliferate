@@ -1,5 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import { shouldPollCloudWorkspaceForUpdates } from "@/lib/domain/workspaces/cloud-workspace-status";
 
 function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(workspaces: T[]): T[] {
   return [...workspaces].sort((a, b) => {
@@ -10,7 +11,7 @@ function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(w
 }
 
 export function cloudWorkspaceGroupKey(
-  workspace: Pick<CloudWorkspaceSummary, "repo">,
+  workspace: { repo: Pick<CloudWorkspaceSummary["repo"], "provider" | "owner" | "name"> },
 ): string {
   return `${workspace.repo.provider}:${workspace.repo.owner}:${workspace.repo.name}`;
 }
@@ -102,9 +103,12 @@ export function workspaceFileTreeStateKey(workspace: Workspace): string {
 
 export interface WorkspaceCollections {
   localWorkspaces: Workspace[];
+  retiredLocalWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
   cloudWorkspaces: CloudWorkspaceSummary[];
   workspaces: Workspace[];
+  allWorkspaces: Workspace[];
+  cleanupAttentionWorkspaces: Workspace[];
 }
 
 export function buildWorkspaceCollections(
@@ -115,13 +119,43 @@ export function buildWorkspaceCollections(
   const enrichedLocalWorkspaces = sortWorkspacesByUpdatedAtDesc(
     enrichLocalWorkspaces(localWorkspaces, repoRoots),
   );
+  const activeLocalWorkspaces = enrichedLocalWorkspaces.filter(
+    (workspace) => workspace.lifecycleState !== "retired",
+  );
+  const retiredLocalWorkspaces = enrichedLocalWorkspaces.filter(
+    (workspace) => workspace.lifecycleState === "retired",
+  );
+  const cleanupAttentionWorkspaces = retiredLocalWorkspaces.filter(
+    (workspace) => workspace.cleanupState === "pending" || workspace.cleanupState === "failed",
+  );
 
   return {
-    localWorkspaces: enrichedLocalWorkspaces,
+    localWorkspaces: activeLocalWorkspaces,
+    retiredLocalWorkspaces,
     repoRoots,
     cloudWorkspaces,
-    workspaces: enrichedLocalWorkspaces,
+    workspaces: activeLocalWorkspaces,
+    allWorkspaces: enrichedLocalWorkspaces,
+    cleanupAttentionWorkspaces,
   };
+}
+
+export function workspaceCollectionsNeedActivityRefresh(
+  collections: WorkspaceCollections | undefined,
+): boolean {
+  if (!collections) {
+    return false;
+  }
+
+  const hasLocalActivity = collections.localWorkspaces.some((workspace) => {
+    const phase = workspace.executionSummary?.phase;
+    return phase === "running" || phase === "awaiting_interaction";
+  });
+  if (hasLocalActivity) {
+    return true;
+  }
+
+  return collections.cloudWorkspaces.some(shouldPollCloudWorkspaceForUpdates);
 }
 
 export function upsertLocalWorkspaceCollections(
@@ -142,7 +176,7 @@ export function upsertLocalWorkspaceCollections(
 
   const localWorkspaces = [
     workspace,
-    ...collections.localWorkspaces.filter((existing) => existing.id !== workspace.id),
+    ...collections.allWorkspaces.filter((existing) => existing.id !== workspace.id),
   ];
 
   return buildWorkspaceCollections(localWorkspaces, repoRoots, collections.cloudWorkspaces);
@@ -162,7 +196,7 @@ export function upsertCloudWorkspaceCollections(
   ];
 
   return buildWorkspaceCollections(
-    collections.localWorkspaces,
+    collections.allWorkspaces,
     collections.repoRoots,
     cloudWorkspaces,
   );
@@ -177,7 +211,7 @@ export function upsertRepoRootCollections(
   }
 
   return buildWorkspaceCollections(
-    collections.localWorkspaces,
+    collections.allWorkspaces,
     [
       repoRoot,
       ...collections.repoRoots.filter((existing) => existing.id !== repoRoot.id),

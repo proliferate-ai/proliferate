@@ -5,6 +5,8 @@ import { anyHarnessRuntimeHealthKey } from "../lib/query-keys.js";
 
 interface RuntimeQueryOptions {
   enabled?: boolean;
+  refetchInterval?: number | false;
+  pollWhileAgentSeedHydrating?: boolean;
 }
 
 export function useRuntimeHealthQuery(options?: RuntimeQueryOptions) {
@@ -18,5 +20,10 @@ export function useRuntimeHealthQuery(options?: RuntimeQueryOptions) {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.runtime.getHealth();
     },
+    refetchInterval: options?.pollWhileAgentSeedHydrating
+      ? (query) => (
+          query.state.data?.agentSeed?.status === "hydrating" ? 1_000 : false
+        )
+      : options?.refetchInterval,
   });
 }

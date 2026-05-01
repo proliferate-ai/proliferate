@@ -107,7 +107,10 @@ class Settings(BaseSettings):
     automation_cloud_executor_branch_prefix: str = "automation"
     automation_cloud_executor_branch_slug_chars: int = 48
     cloud_mcp_oauth_callback_base_url: str = ""
-    cloud_mcp_allow_insecure_launch_urls: bool = False
+    cloud_mcp_slack_enabled: bool = False
+    cloud_mcp_slack_client_id: str = ""
+    cloud_mcp_slack_client_secret: str = ""
+    cloud_mcp_slack_token_endpoint_auth_method: str = "client_secret_post"
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""

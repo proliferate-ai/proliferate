@@ -4,6 +4,7 @@ use std::process::Command;
 use super::credentials::detect_credentials;
 use super::installer::is_valid_executable;
 use super::model::*;
+use super::seed;
 
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
@@ -491,10 +492,12 @@ fn detect_runtime_compatibility_issue(
         return None;
     }
 
-    let node_path = find_in_path("node").or_else(|| find_in_path("node.exe"));
+    let node_path = seed::bundled_node_bin(runtime_home)
+        .or_else(|| find_in_path("node"))
+        .or_else(|| find_in_path("node.exe"));
     let Some(node_path) = node_path else {
         return Some(
-            "Claude ACP requires Node.js 20.10+ on PATH, but `node` was not found. Upgrade the sandbox template or install a newer Node runtime."
+            "Claude ACP requires Node.js 20.10+, but neither bundled Node nor `node` on PATH was found. Upgrade the sandbox template or install a newer Node runtime."
                 .into(),
         );
     };
@@ -505,7 +508,7 @@ fn detect_runtime_compatibility_issue(
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             return Some(format!(
-                "Claude ACP requires Node.js 20.10+ on PATH, but `{} --version` failed{}.",
+                "Claude ACP requires Node.js 20.10+, but `{} --version` failed{}.",
                 node_path.display(),
                 if stderr.is_empty() {
                     String::new()
@@ -516,7 +519,7 @@ fn detect_runtime_compatibility_issue(
         }
         Err(error) => {
             return Some(format!(
-                "Claude ACP requires Node.js 20.10+ on PATH, but `{} --version` could not run: {error}.",
+                "Claude ACP requires Node.js 20.10+, but `{} --version` could not run: {error}.",
                 node_path.display()
             ));
         }
@@ -525,7 +528,7 @@ fn detect_runtime_compatibility_issue(
     let raw_version = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let Some(version) = parse_node_version(&raw_version) else {
         return Some(format!(
-            "Claude ACP requires Node.js 20.10+ on PATH, but the runtime reported an unrecognized Node version `{raw_version}`."
+            "Claude ACP requires Node.js 20.10+, but the runtime reported an unrecognized Node version `{raw_version}`."
         ));
     };
 
@@ -547,7 +550,7 @@ fn detect_runtime_compatibility_issue(
                 .to_string()
         });
     Some(format!(
-        "Claude ACP requires Node.js 20.10+ on PATH, but found Node.js {raw_version}. The launch target `{launch_target}` will crash before ACP initialize. Upgrade the sandbox template image or install a newer Node runtime."
+        "Claude ACP requires Node.js 20.10+, but found Node.js {raw_version}. The launch target `{launch_target}` will crash before ACP initialize. Upgrade the sandbox template image or install a newer Node runtime."
     ))
 }
 

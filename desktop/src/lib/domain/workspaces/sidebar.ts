@@ -1,7 +1,16 @@
 import type { GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import {
+  latestLogicalWorkspaceTimestamp,
+  type LogicalWorkspace,
+} from "@/lib/domain/workspaces/logical-workspaces";
+import {
+  compareLogicalWorkspaceRecency,
+  compareResolvedLogicalWorkspaceRecency,
+  type LogicalWorkspaceRecency,
+  resolveLogicalWorkspaceRecency,
+} from "@/lib/domain/workspaces/recency";
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
@@ -85,6 +94,7 @@ export const DEFAULT_SIDEBAR_WORKSPACE_TYPES: SidebarWorkspaceVariant[] = [
 
 export interface SidebarWorkspaceItemState {
   id: string;
+  localWorkspaceId: string | null;
   name: string;
   /**
    * The label we would render if the user had not set a display name override.
@@ -110,7 +120,7 @@ export interface SidebarWorkspaceItemState {
   detailIndicators: SidebarDetailIndicator[];
   cloudStatus: CloudWorkspaceStatus | null;
   lastInteracted: string | null;
-  unread: boolean;
+  needsReview: boolean;
 }
 
 export interface SidebarGroupState {
@@ -129,8 +139,7 @@ function logicalGroupName(workspace: LogicalWorkspace): string {
     ?? workspace.sourceRoot;
 }
 
-interface WorkspaceUnreadInput {
-  isActive: boolean;
+interface WorkspaceNeedsReviewInput {
   isArchived: boolean;
   lastInteracted: string | null | undefined;
   lastViewedAt: string | null | undefined;
@@ -239,13 +248,12 @@ export function sidebarEntryIsCloud(
   return entry.source === "cloud";
 }
 
-export function isWorkspaceUnread({
-  isActive,
+export function isWorkspaceNeedsReview({
   isArchived,
   lastInteracted,
   lastViewedAt,
-}: WorkspaceUnreadInput): boolean {
-  if (isActive || isArchived || !lastInteracted) {
+}: WorkspaceNeedsReviewInput): boolean {
+  if (isArchived || !lastInteracted) {
     return false;
   }
 
@@ -350,6 +358,7 @@ export function buildSidebarGroupStates(args: {
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
+  finishSuggestionsByWorkspaceId?: Record<string, { workspaceId: string; readinessFingerprint: string }>;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -371,8 +380,16 @@ export function buildSidebarGroupStates(args: {
   ]);
 
   return Array.from(groupKeys)
-    .map((repoKey): { group: SidebarGroupState; sortTimestamp: string } | null => {
-      const groupWorkspaces = groups.get(repoKey) ?? [];
+    .map((repoKey): { group: SidebarGroupState; sortRecency: LogicalWorkspaceRecency } | null => {
+      const rawGroupWorkspaces = groups.get(repoKey) ?? [];
+      const groupWorkspaces = groupHasWorkActivity(
+        rawGroupWorkspaces,
+        args.workspaceLastInteracted,
+      )
+        ? [...rawGroupWorkspaces].sort((left, right) =>
+          compareLogicalWorkspaceRecency(left, right, args.workspaceLastInteracted)
+        )
+        : rawGroupWorkspaces;
       const representative = groupWorkspaces[0] ?? null;
       const repoRoot = representative?.repoRoot ?? repoRootsByKey.get(repoKey) ?? null;
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
@@ -381,7 +398,8 @@ export function buildSidebarGroupStates(args: {
       const items = groupWorkspaces.map((entry) => {
         const active = entry.id === args.selectedLogicalWorkspaceId;
         const archived = args.archivedSet.has(entry.id);
-        const lastInteracted = args.workspaceLastInteracted[entry.id] ?? null;
+        const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
+        const lastInteracted = recency.displayAt;
         const preferredLocalWorkspace = entry.localWorkspace;
         const preferredCloudWorkspace = entry.cloudWorkspace;
         const variant = sidebarWorkspaceVariantForLogicalWorkspace(entry);
@@ -403,16 +421,16 @@ export function buildSidebarGroupStates(args: {
               workspace: preferredCloudWorkspace,
             })
             : entry.displayName;
-        const unread = isWorkspaceUnread({
-          isActive: active,
+        const needsReview = isWorkspaceNeedsReview({
           isArchived: archived,
           lastInteracted,
-          lastViewedAt: args.lastViewedAt[entry.id],
+          lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
         });
         const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
 
         return {
           id: entry.id,
+          localWorkspaceId: preferredLocalWorkspace?.id ?? null,
           name: displayNameOverride ?? defaultName,
           defaultName,
           hasDisplayNameOverride: displayNameOverride !== null,
@@ -423,25 +441,49 @@ export function buildSidebarGroupStates(args: {
           variant,
           statusIndicator: sidebarStatusIndicatorFromActivity({
             activity,
-            unread,
+            needsReview,
             pendingPromptCount: args.pendingPromptCounts?.[entry.id] ?? 0,
             errorAction: { kind: "open_workspace", workspaceId: entry.id },
           }),
-          detailIndicators: detailIndicatorsForWorkspace(entry, variant),
+          detailIndicators: detailIndicatorsForWorkspace(
+            entry,
+            variant,
+            preferredLocalWorkspace
+              ? args.finishSuggestionsByWorkspaceId?.[preferredLocalWorkspace.id] ?? null
+              : null,
+          ),
           cloudStatus: preferredCloudWorkspace
             ? preferredCloudWorkspace.status as CloudWorkspaceStatus
             : null,
           lastInteracted,
-          unread,
+          needsReview,
         };
       });
       const visibleItems = items.filter((item) =>
         item.active
         || ((args.showArchived || !item.archived) && visibleWorkspaceTypes.has(item.variant))
       );
+      const archiveHiddenItems = items.filter((item) =>
+        !item.active
+        && item.archived
+        && visibleWorkspaceTypes.has(item.variant)
+      );
       if (visibleItems.length === 0 && groupWorkspaces.length > 0) {
-        return null;
+        if (!repoRoot || archiveHiddenItems.length === 0) {
+          return null;
+        }
       }
+      const visibleItemIds = new Set(visibleItems.map((item) => item.id));
+      const sortRecency = latestVisibleWorkspaceRecency(
+        groupWorkspaces,
+        visibleItemIds,
+        args.workspaceLastInteracted,
+      ) ?? {
+        activityAt: null,
+        recordUpdatedAt: repoRoot?.updatedAt ?? "",
+        sortAt: repoRoot?.updatedAt ?? "",
+        displayAt: null,
+      };
 
       const sourceRoot = repoRoot?.path
         ?? representative?.sourceRoot
@@ -455,7 +497,7 @@ export function buildSidebarGroupStates(args: {
       const repoName = repoRoot?.remoteRepoName ?? representative?.repoName ?? null;
 
       return {
-        sortTimestamp: groupWorkspaces[0]?.updatedAt ?? repoRoot?.updatedAt ?? "",
+        sortRecency,
         group: {
           sourceRoot,
           name,
@@ -479,9 +521,37 @@ export function buildSidebarGroupStates(args: {
         },
       };
     })
-    .filter((entry): entry is { group: SidebarGroupState; sortTimestamp: string } => entry !== null)
-    .sort((a, b) => new Date(b.sortTimestamp).getTime() - new Date(a.sortTimestamp).getTime())
+    .filter((entry): entry is { group: SidebarGroupState; sortRecency: LogicalWorkspaceRecency } =>
+      entry !== null)
+    .sort((a, b) => compareResolvedLogicalWorkspaceRecency(a.sortRecency, b.sortRecency))
     .map((entry) => entry.group);
+}
+
+function latestVisibleWorkspaceRecency(
+  workspaces: LogicalWorkspace[],
+  visibleItemIds: Set<string>,
+  workspaceActivityAt: Record<string, string>,
+): LogicalWorkspaceRecency | null {
+  let latestRecency: LogicalWorkspaceRecency | null = null;
+  for (const workspace of workspaces) {
+    if (!visibleItemIds.has(workspace.id)) {
+      continue;
+    }
+    const recency = resolveLogicalWorkspaceRecency(workspace, workspaceActivityAt);
+    if (!latestRecency || compareResolvedLogicalWorkspaceRecency(recency, latestRecency) < 0) {
+      latestRecency = recency;
+    }
+  }
+  return latestRecency;
+}
+
+function groupHasWorkActivity(
+  workspaces: LogicalWorkspace[],
+  workspaceActivityAt: Record<string, string>,
+): boolean {
+  return workspaces.some((workspace) =>
+    resolveLogicalWorkspaceRecency(workspace, workspaceActivityAt).activityAt !== null
+  );
 }
 
 function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {

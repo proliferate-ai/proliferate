@@ -53,6 +53,7 @@ pub enum SessionEvent {
     SessionInfoUpdate(SessionInfoUpdatePayload),
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
+    ReviewRunUpdated(ReviewRunUpdatedPayload),
     UsageUpdate(UsageUpdatePayload),
 
     PendingPromptAdded(PendingPromptAddedPayload),
@@ -83,6 +84,7 @@ impl SessionEvent {
             Self::SessionInfoUpdate(_) => "session_info_update",
             Self::SubagentTurnCompleted(_) => "subagent_turn_completed",
             Self::SessionLinkTurnCompleted(_) => "session_link_turn_completed",
+            Self::ReviewRunUpdated(_) => "review_run_updated",
             Self::UsageUpdate(_) => "usage_update",
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
@@ -207,6 +209,16 @@ pub enum PromptProvenance {
         session_link_id: String,
         #[serde(rename = "completionId")]
         completion_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    ReviewFeedback {
+        #[serde(rename = "reviewRunId")]
+        review_run_id: String,
+        #[serde(rename = "reviewRoundId")]
+        review_round_id: String,
+        #[serde(rename = "feedbackJobId")]
+        feedback_job_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
@@ -609,6 +621,21 @@ pub struct SessionLinkTurnCompletedPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ReviewRunUpdatedPayload {
+    pub review_run_id: String,
+    pub parent_session_id: String,
+    pub kind: super::reviews::ReviewKind,
+    pub status: super::reviews::ReviewRunStatus,
+    pub current_round_number: u32,
+    pub max_rounds: u32,
+    pub auto_iterate: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_round_id: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageUpdatePayload {
     pub used: u64,
     pub size: u64,
@@ -665,6 +692,21 @@ pub struct ErrorEvent {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ErrorEventDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ErrorEventDetails {
+    #[serde(rename_all = "camelCase")]
+    ProviderRateLimit {
+        provider: String,
+        provider_model: String,
+        limit: u64,
+        unit: String,
+        fallback_model_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -807,5 +849,49 @@ mod tests {
         };
         assert_eq!(payload.relation, "cowork_coding_session");
         assert_eq!(payload.outcome, SubagentTurnOutcome::Failed);
+    }
+
+    #[test]
+    fn review_run_updated_event_round_trips() {
+        let event = SessionEvent::ReviewRunUpdated(ReviewRunUpdatedPayload {
+            review_run_id: "review-1".to_string(),
+            parent_session_id: "parent-1".to_string(),
+            kind: super::super::reviews::ReviewKind::Plan,
+            status: super::super::reviews::ReviewRunStatus::ParentRevising,
+            current_round_number: 1,
+            max_rounds: 2,
+            auto_iterate: true,
+            active_round_id: Some("round-1".to_string()),
+            updated_at: "2026-04-28T12:00:00Z".to_string(),
+        });
+
+        let json = serde_json::to_value(&event).expect("serialize review update event");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "review_run_updated",
+                "reviewRunId": "review-1",
+                "parentSessionId": "parent-1",
+                "kind": "plan",
+                "status": "parent_revising",
+                "currentRoundNumber": 1,
+                "maxRounds": 2,
+                "autoIterate": true,
+                "activeRoundId": "round-1",
+                "updatedAt": "2026-04-28T12:00:00Z"
+            })
+        );
+
+        let round_tripped: SessionEvent =
+            serde_json::from_value(json).expect("deserialize review update event");
+        assert_eq!(round_tripped.event_type(), "review_run_updated");
+        let SessionEvent::ReviewRunUpdated(payload) = round_tripped else {
+            panic!("expected review run updated event");
+        };
+        assert_eq!(payload.review_run_id, "review-1");
+        assert_eq!(
+            payload.status,
+            super::super::reviews::ReviewRunStatus::ParentRevising
+        );
     }
 }

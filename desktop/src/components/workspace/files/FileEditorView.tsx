@@ -1,15 +1,18 @@
 import { useCallback, useEffect } from "react";
 import Editor, { type BeforeMount } from "@monaco-editor/react";
+import { Button } from "@/components/ui/Button";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useResolvedMode } from "@/hooks/theme/use-theme";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
 import {
   proliferateDarkTheme,
   proliferateLightTheme,
   THEME_NAME_DARK,
   THEME_NAME_LIGHT,
 } from "@/lib/infra/monaco-theme";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 function inferLanguage(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
@@ -36,6 +39,8 @@ export function FileEditorView({ filePath }: FileEditorViewProps) {
   const { saveFile, reloadFile } = useWorkspaceFileActions();
 
   const resolvedMode = useResolvedMode();
+  const readableCodeFontSizeId = useUserPreferencesStore((s) => s.readableCodeFontSizeId);
+  const readableCodeScale = resolveReadableCodeFontScale(readableCodeFontSizeId);
 
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     monaco.editor.defineTheme(THEME_NAME_DARK, proliferateDarkTheme);
@@ -43,6 +48,12 @@ export function FileEditorView({ filePath }: FileEditorViewProps) {
   }, []);
 
   const buf = buffersByPath[filePath];
+
+  useEffect(() => {
+    if (!buf) {
+      void reloadFile(filePath);
+    }
+  }, [buf, filePath, reloadFile]);
 
   const handleSaveShortcut = useCallback(
     (e: KeyboardEvent) => {
@@ -93,8 +104,8 @@ export function FileEditorView({ filePath }: FileEditorViewProps) {
             theme={resolvedMode === "dark" ? THEME_NAME_DARK : THEME_NAME_LIGHT}
             options={{
               minimap: { enabled: false },
-              fontSize: 11,
-              lineHeight: 18,
+              fontSize: readableCodeScale.monacoFontSize,
+              lineHeight: readableCodeScale.monacoLineHeight,
               fontFamily: "'Geist Mono', monospace",
               fontLigatures: false,
               padding: { top: 0 },
@@ -122,12 +133,15 @@ export function FileEditorView({ filePath }: FileEditorViewProps) {
           <span className="text-xs text-destructive">
             File changed on disk. Your local changes are preserved.
           </span>
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => reloadFile(filePath)}
-            className="text-xs text-destructive hover:underline ml-2 shrink-0"
+            className="ml-2 h-auto shrink-0 bg-transparent p-0 text-xs text-destructive hover:bg-transparent hover:underline"
           >
             Reload from disk
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -80,6 +80,7 @@ from tests.e2e.cloud.helpers.workspaces import (
     get_cloud_workspace,
     provision_workspace_with_credentials,
     wait_for_cloud_workspace_status,
+    workspace_status,
 )
 
 __all__ = [
@@ -142,6 +143,7 @@ __all__ = [
     "unique_branch_name",
     "usage_segment_count",
     "wait_for_cloud_workspace_status",
+    "workspace_status",
     "wait_for_e2b_sandbox_event",
     "wait_for_sandbox_event_receipt",
 ]

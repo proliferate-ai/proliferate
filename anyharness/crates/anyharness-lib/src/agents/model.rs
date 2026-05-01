@@ -140,6 +140,40 @@ impl Platform {
             _ => None,
         }
     }
+
+    pub fn from_target_triple(target: &str) -> Option<Self> {
+        match target {
+            "aarch64-apple-darwin" => Some(Self::MacosArm64),
+            "x86_64-apple-darwin" => Some(Self::MacosX64),
+            "x86_64-unknown-linux-gnu" | "x86_64-unknown-linux-musl" => Some(Self::LinuxX64),
+            "aarch64-unknown-linux-gnu" | "aarch64-unknown-linux-musl" => Some(Self::LinuxArm64),
+            "x86_64-pc-windows-msvc" => Some(Self::WindowsX64),
+            "aarch64-pc-windows-msvc" => Some(Self::WindowsArm64),
+            _ => None,
+        }
+    }
+
+    pub fn current_target_triple() -> Option<&'static str> {
+        Self::detect().map(|platform| platform.target_triple())
+    }
+
+    pub fn target_triple(self) -> &'static str {
+        match self {
+            Self::MacosArm64 => "aarch64-apple-darwin",
+            Self::MacosX64 => "x86_64-apple-darwin",
+            Self::LinuxX64 => "x86_64-unknown-linux-gnu",
+            Self::LinuxArm64 => "aarch64-unknown-linux-gnu",
+            Self::WindowsX64 => "x86_64-pc-windows-msvc",
+            Self::WindowsArm64 => "aarch64-pc-windows-msvc",
+        }
+    }
+
+    pub fn node_binary_name(self) -> &'static str {
+        match self {
+            Self::WindowsX64 | Self::WindowsArm64 => "node.exe",
+            _ => "node",
+        }
+    }
 }
 
 /// Describes the native CLI artifact for an agent (optional; not all agents have one).
@@ -354,6 +388,36 @@ pub struct ModelRegistryModelMetadata {
     pub display_name: String,
     pub description: Option<String>,
     pub is_default: bool,
+    pub status: ModelCatalogStatus,
+    pub aliases: Vec<String>,
+    pub min_runtime_version: Option<String>,
+    pub launch_remediation: Option<ModelLaunchRemediationMetadata>,
+}
+
+/// Runtime-owned lifecycle status for one model catalog row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelCatalogStatus {
+    Candidate,
+    Active,
+    Deprecated,
+    Hidden,
+}
+
+/// Product-owned remediation class for a launch-time live-apply mismatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelLaunchRemediationKind {
+    ManagedReinstall,
+    ExternalUpdate,
+    Restart,
+}
+
+/// Runtime-owned catalog remediation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct ModelLaunchRemediationMetadata {
+    pub kind: ModelLaunchRemediationKind,
+    pub message: String,
 }
 
 /// Machine-local resolved state for one artifact (native or agent-process).

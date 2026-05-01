@@ -71,19 +71,11 @@ export function mergeLaunchAgentsWithRegistries(
       return agent.models.length > 0 ? [agent] : [];
     }
 
-    const registryModelsById = new Map(registry.models.map((model) => [model.id, model]));
-    const models = agent.models.flatMap((model) => {
-      const registryModel = registryModelsById.get(model.id);
-      if (!registryModel) {
-        return [];
-      }
-
-      return [{
-        ...model,
-        displayName: registryModel.displayName,
-        isDefault: registryModel.isDefault,
-      }];
-    });
+    const models = registry.models.map((model) => ({
+      id: model.id,
+      displayName: model.displayName,
+      isDefault: model.isDefault,
+    }));
 
     const defaultModelId = models.some((model) => model.id === registry.defaultModelId)
       ? registry.defaultModelId

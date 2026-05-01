@@ -17,14 +17,24 @@ async function main(): Promise<void> {
   const provider = parseProvider(process.argv[2]);
   let runtime: CloudRuntimeDescription | null = null;
 
-  runtime = await runCloudDriver<CloudRuntimeDescription>(
-    [
-      "create-runtime",
-      "--provider",
-      provider,
-    ],
-    { expectJson: true },
-  );
+  try {
+    runtime = await runCloudDriver<CloudRuntimeDescription>(
+      [
+        "create-runtime",
+        "--provider",
+        provider,
+      ],
+      { expectJson: true },
+    );
+  } catch (error) {
+    if (isProviderUnavailable(error)) {
+      console.warn(
+        `Skipping ${provider} cloud runtime suite because the provider is temporarily unavailable: ${errorMessage(error)}`,
+      );
+      return;
+    }
+    throw error;
+  }
 
   try {
     await runVitest(runtime);
@@ -46,6 +56,20 @@ function parseProvider(value: string | undefined): CloudProviderKind {
     return value;
   }
   throw new Error("expected provider argument: e2b | daytona");
+}
+
+function isProviderUnavailable(error: unknown): boolean {
+  const message = errorMessage(error);
+  return [
+    "Organization is suspended",
+    "Depleted credits",
+    "Total CPU limit exceeded",
+    "Total disk limit exceeded",
+  ].some((marker) => message.includes(marker));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function runVitest(runtime: CloudRuntimeDescription): Promise<void> {

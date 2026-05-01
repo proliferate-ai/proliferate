@@ -7,7 +7,10 @@ import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
-import { applyThemePreference, initializeTheme } from "@/config/theme"
+import { SessionModelAvailabilityDialog } from "@/components/workspace/chat/launch/SessionModelAvailabilityDialog"
+import { applyAppearancePreference, initializeTheme } from "@/config/theme"
+import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes"
+import { useAppCommandActions } from "@/hooks/app/use-app-command-actions"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
@@ -26,11 +29,12 @@ import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-b
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
+import { logRendererEvent } from "@/platform/tauri/diagnostics"
 import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
 import { AutomationsPage } from "@/pages/AutomationsPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { MainPage } from "@/pages/MainPage"
-import { PowersPage } from "@/pages/PowersPage"
+import { PluginsPage } from "@/pages/PluginsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import {
@@ -40,6 +44,7 @@ import {
 import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-store"
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
 import { bootstrapLogicalWorkspaceSelection } from "@/stores/workspaces/logical-workspace-store"
+import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
 
@@ -87,6 +92,16 @@ function cloudSettingsDeepLink(search: string): string {
   return url.toString()
 }
 
+function recordAppRendererEvent(message: string, elapsedMs?: number): void {
+  void logRendererEvent({
+    source: "app_bootstrap",
+    message,
+    elapsedMs,
+  }).catch(() => {
+    // Native logging is diagnostic-only; app startup should never depend on it.
+  })
+}
+
 function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
   useEffect(() => {
     window.location.replace(deepLinkUrl)
@@ -132,51 +147,73 @@ function App() {
 function AppRuntime() {
   const bootstrapAuth = useAuthBootstrap()
   const authStatus = useAuthStore((s) => s.status)
+  const appCommandActions = useAppCommandActions()
   useExportRunningAgentCount()
   useShortcutDispatcher()
-  useAppShortcuts()
+  useAppShortcuts(appCommandActions)
   useTurnEndSound()
   useAgentAutoReconcile()
   useLocalAutomationExecutor()
   useHomeDeferredLaunchRunner()
 
   useEffect(() => {
+    recordAppRendererEvent("app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
     initializeTheme()
-    const applyStoredTheme = () => {
-      const { themePreset, colorMode } = useUserPreferencesStore.getState()
-      applyThemePreference(themePreset, colorMode)
+    const applyStoredAppearance = () => {
+      const {
+        themePreset,
+        colorMode,
+        uiFontSizeId,
+        readableCodeFontSizeId,
+      } = useUserPreferencesStore.getState()
+      applyAppearancePreference({
+        themePreset,
+        colorMode,
+        uiFontSizeId,
+        readableCodeFontSizeId,
+      })
     }
-    applyStoredTheme()
+    applyStoredAppearance()
 
-    const unsubscribeTheme = useUserPreferencesStore.subscribe((state, prev) => {
-      if (state.themePreset !== prev.themePreset || state.colorMode !== prev.colorMode) {
-        applyStoredTheme()
+    const unsubscribeAppearance = useUserPreferencesStore.subscribe((state, prev) => {
+      if (
+        state.themePreset !== prev.themePreset
+        || state.colorMode !== prev.colorMode
+        || state.uiFontSizeId !== prev.uiFontSizeId
+        || state.readableCodeFontSizeId !== prev.readableCodeFontSizeId
+      ) {
+        applyStoredAppearance()
       }
     })
     const systemModeQuery = window.matchMedia("(prefers-color-scheme: dark)")
     const handleSystemModeChange = () => {
       if (useUserPreferencesStore.getState().colorMode === "system") {
-        applyStoredTheme()
+        applyStoredAppearance()
       }
     }
     systemModeQuery.addEventListener("change", handleSystemModeChange)
 
-    void bootstrapUserPreferences().then(applyStoredTheme)
+    void bootstrapUserPreferences().then(applyStoredAppearance)
     void bootstrapRepoPreferences()
     void bootstrapWorkspaceUi()
     void bootstrapLogicalWorkspaceSelection()
 
     const authBootstrapStartedAt = startStartupTimer()
+    recordAppRendererEvent("app.auth_bootstrap.start")
     logStartupDebug("app.auth_bootstrap.start")
     void bootstrapAuth().finally(() => {
+      recordAppRendererEvent(
+        "app.auth_bootstrap.completed",
+        elapsedStartupMs(authBootstrapStartedAt),
+      )
       logStartupDebug("app.auth_bootstrap.completed", {
         elapsedMs: elapsedStartupMs(authBootstrapStartedAt),
         authStatus: useAuthStore.getState().status,
       })
     })
     return () => {
-      unsubscribeTheme()
+      unsubscribeAppearance()
       systemModeQuery.removeEventListener("change", handleSystemModeChange)
     }
   }, [bootstrapAuth])
@@ -184,8 +221,13 @@ function AppRuntime() {
   useEffect(() => {
     if (authStatus !== "bootstrapping") {
       const runtimeBootstrapStartedAt = startStartupTimer()
+      recordAppRendererEvent("app.runtime_bootstrap.start")
       logStartupDebug("app.runtime_bootstrap.start", { authStatus })
       void bootstrapHarnessRuntime().finally(() => {
+        recordAppRendererEvent(
+          "app.runtime_bootstrap.completed",
+          elapsedStartupMs(runtimeBootstrapStartedAt),
+        )
         logStartupDebug("app.runtime_bootstrap.completed", {
           elapsedMs: elapsedStartupMs(runtimeBootstrapStartedAt),
           authStatus,
@@ -196,50 +238,59 @@ function AppRuntime() {
 
   return (
     <>
-      <MacWindowControlsSafeArea />
-      <UpdateRestartDialog />
-      <RuntimeInputSyncGate />
-      <InstrumentedRoutes>
-        <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
-        <Route element={<PublicOnlyRoute />}>
-          <Route path="/login" element={<LoginPage />} />
-        </Route>
-        <Route element={<BootstrappedRoute />}>
-          <Route element={<AuthRequiredGate />}>
-            <Route path="/setup" element={<Navigate to="/" replace />} />
-            <Route element={<UserPreferencesGate />}>
-              <Route path="/" element={<MainPage />} />
-              <Route path="/powers" element={<PowersPage />} />
-              <Route path="/automations" element={<AutomationsPage />} />
-              <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+      <AppCommandActionsProvider value={appCommandActions}>
+        <MacWindowControlsSafeArea />
+        <UpdateRestartDialog />
+        <SessionModelAvailabilityDialog />
+        <RuntimeInputSyncGate />
+        <InstrumentedRoutes>
+          <Route path="/index.html" element={<Navigate to="/" replace />} />
+          <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
+          <Route element={<BootstrappedRoute />}>
+            <Route element={<AuthRequiredGate />}>
+              <Route path="/setup" element={<Navigate to="/" replace />} />
+              <Route element={<UserPreferencesGate />}>
+                <Route path={APP_ROUTES.home} element={<MainPage />} />
+                <Route
+                  path={LEGACY_APP_ROUTES.powers}
+                  element={<Navigate to={APP_ROUTES.plugins} replace />}
+                />
+                <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
+                <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
+                <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
+                <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+              </Route>
             </Route>
           </Route>
-        </Route>
-        {import.meta.env.DEV && ChatPlaygroundPage && (
-          <Route
-            path="/playground"
-            element={
-              <Suspense fallback={null}>
-                <ChatPlaygroundPage />
-              </Suspense>
-            }
-          />
-        )}
-        {import.meta.env.DEV && UpdatePlaygroundPage && (
-          <Route
-            path="/playground/updates"
-            element={
-              <Suspense fallback={null}>
-                <UpdatePlaygroundPage />
-              </Suspense>
-            }
-          />
-        )}
-      </InstrumentedRoutes>
-      <RepoSetupModalHost />
-      <ToastContainer />
-      <TurnEndCelebration />
+          {import.meta.env.DEV && ChatPlaygroundPage && (
+            <Route
+              path="/playground"
+              element={
+                <Suspense fallback={null}>
+                  <ChatPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && UpdatePlaygroundPage && (
+            <Route
+              path="/playground/updates"
+              element={
+                <Suspense fallback={null}>
+                  <UpdatePlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </InstrumentedRoutes>
+        <RepoSetupModalHost />
+        <ToastContainer />
+        <TurnEndCelebration />
+      </AppCommandActionsProvider>
     </>
   )
 }
