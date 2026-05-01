@@ -19,8 +19,9 @@ use crate::files::types::{
 };
 use crate::git::file_search::WorkspaceFileSearchMatch;
 
-use super::access::assert_workspace_mutable;
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Deserialize)]
 pub struct FilePathQuery {
@@ -66,6 +67,11 @@ pub async fn list_entries(
     Path(workspace_id): Path<String>,
     Query(query): Query<FilePathQuery>,
 ) -> Result<Json<ListWorkspaceFilesResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let path = query.path;
     let files_runtime = state.files_runtime.clone();
     let response = run_files_task("list files", move || {
@@ -83,6 +89,11 @@ pub async fn read_file(
     Path(workspace_id): Path<String>,
     Query(query): Query<FilePathQuery>,
 ) -> Result<Json<ReadWorkspaceFileResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let path = query.path;
     let files_runtime = state.files_runtime.clone();
     let response = run_files_task("read file", move || {
@@ -100,6 +111,11 @@ pub async fn search_files(
     Path(workspace_id): Path<String>,
     Query(query): Query<FileSearchQuery>,
 ) -> Result<Json<SearchWorkspaceFilesResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let files_runtime = state.files_runtime.clone();
     let search_query = query.q;
     let limit = query.limit.clamp(1, 200);
@@ -120,6 +136,10 @@ pub async fn write_file(
     Path(workspace_id): Path<String>,
     Json(body): Json<WriteWorkspaceFileRequest>,
 ) -> Result<Json<WriteWorkspaceFileResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::FileWrite)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let path = body.path;
     let content = body.content;
@@ -140,6 +160,11 @@ pub async fn stat_file(
     Path(workspace_id): Path<String>,
     Query(query): Query<FilePathQuery>,
 ) -> Result<Json<StatWorkspaceFileResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let path = query.path;
     let files_runtime = state.files_runtime.clone();
     let response = run_files_task("stat file", move || {

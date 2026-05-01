@@ -28,6 +28,7 @@ use crate::sessions::runtime::{
     SessionLifecycleError, SessionMcpRefresh, SetSessionConfigOptionError,
 };
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
+use crate::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
 
 #[derive(Debug, Deserialize)]
 pub struct ListSessionsQuery {
@@ -94,6 +95,10 @@ pub async fn create_session(
             prompt_id = latency_fields.prompt_id,
         "[workspace-latency] session.http.create.request_received"
     );
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionStart)
+        .await;
     let record = state
         .session_runtime
         .create_and_start_session(
@@ -195,6 +200,9 @@ pub async fn set_session_config_option(
         value = %req.value,
         "Setting session config option"
     );
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
+            .await?;
     let (session, live_config, apply_state) = state
         .session_runtime
         .set_live_session_config_option(&session_id, &req.config_id, &req.value)
@@ -252,6 +260,9 @@ pub async fn prompt_session(
         "[workspace-latency] session.http.prompt.request_received"
     );
 
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
+            .await?;
     let outcome = state
         .session_runtime
         .send_prompt(&session_id, req.blocks, latency.as_ref())
@@ -320,6 +331,9 @@ pub async fn edit_pending_prompt(
             text: req.text.unwrap_or_default(),
         }]
     });
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
+            .await?;
     let updated = state
         .session_runtime
         .edit_pending_prompt(&session_id, seq, blocks)
@@ -345,6 +359,9 @@ pub async fn delete_pending_prompt(
     State(state): State<AppState>,
     Path((session_id, seq)): Path<(String, i64)>,
 ) -> Result<Json<Session>, ApiError> {
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionPrompt)
+            .await?;
     let updated = state
         .session_runtime
         .delete_pending_prompt(&session_id, seq)
@@ -440,6 +457,9 @@ pub async fn resume_session(
     } else {
         None
     };
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
+            .await?;
     let updated = state
         .session_runtime
         .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
@@ -465,6 +485,27 @@ fn parse_optional_resume_request(body: Bytes) -> Result<ResumeSessionRequest, Ap
             "INVALID_RESUME_REQUEST",
         )
     })
+}
+
+async fn acquire_session_operation_lease(
+    state: &AppState,
+    session_id: &str,
+    kind: WorkspaceOperationKind,
+) -> Result<WorkspaceOperationLease, ApiError> {
+    let session = state
+        .session_service
+        .get_session(session_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found(
+                format!("Session not found: {session_id}"),
+                "SESSION_NOT_FOUND",
+            )
+        })?;
+    Ok(state
+        .workspace_operation_gate
+        .acquire_shared(&session.workspace_id, kind)
+        .await)
 }
 
 // ---------------------------------------------------------------------------
@@ -568,6 +609,10 @@ pub async fn restore_dismissed_session(
             prompt_id = latency_fields.prompt_id,
         "[workspace-latency] session.http.restore.request_received"
     );
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionResume)
+        .await;
     let restored = state
         .session_runtime
         .restore_dismissed_session(&workspace_id, latency.as_ref())

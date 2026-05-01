@@ -11,10 +11,12 @@ use axum::{
 };
 use serde_json::Value;
 
+use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::reviews::mcp::handle_json_rpc;
 use crate::reviews::service::ReviewError;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,
@@ -36,6 +38,11 @@ pub async fn start_plan_review(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<StartPlanReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     let run = state
         .review_runtime
         .start_plan_review(&workspace_id, &plan_id, req)
@@ -60,6 +67,11 @@ pub async fn start_code_review(
     Path(workspace_id): Path<String>,
     Json(req): Json<StartCodeReviewRequest>,
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     let run = state
         .review_runtime
         .start_code_review(&workspace_id, req)
@@ -222,6 +234,11 @@ pub async fn post_reviews_mcp_endpoint(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     let capability_header = headers
         .get(state.review_session_hooks.capability_header_name())
         .and_then(|value| value.to_str().ok())

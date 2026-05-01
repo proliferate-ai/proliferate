@@ -24,6 +24,8 @@ pub enum WorkspaceAccessError {
         workspace_id: String,
         mode: WorkspaceAccessMode,
     },
+    #[error("workspace {0} is retired")]
+    WorkspaceRetired(String),
 }
 
 #[derive(Clone)]
@@ -98,6 +100,16 @@ impl WorkspaceAccessGate {
         &self,
         workspace_id: &str,
     ) -> Result<(), WorkspaceAccessError> {
+        let workspace = self
+            .workspace_store
+            .find_by_id(workspace_id)
+            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
+        if workspace.lifecycle_state == "retired" {
+            return Err(WorkspaceAccessError::WorkspaceRetired(
+                workspace_id.to_string(),
+            ));
+        }
         let state = self.runtime_state(workspace_id)?;
         match state.mode {
             WorkspaceAccessMode::Normal => Ok(()),
@@ -114,7 +126,7 @@ impl WorkspaceAccessGate {
     ) -> Result<(), WorkspaceAccessError> {
         let workspaces = self
             .workspace_store
-            .list_by_repo_root_id(repo_root_id)
+            .list_active_by_repo_root_id(repo_root_id)
             .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?;
         for workspace in workspaces {
             self.assert_can_mutate_for_workspace(&workspace.id)?;
@@ -128,7 +140,7 @@ impl WorkspaceAccessGate {
     ) -> Result<(), WorkspaceAccessError> {
         let workspaces = self
             .workspace_store
-            .list_by_repo_root_id(repo_root_id)
+            .list_active_by_repo_root_id(repo_root_id)
             .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?;
         for workspace in workspaces {
             let state = self.runtime_state(&workspace.id)?;
@@ -179,6 +191,14 @@ impl WorkspaceAccessGate {
             .map_err(|error| WorkspaceAccessError::SessionNotFound(error.to_string()))?
             .ok_or_else(|| WorkspaceAccessError::SessionNotFound(session_id.to_string()))?;
         let state = self.runtime_state(&session.workspace_id)?;
+        let workspace = self
+            .workspace_store
+            .find_by_id(&session.workspace_id)
+            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
+            .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(session.workspace_id.clone()))?;
+        if workspace.lifecycle_state == "retired" {
+            return Err(WorkspaceAccessError::WorkspaceRetired(session.workspace_id));
+        }
         match state.mode {
             WorkspaceAccessMode::Normal => Ok(()),
             mode => Err(WorkspaceAccessError::LiveSessionStartBlocked {
@@ -222,6 +242,9 @@ mod tests {
             creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }

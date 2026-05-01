@@ -405,6 +405,55 @@ describe("sidebar workspace filters", () => {
     expect(Array.from(expandedKeys)).toEqual(["/tmp/repo-a"]);
   });
 
+  it("carries the runtime workspace id for worktree done actions", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "path:/tmp/repo-a/worktree",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: "feature/worktree",
+        }),
+      ],
+    });
+
+    const item = groups[0]?.items[0];
+    expect(item?.id).toBe("path:/tmp/repo-a/worktree");
+    expect(item?.localWorkspaceId).toBe("path:/tmp/repo-a/worktree-materialization");
+  });
+
+  it("uses runtime workspace ids and logical workspace ids for finish suggestion actions", () => {
+    const logicalWorkspace = makeLocalLogicalWorkspace({
+      id: "path:/tmp/repo-a/worktree",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      kind: "worktree",
+      branch: "feature/worktree",
+    });
+    const materializationId = logicalWorkspace.localWorkspace?.id ?? "";
+    const groups = buildGroups({
+      logicalWorkspaces: [logicalWorkspace],
+      finishSuggestionsByWorkspaceId: {
+        [materializationId]: {
+          workspaceId: materializationId,
+          readinessFingerprint: "fingerprint-1",
+        },
+      },
+    });
+
+    const finishSuggestion = groups[0]?.items[0]?.detailIndicators.find(
+      (indicator) => indicator.kind === "finish_suggestion",
+    );
+    expect(finishSuggestion).toEqual({
+      kind: "finish_suggestion",
+      workspaceId: materializationId,
+      logicalWorkspaceId: "path:/tmp/repo-a/worktree",
+      readinessFingerprint: "fingerprint-1",
+      tooltip: "Ready to mark done",
+    });
+  });
+
   it("normalizes all selected workspace types back to the default order", () => {
     expect(resolveSidebarWorkspaceTypes(["cloud", "local", "worktree"])).toEqual(
       DEFAULT_SIDEBAR_WORKSPACE_TYPES,

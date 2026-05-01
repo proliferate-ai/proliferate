@@ -173,7 +173,7 @@ impl WorkspaceRuntime {
         }
 
         let existing_lookup_started = Instant::now();
-        if self.store.find_by_path(&canonical_path)?.is_some() {
+        if self.store.find_active_by_path(&canonical_path)?.is_some() {
             anyhow::bail!("a workspace record already exists for path: {canonical_path}");
         }
         tracing::info!(
@@ -276,7 +276,7 @@ impl WorkspaceRuntime {
             validate_mobility_destination_id(destination_id)?;
             let candidate = base_dir.join(destination_id);
             let candidate_string = candidate.to_string_lossy().to_string();
-            if let Some(existing) = self.store.find_by_path(&candidate_string)? {
+            if let Some(existing) = self.store.find_active_by_path(&candidate_string)? {
                 if existing.current_branch.as_deref() == Some(requested_branch) {
                     return Ok(existing);
                 }
@@ -312,7 +312,7 @@ impl WorkspaceRuntime {
                     !candidate.exists()
                         && self
                             .store
-                            .find_by_path(&candidate_string)
+                            .find_active_by_path(&candidate_string)
                             .ok()
                             .flatten()
                             .is_none()
@@ -414,6 +414,56 @@ impl WorkspaceRuntime {
             .into_iter()
             .map(reconcile_current_branch)
             .collect()
+    }
+
+    pub fn set_lifecycle_cleanup_state(
+        &self,
+        workspace_id: &str,
+        lifecycle_state: &str,
+        cleanup_state: &str,
+        cleanup_error_message: Option<&str>,
+        cleanup_failed_at: Option<&str>,
+        cleanup_attempted_at: Option<&str>,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.store.update_lifecycle_cleanup_state(
+            workspace_id,
+            lifecycle_state,
+            cleanup_state,
+            cleanup_error_message,
+            cleanup_failed_at,
+            cleanup_attempted_at,
+            &now,
+        )?;
+        self.get_workspace(workspace_id)
+    }
+
+    pub fn retire_worktree_materialization(
+        &self,
+        workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<()> {
+        if workspace.kind != "worktree" {
+            anyhow::bail!("unsupported workspace kind for retire: {}", workspace.kind);
+        }
+        let worktree = Path::new(&workspace.path);
+        if !worktree.exists() {
+            return Ok(());
+        }
+        let output = Command::new("git")
+            .args([
+                "-C",
+                &workspace.source_repo_root_path,
+                "worktree",
+                "remove",
+                "--force",
+                &workspace.path,
+            ])
+            .output()?;
+        if !output.status.success() && worktree.exists() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            anyhow::bail!("failed to remove worktree materialization: {stderr}");
+        }
+        Ok(())
     }
 
     pub fn workspace_env(
@@ -605,7 +655,7 @@ impl WorkspaceRuntime {
         if allow_existing {
             if let Some(existing) = self
                 .store
-                .find_by_path_and_kind(&workspace_path, workspace_kind)?
+                .find_active_by_path_and_kind(&workspace_path, workspace_kind)?
             {
                 return Ok(WorkspaceResolution {
                     repo_root,
@@ -705,6 +755,9 @@ fn build_workspace_record(
         creator_context,
         lifecycle_state: "active".to_string(),
         cleanup_state: "none".to_string(),
+        cleanup_error_message: None,
+        cleanup_failed_at: None,
+        cleanup_attempted_at: None,
         created_at: now.clone(),
         updated_at: now,
     }

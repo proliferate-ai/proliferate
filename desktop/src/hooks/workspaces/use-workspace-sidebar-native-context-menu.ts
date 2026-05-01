@@ -6,17 +6,21 @@ export function useWorkspaceSidebarNativeContextMenu({
   archived,
   canArchive,
   canUnarchive,
+  canMarkDone,
   onRename,
   onArchive,
   onUnarchive,
+  onMarkDone,
 }: {
   canRename: boolean;
   archived: boolean;
   canArchive: boolean;
   canUnarchive: boolean;
+  canMarkDone: boolean;
   onRename: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
+  onMarkDone: () => void;
 }) {
   return useNativeContextMenu(() =>
     buildWorkspaceSidebarNativeContextMenuItems({
@@ -24,9 +28,11 @@ export function useWorkspaceSidebarNativeContextMenu({
       archived,
       canArchive,
       canUnarchive,
+      canMarkDone,
       onRename,
       onArchive,
       onUnarchive,
+      onMarkDone,
     })
   );
 }
@@ -36,17 +42,21 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   archived,
   canArchive,
   canUnarchive,
+  canMarkDone,
   onRename,
   onArchive,
   onUnarchive,
+  onMarkDone,
 }: {
   canRename: boolean;
   archived: boolean;
   canArchive: boolean;
   canUnarchive: boolean;
+  canMarkDone: boolean;
   onRename: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
+  onMarkDone: () => void;
 }): NativeContextMenuItem[] {
   const items: NativeContextMenuItem[] = [];
   if (canRename) {
@@ -54,6 +64,17 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       id: "rename",
       label: "Rename",
       onSelect: onRename,
+    });
+  }
+
+  if (canMarkDone) {
+    if (items.length > 0) {
+      items.push({ kind: "separator" });
+    }
+    items.push({
+      id: "mark-done",
+      label: "Mark done...",
+      onSelect: onMarkDone,
     });
   }
 

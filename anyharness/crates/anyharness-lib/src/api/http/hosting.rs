@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::hosting::types::{
@@ -14,6 +15,7 @@ use crate::hosting::types::{
     PullRequestState as InternalPullRequestState, PullRequestSummary as InternalPullRequestSummary,
 };
 use crate::hosting::HostingService;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
     workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
@@ -37,6 +39,11 @@ where
     T: Send + 'static,
     F: FnOnce(std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
 {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(state, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     tokio::task::spawn_blocking(move || {
         let workspace_path = resolve_workspace_path(&workspace_runtime, &workspace_id)?;
@@ -93,6 +100,11 @@ pub async fn create_pull_request(
     Path(workspace_id): Path<String>,
     Json(req): Json<CreatePullRequestRequest>,
 ) -> Result<Json<CreatePullRequestResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::HostingWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     let title = req.title;
     let body = req.body;
     let base_branch = req.base_branch;

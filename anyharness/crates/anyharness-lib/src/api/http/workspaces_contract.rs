@@ -108,6 +108,9 @@ pub(super) fn workspace_to_contract_with_summary(
             "failed" => WorkspaceCleanupState::Failed,
             _ => WorkspaceCleanupState::None,
         },
+        cleanup_error_message: record.cleanup_error_message,
+        cleanup_failed_at: record.cleanup_failed_at,
+        cleanup_attempted_at: record.cleanup_attempted_at,
         execution_summary: Some(execution_summary),
         origin: record
             .origin

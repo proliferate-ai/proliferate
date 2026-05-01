@@ -238,6 +238,10 @@ fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ),
             "WORKSPACE_LIVE_SESSION_BLOCKED",
         ),
+        WorkspaceAccessError::WorkspaceRetired(workspace_id) => ApiError::conflict(
+            format!("workspace {workspace_id} is retired"),
+            "WORKSPACE_RETIRED",
+        ),
     }
 }
 

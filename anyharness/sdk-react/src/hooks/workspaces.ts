@@ -16,6 +16,7 @@ import {
   anyHarnessRepoRootsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceDetectSetupKey,
+  anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessWorkspaceSetupStatusKey,
 } from "../lib/query-keys.js";
@@ -103,6 +104,73 @@ export function useCreateWorktreeWorkspaceMutation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+      });
+    },
+  });
+}
+
+export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+    enabled: (options?.enabled ?? true) && !!workspaceId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.retirePreflight(
+        resolved.connection.anyharnessWorkspaceId,
+      );
+    },
+  });
+}
+
+export function useRetireWorkspaceMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.retire(resolved.connection.anyharnessWorkspaceId);
+    },
+    onSuccess: async (_data, workspaceId) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+      });
+    },
+  });
+}
+
+export function useRetryRetireCleanupMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.retryRetireCleanup(
+        resolved.connection.anyharnessWorkspaceId,
+      );
+    },
+    onSuccess: async (_data, workspaceId) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
       });
     },
   });

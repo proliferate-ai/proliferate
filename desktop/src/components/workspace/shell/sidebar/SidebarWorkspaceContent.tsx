@@ -45,6 +45,7 @@ interface SidebarWorkspaceContentProps {
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
+  onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
   onWorkspaceHover?: () => void;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
@@ -84,6 +85,7 @@ export function SidebarWorkspaceContent({
   onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
+  onMarkWorkspaceDone,
   onWorkspaceHover,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
@@ -202,6 +204,11 @@ export function SidebarWorkspaceContent({
                 lastInteracted={item.lastInteracted}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onIndicatorAction={onIndicatorAction}
+                onMarkDone={
+                  item.variant === "worktree" && !item.archived && item.localWorkspaceId
+                    ? () => onMarkWorkspaceDone(item.localWorkspaceId!, item.id)
+                    : undefined
+                }
                 onHover={onWorkspaceHover}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}

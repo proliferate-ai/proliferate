@@ -13,7 +13,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use super::access::assert_workspace_mutable;
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::git::types::{
@@ -26,6 +26,7 @@ use crate::git::types::{
     GitStatusSummary as InternalGitStatusSummary, PushError,
 };
 use crate::git::GitService;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
     workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
@@ -49,6 +50,11 @@ where
     T: Send + 'static,
     F: FnOnce(String, std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
 {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(state, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     tokio::task::spawn_blocking(move || {
         let workspace_path = resolve_workspace_path(&workspace_runtime, &workspace_id)?;
@@ -237,6 +243,10 @@ pub async fn rename_branch(
     Path(workspace_id): Path<String>,
     Json(req): Json<RenameBranchRequest>,
 ) -> Result<Json<RenameBranchResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::GitWrite)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let new_name = req.new_name;
     let response = run_git_task(
@@ -274,6 +284,10 @@ pub async fn stage_paths(
     Path(workspace_id): Path<String>,
     Json(req): Json<StagePathsRequest>,
 ) -> Result<Json<()>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::GitWrite)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let paths = req.paths;
     run_git_task(&state, workspace_id, "git stage", move |_, ws_path| {
@@ -306,6 +320,10 @@ pub async fn unstage_paths(
     Path(workspace_id): Path<String>,
     Json(req): Json<UnstagePathsRequest>,
 ) -> Result<Json<()>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::GitWrite)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let paths = req.paths;
     run_git_task(&state, workspace_id, "git unstage", move |_, ws_path| {
@@ -340,6 +358,10 @@ pub async fn commit(
     Path(workspace_id): Path<String>,
     Json(req): Json<CommitRequest>,
 ) -> Result<Json<CommitResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::GitWrite)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let summary = req.summary;
     let body = req.body;
@@ -385,6 +407,10 @@ pub async fn push(
     Path(workspace_id): Path<String>,
     Json(req): Json<PushRequest>,
 ) -> Result<Json<PushResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::GitWrite)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let remote = req.remote;
     let response = run_git_task(&state, workspace_id, "git push", move |_, ws_path| {

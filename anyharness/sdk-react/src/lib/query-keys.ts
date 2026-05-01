@@ -41,6 +41,13 @@ export function anyHarnessRuntimeWorkspacesKey(runtimeUrl: string | null | undef
   return [...anyHarnessRuntimeKey(runtimeUrl), "workspaces"] as const;
 }
 
+export function anyHarnessWorkspaceRetirePreflightKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeWorkspacesKey(runtimeUrl), workspaceId ?? null, "retire", "preflight"] as const;
+}
+
 export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
 }

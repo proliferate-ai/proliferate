@@ -27,6 +27,10 @@ pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ),
             "WORKSPACE_LIVE_SESSION_BLOCKED",
         ),
+        WorkspaceAccessError::WorkspaceRetired(workspace_id) => ApiError::conflict(
+            format!("workspace {workspace_id} is retired"),
+            "WORKSPACE_RETIRED",
+        ),
     }
 }
 
@@ -35,6 +39,21 @@ pub fn assert_workspace_mutable(state: &AppState, workspace_id: &str) -> Result<
         .workspace_access_gate
         .assert_can_mutate_for_workspace(workspace_id)
         .map_err(map_access_error)
+}
+
+pub fn assert_workspace_not_retired(state: &AppState, workspace_id: &str) -> Result<(), ApiError> {
+    let workspace = state
+        .workspace_runtime
+        .get_workspace(workspace_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| ApiError::not_found("Workspace not found", "WORKSPACE_NOT_FOUND"))?;
+    if workspace.lifecycle_state == "retired" {
+        return Err(ApiError::conflict(
+            format!("workspace {workspace_id} is retired"),
+            "WORKSPACE_RETIRED",
+        ));
+    }
+    Ok(())
 }
 
 pub fn assert_session_mutable(state: &AppState, session_id: &str) -> Result<(), ApiError> {

@@ -4,7 +4,10 @@ use anyharness_contract::v1::{
     CreateWorkspaceRequest, CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse,
     DetectProjectSetupResponse, GetSetupStatusResponse, RepoRoot, RepoRootKind,
     ResolveWorkspaceFromPathRequest, ResolveWorkspaceResponse, StartWorkspaceSetupRequest,
-    UpdateWorkspaceDisplayNameRequest, Workspace, WorkspaceSessionLaunchCatalog,
+    UpdateWorkspaceDisplayNameRequest, Workspace, WorkspaceCleanupState, WorkspaceKind,
+    WorkspaceLifecycleState, WorkspaceRetireBlocker, WorkspaceRetireBlockerCode,
+    WorkspaceRetireBlockerSeverity, WorkspaceRetireOutcome, WorkspaceRetirePreflightResponse,
+    WorkspaceRetireResponse, WorkspaceSessionLaunchCatalog,
 };
 use axum::{
     extract::{Path, State},
@@ -12,7 +15,7 @@ use axum::{
     Json,
 };
 
-use super::access::{assert_workspace_mutable, map_access_error};
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
@@ -25,8 +28,10 @@ use crate::app::AppState;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
+use crate::terminals::model::TerminalStatus;
 use crate::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::workspaces::model::WorkspaceRecord;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::workspaces::runtime::WorkspaceResolution;
 
 #[utoipa::path(
@@ -170,6 +175,10 @@ pub async fn create_worktree(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
+        let _lease = state
+            .workspace_operation_gate
+            .acquire_shared(&result.workspace.id, WorkspaceOperationKind::SetupCommand)
+            .await;
         let workspace_runtime_for_env = state.workspace_runtime.clone();
         let env_vars = tokio::task::spawn_blocking({
             let record = result.workspace.clone();
@@ -273,6 +282,279 @@ pub async fn get_workspace(
 }
 
 #[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/retire/preflight",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Retire preflight", body = WorkspaceRetirePreflightResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn retire_workspace_preflight(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspaceRetirePreflightResponse>, ApiError> {
+    Ok(Json(build_retire_preflight(&state, &workspace_id).await?))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/retire",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Retire workspace result", body = WorkspaceRetireResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn retire_workspace(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspaceRetireResponse>, ApiError> {
+    let current = state
+        .workspace_runtime
+        .get_workspace(&workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    if current.lifecycle_state == "retired" {
+        let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace: workspace_to_contract(&state, current).await?,
+            outcome: WorkspaceRetireOutcome::AlreadyRetired,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: true,
+            cleanup_message: None,
+        }));
+    }
+
+    let preflight = build_retire_preflight(&state, &workspace_id).await?;
+    if !preflight.can_retire {
+        let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
+            cleanup_message: None,
+        }));
+    }
+
+    let _exclusive = state
+        .workspace_operation_gate
+        .acquire_exclusive(&workspace_id)
+        .await;
+    let workspace = state
+        .workspace_runtime
+        .get_workspace(&workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    if workspace.lifecycle_state == "retired" {
+        let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace: workspace_to_contract(&state, workspace).await?,
+            outcome: WorkspaceRetireOutcome::AlreadyRetired,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: true,
+            cleanup_message: None,
+        }));
+    }
+
+    let preflight = build_retire_preflight(&state, &workspace_id).await?;
+    if !preflight.can_retire {
+        let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
+            cleanup_message: None,
+        }));
+    }
+
+    let attempted_at = chrono::Utc::now().to_rfc3339();
+    let pending = state
+        .workspace_runtime
+        .set_lifecycle_cleanup_state(
+            &workspace_id,
+            "retired",
+            "pending",
+            None,
+            None,
+            Some(&attempted_at),
+        )
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+
+    let cleanup_result = {
+        let runtime = state.workspace_runtime.clone();
+        let workspace = pending.clone();
+        run_blocking("retire worktree cleanup", move || {
+            runtime.retire_worktree_materialization(&workspace)
+        })
+        .await?
+    };
+
+    let (outcome, cleanup_succeeded, cleanup_message, cleanup_state, error_at) =
+        match cleanup_result {
+            Ok(()) => (
+                WorkspaceRetireOutcome::Retired,
+                true,
+                None,
+                "complete",
+                None,
+            ),
+            Err(error) => {
+                let message = error.to_string();
+                (
+                    WorkspaceRetireOutcome::CleanupFailed,
+                    false,
+                    Some(message),
+                    "failed",
+                    Some(chrono::Utc::now().to_rfc3339()),
+                )
+            }
+        };
+    let final_record = state
+        .workspace_runtime
+        .set_lifecycle_cleanup_state(
+            &workspace_id,
+            "retired",
+            cleanup_state,
+            cleanup_message.as_deref(),
+            error_at.as_deref(),
+            Some(&attempted_at),
+        )
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+
+    Ok(Json(WorkspaceRetireResponse {
+        workspace: workspace_to_contract(&state, final_record).await?,
+        outcome,
+        preflight,
+        cleanup_attempted: true,
+        cleanup_succeeded,
+        cleanup_message,
+    }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/retire/cleanup-retry",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Cleanup retry result", body = WorkspaceRetireResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn retry_retire_cleanup(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspaceRetireResponse>, ApiError> {
+    let workspace = state
+        .workspace_runtime
+        .get_workspace(&workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    if workspace.lifecycle_state != "retired"
+        || !matches!(workspace.cleanup_state.as_str(), "failed" | "pending")
+    {
+        let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace: workspace_to_contract(&state, workspace).await?,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
+            cleanup_message: Some("cleanup retry is only available for retired workspaces with pending or failed cleanup".to_string()),
+        }));
+    }
+
+    let _exclusive = state
+        .workspace_operation_gate
+        .acquire_exclusive(&workspace_id)
+        .await;
+    let attempted_at = chrono::Utc::now().to_rfc3339();
+    let _ = state
+        .workspace_runtime
+        .set_lifecycle_cleanup_state(
+            &workspace_id,
+            "retired",
+            "pending",
+            None,
+            None,
+            Some(&attempted_at),
+        )
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let cleanup_result = {
+        let runtime = state.workspace_runtime.clone();
+        let workspace = workspace.clone();
+        run_blocking("retire cleanup retry", move || {
+            runtime.retire_worktree_materialization(&workspace)
+        })
+        .await?
+    };
+    let (outcome, cleanup_succeeded, cleanup_message, cleanup_state, error_at) =
+        match cleanup_result {
+            Ok(()) => (
+                WorkspaceRetireOutcome::Retired,
+                true,
+                None,
+                "complete",
+                None,
+            ),
+            Err(error) => {
+                let message = error.to_string();
+                (
+                    WorkspaceRetireOutcome::CleanupFailed,
+                    false,
+                    Some(message),
+                    "failed",
+                    Some(chrono::Utc::now().to_rfc3339()),
+                )
+            }
+        };
+    let final_record = state
+        .workspace_runtime
+        .set_lifecycle_cleanup_state(
+            &workspace_id,
+            "retired",
+            cleanup_state,
+            cleanup_message.as_deref(),
+            error_at.as_deref(),
+            Some(&attempted_at),
+        )
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    let preflight = build_retire_preflight(&state, &workspace_id).await?;
+    Ok(Json(WorkspaceRetireResponse {
+        workspace: workspace_to_contract(&state, final_record).await?,
+        outcome,
+        preflight,
+        cleanup_attempted: true,
+        cleanup_succeeded,
+        cleanup_message,
+    }))
+}
+
+#[utoipa::path(
     patch,
     path = "/v1/workspaces/{workspace_id}/display-name",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
@@ -347,6 +629,11 @@ pub async fn detect_project_setup(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<DetectProjectSetupResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+        .await;
+    assert_workspace_not_retired(&state, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     let result = run_blocking("detect-setup", move || {
         workspace_runtime.detect_setup(&workspace_id)
@@ -457,6 +744,11 @@ async fn start_setup_for_workspace(
     command: String,
     base_ref: Option<String>,
 ) -> Result<GetSetupStatusResponse, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::SetupCommand)
+        .await;
+    assert_workspace_mutable(state, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     let ws_id = workspace_id.clone();
     let record = run_blocking("workspace lookup", move || {
@@ -495,6 +787,321 @@ async fn resolve_workspace_response_to_contract(
         repo_root: repo_root_to_contract(result.repo_root),
         workspace: workspace_to_contract(state, result.workspace).await?,
     })
+}
+
+async fn build_retire_preflight(
+    state: &AppState,
+    workspace_id: &str,
+) -> Result<WorkspaceRetirePreflightResponse, ApiError> {
+    let workspace = state
+        .workspace_runtime
+        .get_workspace(workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    let mut blockers = Vec::new();
+    let materialized = std::path::Path::new(&workspace.path).exists();
+    let mut head_oid = None;
+    let mut base_ref = None;
+    let mut merged_into_base = false;
+
+    if workspace.kind != "worktree" {
+        blockers.push(retire_blocker(
+            WorkspaceRetireBlockerCode::UnsupportedWorkspace,
+            "Only worktree workspaces can be marked done.",
+        ));
+    }
+
+    if workspace.kind == "worktree" && workspace.lifecycle_state != "retired" && materialized {
+        let workspace_id_for_task = workspace.id.clone();
+        let workspace_path = workspace.path.clone();
+        let status = run_blocking("retire git status", move || {
+            crate::git::GitService::status(
+                &workspace_id_for_task,
+                std::path::Path::new(&workspace_path),
+            )
+        })
+        .await?
+        .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STATUS_FAILED"))?;
+        head_oid = Some(status.head_oid.clone());
+        if !status.clean {
+            blockers.push(retire_blocker(
+                WorkspaceRetireBlockerCode::DirtyWorkingTree,
+                "Working tree has uncommitted changes.",
+            ));
+        }
+        if status.conflicted {
+            blockers.push(WorkspaceRetireBlocker {
+                code: WorkspaceRetireBlockerCode::ConflictedFiles,
+                message: "Working tree has conflicted files.".to_string(),
+                severity: WorkspaceRetireBlockerSeverity::Blocking,
+                retryable: true,
+                session_id: None,
+                terminal_id: None,
+                command_run_id: None,
+                path: None,
+                paths: None,
+                operation: None,
+            });
+        }
+        if status.operation != crate::git::types::GitOperation::None {
+            blockers.push(WorkspaceRetireBlocker {
+                code: WorkspaceRetireBlockerCode::ActiveGitOperation,
+                message: "A git operation is still in progress.".to_string(),
+                severity: WorkspaceRetireBlockerSeverity::Blocking,
+                retryable: true,
+                session_id: None,
+                terminal_id: None,
+                command_run_id: None,
+                path: None,
+                paths: None,
+                operation: Some(git_operation_to_contract(status.operation.clone())),
+            });
+        }
+        if let Some(default_branch) = status.suggested_base_branch.as_deref() {
+            let remote_ref = format!("origin/{default_branch}");
+            let workspace_path = workspace.path.clone();
+            let remote_merged = run_blocking("retire merged check", {
+                let remote_ref = remote_ref.clone();
+                let workspace_path = workspace_path.clone();
+                move || {
+                    crate::git::GitService::head_is_ancestor_of(
+                        std::path::Path::new(&workspace_path),
+                        &remote_ref,
+                    )
+                }
+            })
+            .await?
+            .unwrap_or(false);
+            if remote_merged {
+                base_ref = Some(remote_ref);
+                merged_into_base = true;
+            } else {
+                let local_ref = default_branch.to_string();
+                let workspace_path = workspace.path.clone();
+                merged_into_base = run_blocking("retire merged check", {
+                    let local_ref = local_ref.clone();
+                    move || {
+                        crate::git::GitService::head_is_ancestor_of(
+                            std::path::Path::new(&workspace_path),
+                            &local_ref,
+                        )
+                    }
+                })
+                .await?
+                .unwrap_or(false);
+                base_ref = Some(local_ref);
+            }
+        }
+    }
+
+    let execution_summary = state
+        .session_runtime
+        .workspace_execution_summary(workspace_id)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    if execution_summary.running_count > 0 || execution_summary.live_session_count > 0 {
+        blockers.push(retire_blocker(
+            WorkspaceRetireBlockerCode::LiveSession,
+            "A live session is still running.",
+        ));
+    }
+    if execution_summary.awaiting_interaction_count > 0 {
+        blockers.push(retire_blocker(
+            WorkspaceRetireBlockerCode::PendingInteraction,
+            "A session is waiting for interaction.",
+        ));
+    }
+
+    let sessions = state
+        .session_service
+        .list_sessions(Some(workspace_id), true)
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    for session in sessions {
+        let prompts = state
+            .session_service
+            .store()
+            .list_pending_prompts(&session.id)
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+        if !prompts.is_empty() {
+            blockers.push(WorkspaceRetireBlocker {
+                code: WorkspaceRetireBlockerCode::PendingPrompt,
+                message: "A session has queued prompts.".to_string(),
+                severity: WorkspaceRetireBlockerSeverity::Blocking,
+                retryable: true,
+                session_id: Some(session.id),
+                terminal_id: None,
+                command_run_id: None,
+                path: None,
+                paths: None,
+                operation: None,
+            });
+            break;
+        }
+    }
+
+    let terminals = state.terminal_service.list_terminals(workspace_id).await;
+    if let Some(terminal) = terminals.iter().find(|terminal| {
+        matches!(
+            terminal.status,
+            TerminalStatus::Starting | TerminalStatus::Running
+        )
+    }) {
+        blockers.push(WorkspaceRetireBlocker {
+            code: WorkspaceRetireBlockerCode::ActiveTerminal,
+            message: "A terminal is still active.".to_string(),
+            severity: WorkspaceRetireBlockerSeverity::Blocking,
+            retryable: true,
+            session_id: None,
+            terminal_id: Some(terminal.id.clone()),
+            command_run_id: None,
+            path: None,
+            paths: None,
+            operation: None,
+        });
+    }
+
+    let operation_snapshot = state.workspace_operation_gate.snapshot(workspace_id).await;
+    let has_running_command_holder = operation_snapshot.has_any(&[
+        WorkspaceOperationKind::MaterializationRead,
+        WorkspaceOperationKind::FileWrite,
+        WorkspaceOperationKind::GitWrite,
+        WorkspaceOperationKind::ProcessRun,
+        WorkspaceOperationKind::TerminalCommand,
+        WorkspaceOperationKind::SessionStart,
+        WorkspaceOperationKind::SessionPrompt,
+        WorkspaceOperationKind::SessionResume,
+        WorkspaceOperationKind::SetupCommand,
+        WorkspaceOperationKind::HostingWrite,
+        WorkspaceOperationKind::PlanWrite,
+        WorkspaceOperationKind::ReviewWrite,
+        WorkspaceOperationKind::CoworkWrite,
+        WorkspaceOperationKind::SubagentWrite,
+        WorkspaceOperationKind::MobilityWrite,
+    ]);
+    let active_runs = state
+        .terminal_service
+        .active_command_runs_for_workspace(workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    if has_running_command_holder || !active_runs.is_empty() {
+        let command_run = active_runs.first();
+        blockers.push(WorkspaceRetireBlocker {
+            code: WorkspaceRetireBlockerCode::RunningCommand,
+            message: "Workspace work is still in progress.".to_string(),
+            severity: WorkspaceRetireBlockerSeverity::Blocking,
+            retryable: true,
+            session_id: None,
+            terminal_id: command_run.and_then(|run| run.terminal_id.clone()),
+            command_run_id: command_run.map(|run| run.id.clone()),
+            path: None,
+            paths: None,
+            operation: None,
+        });
+    }
+
+    let can_retire = blockers.is_empty()
+        && workspace.kind == "worktree"
+        && workspace.lifecycle_state != "retired";
+    let readiness_fingerprint = format!(
+        "v1:{}:{}:{}:{}:{}:{}:{}:{}",
+        workspace.id,
+        workspace.lifecycle_state,
+        workspace.cleanup_state,
+        materialized,
+        head_oid.as_deref().unwrap_or(""),
+        base_ref.as_deref().unwrap_or(""),
+        merged_into_base,
+        blockers
+            .iter()
+            .map(|blocker| format!("{:?}", blocker.code))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+
+    Ok(WorkspaceRetirePreflightResponse {
+        workspace_id: workspace.id,
+        workspace_kind: workspace_kind_to_contract(&workspace.kind),
+        lifecycle_state: workspace_lifecycle_to_contract(&workspace.lifecycle_state),
+        cleanup_state: workspace_cleanup_to_contract(&workspace.cleanup_state),
+        can_retire,
+        materialized,
+        merged_into_base,
+        base_ref,
+        head_oid,
+        readiness_fingerprint,
+        blockers,
+    })
+}
+
+async fn workspace_contract_by_id(
+    state: &AppState,
+    workspace_id: &str,
+) -> Result<Workspace, ApiError> {
+    let record = state
+        .workspace_runtime
+        .get_workspace(workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    workspace_to_contract(state, record).await
+}
+
+fn retire_blocker(code: WorkspaceRetireBlockerCode, message: &str) -> WorkspaceRetireBlocker {
+    WorkspaceRetireBlocker {
+        code,
+        message: message.to_string(),
+        severity: WorkspaceRetireBlockerSeverity::Blocking,
+        retryable: true,
+        session_id: None,
+        terminal_id: None,
+        command_run_id: None,
+        path: None,
+        paths: None,
+        operation: None,
+    }
+}
+
+fn workspace_kind_to_contract(kind: &str) -> WorkspaceKind {
+    match kind {
+        "worktree" => WorkspaceKind::Worktree,
+        _ => WorkspaceKind::Local,
+    }
+}
+
+fn workspace_lifecycle_to_contract(value: &str) -> WorkspaceLifecycleState {
+    match value {
+        "retired" => WorkspaceLifecycleState::Retired,
+        _ => WorkspaceLifecycleState::Active,
+    }
+}
+
+fn workspace_cleanup_to_contract(value: &str) -> WorkspaceCleanupState {
+    match value {
+        "pending" => WorkspaceCleanupState::Pending,
+        "complete" => WorkspaceCleanupState::Complete,
+        "failed" => WorkspaceCleanupState::Failed,
+        _ => WorkspaceCleanupState::None,
+    }
+}
+
+fn git_operation_to_contract(
+    operation: crate::git::types::GitOperation,
+) -> anyharness_contract::v1::git::GitOperation {
+    match operation {
+        crate::git::types::GitOperation::Merge => anyharness_contract::v1::git::GitOperation::Merge,
+        crate::git::types::GitOperation::Rebase => {
+            anyharness_contract::v1::git::GitOperation::Rebase
+        }
+        crate::git::types::GitOperation::CherryPick => {
+            anyharness_contract::v1::git::GitOperation::CherryPick
+        }
+        crate::git::types::GitOperation::Revert => {
+            anyharness_contract::v1::git::GitOperation::Revert
+        }
+        crate::git::types::GitOperation::None => anyharness_contract::v1::git::GitOperation::None,
+    }
 }
 
 fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {

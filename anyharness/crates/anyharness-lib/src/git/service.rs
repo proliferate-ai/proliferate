@@ -183,6 +183,25 @@ impl GitService {
         Ok(branches)
     }
 
+    pub fn head_is_ancestor_of(workspace_path: &Path, base_ref: &str) -> anyhow::Result<bool> {
+        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
+            .trim()
+            .to_string();
+        let repo_root_path = PathBuf::from(&repo_root);
+        let output = std::process::Command::new("git")
+            .args(["merge-base", "--is-ancestor", "HEAD", base_ref])
+            .current_dir(&repo_root_path)
+            .output()?;
+        if output.status.success() {
+            return Ok(true);
+        }
+        if output.status.code() == Some(1) {
+            return Ok(false);
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("{}", git_command_message(&stderr, "merge-base failed"))
+    }
+
     pub fn rename_branch(
         workspace_path: &Path,
         new_name: &str,

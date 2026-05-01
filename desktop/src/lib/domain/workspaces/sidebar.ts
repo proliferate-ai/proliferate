@@ -94,6 +94,7 @@ export const DEFAULT_SIDEBAR_WORKSPACE_TYPES: SidebarWorkspaceVariant[] = [
 
 export interface SidebarWorkspaceItemState {
   id: string;
+  localWorkspaceId: string | null;
   name: string;
   /**
    * The label we would render if the user had not set a display name override.
@@ -357,6 +358,7 @@ export function buildSidebarGroupStates(args: {
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
+  finishSuggestionsByWorkspaceId?: Record<string, { workspaceId: string; readinessFingerprint: string }>;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -428,6 +430,7 @@ export function buildSidebarGroupStates(args: {
 
         return {
           id: entry.id,
+          localWorkspaceId: preferredLocalWorkspace?.id ?? null,
           name: displayNameOverride ?? defaultName,
           defaultName,
           hasDisplayNameOverride: displayNameOverride !== null,
@@ -442,7 +445,13 @@ export function buildSidebarGroupStates(args: {
             pendingPromptCount: args.pendingPromptCounts?.[entry.id] ?? 0,
             errorAction: { kind: "open_workspace", workspaceId: entry.id },
           }),
-          detailIndicators: detailIndicatorsForWorkspace(entry, variant),
+          detailIndicators: detailIndicatorsForWorkspace(
+            entry,
+            variant,
+            preferredLocalWorkspace
+              ? args.finishSuggestionsByWorkspaceId?.[preferredLocalWorkspace.id] ?? null
+              : null,
+          ),
           cloudStatus: preferredCloudWorkspace
             ? preferredCloudWorkspace.status as CloudWorkspaceStatus
             : null,

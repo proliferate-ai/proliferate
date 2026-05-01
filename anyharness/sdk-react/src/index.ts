@@ -26,6 +26,7 @@ export {
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
+  anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessRepoRootsKey,
   anyHarnessRepoRootGitBranchesKey,
   anyHarnessRepoRootDetectSetupKey,
@@ -113,6 +114,9 @@ export {
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
+  useRetireWorkspacePreflightQuery,
+  useRetireWorkspaceMutation,
+  useRetryRetireCleanupMutation,
 } from "./hooks/workspaces.js";
 export {
   useWorkspaceSessionsQuery,

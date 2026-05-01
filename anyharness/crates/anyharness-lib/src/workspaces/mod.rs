@@ -4,6 +4,7 @@ pub mod access_store;
 pub mod creator_context;
 pub mod detector;
 pub mod model;
+pub mod operation_gate;
 pub mod resolver;
 pub mod runtime;
 pub mod service;

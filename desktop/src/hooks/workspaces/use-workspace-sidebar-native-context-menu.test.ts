@@ -8,9 +8,11 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       archived: false,
       canArchive: true,
       canUnarchive: false,
+      canMarkDone: false,
       onRename: () => {},
       onArchive: () => {},
       onUnarchive: () => {},
+      onMarkDone: () => {},
     });
 
     expect(items).toMatchObject([
@@ -25,11 +27,32 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
       archived: true,
       canArchive: false,
       canUnarchive: true,
+      canMarkDone: false,
       onRename: () => {},
       onArchive: () => {},
       onUnarchive: () => {},
+      onMarkDone: () => {},
     });
 
     expect(items).toMatchObject([{ id: "unarchive", label: "Unarchive" }]);
+  });
+
+  it("shows mark done before archive when supported", () => {
+    const items = buildWorkspaceSidebarNativeContextMenuItems({
+      canRename: false,
+      archived: false,
+      canArchive: true,
+      canUnarchive: false,
+      canMarkDone: true,
+      onRename: () => {},
+      onArchive: () => {},
+      onUnarchive: () => {},
+      onMarkDone: () => {},
+    });
+
+    expect(items).toMatchObject([
+      { id: "mark-done", label: "Mark done..." },
+      { id: "archive", label: "Archive" },
+    ]);
   });
 });

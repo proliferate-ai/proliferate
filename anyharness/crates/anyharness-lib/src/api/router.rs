@@ -56,6 +56,18 @@ pub fn build_router(state: AppState) -> Router {
         .route("/workspaces/worktrees", post(workspaces::create_worktree))
         .route("/workspaces/{workspace_id}", get(workspaces::get_workspace))
         .route(
+            "/workspaces/{workspace_id}/retire/preflight",
+            get(workspaces::retire_workspace_preflight),
+        )
+        .route(
+            "/workspaces/{workspace_id}/retire",
+            post(workspaces::retire_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/retire/cleanup-retry",
+            post(workspaces::retry_retire_cleanup),
+        )
+        .route(
             "/repo-roots",
             get(repo_roots::list_repo_roots).post(repo_roots::resolve_repo_root),
         )

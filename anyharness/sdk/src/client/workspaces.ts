@@ -9,6 +9,8 @@ import type {
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
+  WorkspaceRetirePreflightResponse,
+  WorkspaceRetireResponse,
   WorkspaceSessionLaunchCatalog,
 } from "../types/workspaces.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
@@ -119,6 +121,38 @@ export class WorkspacesClient {
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/setup-start`,
       input,
       withTimingCategory(options, "workspace.setup_start"),
+    );
+  }
+
+  async retirePreflight(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceRetirePreflightResponse> {
+    return this.transport.get<WorkspaceRetirePreflightResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/preflight`,
+      withTimingCategory(options, "workspace.retire.preflight"),
+    );
+  }
+
+  async retire(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceRetireResponse> {
+    return this.transport.post<WorkspaceRetireResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire`,
+      {},
+      withTimingCategory(options, "workspace.retire"),
+    );
+  }
+
+  async retryRetireCleanup(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspaceRetireResponse> {
+    return this.transport.post<WorkspaceRetireResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/cleanup-retry`,
+      {},
+      withTimingCategory(options, "workspace.retire.cleanup_retry"),
     );
   }
 }

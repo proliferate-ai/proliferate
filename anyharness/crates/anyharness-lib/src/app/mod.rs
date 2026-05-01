@@ -44,6 +44,7 @@ use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
+use crate::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
 use crate::workspaces::store::WorkspaceStore;
@@ -86,6 +87,7 @@ pub struct AppState {
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
+    pub workspace_operation_gate: Arc<WorkspaceOperationGate>,
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
@@ -120,6 +122,7 @@ impl AppState {
         #[cfg(not(test))]
         model_catalog_service.spawn_refresh();
         let process_service = Arc::new(ProcessService::new());
+        let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
         let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
@@ -281,6 +284,7 @@ impl AppState {
             session_service,
             session_runtime,
             workspace_access_gate,
+            workspace_operation_gate,
             mobility_service,
             plan_service,
             plan_runtime,

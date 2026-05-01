@@ -1,14 +1,18 @@
 import type { MouseEvent, ReactNode } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   CircleAlert,
   CircleQuestion,
   ClipboardList,
   Clock,
+  GitMerge,
   MessageSquare,
   Spinner,
 } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/IconButton";
+import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type {
   SidebarDetailIndicator,
@@ -131,6 +135,16 @@ function SidebarDetailIndicatorView({
     );
   }
 
+  if (indicator.kind === "finish_suggestion") {
+    return (
+      <FinishSuggestionIndicator
+        indicator={indicator}
+        className={className}
+        onAction={onAction}
+      />
+    );
+  }
+
   const glyph = indicator.kind === "automation"
     ? <Clock className="size-3" />
     : <ArrowRight className="size-3" />;
@@ -158,6 +172,86 @@ function SidebarDetailIndicatorView({
   );
 }
 
+function FinishSuggestionIndicator({
+  indicator,
+  className,
+  onAction,
+}: {
+  indicator: Extract<SidebarDetailIndicator, { kind: "finish_suggestion" }>;
+  className: string;
+  onAction?: (action: SidebarIndicatorAction) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const trigger = (
+    <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
+      <IconButton
+        tone="sidebar"
+        size="sm"
+        title={indicator.tooltip}
+        onClick={(event: MouseEvent<HTMLButtonElement>) => {
+          event.stopPropagation();
+        }}
+        className={`!size-4 !px-0 hover:bg-transparent ${className}`}
+      >
+        <GitMerge className="size-3" />
+      </IconButton>
+    </Tooltip>
+  );
+
+  return (
+    <PopoverButton
+      trigger={trigger}
+      stopPropagation
+      className="w-44 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      onOpenChange={(isOpen) => {
+        if (!isOpen) setConfirming(false);
+      }}
+    >
+      {(close) => confirming ? (
+        <>
+          <PopoverMenuItem
+            label="Confirm done"
+            variant="sidebar"
+            onClick={() => {
+              close();
+              onAction?.({
+                kind: "mark_workspace_done",
+                workspaceId: indicator.workspaceId,
+                logicalWorkspaceId: indicator.logicalWorkspaceId,
+              });
+            }}
+          />
+          <PopoverMenuItem
+            label="Cancel"
+            variant="sidebar"
+            onClick={() => setConfirming(false)}
+          />
+        </>
+      ) : (
+        <>
+          <PopoverMenuItem
+            label="Mark done"
+            variant="sidebar"
+            onClick={() => setConfirming(true)}
+          />
+          <PopoverMenuItem
+            label="Keep active"
+            variant="sidebar"
+            onClick={() => {
+              close();
+              onAction?.({
+                kind: "keep_workspace_active",
+                workspaceId: indicator.workspaceId,
+                readinessFingerprint: indicator.readinessFingerprint,
+              });
+            }}
+          />
+        </>
+      )}
+    </PopoverButton>
+  );
+}
+
 function detailIndicatorKey(indicator: SidebarDetailIndicator): string {
   switch (indicator.kind) {
     case "materialization":
@@ -166,5 +260,7 @@ function detailIndicatorKey(indicator: SidebarDetailIndicator): string {
       return "automation";
     case "agent":
       return "agent";
+    case "finish_suggestion":
+      return `finish:${indicator.workspaceId}:${indicator.readinessFingerprint}`;
   }
 }

@@ -46,8 +46,7 @@ impl WorkspaceService {
         );
 
         if ctx.is_worktree {
-            // Worktree paths are unique — plain find_by_path is safe.
-            if let Some(existing) = self.store.find_by_path(workspace_path)? {
+            if let Some(existing) = self.store.find_active_by_path(workspace_path)? {
                 tracing::info!(
                     path = %path,
                     workspace_id = %existing.id,
@@ -92,6 +91,9 @@ impl WorkspaceService {
                 creator_context: None,
                 lifecycle_state: "active".to_string(),
                 cleanup_state: "none".to_string(),
+                cleanup_error_message: None,
+                cleanup_failed_at: None,
+                cleanup_attempted_at: None,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -106,7 +108,10 @@ impl WorkspaceService {
             Ok(record)
         } else {
             // Non-worktree: look for an existing "local" workspace at this path.
-            if let Some(existing) = self.store.find_by_path_and_kind(workspace_path, "local")? {
+            if let Some(existing) = self
+                .store
+                .find_active_by_path_and_kind(workspace_path, "local")?
+            {
                 tracing::info!(
                     path = %path,
                     workspace_id = %existing.id,
@@ -209,6 +214,9 @@ impl WorkspaceService {
                 creator_context: None,
                 lifecycle_state: "active".to_string(),
                 cleanup_state: "none".to_string(),
+                cleanup_error_message: None,
+                cleanup_failed_at: None,
+                cleanup_attempted_at: None,
                 created_at: now.clone(),
                 updated_at: now,
             }
@@ -294,7 +302,7 @@ impl WorkspaceService {
             anyhow::bail!("worktree target path already exists: {canonical_str}");
         }
 
-        if self.store.find_by_path(&canonical_str)?.is_some() {
+        if self.store.find_active_by_path(&canonical_str)?.is_some() {
             anyhow::bail!("a workspace record already exists for path: {canonical_str}");
         }
 
@@ -340,6 +348,9 @@ impl WorkspaceService {
             creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -550,6 +561,9 @@ fn build_repo_workspace_record(ctx: &ResolvedGitContext) -> WorkspaceRecord {
         creator_context: None,
         lifecycle_state: "active".to_string(),
         cleanup_state: "none".to_string(),
+        cleanup_error_message: None,
+        cleanup_failed_at: None,
+        cleanup_attempted_at: None,
         created_at: now.clone(),
         updated_at: now,
     }
@@ -584,6 +598,9 @@ fn build_local_workspace_record(
         creator_context: None,
         lifecycle_state: "active".to_string(),
         cleanup_state: "none".to_string(),
+        cleanup_error_message: None,
+        cleanup_failed_at: None,
+        cleanup_attempted_at: None,
         created_at: now.clone(),
         updated_at: now,
     }

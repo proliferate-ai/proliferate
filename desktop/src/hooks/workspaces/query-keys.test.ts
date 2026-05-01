@@ -12,9 +12,12 @@ describe("getWorkspaceCollectionsFromCache", () => {
     const runtimeUrl = "http://127.0.0.1:7007";
     const collections = {
       localWorkspaces: [],
+      retiredLocalWorkspaces: [],
       repoRoots: [],
       cloudWorkspaces: [],
       workspaces: [],
+      allWorkspaces: [],
+      cleanupAttentionWorkspaces: [],
     } satisfies WorkspaceCollections;
 
     queryClient.setQueryData(workspaceCollectionsKey(runtimeUrl, true), collections);

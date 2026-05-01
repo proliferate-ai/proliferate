@@ -1316,6 +1316,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retire_workspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/retire/cleanup-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retry_retire_cleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/retire/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["retire_workspace_preflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/reviews/code": {
         parameters: {
             query?: never;
@@ -3456,6 +3504,9 @@ export interface components {
             text?: string | null;
         };
         Workspace: {
+            cleanupAttemptedAt?: string | null;
+            cleanupErrorMessage?: string | null;
+            cleanupFailedAt?: string | null;
             cleanupState: components["schemas"]["WorkspaceCleanupState"];
             createdAt: string;
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
@@ -3571,6 +3622,45 @@ export interface components {
             reason?: string | null;
             sessionId: string;
             supported: boolean;
+        };
+        WorkspaceRetireBlocker: {
+            code: components["schemas"]["WorkspaceRetireBlockerCode"];
+            commandRunId?: string | null;
+            message: string;
+            operation?: null | components["schemas"]["GitOperation"];
+            path?: string | null;
+            paths?: string[] | null;
+            retryable: boolean;
+            sessionId?: string | null;
+            severity: components["schemas"]["WorkspaceRetireBlockerSeverity"];
+            terminalId?: string | null;
+        };
+        /** @enum {string} */
+        WorkspaceRetireBlockerCode: "unsupported_workspace" | "dirty_working_tree" | "conflicted_files" | "active_git_operation" | "live_session" | "pending_prompt" | "pending_interaction" | "active_terminal" | "running_command";
+        /** @enum {string} */
+        WorkspaceRetireBlockerSeverity: "blocking";
+        /** @enum {string} */
+        WorkspaceRetireOutcome: "retired" | "already_retired" | "blocked" | "cleanup_failed";
+        WorkspaceRetirePreflightResponse: {
+            baseRef?: string | null;
+            blockers: components["schemas"]["WorkspaceRetireBlocker"][];
+            canRetire: boolean;
+            cleanupState: components["schemas"]["WorkspaceCleanupState"];
+            headOid?: string | null;
+            lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
+            materialized: boolean;
+            mergedIntoBase: boolean;
+            readinessFingerprint: string;
+            workspaceId: string;
+            workspaceKind: components["schemas"]["WorkspaceKind"];
+        };
+        WorkspaceRetireResponse: {
+            cleanupAttempted: boolean;
+            cleanupMessage?: string | null;
+            cleanupSucceeded: boolean;
+            outcome: components["schemas"]["WorkspaceRetireOutcome"];
+            preflight: components["schemas"]["WorkspaceRetirePreflightResponse"];
+            workspace: components["schemas"]["Workspace"];
         };
         WorkspaceSessionLaunchAgent: {
             defaultModelId?: string | null;
@@ -6691,6 +6781,102 @@ export interface operations {
             };
             /** @description Command execution failed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retire_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retire workspace result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRetireResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retry_retire_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleanup retry result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRetireResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retire_workspace_preflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retire preflight */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceRetirePreflightResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
