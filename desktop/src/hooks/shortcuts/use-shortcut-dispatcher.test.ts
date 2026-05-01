@@ -41,7 +41,7 @@ describe("resolveKeyboardShortcut", () => {
     });
   });
 
-  it("opens the file palette with command-k on mac", () => {
+  it("opens the command palette with command-k on mac", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
       userAgent: "Mac OS X",
@@ -55,8 +55,8 @@ describe("resolveKeyboardShortcut", () => {
       shiftKey: false,
       altKey: false,
     } as KeyboardEvent)).toEqual({
-      id: "workspace.open-file-palette",
-      shortcut: expect.objectContaining({ id: "workspace.open-file-palette" }),
+      id: "workspace.open-command-palette",
+      shortcut: expect.objectContaining({ id: "workspace.open-command-palette" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 

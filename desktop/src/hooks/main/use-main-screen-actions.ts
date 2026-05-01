@@ -47,7 +47,7 @@ export function useMainScreenActions({
     setSidebarOpen,
     setRightPanelOpen,
     setTerminalActivationRequestToken,
-    setFilePaletteOpen,
+    setCommandPaletteOpen,
     setPublishDialog,
   } = layout;
 
@@ -107,9 +107,9 @@ export function useMainScreenActions({
     }
   }, [existingPr]);
 
-  const handleFilePaletteOpen = useCallback(() => {
-    setFilePaletteOpen(true);
-  }, [setFilePaletteOpen]);
+  const handleCommandPaletteOpen = useCallback(() => {
+    setCommandPaletteOpen(true);
+  }, [setCommandPaletteOpen]);
 
   const handleViewPr = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
     openRightPanelTool("git");
@@ -171,10 +171,10 @@ export function useMainScreenActions({
     handleCommitOpen: () => openPublishDialog("commit"),
     handlePushOpen: () => openPublishDialog("publish"),
     handlePrOpen: () => openPublishDialog("pull_request"),
-    handleFilePaletteOpen,
+    handleCommandPaletteOpen,
     handleViewPr,
     closePublishDialog,
     reviewDiffsFromPublish,
-    onFilePaletteClose: () => setFilePaletteOpen(false),
+    onCommandPaletteClose: () => setCommandPaletteOpen(false),
   };
 }

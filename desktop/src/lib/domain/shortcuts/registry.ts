@@ -2,7 +2,7 @@ import { SHORTCUTS, type ShortcutId } from "@/config/shortcuts";
 import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
 
 export interface ShortcutTrigger {
-  source: "keyboard" | "menu";
+  source: "keyboard" | "menu" | "palette";
   digit?: ShortcutDigit;
 }
 
@@ -58,6 +58,20 @@ export function registerShortcutHandler(
 
 export function getShortcutHandler(id: ShortcutId): ShortcutHandler | null {
   return shortcutHandlers.get(id)?.handler ?? null;
+}
+
+export function runShortcutHandler(id: ShortcutId, trigger: ShortcutTrigger): boolean {
+  const handler = getShortcutHandler(id);
+  if (!handler) {
+    return false;
+  }
+
+  try {
+    return handler(trigger) !== false;
+  } catch (error) {
+    console.error(`Failed to handle shortcut ${id}`, error);
+    return false;
+  }
 }
 
 export function clearShortcutHandlerRegistryForTests(): void {

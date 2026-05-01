@@ -3,10 +3,10 @@ import { useEffect, useMemo } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
 import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
 import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
-import { WorkspaceFilePalette } from "@/components/workspace/files/palette/WorkspaceFilePalette";
 import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
 import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/WorkspaceShellActionsContext";
+import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
@@ -55,7 +55,7 @@ export function StandardWorkspaceShell() {
     rightPanelWidth,
     terminalActivationRequestToken,
     publishDialog,
-    filePaletteOpen,
+    commandPaletteOpen,
     onLeftSeparatorDown,
     onRightSeparatorDown,
   } = layout;
@@ -90,14 +90,25 @@ export function StandardWorkspaceShell() {
     if (cloudOwner && cloudName) {
       return buildCloudRepoSettingsHref(cloudOwner, cloudName);
     }
+    const localRepoPath = selectedWorkspace?.sourceRepoRootPath?.trim()
+      || selectedWorkspace?.path?.trim()
+      || "";
+    if (!localRepoPath) {
+      return null;
+    }
     return buildSettingsHref({
       section: "repo",
-      repo: selectedWorkspace?.sourceRepoRootPath ?? selectedWorkspace?.path ?? null,
+      repo: localRepoPath,
     });
   }, [selectedCloudWorkspace?.repo?.name, selectedCloudWorkspace?.repo?.owner, selectedWorkspace]);
+  const canOpenRepositorySettings = repoSettingsHref !== null;
+  const repositorySettingsDisabledReason = canOpenRepositorySettings
+    ? null
+    : "Repository settings are unavailable.";
 
   useMainScreenShortcuts({
-    onOpenFilePalette: actions.handleFilePaletteOpen,
+    canOpenCommandPalette: hasWorkspaceShell,
+    onOpenCommandPalette: actions.handleCommandPaletteOpen,
     onOpenTerminal: actions.openTerminalPanel,
   });
 
@@ -243,12 +254,29 @@ export function StandardWorkspaceShell() {
                       shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
                       isCloudWorkspaceSelected={isCloudWorkspaceSelected}
                       state={rightPanelState}
-                      repoSettingsHref={repoSettingsHref}
+                      repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
+                        section: "repo",
+                        repo: null,
+                      })}
                       onStateChange={layout.setRightPanelState}
                       terminalActivationRequestToken={terminalActivationRequestToken}
                     />
                   </div>
                 </div>
+
+                <WorkspaceCommandPalette
+                  open={commandPaletteOpen}
+                  onClose={actions.onCommandPaletteClose}
+                  hasWorkspaceShell={hasWorkspaceShell}
+                  selectedWorkspaceId={selectedWorkspaceId}
+                  hasRuntimeReadyWorkspace={hasRuntimeReadyWorkspace}
+                  runtimeBlockedReason={runtimeBlockedReason}
+                  repoSettingsHref={repoSettingsHref}
+                  canOpenRepositorySettings={canOpenRepositorySettings}
+                  repositorySettingsDisabledReason={repositorySettingsDisabledReason}
+                  runCommand={runCommand}
+                  openTerminalPanel={actions.openTerminalPanel}
+                />
 
                 {hasRuntimeReadyWorkspace && (
                   <>
@@ -264,10 +292,6 @@ export function StandardWorkspaceShell() {
                     />
                     <ConnectedReviewSetupDialog />
                     <ConnectedReviewCritiqueDialog />
-                    <WorkspaceFilePalette
-                      open={filePaletteOpen}
-                      onClose={actions.onFilePaletteClose}
-                    />
                   </>
                 )}
               </>
