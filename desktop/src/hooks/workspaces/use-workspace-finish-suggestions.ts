@@ -38,7 +38,7 @@ export function useWorkspaceFinishSuggestions(
   const suggestions: Record<string, WorkspaceFinishSuggestion> = {};
   queries.forEach((query, index) => {
     const preflight = query.data;
-    if (!preflight?.canRetire || !preflight.mergedIntoBase) {
+    if (!preflight?.canRetire || !preflight.mergedIntoBase || preflight.headMatchesBase) {
       return;
     }
     if (dismissals[preflight.workspaceId] === preflight.readinessFingerprint) {

@@ -202,6 +202,18 @@ impl GitService {
         anyhow::bail!("{}", git_command_message(&stderr, "merge-base failed"))
     }
 
+    pub fn resolve_ref_oid(workspace_path: &Path, ref_name: &str) -> anyhow::Result<String> {
+        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
+            .trim()
+            .to_string();
+        let repo_root_path = PathBuf::from(&repo_root);
+        Ok(
+            run_git_ok(&repo_root_path, &["rev-parse", "--verify", ref_name])?
+                .trim()
+                .to_string(),
+        )
+    }
+
     pub fn rename_branch(
         workspace_path: &Path,
         new_name: &str,

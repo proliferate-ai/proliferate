@@ -81,6 +81,27 @@ export function InlineToolAction({ item }: { item: ToolCallItem }) {
   );
 }
 
+export function InlineToolActions({
+  itemIds,
+  transcript,
+}: {
+  itemIds: string[];
+  transcript: TranscriptState;
+}) {
+  const actionSummary = summarizeCollapsedActions(itemIds, transcript);
+  const containsEdits = actionSummary.edits > 0;
+
+  return (
+    <div className={containsEdits ? "flex flex-col gap-0" : "flex flex-col gap-1"}>
+      {itemIds.map((itemId) => {
+        const item = transcript.itemsById[itemId];
+        if (item?.kind !== "tool_call") return null;
+        return <InlineToolAction key={itemId} item={item} />;
+      })}
+    </div>
+  );
+}
+
 function CollapsedActionsLedger({
   itemIds,
   transcript,

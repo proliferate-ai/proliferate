@@ -3642,10 +3642,12 @@ export interface components {
         /** @enum {string} */
         WorkspaceRetireOutcome: "retired" | "already_retired" | "blocked" | "cleanup_failed";
         WorkspaceRetirePreflightResponse: {
+            baseOid?: string | null;
             baseRef?: string | null;
             blockers: components["schemas"]["WorkspaceRetireBlocker"][];
             canRetire: boolean;
             cleanupState: components["schemas"]["WorkspaceCleanupState"];
+            headMatchesBase: boolean;
             headOid?: string | null;
             lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
             materialized: boolean;

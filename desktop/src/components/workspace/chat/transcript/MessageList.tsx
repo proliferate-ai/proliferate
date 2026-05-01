@@ -625,7 +625,7 @@ function collectToolCallIdsWithProposedPlanForBlocks(
 ): Set<string> {
   const toolCallIds = new Set<string>();
   for (const block of displayBlocks) {
-    if (block.kind === "collapsed_actions") {
+    if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
       for (const itemId of block.itemIds) {
         collectToolCallIdsWithProposedPlanFromItem(
           itemId,
@@ -853,6 +853,9 @@ function blockContainsActiveToolWork(
   if (block.kind === "collapsed_actions") {
     return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
   }
+  if (block.kind === "inline_tools") {
+    return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
+  }
 
   return isActiveToolItem(transcript.itemsById[block.itemId]);
 }
@@ -868,6 +871,9 @@ function blockBelongsToCompletedHistory(
   completedHistoryRootIds: Set<string>,
 ): boolean {
   if (block.kind === "collapsed_actions") {
+    return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
+  }
+  if (block.kind === "inline_tools") {
     return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
   return completedHistoryRootIds.has(block.itemId);

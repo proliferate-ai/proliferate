@@ -181,7 +181,10 @@ pub struct WorkspaceRetirePreflightResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_ref: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub head_oid: Option<String>,
+    pub head_matches_base: bool,
     pub readiness_fingerprint: String,
     pub blockers: Vec<WorkspaceRetireBlocker>,
 }

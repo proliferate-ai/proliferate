@@ -306,8 +306,7 @@ describe("buildTurnPresentation", () => {
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
-      { kind: "inline_tool", itemId: "command" },
-      { kind: "inline_tool", itemId: "edit" },
+      { kind: "inline_tools", blockId: "command-edit", itemIds: ["command", "edit"] },
     ]);
 
     transcript.itemsById.command = {
@@ -321,8 +320,7 @@ describe("buildTurnPresentation", () => {
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
-      { kind: "inline_tool", itemId: "command" },
-      { kind: "inline_tool", itemId: "edit" },
+      { kind: "inline_tools", blockId: "command-edit", itemIds: ["command", "edit"] },
     ]);
   });
 
@@ -335,17 +333,14 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["sqlite", "ps"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tool", itemId: "sqlite" },
-      { kind: "inline_tool", itemId: "ps" },
+      { kind: "inline_tools", blockId: "sqlite-ps", itemIds: ["sqlite", "ps"] },
     ]);
 
     transcript.itemsById.pending = terminalItem("pending", "turn-1", 3, undefined, "in_progress");
     turn.itemOrder = ["sqlite", "ps", "pending"];
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tool", itemId: "sqlite" },
-      { kind: "inline_tool", itemId: "ps" },
-      { kind: "inline_tool", itemId: "pending" },
+      { kind: "inline_tools", blockId: "sqlite-pending", itemIds: ["sqlite", "ps", "pending"] },
     ]);
 
     transcript.itemsById.read = toolItem("read", "turn-1", 3, "file_read", "in_progress");
@@ -553,8 +548,7 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["sqlite", "ps"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tool", itemId: "sqlite" },
-      { kind: "inline_tool", itemId: "ps" },
+      { kind: "inline_tools", blockId: "sqlite-ps", itemIds: ["sqlite", "ps"] },
     ]);
 
     transcript.itemsById.sqlite = parsedCommandItem("sqlite", "turn-1", 1, [

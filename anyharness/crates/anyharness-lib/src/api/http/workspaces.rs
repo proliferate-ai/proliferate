@@ -867,6 +867,8 @@ async fn build_retire_preflight(
     let materialized = std::path::Path::new(&workspace.path).exists();
     let mut head_oid = None;
     let mut base_ref = None;
+    let mut base_oid = None;
+    let mut head_matches_base = false;
     let mut merged_into_base = false;
 
     if workspace.kind != "worktree" {
@@ -971,6 +973,21 @@ async fn build_retire_preflight(
                 .unwrap_or(false);
                 base_ref = Some(local_ref);
             }
+        }
+        if let (Some(base), Some(head)) = (base_ref.as_deref(), head_oid.as_deref()) {
+            let workspace_path = workspace.path.clone();
+            base_oid = run_blocking("retire base oid", {
+                let base = base.to_string();
+                move || {
+                    crate::git::GitService::resolve_ref_oid(
+                        std::path::Path::new(&workspace_path),
+                        &base,
+                    )
+                }
+            })
+            .await?
+            .ok();
+            head_matches_base = base_oid.as_deref() == Some(head);
         }
     }
 
@@ -1082,14 +1099,16 @@ async fn build_retire_preflight(
         && workspace.kind == "worktree"
         && workspace.lifecycle_state != "retired";
     let readiness_fingerprint = format!(
-        "v1:{}:{}:{}:{}:{}:{}:{}:{}",
+        "v1:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
         workspace.id,
         workspace.lifecycle_state,
         workspace.cleanup_state,
         materialized,
         head_oid.as_deref().unwrap_or(""),
         base_ref.as_deref().unwrap_or(""),
+        base_oid.as_deref().unwrap_or(""),
         merged_into_base,
+        head_matches_base,
         blockers
             .iter()
             .map(|blocker| format!("{:?}", blocker.code))
@@ -1106,7 +1125,9 @@ async fn build_retire_preflight(
         materialized,
         merged_into_base,
         base_ref,
+        base_oid,
         head_oid,
+        head_matches_base,
         readiness_fingerprint,
         blockers,
     })

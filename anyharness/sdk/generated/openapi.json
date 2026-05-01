@@ -14166,10 +14166,17 @@
           "canRetire",
           "materialized",
           "mergedIntoBase",
+          "headMatchesBase",
           "readinessFingerprint",
           "blockers"
         ],
         "properties": {
+          "baseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "baseRef": {
             "type": [
               "string",
@@ -14187,6 +14194,9 @@
           },
           "cleanupState": {
             "$ref": "#/components/schemas/WorkspaceCleanupState"
+          },
+          "headMatchesBase": {
+            "type": "boolean"
           },
           "headOid": {
             "type": [

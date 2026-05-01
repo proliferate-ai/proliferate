@@ -132,6 +132,9 @@ mod tests {
             creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         }

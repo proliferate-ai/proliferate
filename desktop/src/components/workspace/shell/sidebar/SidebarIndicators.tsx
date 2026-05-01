@@ -201,13 +201,23 @@ function FinishSuggestionIndicator({
       <PopoverButton
         trigger={trigger}
         stopPropagation
-        className="w-44 rounded-xl border border-border bg-popover p-1 shadow-floating"
+        className="w-64 rounded-xl border border-border bg-popover p-1 shadow-floating"
         onOpenChange={(isOpen) => {
           if (!isOpen) setConfirming(false);
         }}
       >
         {(close) => confirming ? (
           <>
+            <div className="px-2.5 py-2 text-sm text-foreground">
+              <div className="font-medium">Mark done?</div>
+              <div className="mt-1 text-xs leading-4 text-muted-foreground">
+                This removes the local worktree and hides this workspace and its chats from the app.
+                Commits, branches, and pull requests are not deleted.
+              </div>
+              <div className="mt-1 text-xs leading-4 text-muted-foreground">
+                This cannot be undone from Proliferate.
+              </div>
+            </div>
             <PopoverMenuItem
               label="Confirm done"
               variant="sidebar"
