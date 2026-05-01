@@ -184,12 +184,16 @@ export function WorkspaceItem({
     </SidebarRowSurface>
   );
 
+  // Leave PopoverButton uncontrolled until the confirmation step is active.
+  // Passing false would force-close the internally opened right-click menu.
+  const forcedContextMenuOpen = doneConfirmOpen ? true : undefined;
+
   const contextMenu = (
     <PopoverButton
       trigger={row}
       triggerMode="contextMenu"
       stopPropagation
-      externalOpen={doneConfirmOpen}
+      externalOpen={forcedContextMenuOpen}
       onOpenChange={(isOpen) => {
         if (!isOpen) setDoneConfirmOpen(false);
       }}
@@ -247,7 +251,7 @@ export function WorkspaceItem({
               label="Mark done..."
               variant="sidebar"
               onClick={() => {
-                setDoneConfirmOpen(true);
+                handleMarkDoneCommand();
               }}
             />
           )}
