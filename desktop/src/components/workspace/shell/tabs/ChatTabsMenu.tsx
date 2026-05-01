@@ -7,11 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import {
-  BrailleSweepBadge,
-  ChevronRight,
-  ProliferateIcon,
-} from "@/components/ui/icons";
+import { ChevronRight } from "@/components/ui/icons";
 import type { HeaderChatMenuEntry } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 
@@ -203,15 +199,6 @@ function SubagentFlyout({
       {children.map((child) => (
         <PopoverMenuItem
           key={child.sessionLinkId}
-          icon={(
-            <span
-              className="flex size-4 shrink-0 items-center justify-center"
-              style={{ color: child.color }}
-              aria-hidden="true"
-            >
-              <ProliferateIcon className="size-4" />
-            </span>
-          )}
           label={child.title}
           trailing={renderSubagentTrailing(child)}
           className={child.isActive ? "bg-accent/70" : ""}
@@ -254,13 +241,13 @@ function computeFlyoutPosition(rect: DOMRect, childCount: number): FlyoutState["
 
 function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
   if (child.wakeScheduled) {
-    return <span className="text-xs text-foreground">Wake</span>;
+    return <span className="text-xs text-foreground">Wake scheduled</span>;
   }
   if (child.statusLabel === "Failed") {
     return <span className="text-xs text-destructive">Failed</span>;
   }
   if (child.statusLabel === "Working") {
-    return <BrailleSweepBadge className="text-[10px] text-muted-foreground" />;
+    return <span className="text-xs text-foreground">Working</span>;
   }
   if (child.isActive) {
     return <span className="size-1.5 rounded-full bg-foreground/70" />;

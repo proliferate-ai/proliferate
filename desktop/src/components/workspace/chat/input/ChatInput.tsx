@@ -90,7 +90,7 @@ export function ChatInput({
   const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!materializedWorkspaceId;
   const canStartReview = canUseUtilityActions
     && reviewActions.canStartCodeReview
-    && !activeReview.run
+    && !activeReview.hasBlockingReview
     && !activeReview.startingReview;
   const attachFileDetail = (() => {
     if (canAttach) {
@@ -112,7 +112,7 @@ export function ChatInput({
     if (canStartReview) {
       return "Start review agents for the current implementation.";
     }
-    if (activeReview.run || activeReview.startingReview) {
+    if (activeReview.hasBlockingReview || activeReview.startingReview) {
       return "A review is already active for this session";
     }
     if (!activeSessionId) {

@@ -112,7 +112,7 @@ describe("buildTranscriptCopyText", () => {
 
     const copied = copyText({ transcript });
 
-    expect(copied).toBe("\"Typo finder\" Turn Completed");
+    expect(copied).toBe("Typo finder finished");
     expect(copied).not.toContain("Hidden wake instructions");
   });
 
@@ -132,7 +132,7 @@ describe("buildTranscriptCopyText", () => {
 
     const copied = copyText({ transcript });
 
-    expect(copied).toBe("Agents critiqued the plan");
+    expect(copied).toBe("Review feedback");
     expect(copied).not.toContain("Full hidden critique payload");
   });
 
@@ -204,7 +204,7 @@ describe("buildTranscriptCopyText", () => {
     const copied = copyText({ transcript });
 
     expect(copied).toContain("Implementation agent");
-    expect(copied).toContain("Codex · gpt-5");
+    expect(copied).not.toContain("Codex · gpt-5");
     expect(copied).toContain("Patch the tests");
     expect(copied).toContain("Agent result");
     expect(copied).toContain("Child work summary");
@@ -310,7 +310,7 @@ describe("buildTranscriptCopyText", () => {
     };
 
     expect(copyText({ transcript, visibleOptimisticPrompt: optimisticPrompt })).toBe(
-      "Agents critique the plan",
+      "Review feedback queued",
     );
   });
 });

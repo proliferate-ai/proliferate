@@ -12,7 +12,6 @@ describe("buildHeaderStripRows", () => {
       groupedTabs: [tab("a"), tab("b")],
       childrenByParentSessionId: new Map(),
       collapsedGroupIds: [],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -24,7 +23,6 @@ describe("buildHeaderStripRows", () => {
       groupedTabs: [tab("p"), child("c1", "p"), child("c2", "p")],
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }, { sessionId: "c2" }]]]),
       collapsedGroupIds: [],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -34,7 +32,7 @@ describe("buildHeaderStripRows", () => {
       groupKind: "subagent",
       groupId: "p",
       parentId: "p",
-      color: "color-p",
+      color: null,
       label: "Agents",
       isCollapsed: false,
     });
@@ -45,7 +43,6 @@ describe("buildHeaderStripRows", () => {
       groupedTabs: [tab("p"), child("c1", "p")],
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }]]]),
       collapsedGroupIds: ["p"],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -59,7 +56,6 @@ describe("buildHeaderStripRows", () => {
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }]]]),
       collapsedGroupIds: ["p"],
       activeSessionId: "c1",
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -73,7 +69,6 @@ describe("buildHeaderStripRows", () => {
       childrenByParentSessionId: new Map(),
       collapsedGroupIds: [],
       manualGroups: [manualGroup("g1", ["b", "c"])],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -86,7 +81,6 @@ describe("buildHeaderStripRows", () => {
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }, { sessionId: "c2" }]]]),
       collapsedGroupIds: [],
       manualGroups: [manualGroup("g1", ["p", "q"])],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -105,7 +99,6 @@ describe("buildHeaderStripRows", () => {
       childrenByParentSessionId: new Map(),
       collapsedGroupIds: [createManualChatGroupId("g1")],
       manualGroups: [manualGroup("g1", ["a", "b"])],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
     const activeRows = buildHeaderStripRows({
@@ -114,7 +107,6 @@ describe("buildHeaderStripRows", () => {
       collapsedGroupIds: [createManualChatGroupId("g1")],
       manualGroups: [manualGroup("g1", ["a", "b"])],
       activeSessionId: "b",
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -127,7 +119,6 @@ describe("buildHeaderStripRows", () => {
       groupedTabs: [child("c1", "p"), tab("p"), child("c2", "p")],
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }, { sessionId: "c2" }]]]),
       collapsedGroupIds: [],
-      resolveSubagentColor: colorFor,
       resolveManualGroupColor: manualColorFor,
     });
 
@@ -160,10 +151,6 @@ function manualGroup(id: string, sessionIds: string[]): DisplayManualChatGroup {
     colorId: "blue",
     sessionIds,
   };
-}
-
-function colorFor(parentId: string): string {
-  return `color-${parentId}`;
 }
 
 function manualColorFor(group: DisplayManualChatGroup): string {

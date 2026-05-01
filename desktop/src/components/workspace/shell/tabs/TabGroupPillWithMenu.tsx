@@ -22,7 +22,7 @@ export function TabGroupPillWithMenu({
 }: {
   groupKind: "manual" | "subagent";
   label: string;
-  color: string;
+  color: string | null;
   width: number;
   isCollapsed: boolean;
   onToggle: () => void;
@@ -76,6 +76,7 @@ export function TabGroupPillWithMenu({
           }}
         >
           <TabGroupPill
+            groupKind={groupKind}
             label={label}
             color={color}
             width={width}

@@ -39,7 +39,6 @@ import {
   type SessionViewState,
   sessionSlotBelongsToWorkspace,
 } from "@/lib/domain/sessions/activity";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import {
   useWorkspaceActiveChatTabId,
   useWorkspaceShellTabsState,
@@ -389,12 +388,11 @@ export function useWorkspaceHeaderTabsViewModel() {
         const manualGroup = manualGroupByTopLevelSessionId.get(
           grouped.isChild ? grouped.groupRootSessionId : grouped.sessionId,
         ) ?? null;
-        const subagentGroupColor = grouped.isChild || hierarchy.childrenByParentSessionId.has(grouped.sessionId)
-          ? resolveSubagentColor(grouped.groupRootSessionId)
-          : null;
+        const isSubagentGrouped =
+          grouped.isChild || hierarchy.childrenByParentSessionId.has(grouped.sessionId);
         const groupColor = manualGroup
           ? resolveManualChatGroupColor(manualGroup.colorId)
-          : subagentGroupColor;
+          : null;
         return {
           ...grouped,
           id: grouped.sessionId,
@@ -406,7 +404,7 @@ export function useWorkspaceHeaderTabsViewModel() {
           isReviewAgentChild: hierarchyChild?.source === "review",
           isActive: grouped.sessionId === activeChatSessionIdForTabs,
           groupColor,
-          visualGroupId: manualGroup?.id ?? (subagentGroupColor ? grouped.groupRootSessionId : null),
+          visualGroupId: manualGroup?.id ?? (isSubagentGrouped ? grouped.groupRootSessionId : null),
           manualGroupId: manualGroup?.id ?? null,
           isHierarchyResolved: hierarchy.resolvedSessionIds.has(grouped.sessionId),
         } satisfies HeaderChatTabEntry;
@@ -428,7 +426,6 @@ export function useWorkspaceHeaderTabsViewModel() {
       groupedTabs: chatTabs,
       childrenByParentSessionId: hierarchy.childrenByParentSessionId,
       collapsedGroupIds: collapsedParentIds,
-      resolveSubagentColor,
       resolveManualGroupColor: (group) => resolveManualChatGroupColor(group.colorId),
       manualGroups: displayManualGroups,
       activeSessionId,

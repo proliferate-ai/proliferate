@@ -17,8 +17,19 @@ const SHOWABLE_REVIEW_STATUSES = new Set<ReviewRunStatus>([
   "system_failed",
 ]);
 
+const BLOCKING_REVIEW_STATUSES = new Set<ReviewRunStatus>([
+  "reviewing",
+  "feedback_ready",
+  "parent_revising",
+  "waiting_for_revision",
+]);
+
 export function isReviewRunShowable(run: ReviewRunDetail): boolean {
   return SHOWABLE_REVIEW_STATUSES.has(run.status);
+}
+
+export function isReviewRunBlocking(run: ReviewRunDetail): boolean {
+  return BLOCKING_REVIEW_STATUSES.has(run.status);
 }
 
 export function isReviewRunBusy(run: ReviewRunDetail): boolean {
@@ -39,6 +50,63 @@ export function isReviewRunBusy(run: ReviewRunDetail): boolean {
 
 export function isReviewRunTerminal(run: ReviewRunDetail): boolean {
   return run.status === "passed" || run.status === "stopped" || run.status === "system_failed";
+}
+
+interface StartingReviewLike {
+  parentSessionId: string;
+  kind: ReviewKind;
+  maxRounds: number;
+  autoIterate: boolean;
+  startedAt: number;
+}
+
+export function reviewRunReplacesStartingReview(
+  run: ReviewRunDetail,
+  startingReview: StartingReviewLike | null | undefined,
+): boolean {
+  if (!startingReview || run.parentSessionId !== startingReview.parentSessionId) {
+    return false;
+  }
+
+  if (isReviewRunBlocking(run)) {
+    return true;
+  }
+
+  if (
+    run.kind !== startingReview.kind
+    || run.maxRounds !== startingReview.maxRounds
+    || run.autoIterate !== startingReview.autoIterate
+  ) {
+    return false;
+  }
+
+  const createdAtMs = Date.parse(run.createdAt);
+  return Number.isFinite(createdAtMs) && createdAtMs >= startingReview.startedAt;
+}
+
+export function selectBlockingReviewRun(
+  runs: readonly ReviewRunDetail[] | null,
+): ReviewRunDetail | null {
+  return runs?.find(isReviewRunBlocking) ?? null;
+}
+
+export function selectComposerReviewRun(
+  runs: readonly ReviewRunDetail[] | null,
+  dismissedTerminalNoticeRunIds: readonly string[],
+): ReviewRunDetail | null {
+  const blockingRun = selectBlockingReviewRun(runs);
+  if (blockingRun) {
+    return blockingRun;
+  }
+
+  const latestTerminalRun = runs?.find(isReviewRunTerminal) ?? null;
+  if (!latestTerminalRun) {
+    return null;
+  }
+
+  return dismissedTerminalNoticeRunIds.includes(latestTerminalRun.id)
+    ? null
+    : latestTerminalRun;
 }
 
 export function latestReviewRound(run: ReviewRunDetail): ReviewRoundDetail | null {

@@ -40,17 +40,6 @@ export function ReviewModelSettingsMenu({
   );
 }
 
-export function reviewerModelLabel(
-  modelGroups: AgentModelGroup[],
-  reviewer: ReviewerDraft,
-): string {
-  const selected = selectedReviewerModel(modelGroups, reviewer);
-  if (selected) {
-    return `${selected.group.providerDisplayName} · ${selected.model.displayName}`;
-  }
-  return reviewer.modelId || reviewer.agentKind || "No harness";
-}
-
 function selectedReviewerModel(
   modelGroups: AgentModelGroup[],
   reviewer: ReviewerDraft,

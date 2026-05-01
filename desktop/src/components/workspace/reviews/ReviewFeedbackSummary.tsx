@@ -1,12 +1,8 @@
 import type { ReviewAssignmentDetail } from "@anyharness/sdk";
 import { useSessionReviewsQuery } from "@anyharness/sdk-react";
 import { Button } from "@/components/ui/Button";
-import {
-  AgentGlyph,
-  GitPullRequest,
-  PlanningIcon,
-} from "@/components/ui/icons";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { FileText } from "@/components/ui/icons";
+import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { ReviewFeedbackPromptReference } from "@/lib/domain/chat/subagents/provenance";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
@@ -15,14 +11,12 @@ interface ReviewFeedbackSummaryProps {
   reference: ReviewFeedbackPromptReference;
   sessionId: string | null;
   state?: "queued" | "completed";
-  onOpenSession?: (sessionId: string) => void;
 }
 
 export function ReviewFeedbackSummary({
   reference,
   sessionId,
   state = "completed",
-  onOpenSession,
 }: ReviewFeedbackSummaryProps) {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const openCritique = useReviewUiStore((state) => state.openCritique);
@@ -41,43 +35,119 @@ export function ReviewFeedbackSummary({
   ) ?? null;
   const assignments = round?.assignments ?? [];
   const target = run?.kind === "code" ? "PR" : "plan";
-  const title = reference.label?.trim()
-    || reviewFeedbackTitle(assignments, target, state);
-  const TargetIcon = run?.kind === "code" ? GitPullRequest : PlanningIcon;
 
+  return (
+    <ReviewFeedbackSummaryView
+      assignments={assignments}
+      referenceLabel={reference.label}
+      reviewRunId={reference.reviewRunId}
+      state={state}
+      target={target}
+      onOpenCritique={(assignment) => {
+        openCritique({
+          reviewRunId: reference.reviewRunId,
+          assignmentId: assignment.id,
+          personaLabel: assignment.personaLabel,
+        });
+      }}
+    />
+  );
+}
+
+export function ReviewFeedbackSummaryView({
+  assignments,
+  referenceLabel,
+  reviewRunId,
+  state = "completed",
+  target,
+  onOpenCritique,
+}: {
+  assignments: ReviewAssignmentDetail[];
+  referenceLabel?: string | null;
+  reviewRunId: string;
+  state?: "queued" | "completed";
+  target: "plan" | "PR";
+  onOpenCritique: (assignment: ReviewAssignmentDetail) => void;
+}) {
+  const receipt = reviewFeedbackReceipt(assignments, target, state, referenceLabel);
   return (
     <div className="flex justify-end">
       <div
-        className="max-w-[77%] rounded-2xl bg-foreground/5 px-3 py-2 text-foreground"
+        className="grid max-w-[77%] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl bg-foreground/5 px-3 py-2 text-foreground"
         data-telemetry-mask
       >
-        <div className="flex min-w-0 items-center text-chat leading-[var(--text-chat--line-height)]">
-          <span className="min-w-0 truncate font-medium">
-            {title}
-          </span>
+        <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
+          <div className="truncate font-medium">{receipt.title}</div>
+          <div className="truncate text-muted-foreground">{receipt.detail}</div>
         </div>
-        <div className="mt-2 grid gap-1">
-          {assignments.length > 0 ? assignments.map((assignment) => (
-            <ReviewFeedbackAssignmentRow
-              key={assignment.id}
-              assignment={assignment}
-              reviewRunId={reference.reviewRunId}
-              TargetIcon={TargetIcon}
-              onOpenSession={onOpenSession}
-              onOpenCritique={() => {
-                openCritique({
-                  reviewRunId: reference.reviewRunId,
-                  assignmentId: assignment.id,
-                  personaLabel: assignment.personaLabel,
-                });
-              }}
-            />
-          )) : (
-            <div className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
-              Loading reviewer results...
-            </div>
+        <PopoverButton
+          side="top"
+          align="end"
+          offset={6}
+          stopPropagation
+          className="w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-border bg-popover p-0 text-popover-foreground shadow-floating"
+          trigger={(
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-chat-transcript-ignore
+              aria-label="Open review feedback details"
+              title="Open review feedback details"
+              className="h-7 shrink-0 px-2"
+            >
+              <FileText className="size-3.5" />
+              Details
+            </Button>
           )}
-        </div>
+        >
+          {() => (
+            <ReviewFeedbackDetails
+              assignments={assignments}
+              detail={receipt.detail}
+              reviewRunId={reviewRunId}
+              title={receipt.title}
+              onOpenCritique={onOpenCritique}
+            />
+          )}
+        </PopoverButton>
+      </div>
+    </div>
+  );
+}
+
+function ReviewFeedbackDetails({
+  assignments,
+  detail,
+  reviewRunId,
+  title,
+  onOpenCritique,
+}: {
+  assignments: ReviewAssignmentDetail[];
+  detail: string;
+  reviewRunId: string;
+  title: string;
+  onOpenCritique: (assignment: ReviewAssignmentDetail) => void;
+}) {
+  return (
+    <div data-telemetry-mask>
+      <div className="border-b border-border/60 px-3 py-2">
+        <div className="truncate text-sm font-medium text-foreground">{title}</div>
+        <div className="truncate text-xs text-muted-foreground">{detail}</div>
+      </div>
+      <div className="max-h-80 overflow-y-auto p-1">
+        {assignments.length > 0 ? assignments.map((assignment) => (
+          <ReviewFeedbackAssignmentRow
+            key={assignment.id}
+            assignment={assignment}
+            reviewRunId={reviewRunId}
+            onOpenCritique={() => onOpenCritique(assignment)}
+          />
+        )) : (
+          <div className="px-2 py-2 text-sm text-muted-foreground">
+            Loading reviewer results...
+          </div>
+        )}
       </div>
     </div>
   );
@@ -86,18 +156,12 @@ export function ReviewFeedbackSummary({
 function ReviewFeedbackAssignmentRow({
   assignment,
   reviewRunId,
-  TargetIcon,
-  onOpenSession,
   onOpenCritique,
 }: {
   assignment: ReviewAssignmentDetail;
   reviewRunId: string;
-  TargetIcon: typeof GitPullRequest | typeof PlanningIcon;
-  onOpenSession?: (sessionId: string) => void;
   onOpenCritique: () => void;
 }) {
-  const color = resolveSubagentColor(assignment.sessionLinkId ?? assignment.id);
-  const canOpenSession = !!assignment.reviewerSessionId && !!onOpenSession;
   const verdict = reviewAssignmentVerdict(assignment);
   const verdictClassName = verdict.tone === "approved"
     ? "text-foreground"
@@ -109,30 +173,19 @@ function ReviewFeedbackAssignmentRow({
         : "text-muted-foreground";
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-chat leading-[var(--text-chat--line-height)]">
-      <div className="flex min-w-0 items-center gap-1.5">
-        {canOpenSession ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            data-chat-transcript-ignore
-            aria-label={`Open ${assignment.personaLabel} session`}
-            title={`Open ${assignment.personaLabel} session`}
-            onClick={() => onOpenSession(assignment.reviewerSessionId!)}
-            className="-ml-1"
-          >
-            <AgentGlyph agentKind={assignment.agentKind} color={color} className="size-4" />
-          </Button>
-        ) : (
-          <AgentGlyph agentKind={assignment.agentKind} color={color} className="size-4" />
-        )}
-        <span className="min-w-0 truncate text-foreground">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left">
+      <div className="min-w-0">
+        <span className="block truncate text-sm font-medium text-foreground">
           {assignment.personaLabel || reviewRunId}
         </span>
+        {assignment.summary?.trim() && (
+          <span className="block truncate text-xs text-muted-foreground">
+            {assignment.summary.trim()}
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className={verdictClassName}>{verdict.label}</span>
+        <span className={`text-xs ${verdictClassName}`}>{verdict.label}</span>
         {assignment.hasCritique && (
           <Button
             type="button"
@@ -143,7 +196,7 @@ function ReviewFeedbackAssignmentRow({
             title={`Open ${assignment.personaLabel} critique`}
             onClick={onOpenCritique}
           >
-            <TargetIcon className="size-3.5" />
+            <FileText className="size-3.5" />
           </Button>
         )}
       </div>
@@ -151,28 +204,55 @@ function ReviewFeedbackAssignmentRow({
   );
 }
 
-function reviewFeedbackTitle(
+function reviewFeedbackReceipt(
   assignments: ReviewAssignmentDetail[],
   target: "plan" | "PR",
   state: "queued" | "completed",
-): string {
+  referenceLabel: string | null | undefined,
+): {
+  title: string;
+  detail: string;
+} {
   const reviewerCount = assignments.length;
   if (reviewerCount <= 0) {
-    return state === "queued"
-      ? `Agents critique the ${target}`
-      : `Agents critiqued the ${target}`;
+    return {
+      title: referenceLabel?.toLowerCase().includes("complete") ? "Review complete" : "Review feedback",
+      detail: state === "queued" ? "Sending to parent" : "Loading reviewer results",
+    };
   }
-  if (reviewerCount === 1) {
-    const label = assignments[0]?.personaLabel?.trim() || "Reviewer";
-    return state === "queued"
-      ? `${label} critiques the ${target}`
-      : `${label} critiqued the ${target}`;
+
+  const approvedCount = assignments.filter((assignment) =>
+    assignment.status === "submitted" && assignment.pass
+  ).length;
+  const changesCount = assignments.filter((assignment) =>
+    assignment.status === "submitted" && !assignment.pass
+  ).length;
+  const failedCount = assignments.filter((assignment) =>
+    assignment.status === "system_failed"
+    || assignment.status === "timed_out"
+    || assignment.status === "retryable_failed"
+  ).length;
+  const pendingCount = Math.max(0, reviewerCount - approvedCount - changesCount - failedCount);
+  const reviewerLabel = `${reviewerCount} ${reviewerCount === 1 ? "reviewer" : "reviewers"}`;
+
+  if (approvedCount === reviewerCount) {
+    return {
+      title: "Review complete",
+      detail: `${reviewerLabel} approved · ${target}`,
+    };
   }
-  const noun = reviewerCount === 1 ? "agent" : "agents";
-  const verb = state === "queued"
-    ? reviewerCount === 1 ? "critiques" : "critique"
-    : "critiqued";
-  return `${reviewerCount} ${noun} ${verb} the ${target}`;
+
+  const detailParts = [
+    changesCount > 0 ? `${changesCount} requested ${changesCount === 1 ? "change" : "changes"}` : null,
+    failedCount > 0 ? `${failedCount} failed` : null,
+    pendingCount > 0 ? `${pendingCount} reviewing` : null,
+    approvedCount > 0 ? `${approvedCount} approved` : null,
+  ].filter((part): part is string => part !== null);
+
+  return {
+    title: "Review feedback",
+    detail: `${reviewerLabel} · ${detailParts.join(" · ") || "ready"} · ${target}`,
+  };
 }
 
 function reviewAssignmentVerdict(assignment: ReviewAssignmentDetail): {
@@ -181,17 +261,17 @@ function reviewAssignmentVerdict(assignment: ReviewAssignmentDetail): {
 } {
   if (assignment.status === "submitted") {
     return assignment.pass
-      ? { label: "approved", tone: "approved" }
-      : { label: "requested changes", tone: "changes" };
+      ? { label: "Approved", tone: "approved" }
+      : { label: "Requests changes", tone: "changes" };
   }
   if (assignment.status === "timed_out") {
-    return { label: "timed out", tone: "changes" };
+    return { label: "Timed out", tone: "changes" };
   }
   if (assignment.status === "system_failed") {
-    return { label: "failed", tone: "changes" };
+    return { label: "Failed", tone: "changes" };
   }
   if (assignment.status === "retryable_failed") {
-    return { label: "needs retry", tone: "changes" };
+    return { label: "Needs retry", tone: "changes" };
   }
-  return { label: "reviewing", tone: "pending" };
+  return { label: "Reviewing", tone: "pending" };
 }

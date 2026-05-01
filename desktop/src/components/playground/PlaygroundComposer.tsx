@@ -36,10 +36,10 @@ import {
 import {
   ArrowRight,
   ArrowUp,
-  AgentGlyph,
   ChevronDown,
   CloudIcon,
   Copy,
+  FileText,
   Folder,
   FolderOpen,
   GitBranch,
@@ -74,6 +74,7 @@ import {
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
+  PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
   TODOS_LONG,
@@ -85,6 +86,8 @@ import {
   USER_INPUT_SECRET,
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
+  type PlaygroundReviewComposerRow,
+  type PlaygroundReviewComposerState,
 } from "@/lib/domain/chat/__fixtures__/playground";
 import {
   derivePendingPromptQueueRow,
@@ -499,6 +502,15 @@ function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
 }
 
 export function renderDelegationSlot(scenario: ScenarioKey): ReactNode | null {
+  const reviewState = reviewComposerStateForScenario(scenario);
+  if (reviewState) {
+    return (
+      <DelegatedWorkComposerPanel>
+        <PlaygroundReviewComposerControl state={reviewState} />
+      </DelegatedWorkComposerPanel>
+    );
+  }
+
   switch (scenario) {
     case "subagents-composer-few":
       return (
@@ -532,45 +544,9 @@ export function renderDelegationSlot(scenario: ScenarioKey): ReactNode | null {
 function PlaygroundDelegationStack() {
   return (
     <DelegatedWorkComposerPanel>
-      <ReviewComposerControl
-        summary={{
-          label: "2 review agents reviewing code",
-          detail: "Code review · 1/2",
-        }}
-        icon={(
-          <AgentGlyph
-            agentKind="codex"
-            color={resolveSubagentColor("review-link-security")}
-            className="size-4"
-          />
-        )}
-        active
-      >
-        {() => (
-          <>
-            <div className="border-b border-border px-3 py-2">
-              <div className="text-sm font-medium text-foreground">2 review agents reviewing code</div>
-              <div className="text-xs text-muted-foreground">Code review · 1/2</div>
-            </div>
-            <div className="max-h-80 overflow-y-auto p-1">
-              <PlaygroundReviewAgentRow
-                agentKind="codex"
-                color={resolveSubagentColor("review-link-security")}
-                label="Security reviewer"
-                detail="Codex · gpt-5.4 · reviewing"
-                status="Reviewing"
-              />
-              <PlaygroundReviewAgentRow
-                agentKind="gemini"
-                color={resolveSubagentColor("review-link-ux")}
-                label="UX reviewer"
-                detail="Gemini · gemini-3-flash-preview · critique ready"
-                status="Changes"
-              />
-            </div>
-          </>
-        )}
-      </ReviewComposerControl>
+      <PlaygroundReviewComposerControl
+        state={PLAYGROUND_REVIEW_COMPOSER_STATES["subagents-reviewing-code"]}
+      />
       <CoworkComposerControl
         rows={PLAYGROUND_COWORK_ROWS}
         summary={PLAYGROUND_COWORK_SUMMARY}
@@ -588,33 +564,101 @@ function PlaygroundDelegationStack() {
   );
 }
 
-function PlaygroundReviewAgentRow({
-  agentKind,
-  color,
-  label,
-  detail,
-  status,
+function reviewComposerStateForScenario(
+  scenario: ScenarioKey,
+): PlaygroundReviewComposerState | null {
+  return PLAYGROUND_REVIEW_COMPOSER_STATES[scenario] ?? null;
+}
+
+function PlaygroundReviewComposerControl({
+  state,
 }: {
-  agentKind: string;
-  color: string;
-  label: string;
-  detail: string;
-  status: string;
+  state: PlaygroundReviewComposerState;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left">
-      <AgentGlyph agentKind={agentKind} color={color} className="size-5 shrink-0" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">
-          {label}
+    <ReviewComposerControl
+      summary={{
+        label: state.summary.label,
+        detail: state.summary.detail,
+      }}
+      active={state.summary.active}
+    >
+      {() => (
+        <>
+          <div className="max-h-80 overflow-y-auto p-1">
+            {state.rows.map((row) => (
+              <PlaygroundReviewAgentRow key={row.id} row={row} />
+            ))}
+          </div>
+          {(state.deliveryLabel || state.actionLabel) && (
+            <div className="flex min-w-0 items-center justify-between gap-2 border-t border-border/50 px-3 py-2">
+              {state.deliveryLabel && (
+                <div className="min-w-0 truncate text-xs text-muted-foreground">
+                  {state.deliveryLabel}
+                </div>
+              )}
+              {state.actionLabel && (
+                <Button type="button" variant="secondary" size="sm" disabled className="shrink-0">
+                  {state.actionLabel}
+                </Button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </ReviewComposerControl>
+  );
+}
+
+function PlaygroundReviewAgentRow({
+  row,
+}: {
+  row: PlaygroundReviewComposerRow;
+}) {
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left">
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">
+            {row.label}
+          </span>
+          <span className={`shrink-0 text-xs ${reviewStatusClassName(row.status)}`}>
+            {row.status}
+          </span>
         </span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {detail}
-        </span>
+        {row.detail && (
+          <span className="block truncate text-xs text-muted-foreground">
+            {row.detail}
+          </span>
+        )}
       </span>
-      <span className="shrink-0 text-xs text-muted-foreground">{status}</span>
+      {row.hasCritique && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled
+          aria-label={`Open ${row.label} critique`}
+          className="h-7 w-7 px-0"
+        >
+          <FileText className="size-3.5" />
+        </Button>
+      )}
     </div>
   );
+}
+
+function reviewStatusClassName(status: PlaygroundReviewComposerRow["status"]): string {
+  switch (status) {
+    case "Requests changes":
+    case "Failed":
+      return "text-destructive";
+    case "Approved":
+      return "text-foreground";
+    case "Starting":
+    case "Reviewing":
+      return "text-muted-foreground";
+  }
 }
 
 function buildPlaygroundSubagentSummary(

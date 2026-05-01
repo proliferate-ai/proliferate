@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { ChevronDown, ProliferateIcon } from "@/components/ui/icons";
+import { ChevronDown } from "@/components/ui/icons";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
@@ -29,15 +29,12 @@ interface SubagentComposerStripProps {
     childSessionId: string;
     label: string;
     statusLabel: string;
-    meta: string | null;
     latestCompletionLabel: string | null;
     wakeScheduled: boolean;
-    color: string;
   }>;
   parent: {
     parentSessionId: string;
     label: string;
-    meta: string | null;
   } | null;
   summary: {
     label: string;
@@ -83,7 +80,6 @@ export function SubagentComposerControl({
       className="w-auto border-0 bg-transparent p-0 shadow-none"
       trigger={(
         <ComposerControlButton
-          icon={<ProliferateIcon className="size-4" />}
           label={summary.label}
           detail={summary.detail}
           trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}
@@ -95,12 +91,6 @@ export function SubagentComposerControl({
     >
       {(close) => (
         <ComposerPopoverSurface className="w-[min(28rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
-          <div className="border-b border-border px-3 py-2">
-            <div className="text-sm font-medium text-foreground">{summary.label}</div>
-            {summary.detail && (
-              <div className="text-xs text-muted-foreground">{summary.detail}</div>
-            )}
-          </div>
           <div className="max-h-80 overflow-y-auto p-1">
             {parent && (
               <Button
@@ -114,53 +104,48 @@ export function SubagentComposerControl({
                   close();
                 }}
               >
-                <ProliferateIcon className="size-5 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">
                     {parent.label}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {parent.meta ?? "Parent agent"}
+                    Parent session
                   </span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">Parent</span>
               </Button>
             )}
-            {rows.map((row) => (
-              <Button
-                key={row.sessionLinkId}
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-auto w-full justify-start gap-2 rounded-lg px-2 py-2 text-left"
-                title={`Open ${row.label}`}
-                onClick={() => {
-                  onOpenSubagent(row.childSessionId);
-                  close();
-                }}
-              >
-                <span
-                  className="flex size-5 shrink-0 items-center justify-center rounded-full"
-                  style={{ color: row.color }}
-                  aria-hidden="true"
+            {rows.map((row) => {
+              const detail = subagentDetail(row);
+              return (
+                <Button
+                  key={row.sessionLinkId}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto w-full justify-start gap-2 rounded-lg px-2 py-2 text-left"
+                  title={`Open ${row.label}`}
+                  onClick={() => {
+                    onOpenSubagent(row.childSessionId);
+                    close();
+                  }}
                 >
-                  <ProliferateIcon className="size-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-foreground">
-                    {row.label}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {row.label}
+                    </span>
+                    {detail && (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {detail}
+                      </span>
+                    )}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {row.meta ?? "Subagent"}
+                  <span className={`shrink-0 text-xs ${statusClassName(row)}`}>
+                    {row.statusLabel}
                   </span>
-                </span>
-                <span className={`shrink-0 text-xs ${statusClassName(row)}`}>
-                  {row.wakeScheduled
-                    ? "Wake scheduled"
-                    : (row.latestCompletionLabel ?? row.statusLabel)}
-                </span>
-              </Button>
-            ))}
+                </Button>
+              );
+            })}
           </div>
         </ComposerPopoverSurface>
       )}
@@ -168,11 +153,21 @@ export function SubagentComposerControl({
   );
 }
 
+function subagentDetail(row: SubagentComposerStripProps["rows"][number]): string | null {
+  if (row.wakeScheduled && row.latestCompletionLabel) {
+    return `${row.latestCompletionLabel} · Wake scheduled`;
+  }
+  if (row.wakeScheduled) {
+    return "Wake scheduled";
+  }
+  return row.latestCompletionLabel;
+}
+
 function statusClassName(row: SubagentComposerStripProps["rows"][number]): string {
   if (row.statusLabel === "Failed") {
     return "text-destructive";
   }
-  if (row.statusLabel === "Working" || row.wakeScheduled) {
+  if (row.statusLabel === "Working") {
     return "text-foreground";
   }
   return "text-muted-foreground";

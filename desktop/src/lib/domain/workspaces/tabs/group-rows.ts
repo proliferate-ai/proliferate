@@ -4,7 +4,6 @@ import type { DisplayManualChatGroup, ManualChatGroupId } from "./manual-groups"
 interface BasePillRow {
   kind: "pill";
   groupId: string;
-  color: string;
   label: string;
   isCollapsed: boolean;
 }
@@ -12,11 +11,13 @@ interface BasePillRow {
 export interface SubagentPillRow extends BasePillRow {
   groupKind: "subagent";
   parentId: string;
+  color: null;
 }
 
 export interface ManualPillRow extends BasePillRow {
   groupKind: "manual";
   manualGroupId: ManualChatGroupId;
+  color: string;
 }
 
 export type PillRow = SubagentPillRow | ManualPillRow;
@@ -34,7 +35,6 @@ export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
   groupedTabs: TTab[];
   childrenByParentSessionId: ReadonlyMap<string, readonly unknown[]>;
   collapsedGroupIds: readonly string[] | ReadonlySet<string>;
-  resolveSubagentColor: (parentId: string) => string;
   resolveManualGroupColor: (group: DisplayManualChatGroup) => string;
   manualGroups?: readonly DisplayManualChatGroup[];
   activeSessionId?: string | null;
@@ -117,7 +117,7 @@ export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
       groupKind: "subagent",
       groupId: parentId,
       parentId,
-      color: args.resolveSubagentColor(parentId),
+      color: null,
       label: subagentLabel,
       isCollapsed,
     });

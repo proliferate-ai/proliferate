@@ -165,7 +165,7 @@ describe("isSubagentWorkComplete", () => {
 });
 
 describe("resolveSubagentLaunchDisplay", () => {
-  it("uses AnyHarness subagent launch args for title, meta, and prompt", () => {
+  it("uses AnyHarness subagent launch args for title and prompt without model metadata", () => {
     expect(resolveSubagentLaunchDisplay(toolCallItem({
       title: "mcp__subagents__create_subagent",
       nativeToolName: "mcp__subagents__create_subagent",
@@ -177,7 +177,7 @@ describe("resolveSubagentLaunchDisplay", () => {
       },
     }))).toEqual({
       title: "repo-reviewer",
-      meta: "Codex · gpt-5.4",
+      meta: null,
       prompt: "Review the current diff.",
     });
   });

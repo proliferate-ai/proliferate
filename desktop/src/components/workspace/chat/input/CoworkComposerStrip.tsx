@@ -53,7 +53,6 @@ export function CoworkComposerControl({
       className="w-auto border-0 bg-transparent p-0 shadow-none"
       trigger={(
         <ComposerControlButton
-          icon={<ProliferateIcon className="size-4" />}
           label={summary.label}
           detail={summary.detail}
           trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}

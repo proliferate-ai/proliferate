@@ -72,6 +72,14 @@ review-revision actions. Review automation can still make the composer
 unavailable through chat availability state, but it should not displace the
 todo tracker or workspace/cloud panels with a full card.
 
+Review runs have two composer-facing classes: blocking workflow runs
+(`reviewing`, `feedback_ready`, `parent_revising`, `waiting_for_revision`) and
+terminal result notices (`passed`, `stopped`, `system_failed`). The composer may
+show one blocking workflow or the latest terminal notice, but dismissing a
+terminal notice must not reveal older terminal runs underneath it. Starting a
+new review is blocked by workflow runs and optimistic starting state, not by a
+finished result notice.
+
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: context, delegated work, queued work, or active interaction. Add it
 to `use-composer-dock-slots.tsx` — do not compute it inline in `ChatView` and
@@ -252,7 +260,9 @@ Scenarios (selectable via `?s=<key>`):
 - `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
+- `review-feedback-message`, `review-complete-message` — collapsed transcript receipts for review feedback and completed reviews
 - `subagents-composer-few`, `subagents-composer-many`, `subagents-queued-wake`, `subagents-queued-wake-with-approval`, `subagents-coding-review-with-approval` — delegated-work strip, queued wake prompt, coding/review agent, and approval stack coverage
+- `subagents-review-starting-plan`, `subagents-review-starting-code`, `subagents-reviewing-plan`, `subagents-reviewing-code`, `subagents-review-feedback-ready`, `subagents-review-complete` — review-agent composer lifecycle coverage
 - `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.

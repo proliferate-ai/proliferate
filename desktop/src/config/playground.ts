@@ -13,6 +13,8 @@ export type ScenarioKey =
   | "pending-prompts-with-approval"
   | "pending-review-feedback-ready"
   | "pending-review-complete"
+  | "review-feedback-message"
+  | "review-complete-message"
   | "composer-long-input"
   | "file-mention-search"
   | "workspace-arrival-created"
@@ -61,6 +63,12 @@ export type ScenarioKey =
   | "git-diff-panel"
   | "subagents-composer-few"
   | "subagents-composer-many"
+  | "subagents-review-starting-plan"
+  | "subagents-review-starting-code"
+  | "subagents-reviewing-plan"
+  | "subagents-reviewing-code"
+  | "subagents-review-feedback-ready"
+  | "subagents-review-complete"
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagents-coding-review-with-approval"
@@ -93,6 +101,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-with-approval": { label: "Queue + approval" },
   "pending-review-feedback-ready": { label: "Queue review feedback" },
   "pending-review-complete": { label: "Queue review complete" },
+  "review-feedback-message": { label: "Review feedback message" },
+  "review-complete-message": { label: "Review complete message" },
   "composer-long-input": { label: "Composer long input" },
   "file-mention-search": { label: "File mention search" },
   "workspace-arrival-created": { label: "Workspace arrival" },
@@ -141,6 +151,12 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "git-diff-panel": { label: "Git diff panel" },
   "subagents-composer-few": { label: "Subagents composer (3)" },
   "subagents-composer-many": { label: "Subagents composer (10)" },
+  "subagents-review-starting-plan": { label: "Review starting (plan)" },
+  "subagents-review-starting-code": { label: "Review starting (code)" },
+  "subagents-reviewing-plan": { label: "Reviewing plan" },
+  "subagents-reviewing-code": { label: "Reviewing code" },
+  "subagents-review-feedback-ready": { label: "Review feedback ready" },
+  "subagents-review-complete": { label: "Review complete" },
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagents-coding-review-with-approval": { label: "Subagents + coding + review + approval" },

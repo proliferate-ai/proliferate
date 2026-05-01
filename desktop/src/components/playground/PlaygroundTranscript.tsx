@@ -11,6 +11,7 @@ import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/Gen
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
+import { ReviewFeedbackSummaryView } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CircleAlert, Settings, Sparkles } from "@/components/ui/icons";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
@@ -19,6 +20,8 @@ import {
   CLAUDE_PLAN_SHORT,
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
   PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
+  PLAYGROUND_REVIEW_COMPLETE_ASSIGNMENTS,
+  PLAYGROUND_REVIEW_FEEDBACK_ASSIGNMENTS,
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground";
@@ -365,6 +368,32 @@ export function PlaygroundTranscript({
           bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
+    );
+  }
+  if (scenario === "review-feedback-message") {
+    return (
+      <TranscriptPreviewShell>
+        <AssistantMessage content="I’ve sent the current implementation through review." />
+        <ReviewFeedbackSummaryView
+          assignments={PLAYGROUND_REVIEW_FEEDBACK_ASSIGNMENTS}
+          reviewRunId="playground-review-feedback"
+          target="PR"
+          onOpenCritique={noop}
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "review-complete-message") {
+    return (
+      <TranscriptPreviewShell>
+        <AssistantMessage content="The revised plan is ready." />
+        <ReviewFeedbackSummaryView
+          assignments={PLAYGROUND_REVIEW_COMPLETE_ASSIGNMENTS}
+          reviewRunId="playground-review-complete"
+          target="plan"
+          onOpenCritique={noop}
+        />
+      </TranscriptPreviewShell>
     );
   }
   if (scenario === "end-turn-multi-file-diff") {
