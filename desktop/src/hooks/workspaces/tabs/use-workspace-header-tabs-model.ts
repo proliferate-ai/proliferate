@@ -30,6 +30,9 @@ import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 
 export interface HeaderChatTabEntry extends GroupedChatTab {
   id: string;
@@ -55,9 +58,25 @@ export interface HeaderChatMenuEntry {
 
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
 
+const EMPTY_OPEN_TABS: string[] = [];
+
 export function useWorkspaceHeaderTabsModel() {
-  const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
+  const rawOpenTabs = useWorkspaceFilesStore((s) => s.openTabs);
+  const fileStoreMaterializedWorkspaceId = useWorkspaceFilesStore(
+    (s) => s.materializedWorkspaceId,
+  );
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (s) => s.selectedLogicalWorkspaceId,
+  );
+  const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
+  const openTabs = materializedWorkspaceId
+    && fileStoreMaterializedWorkspaceId === materializedWorkspaceId
+    ? rawOpenTabs
+    : EMPTY_OPEN_TABS;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);
@@ -119,20 +138,29 @@ export function useWorkspaceHeaderTabsModel() {
     () => liveVisibilityCandidates.map((candidate) => candidate.sessionId),
     [liveVisibilityCandidates],
   );
-  const persistedVisibleIds = selectedWorkspaceId
-    ? visibleByWorkspace[selectedWorkspaceId]
-    : undefined;
-  const recentlyHiddenIds = selectedWorkspaceId
-    ? hiddenByWorkspace[selectedWorkspaceId] ?? []
-    : [];
-  const collapsedParentIds = selectedWorkspaceId
-    ? collapsedGroupsByWorkspace[selectedWorkspaceId] ?? []
-    : [];
-  const persistedManualGroups = selectedWorkspaceId
-    ? manualGroupsByWorkspace[selectedWorkspaceId] ?? []
-    : [];
+  const persistedVisibleIds = resolveWithWorkspaceFallback(
+    visibleByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value;
+  const recentlyHiddenIds = resolveWithWorkspaceFallback(
+    hiddenByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? [];
+  const collapsedParentIds = resolveWithWorkspaceFallback(
+    collapsedGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? [];
+  const persistedManualGroups = resolveWithWorkspaceFallback(
+    manualGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? [];
   const activeChatSessionIdForTabs = useWorkspaceActiveChatTabId({
-    selectedWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
     fallbackSessionId: activeSessionId,
   });
   const persistedVisibleIdsForResolution = useMemo(
@@ -293,6 +321,8 @@ export function useWorkspaceHeaderTabsModel() {
   return {
     activeSessionId,
     selectedWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
     openTabs,
     chatTabs,
     stripRows,

@@ -261,13 +261,14 @@ export function useWorkspaceBootstrapActions() {
         });
         return [] as WorkspaceSession[];
       }),
-      initForWorkspace(
-        workspaceId,
-        workspaceConnection.runtimeUrl,
+      initForWorkspace({
+        workspaceUiKey: logicalWorkspaceId ?? workspaceId,
+        materializedWorkspaceId: workspaceId,
+        anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+        runtimeUrl: workspaceConnection.runtimeUrl,
         treeStateKey,
-        workspaceConnection.anyharnessWorkspaceId,
-        workspaceConnection.authToken ?? undefined,
-      ).then(() => {
+        authToken: workspaceConnection.authToken ?? undefined,
+      }).then(() => {
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.file_tree_init",
@@ -597,13 +598,14 @@ export function useWorkspaceBootstrapActions() {
         });
 
         const initStartedAt = startLatencyTimer();
-        await initForWorkspace(
-          workspaceId,
-          workspaceConnection.runtimeUrl,
+        await initForWorkspace({
+          workspaceUiKey: logicalWorkspaceId ?? workspaceId,
+          materializedWorkspaceId: workspaceId,
+          anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+          runtimeUrl: workspaceConnection.runtimeUrl,
           treeStateKey,
-          workspaceConnection.anyharnessWorkspaceId,
-          workspaceConnection.authToken ?? undefined,
-        );
+          authToken: workspaceConnection.authToken ?? undefined,
+        });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.file_tree_init",

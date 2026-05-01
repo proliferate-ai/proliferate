@@ -29,7 +29,8 @@ interface ComposerAddActionPopoverProps {
   attachPlanDetail: string;
   canStartReview: boolean;
   reviewDetail: string;
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   onAttachFile: () => void;
   onStartReview: (anchor: ReviewAnchor) => void;
 }
@@ -43,7 +44,8 @@ export function ComposerAddActionPopover({
   attachPlanDetail,
   canStartReview,
   reviewDetail,
-  draftWorkspaceId,
+  workspaceUiKey,
+  sdkWorkspaceId,
   onAttachFile,
   onStartReview,
 }: ComposerAddActionPopoverProps) {
@@ -93,7 +95,8 @@ export function ComposerAddActionPopover({
                 </span>
               </div>
               <PlanPickerContentBody
-                draftWorkspaceId={draftWorkspaceId}
+                workspaceUiKey={workspaceUiKey}
+                sdkWorkspaceId={sdkWorkspaceId}
                 onClose={() => {
                   setView("menu");
                   close();

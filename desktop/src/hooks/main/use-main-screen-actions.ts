@@ -8,7 +8,6 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import {
   rightPanelTerminalHeaderKey,
   type RightPanelTool,
@@ -34,10 +33,9 @@ export function useMainScreenActions({
   existingPr,
 }: UseMainScreenActionsArgs) {
   const queryClient = useQueryClient();
-  const renameBranchMutation = useRenameGitBranchMutation();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const {
@@ -119,12 +117,11 @@ export function useMainScreenActions({
   const openPublishDialog = useCallback((intent: PublishIntent) => {
     openRightPanelTool("git");
     setPublishDialog(openPublishDialogState(
-      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
+      selectedWorkspaceId,
       intent,
     ));
   }, [
     openRightPanelTool,
-    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     setPublishDialog,
   ]);

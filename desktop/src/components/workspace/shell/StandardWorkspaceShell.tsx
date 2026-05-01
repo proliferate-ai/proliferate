@@ -27,7 +27,6 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 export function StandardWorkspaceShell() {
   useDebugRenderCount("workspace-shell");
@@ -64,8 +63,7 @@ export function StandardWorkspaceShell() {
     transparent: transparentChromeEnabled,
     sidebarOpen,
   });
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
-  const activePublishWorkspaceId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+  const activePublishWorkspaceId = selectedWorkspaceId;
   const {
     phase: updaterPhase,
     downloadProgress,

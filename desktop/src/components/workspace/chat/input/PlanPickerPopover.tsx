@@ -12,12 +12,14 @@ import {
 } from "@/config/plans";
 
 interface PlanPickerPopoverProps {
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   disabled?: boolean;
 }
 
 export function PlanPickerPopover({
-  draftWorkspaceId,
+  workspaceUiKey,
+  sdkWorkspaceId,
   disabled = false,
 }: PlanPickerPopoverProps) {
   return (
@@ -39,7 +41,8 @@ export function PlanPickerPopover({
     >
       {(close) => (
         <PlanPickerPopoverSurface
-          draftWorkspaceId={draftWorkspaceId}
+          workspaceUiKey={workspaceUiKey}
+          sdkWorkspaceId={sdkWorkspaceId}
           onClose={close}
         />
       )}
@@ -48,27 +51,35 @@ export function PlanPickerPopover({
 }
 
 export function PlanPickerPopoverSurface({
-  draftWorkspaceId,
+  workspaceUiKey,
+  sdkWorkspaceId,
   onClose,
 }: {
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   onClose: () => void;
 }) {
   return (
     <ComposerPopoverSurface className="w-[min(24rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
-      <PlanPickerContentBody draftWorkspaceId={draftWorkspaceId} onClose={onClose} />
+      <PlanPickerContentBody
+        workspaceUiKey={workspaceUiKey}
+        sdkWorkspaceId={sdkWorkspaceId}
+        onClose={onClose}
+      />
     </ComposerPopoverSurface>
   );
 }
 
 export function PlanPickerContentBody({
-  draftWorkspaceId,
+  workspaceUiKey,
+  sdkWorkspaceId,
   onClose,
 }: {
-  draftWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  sdkWorkspaceId: string | null;
   onClose: () => void;
 }) {
-  const picker = usePlanPicker({ draftWorkspaceId, open: true, onAttached: onClose });
+  const picker = usePlanPicker({ workspaceUiKey, sdkWorkspaceId, open: true, onAttached: onClose });
 
   return (
     <div data-telemetry-mask>

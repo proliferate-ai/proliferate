@@ -15,16 +15,22 @@ import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-s
 
 const EMPTY_PLANS: PromptPlanAttachmentPointer[] = [];
 
-export function usePlanDraftAttachments(workspaceId: string | null | undefined) {
+export function usePlanDraftAttachments({
+  workspaceUiKey,
+  sdkWorkspaceId,
+}: {
+  workspaceUiKey: string | null | undefined;
+  sdkWorkspaceId: string | null | undefined;
+}) {
   const pointers = useChatPlanAttachmentStore((state) =>
-    workspaceId ? state.attachmentsByWorkspaceId[workspaceId] ?? EMPTY_PLANS : EMPTY_PLANS
+    workspaceUiKey ? state.attachmentsByWorkspaceId[workspaceUiKey] ?? EMPTY_PLANS : EMPTY_PLANS
   );
   const removePlanAttachment = useChatPlanAttachmentStore((state) => state.removePlanAttachment);
   const clearPlanAttachments = useChatPlanAttachmentStore((state) => state.clearPlanAttachments);
-  const { addPlan } = useAddPlanDraftAttachment(workspaceId);
+  const { addPlan } = useAddPlanDraftAttachment(workspaceUiKey);
   const detailQueries = usePlanDetailsQueries(pointers.map((pointer) => pointer.planId), {
-    workspaceId,
-    enabled: !!workspaceId,
+    workspaceId: sdkWorkspaceId,
+    enabled: !!sdkWorkspaceId,
   });
 
   const attachments = useMemo<PromptPlanAttachmentDescriptor[]>(() => {
@@ -53,18 +59,18 @@ export function usePlanDraftAttachments(workspaceId: string | null | undefined) 
   );
 
   const removePlan = useCallback((id: string) => {
-    if (!workspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
-    removePlanAttachment(workspaceId, id);
-  }, [removePlanAttachment, workspaceId]);
+    removePlanAttachment(workspaceUiKey, id);
+  }, [removePlanAttachment, workspaceUiKey]);
 
   const clearPlans = useCallback(() => {
-    if (!workspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
-    clearPlanAttachments(workspaceId);
-  }, [clearPlanAttachments, workspaceId]);
+    clearPlanAttachments(workspaceUiKey);
+  }, [clearPlanAttachments, workspaceUiKey]);
 
   const blocks = useMemo<PromptInputBlock[]>(
     () => dedupePlanReferenceBlocks(resolvedAttachments.map((plan) => ({

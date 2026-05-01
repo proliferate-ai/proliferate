@@ -47,6 +47,15 @@ describe("workspace display names", () => {
     ).toBe("Issue triage");
   });
 
+  it("uses the original branch as the default name for detached worktrees", () => {
+    expect(
+      workspaceDefaultDisplayName(workspace({
+        currentBranch: "HEAD",
+        originalBranch: "gecko",
+      })),
+    ).toBe("Gecko");
+  });
+
   it("handles malformed automation-like branches without crashing", () => {
     expect(automationWorkspaceDefaultDisplayNameFromBranch("automation/")).toBeNull();
     expect(automationWorkspaceDefaultDisplayNameFromBranch("automation/issue-triage")).toBeNull();

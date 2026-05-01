@@ -244,12 +244,13 @@ export function useCoworkThreadWorkflow() {
       });
 
       const workspaceInitStartedAt = startLatencyTimer();
-      void initForWorkspace(
-        result.workspace.id,
+      void initForWorkspace({
+        workspaceUiKey: result.workspace.id,
+        materializedWorkspaceId: result.workspace.id,
+        anyharnessWorkspaceId: result.workspace.id,
         runtimeUrl,
-        workspaceFileTreeStateKey(result.workspace),
-        result.workspace.id,
-      ).then(() => {
+        treeStateKey: workspaceFileTreeStateKey(result.workspace),
+      }).then(() => {
         logLatency("workspace.cowork.create.workspace_initialized", {
           attemptId: entry.attemptId,
           workspaceId: result.workspace.id,

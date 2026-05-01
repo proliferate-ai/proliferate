@@ -8,6 +8,13 @@ import { create } from "zustand";
 type FileLoadState = "idle" | "loading" | "loaded" | "error";
 type FileSaveState = "idle" | "saving" | "saved" | "error" | "conflict";
 
+export interface WorkspaceFileRestoreMarker {
+  workspaceUiKey: string;
+  materializedWorkspaceId: string;
+  initVersion: number;
+  ready: boolean;
+}
+
 export interface WorkspaceFileBuffer {
   path: string;
   serverContent: string | null;
@@ -34,12 +41,14 @@ export interface NormalizedWorkspaceFileDiffDescriptor {
 }
 
 interface WorkspaceFilesState {
-  workspaceId: string | null;
-  runtimeWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  materializedWorkspaceId: string | null;
+  anyharnessWorkspaceId: string | null;
   runtimeUrl: string | null;
   authToken: string | null;
   treeStateKey: string | null;
   initVersion: number;
+  fileRestoreMarker: WorkspaceFileRestoreMarker | null;
 
   directoryEntriesByPath: Record<string, WorkspaceFileEntry[]>;
   directoryLoadStateByPath: Record<string, FileLoadState>;
@@ -52,13 +61,16 @@ interface WorkspaceFilesState {
   tabDiffDescriptorsByPath: Record<string, NormalizedWorkspaceFileDiffDescriptor>;
 
   // Actions
-  prepareWorkspace: (
-    workspaceId: string,
-    runtimeUrl: string,
-    treeStateKey: string,
-    runtimeWorkspaceId?: string,
-    authToken?: string,
-  ) => number;
+  prepareWorkspace: (args: {
+    workspaceUiKey: string;
+    materializedWorkspaceId: string;
+    anyharnessWorkspaceId: string;
+    runtimeUrl: string;
+    treeStateKey: string;
+    authToken?: string | null;
+    initialOpenTabs?: string[];
+    initialActiveFilePath?: string | null;
+  }) => number;
   reset: () => void;
   setDirectoryLoadState: (dirPath: string, state: FileLoadState) => void;
   setDirectoryEntries: (dirPath: string, entries: WorkspaceFileEntry[]) => void;
@@ -168,32 +180,41 @@ function bufferFromResponse(
 }
 
 export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => ({
-  workspaceId: null,
-  runtimeWorkspaceId: null,
+  workspaceUiKey: null,
+  materializedWorkspaceId: null,
+  anyharnessWorkspaceId: null,
   runtimeUrl: null,
   authToken: null,
   treeStateKey: null,
   initVersion: 0,
+  fileRestoreMarker: null,
   ...emptyFilesState(),
 
-  prepareWorkspace: (
-    workspaceId,
-    runtimeUrl,
-    treeStateKey,
-    runtimeWorkspaceId,
-    authToken,
-  ) => {
-    const resolvedRuntimeWorkspaceId = runtimeWorkspaceId ?? workspaceId;
+  prepareWorkspace: (args) => {
     const initVersion = get().initVersion + 1;
+    const initialOpenTabs = args.initialOpenTabs ?? [];
+    const initialActiveFilePath = args.initialActiveFilePath
+      && initialOpenTabs.includes(args.initialActiveFilePath)
+      ? args.initialActiveFilePath
+      : null;
     set({
-      workspaceId,
-      runtimeWorkspaceId: resolvedRuntimeWorkspaceId,
-      runtimeUrl,
-      authToken: authToken ?? null,
-      treeStateKey,
+      workspaceUiKey: args.workspaceUiKey,
+      materializedWorkspaceId: args.materializedWorkspaceId,
+      anyharnessWorkspaceId: args.anyharnessWorkspaceId,
+      runtimeUrl: args.runtimeUrl,
+      authToken: args.authToken ?? null,
+      treeStateKey: args.treeStateKey,
       initVersion,
       ...emptyFilesState(),
+      openTabs: initialOpenTabs,
+      activeFilePath: initialActiveFilePath,
       directoryLoadStateByPath: { "": "loading" },
+      fileRestoreMarker: {
+        workspaceUiKey: args.workspaceUiKey,
+        materializedWorkspaceId: args.materializedWorkspaceId,
+        initVersion,
+        ready: true,
+      },
     });
     return initVersion;
   },
@@ -201,12 +222,14 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
   reset: () => {
     const initVersion = get().initVersion + 1;
     set({
-      workspaceId: null,
-      runtimeWorkspaceId: null,
+      workspaceUiKey: null,
+      materializedWorkspaceId: null,
+      anyharnessWorkspaceId: null,
       runtimeUrl: null,
       authToken: null,
       treeStateKey: null,
       initVersion,
+      fileRestoreMarker: null,
       ...emptyFilesState(),
     });
   },

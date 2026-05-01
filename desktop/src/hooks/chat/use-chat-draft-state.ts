@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/chat-input";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import {
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
@@ -14,12 +15,16 @@ export function useChatDraftState() {
     (state) => state.selectedLogicalWorkspaceId,
   );
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const draftWorkspaceId = resolveChatDraftWorkspaceId(
+  const workspaceUiKey = resolveChatDraftWorkspaceId(
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
   );
+  const { materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
   const draft = useChatInputStore((state) =>
-    draftWorkspaceId ? state.draftByWorkspaceId[draftWorkspaceId] ?? EMPTY_CHAT_DRAFT : EMPTY_CHAT_DRAFT,
+    workspaceUiKey ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT : EMPTY_CHAT_DRAFT,
   );
   const setDraftForWorkspace = useChatInputStore((state) => state.setDraft);
   const setDraftTextForWorkspace = useChatInputStore((state) => state.setDraftText);
@@ -27,39 +32,40 @@ export function useChatDraftState() {
   const clearDraftForWorkspace = useChatInputStore((state) => state.clearDraft);
 
   const setDraft = useCallback((value: ChatComposerDraft) => {
-    if (!draftWorkspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
 
-    setDraftForWorkspace(draftWorkspaceId, value);
-  }, [draftWorkspaceId, setDraftForWorkspace]);
+    setDraftForWorkspace(workspaceUiKey, value);
+  }, [setDraftForWorkspace, workspaceUiKey]);
 
   const setDraftText = useCallback((value: string) => {
-    if (!draftWorkspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
 
-    setDraftTextForWorkspace(draftWorkspaceId, value);
-  }, [draftWorkspaceId, setDraftTextForWorkspace]);
+    setDraftTextForWorkspace(workspaceUiKey, value);
+  }, [setDraftTextForWorkspace, workspaceUiKey]);
 
   const appendDraftText = useCallback((value: string) => {
-    if (!draftWorkspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
 
-    appendDraftTextForWorkspace(draftWorkspaceId, value);
-  }, [appendDraftTextForWorkspace, draftWorkspaceId]);
+    appendDraftTextForWorkspace(workspaceUiKey, value);
+  }, [appendDraftTextForWorkspace, workspaceUiKey]);
 
   const clearDraft = useCallback(() => {
-    if (!draftWorkspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
 
-    clearDraftForWorkspace(draftWorkspaceId);
-  }, [clearDraftForWorkspace, draftWorkspaceId]);
+    clearDraftForWorkspace(workspaceUiKey);
+  }, [clearDraftForWorkspace, workspaceUiKey]);
 
   return {
-    selectedWorkspaceId: draftWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
     draft,
     setDraft,
     setDraftText,

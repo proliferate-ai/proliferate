@@ -28,9 +28,17 @@ export function buildBranchName(
 export function workspaceCurrentBranchName(
   workspace: Pick<Workspace, "currentBranch" | "originalBranch">,
 ): string | null {
-  return workspace.currentBranch?.trim()
-    || workspace.originalBranch?.trim()
-    || null;
+  const currentBranch = normalizeBranchName(workspace.currentBranch);
+  if (currentBranch && currentBranch !== "HEAD") {
+    return currentBranch;
+  }
+
+  return normalizeBranchName(workspace.originalBranch);
+}
+
+function normalizeBranchName(branchName: string | null | undefined): string | null {
+  const trimmed = branchName?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
 export function humanizeBranchName(branchName: string): string {

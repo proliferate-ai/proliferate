@@ -3,7 +3,10 @@ import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
 } from "@/lib/integrations/cloud/client";
-import { humanizeBranchName } from "@/lib/domain/workspaces/branch-naming";
+import {
+  humanizeBranchName,
+  workspaceCurrentBranchName,
+} from "@/lib/domain/workspaces/branch-naming";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   cloudWorkspaceGroupKey,
@@ -139,7 +142,12 @@ export function replaceLogicalWorkspaceBranch(
 }
 
 function workspaceBranchKey(workspace: Workspace): string {
-  return normalizeBranchKey(workspace.currentBranch ?? workspace.originalBranch ?? null);
+  const originalBranch = workspace.originalBranch?.trim();
+  if (originalBranch) {
+    return normalizeBranchKey(originalBranch);
+  }
+
+  return normalizeBranchKey(workspaceCurrentBranchName(workspace));
 }
 
 function cloudBranchKey(workspace: CloudWorkspaceSummary): string {

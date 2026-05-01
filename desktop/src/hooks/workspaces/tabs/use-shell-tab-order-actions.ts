@@ -5,7 +5,6 @@ import {
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 
 export function useShellTabOrderActions({
   workspaceId,
@@ -16,7 +15,7 @@ export function useShellTabOrderActions({
   const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
     (state) => state.setVisibleChatSessionIdsForWorkspace,
   );
-  const setShellTabOrder = useWorkspaceTabsStore((state) => state.setShellTabOrder);
+  const setShellTabOrder = useWorkspaceUiStore((state) => state.setShellTabOrderForWorkspace);
 
   const reorderShellTabs = useCallback((nextKeys: WorkspaceShellTabKey[]) => {
     if (!workspaceId) {

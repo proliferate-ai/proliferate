@@ -7,7 +7,9 @@ anyharness/crates/anyharness-lib/src/agents/catalog.rs
 anyharness/crates/anyharness-lib/src/agents/resolver.rs
 anyharness/crates/anyharness-lib/src/api/openapi.rs
 anyharness/crates/anyharness-lib/src/api/router_tests.rs
+anyharness/crates/anyharness-lib/src/api/http/git.rs
 anyharness/crates/anyharness-lib/src/api/http/sessions.rs
+anyharness/crates/anyharness-lib/src/api/http/workspaces.rs
 anyharness/crates/anyharness-lib/src/api/http/mobility.rs
 anyharness/crates/anyharness-lib/src/acp/background_work/claude.rs
 anyharness/crates/anyharness-contract/src/v1/events.rs
@@ -25,11 +27,13 @@ anyharness/crates/anyharness-lib/src/cowork/runtime.rs
 anyharness/crates/anyharness-lib/src/mobility/service.rs
 anyharness/crates/anyharness-lib/src/workspaces/service.rs
 anyharness/crates/anyharness-lib/src/workspaces/runtime.rs
+anyharness/crates/anyharness-lib/src/workspaces/store.rs
 anyharness/sdk/src/reducer/transcript.ts
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts
 desktop/src/components/ui/icons.tsx
 desktop/src/components/playground/PlaygroundComposer.tsx
 desktop/src/components/workspace/chat/transcript/MessageList.tsx
+desktop/src/components/workspace/chat/transcript/VirtualTurnList.tsx
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/hooks/sessions/use-session-selection-actions.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts

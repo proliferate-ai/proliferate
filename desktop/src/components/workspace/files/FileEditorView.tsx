@@ -49,6 +49,12 @@ export function FileEditorView({ filePath }: FileEditorViewProps) {
 
   const buf = buffersByPath[filePath];
 
+  useEffect(() => {
+    if (!buf) {
+      void reloadFile(filePath);
+    }
+  }, [buf, filePath, reloadFile]);
+
   const handleSaveShortcut = useCallback(
     (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {

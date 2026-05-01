@@ -66,6 +66,8 @@ import {
 } from "@/stores/preferences/workspace-ui-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
@@ -138,7 +140,15 @@ export function useSessionRuntimeActions() {
 
     const slot = useHarnessStore.getState().sessionSlots[sessionId];
     if (slot?.workspaceId) {
-      rememberLastViewedSession(slot.workspaceId, sessionId);
+      const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+      const selectedLogicalWorkspaceId =
+        useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId;
+      const workspaceUiKey = slot.workspaceId === selectedWorkspaceId
+        ? resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId)
+        : slot.workspaceId;
+      if (workspaceUiKey) {
+        rememberLastViewedSession(workspaceUiKey, sessionId);
+      }
     }
   }, []);
 

@@ -28,15 +28,22 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/stores/preferences/workspace-ui-store";
 import {
-  DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+  DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+  DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
   RIGHT_PANEL_DEFAULT_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
+  clampRightPanelWidth,
+  mergeRightPanelState,
   reconcileRightPanelWorkspaceState,
+  splitLegacyRightPanelWorkspaceState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
@@ -84,7 +91,10 @@ export interface MainScreenState {
 }
 
 export function useMainScreenState(): MainScreenState {
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelUserOpenOverride, setRightPanelUserOpenOverride] = useState<{
+    materializedWorkspaceId: string;
+    nonce: number;
+  } | null>(null);
   const [terminalActivationRequestToken, setTerminalActivationRequestToken] = useState(0);
   const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
     CLOSED_PUBLISH_DIALOG_STATE,
@@ -92,6 +102,13 @@ export function useMainScreenState(): MainScreenState {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
@@ -100,44 +117,140 @@ export function useMainScreenState(): MainScreenState {
   const setSidebarOpen = useWorkspaceUiStore((state) => state.setSidebarOpen);
   const sidebarWidth = useWorkspaceUiStore((state) => state.sidebarWidth);
   const setSidebarWidth = useWorkspaceUiStore((state) => state.setSidebarWidth);
-  const persistedRightPanelState = useWorkspaceUiStore((state) =>
-    selectedWorkspaceId ? state.rightPanelByWorkspace[selectedWorkspaceId] : undefined
+  const rightPanelDurableByWorkspace = useWorkspaceUiStore(
+    (state) => state.rightPanelDurableByWorkspace,
   );
-  const setRightPanelForWorkspace = useWorkspaceUiStore(
-    (state) => state.setRightPanelForWorkspace,
+  const rightPanelMaterializedByWorkspace = useWorkspaceUiStore(
+    (state) => state.rightPanelMaterializedByWorkspace,
   );
-  const rightPanelWidth = useWorkspaceUiStore((state) =>
-    selectedWorkspaceId
-      ? state.rightPanelWidthByWorkspace[selectedWorkspaceId] ?? RIGHT_PANEL_DEFAULT_WIDTH
-      : RIGHT_PANEL_DEFAULT_WIDTH
+  const setRightPanelDurableForWorkspace = useWorkspaceUiStore(
+    (state) => state.setRightPanelDurableForWorkspace,
   );
-  const setRightPanelWidthForWorkspace = useWorkspaceUiStore(
-    (state) => state.setRightPanelWidthForWorkspace,
+  const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
+    (state) => state.setRightPanelMaterializedForWorkspace,
   );
+  const rightPanelDurableFallback = resolveWithWorkspaceFallback(
+    rightPanelDurableByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const rightPanelDurableState =
+    rightPanelDurableFallback.value ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+  const rightPanelMaterializedState = materializedWorkspaceId
+    ? rightPanelMaterializedByWorkspace[materializedWorkspaceId]
+      ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE
+    : DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
+  const rightPanelWidth = rightPanelDurableState.width ?? RIGHT_PANEL_DEFAULT_WIDTH;
   const rightPanelState = useMemo(
     () => reconcileRightPanelWorkspaceState(
-      persistedRightPanelState ?? DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      mergeRightPanelState({
+        durableState: rightPanelDurableState,
+        materializedState: rightPanelMaterializedState,
+        isCloudWorkspaceSelected,
+      }),
       { isCloudWorkspaceSelected },
     ),
-    [isCloudWorkspaceSelected, persistedRightPanelState],
+    [isCloudWorkspaceSelected, rightPanelDurableState, rightPanelMaterializedState],
   );
+  useEffect(() => {
+    if (
+      !workspaceUiKey
+      || !rightPanelDurableFallback.shouldWriteBack
+      || !rightPanelDurableFallback.value
+    ) {
+      return;
+    }
+    setRightPanelDurableForWorkspace(workspaceUiKey, rightPanelDurableFallback.value);
+  }, [
+    rightPanelDurableFallback.shouldWriteBack,
+    rightPanelDurableFallback.value,
+    setRightPanelDurableForWorkspace,
+    workspaceUiKey,
+  ]);
   const setRightPanelState = useCallback<Dispatch<SetStateAction<RightPanelWorkspaceState>>>(
     (value) => {
-      if (!selectedWorkspaceId) {
+      if (!workspaceUiKey) {
         return;
       }
-      setRightPanelForWorkspace(selectedWorkspaceId, value);
+      const next = typeof value === "function"
+        ? (value as (previous: RightPanelWorkspaceState) => RightPanelWorkspaceState)(
+            rightPanelState,
+          )
+        : value;
+      const split = splitLegacyRightPanelWorkspaceState({
+        state: next,
+        width: rightPanelDurableState.width,
+        isCloudWorkspaceSelected,
+      });
+      setRightPanelDurableForWorkspace(workspaceUiKey, {
+        ...split.durableState,
+        open: rightPanelDurableState.open,
+      });
+      if (materializedWorkspaceId) {
+        setRightPanelMaterializedForWorkspace(
+          materializedWorkspaceId,
+          split.materializedState,
+        );
+      }
     },
-    [selectedWorkspaceId, setRightPanelForWorkspace],
+    [
+      isCloudWorkspaceSelected,
+      materializedWorkspaceId,
+      rightPanelDurableState.open,
+      rightPanelDurableState.width,
+      rightPanelState,
+      setRightPanelDurableForWorkspace,
+      setRightPanelMaterializedForWorkspace,
+      workspaceUiKey,
+    ],
   );
   const setRightPanelWidth = useCallback<Dispatch<SetStateAction<number>>>(
     (value) => {
-      if (!selectedWorkspaceId) {
+      if (!workspaceUiKey) {
         return;
       }
-      setRightPanelWidthForWorkspace(selectedWorkspaceId, value);
+      const nextWidth = typeof value === "function"
+        ? (value as (previous: number) => number)(rightPanelDurableState.width)
+        : value;
+      setRightPanelDurableForWorkspace(workspaceUiKey, {
+        ...rightPanelDurableState,
+        width: clampRightPanelWidth(nextWidth),
+      });
     },
-    [selectedWorkspaceId, setRightPanelWidthForWorkspace],
+    [
+      rightPanelDurableState,
+      setRightPanelDurableForWorkspace,
+      workspaceUiKey,
+    ],
+  );
+  const setRightPanelOpen = useCallback<Dispatch<SetStateAction<boolean>>>(
+    (value) => {
+      if (!workspaceUiKey) {
+        return;
+      }
+      const nextOpen = typeof value === "function"
+        ? (value as (previous: boolean) => boolean)(rightPanelDurableState.open)
+        : value;
+      setRightPanelDurableForWorkspace(workspaceUiKey, {
+        ...rightPanelDurableState,
+        open: nextOpen,
+      });
+      if (nextOpen && materializedWorkspaceId) {
+        setRightPanelUserOpenOverride((current) => ({
+          materializedWorkspaceId,
+          nonce: (current?.nonce ?? 0) + 1,
+        }));
+      } else {
+        setRightPanelUserOpenOverride(null);
+      }
+    },
+    [
+      materializedWorkspaceId,
+      rightPanelDurableState.open,
+      rightPanelDurableState,
+      setRightPanelDurableForWorkspace,
+      workspaceUiKey,
+    ],
   );
 
   const onLeftSeparatorDown = useResize({
@@ -177,11 +290,13 @@ export function useMainScreenState(): MainScreenState {
       : false
   );
   const { data: gitStatus } = useGitStatusQuery({
+    workspaceId: materializedWorkspaceId,
     enabled: hasRuntimeReadyWorkspace && !hotPaintPending,
   });
   const shouldQueryCurrentPullRequest =
     hasRuntimeReadyWorkspace && !hotPaintPending && Boolean(gitStatus?.currentBranch?.trim());
   const { data: currentPullRequest } = useCurrentPullRequestQuery({
+    workspaceId: materializedWorkspaceId,
     enabled: shouldQueryCurrentPullRequest,
   });
 
@@ -196,22 +311,33 @@ export function useMainScreenState(): MainScreenState {
     [selectedCloudWorkspaceId, workspaceCollections?.cloudWorkspaces],
   );
 
-  useEffect(() => {
-    if (pendingWorkspaceEntry) {
-      setRightPanelOpen(false);
-      return;
-    }
-
-    if (
+  const rightPanelSuppressed = Boolean(
+    pendingWorkspaceEntry
+    || (
       workspaceArrivalEvent?.workspaceId
-      && workspaceArrivalEvent.workspaceId === selectedWorkspaceId
+      && workspaceArrivalEvent.workspaceId === materializedWorkspaceId
+    ),
+  );
+  const userOpenOverrideActive = Boolean(
+    rightPanelUserOpenOverride
+    && rightPanelUserOpenOverride.materializedWorkspaceId === materializedWorkspaceId
+    && rightPanelSuppressed,
+  );
+  const rightPanelOpen = rightPanelDurableState.open
+    && (!rightPanelSuppressed || userOpenOverrideActive);
+
+  useEffect(() => {
+    if (
+      !rightPanelUserOpenOverride
+      || rightPanelUserOpenOverride.materializedWorkspaceId !== materializedWorkspaceId
+      || !rightPanelSuppressed
     ) {
-      setRightPanelOpen(false);
+      setRightPanelUserOpenOverride(null);
     }
   }, [
-    pendingWorkspaceEntry,
-    selectedWorkspaceId,
-    workspaceArrivalEvent?.workspaceId,
+    materializedWorkspaceId,
+    rightPanelSuppressed,
+    rightPanelUserOpenOverride,
   ]);
 
   return {
