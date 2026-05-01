@@ -33,8 +33,9 @@ use crate::sessions::live_config::{
     LEGACY_MODE_COMPAT_CONFIG_ID,
 };
 use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
-use crate::sessions::model::PendingConfigChangeRecord;
-use crate::sessions::model::SessionRecord;
+use crate::sessions::model::{
+    serialize_action_capabilities, PendingConfigChangeRecord, SessionRecord,
+};
 use crate::sessions::prompt::{capabilities_from_acp, PromptPayload};
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 use crate::sessions::store::SessionStore;
@@ -44,9 +45,9 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedField, NormalizedSessionControl, PendingInteractionSummary,
     PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
     PendingPromptUpdatedPayload, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
-    SessionEndReason, SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary,
-    SessionInfoUpdatePayload, SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason,
-    UsageUpdatePayload, UserInputSubmittedAnswer,
+    SessionActionCapabilities, SessionEndReason, SessionEventEnvelope, SessionExecutionPhase,
+    SessionExecutionSummary, SessionInfoUpdatePayload, SessionLiveConfigSnapshot,
+    SessionStateUpdatePayload, StopReason, UsageUpdatePayload, UserInputSubmittedAnswer,
 };
 
 #[derive(Debug)]
@@ -70,6 +71,19 @@ pub enum QueueMutationError {
 #[derive(Debug)]
 pub enum SetConfigOptionCommandError {
     Rejected(String),
+}
+
+#[derive(Debug)]
+pub struct ForkSessionCommandResult {
+    pub native_session_id: String,
+    pub supports_close: bool,
+}
+
+#[derive(Debug)]
+pub enum ForkSessionCommandError {
+    Busy,
+    Unsupported(String),
+    Failed(String),
 }
 
 #[derive(Clone, PartialEq)]
@@ -181,6 +195,16 @@ pub(crate) enum SessionCommand {
         expected_version: i64,
         decision: ProposedPlanDecisionState,
         respond_to: oneshot::Sender<Result<PlanRecord, PlanDecisionError>>,
+    },
+    VerifyForkReady {
+        respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,
+    },
+    Fork {
+        respond_to: oneshot::Sender<Result<ForkSessionCommandResult, ForkSessionCommandError>>,
+    },
+    CloseNativeSession {
+        native_session_id: String,
+        respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
     InjectRuntimeEvent {
         event: RuntimeInjectedSessionEvent,
@@ -405,6 +429,8 @@ pub enum SessionStartupStrategy {
     Fresh,
     ResumeSeqFreshNative,
     LoadNative(String),
+    LoadNativeNoFallback(String),
+    ForkFromNative { parent_native_session_id: String },
 }
 
 impl SessionStartupStrategy {
@@ -413,11 +439,17 @@ impl SessionStartupStrategy {
             Self::Fresh => "fresh",
             Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
             Self::LoadNative(_) => "load_native",
+            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
+            Self::ForkFromNative { .. } => "fork_from_native",
         }
     }
 
     pub fn resumes_durable_history(&self) -> bool {
         !matches!(self, Self::Fresh)
+    }
+
+    fn allows_missing_load_fallback(&self) -> bool {
+        matches!(self, Self::LoadNative(_))
     }
 }
 
@@ -756,6 +788,33 @@ impl SessionStartupState {
     }
 
     fn from_load_session(response: &acp::LoadSessionResponse) -> Self {
+        Self {
+            current_mode_id: response
+                .modes
+                .as_ref()
+                .map(|m| m.current_mode_id.to_string()),
+            legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
+            config_options: response.config_options.clone().unwrap_or_default(),
+            current_model_id: response
+                .models
+                .as_ref()
+                .map(|models| models.current_model_id.to_string()),
+            available_model_ids: response
+                .models
+                .as_ref()
+                .map(|models| {
+                    models
+                        .available_models
+                        .iter()
+                        .map(|model| model.model_id.to_string())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+        }
+    }
+
+    fn from_fork_session(response: &acp::ForkSessionResponse) -> Self {
         Self {
             current_mode_id: response
                 .modes
@@ -1210,6 +1269,14 @@ async fn run_actor(
         }
     };
 
+    persist_session_action_capabilities(&store, &session_id, &init_response.agent_capabilities);
+    let action_capabilities = action_capabilities_from_acp(&init_response.agent_capabilities);
+    let supports_native_close = init_response
+        .agent_capabilities
+        .session_capabilities
+        .close
+        .is_some();
+
     // If the agent advertises auth methods, attempt authenticate before new_session.
     // Some agents (e.g. cursor-agent) require this; others advertise methods but
     // don't require the call. We attempt it and only log a warning on failure,
@@ -1283,7 +1350,8 @@ async fn run_actor(
                 NativeSessionStartupDisposition::CreatedFresh,
             )
         }
-        SessionStartupStrategy::LoadNative(existing) => {
+        SessionStartupStrategy::LoadNative(existing)
+        | SessionStartupStrategy::LoadNativeNoFallback(existing) => {
             let load_started = Instant::now();
             match conn
                 .load_session(
@@ -1311,7 +1379,10 @@ async fn run_actor(
                         NativeSessionStartupDisposition::LoadedExisting,
                     )
                 }
-                Err(e) if is_missing_load_session_resource(&e, existing) => {
+                Err(e)
+                    if startup_strategy.allows_missing_load_fallback()
+                        && is_missing_load_session_resource(&e, existing) =>
+                {
                     tracing::warn!(
                         session_id = %session_id,
                         workspace_id = %workspace_id,
@@ -1364,6 +1435,63 @@ async fn run_actor(
                     );
                     let _ = ready_tx.send(Err(anyhow::anyhow!("ACP load_session: {e}")));
                     return Err(anyhow::anyhow!("ACP load_session: {e}"));
+                }
+            }
+        }
+        SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id,
+        } => {
+            if !action_capabilities.fork {
+                let error = anyhow::anyhow!(
+                    "agent does not advertise ACP session/fork with load_session support"
+                );
+                let _ = ready_tx.send(Err(anyhow::anyhow!("{error}")));
+                return Err(error);
+            }
+
+            let fork_started = Instant::now();
+            let mut request = acp::ForkSessionRequest::new(
+                parent_native_session_id.clone(),
+                config.workspace_path.clone(),
+            )
+            .mcp_servers(to_acp_servers(&config.mcp_servers))
+            .meta(build_system_prompt_meta(
+                config.system_prompt_append.as_deref(),
+            ));
+            if config.mcp_servers.is_empty() {
+                request.mcp_servers.clear();
+            }
+
+            match conn.fork_session(request).await {
+                Ok(resp) => {
+                    tracing::info!(
+                        session_id = %session_id,
+                        workspace_id = %workspace_id,
+                        parent_native_session_id = %parent_native_session_id,
+                        native_session_id = %resp.session_id,
+                        startup_strategy = startup_strategy_label,
+                        native_startup_disposition = NativeSessionStartupDisposition::CreatedFresh.as_str(),
+                        elapsed_ms = fork_started.elapsed().as_millis(),
+                        "[workspace-latency] session.actor.fork_session.completed"
+                    );
+                    (
+                        resp.session_id.to_string(),
+                        SessionStartupState::from_fork_session(&resp),
+                        NativeSessionStartupDisposition::CreatedFresh,
+                    )
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        workspace_id = %workspace_id,
+                        parent_native_session_id = %parent_native_session_id,
+                        startup_strategy = startup_strategy_label,
+                        elapsed_ms = fork_started.elapsed().as_millis(),
+                        error = %error,
+                        "[workspace-latency] session.actor.fork_session.failed"
+                    );
+                    let _ = ready_tx.send(Err(anyhow::anyhow!("ACP fork_session: {error}")));
+                    return Err(anyhow::anyhow!("ACP fork_session: {error}"));
                 }
             }
         }
@@ -1837,6 +1965,17 @@ async fn run_actor(
                                                 .await;
                                                 let _ = respond_to.send(result);
                                             }
+                                            Some(SessionCommand::VerifyForkReady { respond_to }) => {
+                                                let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
+                                            }
+                                            Some(SessionCommand::Fork { respond_to }) => {
+                                                let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
+                                            }
+                                            Some(SessionCommand::CloseNativeSession { respond_to, .. }) => {
+                                                let _ = respond_to.send(Err(anyhow::anyhow!(
+                                                    "cannot close native child session while parent session is busy"
+                                                )));
+                                            }
                                             Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
                                                 let touch_session_activity = event.updates_session_activity_at();
                                                 let result = event_sink.lock().await.inject_runtime_event(event);
@@ -2223,6 +2362,40 @@ async fn run_actor(
                             &plan_id,
                             expected_version,
                             decision,
+                        )
+                        .await;
+                        let _ = respond_to.send(result);
+                    }
+                    Some(SessionCommand::VerifyForkReady { respond_to }) => {
+                        let result = verify_fork_ready(
+                            &handle,
+                            &store,
+                            &session_id,
+                            action_capabilities,
+                        )
+                        .await;
+                        let _ = respond_to.send(result);
+                    }
+                    Some(SessionCommand::Fork { respond_to }) => {
+                        let result = fork_native_session(
+                            &conn,
+                            &native_session_id,
+                            &config.workspace_path,
+                            &config.mcp_servers,
+                            &handle,
+                            &store,
+                            &session_id,
+                            action_capabilities,
+                            supports_native_close,
+                        )
+                        .await;
+                        let _ = respond_to.send(result);
+                    }
+                    Some(SessionCommand::CloseNativeSession { native_session_id, respond_to }) => {
+                        let result = close_native_session(
+                            &conn,
+                            &native_session_id,
+                            supports_native_close,
                         )
                         .await;
                         let _ = respond_to.send(result);
@@ -3543,6 +3716,154 @@ fn prepend_system_prompt_append_to_acp_blocks(blocks: &mut Vec<acp::ContentBlock
             "System instruction from AnyHarness, not user content:\n{append}"
         ))),
     );
+}
+
+fn persist_session_action_capabilities(
+    store: &SessionStore,
+    session_id: &str,
+    agent_capabilities: &acp::AgentCapabilities,
+) {
+    let capabilities = action_capabilities_from_acp(agent_capabilities);
+    let Ok(json) = serialize_action_capabilities(capabilities) else {
+        tracing::warn!(
+            session_id,
+            "failed to serialize session action capabilities"
+        );
+        return;
+    };
+    let now = chrono::Utc::now().to_rfc3339();
+    if let Err(error) = store.update_action_capabilities_json(session_id, Some(json), &now) {
+        tracing::warn!(
+            session_id,
+            error = %error,
+            "failed to persist session action capabilities"
+        );
+    }
+}
+
+fn action_capabilities_from_acp(
+    agent_capabilities: &acp::AgentCapabilities,
+) -> SessionActionCapabilities {
+    let fork_capability = agent_capabilities.session_capabilities.fork.as_ref();
+    let fork = agent_capabilities.load_session && fork_capability.is_some();
+    let adapter_targeted_fork_ready = fork
+        && fork_capability
+            .and_then(|capability| capability.meta.as_ref())
+            .map(has_anyharness_targeted_fork_extension)
+            .unwrap_or(false);
+    if adapter_targeted_fork_ready {
+        tracing::debug!(
+            "agent advertises edit-safe targeted fork metadata; public targeted fork remains disabled until runtime target dispatch is implemented"
+        );
+    }
+    SessionActionCapabilities {
+        fork,
+        targeted_fork: false,
+    }
+}
+
+fn has_anyharness_targeted_fork_extension(meta: &acp::Meta) -> bool {
+    let Some(anyharness) = meta.get("anyharness").and_then(|value| value.as_object()) else {
+        return false;
+    };
+    if anyharness
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        != Some(1)
+    {
+        return false;
+    }
+    let Some(targeted_fork) = anyharness
+        .get("targetedFork")
+        .and_then(|value| value.as_object())
+    else {
+        return false;
+    };
+    if targeted_fork
+        .get("fileEffects")
+        .and_then(|value| value.as_str())
+        != Some("none")
+    {
+        return false;
+    }
+    matches!(
+        targeted_fork.get("target").and_then(|value| value.as_str()),
+        Some("message_id" | "user_message_index")
+    )
+}
+
+async fn fork_native_session(
+    conn: &acp::ClientSideConnection,
+    native_session_id: &str,
+    workspace_path: &std::path::PathBuf,
+    mcp_servers: &[SessionMcpServer],
+    handle: &Arc<LiveSessionHandle>,
+    store: &SessionStore,
+    session_id: &str,
+    action_capabilities: SessionActionCapabilities,
+    supports_close: bool,
+) -> Result<ForkSessionCommandResult, ForkSessionCommandError> {
+    verify_fork_ready(handle, store, session_id, action_capabilities).await?;
+
+    let mut request =
+        acp::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.clone());
+    if !mcp_servers.is_empty() {
+        request = request.mcp_servers(to_acp_servers(mcp_servers));
+    }
+    let response = conn
+        .fork_session(request)
+        .await
+        .map_err(|error| ForkSessionCommandError::Failed(error.to_string()))?;
+    Ok(ForkSessionCommandResult {
+        native_session_id: response.session_id.to_string(),
+        supports_close,
+    })
+}
+
+async fn verify_fork_ready(
+    handle: &Arc<LiveSessionHandle>,
+    store: &SessionStore,
+    session_id: &str,
+    action_capabilities: SessionActionCapabilities,
+) -> Result<(), ForkSessionCommandError> {
+    if !action_capabilities.fork {
+        return Err(ForkSessionCommandError::Unsupported(
+            "agent does not advertise ACP session/fork with load_session support".to_string(),
+        ));
+    }
+    if handle.busy.load(Ordering::Acquire) {
+        return Err(ForkSessionCommandError::Busy);
+    }
+    let execution = handle.execution_snapshot().await;
+    if execution.phase != SessionExecutionPhase::Idle || !execution.pending_interactions.is_empty()
+    {
+        return Err(ForkSessionCommandError::Busy);
+    }
+    match store.peek_head_pending_prompt(session_id) {
+        Ok(Some(_)) => return Err(ForkSessionCommandError::Busy),
+        Ok(None) => {}
+        Err(error) => {
+            return Err(ForkSessionCommandError::Failed(format!(
+                "failed to inspect pending prompt queue before fork: {error}"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+async fn close_native_session(
+    conn: &acp::ClientSideConnection,
+    native_session_id: &str,
+    supports_close: bool,
+) -> anyhow::Result<()> {
+    if !supports_close {
+        anyhow::bail!("agent does not advertise ACP session/close");
+    }
+    conn.close_session(acp::CloseSessionRequest::new(native_session_id.to_string()))
+        .await
+        .map(|_| ())
+        .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
 async fn start_new_session(
@@ -4912,6 +5233,7 @@ mod tests {
                     crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
+                action_capabilities_json: None,
                 origin: None,
             })
             .expect("insert session");
@@ -5086,6 +5408,7 @@ mod tests {
                     crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
+                action_capabilities_json: None,
                 origin: None,
             })
             .expect("insert session");
@@ -5250,6 +5573,7 @@ mod tests {
                     crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
+                action_capabilities_json: None,
                 origin: None,
             })
             .expect("insert session");
@@ -5974,6 +6298,7 @@ mod tests {
                     crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
+                action_capabilities_json: None,
                 origin: None,
             })
             .expect("insert session");

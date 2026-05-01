@@ -216,6 +216,33 @@ launch catalog.
 limit capped at 100, strips streaming deltas, and removes raw tool input/output
 from returned event JSON.
 
+## Forked Sessions
+
+Forked sessions use the same durable session/link model but with
+`relation = fork` and `workspace_relation = same_workspace`.
+
+Fork invariants:
+
+- the child is a normal session in the same workspace as the parent
+- the original parent transcript and workspace files are not mutated or
+  reverted by AnyHarness
+- the child has its own durable session row, native ACP session id, actor, and
+  event stream
+- adapters with durable fork ids may fork on the parent actor and then start the
+  child with `load_session`
+- adapters whose fork ids are process-local until first prompt, such as Claude,
+  start the child actor with `fork_from_native`; that child actor calls ACP
+  `session/fork` from the parent native id and owns the resulting live fork
+- for adapters that cannot replay the forked transcript through child
+  `load_session`, AnyHarness snapshots the parent's durable `session_events`
+  into the child before startup and appends child events after that prefix
+- raw ACP notifications are not copied into fork children
+- generic ACP fork support means tip fork only
+
+AnyHarness exposes fork through typed contract fields. ACP `_meta.anyharness`
+is reserved for private runtime-to-adapter extensions and must not leak into
+desktop or public HTTP shapes.
+
 ### Parent Wake
 
 Child turn completion is passive by default. When a child turn finishes, the

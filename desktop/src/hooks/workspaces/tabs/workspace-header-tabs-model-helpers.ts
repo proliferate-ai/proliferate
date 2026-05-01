@@ -10,7 +10,7 @@ import type { ChatVisibilityCandidate } from "@/lib/domain/workspaces/tabs/visib
 import type { SessionSlot } from "@/stores/sessions/harness-store";
 
 export type KnownHeaderSession =
-  | { kind: "slot"; slot: SessionSlot }
+  | { kind: "slot"; slot: SessionSlot; session?: Session }
   | { kind: "session"; session: Session };
 
 export function collectHierarchyChildren(
@@ -65,6 +65,22 @@ export function getKnownSessionViewState(known: KnownHeaderSession): SessionView
     streamConnectionState: "disconnected",
     transcript: { isStreaming: false, pendingInteractions: [] },
   });
+}
+
+export function getKnownSessionCanFork(known: KnownHeaderSession): boolean {
+  if (getKnownSessionViewState(known) !== "idle") {
+    return false;
+  }
+  if (known.kind === "slot") {
+    return Boolean(
+      known.slot.actionCapabilities.fork
+        || known.session?.actionCapabilities.fork,
+    );
+  }
+  if (known.session.status === "closed" || known.session.dismissedAt) {
+    return false;
+  }
+  return Boolean(known.session.actionCapabilities.fork);
 }
 
 export function getLinkedChildViewState(child: HeaderSubagentChildRow): SessionViewState {

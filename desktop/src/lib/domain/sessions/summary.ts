@@ -1,6 +1,7 @@
 import type {
   PendingInteraction,
   Session,
+  SessionActionCapabilities,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
   SessionMcpBindingSummary,
@@ -15,6 +16,7 @@ export interface SessionSlotSummaryPatch {
   modelId: string | null;
   modeId: string | null;
   title: string | null;
+  actionCapabilities: SessionActionCapabilities;
   liveConfig: SessionLiveConfigSnapshot | null;
   executionSummary: SessionExecutionSummary | null;
   mcpBindingSummaries: SessionMcpBindingSummary[] | null;
@@ -40,6 +42,7 @@ export function buildSessionSlotPatchFromSummary(
     modelId: session.modelId ?? null,
     modeId,
     title,
+    actionCapabilities: session.actionCapabilities,
     liveConfig: session.liveConfig ?? null,
     executionSummary: session.executionSummary ?? null,
     mcpBindingSummaries: session.mcpBindingSummaries ?? null,

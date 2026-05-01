@@ -564,6 +564,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["fork_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
         parameters: {
             query?: never;
@@ -2035,6 +2051,28 @@ export interface components {
         FileOpenTarget: "file" | "diff";
         /** @enum {string} */
         FileReadScope: "full" | "line" | "range" | "unknown";
+        /** @enum {string} */
+        ForkChildStartStatus: "started" | "failed";
+        ForkChildStartSummary: {
+            errorCode?: string | null;
+            sessionId?: string | null;
+            status: components["schemas"]["ForkChildStartStatus"];
+        };
+        ForkSessionRequest: {
+            target?: null | components["schemas"]["ForkSessionTarget"];
+        };
+        ForkSessionResponse: {
+            childStart?: null | components["schemas"]["ForkChildStartSummary"];
+            session: components["schemas"]["Session"];
+            sessionLink: components["schemas"]["SessionLinkSummary"];
+        };
+        ForkSessionTarget: {
+            itemId?: string | null;
+            turnId: string;
+            type: components["schemas"]["ForkSessionTargetType"];
+        };
+        /** @enum {string} */
+        ForkSessionTargetType: "before_user_message";
         /** @description Response payload for fetching the current live session config snapshot. */
         GetSessionLiveConfigResponse: {
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
@@ -2467,6 +2505,7 @@ export interface components {
             timestamp: string;
         };
         MobilitySessionRecord: {
+            actionCapabilities?: components["schemas"]["SessionActionCapabilities"];
             agentKind: string;
             closedAt?: string | null;
             createdAt: string;
@@ -3183,6 +3222,7 @@ export interface components {
             replay: boolean;
         };
         Session: {
+            actionCapabilities?: components["schemas"]["SessionActionCapabilities"];
             agentKind: string;
             closedAt?: string | null;
             createdAt: string;
@@ -3203,6 +3243,10 @@ export interface components {
             title?: string | null;
             updatedAt: string;
             workspaceId: string;
+        };
+        SessionActionCapabilities: {
+            fork?: boolean;
+            targetedFork?: boolean;
         };
         /**
          * @description Supported ACP session configuration input types.
@@ -3328,6 +3372,15 @@ export interface components {
         SessionInfoUpdatePayload: {
             title?: string | null;
             updatedAt?: string | null;
+        };
+        SessionLinkSummary: {
+            childSessionId: string;
+            createdAt: string;
+            id: string;
+            label?: string | null;
+            parentSessionId: string;
+            relation: string;
+            workspaceRelation: string;
         };
         SessionLinkTurnCompletedPayload: {
             /** Format: int64 */
@@ -5203,6 +5256,69 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    fork_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["ForkSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Forked session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForkSessionResponse"];
+                };
+            };
+            /** @description Invalid fork request or target session */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session cannot be forked now */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Fork failed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

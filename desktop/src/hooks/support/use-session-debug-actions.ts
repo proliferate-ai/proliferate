@@ -65,7 +65,14 @@ export interface SessionDebugActionState {
   activeSessionId: string | null;
   sessionSlots: Record<string, Pick<
     SessionSlot,
-    "agentKind" | "modeId" | "modelId" | "sessionId" | "status" | "title" | "workspaceId"
+    | "actionCapabilities"
+    | "agentKind"
+    | "modeId"
+    | "modelId"
+    | "sessionId"
+    | "status"
+    | "title"
+    | "workspaceId"
   >>;
 }
 
@@ -515,6 +522,7 @@ function fallbackLocatorSession(
     modelId: slot?.modelId ?? null,
     modeId: slot?.modeId ?? null,
     nativeSessionId: null,
+    actionCapabilities: slot?.actionCapabilities ?? null,
     createdAt: null,
     updatedAt: null,
   };

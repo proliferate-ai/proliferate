@@ -1,11 +1,11 @@
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    CreateSessionRequest, EditPendingPromptRequest, GetSessionLiveConfigResponse,
-    InteractionDecision, PromptInputBlock, PromptSessionRequest, PromptSessionResponse,
-    ResolveInteractionRequest, ResumeSessionRequest, Session, SessionEventEnvelope,
-    SessionRawNotificationEnvelope, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
-    UpdateSessionTitleRequest,
+    CreateSessionRequest, EditPendingPromptRequest, ForkChildStartStatus, ForkSessionRequest,
+    ForkSessionResponse, GetSessionLiveConfigResponse, InteractionDecision, PromptInputBlock,
+    PromptSessionRequest, PromptSessionResponse, ResolveInteractionRequest, ResumeSessionRequest,
+    Session, SessionEventEnvelope, SessionRawNotificationEnvelope, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
 };
 use axum::{
     body::Bytes,
@@ -23,9 +23,10 @@ use crate::app::AppState;
 use crate::origin::OriginContext;
 use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
 use crate::sessions::runtime::{
-    CreateAndStartSessionError, EnsureLiveSessionError, InteractionResolutionRequest,
-    PendingPromptMutationError, ResolveInteractionError, SendPromptError, SendPromptOutcome,
-    SessionLifecycleError, SessionMcpRefresh, SetSessionConfigOptionError,
+    session_link_to_summary, CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
+    InteractionResolutionRequest, PendingPromptMutationError, ResolveInteractionError,
+    SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionMcpRefresh,
+    SetSessionConfigOptionError,
 };
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 use crate::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
@@ -303,6 +304,84 @@ pub async fn prompt_session(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/fork",
+    params(("session_id" = String, Path, description = "Session ID")),
+    request_body = Option<ForkSessionRequest>,
+    responses(
+        (status = 200, description = "Forked session", body = ForkSessionResponse),
+        (status = 400, description = "Invalid fork request or target session", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Session cannot be forked now", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "Fork failed", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn fork_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    body: Bytes,
+) -> Result<Json<ForkSessionResponse>, ApiError> {
+    let req = parse_optional_fork_request(body)?;
+    let _lease = acquire_session_exclusive_operation_lease(&state, &session_id).await?;
+    let outcome = match state
+        .session_runtime
+        .fork_session(&session_id, req.target)
+        .await
+    {
+        Ok(outcome) => outcome,
+        Err(ForkSessionError::StartFailed {
+            session,
+            link,
+            error,
+        }) => {
+            tracing::warn!(
+                parent_session_id = %session_id,
+                child_session_id = %session.id,
+                session_link_id = %link.id,
+                error = %error,
+                "fork child session failed to start"
+            );
+            let session_contract = session_to_contract(&state, &session).await?;
+            return Ok(Json(ForkSessionResponse {
+                session: session_contract,
+                session_link: session_link_to_summary(&link),
+                child_start: Some(anyharness_contract::v1::ForkChildStartSummary {
+                    status: ForkChildStartStatus::Failed,
+                    error_code: Some("FORK_CHILD_START_FAILED".to_string()),
+                    session_id: Some(session.id),
+                }),
+            }));
+        }
+        Err(error) => return Err(map_fork_session_error(error)),
+    };
+    Ok(Json(ForkSessionResponse {
+        session: session_to_contract(&state, &outcome.session).await?,
+        session_link: session_link_to_summary(&outcome.link),
+        child_start: Some(anyharness_contract::v1::ForkChildStartSummary {
+            status: ForkChildStartStatus::Started,
+            error_code: None,
+            session_id: Some(outcome.session.id),
+        }),
+    }))
+}
+
+fn parse_optional_fork_request(body: Bytes) -> Result<ForkSessionRequest, ApiError> {
+    if body.is_empty() || body.iter().all(u8::is_ascii_whitespace) {
+        return Ok(ForkSessionRequest::default());
+    }
+    if body.as_ref().trim_ascii() == b"null" {
+        return Ok(ForkSessionRequest::default());
+    }
+    serde_json::from_slice::<ForkSessionRequest>(&body).map_err(|error| {
+        ApiError::bad_request(
+            format!("invalid fork request: {error}"),
+            "INVALID_FORK_REQUEST",
+        )
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Pending-prompt queue mutations — edit and delete queued prompts
 // ---------------------------------------------------------------------------
@@ -505,6 +584,26 @@ async fn acquire_session_operation_lease(
     Ok(state
         .workspace_operation_gate
         .acquire_shared(&session.workspace_id, kind)
+        .await)
+}
+
+async fn acquire_session_exclusive_operation_lease(
+    state: &AppState,
+    session_id: &str,
+) -> Result<crate::workspaces::operation_gate::WorkspaceExclusiveOperationLease, ApiError> {
+    let session = state
+        .session_service
+        .get_session(session_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found(
+                format!("Session not found: {session_id}"),
+                "SESSION_NOT_FOUND",
+            )
+        })?;
+    Ok(state
+        .workspace_operation_gate
+        .acquire_exclusive_with_kind(&session.workspace_id, WorkspaceOperationKind::SessionFork)
         .await)
 }
 
@@ -1061,6 +1160,31 @@ fn map_send_prompt_error(error: SendPromptError) -> ApiError {
     }
 }
 
+fn map_fork_session_error(error: ForkSessionError) -> ApiError {
+    match error {
+        ForkSessionError::SessionNotFound(session_id) => ApiError::not_found(
+            format!("Session not found: {session_id}"),
+            "SESSION_NOT_FOUND",
+        ),
+        ForkSessionError::Unsupported(detail) => ApiError::conflict(detail, "FORK_UNSUPPORTED"),
+        ForkSessionError::Busy => {
+            ApiError::conflict("session must be idle before forking", "SESSION_BUSY")
+        }
+        ForkSessionError::Invalid(detail) => ApiError::bad_request(detail, "FORK_INVALID_SESSION"),
+        ForkSessionError::MissingNativeSessionId => ApiError::conflict(
+            "session must have a native agent session id before forking",
+            "FORK_MISSING_NATIVE_SESSION",
+        ),
+        ForkSessionError::MissingDataKey => ApiError::internal(
+            crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
+        ),
+        ForkSessionError::StartFailed { error, .. } => {
+            ApiError::internal(format!("fork child start failed: {error}"))
+        }
+        ForkSessionError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
 fn map_pending_prompt_mutation_error(error: PendingPromptMutationError) -> ApiError {
     match error {
         PendingPromptMutationError::SessionNotFound(session_id) => ApiError::not_found(
@@ -1176,6 +1300,26 @@ mod tests {
 
         assert!(request.mcp_servers.is_none());
         assert!(request.mcp_binding_summaries.is_none());
+    }
+
+    #[test]
+    fn fork_request_accepts_missing_body() {
+        let request = match parse_optional_fork_request(Bytes::new()) {
+            Ok(request) => request,
+            Err(_) => panic!("parse empty body"),
+        };
+
+        assert!(request.target.is_none());
+    }
+
+    #[test]
+    fn fork_request_accepts_null_body() {
+        let request = match parse_optional_fork_request(Bytes::from_static(br#" null "#)) {
+            Ok(request) => request,
+            Err(_) => panic!("parse null body"),
+        };
+
+        assert!(request.target.is_none());
     }
 
     #[test]

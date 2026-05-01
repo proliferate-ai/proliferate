@@ -1,5 +1,6 @@
 import type {
   PendingPromptEntry,
+  SessionActionCapabilities,
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
@@ -41,6 +42,7 @@ export interface SessionSlot {
   modelId: string | null;
   modeId: string | null;
   title: string | null;
+  actionCapabilities: SessionActionCapabilities;
   liveConfig: SessionLiveConfigSnapshot | null;
   executionSummary: SessionExecutionSummary | null;
   mcpBindingSummaries: SessionMcpBindingSummary[] | null;

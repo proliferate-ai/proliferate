@@ -56,6 +56,7 @@ pub struct SessionRecord {
     pub mcp_binding_policy: SessionMcpBindingPolicy,
     pub system_prompt_append: Option<String>,
     pub subagents_enabled: bool,
+    pub action_capabilities_json: Option<String>,
     pub origin: Option<OriginContext>,
 }
 
@@ -98,7 +99,29 @@ impl SessionRecord {
             closed_at: self.closed_at.clone(),
             dismissed_at: self.dismissed_at.clone(),
             pending_prompts: Vec::new(),
+            action_capabilities: parse_action_capabilities(
+                self.action_capabilities_json.as_deref(),
+            ),
             origin: self.origin.as_ref().map(OriginContext::to_contract),
+        }
+    }
+}
+
+pub fn serialize_action_capabilities(
+    capabilities: v1::SessionActionCapabilities,
+) -> anyhow::Result<String> {
+    Ok(serde_json::to_string(&capabilities)?)
+}
+
+pub fn parse_action_capabilities(value: Option<&str>) -> v1::SessionActionCapabilities {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return v1::SessionActionCapabilities::default();
+    };
+    match serde_json::from_str(value) {
+        Ok(capabilities) => capabilities,
+        Err(error) => {
+            tracing::warn!(error = %error, "invalid session action capabilities JSON");
+            v1::SessionActionCapabilities::default()
         }
     }
 }

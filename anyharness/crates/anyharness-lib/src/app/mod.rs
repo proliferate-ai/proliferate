@@ -198,7 +198,7 @@ impl AppState {
         let review_service = Arc::new(ReviewService::new(
             ReviewStore::new(db.clone()),
             SessionStore::new(db.clone()),
-            session_link_service,
+            session_link_service.clone(),
             plan_service.clone(),
         ));
         acp_manager.set_review_service(review_service.clone());
@@ -234,6 +234,7 @@ impl AppState {
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
+            session_link_service.clone(),
             workspace_runtime.clone(),
             acp_manager.clone(),
             runtime_home.clone(),

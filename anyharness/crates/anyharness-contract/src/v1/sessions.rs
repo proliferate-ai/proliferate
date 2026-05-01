@@ -121,8 +121,19 @@ pub struct Session {
     pub dismissed_at: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_prompts: Vec<PendingPromptSummary>,
+    #[serde(default)]
+    pub action_capabilities: SessionActionCapabilities,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionActionCapabilities {
+    #[serde(default)]
+    pub fork: bool,
+    #[serde(default)]
+    pub targeted_fork: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -158,6 +169,68 @@ pub struct CreateSessionRequest {
     pub subagents_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkSessionRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<ForkSessionTarget>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkSessionTarget {
+    #[serde(rename = "type")]
+    pub target_type: ForkSessionTargetType,
+    pub turn_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ForkSessionTargetType {
+    BeforeUserMessage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkSessionResponse {
+    pub session: Session,
+    pub session_link: SessionLinkSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub child_start: Option<ForkChildStartSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkChildStartSummary {
+    pub status: ForkChildStartStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ForkChildStartStatus {
+    Started,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLinkSummary {
+    pub id: String,
+    pub relation: String,
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    pub workspace_relation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub created_at: String,
 }
 
 impl fmt::Debug for CreateSessionRequest {
@@ -669,6 +742,7 @@ mod tests {
             mode_id: Some("default".to_string()),
             requested_mode_id: Some("default".to_string()),
             title: Some("Fix auth refresh".to_string()),
+            action_capabilities: SessionActionCapabilities::default(),
             live_config: None,
             execution_summary: None,
             mcp_binding_summaries: None,

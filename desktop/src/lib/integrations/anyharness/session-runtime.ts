@@ -4,7 +4,15 @@ import {
   type PendingPromptEntry,
   streamSession,
 } from "@anyharness/sdk";
-import type { Session, SessionEventEnvelope, SessionExecutionSummary, SessionLiveConfigSnapshot, SessionMcpBindingSummary, SessionStreamHandle } from "@anyharness/sdk";
+import type {
+  Session,
+  SessionActionCapabilities,
+  SessionEventEnvelope,
+  SessionExecutionSummary,
+  SessionLiveConfigSnapshot,
+  SessionMcpBindingSummary,
+  SessionStreamHandle,
+} from "@anyharness/sdk";
 import {
   resolveSessionViewState,
   resolveStatusFromExecutionSummary,
@@ -40,6 +48,10 @@ export interface FlushAwareSessionStreamHandle extends SessionStreamHandle {
 }
 
 const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_SESSION_ACTION_CAPABILITIES: SessionActionCapabilities = {
+  fork: false,
+  targetedFork: false,
+};
 
 function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
   return { runtimeUrl: baseUrl, authToken };
@@ -90,6 +102,7 @@ export function createEmptySessionSlot(
     modelId?: string | null;
     modeId?: string | null;
     title?: string | null;
+    actionCapabilities?: SessionActionCapabilities | null;
     liveConfig?: SessionLiveConfigSnapshot | null;
     executionSummary?: SessionExecutionSummary | null;
     mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
@@ -109,6 +122,7 @@ export function createEmptySessionSlot(
     modelId: config?.modelId ?? null,
     modeId: resolvedModeId,
     title,
+    actionCapabilities: config?.actionCapabilities ?? DEFAULT_SESSION_ACTION_CAPABILITIES,
     liveConfig: config?.liveConfig ?? null,
     executionSummary: config?.executionSummary ?? null,
     mcpBindingSummaries: config?.mcpBindingSummaries ?? null,
@@ -151,6 +165,7 @@ export function createSessionSlotFromSummary(
       modelId: session.modelId ?? null,
       modeId,
       title,
+      actionCapabilities: session.actionCapabilities,
       liveConfig: session.liveConfig ?? null,
       executionSummary: session.executionSummary ?? null,
       mcpBindingSummaries: session.mcpBindingSummaries ?? null,

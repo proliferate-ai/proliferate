@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{ContentPart, OriginContext};
+use super::{ContentPart, OriginContext, SessionActionCapabilities};
 
 fn default_true() -> bool {
     true
@@ -203,6 +203,8 @@ pub struct MobilitySessionRecord {
     pub origin: Option<OriginContext>,
     #[serde(default = "default_true")]
     pub subagents_enabled: bool,
+    #[serde(default)]
+    pub action_capabilities: SessionActionCapabilities,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

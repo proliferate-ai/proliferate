@@ -3,6 +3,7 @@ import type {
   HealthResponse,
   ContentPart,
   Session,
+  SessionActionCapabilities,
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
@@ -37,6 +38,7 @@ export interface SessionDebugLocatorSession {
   modelId: string | null;
   modeId: string | null;
   nativeSessionId: string | null;
+  actionCapabilities: SessionActionCapabilities | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -313,6 +315,7 @@ export function sessionLocatorFromSession(session: Session): SessionDebugLocator
     modelId: session.modelId ?? session.requestedModelId ?? null,
     modeId: session.modeId ?? session.requestedModeId ?? null,
     nativeSessionId: session.nativeSessionId ?? null,
+    actionCapabilities: session.actionCapabilities ?? null,
     createdAt: session.createdAt ?? null,
     updatedAt: session.updatedAt ?? null,
   };

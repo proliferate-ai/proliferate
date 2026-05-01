@@ -35,9 +35,10 @@ use crate::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
 use crate::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentKind, PromptAttachmentRecord,
-    PromptAttachmentState, SessionEventRecord, SessionLiveConfigSnapshotRecord,
-    SessionRawNotificationRecord, SessionRecord,
+    parse_action_capabilities, serialize_action_capabilities, PendingConfigChangeRecord,
+    PendingPromptRecord, PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentState,
+    SessionEventRecord, SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord,
+    SessionRecord,
 };
 use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
 use crate::workspaces::access_gate::WorkspaceAccessError;
@@ -474,6 +475,7 @@ fn to_contract_session_record(record: SessionRecord) -> MobilitySessionRecord {
         dismissed_at: record.dismissed_at,
         system_prompt_append: record.system_prompt_append,
         subagents_enabled: record.subagents_enabled,
+        action_capabilities: parse_action_capabilities(record.action_capabilities_json.as_deref()),
         origin: record
             .origin
             .as_ref()
@@ -703,6 +705,18 @@ fn from_contract_session_record(
     record: MobilitySessionRecord,
     workspace_id: &str,
 ) -> SessionRecord {
+    let action_capabilities_json = match serialize_action_capabilities(record.action_capabilities) {
+        Ok(json) => Some(json),
+        Err(error) => {
+            tracing::warn!(
+                session_id = %record.id,
+                error = %error,
+                "failed to serialize imported session action capabilities"
+            );
+            None
+        }
+    };
+
     SessionRecord {
         id: record.id,
         workspace_id: workspace_id.to_string(),
@@ -727,6 +741,7 @@ fn from_contract_session_record(
         mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
         system_prompt_append: record.system_prompt_append,
         subagents_enabled: record.subagents_enabled,
+        action_capabilities_json,
         origin: record
             .origin
             .map(crate::origin::OriginContext::from_contract),
