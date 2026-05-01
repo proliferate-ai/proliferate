@@ -1,0 +1,80 @@
+"""Organization-domain constants."""
+
+ORGANIZATION_ROLE_OWNER = "owner"
+ORGANIZATION_ROLE_ADMIN = "admin"
+ORGANIZATION_ROLE_MEMBER = "member"
+ORGANIZATION_ROLES: frozenset[str] = frozenset(
+    {
+        ORGANIZATION_ROLE_OWNER,
+        ORGANIZATION_ROLE_ADMIN,
+        ORGANIZATION_ROLE_MEMBER,
+    }
+)
+
+ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE = "active"
+ORGANIZATION_MEMBERSHIP_STATUS_REMOVED = "removed"
+ORGANIZATION_MEMBERSHIP_STATUSES: frozenset[str] = frozenset(
+    {
+        ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+        ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    }
+)
+
+ORGANIZATION_INVITATION_STATUS_PENDING = "pending"
+ORGANIZATION_INVITATION_STATUS_ACCEPTED = "accepted"
+ORGANIZATION_INVITATION_STATUS_REVOKED = "revoked"
+ORGANIZATION_INVITATION_STATUS_EXPIRED = "expired"
+ORGANIZATION_INVITATION_STATUSES: frozenset[str] = frozenset(
+    {
+        ORGANIZATION_INVITATION_STATUS_PENDING,
+        ORGANIZATION_INVITATION_STATUS_ACCEPTED,
+        ORGANIZATION_INVITATION_STATUS_REVOKED,
+        ORGANIZATION_INVITATION_STATUS_EXPIRED,
+    }
+)
+
+ORGANIZATION_INVITATION_DELIVERY_PENDING = "pending"
+ORGANIZATION_INVITATION_DELIVERY_SENT = "sent"
+ORGANIZATION_INVITATION_DELIVERY_FAILED = "failed"
+ORGANIZATION_INVITATION_DELIVERY_SKIPPED = "skipped"
+ORGANIZATION_INVITATION_DELIVERY_STATUSES: frozenset[str] = frozenset(
+    {
+        ORGANIZATION_INVITATION_DELIVERY_PENDING,
+        ORGANIZATION_INVITATION_DELIVERY_SENT,
+        ORGANIZATION_INVITATION_DELIVERY_FAILED,
+        ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
+    }
+)
+
+ORGANIZATION_INVITE_TOKEN_DOMAIN = "org-invite"
+ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN = "org-invite-handoff"
+ORGANIZATION_INVITE_EXPIRES_DAYS = 14
+ORGANIZATION_INVITE_HANDOFF_EXPIRES_MINUTES = 15
+ORGANIZATION_LOGO_IMAGE_MAX_BYTES = 256 * 1024
+ORGANIZATION_LOGO_IMAGE_MIME_TYPES: frozenset[str] = frozenset(
+    {
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
+)
+
+PUBLIC_EMAIL_DOMAINS: frozenset[str] = frozenset(
+    {
+        "aol.com",
+        "fastmail.com",
+        "gmail.com",
+        "googlemail.com",
+        "hotmail.com",
+        "icloud.com",
+        "live.com",
+        "me.com",
+        "msn.com",
+        "outlook.com",
+        "pm.me",
+        "proton.me",
+        "protonmail.com",
+        "yahoo.com",
+    }
+)

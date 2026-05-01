@@ -10,6 +10,7 @@ from proliferate.db import engine as engine_module
 from proliferate.db.migrations import get_head_revision
 from proliferate.db.models.base import Base
 from proliferate.main import create_app
+from tests.integration.schema_migration_assertions import assert_current_schema
 from tests.postgres import run_migrations_async, temporary_database
 
 HEAD_REVISION = get_head_revision()
@@ -186,66 +187,7 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
 
         try:
             async with inspection_engine.begin() as conn:
-                tables = await conn.run_sync(
-                    lambda sync_conn: set(inspect(sync_conn).get_table_names())
-                )
-                assert tables >= {
-                    "alembic_version",
-                    "anonymous_telemetry_event",
-                    "anonymous_telemetry_install",
-                    "anonymous_telemetry_local_install",
-                    "billing_entitlement",
-                    "billing_grant",
-                    "cloud_mcp_connection",
-                    "cloud_mcp_connection_auth",
-                    "cloud_mcp_oauth_client",
-                    "cloud_mcp_oauth_flow",
-                    "cloud_credential",
-                    "cloud_workspace_handoff_op",
-                    "cloud_workspace_mobility",
-                    "cloud_sandbox",
-                    "cloud_workspace",
-                    "desktop_auth_code",
-                    "oauth_account",
-                    "usage_segment",
-                    "user",
-                    "webhook_event_receipt",
-                }
-
-                columns = await conn.run_sync(
-                    lambda sync_conn: {
-                        column["name"]
-                        for column in inspect(sync_conn).get_columns("cloud_workspace")
-                    }
-                )
-                assert "git_base_branch" in columns
-                assert "anyharness_data_key_ciphertext" in columns
-                assert "origin_json" in columns
-
-                user_columns = await conn.run_sync(
-                    lambda sync_conn: {
-                        column["name"] for column in inspect(sync_conn).get_columns("user")
-                    }
-                )
-                assert {"github_login", "avatar_url"} <= user_columns
-
-                mcp_connection_columns = await conn.run_sync(
-                    lambda sync_conn: {
-                        column["name"]
-                        for column in inspect(sync_conn).get_columns("cloud_mcp_connection")
-                    }
-                )
-                assert {
-                    "org_id",
-                    "catalog_entry_version",
-                    "server_name",
-                    "enabled",
-                    "settings_json",
-                    "config_version",
-                } <= mcp_connection_columns
-
-                version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
-                assert version == HEAD_REVISION
+                await assert_current_schema(conn, HEAD_REVISION)
         finally:
             await inspection_engine.dispose()
 

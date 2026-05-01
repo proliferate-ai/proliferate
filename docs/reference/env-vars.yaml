@@ -455,6 +455,18 @@
   description: Customer.io sender email address
   tags: [production]
 
+- name: RESEND_API_KEY
+  secret: true
+  default: ""
+  description: Resend transactional email API key for organization invitations
+  tags: [production]
+
+- name: RESEND_FROM_EMAIL
+  secret: false
+  default: "hello@proliferate.dev"
+  description: Resend sender email address for organization invitations
+  tags: [production]
+
 - name: FRONTEND_BASE_URL
   secret: false
   default: ""

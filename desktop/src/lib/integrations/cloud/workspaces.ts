@@ -10,6 +10,7 @@ import type {
   CloudWorkspaceSummary,
   CreateCloudWorkspaceRequest,
 } from "./client";
+import type { CloudOwnerSelection } from "./billing";
 
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
@@ -59,12 +60,22 @@ function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
 
 export async function listCloudWorkspaces(
   options?: CloudMeasurementOptions,
+  owner?: CloudOwnerSelection,
 ): Promise<CloudWorkspaceSummary[]> {
   const data = await measureCloudRequest({
     operationId: options?.measurementOperationId,
     category: "cloud.workspace.list",
     method: "GET",
-    run: async () => (await getProliferateClient().GET("/v1/cloud/workspaces")).data!,
+    run: async () => (
+      await getProliferateClient().GET("/v1/cloud/workspaces", {
+        params: {
+          query: {
+            ownerScope: owner?.ownerScope ?? "personal",
+            organizationId: owner?.organizationId ?? undefined,
+          },
+        },
+      })
+    ).data!,
   });
   return data.map((workspace) => normalizeCloudWorkspace(workspace) as CloudWorkspaceSummary);
 }
@@ -82,8 +93,17 @@ export async function getCloudWorkspace(
 
 export async function createCloudWorkspace(
   input: CreateCloudWorkspaceRequest,
+  owner?: CloudOwnerSelection,
 ): Promise<CloudWorkspaceDetail> {
-  const data = (await getProliferateClient().POST("/v1/cloud/workspaces", { body: input })).data!;
+  const data = (
+    await getProliferateClient().POST("/v1/cloud/workspaces", {
+      body: {
+        ...input,
+        ownerScope: owner?.ownerScope ?? input.ownerScope ?? "personal",
+        organizationId: owner?.organizationId ?? input.organizationId ?? null,
+      },
+    })
+  ).data!;
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 

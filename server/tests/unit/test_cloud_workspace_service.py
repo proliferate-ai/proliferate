@@ -13,6 +13,7 @@ from proliferate.constants.billing import (
 from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
+from proliferate.server.organizations.service import OwnerContext
 
 
 def _denied_start_authorization(*, blocked_reason: str) -> SandboxStartAuthorization:
@@ -52,6 +53,55 @@ def _allowed_start_authorization() -> SandboxStartAuthorization:
         active_sandbox_count=0,
         remaining_seconds=19.0 * 3600.0,
     )
+
+
+@pytest.mark.asyncio
+async def test_org_cloud_workspace_create_fails_before_personal_helpers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    organization_id = uuid4()
+
+    async def _resolve_owner_context(_user, owner_selection):
+        assert owner_selection.owner_scope == "organization"
+        assert owner_selection.organization_id == organization_id
+        return OwnerContext(
+            owner_scope="organization",
+            actor_user_id=user.id,
+            owner_user_id=None,
+            organization_id=organization_id,
+            membership_id=uuid4(),
+            membership_role="owner",
+            billing_subject_id=uuid4(),
+        )
+
+    async def _unexpected(*_args, **_kwargs) -> None:
+        raise AssertionError("org cloud create must fail before personal cloud helpers")
+
+    monkeypatch.setattr(workspace_service, "resolve_owner_context", _resolve_owner_context)
+    monkeypatch.setattr(workspace_service, "get_linked_github_account", _unexpected)
+    monkeypatch.setattr(workspace_service, "get_github_repo_branches", _unexpected)
+    monkeypatch.setattr(workspace_service, "load_repo_config_value", _unexpected)
+    monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
+    monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await workspace_service.create_cloud_workspace(
+            user,
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            base_branch="main",
+            branch_name="feature/cloud",
+            display_name=None,
+            owner_selection=workspace_service.OwnerSelection(
+                owner_scope="organization",
+                organization_id=organization_id,
+            ),
+        )
+
+    assert exc_info.value.code == "org_cloud_not_ready"
+    assert exc_info.value.status_code == 409
 
 
 @pytest.mark.asyncio

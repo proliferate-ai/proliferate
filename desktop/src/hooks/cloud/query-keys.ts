@@ -10,8 +10,21 @@ export function cloudCredentialsKey() {
   return [...cloudRootKey(), "credentials"] as const;
 }
 
-export function cloudBillingKey() {
-  return [...cloudRootKey(), "billing"] as const;
+export type CloudOwnerScope = "personal" | "organization";
+
+export interface CloudOwnerSelectionKey {
+  ownerScope: CloudOwnerScope;
+  organizationId: string | null;
+}
+
+export function personalCloudOwnerKey(): CloudOwnerSelectionKey {
+  return { ownerScope: "personal", organizationId: null };
+}
+
+export function cloudBillingKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...cloudRootKey(), "billing", owner.ownerScope, owner.organizationId] as const;
 }
 
 export function cloudRepoBranchesKey(gitOwner: string, gitRepoName: string) {
@@ -38,12 +51,32 @@ export function cloudRepoConfigKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRepoConfigsKey(), gitOwner, gitRepoName] as const;
 }
 
-export function cloudWorkspaceRepoConfigStatusKey(workspaceId: string) {
-  return [...cloudRootKey(), "workspaces", workspaceId, "repo-config-status"] as const;
+export function cloudWorkspaceRepoConfigStatusKey(
+  workspaceId: string,
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [
+    ...cloudRootKey(),
+    "workspaces",
+    workspaceId,
+    "repo-config-status",
+    owner.ownerScope,
+    owner.organizationId,
+  ] as const;
 }
 
-export function cloudWorkspaceConnectionKey(workspaceId: string) {
-  return [...cloudRootKey(), "workspaces", workspaceId, "connection"] as const;
+export function cloudWorkspaceConnectionKey(
+  workspaceId: string,
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [
+    ...cloudRootKey(),
+    "workspaces",
+    workspaceId,
+    "connection",
+    owner.ownerScope,
+    owner.organizationId,
+  ] as const;
 }
 
 export function isCloudWorkspaceConnectionQueryKey(

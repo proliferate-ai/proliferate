@@ -187,6 +187,7 @@ export function buildNextCloudWorkspaceAttempt(args: {
       baseBranch: args.target.baseBranch?.trim() || undefined,
       branchName,
       displayName: null,
+      ownerScope: "personal",
     },
     triedBranchNames: nextTriedBranchNames,
   };

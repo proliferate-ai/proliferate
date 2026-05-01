@@ -24,10 +24,6 @@ from proliferate.db.models.base import Base, utcnow
 class CloudRuntimeEnvironment(Base):
     __tablename__ = "cloud_runtime_environment"
     __table_args__ = (
-        CheckConstraint(
-            "organization_id IS NULL",
-            name="ck_cloud_runtime_environment_v1_org_id_null",
-        ),
         Index(
             "uq_cloud_runtime_environment_user_repo_policy",
             "user_id",
@@ -37,6 +33,16 @@ class CloudRuntimeEnvironment(Base):
             "isolation_policy",
             unique=True,
             postgresql_where=text("organization_id IS NULL"),
+        ),
+        Index(
+            "uq_cloud_runtime_environment_org_repo_policy",
+            "organization_id",
+            "git_provider",
+            "git_owner_norm",
+            "git_repo_name_norm",
+            "isolation_policy",
+            unique=True,
+            postgresql_where=text("organization_id IS NOT NULL"),
         ),
     )
 
@@ -98,10 +104,43 @@ class CloudWorkspace(Base):
             unique=True,
             postgresql_where=text("archived_at IS NULL"),
         ),
+        CheckConstraint(
+            "owner_scope IN ('personal', 'organization')",
+            name="ck_cloud_workspace_owner_scope",
+        ),
+        CheckConstraint(
+            "owner_scope != 'personal' OR (owner_user_id IS NOT NULL AND organization_id IS NULL)",
+            name="ck_cloud_workspace_personal_owner",
+        ),
+        CheckConstraint(
+            "owner_scope != 'organization' OR "
+            "(organization_id IS NOT NULL AND owner_user_id IS NULL)",
+            name="ck_cloud_workspace_organization_owner",
+        ),
+        CheckConstraint(
+            "created_by_user_id IS NOT NULL",
+            name="ck_cloud_workspace_created_by_user_id",
+        ),
     )
+
+    def __init__(self, **kwargs: object) -> None:
+        user_id = kwargs.get("user_id")
+        kwargs.setdefault("owner_scope", "personal")
+        kwargs.setdefault("owner_user_id", user_id)
+        kwargs.setdefault("organization_id", None)
+        kwargs.setdefault("created_by_user_id", user_id)
+        super().__init__(**kwargs)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    owner_scope: Mapped[str] = mapped_column(
+        String(32),
+        default="personal",
+        server_default=text("'personal'"),
+    )
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
     billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
     runtime_environment_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_runtime_environment.id", ondelete="CASCADE"),

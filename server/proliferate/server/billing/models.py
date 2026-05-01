@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -159,8 +160,21 @@ class BillingUrlResponse(BillingBaseModel):
     url: str
 
 
+class BillingOwnerSelection(BillingBaseModel):
+    owner_scope: Literal["personal", "organization"] = Field(
+        default="personal",
+        alias="ownerScope",
+    )
+    organization_id: UUID | None = Field(default=None, alias="organizationId")
+
+
 class OverageSettingsRequest(BillingBaseModel):
     enabled: bool
+    owner_scope: Literal["personal", "organization"] = Field(
+        default="personal",
+        alias="ownerScope",
+    )
+    organization_id: UUID | None = Field(default=None, alias="organizationId")
 
 
 class OverageSettingsResponse(BillingBaseModel):

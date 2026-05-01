@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import NoReturn
 from uuid import UUID
 
+from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigValue,
@@ -12,7 +14,8 @@ from proliferate.db.store.cloud_repo_config import (
     persist_cloud_repo_config,
     persist_cloud_repo_file,
 )
-from proliferate.db.store.cloud_workspaces import load_cloud_workspace_for_user
+from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
+from proliferate.db.store.organizations import load_active_membership
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.billing.service import (
     get_billing_snapshot,
@@ -61,6 +64,43 @@ def _default_repo_config_response() -> CloudRepoConfigResponse:
         files_version=0,
         tracked_files=[],
     )
+
+
+def _raise_workspace_not_found() -> NoReturn:
+    raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+
+
+def _raise_org_cloud_not_ready() -> NoReturn:
+    raise CloudApiError(
+        "org_cloud_not_ready",
+        "Organization cloud workspaces are not ready yet.",
+        status_code=409,
+    )
+
+
+async def _load_authorized_workspace_for_repo_config(
+    user_id: UUID,
+    workspace_id: UUID,
+) -> CloudWorkspace:
+    workspace = await load_cloud_workspace_by_id(workspace_id)
+    if workspace is None:
+        _raise_workspace_not_found()
+
+    if workspace.owner_scope == "personal":
+        if workspace.owner_user_id != user_id:
+            _raise_workspace_not_found()
+        return workspace
+
+    if workspace.owner_scope == "organization" and workspace.organization_id is not None:
+        membership = await load_active_membership(
+            organization_id=workspace.organization_id,
+            user_id=user_id,
+        )
+        if membership is None:
+            _raise_workspace_not_found()
+        _raise_org_cloud_not_ready()
+
+    _raise_workspace_not_found()
 
 
 async def list_repo_configs(user_id: UUID) -> CloudRepoConfigsListResponse:
@@ -246,9 +286,7 @@ async def get_workspace_repo_config_status(
     user_id: UUID,
     workspace_id: UUID,
 ) -> CloudWorkspaceRepoConfigStatusResponse:
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     repo_config = await load_cloud_repo_config_for_user(
         user_id=user_id,
         git_owner=workspace.git_owner,
@@ -261,9 +299,7 @@ async def build_resync_workspace_repo_config_status(
     user_id: UUID,
     workspace_id: UUID,
 ) -> ResyncCloudWorkspaceFilesResponse:
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     repo_config = await load_cloud_repo_config_for_user(
         user_id=user_id,
         git_owner=workspace.git_owner,
@@ -292,9 +328,7 @@ async def resync_workspace_files(
     user_id: UUID,
     workspace_id: UUID,
 ) -> ResyncCloudWorkspaceFilesResponse:
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
 
     target = await get_workspace_connection(workspace)
     try:
@@ -316,9 +350,7 @@ async def resync_workspace_files(
             status_code=502,
         ) from error
 
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     repo_config = await load_cloud_repo_config_for_user(
         user_id=user_id,
         git_owner=workspace.git_owner,
@@ -331,9 +363,7 @@ async def run_workspace_setup(
     user_id: UUID,
     workspace_id: UUID,
 ) -> RunCloudWorkspaceSetupResponse:
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
 
     target = await get_workspace_connection(workspace)
     try:
@@ -354,9 +384,7 @@ async def run_workspace_setup(
             status_code=502,
         ) from error
 
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     return run_cloud_workspace_setup_payload(
         workspace,
         command=started.command,
