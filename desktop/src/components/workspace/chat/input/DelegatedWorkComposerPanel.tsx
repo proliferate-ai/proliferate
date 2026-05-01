@@ -7,7 +7,7 @@ interface DelegatedWorkComposerPanelProps {
 export function DelegatedWorkComposerPanel({ children }: DelegatedWorkComposerPanelProps) {
   return (
     <div
-      className="flex min-w-0 items-center rounded-t-2xl border-x border-t border-border/60 bg-background/70 px-2 py-1.5 backdrop-blur-sm"
+      className="flex min-w-0 items-center rounded-t-2xl border-x border-t border-border/70 bg-card/70 px-2 py-1.5 backdrop-blur-sm"
       data-telemetry-mask
       aria-label="Delegated work"
     >

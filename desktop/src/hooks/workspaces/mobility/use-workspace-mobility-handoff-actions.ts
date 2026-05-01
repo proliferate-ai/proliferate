@@ -125,11 +125,6 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
         elapsedMs: elapsedMs(startedAt),
         error: error instanceof Error ? error.message : "unknown_error",
       });
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "Failed to load workspace mobility details.",
-      );
       throw error;
     }
   }, [

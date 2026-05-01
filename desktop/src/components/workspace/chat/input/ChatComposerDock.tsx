@@ -10,10 +10,9 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
-  contextSlot?: ReactNode;
-  queueSlot?: ReactNode;
-  interactionSlot?: ReactNode;
-  delegationSlot?: ReactNode;
+  outboundSlot?: ReactNode;
+  activeSlot?: ReactNode;
+  attachedSlot?: ReactNode;
   footerSlot?: ReactNode;
   lowerBackdropTopPx?: number | null;
   shellClassName?: string;
@@ -26,7 +25,7 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
  *      layered over the transcript scroll
  *   2. a padded max-width column
  *   3. optional inset dock regions, top to bottom:
- *      context, queued prompts, active interactions, delegated work
+ *      outbound work, active agent state, attached context/parallel work
  *   4. children - usually `<ChatInput />` or a playground surface
  *
  * Consumed by `ChatView` (production) and `ChatPlaygroundPage` (dev) so
@@ -35,10 +34,9 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
 export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps>(
   function ChatComposerDock({
     backdrop = true,
-    contextSlot,
-    queueSlot,
-    interactionSlot,
-    delegationSlot,
+    outboundSlot,
+    activeSlot,
+    attachedSlot,
     footerSlot,
     lowerBackdropTopPx,
     shellClassName,
@@ -53,6 +51,11 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
     const lowerBackdropFadeTopPx = lowerBackdropTopPx == null
       ? null
       : Math.max(0, lowerBackdropTopPx - CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX);
+    const dockSlots = [
+      { key: "outbound", content: outboundSlot },
+      { key: "active", content: activeSlot },
+      { key: "attached", content: attachedSlot },
+    ].filter((slot): slot is { key: string; content: ReactNode } => Boolean(slot.content));
 
     return (
       <DebugProfiler id="chat-composer-dock">
@@ -84,18 +87,20 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
         )}
         <div className={twMerge("pointer-events-none relative z-10 pb-4", CHAT_SURFACE_GUTTER_CLASSNAME, className)} {...rest}>
           <div className={twMerge("pointer-events-auto relative @container", CHAT_COLUMN_CLASSNAME)}>
-            {contextSlot && (
-              <div className="relative flex flex-col px-8">{contextSlot}</div>
-            )}
-            {queueSlot && (
-              <div className="relative flex flex-col px-7">{queueSlot}</div>
-            )}
-            {interactionSlot && (
-              <div className="relative flex flex-col px-6">{interactionSlot}</div>
-            )}
-            {delegationSlot && (
-              <div className="relative flex flex-col px-5">{delegationSlot}</div>
-            )}
+            {dockSlots.map((slot, index) => (
+              <div
+                key={slot.key}
+                data-dock-slot={slot.key}
+                className={twMerge(
+                  "relative flex flex-col px-5",
+                  index === 0
+                    ? "[&>*+*]:rounded-t-none [&>*+*]:border-border/60"
+                    : "[&>*]:rounded-t-none [&>*]:border-border/60",
+                )}
+              >
+                {slot.content}
+              </div>
+            ))}
             {children}
             {footerSlot ? (
               <div className="mt-2">{footerSlot}</div>

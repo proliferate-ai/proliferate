@@ -32,7 +32,7 @@ export function PendingPromptList({
 
   return (
     <div
-      className="relative flex flex-col gap-1 overflow-clip rounded-t-2xl border-x border-t border-border/80 bg-card/70 px-2 py-1.5 backdrop-blur-sm"
+      className="relative flex flex-col gap-1 overflow-clip rounded-t-2xl border-x border-t border-border/70 bg-card/70 px-2 py-1.5 backdrop-blur-sm"
       data-telemetry-mask
       aria-label="Queued messages"
     >

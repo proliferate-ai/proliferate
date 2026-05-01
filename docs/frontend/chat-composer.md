@@ -26,17 +26,16 @@ Three layers, top to bottom:
 ```text
 ChatView
 └── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset dock regions)
-    ├── contextSlot: at most one of
-    │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
-    │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
-    │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
-    ├── queueSlot
-    │     └── PendingPromptList             (queued prompts)
-    ├── interactionSlot
+    ├── outboundSlot
+    │     └── PendingPromptList             (queued outbound prompts)
+    ├── activeSlot: at most one of
     │     ├── ConnectedApprovalCard         (pending tool approval)
     │     ├── ConnectedUserInputCard        (agent question/form)
-    │     └── ConnectedMcpElicitationCard   (MCP form)
-    ├── delegationSlot
+    │     ├── ConnectedMcpElicitationCard   (MCP form)
+    │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
+    ├── attachedSlot
+    │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
+    │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
     │     ├── ComposerReviewRunPanel        (summary control + popover list/actions for review agents)
     │     ├── CoworkComposerStrip           (summary control + popover list for coding workspaces)
     │     └── SubagentComposerStrip         (summary control + popover list for linked child sessions)
@@ -58,19 +57,24 @@ Non-negotiable:
 ## 2. Dock Regions
 
 `useComposerDockSlots` (`desktop/src/hooks/chat/use-composer-dock-slots.tsx`)
-derives the named regions above the composer. They always render in this order:
+derives the named regions above the composer. Classify each inhabitant by state
+role first, not by component family. They always render in this order:
 
-1. **`contextSlot`** — workspace/worktree/runtime context first. The slot holds at most one of `WorkspaceArrivalAttachedPanel`, `CloudRuntimeAttachedPanel`, or `TodoTrackerPanel`.
-2. **`queueSlot`** — queued prompts and queued wake prompts.
-3. **`interactionSlot`** — active questions/forms: permission approvals, user-input questions, and MCP elicitation forms.
-4. **`delegationSlot`** — composer-attached delegated work summaries: review agents, cowork coding sessions, and linked same-workspace subagents.
+1. **`outboundSlot`** — queued outbound work: user prompts, queued wake prompts,
+   review feedback prompts, and review-complete prompts.
+2. **`activeSlot`** — the active agent state. Permission approvals, user-input
+   questions, and MCP elicitation forms take precedence. If there is no blocking
+   request, this slot may show `TodoTrackerPanel`.
+3. **`attachedSlot`** — ambient attached context and parallel work:
+   workspace/worktree/runtime panels plus review agents, cowork coding sessions,
+   and linked same-workspace subagents.
 
-Review status lives in `delegationSlot`, not `contextSlot`. `ComposerReviewRunPanel`
-uses the same compact summary-control + popover pattern as subagents/cowork.
-The popover owns reviewer rows, critique links, stop, send-feedback, and
-review-revision actions. Review automation can still make the composer
-unavailable through chat availability state, but it should not displace the
-todo tracker or workspace/cloud panels with a full card.
+Review status lives in `attachedSlot`, not in active state.
+`ComposerReviewRunPanel` uses the same compact summary-control + popover pattern
+as subagents/cowork. The popover owns reviewer rows, critique links, stop,
+send-feedback, and review-revision actions. Review automation can still make
+the composer unavailable through chat availability state, but it should not
+displace blocking requests or todo state with a full card.
 
 Review runs have two composer-facing classes: blocking workflow runs
 (`reviewing`, `feedback_ready`, `parent_revising`, `waiting_for_revision`) and
@@ -81,24 +85,23 @@ new review is blocked by workflow runs and optimistic starting state, not by a
 finished result notice.
 
 If you need to introduce another dock-region inhabitant, classify it by state
-role first: context, delegated work, queued work, or active interaction. Add it
-to `use-composer-dock-slots.tsx` — do not compute it inline in `ChatView` and
-do not introduce a parallel arbiter elsewhere.
+role first: outbound work, active agent state, or attached context/parallel
+work. Add it to `use-composer-dock-slots.tsx` — do not compute it inline in
+`ChatView` and do not introduce a parallel arbiter elsewhere.
 
-`delegationSlot` renders one shared `DelegatedWorkComposerPanel` containing
+`attachedSlot` renders one shared `DelegatedWorkComposerPanel` containing
 compact summary controls for review agents, cowork coding sessions, and linked
 same-workspace child sessions. Each control opens a popover list with the full
 child-session/action set; individual child chips should not be rendered directly
-above the composer. `delegationSlot` is the bottom dock pane and must remain
-directly attached to `ChatInput`; it is an indicator layer for adjacent work,
-not a blocking prompt panel. `queueSlot` must render before active questions,
-forms, and permission approvals in `interactionSlot`; both stack above
-delegated work when present. When multiple delegated-work controls are visible,
-they live in the same panel in review, cowork, subagent order.
+above the composer. Attached delegated work is an indicator layer for adjacent
+work, not a blocking prompt panel. `outboundSlot` must render before
+`activeSlot`; both stack above attached context/parallel work when present. When
+multiple delegated-work controls are visible, they live in the same panel in
+review, cowork, subagent order.
 
-Dock panes are narrower than the composer. When several panes stack, higher
-context panes are slightly narrower than lower panes so each layer reads as
-attached to, but lighter than, the section below it.
+Dock panes share one width and one neutral tray treatment. Hierarchy comes from
+state order, copy, and control weight, not from different colors or a width
+staircase.
 
 ## 2.1 Composer footer semantics
 
@@ -107,9 +110,9 @@ attached to, but lighter than, the section below it.
 - It holds persistent workspace identity and mobility entry controls.
 - It is rendered beneath `ChatInput` via `ChatComposerDock.footerSlot`.
 - It uses `ComposerControlButton`, not ad hoc button treatments.
-- The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`.
+- The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`; the opened card owns preflight, preparation errors, blockers, and the final handoff action.
 - The detail and branch controls are direct utility actions: local workspaces copy a filesystem path, cloud workspaces copy repository identity, and branch copies the branch name.
-- In-flight workspace mobility does **not** render in the dock-slot path anymore. It uses the dedicated `ChatView` overlay instead.
+- In-flight workspace mobility replaces the normal footer controls with one inline progress status. Completion, cleanup recovery, and MCP reconnect follow-up use the dedicated `ChatView` overlay.
 
 ## 3. The three composer-area components
 
@@ -117,7 +120,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 
 | Component | Lifecycle | Renders | Header shape |
 |---|---|---|---|
-| `TodoTrackerPanel` | Long-lived, non-gating (ambient status) | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
+| `TodoTrackerPanel` | Long-lived, non-gating active agent state | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
 | `ApprovalCard` | Short-lived, gating (demands a decision) | options from `pendingApproval`, one variant for all three `toolKind`s | plain title only — NO icon, NO label chip, NO separator |
 | `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and plan actions | bold plan title + icon-only Copy/Collapse buttons |
 | `PlanReferenceAttachmentCard` | Draft/user-prompt attachment | immutable markdown plan snapshot attached to a prompt | compact draft chip + preview action before send; full collapsible transcript card after send |
@@ -183,9 +186,18 @@ echoes it back as a `plan_reference` content part.
 
 Borrowed directly from `references/codex_todo.html` and `references/codex_plan.html`. These are the calls that get broken most easily.
 
-### 4.1 Panels are narrower than the composer
+### 4.1 Panels are one dock stack
 
-`ChatComposerDock` wraps dock panes in inset region wrappers so every pane is narrower than the composer surface. Delegated-work panes use `px-5` because they attach directly to `ChatInput`; interaction, queue, and context panes are progressively narrower as they stack upward. Slots have no bottom margin and no positive z-index: `ComposerAttachedPanel` is an attached cap above the composer, using `rounded-t-2xl border-x border-t border-border/80`, while the composer surface paints after the dock panes so the input's top outline remains visible at the seam. Do not add a `flatTop` mode, a detached gap, a full-perimeter dock card, or a `z-*` layer that lets a dock pane cover the composer border.
+`ChatComposerDock` wraps dock panes in one shared inset width (`px-5`) so queue,
+active state, and attached context read as one dock. Slots have no bottom margin
+and no positive z-index: `ComposerAttachedPanel` is an attached cap above the
+composer, using `rounded-t-2xl border-x border-t border-border/70 bg-card/70`,
+while the composer surface paints after the dock panes so the input's top
+outline remains visible at the seam. When several trays stack, only the top
+visible tray keeps top rounding; inner trays flatten into a hairline seam. Do
+not add a `flatTop` mode, a detached gap, a full-perimeter dock card, a width
+staircase, a separate color per slot, or a `z-*` layer that lets a dock pane
+cover the composer border.
 
 ### 4.2 Headers are minimalist
 

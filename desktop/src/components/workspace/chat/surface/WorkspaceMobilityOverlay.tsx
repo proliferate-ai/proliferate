@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/Button";
-import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
 import {
   type WorkspaceMobilityOverlayMode,
   useWorkspaceMobilityOverlayState,
@@ -7,9 +6,6 @@ import {
 import {
   CheckCircleFilled,
   CircleAlert,
-  CloudIcon,
-  FolderOpen,
-  LoaderCircle,
 } from "@/components/ui/icons";
 
 export function WorkspaceMobilityOverlay() {
@@ -28,34 +24,24 @@ export function WorkspaceMobilityOverlay() {
 
 export function WorkspaceMobilityOverlayView({
   description,
-  direction,
-  locationLabel,
   mcpNotice,
   mode,
   onContinueWorking,
   onDismissNotice,
   onRetryCleanup,
-  statusLabel,
   title,
 }: {
   description: string | null;
-  direction?: WorkspaceMobilityDirection | null;
-  locationLabel: string | null;
   mcpNotice?: string | null;
   mode: WorkspaceMobilityOverlayMode;
   onContinueWorking?: () => void;
   onDismissNotice?: () => void;
   onRetryCleanup?: () => void;
-  statusLabel?: string | null;
   title: string;
 }) {
-  const icon = mode === "progress"
-    ? direction === "cloud_to_local"
-      ? <FolderOpen className="size-4" />
-      : <CloudIcon className="size-4" />
-    : mode === "cleanup_failed"
-      ? <CircleAlert className="size-4" />
-      : <CheckCircleFilled className="size-4" />;
+  const icon = mode === "cleanup_failed"
+    ? <CircleAlert className="size-4" />
+    : <CheckCircleFilled className="size-4" />;
   const iconTone = mode === "cleanup_failed"
     ? "bg-destructive/10 text-destructive"
     : "bg-foreground/8 text-foreground";
@@ -68,12 +54,7 @@ export function WorkspaceMobilityOverlayView({
             {icon}
           </span>
           <div className="min-w-0 flex-1">
-            {locationLabel && (
-              <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground/80">
-                {locationLabel}
-              </p>
-            )}
-            <h2 className="mt-1 text-lg font-medium tracking-tight text-foreground">
+            <h2 className="text-lg font-medium tracking-tight text-foreground">
               {title}
             </h2>
             {description && (
@@ -83,13 +64,6 @@ export function WorkspaceMobilityOverlayView({
             )}
           </div>
         </div>
-
-        {mode === "progress" && statusLabel && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-foreground/6 px-3 py-1.5 text-sm text-muted-foreground">
-            <LoaderCircle className="size-3 animate-spin text-foreground" />
-            <span>{statusLabel}</span>
-          </div>
-        )}
 
         {mode === "completion" && mcpNotice && (
           <div className="mt-4 rounded-lg bg-foreground/6 p-3">

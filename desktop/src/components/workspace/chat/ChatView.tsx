@@ -210,10 +210,9 @@ export function ChatView({
       <ChatComposerDock
         ref={dockRef}
         backdrop={isSessionMode}
-        contextSlot={composerDockSlots.contextSlot}
-        queueSlot={composerDockSlots.queueSlot}
-        interactionSlot={composerDockSlots.interactionSlot}
-        delegationSlot={composerDockSlots.delegationSlot}
+        outboundSlot={composerDockSlots.outboundSlot}
+        activeSlot={composerDockSlots.activeSlot}
+        attachedSlot={composerDockSlots.attachedSlot}
         footerSlot={<WorkspaceMobilityFooterRow />}
         lowerBackdropTopPx={lowerBackdropTopPx}
         shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
