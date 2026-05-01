@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+  HOME_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { HomeModePicker } from "@/components/home/HomeModePicker";
 import { HomeModelPicker } from "@/components/home/HomeModelPicker";
@@ -25,8 +25,6 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { Check, CircleAlert, Clock, Folder, LoaderCircle, Settings } from "@/components/ui/icons";
 import type { HomeActionId, HomeStatusIcon } from "@/lib/domain/home/home-screen";
-
-const HOME_COMPOSER_INPUT_MIN_HEIGHT_REM = 6.5;
 
 function resolveStatusIcon(icon: HomeStatusIcon) {
   switch (icon) {
@@ -113,10 +111,10 @@ export function HomeNextScreen() {
 
     const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
     const homeMinHeightPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * HOME_COMPOSER_INPUT_MIN_HEIGHT_REM
-      : lineHeightPx * CHAT_COMPOSER_INPUT.minRows;
-    const minPx = Math.max(lineHeightPx * CHAT_COMPOSER_INPUT.minRows, homeMinHeightPx);
-    const maxPx = lineHeightPx * CHAT_COMPOSER_INPUT.maxRows;
+      ? rootFontSizePx * HOME_CHAT_COMPOSER_INPUT.minHeightRem
+      : lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows;
+    const minPx = Math.max(lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows, homeMinHeightPx);
+    const maxPx = lineHeightPx * HOME_CHAT_COMPOSER_INPUT.maxRows;
     el.style.height = "auto";
     const contentHeight = el.scrollHeight;
     const next = Math.min(maxPx, Math.max(minPx, contentHeight));
@@ -192,8 +190,8 @@ export function HomeNextScreen() {
               <div
                 className="mb-2 flex-grow select-text overflow-y-auto px-4"
                 style={{
-                  minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
-                  maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+                  minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
+                  maxHeight: `${HOME_CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
                 }}
               >
                 <ComposerTextarea
@@ -209,8 +207,8 @@ export function HomeNextScreen() {
                   autoCorrect="off"
                   autoCapitalize="off"
                   style={{
-                    minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
-                    maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+                    minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
+                    maxHeight: `${HOME_CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
                   }}
                 />
               </div>
