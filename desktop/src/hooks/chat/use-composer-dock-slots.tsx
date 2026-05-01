@@ -22,10 +22,9 @@ import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cl
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
 
 export interface ComposerDockSlots {
-  contextSlot: ReactNode | null;
-  queueSlot: ReactNode | null;
-  interactionSlot: ReactNode | null;
-  delegationSlot: ReactNode | null;
+  outboundSlot: ReactNode | null;
+  activeSlot: ReactNode | null;
+  attachedSlot: ReactNode | null;
 }
 
 export function useComposerDockSlots(options?: {
@@ -52,13 +51,16 @@ export function useComposerDockSlots(options?: {
         ? <ConnectedMcpElicitationCard />
         : null;
 
-  const contextSlot: ReactNode | null = workspaceStatusPanel
+  const ambientContextSlot: ReactNode | null = workspaceStatusPanel
     ? <WorkspaceArrivalAttachedPanel />
     : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
       ? <CloudRuntimeAttachedPanel />
-      : !suppressSessionSlots && activeTodoTracker
-        ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
-        : null;
+      : null;
+  const activeAgentSlot: ReactNode | null = suppressSessionSlots
+    ? null
+    : interactionPanel || (activeTodoTracker
+      ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
+      : null);
   const delegatedWorkSlot: ReactNode | null = reviewComposerStrip || subagentComposerStrip || coworkComposerStrip
     ? (
       <DelegatedWorkComposerPanel>
@@ -83,13 +85,21 @@ export function useComposerDockSlots(options?: {
       </DelegatedWorkComposerPanel>
     )
     : null;
+  const attachedDelegatedWorkSlot = suppressSessionSlots ? null : delegatedWorkSlot;
+  const attachedSlot: ReactNode | null = ambientContextSlot || attachedDelegatedWorkSlot
+    ? (
+      <>
+        {ambientContextSlot}
+        {attachedDelegatedWorkSlot}
+      </>
+    )
+    : null;
 
   return {
-    contextSlot,
-    queueSlot: !suppressSessionSlots && pendingPrompts.length > 0
+    outboundSlot: !suppressSessionSlots && pendingPrompts.length > 0
       ? <ConnectedPendingPromptList />
       : null,
-    interactionSlot: suppressSessionSlots ? null : interactionPanel,
-    delegationSlot: suppressSessionSlots ? null : delegatedWorkSlot,
+    activeSlot: activeAgentSlot,
+    attachedSlot,
   };
 }

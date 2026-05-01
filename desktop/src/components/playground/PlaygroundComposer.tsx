@@ -20,6 +20,7 @@ import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerP
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/input/WorkspaceMobilityLocationPopover";
+import { WorkspaceMobilityFooterProgressStatus } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { WorkspaceArrivalAttachedPanelView } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
 import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
@@ -29,6 +30,7 @@ import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
 import {
   getMobilityOverlayTitle,
   mobilityStatusCopy,
@@ -155,18 +157,16 @@ export function PlaygroundComposer({
 }: PlaygroundComposerProps) {
   const replaySlots = useComposerDockSlots();
   const scenario = selection.kind === "fixture" ? selection.key : null;
-  const contextSlot = scenario ? renderContextSlot(scenario) : replaySlots.contextSlot;
-  const queueSlot = scenario ? renderQueueSlot(scenario) : replaySlots.queueSlot;
-  const interactionSlot = scenario ? renderInteractionSlot(scenario) : replaySlots.interactionSlot;
-  const delegationSlot = scenario ? renderDelegationSlot(scenario) : replaySlots.delegationSlot;
+  const outboundSlot = scenario ? renderOutboundSlot(scenario) : replaySlots.outboundSlot;
+  const activeSlot = scenario ? renderActiveSlot(scenario) : replaySlots.activeSlot;
+  const attachedSlot = scenario ? renderAttachedSlot(scenario) : replaySlots.attachedSlot;
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <ChatComposerDock
         ref={dockRef}
-        contextSlot={contextSlot ?? undefined}
-        queueSlot={queueSlot ?? undefined}
-        interactionSlot={interactionSlot ?? undefined}
-        delegationSlot={delegationSlot ?? undefined}
+        outboundSlot={outboundSlot ?? undefined}
+        activeSlot={activeSlot ?? undefined}
+        attachedSlot={attachedSlot ?? undefined}
         footerSlot={scenario ? <PlaygroundMobilityFooterRow scenario={scenario} /> : undefined}
         lowerBackdropTopPx={lowerBackdropTopPx}
         shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
@@ -193,27 +193,11 @@ export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNo
   }
 }
 
-export function renderContextSlot(scenario: ScenarioKey): ReactNode | null {
+export function renderActiveSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "todos-short":
     case "todos-mid":
     case "todos-long":
-    case "workspace-arrival-created":
-    case "cloud-first-runtime":
-    case "cloud-provisioning":
-    case "cloud-applying-files":
-    case "cloud-blocked":
-    case "cloud-error":
-    case "cloud-reconnecting":
-    case "cloud-reconnect-error":
-      return renderPanelSlotFixture(scenario);
-    default:
-      return null;
-  }
-}
-
-export function renderInteractionSlot(scenario: ScenarioKey): ReactNode | null {
-  switch (scenario) {
     case "execute-approval":
     case "edit-approval":
     case "pending-prompts-with-approval":
@@ -237,6 +221,36 @@ export function renderInteractionSlot(scenario: ScenarioKey): ReactNode | null {
     default:
       return null;
   }
+}
+
+export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
+  const contextPanel = (() => {
+    switch (scenario) {
+      case "workspace-arrival-created":
+      case "cloud-first-runtime":
+      case "cloud-provisioning":
+      case "cloud-applying-files":
+      case "cloud-blocked":
+      case "cloud-error":
+      case "cloud-reconnecting":
+      case "cloud-reconnect-error":
+        return renderPanelSlotFixture(scenario);
+      default:
+        return null;
+    }
+  })();
+  const delegationPanel = renderDelegationSlot(scenario);
+
+  if (!contextPanel && !delegationPanel) {
+    return null;
+  }
+
+  return (
+    <>
+      {contextPanel}
+      {delegationPanel}
+    </>
+  );
 }
 
 function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
@@ -679,7 +693,7 @@ function buildPlaygroundSubagentSummary(
   };
 }
 
-export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
+export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "pending-prompts-single":
     case "pending-prompts-with-approval":
@@ -931,6 +945,23 @@ function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
   const detailIcon = isCloudScenario
     ? <CloudIcon className="size-3.5" />
     : <Folder className="size-3.5" />;
+  const progressStatus = scenario === "mobility-in-flight"
+    ? {
+      title: getMobilityOverlayTitle("local_to_cloud", "transferring"),
+      statusLabel: mobilityStatusCopy("transferring", "local_to_cloud").title,
+    }
+    : null;
+
+  if (progressStatus) {
+    return (
+      <div className="relative rounded-[var(--radius-composer)] border border-border bg-card px-2 py-2 shadow-xs">
+        <WorkspaceMobilityFooterProgressStatus
+          title={progressStatus.title}
+          statusLabel={progressStatus.statusLabel}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative rounded-[var(--radius-composer)] border border-border bg-card px-2 py-2 shadow-xs">
@@ -960,6 +991,7 @@ function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
         <div className="absolute bottom-full left-2 z-10 mb-2">
           <WorkspaceMobilityLocationPopover
             prompt={prompt}
+            snapshot={mobilitySnapshotForScenario(scenario)}
             onClose={noop}
             onPrimaryAction={noop}
           />
@@ -971,18 +1003,7 @@ function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
 
 export function renderMobilityOverlayPreview(scenario: ScenarioKey): ReactNode | null {
   if (scenario === "mobility-in-flight") {
-    const phase = "transferring";
-    const direction = "local_to_cloud";
-    return (
-      <WorkspaceMobilityOverlayView
-        description={mobilityStatusCopy(phase, direction).description}
-        direction={direction}
-        locationLabel="Cloud workspace"
-        mode="progress"
-        statusLabel={mobilityStatusCopy(phase, direction).title}
-        title={getMobilityOverlayTitle(direction, phase)}
-      />
-    );
+    return null;
   }
 
   if (scenario === "mobility-failed") {
@@ -991,8 +1012,6 @@ export function renderMobilityOverlayPreview(scenario: ScenarioKey): ReactNode |
     return (
       <WorkspaceMobilityOverlayView
         description={mobilityStatusCopy(phase, direction).description}
-        direction={direction}
-        locationLabel="Cloud workspace"
         mode="cleanup_failed"
         onContinueWorking={noop}
         onRetryCleanup={noop}
@@ -1012,11 +1031,10 @@ function mobilityPromptForScenario(
       return {
         variant: "actionable",
         direction: "local_to_cloud",
-        headline: "You're working in a local worktree.",
-        body: "You can move this workspace to the cloud.",
+        headline: "Move to cloud",
+        body: "Move this local worktree to a cloud runtime.",
         helper: null,
         actionLabel: "Move to cloud",
-        secondaryActionLabel: null,
         warning: "Active terminals will stay here.",
         blocker: null,
         primaryActionKind: "confirm_move",
@@ -1030,7 +1048,6 @@ function mobilityPromptForScenario(
         body: "This branch isn't on GitHub yet.",
         helper: "Publish `feature/workspace-mobility` before moving to cloud.",
         actionLabel: "Publish branch",
-        secondaryActionLabel: null,
         warning: "Uncommitted changes will move with the workspace after this branch is synced.",
         blocker: null,
         primaryActionKind: "publish_branch",
@@ -1043,7 +1060,6 @@ function mobilityPromptForScenario(
         body: "Your latest commit isn't on GitHub yet.",
         helper: "Push `feature/workspace-mobility` before moving to cloud.",
         actionLabel: "Push commits",
-        secondaryActionLabel: null,
         warning: "Uncommitted changes will move with the workspace after this branch is synced.",
         blocker: null,
         primaryActionKind: "push_commits",
@@ -1056,25 +1072,46 @@ function mobilityPromptForScenario(
         body: "This branch is out of sync with GitHub.",
         helper: "Pull or rebase locally, then try again.",
         actionLabel: null,
-        secondaryActionLabel: null,
         warning: null,
         blocker: null,
         primaryActionKind: null,
       };
     case "mobility-failed":
-      return {
-        variant: "terminal_failure",
-        direction: "local_to_cloud",
-        headline: "Workspace move failed",
-        body: "The workspace stayed on its current runtime.",
-        helper: "Try the move again when you're ready.",
-        actionLabel: "Try again",
-        secondaryActionLabel: null,
-        warning: null,
-        blocker: null,
-        primaryActionKind: "retry_prepare",
-      };
+      return null;
     default:
       return null;
   }
+}
+
+function mobilitySnapshotForScenario(
+  scenario: ScenarioKey,
+): WorkspaceMobilityConfirmSnapshot | null {
+  if (scenario !== "mobility-local-actionable") {
+    return null;
+  }
+
+  return {
+    logicalWorkspaceId: "logical-1",
+    direction: "local_to_cloud",
+    sourceWorkspaceId: "workspace-1",
+    mobilityWorkspaceId: "mobility-1",
+    sourcePreflight: {
+      canMove: true,
+      branchName: "feature/workspace-mobility",
+      baseCommitSha: "abc123456789",
+      blockers: [],
+      warnings: ["Terminal abc will not migrate"],
+      sessions: [],
+    } as never,
+    cloudPreflight: {
+      canStart: true,
+      blockers: [],
+      excludedPaths: [],
+      workspace: {
+        repo: {
+          branch: "feature/workspace-mobility",
+        },
+      },
+    } as never,
+  };
 }

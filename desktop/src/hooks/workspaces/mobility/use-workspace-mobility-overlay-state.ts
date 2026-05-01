@@ -6,11 +6,10 @@ import {
   mobilityStatusCopy,
 } from "@/config/mobility-copy";
 import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
-import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
 import { useWorkspaceMobilityCleanupActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-cleanup-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 
-export type WorkspaceMobilityOverlayMode = "progress" | "cleanup_failed" | "completion";
+export type WorkspaceMobilityOverlayMode = "cleanup_failed" | "completion";
 
 export interface WorkspaceMobilityCompletionSnapshot {
   description: string | null;
@@ -20,14 +19,11 @@ export interface WorkspaceMobilityCompletionSnapshot {
 
 export interface WorkspaceMobilityOverlayState {
   description: string | null;
-  direction: WorkspaceMobilityDirection | null;
-  locationLabel: string | null;
   mcpNotice: string | null;
   mode: WorkspaceMobilityOverlayMode;
   onContinueWorking: () => void;
   onDismissNotice: () => void;
   onRetryCleanup: () => void;
-  statusLabel: string | null;
   title: string;
 }
 
@@ -60,7 +56,6 @@ function isProgressPhase(phase: string): boolean {
 
 export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayState | null {
   const mobilityState = useWorkspaceMobilityState();
-  const footerContext = useMobilityFooterContext();
   const cleanupActions = useWorkspaceMobilityCleanupActions(mobilityState);
   const [completionSnapshot, setCompletionSnapshot] = useState<WorkspaceMobilityCompletionSnapshot | null>(null);
   const [cleanupFailureDismissed, setCleanupFailureDismissed] = useState(false);
@@ -108,7 +103,7 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
 
   const mode = useMemo(() => {
     if (isProgressPhase(mobilityState.status.phase)) {
-      return "progress" as const;
+      return "hidden" as const;
     }
     if (mobilityState.status.phase === "cleanup_failed") {
       if (cleanupFailureDismissed) {
@@ -136,24 +131,17 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
     snapshot: completionSnapshot,
     statusDirection: mobilityState.status.direction,
   });
-  const direction = mode === "completion" ? completionDirection : mobilityState.status.direction;
+  const direction = completionDirection;
   const phase = mode === "completion" ? "success" : mobilityState.status.phase;
   const fallbackTitle = getMobilityOverlayTitle(direction, phase);
-  const title = mode === "progress"
-    ? fallbackTitle
-    : completionSnapshot?.title ?? mobilityState.status.title ?? fallbackTitle;
+  const title = completionSnapshot?.title ?? mobilityState.status.title ?? fallbackTitle;
   const description =
     completionSnapshot?.description
     ?? mobilityState.status.description
     ?? mobilityStatusCopy(phase, direction).description;
-  const statusLabel = mode === "progress"
-    ? mobilityStatusCopy(mobilityState.status.phase, direction).title
-    : null;
 
   return {
     description,
-    direction,
-    locationLabel: footerContext?.locationLabel ?? null,
     mcpNotice: mobilityState.showMcpNotice
       ? mobilityReconnectCopy(direction)
       : null,
@@ -166,7 +154,6 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
     onRetryCleanup: () => {
       void cleanupActions.retryCleanup();
     },
-    statusLabel,
     title,
   };
 }

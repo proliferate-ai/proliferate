@@ -1,15 +1,11 @@
 import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
-import {
-  isWorkspaceMobilityTransitionPhase,
-  type WorkspaceMobilityStatusModel,
-} from "@/lib/domain/workspaces/mobility-state-machine";
+import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
 import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
 import {
   mobilityActionableCopy,
   mobilityBlockerCopy,
   mobilityBranchSyncLoadingCopy,
   mobilityLocationLabel,
-  type WorkspaceMobilityBlockerCode,
   type WorkspaceMobilityLocationKind,
 } from "@/config/mobility-copy";
 import {
@@ -29,9 +25,7 @@ import {
 export type MobilityPromptVariant =
   | "loading"
   | "actionable"
-  | "blocked"
-  | "in_flight"
-  | "terminal_failure";
+  | "blocked";
 
 export type MobilityPromptPrimaryActionKind =
   | "confirm_move"
@@ -40,7 +34,6 @@ export type MobilityPromptPrimaryActionKind =
   | "publish_branch"
   | "push_commits"
   | "retry_prepare"
-  | "retry_cleanup"
   | null;
 
 export interface MobilityPromptState {
@@ -50,7 +43,6 @@ export interface MobilityPromptState {
   body: string;
   helper: string | null;
   actionLabel: string | null;
-  secondaryActionLabel: string | null;
   warning: string | null;
   blocker: WorkspaceMobilityPrimaryBlocker | null;
   primaryActionKind: MobilityPromptPrimaryActionKind;
@@ -59,7 +51,6 @@ export interface MobilityPromptState {
 export function isMobilityPromptPrimaryActionPending(
   prompt: MobilityPromptState,
   pending: {
-    isMobilityPending: boolean;
     isBranchSyncing: boolean;
   },
 ): boolean {
@@ -67,8 +58,6 @@ export function isMobilityPromptPrimaryActionPending(
     case "publish_branch":
     case "push_commits":
       return pending.isBranchSyncing;
-    case "retry_cleanup":
-      return pending.isMobilityPending;
     default:
       return false;
   }
@@ -89,46 +78,47 @@ function buildBlockedPrompt(args: {
     body: args.blocker.body,
     helper: args.blocker.helper,
     actionLabel: primaryActionKind ? args.blocker.actionLabel : null,
-    secondaryActionLabel: null,
     warning: args.warning ?? null,
     blocker: args.blocker,
     primaryActionKind,
   };
 }
 
-function buildTerminalFailurePrompt(args: {
+function isSignInPreparationError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("sign in")
+    && !normalized.includes("vite_dev_disable_auth");
+}
+
+function buildPreparationFailurePrompt(args: {
   direction: WorkspaceMobilityDirection | null;
-  blockerCode: WorkspaceMobilityBlockerCode;
-  rawMessage: string | null;
-  primaryActionKind: Exclude<MobilityPromptPrimaryActionKind, "confirm_move" | "publish_branch" | "push_commits" | null>;
+  errorMessage: string;
 }): MobilityPromptState {
-  const blocker = {
-    code: args.blockerCode,
-    rawMessage: args.rawMessage ?? "",
-    ...mobilityBlockerCopy({
-      code: args.blockerCode,
-      direction: args.direction,
-      rawMessage: args.rawMessage,
-    }),
+  const signInRequired = isSignInPreparationError(args.errorMessage);
+  const blocker: WorkspaceMobilityPrimaryBlocker = {
+    code: signInRequired ? "github_account_required" : "unknown",
+    rawMessage: args.errorMessage,
+    headline: args.direction === "cloud_to_local"
+      ? "Can't bring this workspace back local yet"
+      : "Can't move this workspace to cloud yet",
+    body: args.errorMessage,
+    helper: signInRequired
+      ? "Sign in, then try the move again."
+      : "Try again in a moment.",
+    actionLabel: signInRequired ? "Sign in" : "Try again",
   };
 
-  return {
-    variant: "terminal_failure",
+  return buildBlockedPrompt({
     direction: args.direction,
-    headline: blocker.headline,
-    body: args.rawMessage?.trim() || blocker.body,
-    helper: blocker.helper,
-    actionLabel: blocker.actionLabel,
-    secondaryActionLabel: null,
-    warning: null,
     blocker,
-    primaryActionKind: args.primaryActionKind,
-  };
+    primaryActionKind: signInRequired ? "connect_github" : "retry_prepare",
+  });
 }
 
 export function buildMobilityPromptState(args: {
   isPreparing: boolean;
   hasResolvedPrompt: boolean;
+  preparationError: string | null;
   locationKind: WorkspaceMobilityLocationKind;
   repoBacked: boolean;
   canMoveToCloud: boolean;
@@ -143,35 +133,6 @@ export function buildMobilityPromptState(args: {
   const actionableCopy = mobilityActionableCopy(args.locationKind);
   const direction = args.confirmSnapshot?.direction ?? actionableCopy.direction;
   const branchName = args.confirmSnapshot?.sourcePreflight.branchName ?? null;
-
-  if (
-    args.selectionLocked
-    && isWorkspaceMobilityTransitionPhase(args.status.phase)
-  ) {
-    return {
-      variant: "in_flight",
-      direction: args.status.direction,
-      headline: args.status.direction === "cloud_to_local"
-        ? "Bringing workspace back local"
-        : "Moving workspace to cloud",
-      body: args.status.description ?? "The move is still in progress.",
-      helper: null,
-      actionLabel: null,
-      secondaryActionLabel: null,
-      warning: null,
-      blocker: null,
-      primaryActionKind: null,
-    };
-  }
-
-  if (args.status.phase === "cleanup_failed") {
-    return buildTerminalFailurePrompt({
-      direction: args.status.direction,
-      blockerCode: "cleanup_failed",
-      rawMessage: args.status.description,
-      primaryActionKind: "retry_cleanup",
-    });
-  }
 
   if (!args.repoBacked) {
     const blocker = {
@@ -203,15 +164,6 @@ export function buildMobilityPromptState(args: {
     });
   }
 
-  if (args.status.phase === "failed" && !args.isPreparing && !args.confirmSnapshot) {
-    return buildTerminalFailurePrompt({
-      direction: args.status.direction,
-      blockerCode: args.status.direction === null ? "cloud_lost" : "handoff_failed",
-      rawMessage: args.status.description,
-      primaryActionKind: "retry_prepare",
-    });
-  }
-
   if (
     args.isPreparing
     || ((args.canMoveToCloud || args.canBringBackLocal) && !args.confirmSnapshot && !args.hasResolvedPrompt)
@@ -223,14 +175,20 @@ export function buildMobilityPromptState(args: {
       body: "Gathering the details for this workspace move.",
       helper: null,
       actionLabel: null,
-      secondaryActionLabel: null,
       warning: null,
       blocker: null,
       primaryActionKind: null,
     };
   }
 
-  if ((args.canMoveToCloud || args.canBringBackLocal) && !args.confirmSnapshot) {
+  if (args.preparationError) {
+    return buildPreparationFailurePrompt({
+      direction,
+      errorMessage: args.preparationError,
+    });
+  }
+
+  if (!args.confirmSnapshot) {
     const blocker = {
       code: "unknown" as const,
       rawMessage: "Workspace move details couldn't be loaded.",
@@ -272,7 +230,6 @@ export function buildMobilityPromptState(args: {
       body: copy.body,
       helper: null,
       actionLabel: null,
-      secondaryActionLabel: null,
       warning: null,
       blocker: null,
       primaryActionKind: null,
@@ -323,7 +280,6 @@ export function buildMobilityPromptState(args: {
     body: actionableCopy.body,
     helper: null,
     actionLabel: actionableCopy.actionLabel,
-    secondaryActionLabel: null,
     warning: summarizeNonMigratingState(args.confirmSnapshot?.sourcePreflight ?? null),
     blocker: null,
     primaryActionKind: "confirm_move",

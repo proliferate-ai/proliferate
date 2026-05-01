@@ -5,9 +5,11 @@ import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useMobilityPromptState } from "@/hooks/workspaces/mobility/use-mobility-prompt-state";
-import { useWorkspaceMobilityCleanupActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-cleanup-actions";
 import { useWorkspaceMobilityHandoffActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-handoff-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility-state-machine";
+import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mobility-footer-progress";
+import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility-prompt";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
@@ -27,31 +29,42 @@ export function useWorkspaceMobilityFooterFlow() {
     clearPrompt,
     clearPromptRequest,
     confirmMove,
-    isHandoffPending,
     isSyncingBranch,
     preparePrompt,
     syncBranchForCloudMove,
   } = useWorkspaceMobilityHandoffActions(mobilityState);
-  const {
-    isRetryingCleanup,
-    retryCleanup,
-  } = useWorkspaceMobilityCleanupActions(mobilityState);
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [hasResolvedPrompt, setHasResolvedPrompt] = useState(false);
+  const [preparationError, setPreparationError] = useState<string | null>(null);
   const [isOpeningGitHubAccess, setIsOpeningGitHubAccess] = useState(false);
-  const keepPromptOnCloseRef = useRef(false);
+  const [optimisticProgressDirection, setOptimisticProgressDirection] =
+    useState<WorkspaceMobilityDirection | null>(null);
   const prepareRequestTokenRef = useRef(0);
-  const prompt = useMobilityPromptState(isPreparing, hasResolvedPrompt, popoverOpen);
+  const rawPrompt = useMobilityPromptState(
+    isPreparing,
+    hasResolvedPrompt,
+    popoverOpen && !mobilityState.selectionLocked,
+    preparationError,
+  );
+  const prompt = mobilityState.selectionLocked ? null : rawPrompt;
 
   const canPrepare = mobilityState.canMoveToCloud || mobilityState.canBringBackLocal;
-  const isPending = isHandoffPending || isRetryingCleanup;
+  const statusIsTransitioning = isWorkspaceMobilityTransitionPhase(mobilityState.status.phase);
+  const progressStatus = resolveMobilityFooterProgressStatus({
+    canBringBackLocal: mobilityState.canBringBackLocal,
+    canMoveToCloud: mobilityState.canMoveToCloud,
+    confirmDirection: mobilityState.confirmSnapshot?.direction ?? null,
+    optimisticProgressDirection,
+    statusDirection: mobilityState.status.direction,
+    statusPhase: mobilityState.status.phase,
+  });
 
   const resetPromptState = useCallback(() => {
     prepareRequestTokenRef.current += 1;
     setIsPreparing(false);
     setHasResolvedPrompt(false);
+    setPreparationError(null);
   }, []);
 
   const runPromptPreparation = useCallback(async () => {
@@ -67,16 +80,18 @@ export function useWorkspaceMobilityFooterFlow() {
     });
     activatePromptRequest(requestToken);
     clearPrompt();
+    setPreparationError(null);
     setIsPreparing(true);
     setHasResolvedPrompt(false);
     try {
       await preparePrompt(requestToken);
-    } catch {
+    } catch (error) {
       if (prepareRequestTokenRef.current !== requestToken) {
         return;
       }
       setIsPreparing(false);
       setHasResolvedPrompt(true);
+      setPreparationError(error instanceof Error ? error.message : "Failed to load workspace mobility details.");
       return;
     }
     const activeRequestId = mobilityState.selectedLogicalWorkspaceId
@@ -120,6 +135,24 @@ export function useWorkspaceMobilityFooterFlow() {
   ]);
 
   useEffect(() => {
+    setOptimisticProgressDirection(null);
+  }, [mobilityState.selectedLogicalWorkspaceId]);
+
+  useEffect(() => {
+    if (
+      statusIsTransitioning
+      || mobilityState.status.phase === "success"
+      || mobilityState.status.phase === "cleanup_failed"
+      || mobilityState.status.phase === "failed"
+    ) {
+      setOptimisticProgressDirection(null);
+    }
+  }, [
+    mobilityState.status.phase,
+    statusIsTransitioning,
+  ]);
+
+  useEffect(() => {
     if (!popoverOpen) {
       return;
     }
@@ -127,6 +160,7 @@ export function useWorkspaceMobilityFooterFlow() {
     if (mobilityState.selectionLocked || !canPrepare) {
       setIsPreparing(false);
       setHasResolvedPrompt(true);
+      setPreparationError(null);
       return;
     }
 
@@ -145,20 +179,17 @@ export function useWorkspaceMobilityFooterFlow() {
   ]);
 
   useEffect(() => {
-    if (!mobilityState.selectionLocked || (!popoverOpen && !confirmOpen)) {
+    if (!mobilityState.selectionLocked || !popoverOpen) {
       return;
     }
 
-    keepPromptOnCloseRef.current = false;
     setPopoverOpen(false);
-    setConfirmOpen(false);
     resetPromptState();
     clearPromptRequest();
     clearPrompt();
   }, [
     clearPrompt,
     clearPromptRequest,
-    confirmOpen,
     mobilityState.selectionLocked,
     popoverOpen,
     resetPromptState,
@@ -177,7 +208,6 @@ export function useWorkspaceMobilityFooterFlow() {
   }, [showToast]);
 
   const closePopover = useCallback(() => {
-    keepPromptOnCloseRef.current = false;
     setPopoverOpen(false);
     resetPromptState();
     clearPromptRequest();
@@ -195,14 +225,16 @@ export function useWorkspaceMobilityFooterFlow() {
       selectionLocked: mobilityState.selectionLocked,
       canPrepare,
     });
+
+    if (open && mobilityState.selectionLocked) {
+      setPopoverOpen(false);
+      return;
+    }
+
     setPopoverOpen(open);
     if (!open) {
       resetPromptState();
       clearPromptRequest();
-      if (keepPromptOnCloseRef.current) {
-        keepPromptOnCloseRef.current = false;
-        return;
-      }
       clearPrompt();
     }
   }, [
@@ -221,13 +253,24 @@ export function useWorkspaceMobilityFooterFlow() {
 
     switch (prompt.primaryActionKind) {
       case "confirm_move":
-        keepPromptOnCloseRef.current = true;
-        setConfirmOpen(true);
+        setOptimisticProgressDirection(mobilityState.confirmSnapshot?.direction ?? mobilityState.status.direction);
         setPopoverOpen(false);
+        resetPromptState();
+        clearPromptRequest();
+        try {
+          await confirmMove();
+        } catch {
+          setOptimisticProgressDirection(null);
+          // Directional handoff hooks already toast failures; this prevents a
+          // dropped rejection after the card hands off to overlay.
+        } finally {
+          clearPrompt();
+        }
         return;
       case "connect_github":
         if (!githubSignInAvailable) {
-          showToast(signInUnavailableDescription);
+          setPreparationError(signInUnavailableDescription);
+          setHasResolvedPrompt(true);
           return;
         }
         try {
@@ -236,7 +279,8 @@ export function useWorkspaceMobilityFooterFlow() {
           clearPrompt();
           await runPromptPreparation();
         } catch (error) {
-          showToast(error instanceof Error ? error.message : "GitHub sign-in failed.");
+          setPreparationError(error instanceof Error ? error.message : "GitHub sign-in failed.");
+          setHasResolvedPrompt(true);
         }
         return;
       case "manage_github_access":
@@ -262,10 +306,6 @@ export function useWorkspaceMobilityFooterFlow() {
         await runPromptPreparation();
         return;
       }
-      case "retry_cleanup":
-        await retryCleanup();
-        closePopover();
-        return;
       case "retry_prepare":
         resetPromptState();
         await runPromptPreparation();
@@ -276,11 +316,14 @@ export function useWorkspaceMobilityFooterFlow() {
   }, [
     closePopover,
     clearPrompt,
+    clearPromptRequest,
+    confirmMove,
     githubAuthAvailability?.clientId,
     githubSignInAvailable,
+    mobilityState.confirmSnapshot?.direction,
+    mobilityState.status.direction,
     prompt,
     resetPromptState,
-    retryCleanup,
     runPromptPreparation,
     showToast,
     signInUnavailableDescription,
@@ -288,31 +331,14 @@ export function useWorkspaceMobilityFooterFlow() {
     syncBranchForCloudMove,
   ]);
 
-  const handleConfirmClose = useCallback(() => {
-    setConfirmOpen(false);
-    clearPrompt();
-  }, [clearPrompt]);
-
-  const handleConfirm = useCallback(async () => {
-    setConfirmOpen(false);
-    try {
-      await confirmMove();
-    } catch {
-      // Directional handoff hooks already toast failures; this prevents a
-      // dropped rejection after the confirmation dialog hands off to overlay.
-    }
-  }, [confirmMove]);
-
   return {
     prompt,
+    progressStatus,
     popoverOpen,
-    confirmOpen,
     confirmSnapshot: mobilityState.confirmSnapshot,
-    isPending,
     isSyncingBranch,
     isPromptActionPending: prompt
       ? isMobilityPromptPrimaryActionPending(prompt, {
-        isMobilityPending: isPending,
         isBranchSyncing: isSyncingBranch,
       })
         || (prompt.primaryActionKind === "connect_github" && githubSignInSubmitting)
@@ -322,7 +348,5 @@ export function useWorkspaceMobilityFooterFlow() {
     handlePopoverOpenChange,
     closePopover,
     handlePrimaryAction,
-    handleConfirmClose,
-    handleConfirm,
   };
 }

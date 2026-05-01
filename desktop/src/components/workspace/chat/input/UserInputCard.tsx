@@ -10,6 +10,35 @@ import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 const OTHER_OPTION_LABEL = "None of the above";
 const BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";
 
+function optionsForQuestion(question: UserInputQuestion) {
+  return [
+    ...(question.options ?? []),
+    ...(question.isOther
+      ? [{ label: OTHER_OPTION_LABEL, description: "Write a custom answer" }]
+      : []),
+  ];
+}
+
+function allowsDraftText(question: UserInputQuestion, draft: UserInputDraft): boolean {
+  const options = optionsForQuestion(question);
+  if (options.length === 0) {
+    return true;
+  }
+  return question.isOther && draft.selectedOptionLabel === OTHER_OPTION_LABEL;
+}
+
+function buildSubmittedAnswer(
+  question: UserInputQuestion,
+  draft: UserInputDraft,
+): UserInputSubmittedAnswer {
+  const text = allowsDraftText(question, draft) ? draft.text.trim() : "";
+  return {
+    questionId: question.questionId,
+    selectedOptionLabel: draft.selectedOptionLabel ?? undefined,
+    text: text.length > 0 ? text : undefined,
+  };
+}
+
 interface UserInputDraft {
   selectedOptionLabel: string | null;
   text: string;
@@ -62,12 +91,7 @@ export function UserInputCard({
         selectedOptionLabel: null,
         text: "",
       };
-      const text = draft.text.trim();
-      return {
-        questionId: question.questionId,
-        selectedOptionLabel: draft.selectedOptionLabel ?? undefined,
-        text: text.length > 0 ? text : undefined,
-      };
+      return buildSubmittedAnswer(question, draft);
     }), [drafts, questions]);
 
   if (!currentQuestion) {
@@ -92,13 +116,8 @@ export function UserInputCard({
     selectedOptionLabel: null,
     text: "",
   };
-  const options = [
-    ...(currentQuestion.options ?? []),
-    ...(currentQuestion.isOther
-      ? [{ label: OTHER_OPTION_LABEL, description: "Write a custom answer" }]
-      : []),
-  ];
-  const showTextInput = currentQuestion.isOther || options.length === 0;
+  const options = optionsForQuestion(currentQuestion);
+  const showTextInput = allowsDraftText(currentQuestion, draft);
   const isFirst = questionIndex === 0;
   const isLast = questionIndex >= questions.length - 1;
 
@@ -140,7 +159,11 @@ export function UserInputCard({
                   variant={selected ? "primary" : "secondary"}
                   size="sm"
                   className="h-auto justify-start rounded-xl px-3 py-2 text-left"
-                  onClick={() => updateDraft({ selectedOptionLabel: option.label })}
+                  onClick={() =>
+                    updateDraft({
+                      selectedOptionLabel: option.label,
+                      text: option.label === OTHER_OPTION_LABEL ? draft.text : "",
+                    })}
                 >
                   <span className="flex flex-col gap-0.5">
                     <span>{option.label}</span>
@@ -170,7 +193,9 @@ export function UserInputCard({
             <Textarea
               value={draft.text}
               onChange={(event) => updateDraft({ text: event.currentTarget.value })}
-              placeholder={currentQuestion.isOther ? "Add details or a custom answer" : "Enter your answer"}
+              placeholder={draft.selectedOptionLabel === OTHER_OPTION_LABEL
+                ? "Write a custom answer"
+                : "Enter your answer"}
               rows={3}
               data-telemetry-mask="true"
             />

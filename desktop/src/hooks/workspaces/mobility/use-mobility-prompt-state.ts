@@ -11,6 +11,7 @@ export function useMobilityPromptState(
   isPreparing: boolean,
   hasResolvedPrompt: boolean,
   isPromptActive: boolean,
+  preparationError: string | null,
 ): MobilityPromptState | null {
   const mobility = useWorkspaceMobilityState();
   const footerContext = useMobilityFooterContext();
@@ -45,6 +46,7 @@ export function useMobilityPromptState(
     return buildMobilityPromptState({
       isPreparing,
       hasResolvedPrompt,
+      preparationError,
       locationKind: footerContext.locationKind,
       repoBacked: mobility.repoBacked,
       canMoveToCloud: mobility.canMoveToCloud,
@@ -62,6 +64,7 @@ export function useMobilityPromptState(
     hasResolvedPrompt,
     isGitSyncResolved,
     isPreparing,
+    preparationError,
     mobility.canBringBackLocal,
     mobility.canMoveToCloud,
     mobility.confirmSnapshot,

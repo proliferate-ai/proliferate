@@ -91,18 +91,18 @@ export function PopoverButton({
     openFromTrigger();
   }, [open, openFromTrigger, setOpenAndNotify]);
 
-  // Respond to external open/close requests
-  const openedExternallyRef = useRef(false);
-
+  // Respond to external open/close requests.
   useEffect(() => {
-    if (externalOpen && !open) {
-      openedExternallyRef.current = true;
-      openFromTrigger();
-    } else if (!externalOpen && open && openedExternallyRef.current) {
-      openedExternallyRef.current = false;
-      setOpenAndNotify(false);
+    if (externalOpen === undefined) {
+      return;
     }
-  }, [externalOpen, open, openFromTrigger, setOpenAndNotify]);
+
+    if (externalOpen && !open) {
+      openFromTrigger();
+    } else if (!externalOpen && open) {
+      setOpen(false);
+    }
+  }, [externalOpen, open, openFromTrigger]);
 
   useEffect(() => {
     if (!open) return;

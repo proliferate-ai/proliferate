@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { WorkspaceMobilityOverlayView } from "./WorkspaceMobilityOverlay";
-import { CloudIcon, FolderOpen, LoaderCircle } from "@/components/ui/icons";
+import { CheckCircleFilled, CircleAlert } from "@/components/ui/icons";
 
 function countElementsByType(node: ReactNode, targetType: unknown): number {
   if (Array.isArray(node)) {
@@ -18,44 +18,24 @@ function countElementsByType(node: ReactNode, targetType: unknown): number {
 }
 
 describe("WorkspaceMobilityOverlayView", () => {
-  it("uses the status pill as the only progress spinner", () => {
+  it("keeps completion as a notice overlay", () => {
     const element = WorkspaceMobilityOverlayView({
-      description: "Moving workspace state to the new runtime.",
-      direction: "local_to_cloud",
-      locationLabel: "Cloud workspace",
-      mode: "progress",
-      statusLabel: "Syncing workspace",
-      title: "Moving to cloud",
+      description: "This workspace has moved to the cloud.",
+      mcpNotice: "Reconnect MCP tools in cloud.",
+      mode: "completion",
+      title: "Now in cloud",
     });
 
-    expect(countElementsByType(element, LoaderCircle)).toBe(1);
+    expect(countElementsByType(element, CheckCircleFilled)).toBe(1);
   });
 
-  it("uses a static cloud hero icon for local to cloud progress", () => {
+  it("keeps cleanup failure as a recovery overlay", () => {
     const element = WorkspaceMobilityOverlayView({
-      description: null,
-      direction: "local_to_cloud",
-      locationLabel: "Cloud workspace",
-      mode: "progress",
-      statusLabel: "Preparing cloud workspace",
-      title: "Moving to cloud",
+      description: "The workspace moved, but cleanup needs retry.",
+      mode: "cleanup_failed",
+      title: "Cleanup needs retry",
     });
 
-    expect(countElementsByType(element, CloudIcon)).toBe(1);
-    expect(countElementsByType(element, FolderOpen)).toBe(0);
-  });
-
-  it("uses a static folder hero icon for cloud to local progress", () => {
-    const element = WorkspaceMobilityOverlayView({
-      description: null,
-      direction: "cloud_to_local",
-      locationLabel: "Local workspace",
-      mode: "progress",
-      statusLabel: "Preparing local workspace",
-      title: "Bringing back local",
-    });
-
-    expect(countElementsByType(element, FolderOpen)).toBe(1);
-    expect(countElementsByType(element, CloudIcon)).toBe(0);
+    expect(countElementsByType(element, CircleAlert)).toBe(1);
   });
 });

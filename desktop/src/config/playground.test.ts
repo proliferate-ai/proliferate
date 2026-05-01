@@ -4,12 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import {
-  renderContextSlot,
+  renderActiveSlot,
+  renderAttachedSlot,
   renderComposerSurfaceForScenario,
   renderDelegationSlot,
-  renderInteractionSlot,
   renderMobilityOverlayPreview,
-  renderQueueSlot,
+  renderOutboundSlot,
 } from "@/components/playground/PlaygroundComposer";
 import {
   FILE_MENTION_SEARCH_RESULTS,
@@ -113,10 +113,10 @@ describe("playground scenarios", () => {
     expect(isValidElement(renderDelegationSlot("subagents-queued-wake"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-queued-wake-with-approval"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-coding-review-with-approval"))).toBe(true);
-    expect(isValidElement(renderQueueSlot("subagents-queued-wake"))).toBe(true);
-    expect(isValidElement(renderQueueSlot("subagents-queued-wake-with-approval"))).toBe(true);
-    expect(isValidElement(renderInteractionSlot("subagents-queued-wake-with-approval"))).toBe(true);
-    expect(isValidElement(renderInteractionSlot("subagents-coding-review-with-approval"))).toBe(true);
+    expect(isValidElement(renderOutboundSlot("subagents-queued-wake"))).toBe(true);
+    expect(isValidElement(renderOutboundSlot("subagents-queued-wake-with-approval"))).toBe(true);
+    expect(isValidElement(renderActiveSlot("subagents-queued-wake-with-approval"))).toBe(true);
+    expect(isValidElement(renderActiveSlot("subagents-coding-review-with-approval"))).toBe(true);
 
     const subagentComposerHtml = renderToStaticMarkup(renderDelegationSlot("subagents-composer-many"));
     expect(subagentComposerHtml).not.toContain("color-mix");
@@ -140,22 +140,22 @@ describe("playground scenarios", () => {
     }
   });
 
-  it("renders cloud composer context-slot scenarios", () => {
+  it("renders cloud composer attached-slot scenarios", () => {
     for (const scenario of CLOUD_COMPOSER_SCENARIOS) {
-      expect(isValidElement(renderContextSlot(scenario))).toBe(true);
+      expect(isValidElement(renderAttachedSlot(scenario))).toBe(true);
     }
   });
 
-  it("renders queued prompt scenarios through the queue slot", () => {
+  it("renders queued prompt scenarios through the outbound slot", () => {
     for (const scenario of QUEUE_COMPOSER_SCENARIOS) {
-      expect(isValidElement(renderQueueSlot(scenario))).toBe(true);
+      expect(isValidElement(renderOutboundSlot(scenario))).toBe(true);
     }
-    expect(renderInteractionSlot("pending-prompts-single")).toBeNull();
-    expect(isValidElement(renderInteractionSlot("pending-prompts-with-approval"))).toBe(true);
+    expect(renderActiveSlot("pending-prompts-single")).toBeNull();
+    expect(isValidElement(renderActiveSlot("pending-prompts-with-approval"))).toBe(true);
   });
 
   it("renders subagent wake prompts as plain queued text", () => {
-    const html = renderToStaticMarkup(renderQueueSlot("subagents-queued-wake"));
+    const html = renderToStaticMarkup(renderOutboundSlot("subagents-queued-wake"));
     expect(html).toContain("runtime-server-sdk-survey finished");
     expect(html).not.toContain("Turn Completed");
     expect(html).not.toContain("Child session:");
@@ -164,7 +164,7 @@ describe("playground scenarios", () => {
   });
 
   it("renders review feedback prompts as single-line queue rows", () => {
-    const readyHtml = renderToStaticMarkup(renderQueueSlot("pending-review-feedback-ready"));
+    const readyHtml = renderToStaticMarkup(renderOutboundSlot("pending-review-feedback-ready"));
     expect(readyHtml).toContain("Review feedback ready");
     expect(readyHtml).toContain("truncate");
     expect(readyHtml).toContain("min-w-0");
@@ -175,7 +175,7 @@ describe("playground scenarios", () => {
     expect(readyHtml).not.toContain("Open Reviewer critique");
     expect(readyHtml).not.toContain("whitespace-pre-wrap");
 
-    const completeHtml = renderToStaticMarkup(renderQueueSlot("pending-review-complete"));
+    const completeHtml = renderToStaticMarkup(renderOutboundSlot("pending-review-complete"));
     expect(completeHtml).toContain("Review complete");
     expect(completeHtml).not.toContain("Final hidden reviewer note");
   });
@@ -185,12 +185,12 @@ describe("playground scenarios", () => {
   });
 
   it("keeps queued rows single-line and hides edit on the active edit row", () => {
-    const plainHtml = renderToStaticMarkup(renderQueueSlot("pending-prompts-multi"));
+    const plainHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-multi"));
     expect(plainHtml).toContain("truncate");
     expect(plainHtml).toContain("min-w-0");
     expect(plainHtml).not.toContain("whitespace-pre-wrap");
 
-    const editingHtml = renderToStaticMarkup(renderQueueSlot("pending-prompts-editing"));
+    const editingHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-editing"));
     expect(editingHtml).toContain("editing in composer");
     expect(editingHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(1);
     expect(editingHtml.match(/aria-label="Delete queued message"/g)).toHaveLength(2);
@@ -202,8 +202,8 @@ describe("playground scenarios", () => {
         ChatComposerDock,
         {
           backdrop: false,
-          queueSlot: renderQueueSlot("pending-prompts-with-approval"),
-          interactionSlot: renderInteractionSlot("pending-prompts-with-approval"),
+          outboundSlot: renderOutboundSlot("pending-prompts-with-approval"),
+          activeSlot: renderActiveSlot("pending-prompts-with-approval"),
           children: createElement("div", { "data-slot": "composer" }),
         },
       ),
@@ -221,15 +221,14 @@ describe("playground scenarios", () => {
         ChatComposerDock,
         {
           backdrop: false,
-          contextSlot: createElement("div", { "data-slot": "context" }),
-          queueSlot: createElement("div", { "data-slot": "queue" }),
-          interactionSlot: createElement("div", { "data-slot": "interaction" }),
-          delegationSlot: createElement("div", { "data-slot": "delegation" }),
+          outboundSlot: createElement("div", { "data-slot": "outbound" }),
+          activeSlot: createElement("div", { "data-slot": "active" }),
+          attachedSlot: createElement("div", { "data-slot": "attached" }),
           children: createElement("div", { "data-slot": "composer" }),
         },
       ),
     );
-    const order = ["context", "queue", "interaction", "delegation", "composer"]
+    const order = ["outbound", "active", "attached", "composer"]
       .map((slot) => html.indexOf(`data-slot="${slot}"`));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((left, right) => left - right));
@@ -244,9 +243,9 @@ describe("playground scenarios", () => {
     expect(html.match(/aria-label="Delegated work"/g)).toHaveLength(1);
   });
 
-  it("renders mobility overlay playground scenarios through the production view", () => {
+  it("keeps in-flight mobility in the footer and renders recovery as an overlay", () => {
     expect(Object.keys(SCENARIOS)).toContain("mobility-cloud-active");
-    expect(isValidElement(renderMobilityOverlayPreview("mobility-in-flight"))).toBe(true);
+    expect(renderMobilityOverlayPreview("mobility-in-flight")).toBeNull();
     expect(isValidElement(renderMobilityOverlayPreview("mobility-failed"))).toBe(true);
   });
 

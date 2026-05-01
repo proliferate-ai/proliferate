@@ -9,10 +9,10 @@ import {
   Folder,
   FolderOpen,
   GitBranch,
+  LoaderCircle,
 } from "@/components/ui/icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
-import { WorkspaceMobilityConfirmDialog } from "./WorkspaceMobilityConfirmDialog";
 
 function FooterDetailLabel({ value }: { value: string }) {
   return (
@@ -34,6 +34,23 @@ function locationIcon(kind: "local_workspace" | "local_worktree" | "cloud_worksp
   }
 }
 
+export function WorkspaceMobilityFooterProgressStatus({
+  statusLabel,
+  title,
+}: {
+  statusLabel: string;
+  title: string;
+}) {
+  return (
+    <div className="flex h-7 min-w-0 max-w-[34rem] shrink items-center gap-1.5 rounded-full bg-[var(--color-composer-control-hover)] px-2 text-sm text-foreground">
+      <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+      <span className="min-w-0 truncate font-medium">{title}</span>
+      <span className="h-3 w-px shrink-0 bg-border/80" aria-hidden="true" />
+      <span className="min-w-0 truncate text-muted-foreground">{statusLabel}</span>
+    </div>
+  );
+}
+
 export function WorkspaceMobilityFooterRow() {
   const footerContext = useMobilityFooterContext();
   const flow = useWorkspaceMobilityFooterFlow();
@@ -42,21 +59,33 @@ export function WorkspaceMobilityFooterRow() {
     return null;
   }
 
+  if (flow.progressStatus) {
+    return (
+      <div className="rounded-[var(--radius-composer)] px-2 pt-2">
+        <WorkspaceMobilityFooterProgressStatus
+          title={flow.progressStatus.title}
+          statusLabel={flow.progressStatus.statusLabel}
+        />
+      </div>
+    );
+  }
+
   const prompt = flow.prompt;
-  const locationTrigger = prompt ? (
+  const locationButton = (
+    <ComposerControlButton
+      icon={locationIcon(footerContext.locationKind)}
+      label={<AnimatedSwapText value={footerContext.locationLabel} />}
+      trailing={prompt ? <ChevronDown className="size-3.5 text-muted-foreground/70" /> : undefined}
+      active={flow.popoverOpen || footerContext.isActive}
+      disabled={!prompt || !footerContext.isInteractive}
+      data-telemetry-mask
+    />
+  );
+  const locationTrigger = prompt && footerContext.isInteractive ? (
     <PopoverButton
       externalOpen={flow.popoverOpen}
       onOpenChange={flow.handlePopoverOpenChange}
-      trigger={(
-        <ComposerControlButton
-          icon={locationIcon(footerContext.locationKind)}
-          label={<AnimatedSwapText value={footerContext.locationLabel} />}
-          trailing={<ChevronDown className="size-3.5 text-muted-foreground/70" />}
-          active={flow.popoverOpen || footerContext.isActive}
-          disabled={!footerContext.isInteractive}
-          data-telemetry-mask
-        />
-      )}
+      trigger={locationButton}
       align="start"
       side="top"
       offset={8}
@@ -65,68 +94,52 @@ export function WorkspaceMobilityFooterRow() {
       {(close) => (
         <WorkspaceMobilityLocationPopover
           prompt={prompt}
+          snapshot={flow.confirmSnapshot}
           isActionPending={flow.isPromptActionPending}
           onClose={() => {
             close();
             flow.closePopover();
           }}
-          onPrimaryAction={() => {
-            const primaryActionKind = prompt.primaryActionKind;
-            const result = flow.handlePrimaryAction();
-            if (primaryActionKind === "confirm_move") {
-              close();
-            }
-            return result;
-          }}
+          onPrimaryAction={flow.handlePrimaryAction}
         />
       )}
     </PopoverButton>
-  ) : null;
+  ) : locationButton;
 
   return (
-    <>
-      <div className="rounded-[var(--radius-composer)]  px-2 pt-2 ">
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-          {locationTrigger}
+    <div className="rounded-[var(--radius-composer)] px-2 pt-2">
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+        {locationTrigger}
 
-          {footerContext.detailValue && (
-            <ComposerControlButton
-              icon={footerContext.detailKind === "repository"
-                ? <CloudIcon className="size-3.5" />
-                : <Folder className="size-3.5" />}
-              label={<FooterDetailLabel value={footerContext.detailValue} />}
-              labelClassName={footerContext.detailKind === "path" ? "[direction:rtl]" : undefined}
-              trailing={<Copy className="size-3 text-muted-foreground/70" />}
-              onClick={() => {
-                void flow.handleCopy(footerContext.detailValue, footerContext.detailCopyLabel);
-              }}
-              title={footerContext.detailValue ?? undefined}
-              data-telemetry-mask
-            />
-          )}
+        {footerContext.detailValue && (
+          <ComposerControlButton
+            icon={footerContext.detailKind === "repository"
+              ? <CloudIcon className="size-3.5" />
+              : <Folder className="size-3.5" />}
+            label={<FooterDetailLabel value={footerContext.detailValue} />}
+            labelClassName={footerContext.detailKind === "path" ? "[direction:rtl]" : undefined}
+            trailing={<Copy className="size-3 text-muted-foreground/70" />}
+            onClick={() => {
+              void flow.handleCopy(footerContext.detailValue, footerContext.detailCopyLabel);
+            }}
+            title={footerContext.detailValue ?? undefined}
+            data-telemetry-mask
+          />
+        )}
 
-          {footerContext.branchLabel && (
-            <ComposerControlButton
-              icon={<GitBranch className="size-3.5" />}
-              label={footerContext.branchLabel}
-              trailing={<Copy className="size-3 text-muted-foreground/70" />}
-              onClick={() => {
-                void flow.handleCopy(footerContext.branchValue, "Branch");
-              }}
-              title={footerContext.branchValue ?? undefined}
-              data-telemetry-mask
-            />
-          )}
-        </div>
+        {footerContext.branchLabel && (
+          <ComposerControlButton
+            icon={<GitBranch className="size-3.5" />}
+            label={footerContext.branchLabel}
+            trailing={<Copy className="size-3 text-muted-foreground/70" />}
+            onClick={() => {
+              void flow.handleCopy(footerContext.branchValue, "Branch");
+            }}
+            title={footerContext.branchValue ?? undefined}
+            data-telemetry-mask
+          />
+        )}
       </div>
-
-      <WorkspaceMobilityConfirmDialog
-        snapshot={flow.confirmSnapshot}
-        open={flow.confirmOpen && flow.confirmSnapshot !== null}
-        isPending={flow.isPending}
-        onClose={flow.handleConfirmClose}
-        onConfirm={flow.handleConfirm}
-      />
-    </>
+    </div>
   );
 }

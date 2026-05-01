@@ -56,6 +56,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: false,
+      preparationError: null,
       locationKind: "local_workspace",
       repoBacked: false,
       canMoveToCloud: false,
@@ -76,6 +77,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_worktree",
       repoBacked: true,
       canMoveToCloud: true,
@@ -101,10 +103,11 @@ describe("buildMobilityPromptState", () => {
     expect(prompt.warning).toBe("Active terminals will stay here.");
   });
 
-  it("maps cleanup failures into the terminal recovery state", () => {
+  it("keeps cleanup failures out of the prompt recovery surface", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
-      hasResolvedPrompt: false,
+      hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "cloud_workspace",
       repoBacked: true,
       canMoveToCloud: false,
@@ -122,16 +125,17 @@ describe("buildMobilityPromptState", () => {
       isGitSyncResolved: true,
     });
 
-    expect(prompt.variant).toBe("terminal_failure");
-    expect(prompt.actionLabel).toBe("Retry cleanup");
-    expect(prompt.body).toBe("Source cleanup needs another pass.");
-    expect(prompt.primaryActionKind).toBe("retry_cleanup");
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.actionLabel).toBe("Try again");
+    expect(prompt.body).toBe("Workspace move details couldn't be loaded.");
+    expect(prompt.primaryActionKind).toBe("retry_prepare");
   });
 
-  it("preserves cloud-lost failure details and blocker code", () => {
+  it("does not memorialize previous handoff failures in the prompt", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
-      hasResolvedPrompt: false,
+      hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "cloud_workspace",
       repoBacked: true,
       canMoveToCloud: false,
@@ -148,16 +152,41 @@ describe("buildMobilityPromptState", () => {
       isGitSyncResolved: true,
     });
 
-    expect(prompt.variant).toBe("terminal_failure");
-    expect(prompt.blocker?.code).toBe("cloud_lost");
-    expect(prompt.body).toBe("Cloud workspace heartbeat timed out.");
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.blocker?.code).toBe("unknown");
+    expect(prompt.body).toBe("Workspace move details couldn't be loaded.");
     expect(prompt.primaryActionKind).toBe("retry_prepare");
+  });
+
+  it("shows cloud sign-in preparation failures in the card with sign-in recovery", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      preparationError: "You must sign in to use cloud workspaces.",
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: null,
+      gitSync: null,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.body).toBe("You must sign in to use cloud workspaces.");
+    expect(prompt.helper).toBe("Sign in, then try the move again.");
+    expect(prompt.actionLabel).toBe("Sign in");
+    expect(prompt.primaryActionKind).toBe("connect_github");
   });
 
   it("shows loading instead of stale failure while retry preparation is running", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: true,
       hasResolvedPrompt: false,
+      preparationError: null,
       locationKind: "local_workspace",
       repoBacked: true,
       canMoveToCloud: true,
@@ -182,6 +211,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_workspace",
       repoBacked: true,
       canMoveToCloud: true,
@@ -206,6 +236,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_worktree",
       repoBacked: true,
       canMoveToCloud: true,
@@ -233,6 +264,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_worktree",
       repoBacked: true,
       canMoveToCloud: true,
@@ -267,6 +299,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_worktree",
       repoBacked: true,
       canMoveToCloud: true,
@@ -295,6 +328,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_worktree",
       repoBacked: true,
       canMoveToCloud: true,
@@ -324,6 +358,7 @@ describe("buildMobilityPromptState", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
+      preparationError: null,
       locationKind: "local_worktree",
       repoBacked: true,
       canMoveToCloud: true,
