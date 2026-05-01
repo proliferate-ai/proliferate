@@ -92,6 +92,8 @@ export function TerminalPanel({
               New terminal
             </Button>
           </div>
+        ) : !activeTerminal ? (
+          <TerminalEmptyState label="Terminal unavailable" />
         ) : (
           terminals.map((terminal) => (
             <TerminalErrorBoundary key={terminal.id}>

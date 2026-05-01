@@ -23,9 +23,10 @@ import {
   clampRightPanelWidth,
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
-  mergeRightPanelState,
-  parseRightPanelHeaderEntryKey,
-  splitLegacyRightPanelWorkspaceState,
+  migrateLegacyRightPanelWorkspaceState,
+  normalizeRightPanelDurableState,
+  normalizeRightPanelMaterializedState,
+  reconcileRightPanelWorkspaceState,
   type RightPanelDurableState,
   type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
@@ -172,8 +173,8 @@ export interface WorkspaceUiState {
  * v5: add unified right-panel header order hints.
  * v6: current mainline schema with legacy unified right-panel preferences.
  * v7: split right-panel durable/materialized state and persist shell tab maps.
- * v8: make Terminal a singleton right-panel tool and migrate terminal tabs
- * from header entries into terminalOrder + activeTerminalId.
+ * v8: make activeEntryKey/headerOrder the only right-panel selection/order
+ *     model, removing durable toolOrder and terminal active/order fields.
  */
 const WORKSPACE_UI_MIGRATION_VERSION = 8;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
@@ -300,7 +301,7 @@ export function migrateWorkspaceUiState(
   input: PersistedWorkspaceUiState,
 ): { state: PersistedWorkspaceUiState; didMigrate: boolean } {
   const legacyInput = input as PersistedWorkspaceUiState & {
-    rightPanelByWorkspace?: Record<string, RightPanelWorkspaceState>;
+    rightPanelByWorkspace?: Record<string, unknown>;
     rightPanelWidthByWorkspace?: Record<string, number>;
   };
   const state = {
@@ -322,15 +323,6 @@ export function migrateWorkspaceUiState(
       ...migratedRightPanel.materializedByWorkspace,
       ...state.rightPanelMaterializedByWorkspace,
     };
-    didMigrate = true;
-  }
-  if (previousMigrationVersion < 8) {
-    const migratedRightPanel = migrateRightPanelTerminalHeadersToSingleton({
-      durableByWorkspace: state.rightPanelDurableByWorkspace,
-      materializedByWorkspace: state.rightPanelMaterializedByWorkspace,
-    });
-    state.rightPanelDurableByWorkspace = migratedRightPanel.durableByWorkspace;
-    state.rightPanelMaterializedByWorkspace = migratedRightPanel.materializedByWorkspace;
     didMigrate = true;
   }
   if (previousMigrationVersion < 3) {
@@ -495,78 +487,37 @@ function isStringRecord(value: unknown): value is Record<string, string> {
     && Object.values(value).every((entry) => typeof entry === "string");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function migrateLegacyRightPanelPreferences(args: {
-  rightPanelByWorkspace?: Record<string, RightPanelWorkspaceState>;
+  rightPanelByWorkspace?: Record<string, unknown>;
   rightPanelWidthByWorkspace?: Record<string, number>;
 }): {
   durableByWorkspace: Record<string, RightPanelDurableState>;
   materializedByWorkspace: Record<string, RightPanelMaterializedState>;
 } {
-  const legacyPanels = typeof args.rightPanelByWorkspace === "object" && args.rightPanelByWorkspace !== null
-    ? args.rightPanelByWorkspace
-    : {};
+  const legacyPanels = isRecord(args.rightPanelByWorkspace) ? args.rightPanelByWorkspace : {};
   const legacyWidths = sanitizeRightPanelWidths(args.rightPanelWidthByWorkspace);
-  const legacyPanelWorkspaceIds = Object.entries(legacyPanels)
-    .filter(([, panel]) => typeof panel === "object" && panel !== null)
-    .map(([workspaceId]) => workspaceId);
   const workspaceIds = new Set([
-    ...legacyPanelWorkspaceIds,
+    ...Object.keys(legacyPanels),
     ...Object.keys(legacyWidths),
   ]);
   const durableByWorkspace: Record<string, RightPanelDurableState> = {};
   const materializedByWorkspace: Record<string, RightPanelMaterializedState> = {};
 
   for (const workspaceId of workspaceIds) {
-    const rawState = legacyPanels[workspaceId];
-    const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
-      state: typeof rawState === "object" && rawState !== null
-        ? rawState as Partial<RightPanelWorkspaceState>
-        : undefined,
+    const legacyState = legacyPanels[workspaceId];
+    if (!isRecord(legacyState) && legacyWidths[workspaceId] === undefined) {
+      continue;
+    }
+    const { durableState, materializedState } = migrateLegacyRightPanelWorkspaceState({
+      state: legacyState,
       width: legacyWidths[workspaceId],
       isCloudWorkspaceSelected: true,
     });
     durableByWorkspace[workspaceId] = durableState;
-    materializedByWorkspace[workspaceId] = materializedState;
-  }
-
-  return { durableByWorkspace, materializedByWorkspace };
-}
-
-function migrateRightPanelTerminalHeadersToSingleton(args: {
-  durableByWorkspace: Record<string, RightPanelDurableState>;
-  materializedByWorkspace: Record<string, RightPanelMaterializedState>;
-}): {
-  durableByWorkspace: Record<string, RightPanelDurableState>;
-  materializedByWorkspace: Record<string, RightPanelMaterializedState>;
-} {
-  const workspaceIds = new Set([
-    ...Object.keys(args.durableByWorkspace ?? {}),
-    ...Object.keys(args.materializedByWorkspace ?? {}),
-  ]);
-  const durableByWorkspace: Record<string, RightPanelDurableState> = {};
-  const materializedByWorkspace: Record<string, RightPanelMaterializedState> = {};
-
-  for (const workspaceId of workspaceIds) {
-    const durable = args.durableByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
-    const materialized =
-      args.materializedByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
-    const activeEntryKey = (materialized as { activeEntryKey?: unknown }).activeEntryKey;
-    const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
-      state: {
-        activeTool: activeToolFromEntry(activeEntryKey),
-        activeEntryKey,
-        toolOrder: durable.toolOrder,
-        headerOrder: materialized.headerOrder,
-        terminalOrder: materialized.terminalOrder,
-        activeTerminalId: materialized.activeTerminalId ?? terminalIdFromLegacyEntry(activeEntryKey),
-      } as Partial<RightPanelWorkspaceState>,
-      width: durable.width,
-      isCloudWorkspaceSelected: true,
-    });
-    durableByWorkspace[workspaceId] = {
-      ...durableState,
-      open: typeof durable.open === "boolean" ? durable.open : DEFAULT_RIGHT_PANEL_DURABLE_STATE.open,
-    };
     materializedByWorkspace[workspaceId] = materializedState;
   }
 
@@ -585,16 +536,9 @@ function sanitizeRightPanelDurableByWorkspace(
     if (typeof rawState !== "object" || rawState === null) {
       continue;
     }
-    next[workspaceId] = splitLegacyRightPanelWorkspaceState({
-      state: {
-        toolOrder: (rawState as Partial<RightPanelDurableState>).toolOrder,
-      },
-      width: (rawState as Partial<RightPanelDurableState>).width,
-      isCloudWorkspaceSelected: true,
-    }).durableState;
-    next[workspaceId].open = typeof (rawState as Partial<RightPanelDurableState>).open === "boolean"
-      ? Boolean((rawState as Partial<RightPanelDurableState>).open)
-      : DEFAULT_RIGHT_PANEL_DURABLE_STATE.open;
+    next[workspaceId] = normalizeRightPanelDurableState(
+      rawState as Partial<RightPanelDurableState>,
+    );
   }
   return next;
 }
@@ -611,37 +555,12 @@ function sanitizeRightPanelMaterializedByWorkspace(
     if (typeof rawState !== "object" || rawState === null) {
       continue;
     }
-    const durableState = DEFAULT_RIGHT_PANEL_DURABLE_STATE;
-    next[workspaceId] = splitLegacyRightPanelWorkspaceState({
-      state: {
-        activeTool: activeToolFromEntry(
-          (rawState as Partial<RightPanelMaterializedState>).activeEntryKey,
-        ),
-        headerOrder: (rawState as Partial<RightPanelMaterializedState>).headerOrder,
-        terminalOrder: (rawState as Partial<RightPanelMaterializedState>).terminalOrder,
-        activeTerminalId: (rawState as Partial<RightPanelMaterializedState>).activeTerminalId,
-      },
-      width: durableState.width,
-      isCloudWorkspaceSelected: true,
-    }).materializedState;
+    next[workspaceId] = normalizeRightPanelMaterializedState(
+      rawState as Partial<RightPanelMaterializedState>,
+      { isCloudWorkspaceSelected: true },
+    );
   }
   return next;
-}
-
-function activeToolFromEntry(entryKey: unknown): RightPanelWorkspaceState["activeTool"] {
-  if (terminalIdFromLegacyEntry(entryKey)) {
-    return "terminal";
-  }
-  const entry = parseRightPanelHeaderEntryKey(entryKey);
-  return entry?.tool ?? "terminal";
-}
-
-function terminalIdFromLegacyEntry(entryKey: unknown): string | null {
-  if (typeof entryKey !== "string" || !entryKey.startsWith("terminal:")) {
-    return null;
-  }
-  const terminalId = entryKey.slice("terminal:".length);
-  return terminalId || null;
 }
 
 function sanitizeActiveShellTabKeysByWorkspace(
@@ -700,38 +619,22 @@ function sanitizeRightPanelWidths(value: unknown): Record<string, number> {
   return next;
 }
 
-function splitRightPanelStateUpdate(
+function rightPanelStateUpdate(
   state: WorkspaceUiState,
   workspaceId: string,
   value: SetStateAction<RightPanelWorkspaceState>,
-): Pick<WorkspaceUiState, "rightPanelDurableByWorkspace" | "rightPanelMaterializedByWorkspace"> {
-  const currentDurable = state.rightPanelDurableByWorkspace[workspaceId]
-    ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+): Pick<WorkspaceUiState, "rightPanelMaterializedByWorkspace"> {
   const currentMaterialized = state.rightPanelMaterializedByWorkspace[workspaceId]
     ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
-  const currentMerged = mergeRightPanelState({
-    durableState: currentDurable,
-    materializedState: currentMaterialized,
-    isCloudWorkspaceSelected: true,
-  });
-  const nextMerged = resolveStateValue(value, currentMerged);
-  const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
-    state: nextMerged,
-    width: currentDurable.width,
-    isCloudWorkspaceSelected: true,
-  });
+  const nextMaterialized = reconcileRightPanelWorkspaceState(
+    resolveStateValue(value, currentMaterialized),
+    { isCloudWorkspaceSelected: true },
+  );
 
   return {
-    rightPanelDurableByWorkspace: {
-      ...state.rightPanelDurableByWorkspace,
-      [workspaceId]: {
-        ...durableState,
-        open: currentDurable.open,
-      },
-    },
     rightPanelMaterializedByWorkspace: {
       ...state.rightPanelMaterializedByWorkspace,
-      [workspaceId]: materializedState,
+      [workspaceId]: nextMaterialized,
     },
   };
 }
@@ -805,63 +708,38 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
 
   setRightPanelForWorkspace: (workspaceId, value) => {
     set((state) => ({
-      ...splitRightPanelStateUpdate(state, workspaceId, value),
+      ...rightPanelStateUpdate(state, workspaceId, value),
     }));
   },
 
   setRightPanelDurableForWorkspace: (workspaceId, value) => {
-    set((state) => {
-      const resolved = resolveStateValue(
-          value,
-          state.rightPanelDurableByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
-      );
-      const { durableState } = splitLegacyRightPanelWorkspaceState({
-        state: {
-          toolOrder: resolved.toolOrder,
-        },
-        width: resolved.width,
-        isCloudWorkspaceSelected: true,
-      });
-      return {
-        rightPanelDurableByWorkspace: {
-          ...state.rightPanelDurableByWorkspace,
-          [workspaceId]: {
-            ...durableState,
-            open: resolved.open,
-          },
-        },
-      };
-    });
+    set((state) => ({
+      rightPanelDurableByWorkspace: {
+        ...state.rightPanelDurableByWorkspace,
+        [workspaceId]: normalizeRightPanelDurableState(
+          resolveStateValue(
+            value,
+            state.rightPanelDurableByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+          ),
+        ),
+      },
+    }));
   },
 
   setRightPanelMaterializedForWorkspace: (workspaceId, value) => {
-    set((state) => {
-      const currentDurable = state.rightPanelDurableByWorkspace[workspaceId]
-        ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
-      const resolved = resolveStateValue(
-          value,
-          state.rightPanelMaterializedByWorkspace[workspaceId]
-            ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
-      );
-      const { materializedState } = splitLegacyRightPanelWorkspaceState({
-        state: {
-          activeTool: activeToolFromEntry(resolved.activeEntryKey),
-          activeEntryKey: resolved.activeEntryKey,
-          toolOrder: currentDurable.toolOrder,
-          headerOrder: resolved.headerOrder,
-          terminalOrder: resolved.terminalOrder,
-          activeTerminalId: resolved.activeTerminalId,
-        } as Partial<RightPanelWorkspaceState>,
-        width: currentDurable.width,
-        isCloudWorkspaceSelected: true,
-      });
-      return {
-        rightPanelMaterializedByWorkspace: {
-          ...state.rightPanelMaterializedByWorkspace,
-          [workspaceId]: materializedState,
-        },
-      };
-    });
+    set((state) => ({
+      rightPanelMaterializedByWorkspace: {
+        ...state.rightPanelMaterializedByWorkspace,
+        [workspaceId]: reconcileRightPanelWorkspaceState(
+          resolveStateValue(
+            value,
+            state.rightPanelMaterializedByWorkspace[workspaceId]
+              ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
+          ),
+          { isCloudWorkspaceSelected: true },
+        ),
+      },
+    }));
   },
 
   setRightPanelWidthForWorkspace: (workspaceId, value) => {

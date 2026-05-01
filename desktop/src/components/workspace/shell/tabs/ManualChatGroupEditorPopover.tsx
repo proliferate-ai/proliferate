@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 import {
   MANUAL_CHAT_GROUP_COLOR_IDS,
   resolveManualChatGroupColor,
@@ -41,6 +42,8 @@ export function ManualChatGroupEditorPopover({
     colorId: ManualChatGroupColorId;
   }) => void;
 }) {
+  useNativeOverlayRegistration(true);
+
   const [label, setLabel] = useState(initialLabel);
   const [colorId, setColorId] = useState(initialColorId);
   const inputRef = useRef<HTMLInputElement>(null);

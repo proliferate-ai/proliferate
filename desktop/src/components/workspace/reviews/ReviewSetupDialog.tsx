@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import { Plus } from "@/components/ui/icons";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { ReviewSetupLoopControls } from "./ReviewSetupLoopControls";
 import { ReviewSetupReviewerList } from "./ReviewSetupReviewerList";
@@ -48,6 +49,8 @@ export function ReviewSetupDialog({
   onClose,
   onManagePersonalities,
 }: ReviewSetupDialogProps) {
+  useNativeOverlayRegistration(open);
+
   const reviewerCount = draft?.reviewers.length ?? 0;
   const hasInvalidReviewer = draft?.reviewers.some((reviewer) => (
     !reviewerHasRequiredFields(reviewer)
