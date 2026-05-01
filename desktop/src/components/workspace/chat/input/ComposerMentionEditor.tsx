@@ -215,7 +215,7 @@ export function ComposerMentionEditor({
         ? createPortal(searchTray, searchHostElement)
         : searchTray}
       <div
-        className="mb-2 flex-grow select-text overflow-y-auto px-3"
+        className="mb-2 flex-grow select-text overflow-y-auto px-4"
         style={{
           minHeight: `${minHeightRem}rem`,
           maxHeight: `${maxHeightRem}rem`,

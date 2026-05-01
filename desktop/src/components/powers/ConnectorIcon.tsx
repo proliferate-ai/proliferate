@@ -1,10 +1,8 @@
 import type { SVGProps } from "react";
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
-import braveIcon from "@/assets/connector-icons/brave.svg";
 import context7Icon from "@/assets/connector-icons/context7.jpeg";
 import filesystemIcon from "@/assets/connector-icons/filesystem.svg";
 import notionIcon from "@/assets/connector-icons/notion.png";
-import openweatherIcon from "@/assets/connector-icons/openweather.svg";
 import playwrightIcon from "@/assets/connector-icons/playwright.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
 import {
@@ -62,11 +60,9 @@ const CONNECTOR_ICONS = {
 } as const;
 
 const CONNECTOR_ICON_IMAGES = {
-  brave: braveIcon,
   context7: context7Icon,
   filesystem: filesystemIcon,
   notion: notionIcon,
-  openweather: openweatherIcon,
   playwright: playwrightIcon,
   supabase: supabaseIcon,
 } as const;

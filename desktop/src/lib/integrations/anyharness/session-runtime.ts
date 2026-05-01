@@ -304,15 +304,17 @@ export async function resumeSession(
     options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
   );
   const isCowork = workspace.surface === "cowork";
-  const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
-    targetLocation: target.location,
-    workspacePath: workspace.path ?? null,
-    policy: {
-      workspaceSurface: isCowork ? "cowork" : "coding",
-      lifecycle: "resume",
-      enabled: isCowork || options?.powersInCodingSessionsEnabled === true,
-    },
-  });
+  const { mcpServers, mcpBindingSummaries } = options?.powersInCodingSessionsEnabled === true
+    ? await resolveSessionMcpServersForLaunch({
+      targetLocation: target.location,
+      workspacePath: workspace.path ?? null,
+      policy: {
+        workspaceSurface: isCowork ? "cowork" : "coding",
+        lifecycle: "resume",
+        enabled: true,
+      },
+    })
+    : { mcpServers: [], mcpBindingSummaries: [] };
   return client.sessions.resume(
     sessionId,
     {

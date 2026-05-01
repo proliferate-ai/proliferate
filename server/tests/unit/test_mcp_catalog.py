@@ -1,4 +1,5 @@
 from proliferate.server.cloud.mcp_catalog.catalog import (
+    CONNECTOR_CATALOG,
     get_catalog_entry,
     parse_settings,
     render_http_launch,
@@ -44,3 +45,10 @@ def test_supabase_legacy_kind_is_dropped_and_boolean_false_renders() -> None:
 
     assert settings == {"projectRef": "abcd1234", "readOnly": False}
     assert launch.url == ("https://mcp.supabase.com/mcp?project_ref=abcd1234&read_only=false")
+
+
+def test_universal_catalog_does_not_use_claude_hosted_mcp_urls() -> None:
+    assert all(
+        entry.transport != "http" or "mcp.claude.com" not in entry.http.display_url
+        for entry in CONNECTOR_CATALOG
+    )

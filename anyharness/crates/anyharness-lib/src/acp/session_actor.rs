@@ -3302,7 +3302,18 @@ async fn start_new_session(
         request = request.meta(meta);
     }
 
+    let system_prompt_append_len = system_prompt_append
+        .map(|value| value.len())
+        .unwrap_or_default();
     let new_session_started = Instant::now();
+    tracing::info!(
+        session_id = %session_id,
+        workspace_id = %workspace_id,
+        startup_strategy,
+        mcp_server_count = mcp_servers.len(),
+        system_prompt_append_len,
+        "[workspace-latency] session.actor.new_session.start"
+    );
     match conn.new_session(request).await {
         Ok(resp) => {
             tracing::info!(
@@ -3311,9 +3322,11 @@ async fn start_new_session(
                 native_session_id = %resp.session_id,
                 startup_strategy,
                 startup_event = completed_event,
+                detail = "ACP new_session completed",
                 native_startup_disposition = NativeSessionStartupDisposition::CreatedFresh.as_str(),
                 elapsed_ms = new_session_started.elapsed().as_millis(),
-                "ACP new_session completed"
+                "{}",
+                completed_event
             );
             Ok(resp)
         }
@@ -3323,9 +3336,11 @@ async fn start_new_session(
                 workspace_id = %workspace_id,
                 startup_strategy,
                 startup_event = failed_event,
+                detail = "ACP new_session failed",
                 elapsed_ms = new_session_started.elapsed().as_millis(),
                 error = %error,
-                "ACP new_session failed"
+                "{}",
+                failed_event
             );
             Err(anyhow::anyhow!("{error}"))
         }

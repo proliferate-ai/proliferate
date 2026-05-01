@@ -646,7 +646,7 @@ class TestCloudMcpConnections:
         created = await client.post(
             "/v1/cloud/mcp/connections",
             headers=headers,
-            json={"catalogEntryId": "google_calendar", "enabled": True},
+            json={"catalogEntryId": "linear", "enabled": True},
         )
         assert created.status_code == 200
         records = await _list_mcp_connections(db_session, session["user_id"])
@@ -702,12 +702,12 @@ class TestCloudMcpConnections:
             json={"catalogEntryId": "context7", "enabled": True},
         )
         assert context7.status_code == 200
-        google_calendar = await client.post(
+        linear = await client.post(
             "/v1/cloud/mcp/connections",
             headers=headers,
-            json={"catalogEntryId": "google_calendar", "enabled": True},
+            json={"catalogEntryId": "linear", "enabled": True},
         )
-        assert google_calendar.status_code == 200
+        assert linear.status_code == 200
         authed = await client.put(
             f"/v1/cloud/mcp/connections/{context7.json()['connectionId']}/auth/secret",
             headers=headers,
@@ -717,23 +717,23 @@ class TestCloudMcpConnections:
 
         db_session.expire_all()
         records = await _list_mcp_connections(db_session, session["user_id"])
-        google_calendar_record = next(
-            record for record in records if record.catalog_entry_id == "google_calendar"
+        linear_record = next(
+            record for record in records if record.catalog_entry_id == "linear"
         )
         await upsert_connection_auth(
-            connection_db_id=google_calendar_record.id,
+            connection_db_id=linear_record.id,
             auth_kind="oauth",
             auth_status="ready",
             payload_ciphertext=encrypt_json(
                 {
-                    "issuer": "https://accounts.example.com",
-                    "resource": "https://calendar.example.com/mcp",
+                    "issuer": "https://linear.example.com",
+                    "resource": "https://mcp.linear.app/mcp",
                     "clientId": "client-id",
                     "accessToken": "old-access-token",
                     "refreshToken": "refresh-token",
                     "expiresAt": datetime(2024, 1, 1, tzinfo=UTC).isoformat(),
                     "scopes": [],
-                    "tokenEndpoint": "https://accounts.example.com/token",
+                    "tokenEndpoint": "https://linear.example.com/token",
                 }
             ),
             payload_format="oauth-bundle-v1",
@@ -757,12 +757,12 @@ class TestCloudMcpConnections:
         body = response.json()
         assert [server["catalogEntryId"] for server in body["mcpServers"]] == ["context7"]
         assert any(
-            warning["catalogEntryId"] == "google_calendar"
+            warning["catalogEntryId"] == "linear"
             and warning["kind"] == "resolver_error"
             for warning in body["warnings"]
         )
         assert any(
-            summary["id"] == google_calendar.json()["connectionId"]
+            summary["id"] == linear.json()["connectionId"]
             and summary["outcome"] == "not_applied"
             and summary["reason"] == "resolver_error"
             for summary in body["mcpBindingSummaries"]
@@ -780,7 +780,7 @@ class TestCloudMcpConnections:
         created = await client.post(
             "/v1/cloud/mcp/connections",
             headers=headers,
-            json={"catalogEntryId": "google_calendar", "enabled": True},
+            json={"catalogEntryId": "linear", "enabled": True},
         )
         assert created.status_code == 200
         records = await _list_mcp_connections(db_session, session["user_id"])
@@ -792,13 +792,13 @@ class TestCloudMcpConnections:
             user_id=uuid.UUID(session["user_id"]),
             state_hash=state_hash,
             code_verifier_ciphertext=encrypt_text("verifier"),
-            issuer="https://accounts.example.com",
-            resource="https://calendar.example.com/mcp",
+            issuer="https://linear.example.com",
+            resource="https://mcp.linear.app/mcp",
             client_id="client-id",
-            token_endpoint="https://accounts.example.com/token",
+            token_endpoint="https://linear.example.com/token",
             requested_scopes="[]",
             redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
-            authorization_url="https://accounts.example.com/authorize",
+            authorization_url="https://linear.example.com/authorize",
             expires_at=datetime(2099, 1, 1, tzinfo=UTC),
         )
 

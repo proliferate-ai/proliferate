@@ -61,6 +61,7 @@ export function useCoworkThreadWorkflow() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelId: state.defaultChatModelId,
+    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));
   const showToast = useToastStore((state) => state.show);
@@ -113,17 +114,20 @@ export function useCoworkThreadWorkflow() {
 
     try {
       const resolveStartedAt = startLatencyTimer();
-      const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
-        targetLocation: "local",
-        workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
-        policy: {
-          workspaceSurface: "cowork",
-          lifecycle: "create",
-          enabled: true,
-        },
-      });
+      const { mcpServers, mcpBindingSummaries } = preferences.powersInCodingSessionsEnabled
+        ? await resolveSessionMcpServersForLaunch({
+          targetLocation: "local",
+          workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
+          policy: {
+            workspaceSurface: "cowork",
+            lifecycle: "create",
+            enabled: true,
+          },
+        })
+        : { mcpServers: [], mcpBindingSummaries: [] };
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
+        powersEnabled: preferences.powersInCodingSessionsEnabled,
         mcpServerCount: mcpServers.length,
         elapsedMs: elapsedMs(resolveStartedAt),
       });
@@ -138,6 +142,7 @@ export function useCoworkThreadWorkflow() {
         agentKind: input.agentKind,
         modelId: input.modelId,
         modeId: modeId ?? null,
+        workspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
         mcpServerCount: mcpServers.length,
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });

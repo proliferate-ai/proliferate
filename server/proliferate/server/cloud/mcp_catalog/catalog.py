@@ -31,7 +31,7 @@ from proliferate.server.cloud.mcp_catalog.types import (
     UrlVariant,
 )
 
-CATALOG_VERSION = "2026-04-21.1"
+CATALOG_VERSION = "2026-04-22.1"
 
 __all__ = [
     "ArgTemplate",
@@ -103,34 +103,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Read pull requests, reviews, and discussions",
             "Browse issues, labels, and milestones",
             "Pull in README and doc content from repos",
-        ),
-    ),
-    CatalogEntry(
-        id="google_calendar",
-        version=1,
-        name="Google Calendar",
-        one_liner="Search events and schedule context from Google Calendar.",
-        description=(
-            "Use Google Calendar to inspect authorized events, meeting details, and "
-            "schedule context after you authorize the connected Google account."
-        ),
-        docs_url=(
-            "https://support.anthropic.com/en/articles/11088742-using-the-gmail-and-"
-            "google-calendar-integrations"
-        ),
-        availability="universal",
-        transport="http",
-        auth_kind="oauth",
-        http=HttpLaunchTemplate(
-            url=StaticUrl("https://gcal.mcp.claude.com/mcp"),
-            display_url="https://gcal.mcp.claude.com/mcp",
-        ),
-        server_name_base="google_calendar",
-        icon_id="calendar",
-        capabilities=(
-            "Search authorized calendar events",
-            "Read meeting details and attendees",
-            "Use schedule context when planning work",
         ),
     ),
     CatalogEntry(
@@ -207,39 +179,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         ),
     ),
     CatalogEntry(
-        id="brave_search",
-        version=1,
-        name="Brave Search",
-        one_liner="Search the web with Brave's independent index.",
-        description="Use Brave Search for current web results, news, and general lookups.",
-        docs_url="https://api-dashboard.search.brave.com/documentation/guides/authentication",
-        availability="universal",
-        cloud_secret_sync=True,
-        transport="http",
-        auth_kind="secret",
-        http=HttpLaunchTemplate(
-            url=StaticUrl(""),
-            display_url="",
-            headers=(HeaderTemplate("X-Subscription-Token", "{secret.api_key}"),),
-        ),
-        server_name_base="brave_search",
-        icon_id="brave",
-        secret_fields=(
-            _secret_field(
-                "api_key",
-                "API key",
-                "Paste your Brave Search API key",
-                "Create a key in your Brave Search API dashboard.",
-                "Create a key in your Brave Search API dashboard, then paste it here.",
-            ),
-        ),
-        capabilities=(
-            "Search the open web with Brave's independent index",
-            "Pull news and recent articles",
-            "Look up unfamiliar terms and references",
-        ),
-    ),
-    CatalogEntry(
         id="tavily",
         version=1,
         name="Tavily",
@@ -274,39 +213,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Run focused web searches",
             "Extract clean text from pages",
             "Crawl linked pages for deeper research",
-        ),
-    ),
-    CatalogEntry(
-        id="openweather",
-        version=1,
-        name="OpenWeather",
-        one_liner="Fetch current weather and forecasts anywhere.",
-        description="Use OpenWeather for live conditions, forecasts, and weather lookups.",
-        docs_url="https://openweathermap.org/appid",
-        availability="universal",
-        cloud_secret_sync=True,
-        transport="http",
-        auth_kind="secret",
-        http=HttpLaunchTemplate(
-            url=StaticUrl(""),
-            display_url="",
-            query=(_secret_query("appid", "api_key"),),
-        ),
-        server_name_base="openweather",
-        icon_id="openweather",
-        secret_fields=(
-            _secret_field(
-                "api_key",
-                "API key",
-                "Paste your OpenWeather API key",
-                "Create an API key in your OpenWeather account.",
-                "Find your OpenWeather API key on the API key tab, then paste it here.",
-            ),
-        ),
-        capabilities=(
-            "Look up current weather conditions anywhere",
-            "Pull short-term forecasts",
-            "Check wind, humidity, and pressure for a location",
         ),
     ),
     CatalogEntry(
