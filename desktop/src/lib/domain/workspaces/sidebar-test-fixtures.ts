@@ -16,6 +16,8 @@ export function makeWorkspace(args: {
   sourceRoot?: string;
   kind?: Workspace["kind"];
   branch?: string;
+  currentBranch?: string | null;
+  originalBranch?: string | null;
   displayName?: string | null;
   origin?: Workspace["origin"];
   creatorContext?: Workspace["creatorContext"];
@@ -28,6 +30,8 @@ export function makeWorkspace(args: {
     sourceRoot = `/tmp/${repoName}`,
     kind = "local",
     branch = kind === "worktree" ? `feature/${id}` : "main",
+    currentBranch = branch,
+    originalBranch = branch,
     displayName = null,
     origin = null,
     creatorContext = null,
@@ -46,8 +50,8 @@ export function makeWorkspace(args: {
     gitProvider: "github",
     gitOwner: "proliferate-ai",
     gitRepoName: repoName,
-    originalBranch: "main",
-    currentBranch: branch,
+    originalBranch,
+    currentBranch,
     displayName,
     origin,
     creatorContext,

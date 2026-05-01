@@ -123,6 +123,74 @@ describe("logical workspaces", () => {
     ]);
   });
 
+  it("keeps detached worktree materializations distinct by original branch", () => {
+    const repoRoot = makeRepoRoot({ id: "proliferate-root" });
+    const gecko = makeWorkspace({
+      id: "gecko-workspace",
+      kind: "worktree",
+      currentBranch: "HEAD",
+      originalBranch: "gecko",
+      updatedAt: "2026-04-13T10:00:00Z",
+    });
+    const polecat = makeWorkspace({
+      id: "polecat-workspace",
+      kind: "worktree",
+      currentBranch: "HEAD",
+      originalBranch: "polecat",
+      updatedAt: "2026-04-13T11:00:00Z",
+    });
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [gecko, polecat],
+      repoRoots: [repoRoot],
+      cloudWorkspaces: [],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces.map((workspace) => workspace.branchKey).sort()).toEqual([
+      "gecko",
+      "polecat",
+    ]);
+    expect(logicalWorkspaces.map((workspace) => workspace.localWorkspace?.id).sort()).toEqual([
+      "gecko-workspace",
+      "polecat-workspace",
+    ]);
+  });
+
+  it("does not let a local checkout current branch hide a worktree branch", () => {
+    const repoRoot = makeRepoRoot({ id: "proliferate-root" });
+    const localCheckout = makeWorkspace({
+      id: "local-ant",
+      kind: "local",
+      currentBranch: "polecat",
+      originalBranch: "ant",
+      updatedAt: "2026-04-13T12:00:00Z",
+    });
+    const subagentWorktree = makeWorkspace({
+      id: "subagent-polecat",
+      kind: "worktree",
+      currentBranch: "HEAD",
+      originalBranch: "polecat",
+      updatedAt: "2026-04-13T11:00:00Z",
+    });
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [localCheckout, subagentWorktree],
+      repoRoots: [repoRoot],
+      cloudWorkspaces: [],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces.map((workspace) => workspace.branchKey).sort()).toEqual([
+      "ant",
+      "polecat",
+    ]);
+    expect(logicalWorkspaces.map((workspace) => workspace.localWorkspace?.id).sort()).toEqual([
+      "local-ant",
+      "subagent-polecat",
+    ]);
+  });
+
   it("merges a matching local repo root with mobility-only placeholders in one sidebar group", () => {
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [],
