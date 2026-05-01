@@ -50,15 +50,10 @@ import {
   reportConnectorLaunchWarnings,
   resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
-
-interface InFlightSessionCreate {
-  sessionId: string;
-  agentKind: string;
-  modelId: string;
-  promise: Promise<string>;
-}
-
-const inFlightSessionCreatesByWorkspace = new Map<string, InFlightSessionCreate>();
+import {
+  inFlightSessionCreatesByWorkspace,
+  updateInFlightSessionCreateId,
+} from "@/hooks/sessions/session-creation-in-flight";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -97,22 +92,6 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
   }
 
   return readyState.runtimeUrl;
-}
-
-function updateInFlightSessionCreateId(
-  workspaceId: string,
-  previousSessionId: string,
-  nextSessionId: string,
-): void {
-  const inFlightCreate = inFlightSessionCreatesByWorkspace.get(workspaceId);
-  if (!inFlightCreate || inFlightCreate.sessionId !== previousSessionId) {
-    return;
-  }
-
-  inFlightSessionCreatesByWorkspace.set(workspaceId, {
-    ...inFlightCreate,
-    sessionId: nextSessionId,
-  });
 }
 
 export function useSessionCreationActions() {
