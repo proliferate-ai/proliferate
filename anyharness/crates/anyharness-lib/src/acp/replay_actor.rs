@@ -11,8 +11,9 @@ use tokio::sync::{broadcast, mpsc};
 
 use super::event_sink::publish_session_event;
 use super::session_actor::{
-    ActorReadyResult, LiveSessionHandle, PromptAcceptError, QueueMutationError,
-    ResolveInteractionCommandError, SessionCommand, SetConfigOptionCommandError,
+    ActorReadyResult, ForkSessionCommandError, LiveSessionHandle, PromptAcceptError,
+    QueueMutationError, ResolveInteractionCommandError, SessionCommand,
+    SetConfigOptionCommandError,
 };
 use crate::plans::service::PlanDecisionError;
 use crate::sessions::model::SessionRecord;
@@ -369,6 +370,24 @@ async fn handle_non_replay_command(
         }
         SessionCommand::ApplyPlanDecision { respond_to, .. } => {
             let _ = respond_to.send(Err(PlanDecisionError::NotFound));
+            None
+        }
+        SessionCommand::VerifyForkReady { respond_to } => {
+            let _ = respond_to.send(Err(ForkSessionCommandError::Unsupported(
+                "replay sessions cannot be forked".to_string(),
+            )));
+            None
+        }
+        SessionCommand::Fork { respond_to } => {
+            let _ = respond_to.send(Err(ForkSessionCommandError::Unsupported(
+                "replay sessions cannot be forked".to_string(),
+            )));
+            None
+        }
+        SessionCommand::CloseNativeSession { respond_to, .. } => {
+            let _ = respond_to.send(Err(anyhow::anyhow!(
+                "replay sessions have no native child sessions"
+            )));
             None
         }
         SessionCommand::InjectRuntimeEvent { respond_to, .. } => {

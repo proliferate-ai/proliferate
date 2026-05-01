@@ -12,6 +12,7 @@ pub enum WorkspaceOperationKind {
     ProcessRun,
     TerminalCommand,
     SessionStart,
+    SessionFork,
     SessionPrompt,
     SessionResume,
     SetupCommand,
@@ -56,6 +57,9 @@ pub struct WorkspaceOperationLease {
 }
 
 pub struct WorkspaceExclusiveOperationLease {
+    workspace_id: Option<String>,
+    kind: Option<WorkspaceOperationKind>,
+    state: Option<Arc<WorkspaceOperationState>>,
     _guard: OwnedRwLockWriteGuard<()>,
 }
 
@@ -98,7 +102,29 @@ impl WorkspaceOperationGate {
     pub async fn acquire_exclusive(&self, workspace_id: &str) -> WorkspaceExclusiveOperationLease {
         let state = self.state_for(workspace_id).await;
         WorkspaceExclusiveOperationLease {
+            workspace_id: None,
+            kind: None,
+            state: None,
             _guard: state.lock.clone().write_owned().await,
+        }
+    }
+
+    pub async fn acquire_exclusive_with_kind(
+        &self,
+        workspace_id: &str,
+        kind: WorkspaceOperationKind,
+    ) -> WorkspaceExclusiveOperationLease {
+        let state = self.state_for(workspace_id).await;
+        let guard = state.lock.clone().write_owned().await;
+        {
+            let mut counts = state.counts.lock().expect("operation counts poisoned");
+            *counts.entry(kind).or_insert(0) += 1;
+        }
+        WorkspaceExclusiveOperationLease {
+            workspace_id: Some(workspace_id.to_string()),
+            kind: Some(kind),
+            state: Some(state),
+            _guard: guard,
         }
     }
 
@@ -133,6 +159,29 @@ impl Drop for WorkspaceOperationLease {
             workspace_id = %self.workspace_id,
             kind = ?self.kind,
             "workspace operation lease released"
+        );
+    }
+}
+
+impl Drop for WorkspaceExclusiveOperationLease {
+    fn drop(&mut self) {
+        let Some(state) = &self.state else {
+            return;
+        };
+        let Some(kind) = self.kind else {
+            return;
+        };
+        let mut counts = state.counts.lock().expect("operation counts poisoned");
+        if let Some(count) = counts.get_mut(&kind) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                counts.remove(&kind);
+            }
+        }
+        tracing::trace!(
+            workspace_id = self.workspace_id.as_deref().unwrap_or("<unknown>"),
+            kind = ?kind,
+            "workspace exclusive operation lease released"
         );
     }
 }
@@ -201,6 +250,20 @@ mod tests {
             .await
             .expect("exclusive lease should unblock")
             .expect("exclusive task should complete");
+        assert!(gate.snapshot("workspace-1").await.holders.is_empty());
+    }
+
+    #[tokio::test]
+    async fn exclusive_lease_with_kind_tracks_active_holder() {
+        let gate = WorkspaceOperationGate::new();
+        let lease = gate
+            .acquire_exclusive_with_kind("workspace-1", WorkspaceOperationKind::SessionFork)
+            .await;
+
+        let snapshot = gate.snapshot("workspace-1").await;
+        assert_eq!(snapshot.count(WorkspaceOperationKind::SessionFork), 1);
+
+        drop(lease);
         assert!(gate.snapshot("workspace-1").await.holders.is_empty());
     }
 

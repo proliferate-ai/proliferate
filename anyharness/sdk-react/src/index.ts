@@ -145,6 +145,7 @@ export {
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,
   usePromptSessionTextMutation,
+  useForkSessionMutation,
   useEditPendingPromptMutation,
   useDeletePendingPromptMutation,
   useResumeSessionMutation,

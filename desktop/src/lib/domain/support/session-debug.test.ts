@@ -39,6 +39,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     createdAt: "2026-04-16T18:00:00.000Z",
     updatedAt: "2026-04-16T18:20:00.000Z",
     ...overrides,
+    actionCapabilities: overrides.actionCapabilities ?? { fork: false, targetedFork: false },
   };
 }
 
@@ -143,6 +144,7 @@ describe("buildSessionDebugLocator", () => {
       owningWorkspaceId: "workspace-12345678",
       agentKind: "claude",
       status: "running",
+      actionCapabilities: { fork: false, targetedFork: false },
     });
   });
 

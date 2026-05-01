@@ -390,6 +390,7 @@ pub fn build_router(state: AppState) -> Router {
             "/sessions/{session_id}/prompt",
             post(sessions::prompt_session),
         )
+        .route("/sessions/{session_id}/fork", post(sessions::fork_session))
         .route(
             "/sessions/{session_id}/pending-prompts/{seq}",
             patch(sessions::edit_pending_prompt).delete(sessions::delete_pending_prompt),

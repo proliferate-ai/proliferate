@@ -65,6 +65,7 @@ function session(
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
     liveConfig: live,
+    actionCapabilities: { fork: false, targetedFork: false },
     ...overrides,
   };
 }

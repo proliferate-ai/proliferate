@@ -97,7 +97,9 @@ async fn app_state_rejects_invalid_data_key() {
     .expect("expected invalid data key error");
 
     assert!(
-        error.to_string().starts_with("Invalid ANYHARNESS_DATA_KEY:"),
+        error
+            .to_string()
+            .starts_with("Invalid ANYHARNESS_DATA_KEY:"),
         "unexpected error: {error}"
     );
 }

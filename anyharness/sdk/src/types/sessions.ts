@@ -11,6 +11,8 @@ type GeneratedSetSessionConfigOptionResponse =
 type GeneratedSession = components["schemas"]["Session"];
 type GeneratedPromptSessionResponse =
   components["schemas"]["PromptSessionResponse"];
+type GeneratedForkSessionResponse =
+  components["schemas"]["ForkSessionResponse"];
 
 export type SessionStatus = components["schemas"]["SessionStatus"];
 export type SessionExecutionPhase = components["schemas"]["SessionExecutionPhase"];
@@ -21,8 +23,11 @@ export type PendingInteractionSource =
 export type PendingInteractionPayloadSummary =
   components["schemas"]["PendingInteractionPayloadSummary"];
 export type SessionExecutionSummary = components["schemas"]["SessionExecutionSummary"];
+export type SessionActionCapabilities =
+  components["schemas"]["SessionActionCapabilities"];
 export type Session = Omit<GeneratedSession, "liveConfig"> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
+  actionCapabilities: SessionActionCapabilities;
 };
 export type CreateSessionRequest = components["schemas"]["CreateSessionRequest"];
 export type SessionMcpEnvVar = components["schemas"]["SessionMcpEnvVar"];
@@ -86,6 +91,21 @@ export type PromptSessionResponse = Omit<
 > & {
   session: Session;
 };
+export type ForkSessionRequest = components["schemas"]["ForkSessionRequest"];
+export type ForkSessionTarget = components["schemas"]["ForkSessionTarget"];
+export type ForkSessionTargetType =
+  components["schemas"]["ForkSessionTargetType"];
+export type ForkChildStartStatus =
+  components["schemas"]["ForkChildStartStatus"];
+export type ForkChildStartSummary =
+  components["schemas"]["ForkChildStartSummary"];
+export type SessionLinkSummary = components["schemas"]["SessionLinkSummary"];
+export type ForkSessionResponse = Omit<
+  GeneratedForkSessionResponse,
+  "session"
+> & {
+  session: Session;
+};
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
@@ -134,15 +154,30 @@ export function normalizeSessionLiveConfigSnapshot(
 }
 
 export function normalizeSession(session: GeneratedSession): Session {
+  const actionCapabilities = session.actionCapabilities ?? {
+    fork: false,
+    targetedFork: false,
+  };
   if (!session.liveConfig) {
     return {
       ...session,
+      actionCapabilities,
       liveConfig: session.liveConfig ?? null,
     };
   }
 
   return {
     ...session,
+    actionCapabilities,
     liveConfig: normalizeSessionLiveConfigSnapshot(session.liveConfig),
+  };
+}
+
+export function normalizeForkSessionResponse(
+  response: GeneratedForkSessionResponse,
+): ForkSessionResponse {
+  return {
+    ...response,
+    session: normalizeSession(response.session),
   };
 }

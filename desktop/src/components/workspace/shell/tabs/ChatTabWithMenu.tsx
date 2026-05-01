@@ -35,6 +35,7 @@ export function ChatTabWithMenu({
   canCreateGroup = false,
   onCreateGroup,
   onContextMenuTarget,
+  onFork,
   onClose,
   onCloseOthers,
   onCloseRight,
@@ -54,6 +55,7 @@ export function ChatTabWithMenu({
   canCreateGroup?: boolean;
   onCreateGroup?: () => void;
   onContextMenuTarget?: (anchorRect: ManualChatGroupEditorAnchorRect) => void;
+  onFork?: () => void;
   onClose: () => void;
   onCloseOthers: () => void;
   onCloseRight: () => void;
@@ -62,6 +64,7 @@ export function ChatTabWithMenu({
   const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({
     canRename: !isReviewAgentChild,
+    canFork: tab.canFork && !tab.isChild && !isReviewAgentChild,
     canDismiss: !isReviewAgentChild,
     canCreateGroup: !isReviewAgentChild && canCreateGroup,
     isChild: tab.isChild,
@@ -78,6 +81,9 @@ export function ChatTabWithMenu({
         return;
       case "create-group":
         onCreateGroup?.();
+        return;
+      case "fork":
+        onFork?.();
         return;
       case "close":
         onClose();

@@ -413,6 +413,7 @@ impl RetirePreflightChecker {
             WorkspaceOperationKind::ProcessRun,
             WorkspaceOperationKind::TerminalCommand,
             WorkspaceOperationKind::SessionStart,
+            WorkspaceOperationKind::SessionFork,
             WorkspaceOperationKind::SessionPrompt,
             WorkspaceOperationKind::SessionResume,
             WorkspaceOperationKind::SetupCommand,

@@ -1656,6 +1656,93 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/fork": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "fork_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ForkSessionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Forked session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForkSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fork request or target session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot be forked now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fork failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
       "post": {
         "tags": [
@@ -7030,6 +7117,103 @@
           "unknown"
         ]
       },
+      "ForkChildStartStatus": {
+        "type": "string",
+        "enum": [
+          "started",
+          "failed"
+        ]
+      },
+      "ForkChildStartSummary": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ForkChildStartStatus"
+          }
+        }
+      },
+      "ForkSessionRequest": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkSessionTarget"
+              }
+            ]
+          }
+        }
+      },
+      "ForkSessionResponse": {
+        "type": "object",
+        "required": [
+          "session",
+          "sessionLink"
+        ],
+        "properties": {
+          "childStart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkChildStartSummary"
+              }
+            ]
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "sessionLink": {
+            "$ref": "#/components/schemas/SessionLinkSummary"
+          }
+        }
+      },
+      "ForkSessionTarget": {
+        "type": "object",
+        "required": [
+          "type",
+          "turnId"
+        ],
+        "properties": {
+          "itemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ForkSessionTargetType"
+          }
+        }
+      },
+      "ForkSessionTargetType": {
+        "type": "string",
+        "enum": [
+          "before_user_message"
+        ]
+      },
       "GetSessionLiveConfigResponse": {
         "type": "object",
         "description": "Response payload for fetching the current live session config snapshot.",
@@ -8943,6 +9127,9 @@
           "updatedAt"
         ],
         "properties": {
+          "actionCapabilities": {
+            "$ref": "#/components/schemas/SessionActionCapabilities"
+          },
           "agentKind": {
             "type": "string"
           },
@@ -11854,6 +12041,9 @@
           "updatedAt"
         ],
         "properties": {
+          "actionCapabilities": {
+            "$ref": "#/components/schemas/SessionActionCapabilities"
+          },
           "agentKind": {
             "type": "string"
           },
@@ -11970,6 +12160,17 @@
           },
           "workspaceId": {
             "type": "string"
+          }
+        }
+      },
+      "SessionActionCapabilities": {
+        "type": "object",
+        "properties": {
+          "fork": {
+            "type": "boolean"
+          },
+          "targetedFork": {
+            "type": "boolean"
           }
         }
       },
@@ -12622,6 +12823,43 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "SessionLinkSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "relation",
+          "parentSessionId",
+          "childSessionId",
+          "workspaceRelation",
+          "createdAt"
+        ],
+        "properties": {
+          "childSessionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "workspaceRelation": {
+            "type": "string"
           }
         }
       },

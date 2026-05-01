@@ -672,6 +672,7 @@ async fn raw_notification_history_route_returns_persisted_notifications() {
             mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: None,
         })
         .expect("insert session");
@@ -750,6 +751,7 @@ async fn restore_route_returns_cold_visible_session_without_live_handle() {
             mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: None,
         })
         .expect("insert dismissed session");

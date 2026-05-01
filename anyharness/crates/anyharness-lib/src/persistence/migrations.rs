@@ -149,6 +149,14 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0040_worktree_retention_policy",
         include_str!("sql/0040_worktree_retention_policy.sql"),
     ),
+    (
+        "0041_session_action_capabilities",
+        include_str!("sql/0041_session_action_capabilities.sql"),
+    ),
+    (
+        "0042_fork_link_child_unique",
+        include_str!("sql/0042_fork_link_child_unique.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

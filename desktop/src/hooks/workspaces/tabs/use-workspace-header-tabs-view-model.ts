@@ -5,6 +5,7 @@ import {
 } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
   collectHierarchyChildren,
+  getKnownSessionCanFork,
   getKnownSessionAgentKind,
   getKnownSessionId,
   getKnownSessionTitle,
@@ -63,6 +64,7 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   title: string;
   agentKind: string;
   viewState: SessionViewState;
+  canFork: boolean;
   isReviewAgentChild: boolean;
   isActive: boolean;
   groupColor: string | null;
@@ -152,7 +154,12 @@ export function useWorkspaceHeaderTabsViewModel() {
       map.set(session.id, { kind: "session", session });
     }
     for (const slot of liveSlots) {
-      map.set(slot.sessionId, { kind: "slot", slot });
+      const existing = map.get(slot.sessionId);
+      map.set(slot.sessionId, {
+        kind: "slot",
+        slot,
+        session: existing?.kind === "session" ? existing.session : existing?.session,
+      });
     }
     return map;
   }, [liveSlots, selectedWorkspaceId, workspaceSessionsQuery.data]);
@@ -402,6 +409,7 @@ export function useWorkspaceHeaderTabsViewModel() {
           viewState: known
             ? getKnownSessionViewState(known)
             : getLinkedChildViewState(hierarchyChild!),
+          canFork: known ? getKnownSessionCanFork(known) : false,
           isReviewAgentChild: hierarchyChild?.source === "review",
           isActive: grouped.sessionId === activeChatSessionIdForTabs,
           groupColor,

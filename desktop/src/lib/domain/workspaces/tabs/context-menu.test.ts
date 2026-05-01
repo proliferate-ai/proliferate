@@ -41,6 +41,28 @@ describe("workspace tab context menu", () => {
       canRename: false,
       canDismiss: false,
     })).toEqual(FILE_TAB_CONTEXT_MENU_ITEMS);
+
+    expect(buildChatTabContextMenuItems({
+      canRename: false,
+      canFork: true,
+      canDismiss: false,
+    })).toEqual([
+      { kind: "action", command: "fork", label: "Fork Session" },
+      { kind: "separator", id: "close-separator" },
+      { kind: "action", command: "close", label: "Close Tab", shortcutKey: "closeActiveTab" },
+      {
+        kind: "action",
+        command: "close-others",
+        label: "Close Other Tabs",
+        shortcutKey: "closeOtherTabs",
+      },
+      {
+        kind: "action",
+        command: "close-right",
+        label: "Close Tabs to the Right",
+        shortcutKey: "closeTabsToRight",
+      },
+    ]);
   });
 
   it("gates create-group and child-tab commands", () => {
@@ -76,6 +98,7 @@ describe("workspace tab context menu", () => {
 
     expect(buildChatTabContextMenuItems({
       canRename: true,
+      canFork: true,
       canDismiss: true,
       isChild: true,
     })).toEqual([
