@@ -23,19 +23,14 @@ import {
   clampRightPanelWidth,
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
-  DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
-  isRightPanelTool,
-  mergeRightPanelState,
-  parseRightPanelHeaderEntryKey,
+  normalizeRightPanelDurableState,
+  normalizeRightPanelMaterializedState,
   reconcileRightPanelWorkspaceState,
-  rightPanelTerminalHeaderKey,
-  rightPanelToolHeaderKey,
-  splitLegacyRightPanelWorkspaceState,
   type RightPanelDurableState,
-  type RightPanelHeaderEntryKey,
   type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
+import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/right-panel-migration";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
 import type {
   WorkspaceShellIntentKey,
@@ -178,8 +173,10 @@ export interface WorkspaceUiState {
  * v5: add unified right-panel header order hints.
  * v6: current mainline schema with legacy unified right-panel preferences.
  * v7: split right-panel durable/materialized state and persist shell tab maps.
+ * v8: make activeEntryKey/headerOrder the only right-panel selection/order
+ *     model, removing durable toolOrder and terminal active/order fields.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 7;
+const WORKSPACE_UI_MIGRATION_VERSION = 8;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -304,7 +301,7 @@ export function migrateWorkspaceUiState(
   input: PersistedWorkspaceUiState,
 ): { state: PersistedWorkspaceUiState; didMigrate: boolean } {
   const legacyInput = input as PersistedWorkspaceUiState & {
-    rightPanelByWorkspace?: Record<string, RightPanelWorkspaceState>;
+    rightPanelByWorkspace?: Record<string, unknown>;
     rightPanelWidthByWorkspace?: Record<string, number>;
   };
   const state = {
@@ -490,14 +487,18 @@ function isStringRecord(value: unknown): value is Record<string, string> {
     && Object.values(value).every((entry) => typeof entry === "string");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function migrateLegacyRightPanelPreferences(args: {
-  rightPanelByWorkspace?: Record<string, RightPanelWorkspaceState>;
+  rightPanelByWorkspace?: Record<string, unknown>;
   rightPanelWidthByWorkspace?: Record<string, number>;
 }): {
   durableByWorkspace: Record<string, RightPanelDurableState>;
   materializedByWorkspace: Record<string, RightPanelMaterializedState>;
 } {
-  const legacyPanels = sanitizeRightPanelByWorkspace(args.rightPanelByWorkspace);
+  const legacyPanels = isRecord(args.rightPanelByWorkspace) ? args.rightPanelByWorkspace : {};
   const legacyWidths = sanitizeRightPanelWidths(args.rightPanelWidthByWorkspace);
   const workspaceIds = new Set([
     ...Object.keys(legacyPanels),
@@ -507,8 +508,12 @@ function migrateLegacyRightPanelPreferences(args: {
   const materializedByWorkspace: Record<string, RightPanelMaterializedState> = {};
 
   for (const workspaceId of workspaceIds) {
-    const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
-      state: legacyPanels[workspaceId],
+    const legacyState = legacyPanels[workspaceId];
+    if (!isRecord(legacyState) && legacyWidths[workspaceId] === undefined) {
+      continue;
+    }
+    const { durableState, materializedState } = migrateLegacyRightPanelWorkspaceState({
+      state: legacyState,
       width: legacyWidths[workspaceId],
       isCloudWorkspaceSelected: true,
     });
@@ -531,16 +536,9 @@ function sanitizeRightPanelDurableByWorkspace(
     if (typeof rawState !== "object" || rawState === null) {
       continue;
     }
-    next[workspaceId] = splitLegacyRightPanelWorkspaceState({
-      state: {
-        toolOrder: (rawState as Partial<RightPanelDurableState>).toolOrder,
-      },
-      width: (rawState as Partial<RightPanelDurableState>).width,
-      isCloudWorkspaceSelected: true,
-    }).durableState;
-    next[workspaceId].open = typeof (rawState as Partial<RightPanelDurableState>).open === "boolean"
-      ? Boolean((rawState as Partial<RightPanelDurableState>).open)
-      : DEFAULT_RIGHT_PANEL_DURABLE_STATE.open;
+    next[workspaceId] = normalizeRightPanelDurableState(
+      rawState as Partial<RightPanelDurableState>,
+    );
   }
   return next;
 }
@@ -557,33 +555,12 @@ function sanitizeRightPanelMaterializedByWorkspace(
     if (typeof rawState !== "object" || rawState === null) {
       continue;
     }
-    const durableState = DEFAULT_RIGHT_PANEL_DURABLE_STATE;
-    next[workspaceId] = splitLegacyRightPanelWorkspaceState({
-      state: {
-        activeTool: activeToolFromEntry(
-          (rawState as Partial<RightPanelMaterializedState>).activeEntryKey,
-        ),
-        headerOrder: (rawState as Partial<RightPanelMaterializedState>).headerOrder,
-        terminalOrder: (rawState as Partial<RightPanelMaterializedState>).terminalOrder,
-        activeTerminalId: (rawState as Partial<RightPanelMaterializedState>).activeTerminalId,
-      },
-      width: durableState.width,
-      isCloudWorkspaceSelected: true,
-    }).materializedState;
-    const activeEntryKey = (rawState as Partial<RightPanelMaterializedState>).activeEntryKey;
-    if (typeof activeEntryKey === "string") {
-      next[workspaceId] = {
-        ...next[workspaceId],
-        activeEntryKey,
-      };
-    }
+    next[workspaceId] = normalizeRightPanelMaterializedState(
+      rawState as Partial<RightPanelMaterializedState>,
+      { isCloudWorkspaceSelected: true },
+    );
   }
   return next;
-}
-
-function activeToolFromEntry(entryKey: unknown): RightPanelWorkspaceState["activeTool"] {
-  const entry = parseRightPanelHeaderEntryKey(entryKey);
-  return entry?.kind === "terminal" ? "terminal" : entry?.tool ?? "git";
 }
 
 function sanitizeActiveShellTabKeysByWorkspace(
@@ -628,57 +605,6 @@ function sanitizeShellTabOrderByWorkspace(
   return next;
 }
 
-function sanitizeRightPanelByWorkspace(
-  value: unknown,
-): Record<string, RightPanelWorkspaceState> {
-  if (typeof value !== "object" || value === null) {
-    return {};
-  }
-
-  const next: Record<string, RightPanelWorkspaceState> = {};
-  for (const [workspaceId, rawState] of Object.entries(value)) {
-    if (typeof rawState !== "object" || rawState === null) {
-      continue;
-    }
-
-    const record = rawState as Partial<Record<keyof RightPanelWorkspaceState, unknown>>;
-    const headerToolHints = Array.isArray(record.headerOrder)
-      ? toolsFromRightPanelHeaderEntries(record.headerOrder)
-      : [];
-    const toolOrder = Array.isArray(record.toolOrder)
-      ? uniqueRightPanelTools([...headerToolHints, ...record.toolOrder])
-      : uniqueRightPanelTools(headerToolHints);
-    const activeTool = isRightPanelTool(record.activeTool)
-      ? record.activeTool
-      : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.activeTool;
-    const headerTerminalHints = Array.isArray(record.headerOrder)
-      ? terminalIdsFromRightPanelHeaderEntries(record.headerOrder)
-      : [];
-    const terminalOrder = Array.isArray(record.terminalOrder)
-      ? uniqueStringList([...headerTerminalHints, ...record.terminalOrder])
-      : uniqueStringList(headerTerminalHints);
-    const activeTerminalId = typeof record.activeTerminalId === "string"
-      ? record.activeTerminalId
-      : null;
-    const headerOrder = Array.isArray(record.headerOrder)
-      ? uniqueRightPanelHeaderEntries(record.headerOrder, toolOrder, terminalOrder)
-      : undefined;
-
-    next[workspaceId] = reconcileRightPanelWorkspaceState(
-      {
-        activeTool,
-        toolOrder,
-        terminalOrder,
-        headerOrder,
-        activeTerminalId,
-      },
-      { isCloudWorkspaceSelected: true },
-    );
-  }
-
-  return next;
-}
-
 function sanitizeRightPanelWidths(value: unknown): Record<string, number> {
   if (typeof value !== "object" || value === null) {
     return {};
@@ -693,125 +619,22 @@ function sanitizeRightPanelWidths(value: unknown): Record<string, number> {
   return next;
 }
 
-function uniqueRightPanelTools(value: readonly unknown[]): RightPanelWorkspaceState["toolOrder"] {
-  const next: RightPanelWorkspaceState["toolOrder"] = [];
-  for (const item of value) {
-    if (isRightPanelTool(item) && item !== "terminal" && !next.includes(item)) {
-      next.push(item);
-    }
-  }
-  return next.length > 0 ? next : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.toolOrder;
-}
-
-function uniqueRightPanelHeaderEntries(
-  value: readonly unknown[],
-  toolOrder: readonly RightPanelWorkspaceState["toolOrder"][number][],
-  terminalOrder: readonly string[],
-): RightPanelHeaderEntryKey[] {
-  const toolKeys = new Set(
-    toolOrder
-      .filter((tool) => tool !== "terminal")
-      .map((tool) => rightPanelToolHeaderKey(tool)),
-  );
-  const terminalKeys = new Set(
-    terminalOrder.map((terminalId) => rightPanelTerminalHeaderKey(terminalId)),
-  );
-  const next: RightPanelHeaderEntryKey[] = [];
-
-  for (const item of value) {
-    const entry = parseRightPanelHeaderEntryKey(item);
-    if (!entry) {
-      continue;
-    }
-    const key = entry.kind === "tool"
-      ? rightPanelToolHeaderKey(entry.tool)
-      : rightPanelTerminalHeaderKey(entry.terminalId);
-    if (
-      !next.includes(key)
-      && (
-        (entry.kind === "tool" && toolKeys.has(key))
-        || (entry.kind === "terminal" && terminalKeys.has(key))
-      )
-    ) {
-      next.push(key);
-    }
-  }
-
-  for (const key of [...toolKeys, ...terminalKeys]) {
-    if (!next.includes(key)) {
-      next.push(key);
-    }
-  }
-
-  return next;
-}
-
-function toolsFromRightPanelHeaderEntries(
-  value: readonly unknown[],
-): RightPanelWorkspaceState["toolOrder"] {
-  const next: RightPanelWorkspaceState["toolOrder"] = [];
-  for (const item of value) {
-    const entry = parseRightPanelHeaderEntryKey(item);
-    if (entry?.kind === "tool" && !next.includes(entry.tool)) {
-      next.push(entry.tool);
-    }
-  }
-  return next;
-}
-
-function terminalIdsFromRightPanelHeaderEntries(value: readonly unknown[]): string[] {
-  const next: string[] = [];
-  for (const item of value) {
-    const entry = parseRightPanelHeaderEntryKey(item);
-    if (entry?.kind === "terminal" && !next.includes(entry.terminalId)) {
-      next.push(entry.terminalId);
-    }
-  }
-  return next;
-}
-
-function uniqueStringList(value: readonly unknown[]): string[] {
-  const next: string[] = [];
-  for (const item of value) {
-    if (typeof item === "string" && item && !next.includes(item)) {
-      next.push(item);
-    }
-  }
-  return next;
-}
-
-function splitRightPanelStateUpdate(
+function rightPanelStateUpdate(
   state: WorkspaceUiState,
   workspaceId: string,
   value: SetStateAction<RightPanelWorkspaceState>,
-): Pick<WorkspaceUiState, "rightPanelDurableByWorkspace" | "rightPanelMaterializedByWorkspace"> {
-  const currentDurable = state.rightPanelDurableByWorkspace[workspaceId]
-    ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+): Pick<WorkspaceUiState, "rightPanelMaterializedByWorkspace"> {
   const currentMaterialized = state.rightPanelMaterializedByWorkspace[workspaceId]
     ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
-  const currentMerged = mergeRightPanelState({
-    durableState: currentDurable,
-    materializedState: currentMaterialized,
-    isCloudWorkspaceSelected: true,
-  });
-  const nextMerged = resolveStateValue(value, currentMerged);
-  const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
-    state: nextMerged,
-    width: currentDurable.width,
-    isCloudWorkspaceSelected: true,
-  });
+  const nextMaterialized = reconcileRightPanelWorkspaceState(
+    resolveStateValue(value, currentMaterialized),
+    { isCloudWorkspaceSelected: true },
+  );
 
   return {
-    rightPanelDurableByWorkspace: {
-      ...state.rightPanelDurableByWorkspace,
-      [workspaceId]: {
-        ...durableState,
-        open: currentDurable.open,
-      },
-    },
     rightPanelMaterializedByWorkspace: {
       ...state.rightPanelMaterializedByWorkspace,
-      [workspaceId]: materializedState,
+      [workspaceId]: nextMaterialized,
     },
   };
 }
@@ -885,7 +708,7 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
 
   setRightPanelForWorkspace: (workspaceId, value) => {
     set((state) => ({
-      ...splitRightPanelStateUpdate(state, workspaceId, value),
+      ...rightPanelStateUpdate(state, workspaceId, value),
     }));
   },
 
@@ -893,9 +716,11 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     set((state) => ({
       rightPanelDurableByWorkspace: {
         ...state.rightPanelDurableByWorkspace,
-        [workspaceId]: resolveStateValue(
-          value,
-          state.rightPanelDurableByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+        [workspaceId]: normalizeRightPanelDurableState(
+          resolveStateValue(
+            value,
+            state.rightPanelDurableByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+          ),
         ),
       },
     }));
@@ -905,10 +730,13 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     set((state) => ({
       rightPanelMaterializedByWorkspace: {
         ...state.rightPanelMaterializedByWorkspace,
-        [workspaceId]: resolveStateValue(
-          value,
-          state.rightPanelMaterializedByWorkspace[workspaceId]
-            ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
+        [workspaceId]: reconcileRightPanelWorkspaceState(
+          resolveStateValue(
+            value,
+            state.rightPanelMaterializedByWorkspace[workspaceId]
+              ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
+          ),
+          { isCloudWorkspaceSelected: true },
         ),
       },
     }));

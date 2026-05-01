@@ -2,36 +2,25 @@ import {
   resolveCloudRepoActionState,
   type CloudWorkspaceRepoTarget,
 } from "@/lib/domain/workspaces/cloud-workspace-creation";
-import type {
-  SidebarEmptyState,
-  SidebarGroupState,
-  SidebarIndicatorAction,
+import {
+  SIDEBAR_REPO_GROUP_ITEM_LIMIT,
+  type SidebarEmptyState,
+  type SidebarGroupState,
+  type SidebarIndicatorAction,
 } from "@/lib/domain/workspaces/sidebar";
 import { BrailleSweepBadge } from "@/components/ui/icons";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
 
-export const DEFAULT_REPO_GROUP_ITEM_LIMIT = 6;
-
 interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;
   isLoading: boolean;
   groups: SidebarGroupState[];
   collapsedRepoGroupKeys: ReadonlySet<string>;
-  /**
-   * Groups the user has explicitly expanded via "Show more". Used to decide
-   * whether to show a "Show less" toggle (forced expansions get no toggle).
-   */
-  explicitlyExpandedRepoKeys: Set<string>;
-  /**
-   * Effective expansion set — union of explicit expansions and groups
-   * force-expanded because the selected workspace is past the cap. Used
-   * for slicing.
-   */
-  effectiveExpandedRepoKeys: Set<string>;
+  repoGroupsShownMore: ReadonlySet<string>;
   onToggleRepoCollapsed: (sourceRoot: string) => void;
-  onToggleRepoExpansion: (sourceRoot: string) => void;
+  onToggleRepoShowMore: (sourceRoot: string) => void;
   configuredCloudRepoKeys: ReadonlySet<string>;
   cloudRepoConfigsInitialLoading: boolean;
   cloudWorkspaceEnabled: boolean;
@@ -71,10 +60,9 @@ export function SidebarWorkspaceContent({
   isLoading,
   groups,
   collapsedRepoGroupKeys,
-  explicitlyExpandedRepoKeys,
-  effectiveExpandedRepoKeys,
+  repoGroupsShownMore,
   onToggleRepoCollapsed,
-  onToggleRepoExpansion,
+  onToggleRepoShowMore,
   configuredCloudRepoKeys,
   cloudRepoConfigsInitialLoading,
   cloudWorkspaceEnabled,
@@ -124,23 +112,17 @@ export function SidebarWorkspaceContent({
   }
 
   return groups.map((group, groupIndex) => {
-    const overLimit = group.items.length > DEFAULT_REPO_GROUP_ITEM_LIMIT;
-    const isExplicitlyExpanded = explicitlyExpandedRepoKeys.has(group.sourceRoot);
-    const isEffectivelyExpanded = effectiveExpandedRepoKeys.has(group.sourceRoot);
-    const isForceExpanded = isEffectivelyExpanded && !isExplicitlyExpanded;
-    const shouldTruncate = overLimit && !isEffectivelyExpanded;
+    const overLimit = group.items.length > SIDEBAR_REPO_GROUP_ITEM_LIMIT;
+    const isShownMore = repoGroupsShownMore.has(group.sourceRoot);
+    const shouldTruncate = overLimit && !isShownMore;
     const visibleItems = shouldTruncate
-      ? group.items.slice(0, DEFAULT_REPO_GROUP_ITEM_LIMIT)
+      ? group.items.slice(0, SIDEBAR_REPO_GROUP_ITEM_LIMIT)
       : group.items;
-    // Hide toggle entirely when force-expanded: clicking would be a no-op
-    // since selection would immediately re-expand the group.
     const toggleLabel: "Show more" | "Show less" | null = !overLimit
       ? null
-      : isForceExpanded
-        ? null
-        : isExplicitlyExpanded
-          ? "Show less"
-          : "Show more";
+      : isShownMore
+        ? "Show less"
+        : "Show more";
     const cloudRepoAction = resolveCloudRepoActionState({
       repoTarget: group.cloudRepoTarget,
       configuredRepoKeys: configuredCloudRepoKeys,
@@ -222,7 +204,7 @@ export function SidebarWorkspaceContent({
             {toggleLabel && (
               <SidebarShowToggleRow
                 label={toggleLabel}
-                onClick={() => onToggleRepoExpansion(group.sourceRoot)}
+                onClick={() => onToggleRepoShowMore(group.sourceRoot)}
               />
             )}
           </>

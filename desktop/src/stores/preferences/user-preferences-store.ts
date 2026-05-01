@@ -21,6 +21,8 @@ export {
 } from "@/lib/domain/preferences/user-preferences";
 export type {
   BranchPrefixType,
+  DefaultLiveSessionControlKey,
+  DefaultLiveSessionControlValuesByAgentKind,
   ReviewDefaultKind,
   ReviewDefaultsByKind,
   ReviewKindPreference,
@@ -91,6 +93,8 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     defaultChatModelIdByAgentKind:
       legacyDefaultChatModelIdByAgentKind ?? defaults.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: defaults.defaultSessionModeByAgentKind,
+    defaultLiveSessionControlValuesByAgentKind:
+      defaults.defaultLiveSessionControlValuesByAgentKind,
     defaultOpenInTargetId: legacyDefaultOpenInTargetId ?? defaults.defaultOpenInTargetId,
     branchPrefixType: legacyBranchPrefixType ?? defaults.branchPrefixType,
     turnEndSoundEnabled: defaults.turnEndSoundEnabled,
@@ -141,6 +145,8 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
+    defaultLiveSessionControlValuesByAgentKind:
+      state.defaultLiveSessionControlValuesByAgentKind,
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,

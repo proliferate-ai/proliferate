@@ -36,6 +36,8 @@ export interface WorkspaceCommandPaletteProps {
   repositorySettingsDisabledReason: string | null;
   runCommand: RunCommandState;
   openTerminalPanel: () => boolean;
+  onToggleLeftSidebar: () => void;
+  onToggleRightPanel: () => void;
 }
 
 export function WorkspaceCommandPalette(props: WorkspaceCommandPaletteProps) {
@@ -58,6 +60,8 @@ function WorkspaceCommandPaletteContent({
   repositorySettingsDisabledReason,
   runCommand,
   openTerminalPanel,
+  onToggleLeftSidebar,
+  onToggleRightPanel,
 }: WorkspaceCommandPaletteProps) {
   const [query, setQuery] = useState("");
   const state = useWorkspaceCommandPalette({
@@ -72,6 +76,8 @@ function WorkspaceCommandPaletteContent({
     repositorySettingsDisabledReason,
     runCommand,
     openTerminalPanel,
+    onToggleLeftSidebar,
+    onToggleRightPanel,
   });
 
   return (

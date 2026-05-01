@@ -97,7 +97,10 @@ async def _request(
 async def create_customer(
     *,
     email: str | None,
+    name: str | None = None,
     billing_subject_id: str,
+    organization_id: str | None = None,
+    created_by_user_id: str | None = None,
     idempotency_key: str,
 ) -> dict[str, Any]:
     data = [
@@ -106,6 +109,12 @@ async def create_customer(
     ]
     if email:
         data.append(("email", email))
+    if name:
+        data.append(("name", name))
+    if organization_id:
+        data.append(("metadata[organization_id]", organization_id))
+    if created_by_user_id:
+        data.append(("metadata[created_by_user_id]", created_by_user_id))
     return await _request(
         "POST",
         "/customers",

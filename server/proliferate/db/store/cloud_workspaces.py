@@ -80,7 +80,11 @@ async def list_cloud_workspaces(db: AsyncSession, user_id: UUID) -> list[CloudWo
         (
             await db.execute(
                 select(CloudWorkspace)
-                .where(CloudWorkspace.user_id == user_id, CloudWorkspace.archived_at.is_(None))
+                .where(
+                    CloudWorkspace.owner_scope == "personal",
+                    CloudWorkspace.owner_user_id == user_id,
+                    CloudWorkspace.archived_at.is_(None),
+                )
                 .order_by(CloudWorkspace.updated_at.desc())
             )
         )
@@ -98,7 +102,8 @@ async def get_cloud_workspace_for_user(
         await db.execute(
             select(CloudWorkspace).where(
                 CloudWorkspace.id == workspace_id,
-                CloudWorkspace.user_id == user_id,
+                CloudWorkspace.owner_scope == "personal",
+                CloudWorkspace.owner_user_id == user_id,
             )
         )
     ).scalar_one_or_none()
@@ -125,7 +130,8 @@ async def get_existing_cloud_workspace(
     return (
         await db.execute(
             select(CloudWorkspace).where(
-                CloudWorkspace.user_id == user_id,
+                CloudWorkspace.owner_scope == "personal",
+                CloudWorkspace.owner_user_id == user_id,
                 CloudWorkspace.git_provider == git_provider,
                 CloudWorkspace.git_owner == git_owner,
                 CloudWorkspace.git_repo_name == git_repo_name,
@@ -172,6 +178,10 @@ async def create_cloud_workspace_record(
     )
     workspace = CloudWorkspace(
         user_id=user_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
         billing_subject_id=runtime_environment.billing_subject_id or billing_subject.id,
         runtime_environment_id=runtime_environment.id,
         display_name=display_name,
@@ -672,7 +682,8 @@ async def load_any_cloud_workspace_for_repo(
             await db.execute(
                 select(CloudWorkspace)
                 .where(
-                    CloudWorkspace.user_id == user_id,
+                    CloudWorkspace.owner_scope == "personal",
+                    CloudWorkspace.owner_user_id == user_id,
                     CloudWorkspace.git_owner == git_owner,
                     CloudWorkspace.git_repo_name == git_repo_name,
                 )

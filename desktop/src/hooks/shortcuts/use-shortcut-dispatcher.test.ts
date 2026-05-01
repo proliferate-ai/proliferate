@@ -101,6 +101,32 @@ describe("resolveKeyboardShortcut", () => {
       shortcut: expect.objectContaining({ id: "workspace.open-terminal" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
+
+    expect(resolveKeyboardShortcut({
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.toggle-left-sidebar",
+      shortcut: expect.objectContaining({ id: "workspace.toggle-left-sidebar" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.toggle-right-panel",
+      shortcut: expect.objectContaining({ id: "workspace.toggle-right-panel" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("resolves directional chat and terminal shortcuts with ctrl on non-mac", () => {

@@ -1,7 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
 
-type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted";
+type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted" | "unstyled";
 type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm" | "unstyled";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -23,6 +23,7 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90",
   inverted:
     "bg-foreground text-background hover:bg-foreground/80",
+  unstyled: "",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

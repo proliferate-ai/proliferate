@@ -9,22 +9,11 @@ import {
   normalizeLocalEnvironmentDraft,
   type LocalEnvironmentDraft,
 } from "@/lib/domain/settings/environment-draft";
+import { resolveAutoDetectedBranch } from "@/lib/domain/settings/branch-selection";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
-
-function resolveAutoDetectedBranch(branchRefs: GitBranchRef[]): string | null {
-  const branches = branchRefs
-    .filter((branch) => !branch.isRemote)
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const gitDefault = branches.find((branch) => branch.isDefault)
-    ?? branches.find((branch) => branch.name === "main")
-    ?? branches[0];
-
-  return gitDefault?.name ?? null;
-}
 
 export function useRepositorySettings(repository: SettingsRepositoryEntry | null) {
   const sourceRoot = repository?.sourceRoot ?? null;

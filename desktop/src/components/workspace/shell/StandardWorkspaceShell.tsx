@@ -18,6 +18,7 @@ import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
 import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
@@ -53,7 +54,7 @@ export function StandardWorkspaceShell() {
     rightPanelOpen,
     rightPanelState,
     rightPanelWidth,
-    terminalActivationRequestToken,
+    terminalActivationRequest,
     publishDialog,
     commandPaletteOpen,
     onLeftSeparatorDown,
@@ -112,11 +113,17 @@ export function StandardWorkspaceShell() {
   const repositorySettingsDisabledReason = canOpenRepositorySettings
     ? null
     : "Repository settings are unavailable.";
+  const nativePortalOverlayOpen = useNativeOverlayOpen();
+  const nativeWorkspaceOverlaysHidden = commandPaletteOpen
+    || publishDialog.open
+    || nativePortalOverlayOpen;
 
   useMainScreenShortcuts({
     canOpenCommandPalette: hasWorkspaceShell,
     onOpenCommandPalette: actions.handleCommandPaletteOpen,
     onOpenTerminal: actions.openTerminalPanel,
+    onToggleLeftSidebar: actions.onToggleSidebar,
+    onToggleRightPanel: actions.toggleRightPanel,
   });
 
   useEffect(() => {
@@ -258,6 +265,7 @@ export function StandardWorkspaceShell() {
                     <RightPanel
                       workspaceId={selectedWorkspaceId}
                       isWorkspaceReady={hasRuntimeReadyWorkspace}
+                      isOpen={rightPanelOpen}
                       shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
                       isCloudWorkspaceSelected={isCloudWorkspaceSelected}
                       state={rightPanelState}
@@ -266,7 +274,16 @@ export function StandardWorkspaceShell() {
                         repo: null,
                       })}
                       onStateChange={layout.setRightPanelState}
-                      terminalActivationRequestToken={terminalActivationRequestToken}
+                      terminalActivationRequest={terminalActivationRequest}
+                      nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
+                      onTerminalActivationRequestHandled={(request) => {
+                        layout.setTerminalActivationRequest((current) =>
+                          current?.workspaceId === request.workspaceId
+                          && current.token === request.token
+                            ? null
+                            : current
+                        );
+                      }}
                     />
                   </div>
                 </div>
@@ -283,6 +300,8 @@ export function StandardWorkspaceShell() {
                   repositorySettingsDisabledReason={repositorySettingsDisabledReason}
                   runCommand={runCommand}
                   openTerminalPanel={actions.openTerminalPanel}
+                  onToggleLeftSidebar={actions.onToggleSidebar}
+                  onToggleRightPanel={actions.toggleRightPanel}
                 />
 
                 {hasRuntimeReadyWorkspace && (

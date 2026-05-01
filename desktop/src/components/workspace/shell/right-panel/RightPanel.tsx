@@ -7,27 +7,41 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useNavigate } from "react-router-dom";
+import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import {
+  RIGHT_PANEL_BROWSER_TAB_LIMIT,
   availableRightPanelTools,
+  canCreateRightPanelBrowserTab,
+  createBrowserTabInRightPanelState,
+  createRightPanelBrowserTabId,
   parseRightPanelHeaderEntryKey,
   reconcileRightPanelWorkspaceState,
+  removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
+  rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
+  terminalIdsFromHeaderOrder,
+  updateBrowserTabUrlInRightPanelState,
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
-import { isApplePlatform, isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
+import {
+  orderBrowserTabs,
+  orderTerminals,
+  resolvePrimaryDigitShortcutIndex,
+  rightPanelStateEqual,
+} from "@/lib/domain/workspaces/right-panel-view";
+import { isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -38,26 +52,37 @@ import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/
 
 const EMPTY_TERMINALS: never[] = [];
 
+interface TerminalActivationRequest {
+  token: number;
+  workspaceId: string;
+}
+
 interface RightPanelProps {
   workspaceId: string | null;
   isWorkspaceReady: boolean;
+  isOpen: boolean;
   shouldKeepContentVisible?: boolean;
   isCloudWorkspaceSelected: boolean;
   state: RightPanelWorkspaceState;
   repoSettingsHref: string;
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
-  terminalActivationRequestToken: number;
+  terminalActivationRequest: TerminalActivationRequest | null;
+  nativeOverlaysHidden?: boolean;
+  onTerminalActivationRequestHandled: (request: TerminalActivationRequest) => void;
 }
 
 export function RightPanel({
   workspaceId,
   isWorkspaceReady,
+  isOpen,
   shouldKeepContentVisible = false,
   isCloudWorkspaceSelected,
   state,
   repoSettingsHref,
   onStateChange,
-  terminalActivationRequestToken,
+  terminalActivationRequest,
+  nativeOverlaysHidden = false,
+  onTerminalActivationRequestHandled,
 }: RightPanelProps) {
   const { createTab, closeTab, renameTab } = useTerminalActions();
   const navigate = useNavigate();
@@ -68,52 +93,51 @@ export function RightPanel({
   const showToast = useToastStore((store) => store.show);
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const handledActivationTokenRef = useRef(0);
+  const handledActivationRequestRef = useRef<string | null>(null);
   const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
   const terminalsQuery = useTerminalsQuery({
     workspaceId,
     enabled: Boolean(workspaceId && shouldRenderContent),
   });
   const terminals = terminalsQuery.data ?? EMPTY_TERMINALS;
+  const terminalIdsInHeader = useMemo(
+    () => new Set(terminalIdsFromHeaderOrder(state.headerOrder)),
+    [state.headerOrder],
+  );
   const visibleTerminals = useMemo(
     () => terminals.filter((terminal) =>
-      terminal.purpose !== "setup" || state.terminalOrder.includes(terminal.id)
+      terminal.purpose !== "setup" || terminalIdsInHeader.has(terminal.id)
     ),
-    [state.terminalOrder, terminals],
-  );
-  const liveTerminalIds = useMemo(
-    () => visibleTerminals.map((terminal) => terminal.id),
-    [visibleTerminals],
-  );
-  const availableTools = useMemo(
-    () => availableRightPanelTools(isCloudWorkspaceSelected),
-    [isCloudWorkspaceSelected],
-  );
-  const orderedTools = useMemo(
-    () => state.toolOrder.filter((tool) => availableTools.includes(tool)),
-    [availableTools, state.toolOrder],
-  );
-  const orderedTerminals = useMemo(
-    () => orderTerminals(visibleTerminals, state.terminalOrder),
-    [state.terminalOrder, visibleTerminals],
+    [terminalIdsInHeader, terminals],
   );
   const terminalById = useMemo(
-    () => new Map(orderedTerminals.map((terminal) => [terminal.id, terminal])),
-    [orderedTerminals],
+    () => new Map(visibleTerminals.map((terminal) => [terminal.id, terminal])),
+    [visibleTerminals],
   );
-  const selectedTerminal = useMemo(
-    () => orderedTerminals.find((terminal) => terminal.id === state.activeTerminalId) ?? null,
-    [orderedTerminals, state.activeTerminalId],
+  const orderedTerminals = useMemo(
+    () => orderTerminals(visibleTerminals, state.headerOrder),
+    [state.headerOrder, visibleTerminals],
   );
-  const activeTool = state.activeTool === "terminal"
-    ? "terminal"
-    : orderedTools.includes(state.activeTool)
-      ? state.activeTool
-      : "git";
+  const activeEntry = useMemo(
+    () => parseRightPanelHeaderEntryKey(state.activeEntryKey),
+    [state.activeEntryKey],
+  );
+  const activeTool = activeEntry?.kind === "tool" ? activeEntry.tool : null;
+  const activeTerminalId = activeEntry?.kind === "terminal" ? activeEntry.terminalId : null;
+  const activeBrowserId = activeEntry?.kind === "browser" ? activeEntry.browserId : null;
+  const terminalActivationRequestToken = terminalActivationRequest?.workspaceId === workspaceId
+    ? terminalActivationRequest.token
+    : 0;
+  const browserTabs = useMemo(
+    () => orderBrowserTabs(state.browserTabsById, state.headerOrder),
+    [state.browserTabsById, state.headerOrder],
+  );
+  const canCreateBrowserTab = canCreateRightPanelBrowserTab(state);
+
   const headerEntries = useMemo<HeaderEntry[]>(() => {
     const entries: HeaderEntry[] = [];
     const seenKeys = new Set<RightPanelHeaderEntryKey>();
-    const availableToolSet = new Set(orderedTools);
+    const availableToolSet = new Set(availableRightPanelTools(isCloudWorkspaceSelected));
 
     for (const key of state.headerOrder) {
       const entry = parseRightPanelHeaderEntryKey(key);
@@ -125,31 +149,25 @@ export function RightPanel({
         seenKeys.add(key);
       }
       if (entry.kind === "terminal") {
-        const terminal = terminalById.get(entry.terminalId);
-        if (terminal) {
-          entries.push({ kind: "terminal", key, terminal });
+        entries.push({
+          kind: "terminal",
+          key,
+          terminalId: entry.terminalId,
+          terminal: terminalById.get(entry.terminalId) ?? null,
+        });
+        seenKeys.add(key);
+      }
+      if (entry.kind === "browser") {
+        const tab = state.browserTabsById[entry.browserId];
+        if (tab) {
+          entries.push({ kind: "browser", key, tab });
           seenKeys.add(key);
         }
       }
     }
 
-    for (const tool of orderedTools) {
-      const key = rightPanelToolHeaderKey(tool);
-      if (!seenKeys.has(key)) {
-        entries.push({ kind: "tool", key, tool });
-        seenKeys.add(key);
-      }
-    }
-    for (const terminal of orderedTerminals) {
-      const key = rightPanelTerminalHeaderKey(terminal.id);
-      if (!seenKeys.has(key)) {
-        entries.push({ kind: "terminal", key, terminal });
-        seenKeys.add(key);
-      }
-    }
-
     return entries;
-  }, [orderedTerminals, orderedTools, state.headerOrder, terminalById]);
+  }, [isCloudWorkspaceSelected, state.browserTabsById, state.headerOrder, terminalById]);
 
   const updateState = useCallback(
     (value: SetStateAction<RightPanelWorkspaceState>) => {
@@ -162,8 +180,11 @@ export function RightPanel({
               current,
             )
           : value;
-        if (!rightPanelStateEqual(current, next)) {
-          return next;
+        const reconciledNext = reconcileRightPanelWorkspaceState(next, {
+          isCloudWorkspaceSelected,
+        });
+        if (!rightPanelStateEqual(current, reconciledNext)) {
+          return reconciledNext;
         }
         return rightPanelStateEqual(previous, current) ? previous : current;
       });
@@ -174,7 +195,7 @@ export function RightPanel({
   useEffect(() => {
     const next = reconcileRightPanelWorkspaceState(state, {
       isCloudWorkspaceSelected,
-      liveTerminalIds: terminalsQuery.isSuccess ? liveTerminalIds : undefined,
+      liveTerminals: terminalsQuery.isSuccess ? terminals : undefined,
     });
     if (rightPanelStateEqual(state, next)) {
       return;
@@ -182,8 +203,8 @@ export function RightPanel({
     updateState(next);
   }, [
     isCloudWorkspaceSelected,
-    liveTerminalIds,
     state,
+    terminals,
     terminalsQuery.isSuccess,
     updateState,
   ]);
@@ -192,22 +213,21 @@ export function RightPanel({
     if (!workspaceId) {
       return;
     }
-    setActiveTerminalForWorkspace(
-      workspaceId,
-      state.activeTool === "terminal" ? state.activeTerminalId : null,
-    );
+    setActiveTerminalForWorkspace(workspaceId, activeTerminalId);
   }, [
+    activeTerminalId,
     setActiveTerminalForWorkspace,
-    state.activeTerminalId,
-    state.activeTool,
     workspaceId,
   ]);
 
   const selectTerminal = useCallback((terminalId: string) => {
+    const terminalKey = rightPanelTerminalHeaderKey(terminalId);
     updateState((previous) => ({
       ...previous,
-      activeTool: "terminal",
-      activeTerminalId: terminalId,
+      activeEntryKey: terminalKey,
+      headerOrder: previous.headerOrder.includes(terminalKey)
+        ? previous.headerOrder
+        : [...previous.headerOrder, terminalKey],
     }));
     if (workspaceId) {
       setActiveTerminalForWorkspace(workspaceId, terminalId);
@@ -224,14 +244,10 @@ export function RightPanel({
       const terminalKey = rightPanelTerminalHeaderKey(terminalId);
       updateState((previous) => ({
         ...previous,
-        activeTool: "terminal",
-        terminalOrder: previous.terminalOrder.includes(terminalId)
-          ? previous.terminalOrder
-          : [...previous.terminalOrder, terminalId],
+        activeEntryKey: terminalKey,
         headerOrder: previous.headerOrder.includes(terminalKey)
           ? previous.headerOrder
           : [...previous.headerOrder, terminalKey],
-        activeTerminalId: terminalId,
       }));
       setTerminalFocusNonce((nonce) => nonce + 1);
       return terminalId;
@@ -243,15 +259,9 @@ export function RightPanel({
   }, [createTab, shouldRenderContent, showToast, updateState, workspaceId]);
 
   const activateTerminalTool = useCallback(async () => {
-    updateState((previous) => ({ ...previous, activeTool: "terminal" }));
     setTerminalFocusNonce((nonce) => nonce + 1);
 
     if (!workspaceId || !shouldRenderContent) {
-      return;
-    }
-
-    if (terminalsQuery.isLoading || (terminalsQuery.isFetching && !terminalsQuery.data)) {
-      showToast("Terminals are loading.");
       return;
     }
 
@@ -260,27 +270,26 @@ export function RightPanel({
       showToast("Failed to load terminals.");
       return;
     }
-    const records = result.data.filter((terminal) =>
-      terminal.purpose !== "setup" || state.terminalOrder.includes(terminal.id)
-    );
-
-    const next = reconcileRightPanelWorkspaceState({ ...state, activeTool: "terminal" }, {
+    const next = reconcileRightPanelWorkspaceState(state, {
       isCloudWorkspaceSelected,
-      liveTerminalIds: records.map((terminal) => terminal.id),
+      liveTerminals: result.data,
     });
     updateState(next);
+    const records = result.data.filter((terminal) =>
+      terminal.purpose !== "setup" || terminalIdsFromHeaderOrder(next.headerOrder).includes(terminal.id)
+    );
 
     if (records.length === 0) {
       await createTerminal();
       return;
     }
 
-    if (next.activeTerminalId) {
-      setTerminalFocusNonce((nonce) => nonce + 1);
-    } else {
-      selectTerminal(records[0]!.id);
-    }
+    const activeTerminalStillExists = activeTerminalId
+      ? records.some((terminal) => terminal.id === activeTerminalId)
+      : false;
+    selectTerminal(activeTerminalStillExists && activeTerminalId ? activeTerminalId : records[0]!.id);
   }, [
+    activeTerminalId,
     createTerminal,
     isCloudWorkspaceSelected,
     selectTerminal,
@@ -293,26 +302,41 @@ export function RightPanel({
   ]);
 
   useEffect(() => {
+    const activationRequestKey = terminalActivationRequest
+      ? `${terminalActivationRequest.workspaceId}:${terminalActivationRequest.token}`
+      : null;
     if (
-      terminalActivationRequestToken === 0
-      || handledActivationTokenRef.current === terminalActivationRequestToken
+      !terminalActivationRequest
+      || terminalActivationRequest.workspaceId !== workspaceId
+      || handledActivationRequestRef.current === activationRequestKey
     ) {
       return;
     }
-    handledActivationTokenRef.current = terminalActivationRequestToken;
+    if (!workspaceId || !shouldRenderContent) {
+      return;
+    }
+    handledActivationRequestRef.current = activationRequestKey;
+    onTerminalActivationRequestHandled(terminalActivationRequest);
     void activateTerminalTool();
-  }, [activateTerminalTool, terminalActivationRequestToken]);
+  }, [
+    activateTerminalTool,
+    onTerminalActivationRequestHandled,
+    shouldRenderContent,
+    terminalActivationRequest,
+    workspaceId,
+  ]);
 
   const activateTool = useCallback(
     (tool: RightPanelTool) => {
-      if (tool === "terminal") {
-        void activateTerminalTool();
-        return;
-      }
-      updateState((previous) => ({ ...previous, activeTool: tool }));
+      updateState((previous) => ({ ...previous, activeEntryKey: rightPanelToolHeaderKey(tool) }));
     },
-    [activateTerminalTool, updateState],
+    [updateState],
   );
+
+  const selectBrowser = useCallback((browserId: string) => {
+    const browserKey = rightPanelBrowserHeaderKey(browserId);
+    updateState((previous) => ({ ...previous, activeEntryKey: browserKey }));
+  }, [updateState]);
 
   const activateHeaderEntry = useCallback(
     (entry: HeaderEntry) => {
@@ -320,9 +344,13 @@ export function RightPanel({
         activateTool(entry.tool);
         return;
       }
-      selectTerminal(entry.terminal.id);
+      if (entry.kind === "terminal") {
+        selectTerminal(entry.terminalId);
+        return;
+      }
+      selectBrowser(entry.tab.id);
     },
-    [activateTool, selectTerminal],
+    [activateTool, selectBrowser, selectTerminal],
   );
 
   useEffect(() => {
@@ -396,6 +424,42 @@ export function RightPanel({
     }
   }, [renameTab, showToast, workspaceId]);
 
+  const handleCreateBrowser = useCallback(() => {
+    if (!workspaceId || !shouldRenderContent) {
+      return;
+    }
+    if (!canCreateBrowserTab) {
+      showToast(`Maximum ${RIGHT_PANEL_BROWSER_TAB_LIMIT} browser tabs. Close one to open another.`);
+      return;
+    }
+    updateState((previous) =>
+      createBrowserTabInRightPanelState(
+        previous,
+        createRightPanelBrowserTabId(),
+        isCloudWorkspaceSelected,
+      ),
+    );
+  }, [
+    canCreateBrowserTab,
+    isCloudWorkspaceSelected,
+    shouldRenderContent,
+    showToast,
+    updateState,
+    workspaceId,
+  ]);
+
+  const handleCloseBrowser = useCallback((browserId: string) => {
+    updateState((previous) =>
+      removeBrowserTabFromRightPanelState(previous, browserId, isCloudWorkspaceSelected)
+    );
+  }, [isCloudWorkspaceSelected, updateState]);
+
+  const handleUpdateBrowserUrl = useCallback((browserId: string, url: string) => {
+    updateState((previous) =>
+      updateBrowserTabUrlInRightPanelState(previous, browserId, url, isCloudWorkspaceSelected)
+    );
+  }, [isCloudWorkspaceSelected, updateState]);
+
   const handleReorderHeaderEntry = useCallback(
     (
       entryKey: RightPanelHeaderEntryKey,
@@ -414,7 +478,8 @@ export function RightPanel({
   );
 
   const shouldMountTerminalPanel = shouldRenderContent
-    && (activeTool === "terminal" || orderedTerminals.length > 0);
+    && (activeTerminalId !== null || orderedTerminals.length > 0);
+  const shouldMountBrowserPanel = browserTabs.length > 0;
 
   return (
     <div
@@ -425,18 +490,20 @@ export function RightPanel({
     >
       <RightPanelHeaderTabs
         entries={headerEntries}
-        activeTool={activeTool}
-        activeTerminalId={selectedTerminal?.id ?? null}
-        orderedTerminals={orderedTerminals}
+        activeEntryKey={state.activeEntryKey}
         unreadByTerminal={unreadByTerminal}
         isWorkspaceReady={isWorkspaceReady}
+        canCreateBrowserTab={canCreateBrowserTab}
         onActivateTool={activateTool}
         onSelectTerminal={selectTerminal}
+        onSelectBrowser={selectBrowser}
         onCloseTerminal={handleCloseTerminal}
+        onCloseBrowser={handleCloseBrowser}
         onRenameTerminal={handleRenameTerminal}
         onCreateTerminal={() => {
           void createTerminal();
         }}
+        onCreateBrowser={handleCreateBrowser}
         onReorderHeaderEntry={handleReorderHeaderEntry}
         onOpenRepoSettings={() => navigate(repoSettingsHref)}
       />
@@ -447,7 +514,7 @@ export function RightPanel({
         className="relative min-h-0 flex-1 overflow-hidden"
       >
         {!shouldRenderContent ? (
-          <RightPanelPlaceholder tool={activeTool} />
+          <RightPanelPlaceholder activeEntryKey={state.activeEntryKey} />
         ) : (
           <>
             {activeTool === "files" && (
@@ -465,21 +532,37 @@ export function RightPanel({
                 <GitPanel />
               </div>
             )}
+            {shouldMountBrowserPanel && (
+              <div className={activeBrowserId ? "absolute inset-0" : "hidden"}>
+                <WorkspaceBrowserPanel
+                  workspaceId={workspaceId}
+                  tabs={browserTabs}
+                  activeBrowserId={activeBrowserId}
+                  isVisible={isOpen && activeBrowserId !== null}
+                  nativeOverlaysHidden={nativeOverlaysHidden}
+                  onUpdateUrl={handleUpdateBrowserUrl}
+                />
+              </div>
+            )}
             {shouldMountTerminalPanel && (
-              <div className={activeTool === "terminal" ? "absolute inset-0" : "hidden"}>
+              <div className={activeTerminalId ? "absolute inset-0" : "hidden"}>
                 <TerminalPanel
                   workspaceId={workspaceId}
                   terminals={orderedTerminals}
-                  activeTerminalId={selectedTerminal?.id ?? null}
-                  isVisible={activeTool === "terminal"}
+                  activeTerminalId={activeTerminalId}
+                  isVisible={activeTerminalId !== null}
                   isRuntimeReady={isWorkspaceReady}
                   canConnect={terminalsQuery.isSuccess}
                   isLoading={terminalsQuery.isLoading && !terminalsQuery.data}
                   errorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}
                   focusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
+                  unreadByTerminal={unreadByTerminal}
                   onNewTerminal={() => {
                     void createTerminal();
                   }}
+                  onSelectTerminal={selectTerminal}
+                  onCloseTerminal={handleCloseTerminal}
+                  onRenameTerminal={handleRenameTerminal}
                 />
               </div>
             )}
@@ -488,56 +571,4 @@ export function RightPanel({
       </div>
     </div>
   );
-}
-
-function orderTerminals(
-  terminals: readonly TerminalRecord[],
-  terminalOrder: readonly string[],
-): TerminalRecord[] {
-  const byId = new Map(terminals.map((terminal) => [terminal.id, terminal]));
-  const ordered: TerminalRecord[] = [];
-  for (const terminalId of terminalOrder) {
-    const terminal = byId.get(terminalId);
-    if (terminal) {
-      ordered.push(terminal);
-      byId.delete(terminalId);
-    }
-  }
-  ordered.push(...byId.values());
-  return ordered;
-}
-
-function rightPanelStateEqual(
-  left: RightPanelWorkspaceState,
-  right: RightPanelWorkspaceState,
-): boolean {
-  return left.activeTool === right.activeTool
-    && left.activeTerminalId === right.activeTerminalId
-    && arraysEqual(left.toolOrder, right.toolOrder)
-    && arraysEqual(left.terminalOrder, right.terminalOrder)
-    && arraysEqual(left.headerOrder, right.headerOrder);
-}
-
-function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((item, index) => item === right[index]);
-}
-
-function resolvePrimaryDigitShortcutIndex(event: KeyboardEvent): number | null {
-  if (event.shiftKey || event.altKey) {
-    return null;
-  }
-
-  const isApple = isApplePlatform();
-  const hasPrimaryModifier = isApple
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
-  if (!hasPrimaryModifier) {
-    return null;
-  }
-
-  const keyDigit = /^[1-9]$/.test(event.key) ? Number.parseInt(event.key, 10) : null;
-  const codeMatch = /^Digit([1-9])$/.exec(event.code);
-  const codeDigit = codeMatch ? Number.parseInt(codeMatch[1]!, 10) : null;
-  const digit = keyDigit ?? codeDigit;
-  return digit ? digit - 1 : null;
 }

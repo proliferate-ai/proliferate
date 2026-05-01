@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.models.auth import User
@@ -27,15 +28,28 @@ from proliferate.server.cloud.workspaces.service import (
     sync_cloud_workspace_credentials,
     sync_cloud_workspace_display_name,
 )
+from proliferate.server.organizations.service import OwnerSelection
 
 router = APIRouter()
 
 
 @router.get("/workspaces", response_model=list[WorkspaceSummary])
 async def list_cloud_workspaces_endpoint(
+    owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
+    organization_id: UUID | None = Query(default=None, alias="organizationId"),
     user: User = Depends(current_active_user),
 ) -> list[WorkspaceSummary]:
-    return await list_cloud_workspaces_for_user(user.id)
+    try:
+        return await list_cloud_workspaces_for_user(
+            user.id,
+            user=user,
+            owner_selection=OwnerSelection(
+                owner_scope=owner_scope,
+                organization_id=organization_id,
+            ),
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
 
 
 @router.post("/workspaces", response_model=WorkspaceDetail)
@@ -52,6 +66,10 @@ async def create_cloud_workspace_endpoint(
             base_branch=body.base_branch,
             branch_name=body.branch_name,
             display_name=body.display_name,
+            owner_selection=OwnerSelection(
+                owner_scope=body.owner_scope,
+                organization_id=body.organization_id,
+            ),
         )
     except CloudApiError as error:
         raise_cloud_error(error)

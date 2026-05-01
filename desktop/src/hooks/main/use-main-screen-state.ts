@@ -34,9 +34,8 @@ import {
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   clampRightPanelWidth,
-  mergeRightPanelState,
+  normalizeRightPanelDurableState,
   reconcileRightPanelWorkspaceState,
-  splitLegacyRightPanelWorkspaceState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
@@ -61,8 +60,8 @@ export interface MainScreenLayoutState {
   setSidebarWidth: Dispatch<SetStateAction<number>>;
   rightPanelOpen: boolean;
   setRightPanelOpen: Dispatch<SetStateAction<boolean>>;
-  terminalActivationRequestToken: number;
-  setTerminalActivationRequestToken: Dispatch<SetStateAction<number>>;
+  terminalActivationRequest: TerminalActivationRequest | null;
+  setTerminalActivationRequest: Dispatch<SetStateAction<TerminalActivationRequest | null>>;
   publishDialog: PublishDialogState;
   setPublishDialog: Dispatch<SetStateAction<PublishDialogState>>;
   commandPaletteOpen: boolean;
@@ -71,6 +70,11 @@ export interface MainScreenLayoutState {
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
   onLeftSeparatorDown: (event: MouseEvent) => void;
   onRightSeparatorDown: (event: MouseEvent) => void;
+}
+
+export interface TerminalActivationRequest {
+  token: number;
+  workspaceId: string;
 }
 
 export interface MainScreenDataState {
@@ -95,7 +99,8 @@ export function useMainScreenState(): MainScreenState {
     materializedWorkspaceId: string;
     nonce: number;
   } | null>(null);
-  const [terminalActivationRequestToken, setTerminalActivationRequestToken] = useState(0);
+  const [terminalActivationRequest, setTerminalActivationRequest] =
+    useState<TerminalActivationRequest | null>(null);
   const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
     CLOSED_PUBLISH_DIALOG_STATE,
   );
@@ -134,23 +139,19 @@ export function useMainScreenState(): MainScreenState {
     workspaceUiKey,
     materializedWorkspaceId,
   );
-  const rightPanelDurableState =
-    rightPanelDurableFallback.value ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+  const rightPanelDurableState = normalizeRightPanelDurableState(
+    rightPanelDurableFallback.value ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+  );
   const rightPanelMaterializedState = materializedWorkspaceId
     ? rightPanelMaterializedByWorkspace[materializedWorkspaceId]
       ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE
     : DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
   const rightPanelWidth = rightPanelDurableState.width ?? RIGHT_PANEL_DEFAULT_WIDTH;
   const rightPanelState = useMemo(
-    () => reconcileRightPanelWorkspaceState(
-      mergeRightPanelState({
-        durableState: rightPanelDurableState,
-        materializedState: rightPanelMaterializedState,
-        isCloudWorkspaceSelected,
-      }),
-      { isCloudWorkspaceSelected },
-    ),
-    [isCloudWorkspaceSelected, rightPanelDurableState, rightPanelMaterializedState],
+    () => reconcileRightPanelWorkspaceState(rightPanelMaterializedState, {
+      isCloudWorkspaceSelected,
+    }),
+    [isCloudWorkspaceSelected, rightPanelMaterializedState],
   );
   useEffect(() => {
     if (
@@ -177,29 +178,17 @@ export function useMainScreenState(): MainScreenState {
             rightPanelState,
           )
         : value;
-      const split = splitLegacyRightPanelWorkspaceState({
-        state: next,
-        width: rightPanelDurableState.width,
-        isCloudWorkspaceSelected,
-      });
-      setRightPanelDurableForWorkspace(workspaceUiKey, {
-        ...split.durableState,
-        open: rightPanelDurableState.open,
-      });
       if (materializedWorkspaceId) {
         setRightPanelMaterializedForWorkspace(
           materializedWorkspaceId,
-          split.materializedState,
+          reconcileRightPanelWorkspaceState(next, { isCloudWorkspaceSelected }),
         );
       }
     },
     [
       isCloudWorkspaceSelected,
       materializedWorkspaceId,
-      rightPanelDurableState.open,
-      rightPanelDurableState.width,
       rightPanelState,
-      setRightPanelDurableForWorkspace,
       setRightPanelMaterializedForWorkspace,
       workspaceUiKey,
     ],
@@ -350,8 +339,8 @@ export function useMainScreenState(): MainScreenState {
       setSidebarWidth,
       rightPanelOpen,
       setRightPanelOpen,
-      terminalActivationRequestToken,
-      setTerminalActivationRequestToken,
+      terminalActivationRequest,
+      setTerminalActivationRequest,
       publishDialog,
       setPublishDialog,
       commandPaletteOpen,

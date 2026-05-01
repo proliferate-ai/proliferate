@@ -9,7 +9,9 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
+  parseRightPanelHeaderEntryKey,
   rightPanelTerminalHeaderKey,
+  rightPanelToolHeaderKey,
   type RightPanelTool,
 } from "@/lib/domain/workspaces/right-panel";
 import type {
@@ -43,16 +45,15 @@ export function useMainScreenActions({
     setRightPanelState,
     setSidebarOpen,
     setRightPanelOpen,
-    setTerminalActivationRequestToken,
+    setTerminalActivationRequest,
     setCommandPaletteOpen,
     setPublishDialog,
   } = layout;
 
-  const openRightPanelTool = useCallback((tool: RightPanelTool, terminalId?: string) => {
+  const openRightPanelTool = useCallback((tool: RightPanelTool) => {
     setRightPanelState((previous) => ({
       ...previous,
-      activeTool: tool,
-      activeTerminalId: terminalId ?? previous.activeTerminalId,
+      activeEntryKey: rightPanelToolHeaderKey(tool),
     }));
     setRightPanelOpen(true);
   }, [setRightPanelOpen, setRightPanelState]);
@@ -66,36 +67,44 @@ export function useMainScreenActions({
       const terminalKey = rightPanelTerminalHeaderKey(terminalId);
       setRightPanelState((previous) => ({
         ...previous,
-        activeTool: "terminal",
-        terminalOrder: previous.terminalOrder.includes(terminalId)
-          ? previous.terminalOrder
-          : [...previous.terminalOrder, terminalId],
         headerOrder: previous.headerOrder.includes(terminalKey)
           ? previous.headerOrder
           : [...previous.headerOrder, terminalKey],
-        activeTerminalId: terminalId,
+        activeEntryKey: terminalKey,
       }));
       setRightPanelOpen(true);
-      setTerminalActivationRequestToken((token) => token + 1);
+      setTerminalActivationRequest((request) => ({
+        token: (request?.token ?? 0) + 1,
+        workspaceId: selectedWorkspaceId,
+      }));
       return true;
     }
 
-    openRightPanelTool("terminal", terminalId);
-    setTerminalActivationRequestToken((token) => token + 1);
+    setRightPanelOpen(true);
+    setTerminalActivationRequest((request) => ({
+      token: (request?.token ?? 0) + 1,
+      workspaceId: selectedWorkspaceId,
+    }));
     return true;
   }, [
-    openRightPanelTool,
     selectedWorkspaceId,
-    setTerminalActivationRequestToken,
+    setRightPanelOpen,
+    setRightPanelState,
+    setTerminalActivationRequest,
   ]);
 
   const toggleRightPanel = useCallback(() => {
     if (rightPanelOpen) {
       setRightPanelOpen(false);
     } else {
-      openRightPanelTool(rightPanelState.activeTool ?? "git");
+      const activeEntry = parseRightPanelHeaderEntryKey(rightPanelState.activeEntryKey);
+      if (activeEntry?.kind === "tool") {
+        openRightPanelTool(activeEntry.tool);
+        return;
+      }
+      setRightPanelOpen(true);
     }
-  }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeTool, setRightPanelOpen]);
+  }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeEntryKey, setRightPanelOpen]);
 
   const openPrInBrowser = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
     const url = pullRequest?.url ?? existingPr?.url;

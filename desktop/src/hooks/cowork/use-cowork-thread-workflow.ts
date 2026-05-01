@@ -1,4 +1,10 @@
-import { useModelRegistriesQuery, useCreateCoworkThreadMutation } from "@anyharness/sdk-react";
+import {
+  getAnyHarnessClient,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+  useCreateCoworkThreadMutation,
+  useModelRegistriesQuery,
+} from "@anyharness/sdk-react";
 import type { ModelRegistry } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -36,6 +42,7 @@ import {
 import {
   createSessionSlotFromSummary,
 } from "@/lib/integrations/anyharness/session-runtime";
+import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
@@ -62,6 +69,7 @@ export function useCoworkThreadWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const anyHarnessRuntime = useAnyHarnessRuntimeContext();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const enterPendingWorkspaceShell = useHarnessStore(
     (state) => state.enterPendingWorkspaceShell,
@@ -79,6 +87,8 @@ export function useCoworkThreadWorkflow() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    defaultLiveSessionControlValuesByAgentKind:
+      state.defaultLiveSessionControlValuesByAgentKind,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));
   const showToast = useToastStore((state) => state.show);
@@ -195,14 +205,29 @@ export function useCoworkThreadWorkflow() {
         return null;
       }
 
+      const launchDefaults = await applySessionLaunchDefaults({
+        client: getAnyHarnessClient(resolveRuntimeConnection(anyHarnessRuntime)),
+        session: result.session,
+        agentKind: input.agentKind,
+        modelRegistries,
+        defaultLiveSessionControlValuesByAgentKind:
+          preferences.defaultLiveSessionControlValuesByAgentKind,
+      });
+
+      if (!isAttemptCurrent(entry.attemptId)) {
+        return null;
+      }
+
+      const launchedSession = launchDefaults.session;
+
       queryClient.setQueriesData<WorkspaceCollections | undefined>(
         { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
         (collections) => upsertLocalWorkspaceCollections(collections, result.workspace),
       );
-      upsertWorkspaceSessionRecord(result.workspace.id, result.session);
+      upsertWorkspaceSessionRecord(result.workspace.id, launchedSession);
       putSessionSlot(
-        result.session.id,
-        createSessionSlotFromSummary(result.session, result.workspace.id, {
+        launchedSession.id,
+        createSessionSlotFromSummary(launchedSession, result.workspace.id, {
           transcriptHydrated: true,
         }),
       );
@@ -222,15 +247,15 @@ export function useCoworkThreadWorkflow() {
       setSelectedLogicalWorkspaceId(null);
       setSelectedWorkspace(result.workspace.id, {
         clearPending: false,
-        initialActiveSessionId: result.session.id,
+        initialActiveSessionId: launchedSession.id,
       });
-      rememberLastViewedSession(result.workspace.id, result.session.id);
+      rememberLastViewedSession(result.workspace.id, launchedSession.id);
       trackWorkspaceInteraction(result.workspace.id, new Date().toISOString());
       markWorkspaceViewed(result.workspace.id);
       markWorkspaceBootstrappedInSession(result.workspace.id);
 
       const streamStartedAt = startLatencyTimer();
-      void ensureSessionStreamConnected(result.session.id, {
+      void ensureSessionStreamConnected(launchedSession.id, {
         resumeIfActive: false,
         skipInitialRefresh: true,
         refreshOnStartupReady: true,
@@ -238,14 +263,14 @@ export function useCoworkThreadWorkflow() {
         logLatency("workspace.cowork.create.stream_dispatched", {
           attemptId: entry.attemptId,
           workspaceId: result.workspace.id,
-          sessionId: result.session.id,
+          sessionId: launchedSession.id,
           elapsedMs: elapsedMs(streamStartedAt),
         });
       }).catch(() => {
         logLatency("workspace.cowork.create.stream_dispatch_failed", {
           attemptId: entry.attemptId,
           workspaceId: result.workspace.id,
-          sessionId: result.session.id,
+          sessionId: launchedSession.id,
           elapsedMs: elapsedMs(streamStartedAt),
         });
       });
@@ -302,14 +327,17 @@ export function useCoworkThreadWorkflow() {
       throw error;
     }
   }, [
+    anyHarnessRuntime,
     clearDraft,
     createCoworkThreadMutation,
     enterPendingWorkspaceShell,
     ensureSessionStreamConnected,
     initForWorkspace,
+    modelRegistries,
     navigateToWorkspaceShell,
     putSessionSlot,
     preferences.coworkWorkspaceDelegationEnabled,
+    preferences.defaultLiveSessionControlValuesByAgentKind,
     queryClient,
     requestComposerFocus,
     runtimeUrl,

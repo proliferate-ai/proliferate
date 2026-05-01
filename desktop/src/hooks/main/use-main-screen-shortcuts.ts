@@ -6,12 +6,16 @@ interface UseMainScreenShortcutsArgs {
   canOpenCommandPalette: boolean;
   onOpenCommandPalette: () => void;
   onOpenTerminal: () => boolean;
+  onToggleLeftSidebar: () => void;
+  onToggleRightPanel: () => void;
 }
 
 export function useMainScreenShortcuts({
   canOpenCommandPalette,
   onOpenCommandPalette,
   onOpenTerminal,
+  onToggleLeftSidebar,
+  onToggleRightPanel,
 }: UseMainScreenShortcutsArgs): void {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const canUseWorkspaceShortcuts = selectedWorkspaceId !== null;
@@ -22,6 +26,14 @@ export function useMainScreenShortcuts({
 
   useShortcutHandler("workspace.open-terminal", () => {
     return onOpenTerminal();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.toggle-left-sidebar", () => {
+    onToggleLeftSidebar();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.toggle-right-panel", () => {
+    onToggleRightPanel();
   }, { enabled: canUseWorkspaceShortcuts });
 
   useShortcutHandler("workspace.open-command-palette", () => {

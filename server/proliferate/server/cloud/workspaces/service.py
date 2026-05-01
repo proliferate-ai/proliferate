@@ -41,19 +41,17 @@ from proliferate.db.store.cloud_workspaces import (
     load_active_sandbox_for_workspace,
     load_any_cloud_workspace_for_repo,
     load_cloud_workspace_by_id,
-    load_cloud_workspace_for_user,
     load_existing_cloud_workspace,
     mark_workspace_error_by_id,
     persist_workspace_destroy_state,
     persist_workspace_stop_state,
     save_workspace,
-    save_workspace_branch_for_user,
-    save_workspace_display_name_for_user,
     update_sandbox_status,
 )
 from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
+from proliferate.db.store.organizations import load_active_membership
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
 from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
 from proliferate.server.billing.service import (
@@ -95,11 +93,28 @@ from proliferate.server.cloud.workspaces.models import (
     workspace_detail_payload,
     workspace_summary_payload,
 )
+from proliferate.server.organizations.service import (
+    OrganizationServiceError,
+    OwnerSelection,
+    resolve_owner_context,
+)
 from proliferate.utils.time import duration_ms, utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+
+
+def _raise_org_cloud_not_ready() -> NoReturn:
+    raise CloudApiError(
+        "org_cloud_not_ready",
+        "Organization cloud workspaces are not available yet.",
+        status_code=409,
+    )
+
+
+def _map_owner_context_error(error: OrganizationServiceError) -> NoReturn:
+    raise CloudApiError(error.code, error.message, status_code=error.status_code) from error
 
 
 def _creator_context_for_automation_run(
@@ -201,7 +216,22 @@ def transition_workspace_status(
 
 async def list_cloud_workspaces_for_user(
     user_id: UUID,
+    *,
+    user: User | None = None,
+    owner_selection: OwnerSelection | None = None,
 ) -> list[WorkspaceSummary]:
+    if owner_selection is not None and owner_selection.owner_scope == "organization":
+        if user is None:
+            raise CloudApiError(
+                "organization_not_found",
+                "Organization not found.",
+                status_code=404,
+            )
+        try:
+            await resolve_owner_context(user, owner_selection)
+        except OrganizationServiceError as error:
+            _map_owner_context_error(error)
+        return []
     workspaces = await list_cloud_workspaces_store(user_id)
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
         user_id=user_id,
@@ -247,9 +277,30 @@ async def _require_cloud_workspace_for_user(
     user_id: UUID,
     workspace_id: UUID,
 ) -> CloudWorkspace:
-    workspace = await load_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await load_cloud_workspace_by_id(workspace_id)
     if workspace is None:
         raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    if workspace.owner_scope == "personal":
+        if workspace.owner_user_id != user_id:
+            raise CloudApiError(
+                "workspace_not_found",
+                "Cloud workspace not found.",
+                status_code=404,
+            )
+        return workspace
+    if workspace.owner_scope == "organization" and workspace.organization_id is not None:
+        membership = await load_active_membership(
+            organization_id=workspace.organization_id,
+            user_id=user_id,
+        )
+        if membership is None:
+            raise CloudApiError(
+                "workspace_not_found",
+                "Cloud workspace not found.",
+                status_code=404,
+            )
+        _raise_org_cloud_not_ready()
+    raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
     return workspace
 
 
@@ -536,7 +587,14 @@ async def create_cloud_workspace(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
+    owner_selection: OwnerSelection | None = None,
 ) -> WorkspaceDetail:
+    if owner_selection is not None and owner_selection.owner_scope == "organization":
+        try:
+            await resolve_owner_context(user, owner_selection)
+        except OrganizationServiceError as error:
+            _map_owner_context_error(error)
+        _raise_org_cloud_not_ready()
     resolved = await _resolve_new_cloud_workspace_create(
         user,
         git_provider=git_provider,
@@ -847,13 +905,9 @@ async def sync_cloud_workspace_branch(
             status_code=400,
         )
 
-    workspace = await save_workspace_branch_for_user(
-        user_id=user_id,
-        workspace_id=workspace_id,
-        branch_name=cleaned_branch_name,
-    )
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace.git_branch = cleaned_branch_name
+    workspace = await save_workspace(workspace)
     return await _build_workspace_detail(workspace)
 
 
@@ -884,13 +938,9 @@ async def sync_cloud_workspace_display_name(
                 status_code=400,
             )
 
-    workspace = await save_workspace_display_name_for_user(
-        user_id=user_id,
-        workspace_id=workspace_id,
-        display_name=cleaned,
-    )
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
+    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace.display_name = cleaned
+    workspace = await save_workspace(workspace)
     return await _build_workspace_detail(workspace)
 
 

@@ -1,4 +1,5 @@
 import { SHORTCUTS, type ShortcutDef } from "@/config/shortcuts";
+import { getFocusZone } from "@/lib/domain/focus-zone";
 import { isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
 
 type KeyboardShortcutEventLike = Pick<
@@ -46,7 +47,9 @@ export function shouldDispatchKeyboardShortcut(
     return false;
   }
 
-  if (!shortcut.allowInInputs && isTextEntryTarget(event.target)) {
+  const terminalFocused = typeof document !== "undefined"
+    && getFocusZone() === "terminal";
+  if (!shortcut.allowInInputs && (isTextEntryTarget(event.target) || terminalFocused)) {
     return false;
   }
 

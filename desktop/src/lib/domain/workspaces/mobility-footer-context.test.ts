@@ -231,7 +231,7 @@ describe("buildMobilityFooterContext", () => {
     });
 
     expect(context?.isInteractive).toBe(true);
-    expect(context?.isActive).toBe(true);
+    expect(context?.isActive).toBe(false);
   });
 
   it.each<{

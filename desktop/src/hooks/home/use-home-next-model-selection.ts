@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import {
   buildHomeNextModelGroups,
+  resolveHomeModelAvailabilityState,
   resolveEffectiveHomeModelSelection,
   resolveHomeNextModelInfo,
   type HomeNextModelSelection,
@@ -20,7 +21,12 @@ interface UseHomeNextModelSelectionArgs {
 export function useHomeNextModelSelection({
   modelSelectionOverride,
 }: UseHomeNextModelSelectionArgs) {
-  const { readyAgents, isLoading: agentsLoading } = useAgentCatalog();
+  const {
+    readyAgents,
+    isLoading: agentsLoading,
+    isError: agentsError,
+    error: agentsQueryError,
+  } = useAgentCatalog();
   const modelRegistriesQuery = useModelRegistriesQuery();
   const modelRegistries = modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
@@ -57,33 +63,25 @@ export function useHomeNextModelSelection({
     [effectiveModelSelection, modelGroups, modelRegistries],
   );
 
-  const disabledReason = useMemo(() => {
-    if (agentsLoading || modelRegistriesQuery.isLoading) {
-      return "Loading models";
-    }
-    if (modelRegistriesQuery.isError) {
-      return "Couldn't load models";
-    }
-    if (modelGroups.length === 0 || !effectiveModelSelection || !selectedModel) {
-      return "No ready models";
-    }
-    return null;
-  }, [
-    agentsLoading,
-    effectiveModelSelection,
-    modelGroups.length,
-    modelRegistriesQuery.isError,
-    modelRegistriesQuery.isLoading,
-    selectedModel,
-  ]);
+  const isLoading = agentsLoading || modelRegistriesQuery.isLoading;
+  const hasLoadError = agentsError || modelRegistriesQuery.isError;
+  const hasLaunchableModel =
+    modelGroups.length > 0
+    && effectiveModelSelection !== null
+    && selectedModel !== null;
+  const modelAvailabilityState = useMemo(() => resolveHomeModelAvailabilityState({
+    isLoading,
+    hasLoadError,
+    hasLaunchableModel,
+  }), [hasLoadError, hasLaunchableModel, isLoading]);
 
   return {
     modelGroups,
     modelRegistries,
     effectiveModelSelection,
     selectedModel,
-    isLoading: agentsLoading || modelRegistriesQuery.isLoading,
-    error: modelRegistriesQuery.error,
-    disabledReason,
+    isLoading,
+    error: agentsQueryError ?? modelRegistriesQuery.error,
+    modelAvailabilityState,
   };
 }

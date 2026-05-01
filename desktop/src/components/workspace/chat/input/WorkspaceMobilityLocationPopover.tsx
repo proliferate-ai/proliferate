@@ -1,26 +1,92 @@
 import { Button } from "@/components/ui/Button";
-import { BrailleSweepBadge, CircleAlert, LoaderCircle } from "@/components/ui/icons";
+import {
+  ArrowRight,
+  BrailleSweepBadge,
+  CircleAlert,
+  CloudIcon,
+  FolderOpen,
+  GitBranch,
+  GitCommit,
+} from "@/components/ui/icons";
+import { mobilityReconnectCopy } from "@/config/mobility-copy";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
+import type {
+  WorkspaceMobilityConfirmSnapshot,
+  WorkspaceMobilityDirection,
+} from "@/stores/workspaces/workspace-mobility-ui-store";
+
+function HandoffRoute({ direction }: { direction: WorkspaceMobilityDirection }) {
+  const source = direction === "cloud_to_local"
+    ? { label: "Cloud", icon: <CloudIcon className="size-3.5" /> }
+    : { label: "Local", icon: <FolderOpen className="size-3.5" /> };
+  const destination = direction === "cloud_to_local"
+    ? { label: "Local", icon: <FolderOpen className="size-3.5" /> }
+    : { label: "Cloud", icon: <CloudIcon className="size-3.5" /> };
+
+  return (
+    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5">
+        {source.icon}
+        {source.label}
+      </span>
+      <ArrowRight className="size-3.5 text-muted-foreground/60" />
+      <span className="inline-flex items-center gap-1.5 text-foreground">
+        {destination.icon}
+        {destination.label}
+      </span>
+    </div>
+  );
+}
+
+function HandoffSnapshotDetails({
+  snapshot,
+}: {
+  snapshot: WorkspaceMobilityConfirmSnapshot;
+}) {
+  const branchName = snapshot.sourcePreflight.branchName?.trim()
+    || snapshot.cloudPreflight.workspace?.repo?.branch?.trim()
+    || "Current branch";
+  const baseCommitSha = snapshot.sourcePreflight.baseCommitSha?.trim() ?? null;
+
+  return (
+    <div className="space-y-2 border-y border-border/60 py-2 text-xs">
+      <div className="flex min-w-0 items-center gap-2">
+        <GitBranch className="size-3.5 shrink-0 text-muted-foreground/70" />
+        <span className="shrink-0 text-muted-foreground">Branch</span>
+        <span className="min-w-0 truncate text-foreground" title={branchName}>
+          {branchName}
+        </span>
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <GitCommit className="size-3.5 shrink-0 text-muted-foreground/70" />
+        <span className="shrink-0 text-muted-foreground">Sync basis</span>
+        <span className="min-w-0 truncate text-foreground">
+          {baseCommitSha ? `Base commit ${baseCommitSha.slice(0, 8)}` : "Current workspace base"}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export function WorkspaceMobilityLocationPopover({
   prompt,
+  snapshot,
   isActionPending = false,
   onClose,
   onPrimaryAction,
 }: {
   prompt: MobilityPromptState;
+  snapshot: WorkspaceMobilityConfirmSnapshot | null;
   isActionPending?: boolean;
   onClose: () => void;
   onPrimaryAction: () => void | Promise<void>;
 }) {
   const leading = prompt.variant === "loading"
     ? <BrailleSweepBadge className="text-base text-foreground" />
-    : prompt.variant === "actionable"
-      ? null
-      : prompt.variant === "in_flight"
-        ? <LoaderCircle className="size-4 animate-spin text-foreground" />
-        : <CircleAlert className="size-4 text-destructive" />;
+    : prompt.variant === "blocked"
+      ? <CircleAlert className="size-4 text-destructive" />
+      : null;
   const hasPrimaryAction = Boolean(prompt.actionLabel && prompt.primaryActionKind);
   const secondaryLabel = hasPrimaryAction
     ? "Cancel"
@@ -29,9 +95,13 @@ export function WorkspaceMobilityLocationPopover({
       : "Got it";
 
   return (
-    <ComposerPopoverSurface className="w-[min(24rem,calc(100vw-2rem))] p-0">
-      <div className="space-y-3 px-4 py-3">
-        <div className="flex items-start gap-2">
+    <ComposerPopoverSurface className="w-[min(26rem,calc(100vw-2rem))] p-0">
+      <div className="space-y-3 px-4 py-3.5">
+        {prompt.direction && (
+          <HandoffRoute direction={prompt.direction} />
+        )}
+
+        <div className="flex items-start gap-2.5">
           {leading ? <div className="pt-0.5">{leading}</div> : null}
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-medium text-foreground">
@@ -48,10 +118,20 @@ export function WorkspaceMobilityLocationPopover({
           </div>
         </div>
 
+        {prompt.variant === "actionable" && snapshot && (
+          <HandoffSnapshotDetails snapshot={snapshot} />
+        )}
+
         {prompt.warning && (
-          <div className="rounded-xl bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+          <p className="text-xs leading-5 text-muted-foreground">
             {prompt.warning}
-          </div>
+          </p>
+        )}
+
+        {prompt.variant === "actionable" && (
+          <p className="text-xs leading-5 text-muted-foreground/80">
+            {mobilityReconnectCopy(prompt.direction)}
+          </p>
         )}
 
         <div className="flex items-center justify-end gap-2">

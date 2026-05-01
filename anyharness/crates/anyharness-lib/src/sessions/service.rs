@@ -551,7 +551,9 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::model::{ModelCatalogStatus, ModelRegistryModelMetadata};
+    use crate::agents::model::{
+        ModelCatalogStatus, ModelRegistryModelMetadata, SessionDefaultControlsState,
+    };
 
     fn plain_model(id: &str, is_default: bool) -> ModelRegistryModelMetadata {
         ModelRegistryModelMetadata {
@@ -563,6 +565,8 @@ mod tests {
             aliases: vec![],
             min_runtime_version: None,
             launch_remediation: None,
+            session_default_controls: vec![],
+            session_default_controls_state: SessionDefaultControlsState::Empty,
         }
     }
 

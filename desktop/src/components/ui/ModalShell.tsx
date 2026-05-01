@@ -1,6 +1,7 @@
 import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "@/components/ui/icons";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 
 export interface ModalShellProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function ModalShell({
 }: ModalShellProps) {
   const titleId = useId();
   const descriptionId = useId();
+  useNativeOverlayRegistration(open);
 
   useEffect(() => {
     if (!open) {

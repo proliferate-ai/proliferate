@@ -8774,6 +8774,13 @@
             ],
             "description": "Minimum AnyHarness runtime version required for this model, if any"
           },
+          "sessionDefaultControls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDefaultControl"
+            },
+            "description": "Live controls that can be configured as launch defaults for this model."
+          },
           "status": {
             "$ref": "#/components/schemas/ModelCatalogStatus",
             "description": "Runtime-owned lifecycle status for this model"
@@ -8893,6 +8900,13 @@
               "null"
             ],
             "description": "Minimum AnyHarness runtime version required for this model, if any"
+          },
+          "sessionDefaultControls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDefaultControl"
+            },
+            "description": "Live controls that can be configured as launch defaults for this model."
           },
           "status": {
             "$ref": "#/components/schemas/ModelCatalogStatus",
@@ -11561,6 +11575,78 @@
         "enum": [
           "select"
         ]
+      },
+      "SessionDefaultControl": {
+        "type": "object",
+        "description": "Static model metadata describing a live control that can be defaulted at launch.",
+        "required": [
+          "key",
+          "label",
+          "values"
+        ],
+        "properties": {
+          "defaultValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional model catalog default value."
+          },
+          "key": {
+            "$ref": "#/components/schemas/SessionDefaultControlKey",
+            "description": "Product-level semantic key such as `reasoning`, `effort`, or `fast_mode`."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable control label shown in settings."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDefaultControlValue"
+            },
+            "description": "Values intentionally exposed for launch-default selection."
+          }
+        }
+      },
+      "SessionDefaultControlKey": {
+        "type": "string",
+        "description": "Product-level live controls that can be configured as launch defaults.",
+        "enum": [
+          "reasoning",
+          "effort",
+          "fast_mode"
+        ]
+      },
+      "SessionDefaultControlValue": {
+        "type": "object",
+        "description": "Selectable value for a launch-default session control.",
+        "required": [
+          "value",
+          "label",
+          "isDefault"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional user-facing description."
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether this is the model catalog default value."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable value label shown in settings."
+          },
+          "value": {
+            "type": "string",
+            "description": "Stable raw value identifier to send after live config confirms support."
+          }
+        }
       },
       "SessionEndReason": {
         "type": "string",

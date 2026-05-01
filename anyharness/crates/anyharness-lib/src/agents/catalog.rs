@@ -5,11 +5,12 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::agents::model::{
     AgentKind, ModelCatalogStatus, ModelLaunchRemediationKind, ModelLaunchRemediationMetadata,
-    ModelRegistryMetadata, ModelRegistryModelMetadata,
+    ModelRegistryMetadata, ModelRegistryModelMetadata, SessionDefaultControlKey,
+    SessionDefaultControlMetadata, SessionDefaultControlValueMetadata, SessionDefaultControlsState,
 };
 
 const DEFAULT_REMOTE_MODEL_CATALOG_URL: &str =
@@ -185,6 +186,45 @@ struct ModelCatalogModel {
     aliases: Vec<String>,
     min_runtime_version: Option<String>,
     launch_remediation: Option<ModelLaunchRemediationMetadata>,
+    #[serde(
+        default,
+        skip_serializing_if = "RawSessionDefaultControlsState::is_omitted"
+    )]
+    session_default_controls: RawSessionDefaultControlsState,
+}
+
+#[derive(Debug, Clone, Default)]
+enum RawSessionDefaultControlsState {
+    #[default]
+    Omitted,
+    Present(Vec<serde_json::Value>),
+}
+
+impl RawSessionDefaultControlsState {
+    fn is_omitted(&self) -> bool {
+        matches!(self, Self::Omitted)
+    }
+}
+
+impl<'de> Deserialize<'de> for RawSessionDefaultControlsState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Vec::<serde_json::Value>::deserialize(deserializer).map(Self::Present)
+    }
+}
+
+impl Serialize for RawSessionDefaultControlsState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Omitted => serializer.serialize_none(),
+            Self::Present(values) => values.serialize(serializer),
+        }
+    }
 }
 
 fn configured_remote_url() -> Option<String> {
@@ -355,6 +395,12 @@ fn provider_to_registry(provider: &ModelCatalogProvider) -> anyhow::Result<Model
         .models
         .iter()
         .map(|model| {
+            let (session_default_controls, session_default_controls_state) =
+                parse_remote_session_default_controls(
+                    &provider.kind,
+                    &model.id,
+                    &model.session_default_controls,
+                );
             Ok(ModelRegistryModelMetadata {
                 id: model.id.clone(),
                 display_name: model.display_name.clone(),
@@ -364,6 +410,8 @@ fn provider_to_registry(provider: &ModelCatalogProvider) -> anyhow::Result<Model
                 aliases: model.aliases.clone(),
                 min_runtime_version: model.min_runtime_version.clone(),
                 launch_remediation: model.launch_remediation.clone(),
+                session_default_controls,
+                session_default_controls_state,
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -374,6 +422,190 @@ fn provider_to_registry(provider: &ModelCatalogProvider) -> anyhow::Result<Model
         default_model_id: provider.default_model_id.clone(),
         models,
     })
+}
+
+fn parse_remote_session_default_controls(
+    provider_kind: &str,
+    model_id: &str,
+    state: &RawSessionDefaultControlsState,
+) -> (
+    Vec<SessionDefaultControlMetadata>,
+    SessionDefaultControlsState,
+) {
+    let RawSessionDefaultControlsState::Present(raw_controls) = state else {
+        return (vec![], SessionDefaultControlsState::Omitted);
+    };
+    if raw_controls.is_empty() {
+        return (vec![], SessionDefaultControlsState::Empty);
+    }
+
+    match parse_raw_session_default_controls(raw_controls) {
+        Ok(controls) => (controls, SessionDefaultControlsState::Valid),
+        Err(error) => {
+            tracing::debug!(
+                provider_kind,
+                model_id,
+                error = %error,
+                "ignoring invalid remote model session default controls"
+            );
+            (vec![], SessionDefaultControlsState::Invalid)
+        }
+    }
+}
+
+fn parse_raw_session_default_controls(
+    values: &[serde_json::Value],
+) -> anyhow::Result<Vec<SessionDefaultControlMetadata>> {
+    let mut controls = Vec::with_capacity(values.len());
+    for value in values {
+        controls.push(parse_raw_session_default_control(value)?);
+    }
+    validate_session_default_controls(&controls)?;
+    Ok(controls)
+}
+
+fn parse_raw_session_default_control(
+    value: &serde_json::Value,
+) -> anyhow::Result<SessionDefaultControlMetadata> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("session default control is not an object"))?;
+    let key = object
+        .get("key")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("session default control key is missing"))?;
+    let key = match key {
+        "reasoning" => SessionDefaultControlKey::Reasoning,
+        "effort" => SessionDefaultControlKey::Effort,
+        "fast_mode" => SessionDefaultControlKey::FastMode,
+        other => anyhow::bail!("unknown session default control key '{other}'"),
+    };
+    let label = object
+        .get("label")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("session default control label is missing"))?
+        .to_string();
+    let default_value = object
+        .get("defaultValue")
+        .map(|value| {
+            value.as_str().map(str::to_string).ok_or_else(|| {
+                anyhow::anyhow!("session default control defaultValue is not a string")
+            })
+        })
+        .transpose()?;
+    let raw_values = object
+        .get("values")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("session default control values are missing"))?;
+
+    let values = raw_values
+        .iter()
+        .map(parse_raw_session_default_control_value)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(SessionDefaultControlMetadata {
+        key,
+        label,
+        values,
+        default_value,
+    })
+}
+
+fn parse_raw_session_default_control_value(
+    value: &serde_json::Value,
+) -> anyhow::Result<SessionDefaultControlValueMetadata> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("session default control value is not an object"))?;
+    let value_id = object
+        .get("value")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("session default control value id is missing"))?
+        .to_string();
+    let label = object
+        .get("label")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("session default control value label is missing"))?
+        .to_string();
+    let description = object
+        .get("description")
+        .map(|value| {
+            value.as_str().map(str::to_string).ok_or_else(|| {
+                anyhow::anyhow!("session default control value description is not a string")
+            })
+        })
+        .transpose()?;
+    let is_default = object
+        .get("isDefault")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    Ok(SessionDefaultControlValueMetadata {
+        value: value_id,
+        label,
+        description,
+        is_default,
+    })
+}
+
+fn validate_session_default_controls(
+    controls: &[SessionDefaultControlMetadata],
+) -> anyhow::Result<()> {
+    let mut seen_keys = HashSet::new();
+    for control in controls {
+        if !seen_keys.insert(control.key) {
+            anyhow::bail!("duplicate session default control key");
+        }
+        if control.label.trim().is_empty() {
+            anyhow::bail!("session default control label is empty");
+        }
+        if control.values.is_empty() {
+            anyhow::bail!("session default control has no values");
+        }
+
+        let mut seen_values = HashSet::new();
+        let mut default_count = 0usize;
+        for value in &control.values {
+            if value.value.trim().is_empty() {
+                anyhow::bail!("session default control value id is empty");
+            }
+            if value.label.trim().is_empty() {
+                anyhow::bail!("session default control value label is empty");
+            }
+            if !seen_values.insert(value.value.clone()) {
+                anyhow::bail!("duplicate session default control value");
+            }
+            if value.is_default {
+                default_count += 1;
+            }
+        }
+
+        match control.default_value.as_deref() {
+            Some(default_value) => {
+                if default_value.trim().is_empty() {
+                    anyhow::bail!("session default control default value is empty");
+                }
+                let matching_default_count = control
+                    .values
+                    .iter()
+                    .filter(|value| value.is_default && value.value == default_value)
+                    .count();
+                if matching_default_count != 1 || default_count != 1 {
+                    anyhow::bail!(
+                        "session default control default value does not match exactly one default value"
+                    );
+                }
+            }
+            None => {
+                if default_count > 0 {
+                    anyhow::bail!(
+                        "session default control marks a default value without defaultValue"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn effective_registries(
@@ -427,10 +659,10 @@ fn merge_catalog_registry(
             {
                 bundled_model
             } else {
-                remote_model
+                merge_catalog_model(remote_model, Some(bundled_model))
             }
         } else {
-            remote_model
+            merge_catalog_model(remote_model, None)
         };
         models.push(model);
     }
@@ -445,6 +677,34 @@ fn merge_catalog_registry(
             .or(bundled_registry.default_model_id),
         models,
     }
+}
+
+fn merge_catalog_model(
+    mut remote_model: ModelRegistryModelMetadata,
+    bundled_model: Option<ModelRegistryModelMetadata>,
+) -> ModelRegistryModelMetadata {
+    let Some(bundled_model) = bundled_model else {
+        if remote_model.session_default_controls_state == SessionDefaultControlsState::Invalid {
+            remote_model.session_default_controls = vec![];
+            remote_model.session_default_controls_state = SessionDefaultControlsState::Empty;
+        }
+        return remote_model;
+    };
+
+    let should_use_remote_controls = remote_model.session_default_controls_state
+        == SessionDefaultControlsState::Valid
+        && !remote_model.session_default_controls.is_empty();
+    if !should_use_remote_controls {
+        remote_model.session_default_controls = bundled_model.session_default_controls;
+        remote_model.session_default_controls_state =
+            if remote_model.session_default_controls.is_empty() {
+                SessionDefaultControlsState::Empty
+            } else {
+                SessionDefaultControlsState::Valid
+            };
+    }
+
+    remote_model
 }
 
 fn effective_registry(
@@ -586,6 +846,8 @@ fn model_with_status(
         aliases: aliases.into_iter().map(str::to_string).collect(),
         min_runtime_version: min_runtime_version.map(str::to_string),
         launch_remediation: None,
+        session_default_controls: vec![],
+        session_default_controls_state: SessionDefaultControlsState::Empty,
     }
 }
 
@@ -609,7 +871,102 @@ fn model_with_launch_remediation(
             kind: remediation_kind,
             message: remediation_message.into(),
         }),
+        session_default_controls: vec![],
+        session_default_controls_state: SessionDefaultControlsState::Empty,
     }
+}
+
+fn model_with_session_default_controls(
+    mut model: ModelRegistryModelMetadata,
+    controls: Vec<SessionDefaultControlMetadata>,
+) -> ModelRegistryModelMetadata {
+    validate_session_default_controls(&controls).expect("bundled session default controls");
+    model.session_default_controls = controls;
+    model.session_default_controls_state = if model.session_default_controls.is_empty() {
+        SessionDefaultControlsState::Empty
+    } else {
+        SessionDefaultControlsState::Valid
+    };
+    model
+}
+
+fn session_default_control(
+    key: SessionDefaultControlKey,
+    label: &str,
+    default_value: &str,
+    values: Vec<SessionDefaultControlValueMetadata>,
+) -> SessionDefaultControlMetadata {
+    SessionDefaultControlMetadata {
+        key,
+        label: label.into(),
+        values,
+        default_value: Some(default_value.into()),
+    }
+}
+
+fn session_default_value(
+    value: &str,
+    label: &str,
+    is_default: bool,
+) -> SessionDefaultControlValueMetadata {
+    SessionDefaultControlValueMetadata {
+        value: value.into(),
+        label: label.into(),
+        description: None,
+        is_default,
+    }
+}
+
+fn reasoning_default_control() -> SessionDefaultControlMetadata {
+    session_default_control(
+        SessionDefaultControlKey::Reasoning,
+        "Reasoning",
+        "off",
+        vec![
+            session_default_value("off", "Off", true),
+            session_default_value("on", "On", false),
+        ],
+    )
+}
+
+fn effort_default_control(default_value: &str) -> SessionDefaultControlMetadata {
+    session_default_control(
+        SessionDefaultControlKey::Effort,
+        "Reasoning effort",
+        default_value,
+        vec![
+            session_default_value("low", "Low", default_value == "low"),
+            session_default_value("medium", "Medium", default_value == "medium"),
+            session_default_value("high", "High", default_value == "high"),
+            session_default_value("max", "Max", default_value == "max"),
+        ],
+    )
+}
+
+fn fast_mode_default_control() -> SessionDefaultControlMetadata {
+    session_default_control(
+        SessionDefaultControlKey::FastMode,
+        "Fast mode",
+        "off",
+        vec![
+            session_default_value("off", "Slow", true),
+            session_default_value("on", "Fast", false),
+        ],
+    )
+}
+
+fn claude_default_controls() -> Vec<SessionDefaultControlMetadata> {
+    vec![
+        reasoning_default_control(),
+        effort_default_control("medium"),
+    ]
+}
+
+fn codex_default_controls() -> Vec<SessionDefaultControlMetadata> {
+    vec![
+        effort_default_control("medium"),
+        fast_mode_default_control(),
+    ]
 }
 
 fn claude_registry() -> ModelRegistryMetadata {
@@ -617,51 +974,66 @@ fn claude_registry() -> ModelRegistryMetadata {
         "claude",
         "Claude",
         vec![
-            model_with_status(
-                "sonnet",
-                "Sonnet 4.6",
-                Some("Best for everyday tasks"),
-                true,
-                ModelCatalogStatus::Active,
-                vec!["claude-sonnet-4-5", "claude-sonnet-4-6"],
-                None,
+            model_with_session_default_controls(
+                model_with_status(
+                    "sonnet",
+                    "Sonnet 4.6",
+                    Some("Best for everyday tasks"),
+                    true,
+                    ModelCatalogStatus::Active,
+                    vec!["claude-sonnet-4-5", "claude-sonnet-4-6"],
+                    None,
+                ),
+                claude_default_controls(),
             ),
-            model_with_status(
-                "sonnet[1m]",
-                "Sonnet 4.6",
-                Some("1M context · Billed as extra usage · $3/$15 per Mtok"),
-                false,
-                ModelCatalogStatus::Active,
-                vec!["claude-sonnet-4-5-1m", "claude-sonnet-4-6-1m"],
-                None,
+            model_with_session_default_controls(
+                model_with_status(
+                    "sonnet[1m]",
+                    "Sonnet 4.6",
+                    Some("1M context · Billed as extra usage · $3/$15 per Mtok"),
+                    false,
+                    ModelCatalogStatus::Active,
+                    vec!["claude-sonnet-4-5-1m", "claude-sonnet-4-6-1m"],
+                    None,
+                ),
+                claude_default_controls(),
             ),
-            model_with_status(
-                "opus[1m]",
-                "Opus 4.7",
-                Some("Most capable for complex work · 1M context"),
-                false,
-                ModelCatalogStatus::Active,
-                vec![
-                    "claude-opus-4-5",
-                    "claude-opus-4-5-1m",
-                    "claude-opus-4-6-1m",
-                    "claude-opus-4-7",
-                    "claude-opus-4-7-1m",
-                    "opus",
-                ],
-                None,
+            model_with_session_default_controls(
+                model_with_status(
+                    "opus[1m]",
+                    "Opus 4.7",
+                    Some("Most capable for complex work · 1M context"),
+                    false,
+                    ModelCatalogStatus::Active,
+                    vec![
+                        "claude-opus-4-5",
+                        "claude-opus-4-5-1m",
+                        "claude-opus-4-6-1m",
+                        "claude-opus-4-7",
+                        "claude-opus-4-7-1m",
+                        "opus",
+                    ],
+                    None,
+                ),
+                claude_default_controls(),
             ),
-            model(
-                "claude-opus-4-6",
-                "Opus 4.6",
-                Some("Pinned previous Opus model"),
-                false,
+            model_with_session_default_controls(
+                model(
+                    "claude-opus-4-6",
+                    "Opus 4.6",
+                    Some("Pinned previous Opus model"),
+                    false,
+                ),
+                claude_default_controls(),
             ),
-            model(
-                "haiku",
-                "Haiku 4.5",
-                Some("Fastest for quick answers"),
-                false,
+            model_with_session_default_controls(
+                model(
+                    "haiku",
+                    "Haiku 4.5",
+                    Some("Fastest for quick answers"),
+                    false,
+                ),
+                claude_default_controls(),
             ),
         ],
     )
@@ -672,22 +1044,49 @@ fn codex_registry() -> ModelRegistryMetadata {
         "codex",
         "Codex",
         vec![
-            model_with_launch_remediation(
-                "gpt-5.5",
-                "GPT 5.5",
-                Some("Latest OpenAI coding model"),
-                false,
-                ModelLaunchRemediationKind::ManagedReinstall,
-                "Update Codex tools and retry.",
+            model_with_session_default_controls(
+                model_with_launch_remediation(
+                    "gpt-5.5",
+                    "GPT 5.5",
+                    Some("Latest OpenAI coding model"),
+                    false,
+                    ModelLaunchRemediationKind::ManagedReinstall,
+                    "Update Codex tools and retry.",
+                ),
+                codex_default_controls(),
             ),
-            model("gpt-5.4", "GPT 5.4", None, true),
-            model("gpt-5.4-mini", "GPT 5.4 Mini", None, false),
-            model("gpt-5.3-codex", "GPT 5.3 Codex", None, false),
-            model("gpt-5.3-codex-spark", "GPT 5.3 Codex Spark", None, false),
-            model("gpt-5.2-codex", "GPT 5.2 Codex", None, false),
-            model("gpt-5.1-codex-max", "GPT 5.1 Codex Max", None, false),
-            model("gpt-5.2", "GPT 5.2", None, false),
-            model("gpt-5.1-codex-mini", "GPT 5.1 Codex Mini", None, false),
+            model_with_session_default_controls(
+                model("gpt-5.4", "GPT 5.4", None, true),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.4-mini", "GPT 5.4 Mini", None, false),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.3-codex", "GPT 5.3 Codex", None, false),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.3-codex-spark", "GPT 5.3 Codex Spark", None, false),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.2-codex", "GPT 5.2 Codex", None, false),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.1-codex-max", "GPT 5.1 Codex Max", None, false),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.2", "GPT 5.2", None, false),
+                codex_default_controls(),
+            ),
+            model_with_session_default_controls(
+                model("gpt-5.1-codex-mini", "GPT 5.1 Codex Mini", None, false),
+                codex_default_controls(),
+            ),
         ],
     )
 }
@@ -836,6 +1235,29 @@ mod tests {
             aliases: vec![],
             min_runtime_version: None,
             launch_remediation: None,
+            session_default_controls: RawSessionDefaultControlsState::Omitted,
+        }
+    }
+
+    fn control_json(key: &str) -> serde_json::Value {
+        serde_json::json!({
+            "key": key,
+            "label": "Remote control",
+            "defaultValue": "off",
+            "values": [
+                { "value": "off", "label": "Off", "isDefault": true },
+                { "value": "on", "label": "On", "isDefault": false }
+            ]
+        })
+    }
+
+    fn remote_model_with_controls(
+        id: &str,
+        controls: RawSessionDefaultControlsState,
+    ) -> ModelCatalogModel {
+        ModelCatalogModel {
+            session_default_controls: controls,
+            ..remote_model(id, ModelCatalogStatus::Active, true)
         }
     }
 
@@ -993,7 +1415,144 @@ mod tests {
 
         assert_eq!(gpt_55.status, ModelCatalogStatus::Active);
         assert_eq!(gpt_55.display_name, "GPT 5.5");
+        assert!(!gpt_55.session_default_controls.is_empty());
         let _ = fs::remove_file(cache_path);
+    }
+
+    #[test]
+    fn remote_catalog_preserves_bundled_controls_when_omitted_or_empty() {
+        for controls in [
+            RawSessionDefaultControlsState::Omitted,
+            RawSessionDefaultControlsState::Present(vec![]),
+        ] {
+            let catalog = remote_catalog_with_models(
+                "codex",
+                Some("gpt-5.4"),
+                vec![remote_model_with_controls("gpt-5.4", controls)],
+            );
+
+            let registries =
+                effective_remote_registries_from_document(&catalog, false).expect("remote catalog");
+            let codex = registries
+                .into_iter()
+                .find(|registry| registry.kind == "codex")
+                .expect("codex registry");
+            let gpt_54 = codex
+                .models
+                .iter()
+                .find(|model| model.id == "gpt-5.4")
+                .expect("gpt 5.4");
+
+            assert_eq!(
+                gpt_54
+                    .session_default_controls
+                    .iter()
+                    .map(|control| control.key)
+                    .collect::<Vec<_>>(),
+                vec![
+                    SessionDefaultControlKey::Effort,
+                    SessionDefaultControlKey::FastMode
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn remote_catalog_replaces_bundled_controls_when_valid_non_empty() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("gpt-5.4"),
+            vec![remote_model_with_controls(
+                "gpt-5.4",
+                RawSessionDefaultControlsState::Present(vec![control_json("fast_mode")]),
+            )],
+        );
+
+        let registries =
+            effective_remote_registries_from_document(&catalog, false).expect("remote catalog");
+        let codex = registries
+            .into_iter()
+            .find(|registry| registry.kind == "codex")
+            .expect("codex registry");
+        let gpt_54 = codex
+            .models
+            .iter()
+            .find(|model| model.id == "gpt-5.4")
+            .expect("gpt 5.4");
+
+        assert_eq!(
+            gpt_54
+                .session_default_controls
+                .iter()
+                .map(|control| control.key)
+                .collect::<Vec<_>>(),
+            vec![SessionDefaultControlKey::FastMode]
+        );
+    }
+
+    #[test]
+    fn remote_catalog_invalid_non_empty_controls_fall_back_to_bundled() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("gpt-5.4"),
+            vec![remote_model_with_controls(
+                "gpt-5.4",
+                RawSessionDefaultControlsState::Present(vec![
+                    control_json("fast_mode"),
+                    control_json("unknown_future_key"),
+                ]),
+            )],
+        );
+
+        let registries =
+            effective_remote_registries_from_document(&catalog, false).expect("remote catalog");
+        let codex = registries
+            .into_iter()
+            .find(|registry| registry.kind == "codex")
+            .expect("codex registry");
+        let gpt_54 = codex
+            .models
+            .iter()
+            .find(|model| model.id == "gpt-5.4")
+            .expect("gpt 5.4");
+
+        assert_eq!(
+            gpt_54
+                .session_default_controls
+                .iter()
+                .map(|control| control.key)
+                .collect::<Vec<_>>(),
+            vec![
+                SessionDefaultControlKey::Effort,
+                SessionDefaultControlKey::FastMode
+            ]
+        );
+    }
+
+    #[test]
+    fn remote_only_model_with_invalid_controls_stays_without_controls() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("gpt-remote"),
+            vec![remote_model_with_controls(
+                "gpt-remote",
+                RawSessionDefaultControlsState::Present(vec![control_json("unknown_future_key")]),
+            )],
+        );
+
+        let registries =
+            effective_remote_registries_from_document(&catalog, false).expect("remote catalog");
+        let codex = registries
+            .into_iter()
+            .find(|registry| registry.kind == "codex")
+            .expect("codex registry");
+        let gpt_remote = codex
+            .models
+            .iter()
+            .find(|model| model.id == "gpt-remote")
+            .expect("remote model");
+
+        assert!(gpt_remote.session_default_controls.is_empty());
     }
 
     #[test]

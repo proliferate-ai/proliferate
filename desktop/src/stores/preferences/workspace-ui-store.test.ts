@@ -7,14 +7,15 @@ import {
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 
 describe("workspace ui tab persistence", () => {
-  it("preserves archived workspaces for current v7 preference blobs", () => {
+  it("migrates archived workspaces from v7 preference blobs", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 7,
       archivedWorkspaceIds: ["workspace-a"],
     });
 
-    expect(didMigrate).toBe(false);
+    expect(didMigrate).toBe(true);
+    expect(state.migrationVersion).toBe(8);
     expect(state.archivedWorkspaceIds).toEqual(["workspace-a"]);
   });
 
@@ -29,7 +30,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.visibleChatSessionIdsByWorkspace).toEqual({});
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
@@ -47,8 +48,8 @@ describe("workspace ui tab persistence", () => {
       legacyState as typeof WORKSPACE_UI_DEFAULTS,
     );
 
-    expect(didMigrate).toBe(false);
-    expect(state.migrationVersion).toBe(7);
+    expect(didMigrate).toBe(true);
+    expect(state.migrationVersion).toBe(8);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
@@ -75,7 +76,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.manualChatGroupsByWorkspace).toEqual({
       w1: [
         {
@@ -97,7 +98,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.rightPanelDurableByWorkspace).toEqual({});
     expect(state.rightPanelMaterializedByWorkspace).toEqual({});
   });
@@ -126,15 +127,13 @@ describe("workspace ui tab persistence", () => {
       w1: {
         open: false,
         width: 700,
-        toolOrder: ["files", "git", "settings"],
       },
     });
     expect(state.rightPanelMaterializedByWorkspace).toEqual({
       w1: {
         activeEntryKey: "tool:git",
-        terminalOrder: ["t1", "t2"],
         headerOrder: ["tool:files", "tool:git", "tool:settings", "terminal:t1", "terminal:t2"],
-        activeTerminalId: "t2",
+        browserTabsById: {},
       },
     });
   });
@@ -158,18 +157,52 @@ describe("workspace ui tab persistence", () => {
     } as never);
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.rightPanelDurableByWorkspace.w1).toEqual({
       open: false,
       width: 512,
-      toolOrder: ["git", "files", "settings"],
     });
     expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "terminal:terminal-b",
-      terminalOrder: ["terminal-b", "terminal-a"],
       headerOrder: ["tool:git", "terminal:terminal-b", "tool:files", "terminal:terminal-a", "tool:settings"],
-      activeTerminalId: "terminal-b",
+      browserTabsById: {},
     });
+  });
+
+  it("preserves valid v7 active entry keys and drops legacy right panel fields", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 7,
+      rightPanelDurableByWorkspace: {
+        w1: {
+          open: true,
+          width: 420,
+          toolOrder: ["files"],
+        } as never,
+      },
+      rightPanelMaterializedByWorkspace: {
+        w1: {
+          activeEntryKey: "terminal:t1",
+          headerOrder: ["terminal:t1", "tool:git"],
+          terminalOrder: ["t1"],
+          activeTerminalId: "t1",
+        } as never,
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.rightPanelDurableByWorkspace.w1).toEqual({
+      open: true,
+      width: 420,
+    });
+    expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
+      activeEntryKey: "terminal:t1",
+      headerOrder: ["terminal:t1", "tool:git", "tool:files", "tool:settings"],
+      browserTabsById: {},
+    });
+    expect(state.rightPanelDurableByWorkspace.w1).not.toHaveProperty("toolOrder");
+    expect(state.rightPanelMaterializedByWorkspace.w1).not.toHaveProperty("terminalOrder");
+    expect(state.rightPanelMaterializedByWorkspace.w1).not.toHaveProperty("activeTerminalId");
   });
 
   it("stores visible and hidden chat ids per workspace", () => {
@@ -196,11 +229,9 @@ describe("workspace ui tab persistence", () => {
 
     const store = useWorkspaceUiStore.getState();
     store.setRightPanelForWorkspace("w1", {
-      activeTool: "terminal",
-      toolOrder: ["files", "git"],
-      terminalOrder: ["t1"],
+      activeEntryKey: "terminal:t1",
       headerOrder: ["tool:files", "tool:git", "terminal:t1"],
-      activeTerminalId: "t1",
+      browserTabsById: {},
     });
     store.setRightPanelWidthForWorkspace("w1", 900);
 

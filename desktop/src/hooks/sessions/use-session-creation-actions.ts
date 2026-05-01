@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
+import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
 import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
@@ -49,15 +50,10 @@ import {
   reportConnectorLaunchWarnings,
   resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
-
-interface InFlightSessionCreate {
-  sessionId: string;
-  agentKind: string;
-  modelId: string;
-  promise: Promise<string>;
-}
-
-const inFlightSessionCreatesByWorkspace = new Map<string, InFlightSessionCreate>();
+import {
+  inFlightSessionCreatesByWorkspace,
+  updateInFlightSessionCreateId,
+} from "@/hooks/sessions/session-creation-in-flight";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -96,22 +92,6 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
   }
 
   return readyState.runtimeUrl;
-}
-
-function updateInFlightSessionCreateId(
-  workspaceId: string,
-  previousSessionId: string,
-  nextSessionId: string,
-): void {
-  const inFlightCreate = inFlightSessionCreatesByWorkspace.get(workspaceId);
-  if (!inFlightCreate || inFlightCreate.sessionId !== previousSessionId) {
-    return;
-  }
-
-  inFlightSessionCreatesByWorkspace.set(workspaceId, {
-    ...inFlightCreate,
-    sessionId: nextSessionId,
-  });
 }
 
 export function useSessionCreationActions() {
@@ -359,9 +339,7 @@ export function useSessionCreationActions() {
         targetSessionId: session.id,
       });
 
-      const modelRegistries = session.requestedModelId && session.modelId
-        ? await client.modelRegistries.list().catch(() => [])
-        : [];
+      const modelRegistries = await client.modelRegistries.list().catch(() => []);
       const launchCatalog: WorkspaceSessionLaunchCatalog | null =
         session.requestedModelId && session.modelId
         ? await client.workspaces.getSessionLaunchCatalog(
@@ -462,31 +440,48 @@ export function useSessionCreationActions() {
         }
       }
 
+      const launchDefaults = await applySessionLaunchDefaults({
+        client,
+        session,
+        agentKind: options.agentKind,
+        modelRegistries,
+        defaultLiveSessionControlValuesByAgentKind:
+          useUserPreferencesStore.getState()
+            .defaultLiveSessionControlValuesByAgentKind,
+      });
+      const launchedSession = launchDefaults.session;
+      const launchedLiveConfig = launchDefaults.liveConfig
+        ?? launchedSession.liveConfig
+        ?? null;
+
       const realSlot: SessionSlot = {
-        ...createEmptySessionSlot(session.id, options.agentKind, {
+        ...createEmptySessionSlot(launchedSession.id, options.agentKind, {
           workspaceId,
-          modelId: session.modelId ?? options.modelId,
-          modeId: session.modeId ?? resolvedModeId ?? null,
-          title: session.title ?? null,
-          liveConfig: session.liveConfig ?? null,
-          executionSummary: session.executionSummary ?? null,
-          mcpBindingSummaries: session.mcpBindingSummaries ?? null,
-          lastPromptAt: session.lastPromptAt ?? null,
+          modelId: launchedSession.modelId ?? options.modelId,
+          modeId: launchedSession.modeId ?? resolvedModeId ?? null,
+          title: launchedSession.title ?? null,
+          liveConfig: launchedLiveConfig,
+          executionSummary: launchedSession.executionSummary ?? null,
+          mcpBindingSummaries: launchedSession.mcpBindingSummaries ?? null,
+          lastPromptAt: launchedSession.lastPromptAt ?? null,
           optimisticPrompt: null,
         }),
-        status: resolveStatusFromExecutionSummary(session.executionSummary, session.status ?? "idle"),
+        status: resolveStatusFromExecutionSummary(
+          launchedSession.executionSummary,
+          launchedSession.status ?? "idle",
+        ),
         transcriptHydrated: true,
       };
 
-      const ownsShellIntent = replaceOwnedShellIntent(session.id);
-      replacePendingSessionSlot(pendingSessionId, session.id, realSlot, {
+      const ownsShellIntent = replaceOwnedShellIntent(launchedSession.id);
+      replacePendingSessionSlot(pendingSessionId, launchedSession.id, realSlot, {
         remapActiveSession: ownsShellIntent,
       });
-      updateInFlightSessionCreateId(workspaceId, pendingSessionId, session.id);
+      updateInFlightSessionCreateId(workspaceId, pendingSessionId, launchedSession.id);
       if (ownsShellIntent) {
-        activateSession(session.id);
+        activateSession(launchedSession.id);
       }
-      upsertWorkspaceSessionRecord(workspaceId, session);
+      upsertWorkspaceSessionRecord(workspaceId, launchedSession);
       trackProductEvent("chat_session_created", {
         workspace_kind: cloudWorkspaceId ? "cloud" : "local",
         agent_kind: options.agentKind,
@@ -498,14 +493,14 @@ export function useSessionCreationActions() {
           options.launchIntentId,
           {
             workspaceId,
-            sessionId: session.id,
+            sessionId: launchedSession.id,
           },
         );
       }
 
       if (hasPrompt) {
         await promptSession({
-          sessionId: session.id,
+          sessionId: launchedSession.id,
           text: options.text,
           blocks: options.blocks,
           optimisticContentParts: options.optimisticContentParts,
@@ -521,13 +516,13 @@ export function useSessionCreationActions() {
           },
         });
       } else {
-        void ensureSessionStreamConnected(session.id, {
+        void ensureSessionStreamConnected(launchedSession.id, {
           resumeIfActive: false,
           requestHeaders: requestOptions?.headers,
         });
       }
 
-      return session.id;
+      return launchedSession.id;
     })();
 
     if (!hasPrompt && shouldReuseInFlightEmptySession) {

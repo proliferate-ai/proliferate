@@ -20,6 +20,7 @@ from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
     BILLING_RECONCILER_LOCK_KEY,
+    BILLING_SUBJECT_KIND_ORGANIZATION,
     BILLING_SUBJECT_KIND_PERSONAL,
     BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
@@ -93,7 +94,9 @@ class ClaimedUsageExport:
 @dataclass(frozen=True)
 class BillingSubjectStripeState:
     billing_subject_id: UUID
+    kind: str
     user_id: UUID | None
+    organization_id: UUID | None
     stripe_customer_id: str | None
 
 
@@ -124,6 +127,46 @@ async def ensure_personal_billing_subject(db: AsyncSession, user_id: UUID) -> Bi
                 select(BillingSubject).where(
                     BillingSubject.kind == BILLING_SUBJECT_KIND_PERSONAL,
                     BillingSubject.user_id == user_id,
+                )
+            )
+        ).scalar_one()
+    else:
+        subject = await db.get(BillingSubject, subject_id)
+        if subject is None:
+            raise RuntimeError("Billing subject disappeared after creation.")
+    return subject
+
+
+async def ensure_organization_billing_subject(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> BillingSubject:
+    now = utcnow()
+    result = await db.execute(
+        pg_insert(BillingSubject)
+        .values(
+            kind=BILLING_SUBJECT_KIND_ORGANIZATION,
+            user_id=None,
+            organization_id=organization_id,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[BillingSubject.organization_id],
+            index_where=(
+                (BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION)
+                & BillingSubject.organization_id.is_not(None)
+            ),
+        )
+        .returning(BillingSubject.id)
+    )
+    subject_id = result.scalar_one_or_none()
+    if subject_id is None:
+        subject = (
+            await db.execute(
+                select(BillingSubject).where(
+                    BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
+                    BillingSubject.organization_id == organization_id,
                 )
             )
         ).scalar_one()
@@ -416,7 +459,9 @@ async def set_billing_subject_overage_enabled(
 def _billing_subject_stripe_state(subject: BillingSubject) -> BillingSubjectStripeState:
     return BillingSubjectStripeState(
         billing_subject_id=subject.id,
+        kind=subject.kind,
         user_id=subject.user_id,
+        organization_id=subject.organization_id,
         stripe_customer_id=subject.stripe_customer_id,
     )
 
@@ -424,6 +469,16 @@ def _billing_subject_stripe_state(subject: BillingSubject) -> BillingSubjectStri
 async def get_or_create_stripe_customer_state_for_user(user_id: UUID) -> BillingSubjectStripeState:
     async with db_engine.async_session_factory() as db:
         subject = await ensure_personal_billing_subject(db, user_id)
+        state = _billing_subject_stripe_state(subject)
+        await db.commit()
+        return state
+
+
+async def get_or_create_stripe_customer_state_for_organization(
+    organization_id: UUID,
+) -> BillingSubjectStripeState:
+    async with db_engine.async_session_factory() as db:
+        subject = await ensure_organization_billing_subject(db, organization_id)
         state = _billing_subject_stripe_state(subject)
         await db.commit()
         return state
@@ -455,6 +510,22 @@ async def set_overage_enabled_for_user(
         subject = await set_billing_subject_overage_enabled(
             db,
             billing_subject_id=subject.id,
+            overage_enabled=overage_enabled,
+        )
+        state = _billing_subject_stripe_state(subject)
+        await db.commit()
+        return state
+
+
+async def set_overage_enabled_for_subject(
+    *,
+    billing_subject_id: UUID,
+    overage_enabled: bool,
+) -> BillingSubjectStripeState:
+    async with db_engine.async_session_factory() as db:
+        subject = await set_billing_subject_overage_enabled(
+            db,
+            billing_subject_id=billing_subject_id,
             overage_enabled=overage_enabled,
         )
         state = _billing_subject_stripe_state(subject)

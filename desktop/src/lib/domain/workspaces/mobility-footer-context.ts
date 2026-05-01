@@ -118,6 +118,6 @@ export function buildMobilityFooterContext(args: {
     branchLabel: branchValue,
     branchValue,
     isInteractive: !isWorkspaceMobilityTransitionPhase(status.phase),
-    isActive: status.phase !== "idle",
+    isActive: status.isBlocking,
   };
 }

@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
@@ -40,12 +40,12 @@ const PHASE_ICON_CLASSNAMES: Record<UpdatePreviewPhase, string> = {
   error: "text-destructive",
 };
 
-const PHASE_BADGE_CLASSNAMES: Record<UpdatePreviewPhase, string> = {
-  checking: "border-border/50 bg-muted/50 text-muted-foreground",
-  available: "border-border/60 bg-foreground/5 text-foreground",
-  downloading: "border-border/50 bg-muted/50 text-muted-foreground",
-  ready: "border-success/30 bg-success/10 text-success",
-  error: "border-destructive/30 bg-destructive/10 text-destructive",
+const PHASE_BADGE_TONES: Record<UpdatePreviewPhase, BadgeTone> = {
+  checking: "neutral",
+  available: "accent",
+  downloading: "neutral",
+  ready: "success",
+  error: "destructive",
 };
 
 export function UpdateUiPlayground() {
@@ -131,7 +131,7 @@ function UpdateWorkspaceBanner({ state }: { state: UpdatePreviewState }) {
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <p className="truncate text-sm font-medium">{state.title}</p>
-            <Badge className={PHASE_BADGE_CLASSNAMES[state.phase]}>
+            <Badge tone={PHASE_BADGE_TONES[state.phase]}>
               {PHASE_LABELS[state.phase]}
             </Badge>
           </div>
@@ -180,7 +180,7 @@ function UpdateSettingsStatusCard({ state }: { state: UpdatePreviewState }) {
           >
             <Icon className={`size-5 ${isBusy ? "animate-spin" : ""}`} />
           </div>
-          <Badge className={PHASE_BADGE_CLASSNAMES[state.phase]}>
+          <Badge tone={PHASE_BADGE_TONES[state.phase]}>
             {PHASE_LABELS[state.phase]}
           </Badge>
         </div>

@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
 import { ChevronDown } from "@/components/ui/icons";
 
 interface ComposerAttachedPanelProps {
@@ -15,7 +16,7 @@ export function ComposerAttachedPanel({
   onToggleExpanded,
 }: ComposerAttachedPanelProps) {
   return (
-    <div className="relative overflow-clip rounded-t-2xl border-x border-t border-border/80 bg-card/70 backdrop-blur-sm transition-colors">
+    <div className="relative overflow-clip rounded-t-2xl border-x border-t border-border/70 bg-card/70 backdrop-blur-sm transition-colors">
       {header && (
         <div className="flex w-full items-center justify-between gap-1.5 py-1.5 pr-2 pl-3 text-sm">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -23,15 +24,18 @@ export function ComposerAttachedPanel({
           </div>
           {onToggleExpanded && (
             <div className="flex min-w-fit shrink-0 items-center gap-1.5 select-none">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={onToggleExpanded}
-                className="text-muted-foreground hover:text-foreground focus-visible:outline-none"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                aria-label={expanded ? "Collapse panel" : "Expand panel"}
               >
                 <ChevronDown
                   className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
                 />
-              </button>
+              </Button>
             </div>
           )}
         </div>

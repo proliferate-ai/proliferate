@@ -170,6 +170,24 @@ export const SHORTCUTS = {
     match: { kind: "fixed", key: "j", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
+  toggleLeftSidebar: {
+    id: "workspace.toggle-left-sidebar",
+    label: "⌘B",
+    nonMacLabel: "Ctrl+B",
+    description: "Toggle left sidebar",
+    owner: "js",
+    match: { kind: "fixed", key: "b", meta: true, shift: false, alt: false },
+    allowInInputs: false,
+  },
+  toggleRightPanel: {
+    id: "workspace.toggle-right-panel",
+    label: "⌘⌥B",
+    nonMacLabel: "Ctrl+Alt+B",
+    description: "Toggle right panel",
+    owner: "js",
+    match: { kind: "fixed", key: "b", meta: true, shift: false, alt: true },
+    allowInInputs: false,
+  },
   openCommandPalette: {
     id: "workspace.open-command-palette",
     label: "⌘K",
@@ -257,6 +275,8 @@ export const SHORTCUT_GROUPS = [
     shortcutKeys: [
       "focusChat",
       "openTerminal",
+      "toggleLeftSidebar",
+      "toggleRightPanel",
       "openCommandPalette",
       "renameSession",
     ],

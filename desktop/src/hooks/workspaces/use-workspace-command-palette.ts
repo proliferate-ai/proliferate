@@ -37,6 +37,8 @@ interface UseWorkspaceCommandPaletteArgs {
   repositorySettingsDisabledReason: string | null;
   runCommand: RunCommandState;
   openTerminalPanel: () => boolean;
+  onToggleLeftSidebar: () => void;
+  onToggleRightPanel: () => void;
 }
 
 export function useWorkspaceCommandPalette({
@@ -51,6 +53,8 @@ export function useWorkspaceCommandPalette({
   repositorySettingsDisabledReason,
   runCommand,
   openTerminalPanel,
+  onToggleLeftSidebar,
+  onToggleRightPanel,
 }: UseWorkspaceCommandPaletteArgs) {
   const navigate = useNavigate();
   const appActions = useAppCommandActionsContext();
@@ -137,6 +141,24 @@ export function useWorkspaceCommandPalette({
       execute: () => {
         openTerminalPanel();
       },
+    },
+    {
+      id: "workspace.toggle-left-sidebar",
+      value: commandPaletteCommandValue("workspace.toggle-left-sidebar"),
+      group: "workspace",
+      label: "Toggle Left Sidebar",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.toggleLeftSidebar),
+      disabledReason: hasWorkspaceShell ? null : "Workspace is still opening.",
+      execute: onToggleLeftSidebar,
+    },
+    {
+      id: "workspace.toggle-right-panel",
+      value: commandPaletteCommandValue("workspace.toggle-right-panel"),
+      group: "workspace",
+      label: "Toggle Right Panel",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel),
+      disabledReason: hasWorkspaceShell ? null : "Workspace is still opening.",
+      execute: onToggleRightPanel,
     },
     {
       id: "workspace.run-command",
@@ -285,6 +307,8 @@ export function useWorkspaceCommandPalette({
     hasWorkspaceShell,
     navigate,
     newSessionDisabledReason,
+    onToggleLeftSidebar,
+    onToggleRightPanel,
     openTerminalPanel,
     openNewSessionTab,
     repoSettingsHref,

@@ -53,6 +53,27 @@ export type CloudCredentialStatus     = components["schemas"]["CredentialStatus"
 export type BillingPlanInfo           = components["schemas"]["CloudPlanInfo"];
 export type BillingUrlResponse        = components["schemas"]["BillingUrlResponse"];
 export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];
+export type BillingOwnerSelection     = components["schemas"]["BillingOwnerSelection"];
+export type OrganizationUpdateRequest = components["schemas"]["OrganizationUpdateRequest"];
+export type OrganizationInviteRequest = components["schemas"]["OrganizationInviteRequest"];
+export type OrganizationMembershipUpdateRequest =
+  components["schemas"]["OrganizationMembershipUpdateRequest"];
+export type OrganizationInvitationAcceptRequest =
+  components["schemas"]["OrganizationInvitationAcceptRequest"];
+export type OrganizationResponse = components["schemas"]["OrganizationResponse"];
+export type OrganizationListResponse = components["schemas"]["OrganizationListResponse"];
+export type OrganizationMemberResponse =
+  components["schemas"]["OrganizationMemberResponse"];
+export type OrganizationMembersResponse =
+  components["schemas"]["OrganizationMembersResponse"];
+export type OrganizationMembershipResponse =
+  components["schemas"]["OrganizationMembershipResponse"];
+export type OrganizationInvitationResponse =
+  components["schemas"]["OrganizationInvitationResponse"];
+export type OrganizationInvitationsResponse =
+  components["schemas"]["OrganizationInvitationsResponse"];
+export type OrganizationInvitationAcceptResponse =
+  components["schemas"]["OrganizationInvitationAcceptResponse"];
 export type CloudWorkspaceSummary = Omit<
   components["schemas"]["WorkspaceSummary"],
   "status" | "runtime" | "actionBlockKind" | "actionBlockReason"

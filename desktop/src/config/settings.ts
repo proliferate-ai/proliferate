@@ -15,12 +15,14 @@ import type { IconProps } from "@/components/ui/icons";
 
 export const SETTINGS_CONTENT_SECTIONS = [
   "general",
+  "agent-defaults",
   "agents",
   "review",
   "appearance",
   "account",
   "keyboard",
   "cloud",
+  "organization",
   "repo",
 ] as const;
 
@@ -36,7 +38,7 @@ export type SettingsNavItem =
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "preferences" | "workflows" | "account_cloud" | "help";
+  id: "preferences" | "workflows" | "organization" | "account_cloud" | "help";
   heading: string;
   items: SettingsNavItem[];
 }
@@ -56,8 +58,16 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Workflows",
     items: [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
+      { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: Settings },
       { kind: "section", id: "review", label: "Review", icon: BrainOutline },
       { kind: "section", id: "repo", label: "Environments", icon: FolderList },
+    ],
+  },
+  {
+    id: "organization",
+    heading: "Organization",
+    items: [
+      { kind: "section", id: "organization", label: "Settings", icon: CircleUser },
     ],
   },
   {

@@ -11,10 +11,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 
 type PopoverAlign = "start" | "end";
 type PopoverSide = "bottom" | "top" | "right" | "left";
+type PopoverPlacementSide = PopoverSide | "auto";
 type PopoverTriggerMode = "click" | "doubleClick" | "contextMenu";
+
+const DEFAULT_AUTO_VERTICAL_SPACE = 320;
 
 interface PopoverButtonProps {
   /** The trigger element — receives onClick and ref. */
@@ -29,7 +33,7 @@ interface PopoverButtonProps {
   /** Horizontal alignment relative to trigger (for top/bottom sides). Default: "start". */
   align?: PopoverAlign;
   /** Which side to open on. Default: "bottom". */
-  side?: PopoverSide;
+  side?: PopoverPlacementSide;
   /** Gap between trigger and popover in px. Default: 4. */
   offset?: number;
   /** Class name for the popover surface. */
@@ -59,6 +63,7 @@ export function PopoverButton({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<Record<string, number>>({});
   const triggerRef = useRef<HTMLElement>(null);
+  useNativeOverlayRegistration(open);
 
   const setOpenAndNotify = useCallback((next: boolean) => {
     setOpen(next);
@@ -86,18 +91,18 @@ export function PopoverButton({
     openFromTrigger();
   }, [open, openFromTrigger, setOpenAndNotify]);
 
-  // Respond to external open/close requests
-  const openedExternallyRef = useRef(false);
-
+  // Respond to external open/close requests.
   useEffect(() => {
-    if (externalOpen && !open) {
-      openedExternallyRef.current = true;
-      openFromTrigger();
-    } else if (!externalOpen && open && openedExternallyRef.current) {
-      openedExternallyRef.current = false;
-      setOpenAndNotify(false);
+    if (externalOpen === undefined) {
+      return;
     }
-  }, [externalOpen, open, openFromTrigger, setOpenAndNotify]);
+
+    if (externalOpen && !open) {
+      openFromTrigger();
+    } else if (!externalOpen && open) {
+      setOpen(false);
+    }
+  }, [externalOpen, open, openFromTrigger]);
 
   useEffect(() => {
     if (!open) return;
@@ -173,11 +178,15 @@ export function PopoverButton({
 
 function computePosition(
   rect: DOMRect,
-  side: PopoverSide,
+  side: PopoverPlacementSide,
   align: PopoverAlign,
   offset: number,
 ): Record<string, number> {
-  switch (side) {
+  const resolvedSide = side === "auto"
+    ? resolveAutoSide(rect, offset)
+    : side;
+
+  switch (resolvedSide) {
     case "bottom":
       return align === "end"
         ? { top: rect.bottom + offset, right: window.innerWidth - rect.right }
@@ -191,4 +200,12 @@ function computePosition(
     case "left":
       return { top: rect.top, right: window.innerWidth - rect.left + offset };
   }
+}
+
+function resolveAutoSide(rect: DOMRect, offset: number): PopoverSide {
+  const spaceBelow = window.innerHeight - rect.bottom - offset;
+  const spaceAbove = rect.top - offset;
+  return spaceBelow < DEFAULT_AUTO_VERTICAL_SPACE && spaceAbove > spaceBelow
+    ? "top"
+    : "bottom";
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSettingsHref,
   resolveSettingsSelection,
 } from "@/lib/domain/settings/navigation";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
@@ -27,24 +28,27 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "general",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
   });
 
-  it("redirects legacy defaults and advanced sections to general", () => {
+  it("redirects legacy defaults and advanced sections to agent defaults", () => {
     expect(resolveSettingsSelection({
       rawSection: "defaults",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
 
     expect(resolveSettingsSelection({
       rawSection: "advanced",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
   });
 
@@ -55,6 +59,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "general",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
   });
 
@@ -65,6 +70,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "review",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
   });
 
@@ -76,6 +82,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "repo",
       activeRepoSourceRoot: "/repo-a",
+      inviteHandoff: null,
     });
   });
 
@@ -86,6 +93,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "repo",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
   });
 
@@ -97,6 +105,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "repo",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
   });
 
@@ -109,6 +118,7 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "repo",
       activeRepoSourceRoot: "/repo-a",
+      inviteHandoff: null,
     });
   });
 
@@ -124,6 +134,39 @@ describe("settings navigation", () => {
     })).toEqual({
       activeSection: "cloud",
       activeRepoSourceRoot: null,
+      inviteHandoff: null,
     });
+  });
+
+  it("preserves organization invite handoff only on the organization section", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "organization",
+      rawInviteHandoff: "handoff-token",
+      repositories: [],
+    })).toEqual({
+      activeSection: "organization",
+      activeRepoSourceRoot: null,
+      inviteHandoff: "handoff-token",
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "general",
+      rawInviteHandoff: "handoff-token",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      inviteHandoff: null,
+    });
+  });
+
+  it("builds flat organization settings links with optional invite handoff", () => {
+    expect(buildSettingsHref({ section: "organization" })).toBe(
+      "/settings?section=organization",
+    );
+    expect(buildSettingsHref({
+      section: "organization",
+      inviteHandoff: "handoff-token",
+    })).toBe("/settings?section=organization&inviteHandoff=handoff-token");
   });
 });

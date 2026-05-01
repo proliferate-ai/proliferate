@@ -3,9 +3,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
+import type { ReactNode, SetStateAction } from "react";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
-import { DEFAULT_RIGHT_PANEL_WORKSPACE_STATE } from "@/lib/domain/workspaces/right-panel";
+import {
+  DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+  type RightPanelWorkspaceState,
+} from "@/lib/domain/workspaces/right-panel";
 import { openExternal } from "@/platform/tauri/shell";
 import { useMainScreenActions } from "./use-main-screen-actions";
 import type { MainScreenLayoutState } from "./use-main-screen-state";
@@ -86,15 +89,106 @@ describe("useMainScreenActions publish actions", () => {
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
     expect(spies.setRightPanelOpen).not.toHaveBeenCalled();
   });
+
 });
 
-function renderActions() {
+describe("useMainScreenActions right panel actions", () => {
+  it("opens singleton right-panel tools by writing an active entry key", () => {
+    const { result, spies } = renderActions();
+
+    act(() => result.current.onSetRightPanelTool("files"));
+
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+    const nextState = applyRightPanelStateUpdate(
+      DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      lastCallArg(spies.setRightPanelState),
+    );
+    expect(nextState.activeEntryKey).toBe("tool:files");
+  });
+
+  it("opens a concrete terminal by adding and selecting its header entry", () => {
+    const { result, spies } = renderActions();
+
+    act(() => result.current.openTerminalPanel("terminal-1"));
+
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+    expect(spies.setTerminalActivationRequest).toHaveBeenCalledTimes(1);
+    const nextState = applyRightPanelStateUpdate(
+      DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      lastCallArg(spies.setRightPanelState),
+    );
+    expect(nextState.activeEntryKey).toBe("terminal:terminal-1");
+    expect(nextState.headerOrder).toContain("terminal:terminal-1");
+    expect(applyTerminalActivationRequestUpdate(
+      null,
+      lastCallArg<MainScreenLayoutState["terminalActivationRequest"]>(
+        spies.setTerminalActivationRequest,
+      ),
+    )).toEqual({ token: 1, workspaceId: "workspace-1" });
+  });
+
+  it("opens terminal panel without an id by preserving state and bumping activation", () => {
+    const { result, spies } = renderActions();
+
+    act(() => result.current.openTerminalPanel());
+
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+    expect(spies.setTerminalActivationRequest).toHaveBeenCalledTimes(1);
+    expect(applyTerminalActivationRequestUpdate(
+      null,
+      lastCallArg<MainScreenLayoutState["terminalActivationRequest"]>(
+        spies.setTerminalActivationRequest,
+      ),
+    )).toEqual({ token: 1, workspaceId: "workspace-1" });
+    expect(spies.setRightPanelState).not.toHaveBeenCalled();
+  });
+
+  it("toggles a closed right panel from the active tool entry", () => {
+    const { result, spies } = renderActions({
+      rightPanelState: {
+        ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+        activeEntryKey: "tool:settings",
+      },
+      rightPanelOpen: false,
+    });
+
+    act(() => result.current.toggleRightPanel());
+
+    const nextState = applyRightPanelStateUpdate(
+      DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      lastCallArg(spies.setRightPanelState),
+    );
+    expect(nextState.activeEntryKey).toBe("tool:settings");
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("toggles a closed right panel from a live entry without rewriting selection", () => {
+    const { result, spies } = renderActions({
+      rightPanelState: {
+        ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+        activeEntryKey: "browser:b1",
+        headerOrder: [...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder, "browser:b1"],
+        browserTabsById: {
+          b1: { id: "b1", url: null },
+        },
+      },
+      rightPanelOpen: false,
+    });
+
+    act(() => result.current.toggleRightPanel());
+
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+    expect(spies.setRightPanelState).not.toHaveBeenCalled();
+  });
+});
+
+function renderActions(overrides: Partial<MainScreenLayoutState> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
     },
   });
-  const { layout, spies } = mainScreenLayout();
+  const { layout, spies } = mainScreenLayout(overrides);
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
@@ -109,17 +203,19 @@ function renderActions() {
   };
 }
 
-function mainScreenLayout(): {
+function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
   layout: MainScreenLayoutState;
   spies: {
     setPublishDialog: ReturnType<typeof vi.fn>;
     setRightPanelOpen: ReturnType<typeof vi.fn>;
     setRightPanelState: ReturnType<typeof vi.fn>;
+    setTerminalActivationRequest: ReturnType<typeof vi.fn>;
   };
 } {
   const setPublishDialog = vi.fn();
   const setRightPanelOpen = vi.fn();
   const setRightPanelState = vi.fn();
+  const setTerminalActivationRequest = vi.fn();
 
   return {
     layout: {
@@ -131,8 +227,8 @@ function mainScreenLayout(): {
       setSidebarWidth: vi.fn(),
       rightPanelOpen: false,
       setRightPanelOpen,
-      terminalActivationRequestToken: 0,
-      setTerminalActivationRequestToken: vi.fn(),
+      terminalActivationRequest: null,
+      setTerminalActivationRequest,
       publishDialog: {
         open: false,
         initialIntent: "commit",
@@ -145,13 +241,42 @@ function mainScreenLayout(): {
       setRightPanelWidth: vi.fn(),
       onLeftSeparatorDown: vi.fn(),
       onRightSeparatorDown: vi.fn(),
+      ...overrides,
     },
     spies: {
       setPublishDialog,
       setRightPanelOpen,
       setRightPanelState,
+      setTerminalActivationRequest,
     },
   };
+}
+
+function applyRightPanelStateUpdate(
+  previous: RightPanelWorkspaceState,
+  value: SetStateAction<RightPanelWorkspaceState> | undefined,
+): RightPanelWorkspaceState {
+  if (!value) {
+    throw new Error("Expected right panel state update");
+  }
+  return typeof value === "function" ? value(previous) : value;
+}
+
+function lastCallArg<T = RightPanelWorkspaceState>(
+  mock: ReturnType<typeof vi.fn>,
+): SetStateAction<T> | undefined {
+  const calls = mock.mock.calls;
+  return calls[calls.length - 1]?.[0] as SetStateAction<T> | undefined;
+}
+
+function applyTerminalActivationRequestUpdate(
+  previous: MainScreenLayoutState["terminalActivationRequest"],
+  value: SetStateAction<MainScreenLayoutState["terminalActivationRequest"]> | undefined,
+): MainScreenLayoutState["terminalActivationRequest"] {
+  if (!value) {
+    throw new Error("Expected terminal activation request update");
+  }
+  return typeof value === "function" ? value(previous) : value;
 }
 
 function pullRequest(): NonNullable<CurrentPullRequestResponse["pullRequest"]> {

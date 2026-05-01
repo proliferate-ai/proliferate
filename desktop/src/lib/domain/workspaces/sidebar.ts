@@ -91,6 +91,7 @@ export const DEFAULT_SIDEBAR_WORKSPACE_TYPES: SidebarWorkspaceVariant[] = [
   "worktree",
   "cloud",
 ];
+export const SIDEBAR_REPO_GROUP_ITEM_LIMIT = 6;
 
 export interface SidebarWorkspaceItemState {
   id: string;
@@ -295,37 +296,30 @@ export function toggleSidebarWorkspaceTypeSelection(
   return normalizeSidebarWorkspaceTypes([...normalized, type]);
 }
 
-export function getEffectiveExpandedSidebarGroupKeys(args: {
+export function resolveAutoShowMoreRepoKey(args: {
   groups: SidebarGroupState[];
-  explicitlyExpandedRepoKeys: ReadonlySet<string>;
   selectedLogicalWorkspaceId: string | null;
   itemLimit: number;
-}): Set<string> {
+}): string | null {
   const {
     groups,
-    explicitlyExpandedRepoKeys,
     selectedLogicalWorkspaceId,
     itemLimit,
   } = args;
 
   if (!selectedLogicalWorkspaceId) {
-    return new Set(explicitlyExpandedRepoKeys);
+    return null;
   }
 
-  let next: Set<string> | null = null;
   for (const group of groups) {
     if (group.items.length <= itemLimit) continue;
-    if (explicitlyExpandedRepoKeys.has(group.sourceRoot)) continue;
     const selectedIndex = group.items.findIndex((item) => item.id === selectedLogicalWorkspaceId);
     if (selectedIndex >= itemLimit) {
-      if (!next) {
-        next = new Set(explicitlyExpandedRepoKeys);
-      }
-      next.add(group.sourceRoot);
+      return group.sourceRoot;
     }
   }
 
-  return next ?? new Set(explicitlyExpandedRepoKeys);
+  return null;
 }
 
 export function resolveSidebarEmptyState(

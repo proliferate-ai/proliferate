@@ -3,7 +3,7 @@ import type { CloudRepoFileMetadata } from "@/lib/integrations/cloud/client";
 import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,
-} from "@/components/settings/EnvironmentSettingsLayout";
+} from "@/components/ui/EnvironmentLayout";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";

@@ -51,6 +51,11 @@ export type HomeNextModelSelection = AgentModelSelection;
 export type HomeNextModelOption = AgentModelOption;
 export type HomeNextModelGroup = AgentModelGroup;
 export type HomeNextModelInfo = AgentModelInfo;
+export type ModelAvailabilityState =
+  | "loading"
+  | "load_error"
+  | "no_launchable_model"
+  | "launchable";
 
 export interface HomeNextLaunchPreferences {
   defaultChatAgentKind: string;
@@ -62,6 +67,23 @@ export type HomeLaunchTarget =
   | { kind: "local"; sourceRoot: string; existingWorkspaceId: string | null }
   | { kind: "worktree"; repoRootId: string; sourceWorkspaceId: string | null; baseBranch: string }
   | { kind: "cloud"; gitOwner: string; gitRepoName: string; baseBranch: string };
+
+export function resolveHomeModelAvailabilityState(input: {
+  isLoading: boolean;
+  hasLoadError: boolean;
+  hasLaunchableModel: boolean;
+}): ModelAvailabilityState {
+  if (input.isLoading) {
+    return "loading";
+  }
+  if (input.hasLoadError) {
+    return "load_error";
+  }
+  if (input.hasLaunchableModel) {
+    return "launchable";
+  }
+  return "no_launchable_model";
+}
 
 export function buildHomeNextAgentOptions(
   agents: AgentSummary[],

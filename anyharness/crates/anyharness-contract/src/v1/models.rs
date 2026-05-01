@@ -34,6 +34,45 @@ pub struct ModelLaunchRemediation {
     pub message: String,
 }
 
+/// Product-level live controls that can be configured as launch defaults.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionDefaultControlKey {
+    Reasoning,
+    Effort,
+    FastMode,
+}
+
+/// Selectable value for a launch-default session control.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDefaultControlValue {
+    /// Stable raw value identifier to send after live config confirms support.
+    pub value: String,
+    /// Human-readable value label shown in settings.
+    pub label: String,
+    /// Optional user-facing description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Whether this is the model catalog default value.
+    pub is_default: bool,
+}
+
+/// Static model metadata describing a live control that can be defaulted at launch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionDefaultControl {
+    /// Product-level semantic key such as `reasoning`, `effort`, or `fast_mode`.
+    pub key: SessionDefaultControlKey,
+    /// Human-readable control label shown in settings.
+    pub label: String,
+    /// Values intentionally exposed for launch-default selection.
+    pub values: Vec<SessionDefaultControlValue>,
+    /// Optional model catalog default value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<String>,
+}
+
 /// A known model in the AnyHarness catalog for a given provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +97,9 @@ pub struct ModelEntry {
     /// Optional app-owned remediation hint for launch-time live-apply mismatch
     #[serde(skip_serializing_if = "Option::is_none")]
     pub launch_remediation: Option<ModelLaunchRemediation>,
+    /// Live controls that can be configured as launch defaults for this model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_default_controls: Vec<SessionDefaultControl>,
 }
 
 /// A model row in the backend-owned registry for a given harness.
@@ -84,6 +126,9 @@ pub struct ModelRegistryModel {
     /// Optional app-owned remediation hint for launch-time live-apply mismatch
     #[serde(skip_serializing_if = "Option::is_none")]
     pub launch_remediation: Option<ModelLaunchRemediation>,
+    /// Live controls that can be configured as launch defaults for this model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_default_controls: Vec<SessionDefaultControl>,
 }
 
 /// Backend-owned model registry for a harness.
@@ -129,6 +174,7 @@ mod tests {
             aliases: vec![],
             min_runtime_version: None,
             launch_remediation: None,
+            session_default_controls: vec![],
         };
 
         let json = serde_json::to_value(&model).expect("serialize model entry");
@@ -182,6 +228,7 @@ mod tests {
                     kind: ModelLaunchRemediationKind::ManagedReinstall,
                     message: "Update Claude tools and retry.".to_string(),
                 }),
+                session_default_controls: vec![],
             }],
         };
 
@@ -206,6 +253,82 @@ mod tests {
                     }
                 }]
             })
+        );
+    }
+
+    #[test]
+    fn model_registry_omits_empty_session_default_controls() {
+        let model = ModelRegistryModel {
+            id: "sonnet".to_string(),
+            display_name: "Sonnet".to_string(),
+            description: None,
+            is_default: true,
+            status: ModelCatalogStatus::Active,
+            aliases: vec![],
+            min_runtime_version: None,
+            launch_remediation: None,
+            session_default_controls: vec![],
+        };
+
+        let json = serde_json::to_value(&model).expect("serialize model registry model");
+
+        assert!(json.get("sessionDefaultControls").is_none());
+    }
+
+    #[test]
+    fn session_default_controls_serialize_with_wire_casing() {
+        let model = ModelRegistryModel {
+            id: "sonnet".to_string(),
+            display_name: "Sonnet".to_string(),
+            description: None,
+            is_default: true,
+            status: ModelCatalogStatus::Active,
+            aliases: vec![],
+            min_runtime_version: None,
+            launch_remediation: None,
+            session_default_controls: vec![SessionDefaultControl {
+                key: SessionDefaultControlKey::FastMode,
+                label: "Fast mode".to_string(),
+                default_value: Some("off".to_string()),
+                values: vec![
+                    SessionDefaultControlValue {
+                        value: "off".to_string(),
+                        label: "Slow".to_string(),
+                        description: None,
+                        is_default: true,
+                    },
+                    SessionDefaultControlValue {
+                        value: "on".to_string(),
+                        label: "Fast".to_string(),
+                        description: Some("Use the fast service tier.".to_string()),
+                        is_default: false,
+                    },
+                ],
+            }],
+        };
+
+        let json = serde_json::to_value(&model).expect("serialize model registry model");
+
+        assert_eq!(
+            json.get("sessionDefaultControls"),
+            Some(&serde_json::json!([{
+                "key": "fast_mode",
+                "label": "Fast mode",
+                "defaultValue": "off",
+                "values": [
+                    {
+                        "value": "off",
+                        "label": "Slow",
+                        "isDefault": true
+                    },
+                    {
+                        "value": "on",
+                        "label": "Fast",
+                        "description": "Use the fast service tier.",
+                        "isDefault": false
+                    }
+                ]
+            }]))
         );
     }
 }

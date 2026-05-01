@@ -67,47 +67,27 @@ export function mobilityActionableCopy(
   switch (kind) {
     case "cloud_workspace":
       return {
-        headline: "You're working in the cloud.",
-        body: "You can bring this workspace back to your local machine.",
+        headline: "Bring back local",
+        body: "Move this workspace from cloud back to your local machine.",
         actionLabel: "Bring back local",
         direction: "cloud_to_local",
       };
     case "local_worktree":
       return {
-        headline: "You're working in a local worktree.",
-        body: "You can move this workspace to the cloud.",
+        headline: "Move to cloud",
+        body: "Move this local worktree to a cloud runtime.",
         actionLabel: "Move to cloud",
         direction: "local_to_cloud",
       };
     case "local_workspace":
     default:
       return {
-        headline: "You're working locally.",
-        body: "You can move this workspace to the cloud.",
+        headline: "Move to cloud",
+        body: "Move this local workspace to a cloud runtime.",
         actionLabel: "Move to cloud",
         direction: "local_to_cloud",
       };
   }
-}
-
-export function mobilityModalCopy(
-  direction: WorkspaceMobilityDirection,
-): {
-  title: string;
-  body: string;
-  confirmLabel: string;
-} {
-  return direction === "local_to_cloud"
-    ? {
-      title: "Move this workspace to cloud?",
-      body: "You'll keep the same workspace. Its runtime will move to the cloud.",
-      confirmLabel: "Move to cloud",
-    }
-    : {
-      title: "Bring this workspace back local?",
-      body: "You'll keep the same workspace. Its runtime will move back to your local machine.",
-      confirmLabel: "Bring back local",
-    };
 }
 
 export function mobilityReconnectCopy(

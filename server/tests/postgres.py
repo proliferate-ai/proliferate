@@ -14,6 +14,7 @@ import proliferate.db.models.auth  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.billing  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
+import proliferate.db.models.organizations  # noqa: F401
 from proliferate.db.models.base import Base
 
 POSTGRES_USER = "proliferate"

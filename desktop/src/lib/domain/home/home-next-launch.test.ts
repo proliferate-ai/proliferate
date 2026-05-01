@@ -14,6 +14,7 @@ import {
   localBranchNames,
   resolveEffectiveHomeModelSelection,
   resolveHomeLaunchTarget,
+  resolveHomeModelAvailabilityState,
   resolveHomeNextDefaultBranchName,
   resolveSelectedHomeNextAgentOption,
 } from "./home-next-launch";
@@ -227,6 +228,29 @@ describe("home-next agent helpers", () => {
 });
 
 describe("home-next model helpers", () => {
+  it("resolves model availability with loading and error precedence", () => {
+    expect(resolveHomeModelAvailabilityState({
+      isLoading: true,
+      hasLoadError: true,
+      hasLaunchableModel: true,
+    })).toBe("loading");
+    expect(resolveHomeModelAvailabilityState({
+      isLoading: false,
+      hasLoadError: true,
+      hasLaunchableModel: true,
+    })).toBe("load_error");
+    expect(resolveHomeModelAvailabilityState({
+      isLoading: false,
+      hasLoadError: false,
+      hasLaunchableModel: true,
+    })).toBe("launchable");
+    expect(resolveHomeModelAvailabilityState({
+      isLoading: false,
+      hasLoadError: false,
+      hasLaunchableModel: false,
+    })).toBe("no_launchable_model");
+  });
+
   it("builds all ready registry models and treats encoded model ids as opaque", () => {
     const groups = buildHomeNextModelGroups(
       [

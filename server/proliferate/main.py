@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
+import proliferate.db.models.organizations  # noqa: F401
 from proliferate.auth.dependencies import fastapi_users
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.jwt import auth_backend
@@ -41,6 +42,7 @@ from proliferate.server.cloud.runtime.setup_monitor import (
     stop_cloud_setup_monitor,
 )
 from proliferate.server.health import router as health_router
+from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
 
@@ -173,6 +175,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
+    app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(automations_router, prefix=f"{api_prefix}/v1", tags=["automations"])
 
     return app
