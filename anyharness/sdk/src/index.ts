@@ -59,6 +59,9 @@ export type {
   ModelLaunchRemediationKind,
   ModelRegistry,
   ModelRegistryModel,
+  SessionDefaultControl,
+  SessionDefaultControlKey,
+  SessionDefaultControlValue,
 } from "./types/model-registries.js";
 
 export type {

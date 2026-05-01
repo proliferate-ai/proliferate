@@ -14,8 +14,11 @@ export function isSettingsSection(value: string | null): value is SettingsSectio
 }
 
 export function normalizeSettingsSection(value: string | null): SettingsSection {
-  if (value === "configuration" || value === "defaults" || value === "advanced") {
+  if (value === "configuration") {
     return "general";
+  }
+  if (value === "defaults" || value === "advanced") {
+    return "agent-defaults";
   }
 
   return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;

@@ -14,7 +14,10 @@ import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 
 type PopoverAlign = "start" | "end";
 type PopoverSide = "bottom" | "top" | "right" | "left";
+type PopoverPlacementSide = PopoverSide | "auto";
 type PopoverTriggerMode = "click" | "doubleClick" | "contextMenu";
+
+const DEFAULT_AUTO_VERTICAL_SPACE = 320;
 
 interface PopoverButtonProps {
   /** The trigger element — receives onClick and ref. */
@@ -29,7 +32,7 @@ interface PopoverButtonProps {
   /** Horizontal alignment relative to trigger (for top/bottom sides). Default: "start". */
   align?: PopoverAlign;
   /** Which side to open on. Default: "bottom". */
-  side?: PopoverSide;
+  side?: PopoverPlacementSide;
   /** Gap between trigger and popover in px. Default: 4. */
   offset?: number;
   /** Class name for the popover surface. */
@@ -173,11 +176,15 @@ export function PopoverButton({
 
 function computePosition(
   rect: DOMRect,
-  side: PopoverSide,
+  side: PopoverPlacementSide,
   align: PopoverAlign,
   offset: number,
 ): Record<string, number> {
-  switch (side) {
+  const resolvedSide = side === "auto"
+    ? resolveAutoSide(rect, offset)
+    : side;
+
+  switch (resolvedSide) {
     case "bottom":
       return align === "end"
         ? { top: rect.bottom + offset, right: window.innerWidth - rect.right }
@@ -191,4 +198,12 @@ function computePosition(
     case "left":
       return { top: rect.top, right: window.innerWidth - rect.left + offset };
   }
+}
+
+function resolveAutoSide(rect: DOMRect, offset: number): PopoverSide {
+  const spaceBelow = window.innerHeight - rect.bottom - offset;
+  const spaceAbove = rect.top - offset;
+  return spaceBelow < DEFAULT_AUTO_VERTICAL_SPACE && spaceAbove > spaceBelow
+    ? "top"
+    : "bottom";
 }

@@ -3,6 +3,7 @@ import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { type SettingsSection } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "./panes/AccountPane";
+import { AgentDefaultsPane } from "./panes/AgentDefaultsPane";
 import { AgentsPane } from "./panes/AgentsPane";
 import { AppearancePane } from "./panes/AppearancePane";
 import { GeneralPane } from "./panes/GeneralPane";
@@ -42,6 +43,9 @@ function renderSettingsSection(
 ): ReactNode {
   if (activeSection === "agents") {
     return <AgentsPane />;
+  }
+  if (activeSection === "agent-defaults") {
+    return <AgentDefaultsPane />;
   }
   if (activeSection === "general") {
     return <GeneralPane />;

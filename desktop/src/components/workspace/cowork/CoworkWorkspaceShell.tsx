@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
@@ -8,6 +8,7 @@ import { SplitPanel } from "@/components/ui/icons";
 import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";
 import { useResize } from "@/hooks/layout/use-resize";
+import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
@@ -92,6 +93,25 @@ export function CoworkWorkspaceShell({
     return fallbackTitle?.trim() || "Untitled chat";
   }, [activeSessionId, activeSlot?.title, activeSlot?.workspaceId, fallbackTitle, workspaceId]);
 
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((value) => !value);
+  }, [setSidebarOpen]);
+
+  const toggleRightPanel = useCallback(() => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    setArtifactPanelOpen(workspaceId, !rightPanelOpen);
+  }, [rightPanelOpen, setArtifactPanelOpen, workspaceId]);
+
+  useShortcutHandler("workspace.toggle-left-sidebar", toggleSidebar, {
+    enabled: workspaceId !== null,
+  });
+  useShortcutHandler("workspace.toggle-right-panel", toggleRightPanel, {
+    enabled: workspaceId !== null,
+  });
+
   return (
     <WorkspacePathProvider workspacePath={workspacePath}>
       <div
@@ -167,13 +187,8 @@ export function CoworkWorkspaceShell({
               sidebarOpen={sidebarOpen}
               rightPanelOpen={rightPanelOpen}
               showArtifactsToggle={canShowArtifactPanel}
-              onToggleSidebar={() => setSidebarOpen((value) => !value)}
-              onToggleRightPanel={() => {
-                if (!workspaceId) {
-                  return;
-                }
-                setArtifactPanelOpen(workspaceId, !rightPanelOpen);
-              }}
+              onToggleSidebar={toggleSidebar}
+              onToggleRightPanel={toggleRightPanel}
             />
           </div>
 

@@ -30,12 +30,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("redirects legacy defaults and advanced sections to general", () => {
+  it("redirects legacy defaults and advanced sections to agent defaults", () => {
     expect(resolveSettingsSelection({
       rawSection: "defaults",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
     });
 
@@ -43,7 +43,7 @@ describe("settings navigation", () => {
       rawSection: "advanced",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "agent-defaults",
       activeRepoSourceRoot: null,
     });
   });

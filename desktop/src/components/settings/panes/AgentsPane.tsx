@@ -1,5 +1,6 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { AGENTS_PAGE_COPY } from "@/config/agents";
 import type { AgentsPaneRowState } from "@/hooks/agents/use-agents-pane-state";
 import { useAgentsPaneState } from "@/hooks/agents/use-agents-pane-state";
@@ -14,6 +15,7 @@ import {
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 const AGENTS_PANE_BADGE_CLASSNAMES = {
   neutral: "border-border/60 bg-muted/35 text-muted-foreground",
@@ -22,6 +24,7 @@ const AGENTS_PANE_BADGE_CLASSNAMES = {
 
 export function AgentsPane() {
   const state = useAgentsPaneState();
+  const navigate = useNavigate();
 
   return (
     <section className="space-y-6">
@@ -115,6 +118,26 @@ export function AgentsPane() {
           )}
         </>
       )}
+
+      <AgentsSection
+        title={AGENTS_PAGE_COPY.defaultsSectionTitle}
+        description={AGENTS_PAGE_COPY.defaultsSectionDescription}
+      >
+        <SettingsCard>
+          <SettingsCardRow
+            label={AGENTS_PAGE_COPY.defaultsLabel}
+            description={AGENTS_PAGE_COPY.defaultsDescription}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(buildSettingsHref({ section: "agent-defaults" }))}
+            >
+              {AGENTS_PAGE_COPY.defaultsAction}
+            </Button>
+          </SettingsCardRow>
+        </SettingsCard>
+      </AgentsSection>
 
       <AgentReconciliationSection
         connectionState={state.connectionState}

@@ -249,6 +249,32 @@ describe("user preference migration", () => {
     });
   });
 
+  it("sanitizes live session control default maps", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultLiveSessionControlValuesByAgentKind: {
+        claude: {
+          reasoning: " extended ",
+          effort: "",
+          fast_mode: "enabled",
+          temperature: "1",
+        },
+        codex: null,
+        "": {
+          reasoning: "low",
+        },
+      } as unknown as typeof USER_PREFERENCE_DEFAULTS.defaultLiveSessionControlValuesByAgentKind,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultLiveSessionControlValuesByAgentKind).toEqual({
+      claude: {
+        reasoning: "extended",
+        fast_mode: "enabled",
+      },
+    });
+  });
+
   it("preserves pinned Claude Opus 4.6 model preferences", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
