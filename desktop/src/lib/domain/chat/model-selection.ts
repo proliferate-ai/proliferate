@@ -1,4 +1,8 @@
 import type { AgentSummary, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
+import {
+  resolveModelDisplayName,
+  shouldHideModel,
+} from "@/lib/domain/chat/model-display";
 import type { PendingSessionConfigChangeStatus } from "@/lib/domain/sessions/pending-config";
 
 export interface ModelSelectorSelection {
@@ -28,6 +32,15 @@ export interface ModelSelectorGroup {
   kind: string;
   providerDisplayName: string;
   models: ModelSelectorItem[];
+}
+
+export interface ActiveModelSelectorControl {
+  kind: string;
+  values: ReadonlyArray<{
+    value: string;
+    label: string;
+    description?: string | null;
+  }>;
 }
 
 export interface ModelSelectorCurrentModel {
@@ -137,11 +150,12 @@ export function buildModelSelectorGroups(
   agents: WorkspaceSessionLaunchAgent[],
   selected: ModelSelectorSelection | null,
   activeSelection: ModelSelectorSelection | null | undefined,
+  activeModelControl?: ActiveModelSelectorControl | null,
 ): ModelSelectorGroup[] {
   return agents.map((agent) => ({
     kind: agent.kind,
     providerDisplayName: agent.displayName,
-    models: agent.models.map((model) => ({
+    models: resolveSelectorModels(agent, activeModelControl, selected).map((model) => ({
       kind: agent.kind,
       modelId: model.id,
       displayName: model.displayName,
@@ -150,6 +164,54 @@ export function buildModelSelectorGroups(
         selected?.kind === agent.kind && selected?.modelId === model.id,
     })),
   }));
+}
+
+function resolveSelectorModels(
+  agent: WorkspaceSessionLaunchAgent,
+  activeModelControl: ActiveModelSelectorControl | null | undefined,
+  selected: ModelSelectorSelection | null,
+): Array<{ id: string; displayName: string }> {
+  if (activeModelControl?.kind === agent.kind && activeModelControl.values.length > 0) {
+    return activeModelControl.values.flatMap((value) => {
+      const isSelected = selected?.kind === agent.kind && selected.modelId === value.value;
+      const isHidden = shouldHideSelectorModel(agent.kind, value);
+      if (isHidden && !isSelected) {
+        return [];
+      }
+
+      const displayName = resolveModelDisplayName({
+        agentKind: agent.kind,
+        modelId: value.value,
+        sourceLabels: [value.label],
+        preferKnownAlias: !isHidden,
+      }) ?? value.label;
+
+      return [{
+        id: value.value,
+        displayName,
+      }];
+    });
+  }
+
+  return agent.models;
+}
+
+function shouldHideSelectorModel(
+  agentKind: string,
+  value: ActiveModelSelectorControl["values"][number],
+): boolean {
+  if (shouldHideModel(agentKind, value.value)) {
+    return true;
+  }
+
+  if (agentKind !== "claude") {
+    return false;
+  }
+
+  const label = value.label.toLowerCase();
+  return /\bopus\s*4\.1\b/.test(label)
+    || /\bopus\s*4\.5\b/.test(label)
+    || (/\bopus\s*4\.6\b/.test(label) && /\b1m\b|1m context/.test(label));
 }
 
 export function filterModelSelectorGroups(

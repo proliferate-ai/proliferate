@@ -265,7 +265,8 @@ pub enum CredentialDiscoveryKind {
     Codex,
     /// Check Gemini-specific OAuth cache files.
     Gemini,
-    /// Check OpenCode-specific auth.json (multi-provider).
+    /// Check OpenCode-specific auth.json (multi-provider), while leaving
+    /// readiness provider-managed when no local auth file exists.
     OpenCode,
     /// Check Cursor-specific ~/.cursor/cli-config.json for login state.
     Cursor,

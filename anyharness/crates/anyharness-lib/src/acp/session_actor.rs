@@ -11,6 +11,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use super::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate};
 use super::event_sink::{
     AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSink,
+    SessionEventSinkDebugSnapshot,
 };
 use super::mcp_elicitation::McpElicitationOutcome;
 use super::permission_broker::{
@@ -208,6 +209,8 @@ enum ActorExitDisposition {
 }
 
 const IDLE_RESUME_REPLAY_QUIET_WINDOW: Duration = Duration::from_millis(100);
+const EMPTY_TURN_ERROR_CODE: &str = "empty_turn";
+const EMPTY_TURN_ERROR_MESSAGE: &str = "The agent ended the turn without producing a response. The selected model or provider may need additional configuration or credentials.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResumeReplayNotificationClass {
@@ -236,6 +239,7 @@ struct PromptDiagnostics {
     last_raw_kind: Option<&'static str>,
     last_raw_at: Option<Instant>,
     last_agent_chunk_at: Option<Instant>,
+    last_agent_thought_at: Option<Instant>,
     last_agent_preview: Option<String>,
     last_tool_event_at: Option<Instant>,
     last_plan_at: Option<Instant>,
@@ -250,6 +254,7 @@ impl PromptDiagnostics {
             last_raw_kind: None,
             last_raw_at: None,
             last_agent_chunk_at: None,
+            last_agent_thought_at: None,
             last_agent_preview: None,
             last_tool_event_at: None,
             last_plan_at: None,
@@ -265,8 +270,16 @@ impl PromptDiagnostics {
 
         match &notif.update {
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
-                self.last_agent_chunk_at = Some(now);
-                self.last_agent_preview = Some(content_block_preview(&chunk.content));
+                let preview = content_block_preview(&chunk.content);
+                if !preview.trim().is_empty() {
+                    self.last_agent_chunk_at = Some(now);
+                    self.last_agent_preview = Some(preview);
+                }
+            }
+            acp::SessionUpdate::AgentThoughtChunk(chunk) => {
+                if !content_block_preview(&chunk.content).trim().is_empty() {
+                    self.last_agent_thought_at = Some(now);
+                }
             }
             acp::SessionUpdate::ToolCall(_) | acp::SessionUpdate::ToolCallUpdate(_) => {
                 self.last_tool_event_at = Some(now);
@@ -280,6 +293,24 @@ impl PromptDiagnostics {
             _ => {}
         }
     }
+}
+
+fn should_emit_empty_turn_error(
+    stop: &StopReason,
+    diagnostics: &PromptDiagnostics,
+    sink_snapshot: &SessionEventSinkDebugSnapshot,
+) -> bool {
+    matches!(stop, StopReason::EndTurn)
+        && diagnostics.last_agent_chunk_at.is_none()
+        && diagnostics.last_agent_thought_at.is_none()
+        && diagnostics.last_tool_event_at.is_none()
+        && diagnostics.last_plan_at.is_none()
+        && sink_snapshot.open_assistant_item_id.is_none()
+        && sink_snapshot.open_assistant_chars == 0
+        && sink_snapshot.open_reasoning_item_id.is_none()
+        && sink_snapshot.open_reasoning_chars == 0
+        && sink_snapshot.open_plan_item_id.is_none()
+        && sink_snapshot.open_tool_call_ids.is_empty()
 }
 
 fn content_block_preview(content: &acp::ContentBlock) -> String {
@@ -1396,10 +1427,8 @@ async fn run_actor(
     if let Err(error) = apply_requested_session_preferences(
         &conn,
         &native_session_id,
-        &source_agent_kind,
         &config.session,
         &mut startup_state,
-        &event_sink,
     )
     .await
     {
@@ -1976,14 +2005,44 @@ async fn run_actor(
                                         "session.actor.prompt.conn_resolved"
                                     );
                                     let stop = map_stop_reason(&resp.stop_reason);
-                                    let outcome =
-                                        if matches!(stop, anyharness_contract::v1::StopReason::Cancelled) {
-                                            SessionTurnOutcome::Cancelled
-                                        } else {
-                                            SessionTurnOutcome::Completed
-                                        };
+                                    let emit_empty_turn_error = should_emit_empty_turn_error(
+                                        &stop,
+                                        &prompt_diagnostics,
+                                        &sink_snapshot_before_turn_end,
+                                    );
+                                    if emit_empty_turn_error {
+                                        tracing::warn!(
+                                            session_id = %session_id,
+                                            flow_id = latency_fields.flow_id,
+                                            flow_kind = latency_fields.flow_kind,
+                                            flow_source = latency_fields.flow_source,
+                                            prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                                            turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
+                                            stop_reason = ?resp.stop_reason,
+                                            last_raw_kind = ?prompt_diagnostics.last_raw_kind,
+                                            last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
+                                            last_usage_age_ms = age_ms(prompt_diagnostics.last_usage_at),
+                                            "session.actor.prompt.empty_turn_error_emitted"
+                                        );
+                                    }
+                                    let outcome = if matches!(
+                                        stop,
+                                        anyharness_contract::v1::StopReason::Cancelled
+                                    ) {
+                                        SessionTurnOutcome::Cancelled
+                                    } else if emit_empty_turn_error {
+                                        SessionTurnOutcome::Failed
+                                    } else {
+                                        SessionTurnOutcome::Completed
+                                    };
                                     let stop_reason = stop.to_string();
                                     let mut sink = event_sink.lock().await;
+                                    if emit_empty_turn_error {
+                                        sink.error(
+                                            EMPTY_TURN_ERROR_MESSAGE.to_string(),
+                                            Some(EMPTY_TURN_ERROR_CODE.to_string()),
+                                        );
+                                    }
                                     sink.turn_ended(stop);
                                     let last_event_seq = sink.debug_snapshot().next_seq - 1;
                                     drop(sink);
@@ -3595,36 +3654,22 @@ fn emit_startup_state(sink: &mut SessionEventSink, startup_state: &SessionStartu
 async fn apply_requested_session_preferences(
     conn: &acp::ClientSideConnection,
     native_session_id: &str,
-    source_agent_kind: &str,
     session: &SessionRecord,
     startup_state: &mut SessionStartupState,
-    event_sink: &Arc<Mutex<SessionEventSink>>,
 ) -> anyhow::Result<()> {
     if let Some(model_id) = session.requested_model_id.as_deref() {
-        let outcome =
-            try_apply_model_via_models(conn, native_session_id, model_id, startup_state).await?;
-        let outcome = if outcome != ConfigApplyOutcome::NotApplied {
-            outcome
-        } else {
-            try_apply_curated_claude_model_alias_via_setter(
-                conn,
-                native_session_id,
-                source_agent_kind,
-                model_id,
-                startup_state,
-            )
-            .await?
-        };
-        if outcome == ConfigApplyOutcome::NotApplied {
-            let _ = try_apply_config_option(
-                conn,
-                native_session_id,
-                startup_state,
-                ConfigPurpose::Model,
-                model_id,
-                event_sink,
-            )
-            .await?;
+        match try_apply_model_preference(conn, native_session_id, model_id, startup_state).await {
+            Ok(_) => {}
+            Err(error) => {
+                // Model prefs are best-effort at startup because live ACP/provider IDs can
+                // drift while the session remains usable. Mode prefs stay strict below.
+                tracing::warn!(
+                    native_session_id,
+                    requested_model_id = model_id,
+                    error = %error,
+                    "failed to apply requested model; keeping agent-selected model"
+                );
+            }
         }
     }
     if let Some(mode_id) = session.requested_mode_id.as_deref() {
@@ -3634,7 +3679,6 @@ async fn apply_requested_session_preferences(
             startup_state,
             ConfigPurpose::Mode,
             mode_id,
-            event_sink,
         )
         .await?;
         if outcome == ConfigApplyOutcome::NotApplied {
@@ -3651,69 +3695,27 @@ async fn apply_requested_session_preferences(
     Ok(())
 }
 
-async fn try_apply_model_via_models(
+async fn try_apply_model_preference(
     conn: &acp::ClientSideConnection,
     native_session_id: &str,
     desired_model_id: &str,
     startup_state: &mut SessionStartupState,
 ) -> anyhow::Result<ConfigApplyOutcome> {
-    if startup_state.current_model_id.as_deref() == Some(desired_model_id) {
-        set_select_option_current_value_for_purpose(
-            &mut startup_state.config_options,
-            ConfigPurpose::Model,
-            desired_model_id,
-        );
-        return Ok(ConfigApplyOutcome::NoChange);
-    }
-
-    if !startup_state
-        .available_model_ids
-        .iter()
-        .any(|id| id == desired_model_id)
+    if let Some(option) =
+        find_select_option_by_purpose(&startup_state.config_options, ConfigPurpose::Model)
     {
-        return Ok(ConfigApplyOutcome::NotApplied);
-    }
-
-    conn.set_session_model(acp::SetSessionModelRequest::new(
-        native_session_id.to_string(),
-        desired_model_id.to_string(),
-    ))
-    .await?;
-
-    Ok(ConfigApplyOutcome::RequestedOnly)
-}
-
-async fn try_apply_curated_claude_model_alias_via_setter(
-    conn: &acp::ClientSideConnection,
-    native_session_id: &str,
-    source_agent_kind: &str,
-    desired_model_id: &str,
-    startup_state: &mut SessionStartupState,
-) -> anyhow::Result<ConfigApplyOutcome> {
-    if !should_try_direct_claude_model_setter(
-        source_agent_kind,
-        desired_model_id,
-        &startup_state.available_model_ids,
-    ) {
-        return Ok(ConfigApplyOutcome::NotApplied);
-    }
-
-    if startup_state.current_model_id.as_deref() == Some(desired_model_id) {
-        set_select_option_current_value_for_purpose(
-            &mut startup_state.config_options,
-            ConfigPurpose::Model,
+        let config_id = option.id.to_string();
+        return apply_select_config_option(
+            conn,
+            native_session_id,
+            startup_state,
+            &config_id,
             desired_model_id,
-        );
-        return Ok(ConfigApplyOutcome::NoChange);
+        )
+        .await;
     }
 
-    conn.set_session_model(acp::SetSessionModelRequest::new(
-        native_session_id.to_string(),
-        desired_model_id.to_string(),
-    ))
-    .await?;
-
-    Ok(ConfigApplyOutcome::RequestedOnly)
+    apply_model_via_direct_setter(conn, native_session_id, startup_state, desired_model_id).await
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3749,10 +3751,49 @@ async fn try_apply_config_option(
     startup_state: &mut SessionStartupState,
     purpose: ConfigPurpose,
     desired_value: &str,
-    _event_sink: &Arc<Mutex<SessionEventSink>>,
 ) -> anyhow::Result<ConfigApplyOutcome> {
+    if purpose == ConfigPurpose::Model {
+        let Some(option) =
+            find_select_option_by_purpose(&startup_state.config_options, ConfigPurpose::Model)
+        else {
+            return Ok(ConfigApplyOutcome::NotApplied);
+        };
+        let config_id = option.id.to_string();
+        return apply_select_config_option(
+            conn,
+            native_session_id,
+            startup_state,
+            &config_id,
+            desired_value,
+        )
+        .await;
+    }
+
     let Some(option) =
         find_select_option_for_value(&startup_state.config_options, purpose, desired_value)
+    else {
+        return Ok(ConfigApplyOutcome::NotApplied);
+    };
+
+    let config_id = option.id.to_string();
+    apply_select_config_option(
+        conn,
+        native_session_id,
+        startup_state,
+        &config_id,
+        desired_value,
+    )
+    .await
+}
+
+async fn apply_select_config_option(
+    conn: &acp::ClientSideConnection,
+    native_session_id: &str,
+    startup_state: &mut SessionStartupState,
+    config_id: &str,
+    desired_value: &str,
+) -> anyhow::Result<ConfigApplyOutcome> {
+    let Some(option) = find_select_option_for_request(&startup_state.config_options, config_id)
     else {
         return Ok(ConfigApplyOutcome::NotApplied);
     };
@@ -3764,7 +3805,7 @@ async fn try_apply_config_option(
     let response = conn
         .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
             native_session_id.to_string(),
-            option.id.to_string(),
+            config_id.to_string(),
             desired_value,
         ))
         .await?;
@@ -3977,11 +4018,13 @@ async fn apply_config_option_if_possible(
             return Ok(ConfigApplyOutcome::NoChange);
         }
 
-        if !select_option_contains_value(option, desired_value) && is_model_request {
-            return apply_model_via_direct_setter(
+        if is_model_request {
+            let option_id = option.id.to_string();
+            return apply_select_config_option(
                 conn,
                 native_session_id,
                 startup_state,
+                &option_id,
                 desired_value,
             )
             .await;
@@ -4520,6 +4563,10 @@ async fn apply_model_via_direct_setter(
         return Ok(ConfigApplyOutcome::NoChange);
     }
 
+    if !should_apply_model_via_direct_setter(startup_state, desired_model_id) {
+        return Ok(ConfigApplyOutcome::NotApplied);
+    }
+
     conn.set_session_model(acp::SetSessionModelRequest::new(
         native_session_id.to_string(),
         desired_model_id.to_string(),
@@ -4527,6 +4574,17 @@ async fn apply_model_via_direct_setter(
     .await?;
 
     Ok(ConfigApplyOutcome::RequestedOnly)
+}
+
+fn should_apply_model_via_direct_setter(
+    startup_state: &SessionStartupState,
+    desired_model_id: &str,
+) -> bool {
+    startup_state.available_model_ids.is_empty()
+        || startup_state
+            .available_model_ids
+            .iter()
+            .any(|id| id == desired_model_id)
 }
 
 async fn apply_mode_via_direct_setter_legacy(
@@ -4579,23 +4637,6 @@ fn set_select_option_current_value_for_purpose(
     true
 }
 
-fn should_try_direct_claude_model_setter(
-    source_agent_kind: &str,
-    desired_model_id: &str,
-    available_model_ids: &[String],
-) -> bool {
-    source_agent_kind == "claude"
-        && is_curated_claude_model_id(desired_model_id)
-        && !available_model_ids.iter().any(|id| id == desired_model_id)
-}
-
-fn is_curated_claude_model_id(model_id: &str) -> bool {
-    matches!(
-        model_id,
-        "default" | "sonnet" | "sonnet[1m]" | "haiku" | "opus" | "claude-opus-4-6"
-    )
-}
-
 fn current_select_value(option: &acp::SessionConfigOption) -> Option<String> {
     match &option.kind {
         acp::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
@@ -4638,14 +4679,14 @@ mod tests {
         load_startup_restore_snapshot, merge_spawn_env, normalized_key_rank, pending_config_rank,
         persisted_control_values, prepend_system_prompt_append_to_acp_blocks,
         resolve_pending_interactions, sanitize_agent_stderr_line, serialize_meta,
-        should_try_direct_claude_model_setter, title_from_markdown, tracked_config_purpose,
-        ActorExitDisposition, AgentStderrSeverity, InteractionResolution,
+        should_apply_model_via_direct_setter, should_emit_empty_turn_error, title_from_markdown,
+        tracked_config_purpose, ActorExitDisposition, AgentStderrSeverity, InteractionResolution,
         LiveSessionExecutionSnapshot, LiveSessionHandle, NativeSessionStartupDisposition,
-        PersistedSessionConfigState, ResumeReplayFilter, SessionCommand, SessionStartupState,
-        IDLE_RESUME_REPLAY_QUIET_WINDOW,
+        PersistedSessionConfigState, PromptDiagnostics, ResumeReplayFilter, SessionCommand,
+        SessionStartupState, IDLE_RESUME_REPLAY_QUIET_WINDOW,
     };
     use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
-    use crate::acp::event_sink::SessionEventSink;
+    use crate::acp::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
     use crate::acp::permission_broker::{InteractionBroker, PermissionOutcome};
     use crate::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
@@ -4661,7 +4702,7 @@ mod tests {
         InteractionKind, NormalizedSessionControl, NormalizedSessionControlValue,
         NormalizedSessionControls, PendingInteractionPayloadSummary, PendingInteractionSource,
         PendingInteractionSummary, PermissionInteractionOption, PermissionInteractionOptionKind,
-        SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot,
+        SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot, StopReason,
     };
     use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
@@ -4684,6 +4725,46 @@ mod tests {
         let line = "2026-03-28T03:11:55.593240Z INFO codex_otel.log_only";
 
         assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Debug);
+    }
+
+    #[test]
+    fn empty_turn_error_detects_end_turn_without_output() {
+        let diagnostics = PromptDiagnostics::new(None);
+        let snapshot = SessionEventSinkDebugSnapshot::default();
+
+        assert!(should_emit_empty_turn_error(
+            &StopReason::EndTurn,
+            &diagnostics,
+            &snapshot,
+        ));
+    }
+
+    #[test]
+    fn empty_turn_error_ignores_cancelled_turns() {
+        let diagnostics = PromptDiagnostics::new(None);
+        let snapshot = SessionEventSinkDebugSnapshot::default();
+
+        assert!(!should_emit_empty_turn_error(
+            &StopReason::Cancelled,
+            &diagnostics,
+            &snapshot,
+        ));
+    }
+
+    #[test]
+    fn empty_turn_error_ignores_turns_with_agent_content() {
+        let mut diagnostics = PromptDiagnostics::new(None);
+        let notif = acp::SessionNotification::new(
+            "native-1",
+            acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("hello".into())),
+        );
+        diagnostics.observe_notification(&notif);
+
+        assert!(!should_emit_empty_turn_error(
+            &StopReason::EndTurn,
+            &diagnostics,
+            &SessionEventSinkDebugSnapshot::default(),
+        ));
     }
 
     #[test]
@@ -5637,27 +5718,38 @@ mod tests {
     }
 
     #[test]
-    fn direct_claude_model_setter_supports_curated_aliases_missing_from_live_options() {
-        let available = vec![
-            "default".to_string(),
-            "sonnet".to_string(),
-            "sonnet[1m]".to_string(),
-            "haiku".to_string(),
-        ];
+    fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
+        let mut startup_state = SessionStartupState {
+            current_mode_id: None,
+            legacy_mode_state: None,
+            config_options: Vec::new(),
+            current_model_id: None,
+            available_model_ids: vec![
+                "default".to_string(),
+                "sonnet".to_string(),
+                "sonnet[1m]".to_string(),
+                "haiku".to_string(),
+            ],
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+        };
 
-        assert!(should_try_direct_claude_model_setter(
-            "claude", "opus", &available
+        assert!(should_apply_model_via_direct_setter(
+            &startup_state,
+            "sonnet"
         ));
-        assert!(should_try_direct_claude_model_setter(
-            "claude",
-            "claude-opus-4-6",
-            &available
+        assert!(!should_apply_model_via_direct_setter(
+            &startup_state,
+            "opus"
         ));
-        assert!(!should_try_direct_claude_model_setter(
-            "claude", "sonnet", &available
+        assert!(!should_apply_model_via_direct_setter(
+            &startup_state,
+            "claude-opus-4-6"
         ));
-        assert!(!should_try_direct_claude_model_setter(
-            "codex", "opus", &available
+
+        startup_state.available_model_ids.clear();
+        assert!(should_apply_model_via_direct_setter(
+            &startup_state,
+            "legacy-agent-model"
         ));
     }
 

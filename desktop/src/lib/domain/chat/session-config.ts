@@ -37,9 +37,40 @@ export function resolveModelForRegistry(
   registry: ModelRegistry,
   modelId: string | null | undefined,
 ): ModelRegistryModel | null {
+  const normalizedModelId = modelId?.trim();
+  return (
+    registry.models.find((model) => model.id === normalizedModelId)
+    ?? (normalizedModelId
+      ? registry.models.find((model) => model.aliases?.includes(normalizedModelId))
+      : undefined)
+    ?? registry.models.find((model) => model.id === registry.defaultModelId)
+    ?? registry.models.find((model) => model.isDefault)
+    ?? registry.models[0]
+    ?? null
+  );
+}
+
+function resolveRegistryModelForRow(
+  registry: ModelRegistry,
+  modelId: string,
+): ModelRegistryModel | null {
   return (
     registry.models.find((model) => model.id === modelId)
-    ?? registry.models.find((model) => model.id === registry.defaultModelId)
+    ?? registry.models.find((model) => model.aliases?.includes(modelId))
+    ?? null
+  );
+}
+
+function rowMatchesRegistryModel(
+  rowId: string,
+  model: ModelRegistryModel,
+): boolean {
+  return rowId === model.id || (model.aliases ?? []).includes(rowId);
+}
+
+function resolveRegistryDefaultModel(registry: ModelRegistry): ModelRegistryModel | null {
+  return (
+    registry.models.find((model) => model.id === registry.defaultModelId)
     ?? registry.models.find((model) => model.isDefault)
     ?? registry.models[0]
     ?? null
@@ -71,19 +102,33 @@ export function mergeLaunchAgentsWithRegistries(
       return agent.models.length > 0 ? [agent] : [];
     }
 
-    const models = registry.models.map((model) => ({
-      id: model.id,
-      displayName: model.displayName,
-      isDefault: model.isDefault,
-    }));
+    const decoratedModels = agent.models.map((model) => {
+      const registryModel = resolveRegistryModelForRow(registry, model.id);
+      return {
+        id: model.id,
+        displayName: registryModel?.displayName ?? model.displayName,
+        isDefault: model.isDefault,
+      };
+    });
 
-    const defaultModelId = models.some((model) => model.id === registry.defaultModelId)
-      ? registry.defaultModelId
-      : (
-        models.find((model) => model.isDefault)?.id
-        ?? models[0]?.id
-        ?? null
-      );
+    const registryDefaultModel = resolveRegistryDefaultModel(registry);
+    const registryDefaultRow = registryDefaultModel
+      ? decoratedModels.find((model) => rowMatchesRegistryModel(model.id, registryDefaultModel))
+      : undefined;
+    const runtimeDefaultRow = decoratedModels.find((model) =>
+      model.id === agent.defaultModelId || model.isDefault
+    );
+    const defaultModelId = (
+      registryDefaultRow?.id
+      ?? runtimeDefaultRow?.id
+      ?? decoratedModels[0]?.id
+      ?? null
+    );
+
+    const models = decoratedModels.map((model) => ({
+      ...model,
+      isDefault: model.id === defaultModelId,
+    }));
 
     if (models.length === 0) {
       return [];

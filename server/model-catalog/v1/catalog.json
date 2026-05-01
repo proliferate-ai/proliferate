@@ -29,7 +29,21 @@
           "description": "Most capable for complex work. 1M context.",
           "isDefault": false,
           "status": "active",
-          "aliases": ["claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-6-1m", "opus"]
+          "aliases": [
+            "claude-opus-4-5",
+            "claude-opus-4-5-1m",
+            "claude-opus-4-6-1m",
+            "claude-opus-4-7",
+            "claude-opus-4-7-1m",
+            "opus"
+          ]
+        },
+        {
+          "id": "claude-opus-4-6",
+          "displayName": "Opus 4.6",
+          "description": "Pinned previous Opus model",
+          "isDefault": false,
+          "status": "active"
         },
         {
           "id": "haiku",
@@ -259,30 +273,6 @@
           "id": "opencode/big-pickle",
           "displayName": "Big Pickle",
           "isDefault": true,
-          "status": "active"
-        },
-        {
-          "id": "opencode/claude-opus-4-6",
-          "displayName": "Claude Opus 4.6",
-          "isDefault": false,
-          "status": "active"
-        },
-        {
-          "id": "opencode/claude-sonnet-4-5",
-          "displayName": "Claude Sonnet 4.5",
-          "isDefault": false,
-          "status": "active"
-        },
-        {
-          "id": "opencode/gpt-5.3-codex",
-          "displayName": "GPT 5.3 Codex",
-          "isDefault": false,
-          "status": "active"
-        },
-        {
-          "id": "opencode/gemini-3-pro",
-          "displayName": "Gemini 3 Pro",
-          "isDefault": false,
           "status": "active"
         }
       ]

@@ -8,6 +8,7 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
 import {
   buildModelSelectorGroups,
+  type ActiveModelSelectorControl,
   resolveEffectiveLaunchSelection,
   type ModelSelectorGroup,
   type ModelSelectorSelection,
@@ -20,10 +21,12 @@ const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
 interface UseChatLaunchCatalogArgs {
   activeSelection: ModelSelectorSelection | null;
+  activeModelControl?: ActiveModelSelectorControl | null;
 }
 
 export function useChatLaunchCatalog({
   activeSelection,
+  activeModelControl = null,
 }: UseChatLaunchCatalogArgs) {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
@@ -71,8 +74,13 @@ export function useChatLaunchCatalog({
   const selectedLaunchSelection = activeSelection ?? defaultLaunchSelection;
 
   const groups = useMemo<ModelSelectorGroup[]>(
-    () => buildModelSelectorGroups(launchAgents, selectedLaunchSelection, activeSelection),
-    [activeSelection, launchAgents, selectedLaunchSelection],
+    () => buildModelSelectorGroups(
+      launchAgents,
+      selectedLaunchSelection,
+      activeSelection,
+      activeModelControl,
+    ),
+    [activeModelControl, activeSelection, launchAgents, selectedLaunchSelection],
   );
 
   return {

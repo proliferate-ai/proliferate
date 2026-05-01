@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveMatchingModelControlLabel,
   resolveModelDisplayName,
+  shouldHideModel,
 } from "@/lib/domain/chat/model-display";
 
 const MODEL_CONTROL = {
@@ -41,6 +42,39 @@ describe("resolveModelDisplayName", () => {
     ).toBe("Opus 4.6");
   });
 
+  it("can prefer known aliases over vague live labels", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "claude-sonnet-4-6",
+        sourceLabels: ["Sonnet"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Sonnet 4.6");
+  });
+
+  it("adds the version before live 1M context labels", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "sonnet[1m]",
+        sourceLabels: ["Sonnet (1M context)"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Sonnet 4.6 (1M context)");
+  });
+
+  it("derives Claude versions from provider-specific live ids", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "us.anthropic.claude-sonnet-4-6-20251101-v1:0",
+        sourceLabels: ["Sonnet"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Sonnet 4.6");
+  });
+
   it("has a fallback label for the next Codex candidate", () => {
     expect(
       resolveModelDisplayName({
@@ -48,6 +82,19 @@ describe("resolveModelDisplayName", () => {
         modelId: "gpt-5.5",
       }),
     ).toBe("GPT 5.5");
+  });
+});
+
+describe("shouldHideModel", () => {
+  it("hides legacy Claude Opus values that should not be primary choices", () => {
+    expect(shouldHideModel("claude", "claude-opus-4-1")).toBe(true);
+    expect(shouldHideModel("claude", "claude-opus-4-1-20250805")).toBe(true);
+    expect(shouldHideModel("claude", "claude-opus-4-5")).toBe(true);
+    expect(shouldHideModel("claude", "claude-opus-4-5[1m]")).toBe(true);
+    expect(shouldHideModel("claude", "claude-opus-4-6-1m")).toBe(true);
+    expect(shouldHideModel("claude", "claude-opus-4-6[1m]")).toBe(true);
+    expect(shouldHideModel("claude", "claude-opus-4-6")).toBe(false);
+    expect(shouldHideModel("opencode", "claude-opus-4-1")).toBe(false);
   });
 });
 

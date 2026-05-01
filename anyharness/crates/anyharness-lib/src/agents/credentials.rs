@@ -22,6 +22,10 @@ pub fn detect_credentials(auth: &AuthSpec, home_dir: &Path) -> CredentialState {
         return CredentialState::ReadyViaLocalAuth;
     }
 
+    if auth.discovery == CredentialDiscoveryKind::OpenCode {
+        return CredentialState::Ready;
+    }
+
     if auth.login.is_some() {
         return CredentialState::LoginRequired;
     }
@@ -57,7 +61,7 @@ fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> bool {
 ///
 /// Checks:
 /// - `~/.local/share/opencode/auth.json` for provider entries with `type: "api"` + `key`
-///   or `type: "oauth"` + `access`
+///   or `type: "oauth"` + `access`, or `type: "wellknown"` + `token`.
 fn detect_opencode_local_auth(home_dir: &Path) -> bool {
     let path = home_dir
         .join(".local")
@@ -77,20 +81,22 @@ fn detect_opencode_local_auth(home_dir: &Path) -> bool {
         };
         let auth_type = config.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
-        if auth_type == "api" {
-            if let Some(key) = config.get("key").and_then(|v| v.as_str()) {
-                if !key.is_empty() {
-                    return true;
-                }
-            }
-        } else if auth_type == "oauth" {
-            if config.get("access").and_then(|v| v.as_str()).is_some() {
-                return true;
-            }
+        if auth_type == "api" && non_empty_string(config, "key")
+            || auth_type == "oauth" && non_empty_string(config, "access")
+            || auth_type == "wellknown" && non_empty_string(config, "token")
+        {
+            return true;
         }
     }
 
     false
+}
+
+fn non_empty_string(config: &serde_json::Map<String, serde_json::Value>, key: &str) -> bool {
+    config
+        .get(key)
+        .and_then(|v| v.as_str())
+        .is_some_and(|value| !value.is_empty())
 }
 
 /// Check Cursor-specific local login state.
@@ -223,6 +229,58 @@ mod tests {
         std::fs::write(gemini_dir.join("oauth_creds.json"), r#"{}"#).expect("write oauth creds");
 
         assert!(!detect_shared_local_auth(ProviderId::Gemini, &home));
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn treats_opencode_auth_as_provider_managed_when_no_env_or_auth_exists() {
+        let home = make_temp_home();
+        let auth = AuthSpec {
+            env_vars: vec![],
+            login: None,
+            discovery: CredentialDiscoveryKind::OpenCode,
+        };
+
+        assert_eq!(detect_credentials(&auth, &home), CredentialState::Ready);
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn detects_opencode_api_oauth_and_wellknown_auth() {
+        for auth_json in [
+            r#"{"openai":{"type":"api","key":"sk-test"}}"#,
+            r#"{"github-copilot":{"type":"oauth","access":"access-token","refresh":"refresh-token","expires":1}}"#,
+            r#"{"https://example.com":{"type":"wellknown","key":"CUSTOM_TOKEN","token":"token"}}"#,
+        ] {
+            let home = make_temp_home();
+            let opencode_dir = home.join(".local").join("share").join("opencode");
+            std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
+            std::fs::write(opencode_dir.join("auth.json"), auth_json).expect("write auth json");
+
+            assert!(detect_opencode_local_auth(&home));
+
+            let _ = std::fs::remove_dir_all(&home);
+        }
+    }
+
+    #[test]
+    fn ignores_empty_opencode_auth_entries() {
+        let home = make_temp_home();
+        let opencode_dir = home.join(".local").join("share").join("opencode");
+        std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
+        std::fs::write(
+            opencode_dir.join("auth.json"),
+            r#"{
+              "openai": {"type":"api","key":""},
+              "github-copilot": {"type":"oauth","access":""},
+              "custom": {"type":"wellknown","token":""}
+            }"#,
+        )
+        .expect("write auth json");
+
+        assert!(!detect_opencode_local_auth(&home));
 
         let _ = std::fs::remove_dir_all(&home);
     }
