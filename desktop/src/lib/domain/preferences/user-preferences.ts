@@ -14,6 +14,11 @@ import {
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding" | "gong";
 export type ReviewDefaultKind = "plan" | "code";
+export type DefaultLiveSessionControlKey = "reasoning" | "effort" | "fast_mode";
+export type DefaultLiveSessionControlValuesByAgentKind = Record<
+  string,
+  Partial<Record<DefaultLiveSessionControlKey, string>>
+>;
 
 export interface ReviewPersonaPreference {
   id: string;
@@ -41,6 +46,7 @@ export interface UserPreferences {
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
   defaultSessionModeByAgentKind: Record<string, string>;
+  defaultLiveSessionControlValuesByAgentKind: DefaultLiveSessionControlValuesByAgentKind;
   defaultOpenInTargetId: string;
   branchPrefixType: BranchPrefixType;
   turnEndSoundEnabled: boolean;
@@ -62,6 +68,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   defaultChatAgentKind: "",
   defaultChatModelIdByAgentKind: {},
   defaultSessionModeByAgentKind: {},
+  defaultLiveSessionControlValuesByAgentKind: {},
   defaultOpenInTargetId: "",
   branchPrefixType: "none",
   turnEndSoundEnabled: false,
@@ -83,6 +90,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   defaultChatAgentKind: "",
   defaultChatModelIdByAgentKind: {},
   defaultSessionModeByAgentKind: {},
+  defaultLiveSessionControlValuesByAgentKind: {},
   defaultOpenInTargetId: "",
   branchPrefixType: "none",
   turnEndSoundEnabled: false,
@@ -108,6 +116,7 @@ const USER_PREFERENCE_KEYS = [
   "defaultChatAgentKind",
   "defaultChatModelIdByAgentKind",
   "defaultSessionModeByAgentKind",
+  "defaultLiveSessionControlValuesByAgentKind",
   "defaultOpenInTargetId",
   "branchPrefixType",
   "turnEndSoundEnabled",
@@ -196,6 +205,43 @@ function sanitizeDefaultSessionModeByAgentKind(
         ? [[agentKind, modeId]]
         : []
     )),
+  );
+}
+
+const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>([
+  "reasoning",
+  "effort",
+  "fast_mode",
+]);
+
+function sanitizeDefaultLiveSessionControlValuesByAgentKind(
+  value: unknown,
+): DefaultLiveSessionControlValuesByAgentKind {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([agentKind, controls]) => {
+      const trimmedAgentKind = agentKind.trim();
+      if (!trimmedAgentKind || !controls || typeof controls !== "object" || Array.isArray(controls)) {
+        return [];
+      }
+
+      const sanitizedControls = Object.fromEntries(
+        Object.entries(controls).flatMap(([key, controlValue]) => {
+          if (!DEFAULT_LIVE_SESSION_CONTROL_KEYS.has(key as DefaultLiveSessionControlKey)) {
+            return [];
+          }
+          const trimmedValue = typeof controlValue === "string" ? controlValue.trim() : "";
+          return trimmedValue ? [[key, trimmedValue]] : [];
+        }),
+      ) as Partial<Record<DefaultLiveSessionControlKey, string>>;
+
+      return Object.keys(sanitizedControls).length > 0
+        ? [[trimmedAgentKind, sanitizedControls]]
+        : [];
+    }),
   );
 }
 
@@ -490,6 +536,19 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     !== JSON.stringify(next.defaultSessionModeByAgentKind)
   ) {
     next.defaultSessionModeByAgentKind = sanitizedDefaultSessionModeByAgentKind;
+    changed = true;
+  }
+
+  const sanitizedDefaultLiveSessionControlValuesByAgentKind =
+    sanitizeDefaultLiveSessionControlValuesByAgentKind(
+      next.defaultLiveSessionControlValuesByAgentKind,
+    );
+  if (
+    JSON.stringify(sanitizedDefaultLiveSessionControlValuesByAgentKind)
+    !== JSON.stringify(next.defaultLiveSessionControlValuesByAgentKind)
+  ) {
+    next.defaultLiveSessionControlValuesByAgentKind =
+      sanitizedDefaultLiveSessionControlValuesByAgentKind;
     changed = true;
   }
 

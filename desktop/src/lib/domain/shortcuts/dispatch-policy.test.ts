@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { shouldDispatchKeyboardShortcut } from "@/lib/domain/shortcuts/dispatch-policy";
 
 describe("shortcut dispatch policy", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("respects defaultPrevented for non-rename shortcuts", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openSettings, {
       key: ",",
@@ -54,6 +58,26 @@ describe("shortcut dispatch policy", () => {
         tagName: "TEXTAREA",
         isContentEditable: false,
       } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(false);
+  });
+
+  it("blocks input-disallowed shortcuts while terminal focus is active", () => {
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: () => ({
+          getAttribute: () => "terminal",
+        }),
+      },
+    });
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: null,
     } as KeyboardEvent)).toBe(false);
   });
 });

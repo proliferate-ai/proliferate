@@ -38,6 +38,7 @@ export function SettingsMenu({
   return (
     <PopoverButton
       align="end"
+      side="auto"
       trigger={(
         <Button
           type="button"

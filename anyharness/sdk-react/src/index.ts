@@ -1,4 +1,8 @@
-export { AnyHarnessRuntime } from "./context/AnyHarnessRuntime.js";
+export {
+  AnyHarnessRuntime,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+} from "./context/AnyHarnessRuntime.js";
 export {
   AnyHarnessWorkspace,
   resolveWorkspaceConnectionFromContext,

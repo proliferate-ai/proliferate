@@ -134,6 +134,35 @@ describe("shortcut matching", () => {
     )).toBeNull();
   });
 
+  it("uses non-mac labels and bindings for workspace panel toggles", () => {
+    expect(getShortcutDisplayLabel(SHORTCUTS.toggleLeftSidebar)).toBe("Ctrl+B");
+    expect(getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel)).toBe("Ctrl+Alt+B");
+
+    expect(matchShortcutDef(
+      SHORTCUTS.toggleLeftSidebar,
+      {
+        key: "b",
+        code: "KeyB",
+        metaKey: false,
+        ctrlKey: true,
+        shiftKey: false,
+        altKey: false,
+      } as KeyboardEvent,
+    )).toEqual({});
+
+    expect(matchShortcutDef(
+      SHORTCUTS.toggleRightPanel,
+      {
+        key: "b",
+        code: "KeyB",
+        metaKey: false,
+        ctrlKey: true,
+        shiftKey: false,
+        altKey: true,
+      } as KeyboardEvent,
+    )).toEqual({});
+  });
+
   it("uses platform-specific composer shortcut labels", () => {
     expect(getShortcutDisplayLabel(COMPOSER_SHORTCUTS.submitMessage)).toBe("↵ / Ctrl+Enter");
 

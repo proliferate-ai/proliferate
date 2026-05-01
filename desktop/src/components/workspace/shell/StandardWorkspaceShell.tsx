@@ -117,6 +117,8 @@ export function StandardWorkspaceShell() {
     canOpenCommandPalette: hasWorkspaceShell,
     onOpenCommandPalette: actions.handleCommandPaletteOpen,
     onOpenTerminal: actions.openTerminalPanel,
+    onToggleLeftSidebar: actions.onToggleSidebar,
+    onToggleRightPanel: actions.toggleRightPanel,
   });
 
   useEffect(() => {
@@ -283,6 +285,8 @@ export function StandardWorkspaceShell() {
                   repositorySettingsDisabledReason={repositorySettingsDisabledReason}
                   runCommand={runCommand}
                   openTerminalPanel={actions.openTerminalPanel}
+                  onToggleLeftSidebar={actions.onToggleSidebar}
+                  onToggleRightPanel={actions.toggleRightPanel}
                 />
 
                 {hasRuntimeReadyWorkspace && (

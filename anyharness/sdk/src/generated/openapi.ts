@@ -2391,6 +2391,8 @@ export interface components {
             launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
             /** @description Minimum AnyHarness runtime version required for this model, if any */
             minRuntimeVersion?: string | null;
+            /** @description Live controls that can be configured as launch defaults for this model. */
+            sessionDefaultControls?: components["schemas"]["SessionDefaultControl"][];
             /** @description Runtime-owned lifecycle status for this model */
             status: components["schemas"]["ModelCatalogStatus"];
         };
@@ -2433,6 +2435,8 @@ export interface components {
             launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
             /** @description Minimum AnyHarness runtime version required for this model, if any */
             minRuntimeVersion?: string | null;
+            /** @description Live controls that can be configured as launch defaults for this model. */
+            sessionDefaultControls?: components["schemas"]["SessionDefaultControl"][];
             /** @description Runtime-owned lifecycle status for this model */
             status: components["schemas"]["ModelCatalogStatus"];
         };
@@ -3073,6 +3077,33 @@ export interface components {
          * @enum {string}
          */
         SessionConfigOptionType: "select";
+        /** @description Static model metadata describing a live control that can be defaulted at launch. */
+        SessionDefaultControl: {
+            /** @description Optional model catalog default value. */
+            defaultValue?: string | null;
+            /** @description Product-level semantic key such as `reasoning`, `effort`, or `fast_mode`. */
+            key: components["schemas"]["SessionDefaultControlKey"];
+            /** @description Human-readable control label shown in settings. */
+            label: string;
+            /** @description Values intentionally exposed for launch-default selection. */
+            values: components["schemas"]["SessionDefaultControlValue"][];
+        };
+        /**
+         * @description Product-level live controls that can be configured as launch defaults.
+         * @enum {string}
+         */
+        SessionDefaultControlKey: "reasoning" | "effort" | "fast_mode";
+        /** @description Selectable value for a launch-default session control. */
+        SessionDefaultControlValue: {
+            /** @description Optional user-facing description. */
+            description?: string | null;
+            /** @description Whether this is the model catalog default value. */
+            isDefault: boolean;
+            /** @description Human-readable value label shown in settings. */
+            label: string;
+            /** @description Stable raw value identifier to send after live config confirms support. */
+            value: string;
+        };
         /** @enum {string} */
         SessionEndReason: "closed" | "error";
         SessionEndedEvent: {
