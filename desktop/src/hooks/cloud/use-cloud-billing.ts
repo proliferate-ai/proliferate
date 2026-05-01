@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BillingPlanInfo, BillingUrlResponse } from "@/lib/integrations/cloud/client";
 import { ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
+  type CloudOwnerSelection,
   createBillingPortalSession,
   createCloudCheckoutSession,
   createRefillCheckoutSession,
@@ -14,7 +15,7 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { openExternal } from "@/platform/tauri/shell";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { cloudBillingKey } from "./query-keys";
+import { cloudBillingKey, type CloudOwnerSelectionKey } from "./query-keys";
 
 function hasUsableBillingPlan(
   billingPlan: BillingPlanInfo | null | undefined,
@@ -48,22 +49,30 @@ function hasUsableBillingPlan(
   );
 }
 
-export function useCloudBilling() {
+function ownerKey(owner?: CloudOwnerSelection): CloudOwnerSelectionKey {
+  return {
+    ownerScope: owner?.ownerScope ?? "personal",
+    organizationId: owner?.organizationId ?? null,
+  };
+}
+
+export function useCloudBilling(owner?: CloudOwnerSelection) {
   const { billingEnabled } = useAppCapabilities();
   const { cloudActive } = useCloudAvailabilityState();
   const billingAccessible = billingEnabled && cloudActive;
+  const billingOwnerKey = ownerKey(owner);
 
   return useQuery<BillingPlanInfo | null>({
     meta: {
       telemetryHandled: true,
     },
-    queryKey: cloudBillingKey(),
+    queryKey: cloudBillingKey(billingOwnerKey),
     enabled: billingAccessible,
     placeholderData: null,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       try {
-        const billingPlan = await getCloudBillingPlan();
+        const billingPlan = await getCloudBillingPlan(owner);
         if (!hasUsableBillingPlan(billingPlan)) {
           captureTelemetryException(
             new Error("Received malformed billing plan payload"),
@@ -98,13 +107,14 @@ export function useCloudBilling() {
   });
 }
 
-export function useCloudBillingActions() {
+export function useCloudBillingActions(owner?: CloudOwnerSelection) {
   const queryClient = useQueryClient();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const billingOwnerKey = ownerKey(owner);
 
   async function invalidateCloudBillingState() {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: cloudBillingKey() }),
+      queryClient.invalidateQueries({ queryKey: cloudBillingKey(billingOwnerKey) }),
       queryClient.invalidateQueries({
         queryKey: workspaceCollectionsScopeKey(runtimeUrl),
       }),
@@ -117,7 +127,7 @@ export function useCloudBillingActions() {
   }
 
   const cloudCheckoutMutation = useMutation({
-    mutationFn: createCloudCheckoutSession,
+    mutationFn: () => createCloudCheckoutSession(owner),
     onSuccess: openBillingUrl,
     onError: (error) => {
       captureTelemetryException(error, {
@@ -131,7 +141,7 @@ export function useCloudBillingActions() {
   });
 
   const portalMutation = useMutation({
-    mutationFn: createBillingPortalSession,
+    mutationFn: () => createBillingPortalSession(owner),
     onSuccess: openBillingUrl,
     onError: (error) => {
       captureTelemetryException(error, {
@@ -145,7 +155,7 @@ export function useCloudBillingActions() {
   });
 
   const refillMutation = useMutation({
-    mutationFn: createRefillCheckoutSession,
+    mutationFn: () => createRefillCheckoutSession(owner),
     onSuccess: openBillingUrl,
     onError: (error) => {
       captureTelemetryException(error, {
@@ -159,7 +169,7 @@ export function useCloudBillingActions() {
   });
 
   const overageMutation = useMutation({
-    mutationFn: updateOverageSettings,
+    mutationFn: (enabled: boolean) => updateOverageSettings(enabled, owner),
     onSuccess: invalidateCloudBillingState,
     onError: (error) => {
       captureTelemetryException(error, {

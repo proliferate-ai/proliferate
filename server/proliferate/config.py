@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     customerio_api_key: str = ""
     customerio_app_api_key: str = ""
     customerio_from_email: str = "hello@proliferate.dev"
+    resend_api_key: str = ""
+    resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
     anonymous_telemetry_endpoint: str = Field(
         default="https://app.proliferate.com/api/v1/telemetry/anonymous",

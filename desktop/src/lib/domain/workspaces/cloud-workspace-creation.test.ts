@@ -125,8 +125,10 @@ describe("cloud workspace creation helpers", () => {
       gitProvider: "github",
       gitOwner: "acme",
       gitRepoName: "rocket",
+      baseBranch: undefined,
       branchName: attempt.branchName,
       displayName: null,
+      ownerScope: "personal",
     });
     expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
   });
@@ -161,6 +163,7 @@ describe("cloud workspace creation helpers", () => {
       gitRepoName: "rocket",
       branchName: "proliferate/acacia",
       displayName: null,
+      ownerScope: "personal" as const,
     };
 
     expect(isCreateCloudWorkspaceRequest(request)).toBe(true);

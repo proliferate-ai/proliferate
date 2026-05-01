@@ -3,7 +3,18 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -11,6 +22,22 @@ from proliferate.db.models.base import Base, utcnow
 
 class BillingSubject(Base):
     __tablename__ = "billing_subject"
+    __table_args__ = (
+        CheckConstraint(
+            "kind != 'personal' OR (user_id IS NOT NULL AND organization_id IS NULL)",
+            name="ck_billing_subject_personal_owner",
+        ),
+        CheckConstraint(
+            "kind != 'organization' OR (organization_id IS NOT NULL AND user_id IS NULL)",
+            name="ck_billing_subject_organization_owner",
+        ),
+        Index(
+            "uq_billing_subject_organization_id",
+            "organization_id",
+            unique=True,
+            postgresql_where=text("kind = 'organization' AND organization_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[str] = mapped_column(String(32), index=True)
@@ -106,7 +133,7 @@ class BillingGrant(Base):
     __tablename__ = "billing_grant"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
     grant_type: Mapped[str] = mapped_column(String(64))
     hours_granted: Mapped[float] = mapped_column(Float)
@@ -179,7 +206,7 @@ class BillingEntitlement(Base):
     __tablename__ = "billing_entitlement"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
     kind: Mapped[str] = mapped_column(String(64))
     effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

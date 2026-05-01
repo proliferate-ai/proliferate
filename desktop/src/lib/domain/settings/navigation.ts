@@ -24,6 +24,7 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
 interface SettingsNavigationTarget {
   section: SettingsSection;
   repo?: string | null;
+  inviteHandoff?: string | null;
 }
 
 export function buildSettingsHref(target: SettingsNavigationTarget): string {
@@ -31,6 +32,9 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
   params.set("section", target.section);
   if (target.section === "repo" && target.repo) {
     params.set("repo", target.repo);
+  }
+  if (target.section === "organization" && target.inviteHandoff) {
+    params.set("inviteHandoff", target.inviteHandoff);
   }
   return `/settings?${params.toString()}`;
 }
@@ -55,12 +59,14 @@ export interface SettingsSelectionInput {
   rawRepo?: string | null;
   rawCloudRepoOwner?: string | null;
   rawCloudRepoName?: string | null;
+  rawInviteHandoff?: string | null;
   repositories: SettingsRepositoryEntry[];
 }
 
 export interface SettingsSelection {
   activeSection: SettingsSection;
   activeRepoSourceRoot: string | null;
+  inviteHandoff: string | null;
 }
 
 export function resolveSettingsSelection({
@@ -68,6 +74,7 @@ export function resolveSettingsSelection({
   rawRepo = null,
   rawCloudRepoOwner = null,
   rawCloudRepoName = null,
+  rawInviteHandoff = null,
   repositories,
 }: SettingsSelectionInput): SettingsSelection {
   const repositoryRoots = new Set(repositories.map((repository) => repository.sourceRoot));
@@ -111,5 +118,6 @@ export function resolveSettingsSelection({
   return {
     activeSection: section,
     activeRepoSourceRoot: repoSourceRoot,
+    inviteHandoff: section === "organization" ? rawInviteHandoff : null,
   };
 }

@@ -82,6 +82,8 @@ timers on this branch. These values are defined in
 | `FRONTEND_BASE_URL` | No | No | Frontend base URL for email links etc. |
 | `PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT` | No | No | First-party anonymous telemetry collector endpoint |
 | `PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED` | No | No | Disable server-side anonymous telemetry emission |
+| `RESEND_API_KEY` | Yes | No | Resend transactional email API key for organization invitations |
+| `RESEND_FROM_EMAIL` | No | No | Resend sender email address for organization invitations |
 | `SENTRY_DSN` | Yes | No | Server Sentry |
 | `SENTRY_ENVIRONMENT` | No | No | Server Sentry environment |
 | `SENTRY_RELEASE` | No | No | Server Sentry release |

@@ -7,6 +7,7 @@ import { AgentsPane } from "./panes/AgentsPane";
 import { AppearancePane } from "./panes/AppearancePane";
 import { GeneralPane } from "./panes/GeneralPane";
 import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";
+import { OrganizationPane } from "./panes/OrganizationPane";
 import { ReviewSettingsPane } from "./panes/ReviewSettingsPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
@@ -57,6 +58,9 @@ function renderSettingsSection(
   }
   if (activeSection === "account") {
     return <AccountPane />;
+  }
+  if (activeSection === "organization") {
+    return <OrganizationPane />;
   }
   if (activeSection === "cloud") {
     if (!cloudEnabled) {

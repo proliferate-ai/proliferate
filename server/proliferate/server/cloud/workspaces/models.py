@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -29,6 +30,11 @@ class CreateCloudWorkspaceRequest(BaseModel):
     base_branch: str | None = Field(default=None, alias="baseBranch")
     branch_name: str = Field(alias="branchName")
     display_name: str | None = Field(default=None, alias="displayName")
+    owner_scope: Literal["personal", "organization"] = Field(
+        default="personal",
+        alias="ownerScope",
+    )
+    organization_id: UUID | None = Field(default=None, alias="organizationId")
 
 
 class UpdateCloudWorkspaceBranchRequest(BaseModel):

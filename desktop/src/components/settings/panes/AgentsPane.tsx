@@ -15,11 +15,6 @@ import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 
-const AGENTS_PANE_BADGE_CLASSNAMES = {
-  neutral: "border-border/60 bg-muted/35 text-muted-foreground",
-  destructive: "border-destructive/20 bg-destructive/10 text-destructive",
-} as const;
-
 export function AgentsPane() {
   const state = useAgentsPaneState();
 
@@ -269,7 +264,7 @@ function AgentRow({
             <div className="truncate text-sm font-medium">
               {row.agent.displayName}
             </div>
-            <Badge className={`!text-xs ${AGENTS_PANE_BADGE_CLASSNAMES[badgeTone]}`}>
+            <Badge tone={badgeTone} className="!text-xs">
               {row.status.label}
             </Badge>
           </div>

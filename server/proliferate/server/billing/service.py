@@ -32,6 +32,7 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
+from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import (
     BillingEntitlement,
@@ -46,6 +47,7 @@ from proliferate.db.store.billing import (
     account_usage_for_billing_subject,
     bind_stripe_customer_to_billing_subject,
     claim_usage_exports_for_sending,
+    get_or_create_stripe_customer_state_for_organization,
     get_or_create_stripe_customer_state_for_user,
     list_billing_subject_ids_for_usage_accounting,
     load_billing_snapshot_state,
@@ -54,8 +56,10 @@ from proliferate.db.store.billing import (
     mark_usage_export_succeeded,
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
+    set_overage_enabled_for_subject,
     set_overage_enabled_for_user,
 )
+from proliferate.db.store.organizations import load_organization_by_billing_subject
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.models import (
     BillingOverview,
@@ -69,6 +73,13 @@ from proliferate.server.billing.models import (
     coerce_utc,
     duration_seconds,
     utcnow,
+)
+from proliferate.server.organizations.service import (
+    OrganizationServiceError,
+    OwnerContext,
+    OwnerSelection,
+    require_org_role,
+    resolve_owner_context,
 )
 
 _ACTIVE_HOLD_REASONS: dict[str, str] = {
@@ -451,6 +462,15 @@ async def get_billing_overview(user_id: UUID) -> BillingOverview:
     )
 
 
+async def get_billing_overview_for_owner(
+    user: User,
+    owner_selection: OwnerSelection,
+) -> BillingOverview:
+    context = await _resolve_billing_owner_context(user, owner_selection)
+    snapshot = await get_billing_snapshot_for_subject(context.billing_subject_id)
+    return _billing_overview_from_snapshot(snapshot)
+
+
 async def get_current_plan(user_id: UUID) -> PlanInfo:
     snapshot = await get_billing_snapshot(user_id)
     return PlanInfo(
@@ -461,6 +481,48 @@ async def get_current_plan(user_id: UUID) -> PlanInfo:
 
 async def get_cloud_plan(user_id: UUID) -> CloudPlanInfo:
     snapshot = await get_billing_snapshot(user_id)
+    return _cloud_plan_from_snapshot(snapshot)
+
+
+async def get_cloud_plan_for_owner(
+    user: User,
+    owner_selection: OwnerSelection,
+) -> CloudPlanInfo:
+    context = await _resolve_billing_owner_context(user, owner_selection)
+    snapshot = await get_billing_snapshot_for_subject(context.billing_subject_id)
+    return _cloud_plan_from_snapshot(snapshot)
+
+
+def _billing_overview_from_snapshot(snapshot: BillingSnapshot) -> BillingOverview:
+    return BillingOverview(
+        plan=snapshot.plan,
+        billing_mode=snapshot.billing_mode,
+        is_unlimited=snapshot.is_unlimited,
+        has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
+        over_quota=snapshot.over_quota,
+        included_hours=(
+            round(snapshot.included_hours, 2) if snapshot.included_hours is not None else None
+        ),
+        used_hours=round(snapshot.used_hours, 4),
+        remaining_hours=(
+            round(snapshot.remaining_hours, 4) if snapshot.remaining_hours is not None else None
+        ),
+        cloud_repo_limit=snapshot.cloud_repo_limit,
+        active_cloud_repo_count=snapshot.active_cloud_repo_count,
+        concurrent_sandbox_limit=snapshot.concurrent_sandbox_limit,
+        active_sandbox_count=snapshot.active_sandbox_count,
+        is_paid_cloud=snapshot.is_paid_cloud,
+        payment_healthy=snapshot.payment_healthy,
+        overage_enabled=snapshot.overage_enabled,
+        hosted_invoice_url=snapshot.hosted_invoice_url,
+        start_blocked=snapshot.start_blocked,
+        start_block_reason=snapshot.start_block_reason,
+        active_spend_hold=snapshot.active_spend_hold,
+        hold_reason=snapshot.hold_reason,
+    )
+
+
+def _cloud_plan_from_snapshot(snapshot: BillingSnapshot) -> CloudPlanInfo:
     return CloudPlanInfo(
         plan=snapshot.plan,
         billing_mode=snapshot.billing_mode,
@@ -536,14 +598,93 @@ async def _ensure_stripe_customer_for_user(user: User) -> tuple[UUID, str]:
     return state.billing_subject_id, customer_id
 
 
-async def create_cloud_checkout_session(user: User) -> BillingUrlResponse:
+async def _resolve_billing_owner_context(
+    user: User,
+    owner_selection: OwnerSelection,
+) -> OwnerContext:
+    try:
+        return await resolve_owner_context(user, owner_selection)
+    except OrganizationServiceError as error:
+        raise BillingServiceError(
+            error.code,
+            error.message,
+            status_code=error.status_code,
+        ) from error
+
+
+async def _ensure_stripe_customer_for_owner(
+    user: User,
+    owner_selection: OwnerSelection,
+) -> tuple[UUID, str]:
+    context = await _resolve_billing_owner_context(user, owner_selection)
+    if context.owner_scope == "organization":
+        try:
+            require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+        except OrganizationServiceError as error:
+            raise BillingServiceError(
+                error.code,
+                error.message,
+                status_code=error.status_code,
+            ) from error
+        if context.organization_id is None:
+            raise BillingServiceError(
+                "organization_not_found",
+                "Organization not found.",
+                status_code=404,
+            )
+        state = await get_or_create_stripe_customer_state_for_organization(
+            context.organization_id,
+        )
+        organization = await load_organization_by_billing_subject(state.billing_subject_id)
+        customer_name = organization.name if organization is not None else "Organization"
+        organization_id = str(context.organization_id)
+        created_by_user_id = str(user.id)
+    else:
+        state = await get_or_create_stripe_customer_state_for_user(user.id)
+        customer_name = None
+        organization_id = None
+        created_by_user_id = None
+    if state.stripe_customer_id:
+        return state.billing_subject_id, state.stripe_customer_id
+    try:
+        customer = await stripe_billing.create_customer(
+            email=user.email,
+            name=customer_name,
+            billing_subject_id=str(state.billing_subject_id),
+            organization_id=organization_id,
+            created_by_user_id=created_by_user_id,
+            idempotency_key=f"customer:{state.billing_subject_id}",
+        )
+    except stripe_billing.StripeBillingError as error:
+        raise _map_stripe_error(error) from error
+    customer_id = customer.get("id")
+    if not isinstance(customer_id, str):
+        raise BillingServiceError(
+            "stripe_invalid_response",
+            "Stripe did not return a customer id.",
+            status_code=502,
+        )
+    state = await bind_stripe_customer_to_billing_subject(
+        billing_subject_id=state.billing_subject_id,
+        stripe_customer_id=customer_id,
+    )
+    return state.billing_subject_id, customer_id
+
+
+async def create_cloud_checkout_session(
+    user: User,
+    owner_selection: OwnerSelection | None = None,
+) -> BillingUrlResponse:
     success_url, cancel_url, portal_return_url = _require_redirect_urls()
     try:
         await stripe_billing.validate_cloud_subscription_price_configuration()
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
 
-    subject_id, stripe_customer_id = await _ensure_stripe_customer_for_user(user)
+    subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
+        user,
+        owner_selection or OwnerSelection(),
+    )
     snapshot = await get_billing_snapshot_for_subject(subject_id)
     if snapshot.is_paid_cloud:
         try:
@@ -570,13 +711,19 @@ async def create_cloud_checkout_session(user: User) -> BillingUrlResponse:
     return BillingUrlResponse(url=checkout.url)
 
 
-async def create_refill_checkout_session(user: User) -> BillingUrlResponse:
+async def create_refill_checkout_session(
+    user: User,
+    owner_selection: OwnerSelection | None = None,
+) -> BillingUrlResponse:
     success_url, cancel_url, _portal_return_url = _require_redirect_urls()
     try:
         await stripe_billing.validate_refill_price_configuration()
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
-    subject_id, stripe_customer_id = await _ensure_stripe_customer_for_user(user)
+    subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
+        user,
+        owner_selection or OwnerSelection(),
+    )
     try:
         checkout = await stripe_billing.create_refill_checkout_session(
             stripe_customer_id=stripe_customer_id,
@@ -591,9 +738,15 @@ async def create_refill_checkout_session(user: User) -> BillingUrlResponse:
     return BillingUrlResponse(url=checkout.url)
 
 
-async def create_customer_portal_session(user: User) -> BillingUrlResponse:
+async def create_customer_portal_session(
+    user: User,
+    owner_selection: OwnerSelection | None = None,
+) -> BillingUrlResponse:
     _success_url, _cancel_url, portal_return_url = _require_redirect_urls()
-    subject_id, stripe_customer_id = await _ensure_stripe_customer_for_user(user)
+    subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
+        user,
+        owner_selection or OwnerSelection(),
+    )
     try:
         portal = await stripe_billing.create_customer_portal_session(
             stripe_customer_id=stripe_customer_id,
@@ -605,8 +758,29 @@ async def create_customer_portal_session(user: User) -> BillingUrlResponse:
     return BillingUrlResponse(url=portal.url)
 
 
-async def update_overage_settings(user: User, *, enabled: bool) -> OverageSettingsResponse:
-    await set_overage_enabled_for_user(user_id=user.id, overage_enabled=enabled)
+async def update_overage_settings(
+    user: User,
+    *,
+    enabled: bool,
+    owner_selection: OwnerSelection | None = None,
+) -> OverageSettingsResponse:
+    selection = owner_selection or OwnerSelection()
+    if selection.owner_scope == "personal":
+        await set_overage_enabled_for_user(user_id=user.id, overage_enabled=enabled)
+    else:
+        context = await _resolve_billing_owner_context(user, selection)
+        try:
+            require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+        except OrganizationServiceError as error:
+            raise BillingServiceError(
+                error.code,
+                error.message,
+                status_code=error.status_code,
+            ) from error
+        await set_overage_enabled_for_subject(
+            billing_subject_id=context.billing_subject_id,
+            overage_enabled=enabled,
+        )
     return OverageSettingsResponse(overage_enabled=enabled)
 
 

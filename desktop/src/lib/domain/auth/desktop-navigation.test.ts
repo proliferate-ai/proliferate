@@ -33,6 +33,12 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
+  it("routes organization invitation handoff links to the flat organization settings section", () => {
+    expect(
+      desktopNavigationTarget("proliferate://settings/organization?inviteHandoff=abc123"),
+    ).toBe("/settings?inviteHandoff=abc123&section=organization");
+  });
+
   it("rejects unsupported desktop navigation links", () => {
     expect(desktopNavigationTarget("https://plugins?source=mcp_oauth_callback")).toBeNull();
     expect(desktopNavigationTarget("proliferate://plugins/extra")).toBeNull();

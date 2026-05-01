@@ -169,6 +169,12 @@ async def _load_provision_input(
     workspace = await load_cloud_workspace_by_id(workspace_id)
     if workspace is None:
         return None
+    if workspace.owner_scope == "organization":
+        raise CloudApiError(
+            "org_cloud_not_ready",
+            "Organization cloud workspaces are not available yet.",
+            status_code=409,
+        )
 
     runtime_environment = await ensure_runtime_environment_for_workspace_id(workspace_id)
     if runtime_environment is None:
