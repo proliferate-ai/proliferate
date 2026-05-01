@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-  getEffectiveExpandedSidebarGroupKeys,
+  resolveAutoShowMoreRepoKey,
   resolveSidebarEmptyState,
   resolveSidebarWorkspaceTypes,
   toggleSidebarWorkspaceTypeSelection,
@@ -381,7 +381,7 @@ describe("sidebar workspace filters", () => {
     expect(groups[1]?.items.map((item) => item.id)).toEqual(["repo-a-visible"]);
   });
 
-  it("force-expands a repo group when the selected logical workspace is past the item cap", () => {
+  it("resolves a repo key when the selected logical workspace is past the item cap", () => {
     const groups = buildGroups({
       logicalWorkspaces: Array.from({ length: 7 }, (_, index) =>
         makeLocalLogicalWorkspace({
@@ -395,14 +395,81 @@ describe("sidebar workspace filters", () => {
       selectedLogicalWorkspaceId: "worktree-6",
     });
 
-    const expandedKeys = getEffectiveExpandedSidebarGroupKeys({
+    const repoKey = resolveAutoShowMoreRepoKey({
       groups,
-      explicitlyExpandedRepoKeys: new Set(),
       selectedLogicalWorkspaceId: "worktree-6",
       itemLimit: 6,
     });
 
-    expect(Array.from(expandedKeys)).toEqual(["/tmp/repo-a"]);
+    expect(repoKey).toBe("/tmp/repo-a");
+  });
+
+  it("does not resolve a repo key when no logical workspace is selected", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: Array.from({ length: 7 }, (_, index) =>
+        makeLocalLogicalWorkspace({
+          id: `worktree-${index}`,
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: `feature/worktree-${index}`,
+          updatedAt: `2026-04-13T10:0${index}:00.000Z`,
+        })),
+    });
+
+    const repoKey = resolveAutoShowMoreRepoKey({
+      groups,
+      selectedLogicalWorkspaceId: null,
+      itemLimit: 6,
+    });
+
+    expect(repoKey).toBeNull();
+  });
+
+  it("does not resolve a repo key when the selected logical workspace is within the item cap", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: Array.from({ length: 7 }, (_, index) =>
+        makeLocalLogicalWorkspace({
+          id: `worktree-${index}`,
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: `feature/worktree-${index}`,
+          updatedAt: `2026-04-13T10:0${index}:00.000Z`,
+        })),
+      selectedLogicalWorkspaceId: "worktree-5",
+    });
+
+    const repoKey = resolveAutoShowMoreRepoKey({
+      groups,
+      selectedLogicalWorkspaceId: "worktree-5",
+      itemLimit: 6,
+    });
+
+    expect(repoKey).toBeNull();
+  });
+
+  it("does not resolve a repo key when the group is under the item cap", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: Array.from({ length: 5 }, (_, index) =>
+        makeLocalLogicalWorkspace({
+          id: `worktree-${index}`,
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: `feature/worktree-${index}`,
+          updatedAt: `2026-04-13T10:0${index}:00.000Z`,
+        })),
+      selectedLogicalWorkspaceId: "worktree-4",
+    });
+
+    const repoKey = resolveAutoShowMoreRepoKey({
+      groups,
+      selectedLogicalWorkspaceId: "worktree-4",
+      itemLimit: 6,
+    });
+
+    expect(repoKey).toBeNull();
   });
 
   it("carries the runtime workspace id for worktree done actions", () => {

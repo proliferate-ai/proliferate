@@ -7,17 +7,13 @@ import { SidebarFooter } from "./SidebarFooter";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 import { SidebarActionButton } from "./SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
-import {
-  DEFAULT_REPO_GROUP_ITEM_LIMIT,
-  SidebarWorkspaceContent,
-} from "./SidebarWorkspaceContent";
+import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
-  getEffectiveExpandedSidebarGroupKeys,
   isDefaultSidebarWorkspaceTypes,
   type SidebarWorkspaceVariant,
 } from "@/lib/domain/workspaces/sidebar";
@@ -48,6 +44,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
+import { useSidebarRepoGroupState } from "@/hooks/workspaces/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
@@ -65,22 +62,6 @@ const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   { label: "Worktrees", variant: "worktree" },
   { label: "Cloud", variant: "cloud" },
 ];
-
-function removeRepoKeys(current: Set<string>, keys: Iterable<string>): Set<string> {
-  const keysToRemove = new Set(keys);
-  let changed = false;
-  const next = new Set<string>();
-
-  for (const key of current) {
-    if (keysToRemove.has(key)) {
-      changed = true;
-      continue;
-    }
-    next.add(key);
-  }
-
-  return changed ? next : current;
-}
 
 export function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
@@ -118,13 +99,9 @@ export function MainSidebar() {
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
   const unarchiveWorkspaces = useWorkspaceUiStore((s) => s.unarchiveWorkspaces);
   const {
-    collapsedRepoGroups,
-    setCollapsedRepoGroups,
     workspaceTypes,
     toggleSidebarWorkspaceType,
   } = useWorkspaceUiStore(useShallow((state) => ({
-    collapsedRepoGroups: state.collapsedRepoGroups,
-    setCollapsedRepoGroups: state.setCollapsedRepoGroups,
     workspaceTypes: state.workspaceTypes,
     toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
   })));
@@ -153,46 +130,19 @@ export function MainSidebar() {
     && isCloudRepoConfigsPending
     && !cloudRepoConfigs;
 
-  // Ephemeral, session-scoped set of repo keys the user has explicitly
-  // expanded via "Show more". Toggles on/off. Resets on reload so the
-  // 6-item default reasserts itself.
-  const [explicitlyExpandedRepoKeys, setExplicitlyExpandedRepoKeys] = useState<
-    Set<string>
-  >(() => new Set());
-  const collapsedRepoGroupKeys = useMemo(
-    () => new Set(collapsedRepoGroups),
-    [collapsedRepoGroups],
-  );
-  const handleToggleRepoExpansion = useCallback((sourceRoot: string) => {
-    setExplicitlyExpandedRepoKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(sourceRoot)) {
-        next.delete(sourceRoot);
-      } else {
-        next.add(sourceRoot);
-      }
-      return next;
-    });
-  }, []);
-  const handleToggleRepoCollapsed = useCallback((sourceRoot: string) => {
-    if (collapsedRepoGroupKeys.has(sourceRoot)) {
-      setCollapsedRepoGroups(collapsedRepoGroups.filter((key) => key !== sourceRoot));
-      return;
-    }
-
-    setCollapsedRepoGroups([...collapsedRepoGroups, sourceRoot]);
-    setExplicitlyExpandedRepoKeys((prev) => removeRepoKeys(prev, [sourceRoot]));
-  }, [collapsedRepoGroupKeys, collapsedRepoGroups, setCollapsedRepoGroups]);
-
-  // Force-expand any group whose currently selected workspace would be
-  // hidden by the cap, so the selection is always visible. Unions the
-  // user's explicit expansions with the force-expansion set.
-  const effectiveExpandedRepoKeys = useMemo(() => getEffectiveExpandedSidebarGroupKeys({
+  const {
+    allRepoKeys,
+    allRepoGroupsCollapsed,
+    collapsedRepoGroupKeys,
+    repoGroupsShownMoreKeys,
+    handleToggleRepoShowMore,
+    handleToggleRepoCollapsed,
+    handleToggleAllRepoGroups,
+    clearRepoGroupShowMore,
+  } = useSidebarRepoGroupState({
     groups,
-    explicitlyExpandedRepoKeys,
     selectedLogicalWorkspaceId,
-    itemLimit: DEFAULT_REPO_GROUP_ITEM_LIMIT,
-  }), [explicitlyExpandedRepoKeys, groups, selectedLogicalWorkspaceId]);
+  });
 
   const handleRemoveRepo = useCallback((sourceRoot: string) => {
     const group = groups.find((g) => g.sourceRoot === sourceRoot);
@@ -202,7 +152,8 @@ export function MainSidebar() {
         hideRepoRoot(group.repoRootId);
       }
     }
-  }, [groups, hideRepoRoot, unarchiveWorkspaces]);
+    clearRepoGroupShowMore(sourceRoot);
+  }, [clearRepoGroupShowMore, groups, hideRepoRoot, unarchiveWorkspaces]);
 
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
     navigate(`/settings?section=repo&repo=${encodeURIComponent(sourceRoot)}`);
@@ -213,25 +164,6 @@ export function MainSidebar() {
   }) => {
     navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   }, [navigate]);
-
-  // Smart collapse toggle: if any repo group is currently expanded (i.e.
-  // collapsedRepoGroups doesn't already contain every visible group key),
-  // one click collapses them all. Otherwise, one click expands them all.
-  const allRepoKeys = useMemo(
-    () => groups.map((g) => g.sourceRoot),
-    [groups],
-  );
-  const allRepoGroupsCollapsed =
-    allRepoKeys.length > 0
-    && allRepoKeys.every((key) => collapsedRepoGroups.includes(key));
-  const handleToggleAllRepoGroups = useCallback(() => {
-    if (allRepoGroupsCollapsed) {
-      setCollapsedRepoGroups([]);
-    } else {
-      setCollapsedRepoGroups(allRepoKeys);
-      setExplicitlyExpandedRepoKeys((prev) => removeRepoKeys(prev, allRepoKeys));
-    }
-  }, [allRepoGroupsCollapsed, allRepoKeys, setCollapsedRepoGroups]);
 
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   const cloudWorkspaceTooltip = cloudUnavailable
@@ -394,10 +326,9 @@ export function MainSidebar() {
               isLoading={isLoading}
               groups={groups}
               collapsedRepoGroupKeys={collapsedRepoGroupKeys}
-              explicitlyExpandedRepoKeys={explicitlyExpandedRepoKeys}
-              effectiveExpandedRepoKeys={effectiveExpandedRepoKeys}
+              repoGroupsShownMore={repoGroupsShownMoreKeys}
               onToggleRepoCollapsed={handleToggleRepoCollapsed}
-              onToggleRepoExpansion={handleToggleRepoExpansion}
+              onToggleRepoShowMore={handleToggleRepoShowMore}
               configuredCloudRepoKeys={configuredCloudRepoKeys}
               cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
               cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
