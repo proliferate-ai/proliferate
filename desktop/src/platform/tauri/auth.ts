@@ -8,6 +8,7 @@ export interface StoredAuthSession {
   email: string
   display_name: string | null
   github_login?: string | null
+  avatar_url?: string | null
 }
 
 export interface StoredPendingAuthSession {

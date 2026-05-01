@@ -18,6 +18,7 @@ export interface AuthUser {
   email: string
   display_name: string | null
   github_login?: string | null
+  avatar_url?: string | null
   is_active?: boolean
   is_verified?: boolean
   role?: string
@@ -33,6 +34,7 @@ interface DesktopTokenResponse {
     email: string
     display_name: string | null
     github_login?: string | null
+    avatar_url?: string | null
   }
 }
 
@@ -180,6 +182,7 @@ function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
     email: response.user.email,
     display_name: response.user.display_name,
     github_login: response.user.github_login ?? null,
+    avatar_url: response.user.avatar_url ?? null,
   }
 }
 
@@ -248,6 +251,7 @@ export function sessionUser(session: StoredAuthSession): AuthUser {
     email: session.email,
     display_name: session.display_name,
     github_login: session.github_login ?? null,
+    avatar_url: session.avatar_url ?? null,
   }
 }
 
@@ -474,6 +478,7 @@ export async function fetchCurrentDesktopUser(accessToken: string): Promise<Auth
     logStartupDebug("auth.current_user.completed", {
       elapsedMs: elapsedStartupMs(startedAt),
       hasGitHubLogin: Boolean(user.github_login),
+      hasAvatarUrl: Boolean(user.avatar_url),
     })
     return user
   } catch (error) {

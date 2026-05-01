@@ -13,6 +13,7 @@ from httpx import AsyncClient
 from proliferate.auth.desktop import service as desktop_service
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.config import settings
+from proliferate.integrations.github import GitHubUserProfile
 
 
 def _make_pkce_pair() -> tuple[str, str]:
@@ -71,6 +72,14 @@ def _enable_github(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
         assert token == "github-access-token"
         return (f"github-account-{email}", email)
 
+    async def fake_get_github_user_profile(token: str) -> GitHubUserProfile:
+        assert token == "github-access-token"
+        return GitHubUserProfile(
+            login=f"github-{email.split('@')[0]}",
+            avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
+            display_name="GitHub Tester",
+        )
+
     monkeypatch.setattr(
         github_oauth_client,
         "get_authorization_url",
@@ -85,6 +94,11 @@ def _enable_github(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
         github_oauth_client,
         "get_id_email",
         fake_get_id_email,
+    )
+    monkeypatch.setattr(
+        desktop_service,
+        "get_github_user_profile",
+        fake_get_github_user_profile,
     )
 
 
@@ -131,7 +145,9 @@ class TestDesktopGitHubCustomerIoSync:
         schedule_mock.assert_called_once()
         scheduled_user = schedule_mock.call_args.args[0]
         assert scheduled_user.email == "desktop-github@example.com"
-        assert scheduled_user.display_name is None
+        assert scheduled_user.display_name == "GitHub Tester"
+        assert scheduled_user.github_login == "github-desktop-github"
+        assert scheduled_user.avatar_url == ("https://avatars.githubusercontent.com/u/583231?v=4")
 
         exchange = await client.post(
             "/auth/desktop/poll",
@@ -142,6 +158,10 @@ class TestDesktopGitHubCustomerIoSync:
         )
         assert exchange.status_code == 200
         assert exchange.json()["user"]["email"] == "desktop-github@example.com"
+        assert exchange.json()["user"]["github_login"] == "github-desktop-github"
+        assert exchange.json()["user"]["avatar_url"] == (
+            "https://avatars.githubusercontent.com/u/583231?v=4"
+        )
 
     @pytest.mark.asyncio
     async def test_syncs_customerio_for_existing_github_user(
@@ -170,6 +190,8 @@ class TestDesktopGitHubCustomerIoSync:
         assert str(scheduled_user.id) == user_id
         assert scheduled_user.email == "linked@example.com"
         assert scheduled_user.display_name == "Linked User"
+        assert scheduled_user.github_login == "github-linked"
+        assert scheduled_user.avatar_url == ("https://avatars.githubusercontent.com/u/583231?v=4")
 
         exchange = await client.post(
             "/auth/desktop/poll",

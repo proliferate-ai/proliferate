@@ -34,6 +34,8 @@ class TokenUserInfo(BaseModel):
     id: str
     email: str
     display_name: str | None = None
+    github_login: str | None = None
+    avatar_url: str | None = None
 
 
 class TokenResponse(BaseModel):

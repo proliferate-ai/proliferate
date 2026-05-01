@@ -80,6 +80,8 @@ function persistValidatedSession(
     user_id: user.id,
     email: user.email,
     display_name: user.display_name,
+    github_login: user.github_login ?? null,
+    avatar_url: user.avatar_url ?? null,
   };
 }
 

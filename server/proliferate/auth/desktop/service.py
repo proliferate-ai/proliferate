@@ -53,10 +53,14 @@ from proliferate.db.store.auth import (
     consume_auth_code_value,
     create_auth_code_for_user,
 )
-from proliferate.db.store.users import load_active_user_by_id
+from proliferate.db.store.users import load_active_user_by_id, update_user_github_profile
 from proliferate.integrations.customerio import (
     identify_customerio_user,
     track_customerio_desktop_authenticated,
+)
+from proliferate.integrations.github import (
+    GitHubIntegrationError,
+    get_github_user_profile,
 )
 
 if TYPE_CHECKING:
@@ -145,6 +149,8 @@ def build_token_response(*, access_token: str, refresh_token: str, user: User) -
             id=str(user.id),
             email=user.email,
             display_name=user.display_name,
+            github_login=user.github_login,
+            avatar_url=user.avatar_url,
         ),
     )
 
@@ -327,6 +333,21 @@ async def finish_github_desktop_callback(
             title="GitHub sign-in failed",
             message="This account is inactive.",
         )
+
+    try:
+        github_profile = await get_github_user_profile(token["access_token"])
+        synced_user = await update_user_github_profile(
+            user.id,
+            github_login=github_profile.login,
+            avatar_url=github_profile.avatar_url,
+            display_name=github_profile.display_name,
+        )
+        if synced_user is not None:
+            user = synced_user
+    except GitHubIntegrationError:
+        logger.info("Could not sync GitHub profile for desktop auth", exc_info=True)
+    except Exception:
+        logger.exception("Could not persist GitHub profile for desktop auth")
 
     auth_code = await create_auth_code_for_user(
         user_id=user.id,

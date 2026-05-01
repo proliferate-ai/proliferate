@@ -222,6 +222,13 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                 assert "anyharness_data_key_ciphertext" in columns
                 assert "origin_json" in columns
 
+                user_columns = await conn.run_sync(
+                    lambda sync_conn: {
+                        column["name"] for column in inspect(sync_conn).get_columns("user")
+                    }
+                )
+                assert {"github_login", "avatar_url"} <= user_columns
+
                 mcp_connection_columns = await conn.run_sync(
                     lambda sync_conn: {
                         column["name"]

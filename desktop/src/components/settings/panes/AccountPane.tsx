@@ -1,14 +1,20 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
-import { ExternalLink } from "@/components/ui/icons";
+import { ExternalLink, GitHub, Mail, RefreshCw } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
 import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import {
+  getAccountActionDescription,
+  getAccountDisplayName,
+  getAccountInitials,
+  getAccountProfileSummary,
+  getGitHubStatusLabel,
+} from "@/lib/domain/auth/account-profile";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthActions } from "@/hooks/auth/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
@@ -41,6 +47,26 @@ export function AccountPane() {
     && !cloudSignInAvailable
     && !isAuthenticated;
   const signedInWhileCloudUnavailable = cloudUnavailable && isAuthenticated;
+  const githubLogin = user?.github_login?.trim() || null;
+  const displayName = getAccountDisplayName({
+    email: user?.email,
+    displayName: user?.display_name,
+    githubLogin,
+    isAuthenticated,
+    devAuthBypassed,
+    localMode,
+  });
+  const profileSummary = getAccountProfileSummary({
+    devAuthBypassed,
+    isAuthenticated,
+    localMode,
+    signInUnavailable,
+    signedInWhileCloudUnavailable,
+  });
+  const profileAvatarUrl = user?.avatar_url?.trim()
+    || (githubLogin
+      ? `https://github.com/${encodeURIComponent(githubLogin)}.png?size=160`
+      : null);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -65,127 +91,188 @@ export function AccountPane() {
         }
       />
 
-      <SettingsCard>
-        <SettingsCardRow
-          label="Proliferate"
-          description={
-            devAuthBypassed
-                ? AUTH_ACCOUNT_LABELS.devBypassDescription
-              : isAuthenticated
-                ? user?.email ?? "Signed in"
-                : localMode
-                  ? CAPABILITY_COPY.accountLocalDescription
-                  : cloudSignInChecking
-                    ? CAPABILITY_COPY.githubAuthCheckingDescription
-                  : signInUnavailable
-                    ? CAPABILITY_COPY.accountAuthUnavailableDescription
-                    : AUTH_ACCOUNT_LABELS.anonymousDescription
-          }
-        >
-          {devAuthBypassed ? (
-            <span className="text-sm text-muted-foreground">{AUTH_ACCOUNT_LABELS.localPill}</span>
-          ) : localMode ? (
-            <span className="text-sm text-muted-foreground">{AUTH_ACCOUNT_LABELS.localPill}</span>
-          ) : cloudSignInChecking ? (
-            <span className="text-sm text-muted-foreground">Checking…</span>
-          ) : signInUnavailable ? (
-            <span className="text-sm text-muted-foreground">Unavailable</span>
-          ) : isAuthenticated ? (
-            <Button
-              variant="secondary"
-              onClick={() => void handleSignOut()}
-              disabled={signingOut}
-              loading={signingOut}
-            >
-              {signingOut ? AUTH_ACCOUNT_LABELS.signingOut : AUTH_ACCOUNT_LABELS.signOut}
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={() => void signInWithGitHub()}
-              disabled={signingIn || signInChecking}
-              loading={signingIn}
-            >
-              {signingIn
-                ? AUTH_ACCOUNT_LABELS.signingIn
-                : signInChecking
-                  ? AUTH_ACCOUNT_LABELS.checkingSignIn
-                  : AUTH_ACCOUNT_LABELS.signIn}
-            </Button>
-          )}
-        </SettingsCardRow>
+      <AccountProfileHeader
+        avatarUrl={profileAvatarUrl}
+        displayName={displayName}
+        email={user?.email ?? "Not signed in"}
+        githubLabel={githubLogin ? `@${githubLogin}` : getGitHubStatusLabel({
+          cloudSignInChecking,
+          devAuthBypassed,
+          isAuthenticated,
+          localMode,
+          signInUnavailable,
+        })}
+        profileSummary={profileSummary}
+      />
 
-        <SettingsCardRow
-          label="GitHub"
-          description={
-            devAuthBypassed
-              ? "GitHub auth is bypassed in local development mode."
-              : signedInWhileCloudUnavailable
-                ? CAPABILITY_COPY.githubSignedInUnavailableDescription
-              : localMode
-                ? CAPABILITY_COPY.githubLocalDescription
-                : cloudSignInChecking
-                  ? CAPABILITY_COPY.githubAuthCheckingDescription
-                : signInUnavailable
-                  ? CAPABILITY_COPY.githubAuthUnavailableDescription
-              : isAuthenticated
-                ? user?.github_login
-                  ? `Connected through GitHub desktop sign-in as @${user.github_login}. Reconnect opens GitHub's account picker. Manage access opens this app's authorization page on GitHub.`
-                  : "Connected through GitHub desktop sign-in."
-                : "Sign in with GitHub to connect your Proliferate account."
-          }
-        >
-          {canReconnectGitHub ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-primary">Connected</span>
+      <SettingsCard>
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <div className="text-sm font-medium text-foreground">Account access</div>
+            <p className="max-w-xl text-sm text-muted-foreground">
+              {getAccountActionDescription({
+                devAuthBypassed,
+                isAuthenticated,
+                localMode,
+                signInUnavailable,
+                signedInWhileCloudUnavailable,
+                githubLogin,
+              })}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {devAuthBypassed ? (
+              <span className="text-sm text-muted-foreground">
+                {AUTH_ACCOUNT_LABELS.localPill}
+              </span>
+            ) : isAuthenticated ? (
+              <>
+                {canReconnectGitHub && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => void signInWithGitHub({ prompt: "select_account" })}
+                    disabled={signingIn || signInChecking}
+                    loading={signingIn}
+                  >
+                    {!signingIn && <RefreshCw className="size-3" />}
+                    {signingIn
+                      ? AUTH_ACCOUNT_LABELS.reconnecting
+                      : AUTH_ACCOUNT_LABELS.reconnect}
+                  </Button>
+                )}
+                {canOpenGitHubSettings && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => { void openExternal(githubSettingsUrl); }}
+                  >
+                    {AUTH_ACCOUNT_LABELS.manageAccess}
+                    <ExternalLink className="size-3" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() => void handleSignOut()}
+                  disabled={signingOut}
+                  loading={signingOut}
+                  className="text-destructive hover:text-destructive"
+                >
+                  {signingOut ? AUTH_ACCOUNT_LABELS.signingOut : AUTH_ACCOUNT_LABELS.signOut}
+                </Button>
+              </>
+            ) : localMode || signInUnavailable ? (
+              <span className="text-sm text-muted-foreground">Unavailable</span>
+            ) : cloudSignInChecking ? (
+              <span className="text-sm text-muted-foreground">Checking…</span>
+            ) : (
               <Button
                 variant="secondary"
-                onClick={() => void signInWithGitHub({ prompt: "select_account" })}
+                onClick={() => void signInWithGitHub()}
                 disabled={signingIn || signInChecking}
                 loading={signingIn}
               >
                 {signingIn
-                  ? AUTH_ACCOUNT_LABELS.reconnecting
-                  : AUTH_ACCOUNT_LABELS.reconnect}
+                  ? AUTH_ACCOUNT_LABELS.signingIn
+                  : signInChecking
+                    ? AUTH_ACCOUNT_LABELS.checkingSignIn
+                    : AUTH_ACCOUNT_LABELS.signIn}
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => { void openExternal(githubSettingsUrl); }}
-              >
-                {AUTH_ACCOUNT_LABELS.manageAccess}
-                <ExternalLink className="size-3" />
-              </Button>
-            </div>
-          ) : canOpenGitHubSettings ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-primary">Connected</span>
-              <Button
-                variant="ghost"
-                onClick={() => { void openExternal(githubSettingsUrl); }}
-              >
-                {AUTH_ACCOUNT_LABELS.manageAccess}
-                <ExternalLink className="size-3" />
-              </Button>
-            </div>
-          ) : (
-            <span className={`text-sm ${isAuthenticated ? "text-primary" : "text-muted-foreground"}`}>
-              {devAuthBypassed
-                ? "Bypassed"
-                : localMode || signInUnavailable
-                  ? "Unavailable"
-                  : cloudSignInChecking
-                    ? "Checking…"
-                  : isAuthenticated
-                    ? "Connected"
-                    : "Not connected"}
-            </span>
-          )}
-        </SettingsCardRow>
+            )}
+          </div>
+        </div>
       </SettingsCard>
 
       {signInError && (
         <p className="text-sm text-destructive">{signInError}</p>
       )}
     </section>
+  );
+}
+
+function AccountProfileHeader({
+  avatarUrl,
+  displayName,
+  email,
+  githubLabel,
+  profileSummary,
+}: {
+  avatarUrl: string | null;
+  displayName: string;
+  email: string;
+  githubLabel: string;
+  profileSummary: string;
+}) {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <AccountAvatar
+        key={avatarUrl ?? "account-avatar"}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
+      />
+      <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 space-y-1">
+          <div className="truncate text-lg font-medium text-foreground">
+            {displayName}
+          </div>
+          <p className="text-sm text-muted-foreground">{profileSummary}</p>
+        </div>
+        <div className="grid gap-2">
+          <AccountProfileRow
+            icon={<Mail className="size-4" />}
+            label="Email"
+            value={email}
+          />
+          <AccountProfileRow
+            icon={<GitHub className="size-4" />}
+            label="GitHub"
+            value={githubLabel}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AccountAvatar({
+  avatarUrl,
+  displayName,
+}: {
+  avatarUrl: string | null;
+  displayName: string;
+}) {
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const showAvatar = avatarUrl && !avatarFailed;
+
+  return (
+    <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground/5 text-xl font-medium text-muted-foreground">
+      {showAvatar ? (
+        <img
+          src={avatarUrl}
+          alt={`${displayName} GitHub profile`}
+          className="size-full object-cover"
+          referrerPolicy="no-referrer"
+          onError={() => setAvatarFailed(true)}
+        />
+      ) : (
+        <span>{getAccountInitials(displayName)}</span>
+      )}
+    </div>
+  );
+}
+
+function AccountProfileRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="grid grid-cols-[1rem_5rem_minmax(0,1fr)] items-center gap-3 text-sm">
+      <span className="text-muted-foreground" aria-hidden="true">{icon}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-foreground">{value}</span>
+    </div>
   );
 }

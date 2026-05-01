@@ -30,58 +30,11 @@ export function AgentsPane() {
         description={AGENTS_PAGE_COPY.description}
       />
 
-      {state.reconcileError && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          {state.reconcileError}
-        </div>
-      )}
-
       {state.installError && (
         <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           {state.installError}
         </div>
       )}
-
-      <AgentsSection
-        title={AGENTS_PAGE_COPY.runtimeSectionTitle}
-        description={AGENTS_PAGE_COPY.runtimeSectionDescription}
-      >
-        <SettingsCard>
-          <SettingsCardRow
-            label={AGENTS_PAGE_COPY.runtimeStatusLabel}
-            description={state.runtimeStatus.description}
-          >
-            <Badge
-              className={`!text-xs ${AGENTS_PANE_BADGE_CLASSNAMES[state.runtimeStatus.tone]}`}
-            >
-              {state.runtimeStatus.label}
-            </Badge>
-          </SettingsCardRow>
-          <SettingsCardRow
-            label={AGENTS_PAGE_COPY.reconcileLabel}
-            description={AGENTS_PAGE_COPY.reconcileDescription}
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void state.handleReconcile();
-              }}
-              disabled={
-                state.connectionState !== "healthy"
-                || state.isAgentOperationActive
-                || state.isAgentSeedHydrating
-              }
-            >
-              {state.isAgentSeedHydrating
-                ? AGENTS_PAGE_COPY.reconcileSeedHydratingAction
-                : state.isReconciling
-                  ? AGENTS_PAGE_COPY.reconcileLoadingAction
-                  : AGENTS_PAGE_COPY.reconcileAction}
-            </Button>
-          </SettingsCardRow>
-        </SettingsCard>
-      </AgentsSection>
 
       {state.connectionState === "connecting" && (
         <SettingsCard>
@@ -90,6 +43,19 @@ export function AgentsPane() {
               message={AGENTS_PAGE_COPY.reconnectLoadingMessage}
               subtext={AGENTS_PAGE_COPY.reconnectLoadingSubtext}
             />
+          </div>
+        </SettingsCard>
+      )}
+
+      {state.connectionState === "failed" && (
+        <SettingsCard>
+          <div className="space-y-1 p-3">
+            <p className="text-sm font-medium text-foreground">
+              {AGENTS_PAGE_COPY.connectionUnavailableTitle}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {state.connectionDescription}
+            </p>
           </div>
         </SettingsCard>
       )}
@@ -150,6 +116,15 @@ export function AgentsPane() {
         </>
       )}
 
+      <AgentReconciliationSection
+        connectionState={state.connectionState}
+        isAgentOperationActive={state.isAgentOperationActive}
+        isAgentSeedHydrating={state.isAgentSeedHydrating}
+        isReconciling={state.isReconciling}
+        reconcileError={state.reconcileError}
+        onReconcile={state.handleReconcile}
+      />
+
       {state.selectedAgent && (
         <AgentSetupModal
           key={state.selectedAgent.kind}
@@ -162,6 +137,60 @@ export function AgentsPane() {
         />
       )}
     </section>
+  );
+}
+
+function AgentReconciliationSection({
+  connectionState,
+  isAgentOperationActive,
+  isAgentSeedHydrating,
+  isReconciling,
+  reconcileError,
+  onReconcile,
+}: {
+  connectionState: "connecting" | "healthy" | "failed";
+  isAgentOperationActive: boolean;
+  isAgentSeedHydrating: boolean;
+  isReconciling: boolean;
+  reconcileError: string | null;
+  onReconcile: () => Promise<void>;
+}) {
+  return (
+    <AgentsSection
+      title={AGENTS_PAGE_COPY.reconcileSectionTitle}
+      description={AGENTS_PAGE_COPY.reconcileSectionDescription}
+    >
+      <SettingsCard>
+        {reconcileError && (
+          <div className="px-3 py-2 text-xs text-destructive">
+            {reconcileError}
+          </div>
+        )}
+        <SettingsCardRow
+          label={AGENTS_PAGE_COPY.reconcileLabel}
+          description={AGENTS_PAGE_COPY.reconcileDescription}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void onReconcile();
+            }}
+            disabled={
+              connectionState !== "healthy"
+              || isAgentOperationActive
+              || isAgentSeedHydrating
+            }
+          >
+            {isAgentSeedHydrating
+              ? AGENTS_PAGE_COPY.reconcileSeedHydratingAction
+              : isReconciling
+                ? AGENTS_PAGE_COPY.reconcileLoadingAction
+                : AGENTS_PAGE_COPY.reconcileAction}
+          </Button>
+        </SettingsCardRow>
+      </SettingsCard>
+    </AgentsSection>
   );
 }
 

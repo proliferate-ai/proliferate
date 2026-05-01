@@ -15,6 +15,13 @@ class GitHubRepoBranches:
     branch_heads_by_name: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class GitHubUserProfile:
+    login: str
+    avatar_url: str | None
+    display_name: str | None
+
+
 class GitHubIntegrationError(RuntimeError):
     pass
 
@@ -132,3 +139,41 @@ async def get_github_repo_branches(
 
 # Public alias used by cloud repos service.
 list_branches = get_github_repo_branches
+
+
+async def get_github_user_profile(access_token: str) -> GitHubUserProfile:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://api.github.com/user",
+                headers=_github_headers(access_token),
+            )
+    except httpx.HTTPError as exc:
+        raise GitHubIntegrationError("Could not load GitHub profile.") from exc
+
+    if response.status_code >= 300:
+        raise GitHubIntegrationError("Could not load GitHub profile.")
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise GitHubIntegrationError("Could not load GitHub profile.") from exc
+
+    if not isinstance(payload, dict):
+        raise GitHubIntegrationError("Could not load GitHub profile.")
+
+    login = payload.get("login")
+    if not isinstance(login, str) or not login.strip():
+        raise GitHubIntegrationError("Could not load GitHub profile.")
+
+    avatar_url = payload.get("avatar_url")
+    display_name = payload.get("name")
+    return GitHubUserProfile(
+        login=login.strip(),
+        avatar_url=avatar_url.strip()
+        if isinstance(avatar_url, str) and avatar_url.strip()
+        else None,
+        display_name=display_name.strip()
+        if isinstance(display_name, str) and display_name.strip()
+        else None,
+    )

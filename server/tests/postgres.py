@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -19,7 +20,10 @@ POSTGRES_USER = "proliferate"
 POSTGRES_PASSWORD = "localdev"
 POSTGRES_HOST = "127.0.0.1"
 POSTGRES_PORT = 5432
-TEST_DATABASE_NAME = "proliferate_test"
+TEST_DATABASE_NAME = os.environ.get(
+    "PROLIFERATE_TEST_DATABASE_NAME",
+    f"proliferate_test_{os.getpid()}",
+)
 ADMIN_DATABASE_URL = (
     f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
     f"{POSTGRES_HOST}:{POSTGRES_PORT}/postgres"

@@ -2916,6 +2916,10 @@ export interface components {
             email: string;
             /** Display Name */
             display_name?: string | null;
+            /** Github Login */
+            github_login?: string | null;
+            /** Avatar Url */
+            avatar_url?: string | null;
         };
         /** UpdateAutomationRequest */
         UpdateAutomationRequest: {
@@ -2993,6 +2997,10 @@ export interface components {
             is_verified: boolean;
             /** Display Name */
             display_name?: string | null;
+            /** Github Login */
+            github_login?: string | null;
+            /** Avatar Url */
+            avatar_url?: string | null;
             /** @default user */
             role: components["schemas"]["UserRole"];
         };

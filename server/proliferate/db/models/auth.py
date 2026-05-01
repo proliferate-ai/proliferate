@@ -19,6 +19,8 @@ class OAuthAccount(SQLAlchemyBaseOAuthAccountTableUUID, Base):
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github_login: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     oauth_accounts: Mapped[list[OAuthAccount]] = relationship("OAuthAccount", lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

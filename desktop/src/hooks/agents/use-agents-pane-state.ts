@@ -36,15 +36,9 @@ export interface AgentsPaneRowState {
   reconcileResult?: ReconcileAgentResult;
 }
 
-export interface AgentsPaneRuntimeStatus {
-  label: string;
-  description: string;
-  tone: "neutral" | "destructive";
-}
-
 interface AgentsPaneState {
   connectionState: "connecting" | "healthy" | "failed";
-  runtimeStatus: AgentsPaneRuntimeStatus;
+  connectionDescription: string;
   runtimeHome: string | null;
   anyHarnessLogPath: string | null;
   agentsLoading: boolean;
@@ -111,25 +105,9 @@ export function useAgentsPaneState(): AgentsPaneState {
     : null;
   const isAgentOperationActive = reconcileState === "reconciling" || installingAgentKind !== null;
 
-  const runtimeStatus: AgentsPaneRuntimeStatus = connectionState === "healthy"
-    ? {
-        label: AGENTS_PAGE_COPY.runtimeConnectedLabel,
-        description: health?.version
-          ? `${AGENTS_PAGE_COPY.runtimeVersionPrefix}${health.version}`
-          : AGENTS_PAGE_COPY.runtimeConnectedDescription,
-        tone: "neutral",
-      }
-    : connectionState === "connecting"
-      ? {
-          label: AGENTS_PAGE_COPY.runtimeConnectingLabel,
-          description: AGENTS_PAGE_COPY.reconnectLoadingSubtext,
-          tone: "neutral",
-        }
-      : {
-          label: AGENTS_PAGE_COPY.runtimeUnavailableLabel,
-          description: runtimeError ?? AGENTS_PAGE_COPY.reconnectTitle,
-          tone: "destructive",
-        };
+  const connectionDescription = connectionState === "failed"
+    ? runtimeError ?? AGENTS_PAGE_COPY.reconnectTitle
+    : AGENTS_PAGE_COPY.reconnectLoadingSubtext;
 
   const groupedRows = useMemo(() => {
     const needsSetupRows: AgentsPaneRowState[] = [];
@@ -234,7 +212,7 @@ export function useAgentsPaneState(): AgentsPaneState {
 
   return {
     connectionState,
-    runtimeStatus,
+    connectionDescription,
     runtimeHome: health?.runtimeHome ?? null,
     anyHarnessLogPath: health?.runtimeHome
       ? `${health.runtimeHome}/logs/anyharness.log`

@@ -57,15 +57,28 @@ def _stub_decode_state(*args: object, **kwargs: object) -> dict[str, str]:
     return _make_state_payload()
 
 
+def _github_profile() -> SimpleNamespace:
+    return SimpleNamespace(
+        login="octocat",
+        avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
+        display_name="The Octocat",
+    )
+
+
 @pytest.mark.asyncio
 async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _make_request()
     user = _make_user("desktop-github@example.com", display_name=None)
+    synced_user = _make_user("desktop-github@example.com", display_name="The Octocat")
+    synced_user.id = user.id
+    synced_user.github_login = "octocat"
+    synced_user.avatar_url = "https://avatars.githubusercontent.com/u/583231?v=4"
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     create_auth_code_mock = AsyncMock(return_value=SimpleNamespace(code="auth-code"))
     schedule_mock = Mock()
+    sync_profile_mock = AsyncMock(return_value=synced_user)
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
@@ -81,6 +94,12 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
         "get_id_email",
         AsyncMock(return_value=("github-account-desktop", "desktop-github@example.com")),
     )
+    monkeypatch.setattr(
+        desktop_service,
+        "get_github_user_profile",
+        AsyncMock(return_value=_github_profile()),
+    )
+    monkeypatch.setattr(desktop_service, "update_user_github_profile", sync_profile_mock)
     monkeypatch.setattr(desktop_service, "create_auth_code_for_user", create_auth_code_mock)
     monkeypatch.setattr(
         desktop_service,
@@ -101,7 +120,13 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     assert response.status_code == 200
     assert "proliferate://auth/callback?code=auth-code" in response.body.decode()
     create_auth_code_mock.assert_awaited_once()
-    schedule_mock.assert_called_once_with(user)
+    sync_profile_mock.assert_awaited_once_with(
+        user.id,
+        github_login="octocat",
+        avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
+        display_name="The Octocat",
+    )
+    schedule_mock.assert_called_once_with(synced_user)
 
 
 @pytest.mark.asyncio
@@ -113,6 +138,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     create_auth_code_mock = AsyncMock(return_value=SimpleNamespace(code="auth-code"))
     schedule_mock = Mock()
+    sync_profile_mock = AsyncMock(return_value=user)
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
@@ -128,6 +154,12 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
         "get_id_email",
         AsyncMock(return_value=("github-account-linked", "linked@example.com")),
     )
+    monkeypatch.setattr(
+        desktop_service,
+        "get_github_user_profile",
+        AsyncMock(return_value=_github_profile()),
+    )
+    monkeypatch.setattr(desktop_service, "update_user_github_profile", sync_profile_mock)
     monkeypatch.setattr(desktop_service, "create_auth_code_for_user", create_auth_code_mock)
     monkeypatch.setattr(
         desktop_service,
@@ -146,6 +178,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     )
 
     assert response.status_code == 200
+    sync_profile_mock.assert_awaited_once()
     schedule_mock.assert_called_once_with(user)
 
 
@@ -195,6 +228,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
     user = _make_user("desktop-github@example.com", display_name=None)
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
     schedule_mock = Mock()
+    sync_profile_mock = AsyncMock(return_value=user)
 
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
@@ -210,6 +244,12 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
         "get_id_email",
         AsyncMock(return_value=("github-account-desktop", "desktop-github@example.com")),
     )
+    monkeypatch.setattr(
+        desktop_service,
+        "get_github_user_profile",
+        AsyncMock(return_value=_github_profile()),
+    )
+    monkeypatch.setattr(desktop_service, "update_user_github_profile", sync_profile_mock)
     monkeypatch.setattr(
         desktop_service,
         "create_auth_code_for_user",

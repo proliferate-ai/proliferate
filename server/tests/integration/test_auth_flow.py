@@ -7,9 +7,11 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from httpx import AsyncClient
 
+from proliferate.auth.desktop import service as desktop_service
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE
+from proliferate.integrations.github import GitHubUserProfile
 
 
 def _make_pkce_pair() -> tuple[str, str]:
@@ -280,6 +282,14 @@ class TestDesktopGitHubBrowserFlow:
             assert token == "github-access-token"
             return (f"github-account-{email}", email)
 
+        async def fake_get_github_user_profile(token: str) -> GitHubUserProfile:
+            assert token == "github-access-token"
+            return GitHubUserProfile(
+                login=f"github-{email.split('@')[0]}",
+                avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
+                display_name="GitHub Tester",
+            )
+
         monkeypatch.setattr(
             github_oauth_client,
             "get_authorization_url",
@@ -294,6 +304,11 @@ class TestDesktopGitHubBrowserFlow:
             github_oauth_client,
             "get_id_email",
             fake_get_id_email,
+        )
+        monkeypatch.setattr(
+            desktop_service,
+            "get_github_user_profile",
+            fake_get_github_user_profile,
         )
 
     @pytest.mark.asyncio
@@ -372,6 +387,10 @@ class TestDesktopGitHubBrowserFlow:
         assert exchange.status_code == 200
         token_data = exchange.json()
         assert token_data["user"]["email"] == "desktop-github@example.com"
+        assert token_data["user"]["github_login"] == "github-desktop-github"
+        assert token_data["user"]["avatar_url"] == (
+            "https://avatars.githubusercontent.com/u/583231?v=4"
+        )
 
         protected = await client.get(
             "/v1/cloud/workspaces",

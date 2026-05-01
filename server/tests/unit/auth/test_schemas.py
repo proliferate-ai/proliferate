@@ -37,3 +37,5 @@ class TestUserRead:
             is_superuser=False,
         )
         assert user.role == UserRole.USER
+        assert user.github_login is None
+        assert user.avatar_url is None

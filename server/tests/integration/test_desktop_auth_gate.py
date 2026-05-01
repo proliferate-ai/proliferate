@@ -127,6 +127,8 @@ class TestDesktopAuthGate:
         assert "id" in tokens["user"]
         # display_name may be None, but the key must exist
         assert "display_name" in tokens["user"]
+        assert "github_login" in tokens["user"]
+        assert "avatar_url" in tokens["user"]
 
     @pytest.mark.asyncio
     async def test_desktop_user_info_endpoint(self, client: AsyncClient) -> None:
@@ -140,3 +142,5 @@ class TestDesktopAuthGate:
         user = resp.json()
         assert user["email"] == email
         assert user["is_active"] is True
+        assert "github_login" in user
+        assert "avatar_url" in user

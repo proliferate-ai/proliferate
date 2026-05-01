@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from tests.postgres import (
     TEST_DATABASE_NAME,
     TEST_DATABASE_URL,
+    drop_database,
     ensure_database_exists,
     run_migrations,
     truncate_all_tables,
@@ -28,6 +29,8 @@ def event_loop():  # type: ignore[no-untyped-def]
 def migrated_test_database():  # type: ignore[no-untyped-def]
     asyncio.run(ensure_database_exists(TEST_DATABASE_NAME))
     run_migrations(TEST_DATABASE_URL)
+    yield
+    asyncio.run(drop_database(TEST_DATABASE_NAME))
 
 
 @pytest_asyncio.fixture
