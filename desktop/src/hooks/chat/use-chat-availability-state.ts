@@ -15,14 +15,19 @@ export interface ChatAvailabilityState extends ChatInputAvailability {
   selectedWorkspaceKind: "cloud" | "local";
 }
 
-export function useChatAvailabilityState(): ChatAvailabilityState {
+export function useChatAvailabilityState(options?: {
+  activeSessionId?: string | null;
+}): ChatAvailabilityState {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const connectionState = useHarnessStore((state) => state.connectionState);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
+  const storedActiveSessionId = useHarnessStore((state) => state.activeSessionId);
+  const activeSessionId = options && "activeSessionId" in options
+    ? options.activeSessionId ?? null
+    : storedActiveSessionId;
   const activeSessionHydrated = useHarnessStore((state) =>
-    state.activeSessionId
-      ? (state.sessionSlots[state.activeSessionId]?.transcriptHydrated ?? false)
+    activeSessionId
+      ? (state.sessionSlots[activeSessionId]?.transcriptHydrated ?? false)
       : true
   );
   const { data: workspaceCollections } = useWorkspaces();

@@ -29,22 +29,31 @@ import {
 } from "@/lib/infra/latency-flow";
 import { completeChatPromptSubmitSideEffects } from "./chat-submit-effects";
 
-export function useChatPromptActions() {
+export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
+  const forceNewSession = options?.forceNewSession ?? false;
   const queryClient = useQueryClient();
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const { cancelActiveSession, findOrCreateSession, promptActiveSession } = useSessionActions();
+  const {
+    cancelActiveSession,
+    createSessionWithResolvedConfig,
+    findOrCreateSession,
+    promptActiveSession,
+  } = useSessionActions();
   const clearDraft = useChatInputStore((state) => state.clearDraft);
   const {
     activeSessionId,
     currentLaunchIdentity,
   } = useActiveSessionLaunchState();
   const { hasSlot } = useActiveSessionSurfaceSnapshot();
-  const { isDisabled } = useChatAvailabilityState();
-  const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
+  const { isDisabled } = useChatAvailabilityState({
+    activeSessionId: forceNewSession ? null : activeSessionId,
+  });
+  const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
+  const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
 
   const handleSubmit = useCallback(async (input?: {
     text: string;
@@ -65,8 +74,8 @@ export function useChatPromptActions() {
       return;
     }
 
-    const launchSelection = currentLaunchIdentity ?? configuredLaunch.selection;
-    const targetSessionId = hasSlot ? activeSessionId : null;
+    const launchSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
+    const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
       ? startLatencyFlow({
@@ -100,14 +109,25 @@ export function useChatPromptActions() {
           optimisticContentParts: input?.optimisticContentParts,
         });
       } else if (launchSelection) {
-        await findOrCreateSession(
-          launchSelection.kind,
-          text,
-          launchSelection.modelId,
-          blocks,
-          input?.optimisticContentParts,
-          clearDraftIfNeeded,
-        );
+        if (forceNewSession) {
+          await createSessionWithResolvedConfig({
+            text,
+            blocks,
+            optimisticContentParts: input?.optimisticContentParts,
+            agentKind: launchSelection.kind,
+            modelId: launchSelection.modelId,
+            onBeforeOptimisticPrompt: clearDraftIfNeeded,
+          });
+        } else {
+          await findOrCreateSession(
+            launchSelection.kind,
+            text,
+            launchSelection.modelId,
+            blocks,
+            input?.optimisticContentParts,
+            clearDraftIfNeeded,
+          );
+        }
       } else {
         showToast("Choose a ready model before sending a message.");
         return;
@@ -142,9 +162,10 @@ export function useChatPromptActions() {
     activeSessionId,
     clearDraft,
     configuredLaunch.selection,
-    currentLaunchIdentity,
+    createSessionWithResolvedConfig,
     findOrCreateSession,
     hasSlot,
+    forceNewSession,
     isDisabled,
     promptActiveSession,
     queryClient,
@@ -153,14 +174,18 @@ export function useChatPromptActions() {
     selectedWorkspaceId,
     setWorkspaceArrivalEvent,
     showToast,
+    scopedLaunchIdentity,
   ]);
 
   const handleCancel = useCallback(() => {
+    if (forceNewSession) {
+      return;
+    }
     void cancelActiveSession().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to cancel message: ${message}`);
     });
-  }, [cancelActiveSession, showToast]);
+  }, [cancelActiveSession, forceNewSession, showToast]);
 
   return {
     handleSubmit,

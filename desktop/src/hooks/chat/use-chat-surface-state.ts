@@ -13,6 +13,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
+import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
@@ -22,7 +23,7 @@ export type ChatSurfaceState =
   | { kind: "session-empty"; sessionId: string | null }
   | { kind: "session-transcript"; sessionId: string };
 
-export function useChatSurfaceState(): {
+export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface | null): {
   mode: ChatSurfaceState;
   selectedWorkspaceId: string | null;
 } {
@@ -46,6 +47,13 @@ export function useChatSurfaceState(): {
     isRunning,
     streamConnectionState,
   } = useActiveSessionSurfaceSnapshot();
+  const scopedActiveSessionId = shellRenderSurface?.kind === "chat-shell"
+    ? null
+    : activeSessionId;
+  const scopedHasContent = shellRenderSurface?.kind === "chat-shell"
+    ? false
+    : hasContent;
+  const scopedStreamConnectionState = scopedActiveSessionId ? streamConnectionState : null;
 
   if (!selectedWorkspaceId && !pendingWorkspaceEntry && !activeLaunchIntent) {
     return { mode: { kind: "no-workspace" }, selectedWorkspaceId };
@@ -59,8 +67,8 @@ export function useChatSurfaceState(): {
   const launchIntentOverride = resolveLaunchIntentSurfaceOverride({
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
     launchIntentSessionId: activeLaunchIntent?.materializedSessionId ?? null,
-    activeSessionId,
-    hasVisibleSessionContent: hasContent,
+    activeSessionId: scopedActiveSessionId,
+    hasVisibleSessionContent: scopedHasContent,
   });
   if (launchIntentOverride?.kind === "session-transcript") {
     return {
@@ -87,7 +95,7 @@ export function useChatSurfaceState(): {
   const selectedLocalWorkspace = selectedWorkspaceId
     ? workspaceCollections?.localWorkspaces?.find((w) => w.id === selectedWorkspaceId)
     : null;
-  if (shouldShowStructuralRepoWorkspaceStatus(selectedLocalWorkspace ?? null, activeSessionId)) {
+  if (shouldShowStructuralRepoWorkspaceStatus(selectedLocalWorkspace ?? null, scopedActiveSessionId)) {
     return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
   }
 
@@ -95,7 +103,7 @@ export function useChatSurfaceState(): {
   const shouldShowCloudStatus = selectedCloudWorkspace
     && shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace);
   const shouldShowArrivalStatus = isArrivalWorkspace
-    && !hasContent
+    && !scopedHasContent
     // Keep the arrival/status hero only while the selected workspace is still
     // bootstrapping, hydrating, or actively running its first empty turn.
     // Once the session is already hydrated and idle, fall through to
@@ -105,13 +113,17 @@ export function useChatSurfaceState(): {
     return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
   }
 
-  const shouldPreserveTranscript = selectedCloudRuntime.state?.preserveVisibleContent && hasContent;
+  const shouldPreserveTranscript = selectedCloudRuntime.state?.preserveVisibleContent && scopedHasContent;
   const hasBootstrappedWorkspace =
     !!selectedWorkspaceId && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
 
-  if (!activeSessionId) {
+  if (shellRenderSurface?.kind === "chat-session-pending") {
+    return { mode: { kind: "session-loading", sessionId: shellRenderSurface.sessionId }, selectedWorkspaceId };
+  }
+
+  if (!scopedActiveSessionId) {
     if (shouldKeepBootstrappedWorkspaceLoading({
-      activeSessionId,
+      activeSessionId: scopedActiveSessionId,
       hasBootstrappedWorkspace,
       rememberedSessionId,
     })) {
@@ -131,18 +143,18 @@ export function useChatSurfaceState(): {
   // replay on the live stream will populate the transcript anyway, so we
   // should not stick on "Loading history" forever just because a flag
   // didn't flip.
-  const awaitingHydration = !transcriptHydrated && streamConnectionState !== "open";
+  const awaitingHydration = !transcriptHydrated && scopedStreamConnectionState !== "open";
   if (!hasSlot || awaitingHydration || (isEmpty && isRunning)) {
-    return { mode: { kind: "session-loading", sessionId: activeSessionId }, selectedWorkspaceId };
+    return { mode: { kind: "session-loading", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }
 
   if (shouldPreserveTranscript) {
-    return { mode: { kind: "session-transcript", sessionId: activeSessionId }, selectedWorkspaceId };
+    return { mode: { kind: "session-transcript", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }
 
   if (isEmpty) {
-    return { mode: { kind: "session-empty", sessionId: activeSessionId }, selectedWorkspaceId };
+    return { mode: { kind: "session-empty", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }
 
-  return { mode: { kind: "session-transcript", sessionId: activeSessionId }, selectedWorkspaceId };
+  return { mode: { kind: "session-transcript", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
 }

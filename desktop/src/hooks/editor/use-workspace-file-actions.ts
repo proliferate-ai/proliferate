@@ -16,9 +16,9 @@ import {
   startMeasurementOperation,
 } from "@/lib/infra/debug-measurement";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { deriveWorkspaceFileTabSeed } from "@/lib/domain/workspaces/tabs/shell-file-seed";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import {
   normalizeWorkspaceFileDiffDescriptor,
@@ -81,9 +81,7 @@ export function useWorkspaceFileActions() {
   const setDirectoryEntries = useWorkspaceFilesStore((state) => state.setDirectoryEntries);
   const focusFileTab = useWorkspaceFilesStore((state) => state.focusFileTab);
   const setDiffTab = useWorkspaceFilesStore((state) => state.setDiffTab);
-  const setActiveShellTabKey = useWorkspaceUiStore(
-    (state) => state.setActiveShellTabKeyForWorkspace,
-  );
+  const { activateFileTab } = useWorkspaceShellActivation();
   const setBufferLoading = useWorkspaceFilesStore((state) => state.setBufferLoading);
   const setBufferLoaded = useWorkspaceFilesStore((state) => state.setBufferLoaded);
   const setBufferLoadError = useWorkspaceFilesStore((state) => state.setBufferLoadError);
@@ -417,12 +415,20 @@ export function useWorkspaceFileActions() {
 
   const openFile = useCallback(async (filePath: string) => {
     focusFileTab(filePath);
-    const workspaceUiKey = useWorkspaceFilesStore.getState().workspaceUiKey;
-    if (workspaceUiKey) {
-      setActiveShellTabKey(workspaceUiKey, fileWorkspaceShellTabKey(filePath));
+    const {
+      workspaceUiKey,
+      materializedWorkspaceId,
+    } = useWorkspaceFilesStore.getState();
+    if (materializedWorkspaceId) {
+      activateFileTab({
+        workspaceId: materializedWorkspaceId,
+        shellWorkspaceId: workspaceUiKey,
+        path: filePath,
+        mode: "open-or-focus",
+      });
     }
     await readFileIntoStore(filePath);
-  }, [focusFileTab, readFileIntoStore, setActiveShellTabKey]);
+  }, [activateFileTab, focusFileTab, readFileIntoStore]);
 
   const openFileDiff = useCallback(async (filePath: string, options?: GitDiffOptions) => {
     const state = useWorkspaceFilesStore.getState();
@@ -445,7 +451,12 @@ export function useWorkspaceFileActions() {
     const descriptor = normalizeWorkspaceFileDiffDescriptor(options);
     const patchKey = workspaceFileDiffPatchKey(filePath, descriptor);
     setDiffTab(filePath, tabPatches[patchKey] ?? null, descriptor);
-    setActiveShellTabKey(workspaceUiKey, fileWorkspaceShellTabKey(filePath));
+    activateFileTab({
+      workspaceId: materializedWorkspaceId,
+      shellWorkspaceId: workspaceUiKey,
+      path: filePath,
+      mode: "open-or-focus",
+    });
 
     const loadDiff = async () => {
       try {
@@ -467,7 +478,7 @@ export function useWorkspaceFileActions() {
       loadDiff(),
       readFileIntoStore(filePath),
     ]);
-  }, [assertWorkspaceRuntimeReady, readFileIntoStore, setActiveShellTabKey, setDiffTab]);
+  }, [activateFileTab, assertWorkspaceRuntimeReady, readFileIntoStore, setDiffTab]);
 
   const saveFile = useCallback(async (filePath: string) => {
     const state = useWorkspaceFilesStore.getState();

@@ -40,15 +40,12 @@ import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-action
 import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
 import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
-import {
-  fileWorkspaceShellTabKey,
-} from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
@@ -56,6 +53,8 @@ export function HeaderTabs() {
   useDebugRenderCount("header-tabs");
   const viewModel = useWorkspaceHeaderTabsViewModel();
   const chatVisibilityActions = useChatTabVisibilityActions({
+    workspaceUiKey: viewModel.workspaceUiKey,
+    materializedWorkspaceId: viewModel.materializedWorkspaceId,
     visibleIds: viewModel.visibleChatSessionIds,
     liveIds: viewModel.liveChatSessionIds,
     childToParent: viewModel.childToParent,
@@ -71,10 +70,7 @@ export function HeaderTabs() {
   } = useManualChatGroupActions();
 
   const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
-  const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const setActiveShellTabKey = useWorkspaceUiStore(
-    (state) => state.setActiveShellTabKeyForWorkspace,
-  );
+  const { activateFileTab } = useWorkspaceShellActivation();
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
@@ -133,10 +129,13 @@ export function HeaderTabs() {
     closeOtherWorkspaceTabs,
     closeWorkspaceTabsToRight,
   } = useHeaderTabsCloseActions({
+    selectedWorkspaceId: viewModel.selectedWorkspaceId,
+    shellWorkspaceId: viewModel.workspaceUiKey,
     activeShellTab: viewModel.activeShellTab,
     orderedTabs: viewModel.orderedTabs,
     buffersByPath: viewModel.buffersByPath,
     closeTab,
+    showChatSessionTab: chatVisibilityActions.showChatSessionTab,
     hideChatSessionTabs: chatVisibilityActions.hideChatSessionTabs,
   });
 
@@ -220,12 +219,13 @@ export function HeaderTabs() {
                     if (shellDrag.shouldSuppressClick(rowId)) {
                       return;
                     }
-                    setActiveTab(path);
-                    if (viewModel.workspaceUiKey) {
-                      setActiveShellTabKey(
-                        viewModel.workspaceUiKey,
-                        fileWorkspaceShellTabKey(path),
-                      );
+                    if (viewModel.selectedWorkspaceId) {
+                      activateFileTab({
+                        workspaceId: viewModel.selectedWorkspaceId,
+                        shellWorkspaceId: viewModel.workspaceUiKey,
+                        path,
+                        mode: "focus-existing",
+                      });
                     }
                   }}
                   onClose={() => closeFilePaths([path])}

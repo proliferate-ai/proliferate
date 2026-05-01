@@ -32,6 +32,7 @@ import {
   isFileDrag,
   readFileDragInput,
 } from "@/lib/domain/chat/prompt-attachment-drag";
+import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 
 function ChatContent({
   dockSafeAreaPx,
@@ -91,22 +92,33 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
   }
 }
 
-export function ChatView() {
+export function ChatView({
+  shellRenderSurface = null,
+}: {
+  shellRenderSurface?: WorkspaceRenderSurface | null;
+}) {
   useDebugRenderCount("chat-surface");
-  const { mode } = useChatSurfaceState();
+  const { mode } = useChatSurfaceState(shellRenderSurface);
+  const suppressSessionChrome = shellRenderSurface?.kind === "chat-shell"
+    || shellRenderSurface?.kind === "chat-session-pending";
   const activeSessionId = useActiveSessionId();
-  const promptCapabilities = useActiveSessionPromptCapabilities();
+  const activePromptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
   const queuedPromptEditStatus = useQueuedPromptEditStatus();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const isSessionMode = shouldShowSessionInputChrome(mode);
-  const composerDockSlots = useComposerDockSlots();
+  const composerDockSlots = useComposerDockSlots({
+    suppressSessionSlots: suppressSessionChrome,
+  });
+  const promptCapabilities = suppressSessionChrome
+    ? null
+    : activePromptCapabilities;
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const canAcceptFileDrop = canAcceptChatFileDrop({
     isEditingQueuedPrompt: queuedPromptEditStatus.isEditing,
     isDisabled: availability.isDisabled,
     areRuntimeControlsDisabled: availability.areRuntimeControlsDisabled,
-    hasActiveSession: !!activeSessionId,
+    hasActiveSession: !suppressSessionChrome && !!activeSessionId,
     supportsAttachments,
   });
   const promptAttachments = useChatPromptAttachments({
@@ -208,7 +220,10 @@ export function ChatView() {
         data-telemetry-block
         data-focus-zone="chat"
       >
-        <ChatInput attachments={promptAttachments} />
+        <ChatInput
+          attachments={promptAttachments}
+          suppressActiveSessionState={suppressSessionChrome}
+        />
       </ChatComposerDock>
       </div>
     </DebugProfiler>

@@ -1,13 +1,11 @@
 import { useCallback } from "react";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import {
-  fileWorkspaceShellTabKey,
-  getWorkspaceShellTabKey,
   resolveFallbackWorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";
 
@@ -22,12 +20,11 @@ function discardDirtyFileTab(isDirty: boolean): boolean {
 export function useCloseActiveWorkspaceTab() {
   const buffersByPath = useWorkspaceFilesStore((state) => state.buffersByPath);
   const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
-  const setActiveFileTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const setActiveShellTabKey = useWorkspaceUiStore(
-    (state) => state.setActiveShellTabKeyForWorkspace,
-  );
+  const { activateChatShell, activateFileTab } = useWorkspaceShellActivation();
   const headerTabs = useWorkspaceHeaderTabsViewModel();
   const chatVisibilityActions = useChatTabVisibilityActions({
+    workspaceUiKey: headerTabs.workspaceUiKey,
+    materializedWorkspaceId: headerTabs.materializedWorkspaceId,
     visibleIds: headerTabs.visibleChatSessionIds,
     liveIds: headerTabs.liveChatSessionIds,
     childToParent: headerTabs.childToParent,
@@ -48,18 +45,23 @@ export function useCloseActiveWorkspaceTab() {
         activeTab: activeShellTab,
       });
       closeTab(path);
-      if (fallback && headerTabs.workspaceUiKey) {
+      if (fallback && headerTabs.selectedWorkspaceId) {
         if (fallback.kind === "chat") {
           chatVisibilityActions.showChatSessionTab(fallback.sessionId, { select: true });
         } else {
-          setActiveFileTab(fallback.path);
-          setActiveShellTabKey(
-            headerTabs.workspaceUiKey,
-            fileWorkspaceShellTabKey(fallback.path),
-          );
+          activateFileTab({
+            workspaceId: headerTabs.selectedWorkspaceId,
+            shellWorkspaceId: headerTabs.workspaceUiKey,
+            path: fallback.path,
+            mode: "focus-existing",
+          });
         }
-      } else if (headerTabs.workspaceUiKey) {
-        setActiveShellTabKey(headerTabs.workspaceUiKey, null);
+      } else if (headerTabs.selectedWorkspaceId) {
+        activateChatShell({
+          workspaceId: headerTabs.selectedWorkspaceId,
+          shellWorkspaceId: headerTabs.workspaceUiKey,
+          reason: "close_active_tab",
+        });
       }
       return "closed";
     }
@@ -69,25 +71,19 @@ export function useCloseActiveWorkspaceTab() {
         [activeShellTab.sessionId],
         { selectFallback: true },
       );
-      if (!hidden && headerTabs.selectedWorkspaceId) {
-        setActiveShellTabKey(
-          headerTabs.workspaceUiKey ?? headerTabs.selectedWorkspaceId,
-          getWorkspaceShellTabKey(activeShellTab),
-        );
-      }
       return hidden ? "closed" : "noop";
     }
 
     return "noop";
   }, [
     buffersByPath,
+    activateChatShell,
+    activateFileTab,
     chatVisibilityActions,
     closeTab,
     headerTabs.activeShellTab,
     headerTabs.orderedTabs,
     headerTabs.selectedWorkspaceId,
     headerTabs.workspaceUiKey,
-    setActiveFileTab,
-    setActiveShellTabKey,
   ]);
 }

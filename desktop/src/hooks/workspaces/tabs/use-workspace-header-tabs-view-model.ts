@@ -43,6 +43,7 @@ import {
   useWorkspaceActiveChatTabId,
   useWorkspaceShellTabsState,
 } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
+import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   useWorkspaceFilesStore,
   type WorkspaceFileBuffer,
@@ -449,6 +450,7 @@ export function useWorkspaceHeaderTabsViewModel() {
   const {
     activeShellTab,
     activeShellTabKey,
+    activation,
     shellRows,
     orderedTabs,
     orderedShellTabKeys,
@@ -462,6 +464,28 @@ export function useWorkspaceHeaderTabsViewModel() {
     displayManualGroups,
     subagentChildIdsByParentId: hierarchyChildren.childIdsByParentSessionId,
   });
+  const highlightedChatSessionId = useMemo(() => {
+    const highlighted = activation.highlightedTabKey ? parseWorkspaceShellTabKey(activation.highlightedTabKey) : null;
+    return highlighted?.kind === "chat" ? highlighted.sessionId : null;
+  }, [activation.highlightedTabKey]);
+  const displayShellRows = useMemo<HeaderWorkspaceShellStripRow[]>(
+    () => shellRows.map((shellRow) => {
+      if (shellRow.kind !== "chat" || shellRow.row.kind !== "tab") {
+        return shellRow;
+      }
+      return {
+        ...shellRow,
+        row: {
+          ...shellRow.row,
+          tab: {
+            ...shellRow.row.tab,
+            isActive: shellRow.row.tab.sessionId === highlightedChatSessionId,
+          },
+        },
+      };
+    }),
+    [highlightedChatSessionId, shellRows],
+  );
 
   useEffect(() => {
     if (!workspaceUiKey || collapsedParentIds.length === 0) {
@@ -535,12 +559,12 @@ export function useWorkspaceHeaderTabsViewModel() {
           title: getKnownSessionTitle(known),
           agentKind: getKnownSessionAgentKind(known),
           viewState: getKnownSessionViewState(known),
-          isActive: id === activeChatSessionIdForTabs,
+          isActive: id === highlightedChatSessionId,
           isVisible: visibleChatSessionIds.includes(id),
         };
       }),
     [
-      activeChatSessionIdForTabs,
+      highlightedChatSessionId,
       hierarchy.childToParent,
       knownSessions,
       visibleChatSessionIds,
@@ -551,6 +575,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeSessionId,
     activeShellTab,
     activeShellTabKey,
+    activation,
     selectedWorkspaceId,
     workspaceUiKey,
     materializedWorkspaceId,
@@ -559,7 +584,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     tabModes,
     chatTabs,
     stripRows,
-    shellRows,
+    shellRows: displayShellRows,
     orderedTabs,
     orderedShellTabKeys,
     stripChatSessionIds,

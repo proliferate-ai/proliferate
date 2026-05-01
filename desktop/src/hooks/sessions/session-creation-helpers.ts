@@ -39,17 +39,29 @@ export function replacePendingSessionSlot(
   pendingSessionId: string,
   nextSessionId: string,
   slot: SessionSlot,
+  options?: { remapActiveSession?: boolean },
 ): void {
   useHarnessStore.setState((state) => {
     const nextSlots = { ...state.sessionSlots };
     delete nextSlots[pendingSessionId];
     nextSlots[nextSessionId] = slot;
+    const shouldRemapActiveSession =
+      options?.remapActiveSession !== false
+      && state.activeSessionId === pendingSessionId;
+    const shouldClearDanglingActiveSession =
+      !shouldRemapActiveSession && state.activeSessionId === pendingSessionId;
+    const nextActiveSessionId = shouldRemapActiveSession
+      ? nextSessionId
+      : shouldClearDanglingActiveSession
+        ? null
+      : state.activeSessionId;
+    const activeSessionChanged = nextActiveSessionId !== state.activeSessionId;
 
     return {
-      activeSessionId:
-        state.activeSessionId === pendingSessionId
-          ? nextSessionId
-          : state.activeSessionId,
+      activeSessionId: nextActiveSessionId,
+      activeSessionVersion: activeSessionChanged
+        ? state.activeSessionVersion + 1
+        : state.activeSessionVersion,
       sessionSlots: nextSlots,
     };
   });
@@ -63,8 +75,13 @@ export function removeSessionSlot(sessionId: string): void {
 
     const nextSlots = { ...state.sessionSlots };
     delete nextSlots[sessionId];
+    const shouldClearActiveSession = state.activeSessionId === sessionId;
 
     return {
+      activeSessionId: shouldClearActiveSession ? null : state.activeSessionId,
+      activeSessionVersion: shouldClearActiveSession
+        ? state.activeSessionVersion + 1
+        : state.activeSessionVersion,
       sessionSlots: nextSlots,
     };
   });

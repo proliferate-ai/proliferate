@@ -11,6 +11,7 @@ import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-wor
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
+import { useWorkspaceActivationWorkflow } from "./use-workspace-activation-workflow";
 import { useAddRepo } from "./use-add-repo";
 import {
   failLatencyFlow,
@@ -31,6 +32,7 @@ export function useWorkspaceSidebarActions() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const mobility = useWorkspaceMobilityState();
   const { selectWorkspace } = useWorkspaceSelection();
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const {
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
@@ -136,9 +138,10 @@ export function useWorkspaceSidebarActions() {
         }
 
         navigateToWorkspaceShell();
-        void selectWorkspace(action.workspaceId, {
-          force: true,
-          initialActiveSessionId: action.sessionId,
+        void openWorkspaceSession({
+          workspaceId: action.workspaceId,
+          sessionId: action.sessionId,
+          forceWorkspaceSelection: true,
         }).catch((error) => {
           const message = error instanceof Error ? error.message : String(error);
           showToast(`Failed to open source session: ${message}`);
@@ -171,6 +174,7 @@ export function useWorkspaceSidebarActions() {
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
     navigateToWorkspaceShell,
+    openWorkspaceSession,
     selectWorkspace,
     showToast,
   ]);

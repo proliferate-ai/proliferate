@@ -36,7 +36,11 @@ import {
   type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
-import type { WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
+import type {
+  WorkspaceShellIntentKey,
+  WorkspaceShellTabKey,
+} from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   sanitizeWorkspaceShellTabKeys,
 } from "@/lib/domain/workspaces/tabs/shell-file-seed";
@@ -53,8 +57,10 @@ export interface WorkspaceUiState {
   sidebarWidth: number;
   rightPanelDurableByWorkspace: Record<string, RightPanelDurableState>;
   rightPanelMaterializedByWorkspace: Record<string, RightPanelMaterializedState>;
-  activeShellTabKeyByWorkspace: Record<string, WorkspaceShellTabKey | null>;
+  activeShellTabKeyByWorkspace: Record<string, WorkspaceShellIntentKey | null>;
   shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
+  shellActivationEpochByWorkspace: Record<string, number>;
+  pendingChatActivationByWorkspace: Record<string, PendingChatActivation | null>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
@@ -97,12 +103,38 @@ export interface WorkspaceUiState {
   ) => void;
   setActiveShellTabKeyForWorkspace: (
     workspaceId: string,
-    key: WorkspaceShellTabKey | null,
+    key: WorkspaceShellIntentKey | null,
   ) => void;
   setShellTabOrderForWorkspace: (
     workspaceId: string,
     order: WorkspaceShellTabKey[],
   ) => void;
+  writeShellIntent: (input: {
+    workspaceId: string;
+    intent: WorkspaceShellIntentKey | null;
+  }) => ShellIntentResult;
+  replaceShellIntent: (input: {
+    workspaceId: string;
+    expectedIntent: WorkspaceShellIntentKey | null;
+    nextIntent: WorkspaceShellIntentKey | null;
+    expectedEpoch?: number;
+  }) => ShellIntentResult & { replaced: boolean };
+  rollbackShellIntent: (input: {
+    workspaceId: string;
+    expectedIntent: WorkspaceShellIntentKey | null;
+    expectedEpoch: number;
+    expectedPendingAttemptId?: string;
+    rollbackIntent: WorkspaceShellIntentKey | null;
+  }) => ShellIntentResult & { rolledBack: boolean };
+  setPendingChatActivation: (input: {
+    workspaceId: string;
+    pending: PendingChatActivation;
+  }) => { set: true };
+  clearPendingChatActivation: (input: {
+    workspaceId: string;
+    attemptId: string;
+    bumpIfCurrent: boolean;
+  }) => { cleared: boolean; bumped: boolean; epoch: number };
   resetWorkspaceShellTabs: (workspaceId: string) => void;
   toggleSidebarWorkspaceType: (type: SidebarWorkspaceVariant) => void;
   markWorkspaceViewed: (workspaceId: string) => void;
@@ -162,7 +194,7 @@ export interface PersistedWorkspaceUiState {
   sidebarWidth: number;
   rightPanelDurableByWorkspace: Record<string, RightPanelDurableState>;
   rightPanelMaterializedByWorkspace: Record<string, RightPanelMaterializedState>;
-  activeShellTabKeyByWorkspace: Record<string, WorkspaceShellTabKey | null>;
+  activeShellTabKeyByWorkspace: Record<string, WorkspaceShellIntentKey | null>;
   shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
@@ -175,6 +207,13 @@ export interface PersistedWorkspaceUiState {
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
   manualChatGroupsByWorkspace: Record<string, ManualChatGroup[]>;
+}
+
+export interface ShellIntentResult {
+  changed: boolean;
+  previousIntent: WorkspaceShellIntentKey | null;
+  currentIntent: WorkspaceShellIntentKey | null;
+  epoch: number;
 }
 
 const WORKSPACE_UI_KEY = "workspace_ui";
@@ -549,14 +588,18 @@ function activeToolFromEntry(entryKey: unknown): RightPanelWorkspaceState["activ
 
 function sanitizeActiveShellTabKeysByWorkspace(
   value: unknown,
-): Record<string, WorkspaceShellTabKey | null> {
+): Record<string, WorkspaceShellIntentKey | null> {
   if (typeof value !== "object" || value === null) {
     return {};
   }
-  const next: Record<string, WorkspaceShellTabKey | null> = {};
+  const next: Record<string, WorkspaceShellIntentKey | null> = {};
   for (const [workspaceId, key] of Object.entries(value)) {
     if (key === null) {
       next[workspaceId] = null;
+      continue;
+    }
+    if (key === "chat-shell") {
+      next[workspaceId] = key;
       continue;
     }
     if (typeof key === "string" && sanitizeWorkspaceShellTabKeys([key]).length === 1) {
@@ -776,6 +819,8 @@ function splitRightPanelStateUpdate(
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   ...WORKSPACE_UI_DEFAULTS,
   _hydrated: false,
+  shellActivationEpochByWorkspace: {},
+  pendingChatActivationByWorkspace: {},
 
   archiveWorkspace: (id) => {
     const current = get().archivedWorkspaceIds;
@@ -902,20 +947,122 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   },
 
   setActiveShellTabKeyForWorkspace: (workspaceId, key) => {
+    get().writeShellIntent({ workspaceId, intent: key });
+  },
+
+  writeShellIntent: ({ workspaceId, intent }) => {
     const hasCurrent = Object.prototype.hasOwnProperty.call(
       get().activeShellTabKeyByWorkspace,
       workspaceId,
     );
     const current = hasCurrent ? get().activeShellTabKeyByWorkspace[workspaceId] : null;
-    if (hasCurrent && current === key) {
-      return;
+    const previousEpoch = get().shellActivationEpochByWorkspace[workspaceId] ?? 0;
+    if (hasCurrent && current === intent) {
+      return {
+        changed: false,
+        previousIntent: current,
+        currentIntent: current,
+        epoch: previousEpoch,
+      };
     }
+    const nextEpoch = previousEpoch + 1;
     set({
       activeShellTabKeyByWorkspace: {
         ...get().activeShellTabKeyByWorkspace,
-        [workspaceId]: key,
+        [workspaceId]: intent,
+      },
+      shellActivationEpochByWorkspace: {
+        ...get().shellActivationEpochByWorkspace,
+        [workspaceId]: nextEpoch,
       },
     });
+    return {
+      changed: true,
+      previousIntent: current,
+      currentIntent: intent,
+      epoch: nextEpoch,
+    };
+  },
+
+  replaceShellIntent: ({ workspaceId, expectedIntent, nextIntent, expectedEpoch }) => {
+    const previousIntent = get().activeShellTabKeyByWorkspace[workspaceId] ?? null;
+    const previousEpoch = get().shellActivationEpochByWorkspace[workspaceId] ?? 0;
+    if (
+      previousIntent !== expectedIntent
+      || (expectedEpoch !== undefined && previousEpoch !== expectedEpoch)
+    ) {
+      return {
+        changed: false,
+        replaced: false,
+        previousIntent,
+        currentIntent: previousIntent,
+        epoch: previousEpoch,
+      };
+    }
+    const result = get().writeShellIntent({ workspaceId, intent: nextIntent });
+    return { ...result, replaced: result.changed };
+  },
+
+  rollbackShellIntent: ({
+    workspaceId,
+    expectedIntent,
+    expectedEpoch,
+    expectedPendingAttemptId,
+    rollbackIntent,
+  }) => {
+    const previousIntent = get().activeShellTabKeyByWorkspace[workspaceId] ?? null;
+    const previousEpoch = get().shellActivationEpochByWorkspace[workspaceId] ?? 0;
+    const pending = get().pendingChatActivationByWorkspace[workspaceId] ?? null;
+    if (
+      previousIntent !== expectedIntent
+      || previousEpoch !== expectedEpoch
+      || (
+        expectedPendingAttemptId !== undefined
+        && pending?.attemptId !== expectedPendingAttemptId
+      )
+    ) {
+      return {
+        changed: false,
+        rolledBack: false,
+        previousIntent,
+        currentIntent: previousIntent,
+        epoch: previousEpoch,
+      };
+    }
+    const result = get().writeShellIntent({ workspaceId, intent: rollbackIntent });
+    return { ...result, rolledBack: result.changed };
+  },
+
+  setPendingChatActivation: ({ workspaceId, pending }) => {
+    set({
+      pendingChatActivationByWorkspace: {
+        ...get().pendingChatActivationByWorkspace,
+        [workspaceId]: pending,
+      },
+    });
+    return { set: true };
+  },
+
+  clearPendingChatActivation: ({ workspaceId, attemptId, bumpIfCurrent }) => {
+    const pending = get().pendingChatActivationByWorkspace[workspaceId] ?? null;
+    const epoch = get().shellActivationEpochByWorkspace[workspaceId] ?? 0;
+    if (!pending || pending.attemptId !== attemptId) {
+      return { cleared: false, bumped: false, epoch };
+    }
+    const nextEpoch = bumpIfCurrent ? epoch + 1 : epoch;
+    set({
+      pendingChatActivationByWorkspace: {
+        ...get().pendingChatActivationByWorkspace,
+        [workspaceId]: null,
+      },
+      shellActivationEpochByWorkspace: bumpIfCurrent
+        ? {
+          ...get().shellActivationEpochByWorkspace,
+          [workspaceId]: nextEpoch,
+        }
+        : get().shellActivationEpochByWorkspace,
+    });
+    return { cleared: true, bumped: bumpIfCurrent, epoch: nextEpoch };
   },
 
   setShellTabOrderForWorkspace: (workspaceId, order) => {
@@ -938,11 +1085,17 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   resetWorkspaceShellTabs: (workspaceId) => {
     const active = { ...get().activeShellTabKeyByWorkspace };
     const order = { ...get().shellTabOrderByWorkspace };
+    const epoch = { ...get().shellActivationEpochByWorkspace };
+    const pending = { ...get().pendingChatActivationByWorkspace };
     delete active[workspaceId];
     delete order[workspaceId];
+    delete epoch[workspaceId];
+    delete pending[workspaceId];
     set({
       activeShellTabKeyByWorkspace: active,
       shellTabOrderByWorkspace: order,
+      shellActivationEpochByWorkspace: epoch,
+      pendingChatActivationByWorkspace: pending,
     });
   },
 

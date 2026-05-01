@@ -2,21 +2,28 @@ import { useEffect, useMemo } from "react";
 import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
 import type { DisplayManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
+  buildHeaderShellRows,
   type HeaderShellStripRow,
   type ShellChatTab,
 } from "@/lib/domain/workspaces/tabs/shell-rows";
-import { resolveWorkspaceShellTabsState } from "@/lib/domain/workspaces/tabs/shell-tab-state";
 import {
+  buildWorkspaceShellTabs,
+  getWorkspaceShellTabKey,
   parseWorkspaceShellTabKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import {
+  resolveWorkspaceShellActivation,
+  type WorkspaceShellActivation,
+} from "@/lib/domain/workspaces/tabs/shell-activation";
 import {
   resolveWithWorkspaceFallback,
   sameStringArray,
 } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
 
@@ -41,12 +48,16 @@ export function useWorkspaceActiveChatTabId({
     ? parseWorkspaceShellTabKey(storedActiveShellTabKey)
     : null;
 
-  if (storedActiveShellTab?.kind === "file") {
+  if (storedActiveShellTab?.kind === "file" || storedActiveShellTabKey === "chat-shell") {
     return null;
   }
+  if (!storedActiveShellTabKey) {
+    return fallbackSessionId;
+  }
   return storedActiveShellTab?.kind === "chat"
+    && storedActiveShellTab.sessionId === fallbackSessionId
     ? storedActiveShellTab.sessionId
-    : fallbackSessionId;
+    : null;
 }
 
 export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
@@ -70,6 +81,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
 }): {
   activeShellTab: WorkspaceShellTab | null;
   activeShellTabKey: string | null;
+  activation: WorkspaceShellActivation;
   shellRows: HeaderShellStripRow<TTab>[];
   orderedTabs: WorkspaceShellTab[];
   orderedShellTabKeys: string[];
@@ -86,12 +98,31 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   const setShellTabOrder = useWorkspaceUiStore(
     (state) => state.setShellTabOrderForWorkspace,
   );
+  const activeFilePath = useWorkspaceFilesStore((state) => state.activeFilePath);
   const fileRestoreMarker = useWorkspaceFilesStore((state) => state.fileRestoreMarker);
+  const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
+  const sessionActivationEpoch = useHarnessStore((state) =>
+    materializedWorkspaceId
+      ? state.sessionActivationIntentEpochByWorkspace[materializedWorkspaceId] ?? 0
+      : 0
+  );
 
   const activeShellTabFallback = resolveWithWorkspaceFallback(
     activeShellTabKeyByWorkspace,
     workspaceUiKey,
     materializedWorkspaceId,
+  );
+  const shellStateKey =
+    activeShellTabFallback.sourceKey ?? workspaceUiKey ?? materializedWorkspaceId;
+  const pendingChatActivation = useWorkspaceUiStore((state) =>
+    shellStateKey
+      ? state.pendingChatActivationByWorkspace[shellStateKey] ?? null
+      : null
+  );
+  const shellActivationEpoch = useWorkspaceUiStore((state) =>
+    shellStateKey
+      ? state.shellActivationEpochByWorkspace[shellStateKey] ?? 0
+      : 0
   );
   const shellOrderFallback = resolveWithWorkspaceFallback(
     shellTabOrderByWorkspace,
@@ -120,37 +151,77 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
       && fileRestoreMarker.materializedWorkspaceId === materializedWorkspaceId,
   );
 
-  const resolved = useMemo(
-    () => resolveWorkspaceShellTabsState({
+  const orderedTabs = useMemo(
+    () => buildWorkspaceShellTabs({
       selectedWorkspaceId: materializedWorkspaceId,
-      activeSessionId,
-      storedActiveShellTabKey,
-      persistedShellOrderKeys,
-      shellChatSessionIds,
+      sessionSlots: Object.fromEntries(
+        shellChatSessionIds.map((sessionId) => [
+          sessionId,
+          { sessionId, workspaceId: materializedWorkspaceId },
+        ]),
+      ),
+      visibleChatSessionIds: [...shellChatSessionIds],
       openTabs,
-      stripRows,
-      displayManualGroups,
-      subagentChildIdsByParentId,
+      orderKeys: persistedShellOrderKeys,
     }),
     [
-      activeSessionId,
-      displayManualGroups,
+      materializedWorkspaceId,
       openTabs,
       persistedShellOrderKeys,
-      materializedWorkspaceId,
       shellChatSessionIds,
-      storedActiveShellTabKey,
-      stripRows,
-      subagentChildIdsByParentId,
     ],
   );
-  const {
-    activeShellTab,
-    activeShellTabKey,
-    shellRows,
-    orderedTabs,
+  const orderedShellTabKeys = useMemo(
+    () => orderedTabs.map(getWorkspaceShellTabKey),
+    [orderedTabs],
+  );
+  const activation = useMemo<WorkspaceShellActivation>(() => resolveWorkspaceShellActivation({
+    workspaceId: materializedWorkspaceId ?? "",
+    storedIntent: storedActiveShellTabKey,
+    orderedTabs: orderedShellTabKeys,
+    activeSessionId,
+    activeFilePath,
+    liveChatSessionIds: new Set(shellChatSessionIds),
+    openFilePaths: new Set(openTabs),
+    pendingChatActivation,
+    currentShellActivationEpoch: shellActivationEpoch,
+    currentSessionActivationEpoch: sessionActivationEpoch,
+    currentWorkspaceSelectionNonce: workspaceSelectionNonce,
+  }), [
+    activeFilePath,
+    activeSessionId,
+    materializedWorkspaceId,
+    openTabs,
     orderedShellTabKeys,
-  } = resolved;
+    pendingChatActivation,
+    sessionActivationEpoch,
+    shellActivationEpoch,
+    shellChatSessionIds,
+    storedActiveShellTabKey,
+    workspaceSelectionNonce,
+  ]);
+  const activeShellTab = useMemo<WorkspaceShellTab | null>(() => {
+    switch (activation.renderSurface.kind) {
+      case "chat-session":
+      case "chat-session-pending":
+        return { kind: "chat", sessionId: activation.renderSurface.sessionId };
+      case "file":
+        return { kind: "file", path: activation.renderSurface.path };
+      case "chat-shell":
+        return null;
+    }
+  }, [activation.renderSurface]);
+  const activeShellTabKey = activeShellTab ? getWorkspaceShellTabKey(activeShellTab) : null;
+  const shellRows = useMemo<HeaderShellStripRow<TTab>[]>(
+    () => buildHeaderShellRows({
+      stripRows,
+      openTabs,
+      orderedTabs,
+      manualGroups: displayManualGroups,
+      subagentChildIdsByParentId,
+    }),
+    [displayManualGroups, openTabs, orderedTabs, stripRows, subagentChildIdsByParentId],
+  );
 
   useEffect(() => {
     if (!workspaceUiKey) {
@@ -171,13 +242,9 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     if (!sameStringArray(persistedShellOrderKeys, orderedShellTabKeys)) {
       setShellTabOrder(workspaceUiKey, orderedShellTabKeys);
     }
-    if (storedActiveShellTabKey !== activeShellTabKey) {
-      setActiveShellTabKey(workspaceUiKey, activeShellTabKey);
-    }
   }, [
     activeShellTabFallback.shouldWriteBack,
     activeShellTabFallback.value,
-    activeShellTabKey,
     fileRestoreReady,
     orderedShellTabKeys,
     persistedShellOrderKeys,
@@ -185,13 +252,13 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     setShellTabOrder,
     shellOrderFallback.shouldWriteBack,
     shellOrderFallback.value,
-    storedActiveShellTabKey,
     workspaceUiKey,
   ]);
 
   return {
     activeShellTab,
     activeShellTabKey,
+    activation,
     shellRows,
     orderedTabs,
     orderedShellTabKeys,

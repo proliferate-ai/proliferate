@@ -21,8 +21,10 @@ import {
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
-import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import {
+  resolveStatusFromExecutionSummary,
+  sessionSlotBelongsToWorkspace,
+} from "@/lib/domain/sessions/activity";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import {
   getSessionClientAndWorkspace,
@@ -30,14 +32,15 @@ import {
 } from "@/lib/integrations/anyharness/session-runtime";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
+import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 
 interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;
 }
 
-interface PromptLatencyFlowOptions extends SessionLatencyFlowOptions {
-  promptId?: string | null;
-}
+interface PromptLatencyFlowOptions extends SessionLatencyFlowOptions { promptId?: string | null; }
 
 interface LaunchPromptInput extends SessionLatencyFlowOptions {
   workspaceId: string;
@@ -72,10 +75,7 @@ interface SessionControlDeps {
     workspaceId: string;
     lastPromptAt?: string | null;
   }>>;
-  selectSession: (
-    sessionId: string,
-    options?: SessionLatencyFlowOptions,
-  ) => Promise<void>;
+  selectSession: (sessionId: string, options?: SessionLatencyFlowOptions & { guard?: SessionActivationGuard }) => Promise<SessionActivationOutcome | void>;
   activateSession: (sessionId: string | null) => void;
 }
 
@@ -456,6 +456,7 @@ export function useSessionControlActions({
         && sessionSlotBelongsToWorkspace(slot, workspaceId)
       ) {
         activateSession(slot.sessionId);
+        writeChatShellIntentForSession({ workspaceId, sessionId: slot.sessionId });
         await promptSession({
           sessionId: slot.sessionId,
           text,
@@ -472,7 +473,11 @@ export function useSessionControlActions({
       const sessions = await ensureWorkspaceSessions(workspaceId);
       const backendSession = sessions.find((session) => session.agentKind === agentKind);
       if (backendSession) {
-        await selectSession(backendSession.id);
+        await selectSessionWithShellIntentRollback({
+          workspaceId,
+          sessionId: backendSession.id,
+          selectSession,
+        });
         await promptSession({
           sessionId: backendSession.id,
           text,
@@ -525,6 +530,7 @@ export function useSessionControlActions({
         && sessionSlotBelongsToWorkspace(slot, workspaceId)
       ) {
         activateSession(slot.sessionId);
+        writeChatShellIntentForSession({ workspaceId, sessionId: slot.sessionId });
         await promptSession({
           sessionId: slot.sessionId,
           text,
@@ -543,7 +549,12 @@ export function useSessionControlActions({
       session.agentKind === agentKind && session.modelId === modelId
     );
     if (backendSession) {
-      await selectSession(backendSession.id, { latencyFlowId });
+      await selectSessionWithShellIntentRollback({
+        workspaceId,
+        sessionId: backendSession.id,
+        options: { latencyFlowId },
+        selectSession,
+      });
       await promptSession({
         sessionId: backendSession.id,
         text,

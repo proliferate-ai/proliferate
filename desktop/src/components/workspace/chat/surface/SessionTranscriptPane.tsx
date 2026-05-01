@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/use-active-chat-session-selectors";
@@ -6,8 +6,16 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/use-plan-handoff-dialog-state";
-import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
+import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
+import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useCoworkManagedWorkspaces } from "@/hooks/cowork/use-cowork-managed-workspaces";
+import {
+  resolveTranscriptOpenSessionWorkspaceId,
+  type TranscriptOpenSessionRole,
+} from "@/lib/domain/chat/transcript-open-target";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { logLatency } from "@/lib/infra/debug-latency";
 
 interface SessionTranscriptPaneProps {
@@ -22,8 +30,10 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   useDebugRenderCount("session-transcript-pane");
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
-  const { selectSession } = useSessionSelectionActions();
+  const { activateChatTab } = useWorkspaceShellActivation();
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const { rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
+  const { data: workspaceCollections } = useWorkspaces();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const {
     activeSessionId,
@@ -32,6 +42,36 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     sessionViewState,
     oldestLoadedEventSeq,
   } = useActiveTranscriptPaneState();
+  const selectedWorkspace = useMemo(
+    () => selectedWorkspaceId
+      ? workspaceCollections?.allWorkspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null
+      : null,
+    [selectedWorkspaceId, workspaceCollections?.allWorkspaces],
+  );
+  const selectedCloudWorkspace = useMemo(() => {
+    const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
+    return cloudWorkspaceId
+      ? workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId) ?? null
+      : null;
+  }, [selectedWorkspaceId, workspaceCollections?.cloudWorkspaces]);
+  const hasCoworkCodingCompletions = useMemo(
+    () => transcript
+      ? Object.values(transcript.linkCompletionsByCompletionId).some(
+      (completion) => completion.relation === "cowork_coding_session",
+    )
+      : false,
+    [transcript],
+  );
+  const { workspaces: coworkManagedWorkspaces } = useCoworkManagedWorkspaces(
+    activeSessionId,
+    hasCoworkCodingCompletions,
+  );
+  const linkedSessionWorkspaces = useMemo(() => {
+    const entries = coworkManagedWorkspaces.flatMap((workspace) =>
+      workspace.sessions.map((session) => [session.codingSessionId, workspace.workspaceId] as const)
+    );
+    return Object.fromEntries(entries);
+  }, [coworkManagedWorkspaces]);
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
   const loadOlderHistory = useCallback(() => {
@@ -77,6 +117,61 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     selectedWorkspaceId,
   ]);
 
+  const resolveOpenSessionWorkspaceId = useCallback((
+    sessionId: string,
+    role: TranscriptOpenSessionRole = "generic",
+  ) => {
+    const state = useHarnessStore.getState();
+    return resolveTranscriptOpenSessionWorkspaceId({
+      sessionId,
+      role,
+      sessionSlots: state.sessionSlots,
+      fallbackWorkspaceId: activeSessionId
+        ? state.sessionSlots[activeSessionId]?.workspaceId ?? selectedWorkspaceId
+        : selectedWorkspaceId,
+      linkedSessionWorkspaces,
+      contextWorkspaces: [selectedWorkspace, selectedCloudWorkspace],
+    });
+  }, [
+    activeSessionId,
+    linkedSessionWorkspaces,
+    selectedCloudWorkspace,
+    selectedWorkspace,
+    selectedWorkspaceId,
+  ]);
+
+  const canOpenTranscriptSession = useCallback((
+    sessionId: string,
+    role: TranscriptOpenSessionRole = "generic",
+  ) => resolveOpenSessionWorkspaceId(sessionId, role) !== null, [resolveOpenSessionWorkspaceId]);
+
+  const openTranscriptSession = useCallback((
+    sessionId: string,
+    role: TranscriptOpenSessionRole = "generic",
+  ) => {
+    const workspaceId = resolveOpenSessionWorkspaceId(sessionId, role);
+    if (!workspaceId) return;
+
+    const currentWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+    if (workspaceId === currentWorkspaceId) {
+      void activateChatTab({
+        workspaceId,
+        sessionId,
+        source: "session-transcript-pane",
+      });
+      return;
+    }
+
+    void openWorkspaceSession({
+      workspaceId,
+      sessionId,
+    });
+  }, [
+    activateChatTab,
+    openWorkspaceSession,
+    resolveOpenSessionWorkspaceId,
+  ]);
+
   if (!activeSessionId || !transcript) {
     return null;
   }
@@ -95,7 +190,8 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
         bottomInsetPx={bottomInsetPx}
         onLoadOlderHistory={loadOlderHistory}
         onHandOffPlanToNewSession={handoff.open}
-        onOpenSession={(sessionId) => void selectSession(sessionId)}
+        onOpenSession={openTranscriptSession}
+        canOpenSession={canOpenTranscriptSession}
       />
       {handoff.plan && (
         <ConnectedPlanHandoffDialog

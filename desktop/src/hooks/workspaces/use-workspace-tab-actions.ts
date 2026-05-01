@@ -4,16 +4,14 @@ import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import {
-  fileWorkspaceShellTabKey,
   resolveRelativeWorkspaceShellTab,
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -21,15 +19,13 @@ import {
 } from "@/lib/infra/latency-flow";
 
 export function useWorkspaceTabActions() {
-  const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const setActiveShellTabKey = useWorkspaceUiStore(
-    (state) => state.setActiveShellTabKeyForWorkspace,
-  );
-
   const headerTabs = useWorkspaceHeaderTabsViewModel();
+  const { activateFileTab } = useWorkspaceShellActivation();
   const showToast = useToastStore((state) => state.show);
   const closeActiveWorkspaceTab = useCloseActiveWorkspaceTab();
   const chatVisibilityActions = useChatTabVisibilityActions({
+    workspaceUiKey: headerTabs.workspaceUiKey,
+    materializedWorkspaceId: headerTabs.materializedWorkspaceId,
     visibleIds: headerTabs.visibleChatSessionIds,
     liveIds: headerTabs.liveChatSessionIds,
     childToParent: headerTabs.childToParent,
@@ -49,19 +45,20 @@ export function useWorkspaceTabActions() {
       return chatVisibilityActions.showChatSessionTab(tab.sessionId, { select: true });
     }
 
-    setActiveTab(tab.path);
-    if (headerTabs.workspaceUiKey) {
-      setActiveShellTabKey(
-        headerTabs.workspaceUiKey,
-        fileWorkspaceShellTabKey(tab.path),
-      );
+    if (headerTabs.selectedWorkspaceId) {
+      activateFileTab({
+        workspaceId: headerTabs.selectedWorkspaceId,
+        shellWorkspaceId: headerTabs.workspaceUiKey,
+        path: tab.path,
+        mode: "focus-existing",
+      });
     }
     return true;
   }, [
+    activateFileTab,
     chatVisibilityActions,
     headerTabs.workspaceUiKey,
-    setActiveShellTabKey,
-    setActiveTab,
+    headerTabs.selectedWorkspaceId,
   ]);
 
   const activateRelativeTab = useCallback((delta: number) => {

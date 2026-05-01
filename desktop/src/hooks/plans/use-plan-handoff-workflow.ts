@@ -11,8 +11,10 @@ import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-sessio
 import { useChatLaunchCatalog } from "@/hooks/chat/use-chat-launch-catalog";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import type { SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import {
   planReferenceContentPartFromDescriptor,
@@ -57,8 +59,8 @@ export function usePlanHandoffWorkflow({
   const {
     createEmptySessionWithResolvedConfig,
     dismissSession,
-    selectSession,
   } = useSessionActions();
+  const { activateChatTab } = useWorkspaceShellActivation();
   const { promptSession } = useSessionPromptWorkflow();
 
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
@@ -167,7 +169,11 @@ export function usePlanHandoffWorkflow({
           ),
         promptSession,
         dismissSession,
-        selectSession,
+        selectSession: (sessionId) => activateChatTab({
+          workspaceId: selectedWorkspaceId,
+          sessionId,
+          source: "plan-handoff-restore",
+        }),
         hasSession: (sessionId) =>
           !!useHarnessStore.getState().sessionSlots[sessionId],
         onCompleted,
@@ -184,7 +190,6 @@ export function usePlanHandoffWorkflow({
     plan,
     promptText,
     promptSession,
-    selectSession,
     selectedModeId,
     selectedWorkspaceId,
     showToast,
@@ -223,7 +228,7 @@ interface ExecutePlanHandoffInput {
     workspaceId: string;
   }) => Promise<void>;
   dismissSession: (sessionId: string) => Promise<void>;
-  selectSession: (sessionId: string) => Promise<void>;
+  selectSession: (sessionId: string) => Promise<SessionActivationOutcome | void>;
   hasSession: (sessionId: string) => boolean;
   onCompleted: () => void;
   showToast: (message: string) => void;

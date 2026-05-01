@@ -75,6 +75,7 @@ interface HarnessState {
   patchSessionSlot: (sessionId: string, patch: Partial<SessionSlot>) => void;
   removeSessionSlot: (sessionId: string) => void;
   setActiveSessionId: (sessionId: string | null) => void;
+  bumpSessionActivationIntentEpoch: (workspaceId: string) => number;
   setHotPaintGate: (gate: HotPaintGate | null) => void;
   clearHotPaintGate: (nonce: number) => void;
 
@@ -84,11 +85,13 @@ interface HarnessState {
   workspaceArrivalEvent: WorkspaceArrivalEvent | null;
 
   activeSessionId: string | null;
+  activeSessionVersion: number;
+  sessionActivationIntentEpochByWorkspace: Record<string, number>;
   sessionSlots: Record<string, SessionSlot>;
   hotPaintGate: HotPaintGate | null;
 }
 
-export const useHarnessStore = create<HarnessState>((set) => ({
+export const useHarnessStore = create<HarnessState>((set, get) => ({
   runtimeUrl: DEFAULT_RUNTIME_URL,
   connectionState: "connecting",
 
@@ -100,6 +103,7 @@ export const useHarnessStore = create<HarnessState>((set) => ({
     workspaceSelectionNonce: s.workspaceSelectionNonce + 1,
     workspaceArrivalEvent: null,
     activeSessionId: null,
+    activeSessionVersion: bumpVersionIfChanged(s.activeSessionVersion, s.activeSessionId, null),
   })),
 
   setPendingWorkspaceEntry: (pendingWorkspaceEntry) => set({ pendingWorkspaceEntry }),
@@ -119,6 +123,11 @@ export const useHarnessStore = create<HarnessState>((set) => ({
       ? s.workspaceArrivalEvent
       : null,
     activeSessionId: opts?.initialActiveSessionId ?? null,
+    activeSessionVersion: bumpVersionIfChanged(
+      s.activeSessionVersion,
+      s.activeSessionId,
+      opts?.initialActiveSessionId ?? null,
+    ),
   })),
 
   deselectWorkspacePreservingSlots: () => set(s => ({
@@ -127,18 +136,27 @@ export const useHarnessStore = create<HarnessState>((set) => ({
     workspaceSelectionNonce: s.workspaceSelectionNonce + 1,
     workspaceArrivalEvent: null,
     activeSessionId: null,
+    activeSessionVersion: bumpVersionIfChanged(s.activeSessionVersion, s.activeSessionId, null),
     hotPaintGate: null,
   })),
 
-  removeWorkspaceSlots: (workspaceId) => set(s => ({
-    sessionSlots: Object.fromEntries(
-      Object.entries(s.sessionSlots).filter(([, slot]) => slot.workspaceId !== workspaceId),
-    ),
-    activeSessionId: s.activeSessionId && s.sessionSlots[s.activeSessionId]?.workspaceId !== workspaceId
+  removeWorkspaceSlots: (workspaceId) => set((s) => {
+    const nextActiveSessionId = s.activeSessionId && s.sessionSlots[s.activeSessionId]?.workspaceId !== workspaceId
       ? s.activeSessionId
-      : null,
-    hotPaintGate: s.hotPaintGate?.workspaceId === workspaceId ? null : s.hotPaintGate,
-  })),
+      : null;
+    return {
+      sessionSlots: Object.fromEntries(
+        Object.entries(s.sessionSlots).filter(([, slot]) => slot.workspaceId !== workspaceId),
+      ),
+      activeSessionId: nextActiveSessionId,
+      activeSessionVersion: bumpVersionIfChanged(
+        s.activeSessionVersion,
+        s.activeSessionId,
+        nextActiveSessionId,
+      ),
+      hotPaintGate: s.hotPaintGate?.workspaceId === workspaceId ? null : s.hotPaintGate,
+    };
+  }),
 
   clearSelection: () => set(s => ({
     pendingWorkspaceEntry: null,
@@ -146,6 +164,7 @@ export const useHarnessStore = create<HarnessState>((set) => ({
     workspaceSelectionNonce: s.workspaceSelectionNonce + 1,
     workspaceArrivalEvent: null,
     activeSessionId: null,
+    activeSessionVersion: bumpVersionIfChanged(s.activeSessionVersion, s.activeSessionId, null),
     sessionSlots: {},
     hotPaintGate: null,
   })),
@@ -176,10 +195,38 @@ export const useHarnessStore = create<HarnessState>((set) => ({
       return state;
     }
     const { [sessionId]: _removed, ...sessionSlots } = state.sessionSlots;
-    return { sessionSlots };
+    const nextActiveSessionId = state.activeSessionId === sessionId ? null : state.activeSessionId;
+    return {
+      sessionSlots,
+      activeSessionId: nextActiveSessionId,
+      activeSessionVersion: bumpVersionIfChanged(
+        state.activeSessionVersion,
+        state.activeSessionId,
+        nextActiveSessionId,
+      ),
+    };
   }),
 
-  setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
+  setActiveSessionId: (activeSessionId) => set((state) => ({
+    activeSessionId,
+    activeSessionVersion: bumpVersionIfChanged(
+      state.activeSessionVersion,
+      state.activeSessionId,
+      activeSessionId,
+    ),
+  })),
+
+  bumpSessionActivationIntentEpoch: (workspaceId) => {
+    const current = get().sessionActivationIntentEpochByWorkspace[workspaceId] ?? 0;
+    const next = current + 1;
+    set((state) => ({
+      sessionActivationIntentEpochByWorkspace: {
+        ...state.sessionActivationIntentEpochByWorkspace,
+        [workspaceId]: next,
+      },
+    }));
+    return next;
+  },
 
   setHotPaintGate: (hotPaintGate) => set({ hotPaintGate }),
 
@@ -195,9 +242,19 @@ export const useHarnessStore = create<HarnessState>((set) => ({
   workspaceArrivalEvent: null,
 
   activeSessionId: null,
+  activeSessionVersion: 0,
+  sessionActivationIntentEpochByWorkspace: {},
   sessionSlots: {},
   hotPaintGate: null,
 }));
+
+function bumpVersionIfChanged(
+  version: number,
+  previousSessionId: string | null,
+  nextSessionId: string | null,
+): number {
+  return previousSessionId === nextSessionId ? version : version + 1;
+}
 
 const RETAINED_SESSION_SLOT_WARNING_THRESHOLD = 50;
 const retainedSessionSlotWarningEnabled = isDebugMeasurementEnabled();

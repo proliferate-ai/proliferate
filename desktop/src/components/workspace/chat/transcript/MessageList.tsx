@@ -123,6 +123,7 @@ import {
   resolveOptimisticPromptActionTime,
   resolveUserMessageActionTime,
 } from "@/lib/domain/chat/transcript-action-time";
+import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript-open-target";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -150,7 +151,14 @@ const ProposedPlanToolCallIdsContext = createContext<ReadonlySet<string>>(
   EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
 );
 const TranscriptSessionIdContext = createContext<string | null>(null);
-const TranscriptOpenSessionContext = createContext<((sessionId: string) => void) | null>(null);
+type TranscriptOpenSessionHandler = (
+  sessionId: string,
+  role?: TranscriptOpenSessionRole,
+) => void;
+const TranscriptOpenSessionContext = createContext<TranscriptOpenSessionHandler | null>(null);
+const TranscriptCanOpenSessionContext = createContext<
+  ((sessionId: string, role?: TranscriptOpenSessionRole) => boolean) | null
+>(null);
 const noop = () => {};
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -168,7 +176,8 @@ interface MessageListProps {
   bottomInsetPx?: number;
   onLoadOlderHistory?: () => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
-  onOpenSession?: (sessionId: string) => void;
+  onOpenSession?: TranscriptOpenSessionHandler;
+  canOpenSession?: (sessionId: string, role?: TranscriptOpenSessionRole) => boolean;
 }
 
 export function MessageList({
@@ -184,6 +193,7 @@ export function MessageList({
   onLoadOlderHistory,
   onHandOffPlanToNewSession,
   onOpenSession,
+  canOpenSession,
 }: MessageListProps) {
   useDebugRenderCount("transcript-list");
   const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
@@ -489,22 +499,24 @@ export function MessageList({
       <div className="flex-1 min-h-0" data-telemetry-block>
         <TranscriptSessionIdContext.Provider value={activeSessionId}>
           <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
-            <VirtualTranscriptRowList
-              key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
-              rows={virtualRows}
-              selectionRootRef={selectionRootRef}
-              hasOlderHistory={hasOlderHistory}
-              isLoadingOlderHistory={isLoadingOlderHistory}
-              olderHistoryCursor={olderHistoryCursor}
-              bottomInsetPx={bottomInsetPx}
-              selectedWorkspaceId={selectedWorkspaceId}
-              activeSessionId={activeSessionId}
-              isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
-              pendingPromptText={visibleOptimisticPrompt?.text ?? null}
-              onLoadOlderHistory={onLoadOlderHistory ?? noop}
-              onScrollSample={handleTranscriptScroll}
-              renderRow={renderVirtualRow}
-            />
+            <TranscriptCanOpenSessionContext.Provider value={canOpenSession ?? null}>
+              <VirtualTranscriptRowList
+                key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
+                rows={virtualRows}
+                selectionRootRef={selectionRootRef}
+                hasOlderHistory={hasOlderHistory}
+                isLoadingOlderHistory={isLoadingOlderHistory}
+                olderHistoryCursor={olderHistoryCursor}
+                bottomInsetPx={bottomInsetPx}
+                selectedWorkspaceId={selectedWorkspaceId}
+                activeSessionId={activeSessionId}
+                isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
+                pendingPromptText={visibleOptimisticPrompt?.text ?? null}
+                onLoadOlderHistory={onLoadOlderHistory ?? noop}
+                onScrollSample={handleTranscriptScroll}
+                renderRow={renderVirtualRow}
+              />
+            </TranscriptCanOpenSessionContext.Provider>
           </TranscriptOpenSessionContext.Provider>
         </TranscriptSessionIdContext.Provider>
       </div>
@@ -881,28 +893,37 @@ function TranscriptItemBlock({
   const toolCallIdsWithProposedPlan = useContext(ProposedPlanToolCallIdsContext);
   const sessionId = useContext(TranscriptSessionIdContext);
   const openSession = useContext(TranscriptOpenSessionContext);
-  const subagentWakeCompletion =
-    item.kind === "user_message" && isSubagentWakeProvenance(item.promptProvenance)
-      ? transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null
-      : null;
-  const subagentWakeChildSessionId = subagentWakeCompletion?.childSessionId ?? null;
+  const canOpenSession = useContext(TranscriptCanOpenSessionContext);
 
   switch (item.kind) {
     case "user_message": {
       if (isSubagentWakeProvenance(item.promptProvenance)) {
+        const completion =
+          transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null;
+        const childRole: TranscriptOpenSessionRole =
+          item.promptProvenance.type === "linkWake"
+          && item.promptProvenance.relation === "cowork_coding_session"
+            ? "cowork-coding-child"
+            : "linked-child";
+        const childSessionId = completion?.childSessionId ?? null;
+        const canOpenChild = !!openSession
+          && !!childSessionId
+          && (canOpenSession?.(childSessionId, childRole) ?? true);
         return (
           <div className="flex justify-end">
             <SubagentWakeBadge
-              label={item.promptProvenance.label ?? subagentWakeCompletion?.label ?? null}
-              childSessionId={subagentWakeChildSessionId}
-              outcome={subagentWakeCompletion?.outcome ?? null}
+              label={item.promptProvenance.label ?? completion?.label ?? null}
+              childSessionId={childSessionId}
+              outcome={completion?.outcome ?? null}
               titleFallback={
                 item.promptProvenance.type === "linkWake"
                 && item.promptProvenance.relation === "cowork_coding_session"
                   ? "Coding session"
                   : "Subagent"
               }
-              onOpenChild={openSession ?? undefined}
+              onOpenChild={canOpenChild
+                ? (targetSessionId) => openSession(targetSessionId, childRole)
+                : undefined}
             />
           </div>
         );
@@ -922,6 +943,9 @@ function TranscriptItemBlock({
       }
 
       if (isAgentSessionProvenance(item.promptProvenance)) {
+        const sourceSessionId = item.promptProvenance.sourceSessionId;
+        const canOpenParent = !!openSession
+          && (canOpenSession?.(sourceSessionId, "agent-parent") ?? true);
         return (
           <UserMessage
             sessionId={sessionId}
@@ -931,9 +955,11 @@ function TranscriptItemBlock({
             timestampLabel={resolveUserMessageActionTime(item)}
             footer={(
               <UserMessageProvenanceChrome
-                sourceSessionId={item.promptProvenance.sourceSessionId}
+                sourceSessionId={sourceSessionId}
                 label={item.promptProvenance.label ?? null}
-                onOpenParent={openSession ?? undefined}
+                onOpenParent={canOpenParent
+                  ? (parentSessionId) => openSession(parentSessionId, "agent-parent")
+                  : undefined}
               />
             )}
           />
@@ -1511,7 +1537,9 @@ function AgentGroupBlock({
             provisioningStatus={provisioningStatus}
             executionState={executionState}
             childSessionId={launchResult?.childSessionId ?? null}
-            onOpenChild={openSession ?? undefined}
+            onOpenChild={openSession
+              ? (childSessionId) => openSession(childSessionId, "linked-child")
+              : undefined}
           />
         )}
 

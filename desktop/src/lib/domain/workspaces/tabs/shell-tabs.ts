@@ -5,6 +5,8 @@ export type WorkspaceShellTab =
   | { kind: "file"; path: string };
 
 export type WorkspaceShellTabKey = string;
+export type ChatWorkspaceShellTabKey = `chat:${string}`;
+export type WorkspaceShellIntentKey = WorkspaceShellTabKey | "chat-shell";
 
 const CHAT_TAB_KEY_PREFIX = "chat:";
 const FILE_TAB_KEY_PREFIX = "file:";
@@ -14,12 +16,16 @@ export interface WorkspaceSessionTabCandidate {
   workspaceId: string | null;
 }
 
-export function chatWorkspaceShellTabKey(sessionId: string): WorkspaceShellTabKey {
+export function chatWorkspaceShellTabKey(sessionId: string): ChatWorkspaceShellTabKey {
   return `${CHAT_TAB_KEY_PREFIX}${sessionId}`;
 }
 
 export function fileWorkspaceShellTabKey(path: string): WorkspaceShellTabKey {
   return `${FILE_TAB_KEY_PREFIX}${path}`;
+}
+
+export function chatShellWorkspaceIntentKey(): WorkspaceShellIntentKey {
+  return "chat-shell";
 }
 
 export function getWorkspaceShellTabKey(tab: WorkspaceShellTab): WorkspaceShellTabKey {
@@ -28,7 +34,7 @@ export function getWorkspaceShellTabKey(tab: WorkspaceShellTab): WorkspaceShellT
     : fileWorkspaceShellTabKey(tab.path);
 }
 
-export function parseWorkspaceShellTabKey(key: WorkspaceShellTabKey): WorkspaceShellTab | null {
+export function parseWorkspaceShellTabKey(key: string): WorkspaceShellTab | null {
   if (key.startsWith(CHAT_TAB_KEY_PREFIX)) {
     const sessionId = key.slice(CHAT_TAB_KEY_PREFIX.length);
     return sessionId ? { kind: "chat", sessionId } : null;

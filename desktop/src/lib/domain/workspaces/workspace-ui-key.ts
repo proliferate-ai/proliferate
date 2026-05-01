@@ -11,6 +11,25 @@ export function resolveWorkspaceUiKey(
   return selectedLogicalWorkspaceId ?? materializedWorkspaceId ?? null;
 }
 
+export function resolveWorkspaceShellStateKey(args: {
+  workspaceId: string | null | undefined;
+  shellWorkspaceId?: string | null | undefined;
+  selectedWorkspaceId?: string | null | undefined;
+  selectedLogicalWorkspaceId?: string | null | undefined;
+}): string | null {
+  const workspaceId = args.workspaceId ?? null;
+  if (!workspaceId) {
+    return null;
+  }
+  if (args.shellWorkspaceId) {
+    return args.shellWorkspaceId;
+  }
+  if (args.selectedWorkspaceId === workspaceId) {
+    return resolveWorkspaceUiKey(args.selectedLogicalWorkspaceId, workspaceId);
+  }
+  return workspaceId;
+}
+
 export function resolveSelectedWorkspaceIdentity(args: {
   selectedLogicalWorkspaceId: string | null | undefined;
   materializedWorkspaceId: string | null | undefined;

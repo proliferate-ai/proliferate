@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type {
   ModelRegistry,
   Session,
@@ -6,8 +6,16 @@ import type {
 } from "@anyharness/sdk";
 import {
   hasImmediateLaunchModelMismatch,
+  removeSessionSlot,
+  replacePendingSessionSlot,
   resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
+import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
+
+beforeEach(() => {
+  useHarnessStore.getState().clearSelection();
+});
 
 describe("resolveSessionCreationModeId", () => {
   it("lets an explicit mode override the stored user default", () => {
@@ -134,5 +142,51 @@ describe("hasImmediateLaunchModelMismatch", () => {
       registries: [registry],
       launchCatalog: launchCatalog(["gpt-5.5"]),
     })).toBe(false);
+  });
+});
+
+describe("pending session slot replacement", () => {
+  it("clears a dangling active pending id when shell ownership was lost", () => {
+    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
+    useHarnessStore.getState().putSessionSlot(
+      "pending-codex",
+      createEmptySessionSlot("pending-codex", "codex", {
+        workspaceId: "workspace-1",
+      }),
+    );
+    useHarnessStore.getState().setActiveSessionId("pending-codex");
+    const versionBefore = useHarnessStore.getState().activeSessionVersion;
+
+    replacePendingSessionSlot(
+      "pending-codex",
+      "session-1",
+      createEmptySessionSlot("session-1", "codex", {
+        workspaceId: "workspace-1",
+      }),
+      { remapActiveSession: false },
+    );
+
+    expect(useHarnessStore.getState().activeSessionId).toBeNull();
+    expect(useHarnessStore.getState().sessionSlots["pending-codex"]).toBeUndefined();
+    expect(useHarnessStore.getState().sessionSlots["session-1"]).toBeDefined();
+    expect(useHarnessStore.getState().activeSessionVersion).toBe(versionBefore + 1);
+  });
+
+  it("clears active session when removing an active pending slot", () => {
+    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
+    useHarnessStore.getState().putSessionSlot(
+      "pending-codex",
+      createEmptySessionSlot("pending-codex", "codex", {
+        workspaceId: "workspace-1",
+      }),
+    );
+    useHarnessStore.getState().setActiveSessionId("pending-codex");
+    const versionBefore = useHarnessStore.getState().activeSessionVersion;
+
+    removeSessionSlot("pending-codex");
+
+    expect(useHarnessStore.getState().activeSessionId).toBeNull();
+    expect(useHarnessStore.getState().sessionSlots["pending-codex"]).toBeUndefined();
+    expect(useHarnessStore.getState().activeSessionVersion).toBe(versionBefore + 1);
   });
 });

@@ -53,8 +53,10 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
  */
 export function ChatInput({
   attachments,
+  suppressActiveSessionState = false,
 }: {
   attachments: PromptAttachmentController;
+  suppressActiveSessionState?: boolean;
 }) {
   useDebugRenderCount("chat-composer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -64,12 +66,23 @@ export function ChatInput({
   const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
   const activeSessionId = useActiveSessionId();
   const isRunning = useActiveSessionRunningState();
+  const activeSessionIdForUi = suppressActiveSessionState ? null : activeSessionId;
+  const isRunningForUi = suppressActiveSessionState ? false : isRunning;
   const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
     useChatDraftState();
-  const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState();
-  const modelSelectorProps = useChatModelSelectorState();
+  const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState({
+    activeSessionId: activeSessionIdForUi,
+  });
+  const modelSelectorProps = useChatModelSelectorState({
+    suppressActiveSessionState,
+  });
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
-  const { handleSubmit, handleCancel } = useChatPromptActions();
+  const effectiveSessionConfigControls = suppressActiveSessionState ? [] : sessionConfigControls;
+  const effectiveAgentKind = suppressActiveSessionState ? null : agentKind;
+  const effectiveModeControl = suppressActiveSessionState ? null : modeControl;
+  const { handleSubmit, handleCancel } = useChatPromptActions({
+    forceNewSession: suppressActiveSessionState,
+  });
   const reviewActions = useReviewActions();
   const activeReview = useActiveReviewRun();
   const {
@@ -79,17 +92,19 @@ export function ChatInput({
     cancelEdit,
     commitEdit,
   } = useQueuedPromptEdit();
+  const effectiveIsEditingQueuedPrompt = suppressActiveSessionState ? false : isEditingQueuedPrompt;
   const planAttachments = usePlanDraftAttachments({
     workspaceUiKey,
     sdkWorkspaceId: materializedWorkspaceId,
   });
   const canUseUtilityActions =
-    !isEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
+    !effectiveIsEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
   const canAttach = canUseUtilityActions && attachments.canAttachFiles;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
   const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!materializedWorkspaceId;
   const canStartReview = canUseUtilityActions
+    && !suppressActiveSessionState
     && reviewActions.canStartCodeReview
     && !activeReview.hasBlockingReview
     && !activeReview.startingReview;
@@ -98,7 +113,7 @@ export function ChatInput({
       return "Upload image or text context.";
     }
     if (!attachments.supportsAttachments) {
-      return activeSessionId
+      return activeSessionIdForUi
         ? "Attachments are not supported by this agent"
         : "Attachments are available after a session starts";
     }
@@ -116,14 +131,14 @@ export function ChatInput({
     if (activeReview.hasBlockingReview || activeReview.startingReview) {
       return "A review is already active for this session";
     }
-    if (!activeSessionId) {
+    if (!activeSessionIdForUi) {
       return "Review is available after a session starts";
     }
     return "Review agents are unavailable right now";
   })();
   const promptText = serializeChatDraftToPrompt(draft);
   const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
-  const effectiveIsEmpty = isEditingQueuedPrompt
+  const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
     : isEmpty && !hasDraftAttachments;
   const canSubmit = !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans;
@@ -137,7 +152,7 @@ export function ChatInput({
   });
 
   const onSubmit = useCallback(async () => {
-    if (isEditingQueuedPrompt) {
+    if (effectiveIsEditingQueuedPrompt) {
       await commitEdit();
       return;
     }
@@ -155,28 +170,28 @@ export function ChatInput({
     await handleSubmit({ text: promptText, blocks, optimisticContentParts });
     attachments.clearAttachments();
     planAttachments.clearPlans();
-  }, [attachments, commitEdit, handleSubmit, isEditingQueuedPrompt, planAttachments, promptText]);
+  }, [attachments, commitEdit, effectiveIsEditingQueuedPrompt, handleSubmit, planAttachments, promptText]);
 
   const onCancel = useCallback(() => {
-    if (isEditingQueuedPrompt) {
+    if (effectiveIsEditingQueuedPrompt) {
       cancelEdit();
       return;
     }
     handleCancel();
-  }, [cancelEdit, handleCancel, isEditingQueuedPrompt]);
+  }, [cancelEdit, effectiveIsEditingQueuedPrompt, handleCancel]);
 
   const { handleKeyDown } = useChatComposerKeyboard({
     handleSubmit: onSubmit,
     handleCancel: onCancel,
-    isRunning,
+    isRunning: isRunningForUi,
     canSubmit,
-    modeControl,
-    isEditingQueuedPrompt,
+    modeControl: effectiveModeControl,
+    isEditingQueuedPrompt: effectiveIsEditingQueuedPrompt,
     onCancelEdit: cancelEdit,
   });
 
   const focusComposer = useCallback((): boolean => {
-    if (isEditingQueuedPrompt) {
+    if (effectiveIsEditingQueuedPrompt) {
       if (!textareaRef.current) {
         return false;
       }
@@ -184,7 +199,7 @@ export function ChatInput({
       return true;
     }
     return focusChatInput();
-  }, [isEditingQueuedPrompt]);
+  }, [effectiveIsEditingQueuedPrompt]);
 
   const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -206,7 +221,7 @@ export function ChatInput({
   }, [attachments, canAttach]);
 
   useEffect(() => {
-    if (!workspaceUiKey && !activeSessionId) {
+    if (!workspaceUiKey && !activeSessionIdForUi) {
       return;
     }
 
@@ -215,7 +230,7 @@ export function ChatInput({
     }, 50);
     return () => window.clearTimeout(timer);
   }, [
-    activeSessionId,
+    activeSessionIdForUi,
     focusComposer,
     workspaceUiKey,
     workspaceSelectionNonce,
@@ -256,7 +271,7 @@ export function ChatInput({
       <ChatComposerSurface
         overflowMode="clip"
         onClick={() => {
-          if (isEditingQueuedPrompt) {
+          if (effectiveIsEditingQueuedPrompt) {
             textareaRef.current?.focus();
             return;
           }
@@ -273,7 +288,7 @@ export function ChatInput({
             onChange={handleFileInputChange}
             accept="image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh"
           />
-          {isEditingQueuedPrompt && (
+          {effectiveIsEditingQueuedPrompt && (
             <div className="mx-5 mt-3 flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
               <span>Editing queued message</span>
               <Button
@@ -286,13 +301,13 @@ export function ChatInput({
               </Button>
             </div>
           )}
-          {!isEditingQueuedPrompt && (
+          {!effectiveIsEditingQueuedPrompt && (
             <DraftAttachmentPreviewList
               attachments={[...attachments.attachments, ...planAttachments.attachments]}
               onRemove={handleRemoveDraftAttachment}
             />
           )}
-          {isEditingQueuedPrompt ? (
+          {effectiveIsEditingQueuedPrompt ? (
             <ComposerTextareaFrame topInset="none">
               <ComposerTextarea
                 data-chat-composer-editor
@@ -330,11 +345,14 @@ export function ChatInput({
               }`}
             >
               <ModelSelector {...modelSelectorProps} />
-              <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
+              <SessionConfigControls
+                agentKind={effectiveAgentKind}
+                controls={effectiveSessionConfigControls}
+              />
             </div>
 
             <div className="flex items-center gap-[5px]">
-              {!isEditingQueuedPrompt && (
+              {!effectiveIsEditingQueuedPrompt && (
                 <ComposerAddActionPopover
                   canAttachFile={canAttach}
                   attachFileDetail={attachFileDetail}
@@ -351,10 +369,10 @@ export function ChatInput({
                 />
               )}
               <ChatComposerActions
-                isRunning={isRunning}
+                isRunning={isRunningForUi}
                 isEmpty={effectiveIsEmpty}
                 isDisabled={isDisabled || planAttachments.hasUnresolvedPlans}
-                isEditingQueuedPrompt={isEditingQueuedPrompt}
+                isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
                 onSubmit={onSubmit}
                 onCancel={onCancel}
               />

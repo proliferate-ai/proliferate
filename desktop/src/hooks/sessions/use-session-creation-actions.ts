@@ -46,7 +46,10 @@ import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
+import { chatWorkspaceShellTabKey, type WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import {
   buildLatencyRequestOptions,
   buildPausedModelAvailability,
@@ -182,15 +185,52 @@ export function useSessionCreationActions() {
           targetWorkspaceId: workspaceId,
           targetSessionId: inFlightCreate.sessionId,
         });
+        const pendingShellWrite = writeChatShellIntentForSession({
+          workspaceId,
+          sessionId: inFlightCreate.sessionId,
+        });
         if (useHarnessStore.getState().sessionSlots[inFlightCreate.sessionId]) {
           activateSession(inFlightCreate.sessionId);
         }
         cancelLatencyFlow(options.latencyFlowId, "session_create_reused_inflight", {
           reusedSessionId: inFlightCreate.sessionId,
         });
-        const resolvedSessionId = await inFlightCreate.promise;
-        activateSession(resolvedSessionId);
-        return resolvedSessionId;
+        try {
+          const resolvedSessionId = await inFlightCreate.promise;
+          const replaced = pendingShellWrite
+            ? useWorkspaceUiStore.getState().replaceShellIntent({
+              workspaceId: pendingShellWrite.shellWorkspaceId,
+              expectedIntent: pendingShellWrite.currentIntent,
+              expectedEpoch: pendingShellWrite.epoch,
+              nextIntent: chatWorkspaceShellTabKey(resolvedSessionId),
+            }).replaced
+            : false;
+          if (replaced) {
+            activateSession(resolvedSessionId);
+          }
+          return resolvedSessionId;
+        } catch (error) {
+          let rolledBackShellIntent = false;
+          if (pendingShellWrite) {
+            rolledBackShellIntent = useWorkspaceUiStore.getState().rollbackShellIntent({
+              workspaceId: pendingShellWrite.shellWorkspaceId,
+              expectedIntent: pendingShellWrite.currentIntent,
+              expectedEpoch: pendingShellWrite.epoch,
+              rollbackIntent: pendingShellWrite.previousIntent,
+            }).rolledBack;
+          }
+          if (
+            rolledBackShellIntent
+            && useHarnessStore.getState().activeSessionId === inFlightCreate.sessionId
+          ) {
+            if (previousActiveSessionId) {
+              activateSession(previousActiveSessionId);
+            } else {
+              useHarnessStore.getState().setActiveSessionId(null);
+            }
+          }
+          throw error;
+        }
       }
     }
 
@@ -223,11 +263,60 @@ export function useSessionCreationActions() {
 
     useHarnessStore.getState().putSessionSlot(pendingSessionId, optimisticSlot);
     activateSession(pendingSessionId);
+    let initialShellIntent: WorkspaceShellIntentKey | null | undefined;
+    let currentOwnedShellIntent: WorkspaceShellIntentKey | null = null;
+    let currentOwnedShellEpoch: number | null = null;
+    let currentOwnedShellWorkspaceId: string | null = null;
+    let currentOwnedSessionId: string | null = null;
+    const writeOwnedShellIntent = (sessionId: string): void => {
+      const write = writeChatShellIntentForSession({ workspaceId, sessionId });
+      if (!write) {
+        return;
+      }
+      if (initialShellIntent === undefined) {
+        initialShellIntent = write.previousIntent;
+      }
+      currentOwnedShellIntent = write.currentIntent;
+      currentOwnedShellEpoch = write.epoch;
+      currentOwnedShellWorkspaceId = write.shellWorkspaceId;
+      currentOwnedSessionId = sessionId;
+    };
+    const replaceOwnedShellIntent = (sessionId: string): boolean => {
+      if (currentOwnedShellIntent === null || currentOwnedShellEpoch === null || currentOwnedShellWorkspaceId === null) {
+        return false;
+      }
+      const replace = useWorkspaceUiStore.getState().replaceShellIntent({
+        workspaceId: currentOwnedShellWorkspaceId,
+        expectedIntent: currentOwnedShellIntent,
+        expectedEpoch: currentOwnedShellEpoch,
+        nextIntent: chatWorkspaceShellTabKey(sessionId),
+      });
+      if (!replace.replaced) {
+        return false;
+      }
+      currentOwnedShellIntent = replace.currentIntent;
+      currentOwnedShellEpoch = replace.epoch;
+      currentOwnedSessionId = sessionId;
+      return true;
+    };
+    const rollbackOwnedShellIntent = (): boolean => {
+      if (initialShellIntent === undefined || currentOwnedShellIntent === null || currentOwnedShellEpoch === null || currentOwnedShellWorkspaceId === null) {
+        return false;
+      }
+      return useWorkspaceUiStore.getState().rollbackShellIntent({
+        workspaceId: currentOwnedShellWorkspaceId,
+        expectedIntent: currentOwnedShellIntent,
+        expectedEpoch: currentOwnedShellEpoch,
+        rollbackIntent: initialShellIntent,
+      }).rolledBack;
+    };
+    writeOwnedShellIntent(pendingSessionId);
     pruneInactiveSessionStreams();
 
     const createPromise = (async () => {
       const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
       const runtimeUrl = await ensureRuntimeReadyForSessions();
+
       const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
       const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
       const client = getAnyHarnessClient({
@@ -254,6 +343,7 @@ export function useSessionCreationActions() {
           enabled: pluginsInCodingSessionsEnabled,
         },
       });
+
       const session = await client.sessions.create({
         workspaceId: target.anyharnessWorkspaceId,
         agentKind: options.agentKind,
@@ -390,9 +480,14 @@ export function useSessionCreationActions() {
         transcriptHydrated: true,
       };
 
-      replacePendingSessionSlot(pendingSessionId, session.id, realSlot);
+      const ownsShellIntent = replaceOwnedShellIntent(session.id);
+      replacePendingSessionSlot(pendingSessionId, session.id, realSlot, {
+        remapActiveSession: ownsShellIntent,
+      });
       updateInFlightSessionCreateId(workspaceId, pendingSessionId, session.id);
-      activateSession(session.id);
+      if (ownsShellIntent) {
+        activateSession(session.id);
+      }
       upsertWorkspaceSessionRecord(workspaceId, session);
       trackProductEvent("chat_session_created", {
         workspace_kind: cloudWorkspaceId ? "cloud" : "local",
@@ -449,11 +544,15 @@ export function useSessionCreationActions() {
     try {
       return await createPromise;
     } catch (error) {
+      const activeSessionIdBeforeRemoval = useHarnessStore.getState().activeSessionId;
       removeSessionSlot(pendingSessionId);
-      if (previousActiveSessionId) {
-        activateSession(previousActiveSessionId);
-      } else {
-        useHarnessStore.getState().setActiveSessionId(null);
+      const rolledBackShellIntent = rollbackOwnedShellIntent();
+      if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
+        if (previousActiveSessionId) {
+          activateSession(previousActiveSessionId);
+        } else {
+          useHarnessStore.getState().setActiveSessionId(null);
+        }
       }
       throw error;
     } finally {

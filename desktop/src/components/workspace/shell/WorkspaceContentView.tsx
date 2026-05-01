@@ -32,7 +32,7 @@ export function WorkspaceContentView() {
     <div className="h-full flex flex-col">
       <div className="flex-1 min-h-0 flex flex-col">
         {headerTabs.activeShellTab?.kind !== "file" ? (
-          <ChatView />
+          <ChatView shellRenderSurface={headerTabs.activation.renderSurface} />
         ) : tabModes[headerTabs.activeShellTab.path] === "diff" ? (
           <FileDiffView filePath={headerTabs.activeShellTab.path} />
         ) : (

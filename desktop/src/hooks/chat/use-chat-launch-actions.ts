@@ -22,7 +22,8 @@ import {
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
-export function useChatLaunchActions() {
+export function useChatLaunchActions(options?: { suppressActiveSessionState?: boolean }) {
+  const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
@@ -45,21 +46,24 @@ export function useChatLaunchActions() {
     currentLaunchIdentity,
     currentModelConfigId,
   } = useActiveSessionLaunchState();
+  const scopedActiveSessionId = suppressActiveSessionState ? null : activeSessionId;
+  const scopedCurrentLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
+  const scopedCurrentModelConfigId = suppressActiveSessionState ? null : currentModelConfigId;
 
   const handleLaunchSelect = useCallback((selection: ModelSelectorSelection) => {
     if (
-      currentLaunchIdentity?.kind === selection.kind
-      && currentLaunchIdentity.modelId === selection.modelId
+      scopedCurrentLaunchIdentity?.kind === selection.kind
+      && scopedCurrentLaunchIdentity.modelId === selection.modelId
     ) {
       return;
     }
 
     if (
-      activeSessionId
-      && currentLaunchIdentity?.kind === selection.kind
-      && currentModelConfigId
+      scopedActiveSessionId
+      && scopedCurrentLaunchIdentity?.kind === selection.kind
+      && scopedCurrentModelConfigId
     ) {
-      void setActiveSessionConfigOption(currentModelConfigId, selection.modelId)
+      void setActiveSessionConfigOption(scopedCurrentModelConfigId, selection.modelId)
         .then(() => {
           setWorkspaceArrivalEvent(null);
         })
@@ -115,17 +119,17 @@ export function useChatLaunchActions() {
         showToast(`Failed to open chat: ${message}`);
       });
   }, [
-    activeSessionId,
-    currentLaunchIdentity,
     createThreadFromSelection,
     currentDraft,
-    currentModelConfigId,
     createEmptySessionWithResolvedConfig,
     selectedWorkspace?.surface,
     selectedWorkspaceId,
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,
+    scopedActiveSessionId,
+    scopedCurrentLaunchIdentity,
+    scopedCurrentModelConfigId,
   ]);
 
   return {

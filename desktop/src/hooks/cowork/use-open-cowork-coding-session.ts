@@ -1,11 +1,11 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 
 export function useOpenCoworkCodingSession() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { selectWorkspace } = useWorkspaceSelection();
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
 
   return useCallback(async (input: {
     workspaceId: string;
@@ -14,9 +14,10 @@ export function useOpenCoworkCodingSession() {
     if (location.pathname !== "/") {
       navigate("/");
     }
-    await selectWorkspace(input.workspaceId, {
-      force: true,
-      initialActiveSessionId: input.sessionId,
+    await openWorkspaceSession({
+      workspaceId: input.workspaceId,
+      sessionId: input.sessionId,
+      forceWorkspaceSelection: true,
     });
-  }, [location.pathname, navigate, selectWorkspace]);
+  }, [location.pathname, navigate, openWorkspaceSession]);
 }

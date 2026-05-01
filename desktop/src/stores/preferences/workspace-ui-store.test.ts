@@ -213,6 +213,8 @@ describe("workspace ui tab persistence", () => {
     useWorkspaceUiStore.setState({
       ...WORKSPACE_UI_DEFAULTS,
       _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
     });
 
     const store = useWorkspaceUiStore.getState();
@@ -224,6 +226,143 @@ describe("workspace ui tab persistence", () => {
     expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w1)
       .toEqual(["chat:s1", "file:src/App.tsx"]);
     expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w2).toEqual([]);
+  });
+
+  it("keeps chat-shell out of real tab order while accepting it as active intent", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat-shell",
+    });
+    store.setShellTabOrderForWorkspace("w1", ["chat:s1"]);
+
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1).toBe("chat-shell");
+    expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w1)
+      .toEqual(["chat:s1"]);
+  });
+
+  it("does not roll back a shell intent after another activation replaced it", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const first = useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:s1",
+    });
+    useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "file:src/App.tsx",
+    });
+
+    const rollback = useWorkspaceUiStore.getState().rollbackShellIntent({
+      workspaceId: "w1",
+      expectedIntent: "chat:s1",
+      expectedEpoch: first.epoch,
+      rollbackIntent: null,
+    });
+
+    expect(rollback.rolledBack).toBe(false);
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1)
+      .toBe("file:src/App.tsx");
+  });
+
+  it("does not replace a pending shell intent after another activation replaced it", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const pending = useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:pending-1",
+    });
+    useWorkspaceUiStore.getState().writeShellIntent({
+      workspaceId: "w1",
+      intent: "file:src/App.tsx",
+    });
+
+    const replace = useWorkspaceUiStore.getState().replaceShellIntent({
+      workspaceId: "w1",
+      expectedIntent: "chat:pending-1",
+      expectedEpoch: pending.epoch,
+      nextIntent: "chat:real-1",
+    });
+
+    expect(replace.replaced).toBe(false);
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1)
+      .toBe("file:src/App.tsx");
+  });
+
+  it("does not roll back a same-intent activation after pending ownership changed", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      shellActivationEpochByWorkspace: {},
+      pendingChatActivationByWorkspace: {},
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.writeShellIntent({ workspaceId: "w1", intent: "chat:s1" });
+    const firstWrite = store.writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:s2",
+    });
+    store.setPendingChatActivation({
+      workspaceId: "w1",
+      pending: {
+        attemptId: "attempt-1",
+        sessionId: "s2",
+        intent: "chat:s2",
+        guardToken: 1,
+        workspaceSelectionNonce: 1,
+        shellEpochAtWrite: firstWrite.epoch,
+        sessionActivationEpochAtWrite: 1,
+      },
+    });
+
+    const secondWrite = store.writeShellIntent({
+      workspaceId: "w1",
+      intent: "chat:s2",
+    });
+    store.setPendingChatActivation({
+      workspaceId: "w1",
+      pending: {
+        attemptId: "attempt-2",
+        sessionId: "s2",
+        intent: "chat:s2",
+        guardToken: 2,
+        workspaceSelectionNonce: 1,
+        shellEpochAtWrite: secondWrite.epoch,
+        sessionActivationEpochAtWrite: 2,
+      },
+    });
+
+    const rollback = store.rollbackShellIntent({
+      workspaceId: "w1",
+      expectedIntent: "chat:s2",
+      expectedEpoch: firstWrite.epoch,
+      expectedPendingAttemptId: "attempt-1",
+      rollbackIntent: "chat:s1",
+    });
+
+    expect(rollback.rolledBack).toBe(false);
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1)
+      .toBe("chat:s2");
+    expect(useWorkspaceUiStore.getState().pendingChatActivationByWorkspace.w1?.attemptId)
+      .toBe("attempt-2");
   });
 
   it("stores and clears viewed session error keys without eviction", () => {

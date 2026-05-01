@@ -3,14 +3,17 @@ import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { Button } from "@/components/ui/Button";
 import { X } from "@/components/ui/icons";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { resolveEditorTabChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 
 export function WorkspaceEditorTabs() {
   const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
   const activeFilePath = useWorkspaceFilesStore((s) => s.activeFilePath);
+  const workspaceId = useWorkspaceFilesStore((s) => s.materializedWorkspaceId);
+  const workspaceUiKey = useWorkspaceFilesStore((s) => s.workspaceUiKey);
   const buffersByPath = useWorkspaceFilesStore((s) => s.buffersByPath);
-  const setActiveTab = useWorkspaceFilesStore((s) => s.setActiveTab);
   const closeTab = useWorkspaceFilesStore((s) => s.closeTab);
+  const { activateChatShell, activateFileTab } = useWorkspaceShellActivation();
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const chromeClasses = resolveEditorTabChromeClasses(transparentChromeEnabled);
 
@@ -21,7 +24,27 @@ export function WorkspaceEditorTabs() {
       return;
     }
 
+    const closedIndex = openTabs.indexOf(path);
+    const remainingTabs = openTabs.filter((candidate) => candidate !== path);
+    const fallbackPath = remainingTabs[closedIndex] ?? remainingTabs[closedIndex - 1] ?? null;
     closeTab(path);
+    if (!workspaceId || path !== activeFilePath) {
+      return;
+    }
+    if (fallbackPath) {
+      activateFileTab({
+        workspaceId,
+        shellWorkspaceId: workspaceUiKey,
+        path: fallbackPath,
+        mode: "focus-existing",
+      });
+      return;
+    }
+    activateChatShell({
+      workspaceId,
+      shellWorkspaceId: workspaceUiKey,
+      reason: "close_editor_tab",
+    });
   }
 
   return (
@@ -55,7 +78,17 @@ export function WorkspaceEditorTabs() {
               title={path}
               variant="ghost"
               size="sm"
-              onClick={() => setActiveTab(path)}
+              onClick={() => {
+                if (!workspaceId) {
+                  return;
+                }
+                activateFileTab({
+                  workspaceId,
+                  shellWorkspaceId: workspaceUiKey,
+                  path,
+                  mode: "focus-existing",
+                });
+              }}
               className={`h-full min-w-0 flex-1 justify-start gap-1.5 bg-transparent px-2 py-0 text-xs font-normal hover:bg-transparent ${shapeClassName} ${
                 isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
               }`}

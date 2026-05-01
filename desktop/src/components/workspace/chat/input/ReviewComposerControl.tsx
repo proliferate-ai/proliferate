@@ -12,10 +12,12 @@ export interface ReviewComposerSummary {
 
 export function ReviewComposerStrip({
   summary,
+  icon,
   active,
   children,
 }: {
   summary: ReviewComposerSummary;
+  icon?: ReactNode;
   active: boolean;
   children: (close: () => void) => ReactNode;
 }) {
@@ -23,6 +25,7 @@ export function ReviewComposerStrip({
     <DelegatedWorkComposerPanel>
       <ReviewComposerControl
         summary={summary}
+        icon={icon}
         active={active}
       >
         {children}
@@ -33,10 +36,12 @@ export function ReviewComposerStrip({
 
 export function ReviewComposerControl({
   summary,
+  icon,
   active,
   children,
 }: {
   summary: ReviewComposerSummary;
+  icon?: ReactNode;
   active: boolean;
   children: (close: () => void) => ReactNode;
 }) {
@@ -48,6 +53,7 @@ export function ReviewComposerControl({
       className="w-auto border-0 bg-transparent p-0 shadow-none"
       trigger={(
         <ComposerControlButton
+          icon={icon}
           label={summary.label}
           detail={summary.detail}
           trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}

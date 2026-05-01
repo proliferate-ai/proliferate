@@ -1,52 +1,29 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
-import { useWorkspaceHeaderTabsModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-model";
-import { resolveWorkspaceShellTabsState } from "@/lib/domain/workspaces/tabs/shell-tab-state";
+import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import {
-  fileWorkspaceShellTabKey,
   resolveRelativeWorkspaceShellTab,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
 
-const EMPTY_SHELL_TAB_ORDER_KEYS: readonly string[] = [];
-
 export function useWorkspaceCommandPaletteTabs() {
-  const model = useWorkspaceHeaderTabsModel();
+  const model = useWorkspaceHeaderTabsViewModel();
   const selectedWorkspaceId = model.selectedWorkspaceId;
-  const activeShellTabKeyByWorkspace = useWorkspaceUiStore(
-    (state) => state.activeShellTabKeyByWorkspace,
-  );
-  const shellTabOrderByWorkspace = useWorkspaceUiStore(
-    (state) => state.shellTabOrderByWorkspace,
-  );
-  const setActiveShellTabKey = useWorkspaceUiStore(
-    (state) => state.setActiveShellTabKeyForWorkspace,
-  );
-  const storedActiveShellTabKey = resolveWithWorkspaceFallback(
-    activeShellTabKeyByWorkspace,
-    model.workspaceUiKey,
-    model.materializedWorkspaceId,
-  ).value ?? null;
-  const persistedShellOrderKeys = resolveWithWorkspaceFallback(
-    shellTabOrderByWorkspace,
-    model.workspaceUiKey,
-    model.materializedWorkspaceId,
-  ).value ?? EMPTY_SHELL_TAB_ORDER_KEYS;
-  const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
   const showToast = useToastStore((state) => state.show);
+  const { activateFileTab } = useWorkspaceShellActivation();
   const visibilityActions = useChatTabVisibilityActions({
+    workspaceUiKey: model.workspaceUiKey,
+    materializedWorkspaceId: model.materializedWorkspaceId,
     visibleIds: model.visibleChatSessionIds,
     liveIds: model.liveChatSessionIds,
     childToParent: model.childToParent,
@@ -55,63 +32,38 @@ export function useWorkspaceCommandPaletteTabs() {
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const { createEmptySessionWithResolvedConfig } = useSessionActions();
 
-  const shellState = useMemo(
-    () => resolveWorkspaceShellTabsState({
-      selectedWorkspaceId,
-      activeSessionId: model.activeSessionId,
-      storedActiveShellTabKey,
-      persistedShellOrderKeys,
-      shellChatSessionIds: model.stripVisibleChatSessionIds,
-      openTabs: model.openTabs,
-      stripRows: model.stripRows,
-      displayManualGroups: model.displayManualGroups,
-      subagentChildIdsByParentId: model.hierarchyChildIdsByParentSessionId,
-    }),
-    [
-      model.activeSessionId,
-      model.displayManualGroups,
-      model.hierarchyChildIdsByParentSessionId,
-      model.openTabs,
-      persistedShellOrderKeys,
-      model.stripRows,
-      model.stripVisibleChatSessionIds,
-      selectedWorkspaceId,
-      storedActiveShellTabKey,
-    ],
-  );
-
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
     if (tab.kind === "chat") {
       return visibilityActions.showChatSessionTab(tab.sessionId, { select: true });
     }
-    if (!model.workspaceUiKey || !selectedWorkspaceId) {
+    if (!selectedWorkspaceId) {
       return false;
     }
-    setActiveTab(tab.path);
-    setActiveShellTabKey(
-      model.workspaceUiKey,
-      fileWorkspaceShellTabKey(tab.path),
-    );
+    activateFileTab({
+      workspaceId: selectedWorkspaceId,
+      shellWorkspaceId: model.workspaceUiKey,
+      path: tab.path,
+      mode: "focus-existing",
+    });
     return true;
   }, [
+    activateFileTab,
     model.workspaceUiKey,
     selectedWorkspaceId,
-    setActiveTab,
-    setActiveShellTabKey,
     visibilityActions,
   ]);
 
   const activateRelativeTab = useCallback((delta: number) => {
     const nextTab = resolveRelativeWorkspaceShellTab({
-      tabs: shellState.orderedTabs,
-      activeTab: shellState.activeShellTab,
+      tabs: model.orderedTabs,
+      activeTab: model.activeShellTab,
       delta,
     });
     if (!nextTab) {
       return false;
     }
     return activateWorkspaceTab(nextTab);
-  }, [activateWorkspaceTab, shellState.activeShellTab, shellState.orderedTabs]);
+  }, [activateWorkspaceTab, model.activeShellTab, model.orderedTabs]);
 
   const restoreLastDismissedTab = useCallback(
     () => visibilityActions.restoreHiddenOrDismissedChatTab(),
@@ -158,12 +110,12 @@ export function useWorkspaceCommandPaletteTabs() {
       ? null
       : configuredLaunch.disabledReason
     : "Workspace is still opening.";
-  const hasMultipleTabs = shellState.orderedTabs.length > 1;
+  const hasMultipleTabs = model.orderedTabs.length > 1;
 
   return {
     activeSessionId: model.activeSessionId,
-    activeShellTab: shellState.activeShellTab,
-    orderedTabs: shellState.orderedTabs,
+    activeShellTab: model.activeShellTab,
+    orderedTabs: model.orderedTabs,
     canActivateRelativeTab: selectedWorkspaceId !== null && hasMultipleTabs,
     relativeTabDisabledReason: selectedWorkspaceId
       ? hasMultipleTabs

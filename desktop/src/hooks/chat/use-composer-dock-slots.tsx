@@ -28,7 +28,10 @@ export interface ComposerDockSlots {
   delegationSlot: ReactNode | null;
 }
 
-export function useComposerDockSlots(): ComposerDockSlots {
+export function useComposerDockSlots(options?: {
+  suppressSessionSlots?: boolean;
+}): ComposerDockSlots {
+  const suppressSessionSlots = options?.suppressSessionSlots ?? false;
   const { primaryPendingInteraction } = useActivePendingInteractionState();
   const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
@@ -53,7 +56,7 @@ export function useComposerDockSlots(): ComposerDockSlots {
     ? <WorkspaceArrivalAttachedPanel />
     : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
       ? <CloudRuntimeAttachedPanel />
-      : activeTodoTracker
+      : !suppressSessionSlots && activeTodoTracker
         ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
         : null;
   const delegatedWorkSlot: ReactNode | null = reviewComposerStrip || subagentComposerStrip || coworkComposerStrip
@@ -83,8 +86,10 @@ export function useComposerDockSlots(): ComposerDockSlots {
 
   return {
     contextSlot,
-    queueSlot: pendingPrompts.length > 0 ? <ConnectedPendingPromptList /> : null,
-    interactionSlot: interactionPanel,
-    delegationSlot: delegatedWorkSlot,
+    queueSlot: !suppressSessionSlots && pendingPrompts.length > 0
+      ? <ConnectedPendingPromptList />
+      : null,
+    interactionSlot: suppressSessionSlots ? null : interactionPanel,
+    delegationSlot: suppressSessionSlots ? null : delegatedWorkSlot,
   };
 }

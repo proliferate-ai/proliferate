@@ -40,7 +40,8 @@ function resolveCurrentModelDisplayName(args: {
   });
 }
 
-export function useChatModelSelectorState() {
+export function useChatModelSelectorState(options?: { suppressActiveSessionState?: boolean }) {
+  const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
   const connectionState = useHarnessStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const {
@@ -48,40 +49,43 @@ export function useChatModelSelectorState() {
     pendingConfigChanges,
     modelControl,
   } = useActiveSessionLaunchState();
-  const { handleLaunchSelect } = useChatLaunchActions();
-  const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
+  const scopedLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
+  const scopedPendingConfigChanges = suppressActiveSessionState ? null : pendingConfigChanges;
+  const scopedModelControl = suppressActiveSessionState ? null : modelControl;
+  const { handleLaunchSelect } = useChatLaunchActions({ suppressActiveSessionState });
+  const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
   const launchCatalog = useChatLaunchCatalog({
-    activeSelection: currentLaunchIdentity ?? configuredLaunch.selection,
+    activeSelection: scopedLaunchIdentity ?? configuredLaunch.selection,
   });
   const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
 
   const pendingModelChange = getPendingSessionConfigChange(
-    pendingConfigChanges,
-    modelControl?.rawConfigId ?? null,
+    scopedPendingConfigChanges,
+    scopedModelControl?.rawConfigId ?? null,
   );
-  const currentSelection = currentLaunchIdentity ?? configuredLaunch.selection;
+  const currentSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
   const displayedModelValue =
     pendingModelChange?.value
-    ?? modelControl?.currentValue
+    ?? scopedModelControl?.currentValue
     ?? null;
   const liveConfigModelLabel = resolveMatchingModelControlLabel({
     modelId: currentSelection?.modelId,
-    control: modelControl,
+    control: scopedModelControl,
     displayedModelValue,
   });
 
   const currentModelDisplayName = useMemo(
     () => resolveCurrentModelDisplayName({
-      activeLaunchIdentity: currentLaunchIdentity,
+      activeLaunchIdentity: scopedLaunchIdentity,
       defaultLaunchSelection: configuredLaunch.selection,
       launchAgents: launchCatalog.launchAgents,
       liveConfigLabel: liveConfigModelLabel,
     }),
     [
       configuredLaunch.selection,
-      currentLaunchIdentity,
       launchCatalog.launchAgents,
       liveConfigModelLabel,
+      scopedLaunchIdentity,
     ],
   );
 

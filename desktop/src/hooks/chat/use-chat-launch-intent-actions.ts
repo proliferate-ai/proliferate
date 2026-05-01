@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
+import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -13,11 +14,11 @@ export function useChatLaunchIntentActions() {
   const deselectWorkspacePreservingSlots = useHarnessStore(
     (state) => state.deselectWorkspacePreservingSlots,
   );
-  const setSelectedWorkspace = useHarnessStore((state) => state.setSelectedWorkspace);
   const setSelectedLogicalWorkspaceId =
     useLogicalWorkspaceStore((state) => state.setSelectedLogicalWorkspaceId);
-  const { activateSession, ensureSessionStreamConnected } = useSessionRuntimeActions();
   const { isLaunching, launch } = useHomeNextLaunch();
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
+  const { selectWorkspace } = useWorkspaceSelection();
 
   const retry = useCallback(() => {
     if (!activeIntent || activeIntent.failure?.retryMode !== "safe") {
@@ -49,25 +50,25 @@ export function useChatLaunchIntentActions() {
       return;
     }
 
-    if (activeIntent.materializedWorkspaceId) {
-      setSelectedWorkspace(activeIntent.materializedWorkspaceId, {
-        initialActiveSessionId: activeIntent.materializedSessionId,
-        clearPending: true,
-      });
+    const intent = activeIntent;
+    clearIfActive(intent.id);
+    if (intent.materializedWorkspaceId && intent.materializedSessionId) {
+      void openWorkspaceSession({
+        workspaceId: intent.materializedWorkspaceId,
+        sessionId: intent.materializedSessionId,
+        forceWorkspaceSelection: true,
+      }).catch(() => undefined);
+      return;
     }
-    if (activeIntent.materializedSessionId) {
-      activateSession(activeIntent.materializedSessionId);
-      void ensureSessionStreamConnected(activeIntent.materializedSessionId, {
-        resumeIfActive: false,
-      });
+    if (intent.materializedWorkspaceId) {
+      void selectWorkspace(intent.materializedWorkspaceId, { force: true })
+        .catch(() => undefined);
     }
-    clearIfActive(activeIntent.id);
   }, [
     activeIntent,
-    activateSession,
     clearIfActive,
-    ensureSessionStreamConnected,
-    setSelectedWorkspace,
+    openWorkspaceSession,
+    selectWorkspace,
   ]);
 
   return {

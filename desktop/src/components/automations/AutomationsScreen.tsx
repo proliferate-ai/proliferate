@@ -27,8 +27,8 @@ import type {
   UpdateAutomationRequest,
 } from "@/lib/integrations/cloud/client";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 
 const EMPTY_AUTOMATIONS: AutomationResponse[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunResponse[] = [];
@@ -41,7 +41,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
-  const { selectSession } = useSessionActions();
+  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
   const { refetch: refetchWorkspaces } = useWorkspaces();
   const [editingAutomation, setEditingAutomation] = useState<AutomationResponse | null>(null);
@@ -118,10 +118,17 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     try {
       await refetchWorkspaces();
       navigate("/");
-      await selectWorkspace(run.anyharnessWorkspaceId, { force: true });
       if (run.anyharnessSessionId) {
-        await selectSession(run.anyharnessSessionId);
+        const result = await openWorkspaceSession({
+          workspaceId: run.anyharnessWorkspaceId,
+          sessionId: run.anyharnessSessionId,
+        });
+        if (result.result === "stale") {
+          showToast("Workspace selection changed before the automation session opened.");
+        }
+        return;
       }
+      await selectWorkspace(run.anyharnessWorkspaceId, { force: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to open workspace.";
       showToast(message);
