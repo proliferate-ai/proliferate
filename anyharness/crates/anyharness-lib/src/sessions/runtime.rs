@@ -1702,6 +1702,8 @@ impl SessionRuntime {
         let launch_extras = self
             .resolve_extension_launch_extras(&workspace, record)
             .map_err(StartSessionError::Internal)?;
+        let first_prompt_system_prompt_append =
+            join_system_prompt_append(Some(launch_extras.first_prompt_system_prompt_append));
         let system_prompt_append =
             merge_system_prompt_append(system_prompt_append, launch_extras.system_prompt_append);
         self.persist_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries)
@@ -1720,6 +1722,7 @@ impl SessionRuntime {
                 mcp_servers,
                 startup_strategy,
                 system_prompt_append,
+                first_prompt_system_prompt_append,
                 Some(Arc::new({
                     let extensions = self.session_extensions.clone();
                     let workspace = workspace.clone();
@@ -1784,6 +1787,9 @@ impl SessionRuntime {
             combined
                 .system_prompt_append
                 .append(&mut extras.system_prompt_append);
+            combined
+                .first_prompt_system_prompt_append
+                .append(&mut extras.first_prompt_system_prompt_append);
             combined.mcp_servers.append(&mut extras.mcp_servers);
             combined
                 .mcp_binding_summaries

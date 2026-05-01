@@ -1,4 +1,8 @@
 import { useRef, type ReactNode, type Ref } from "react";
+import {
+  CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+  WORKSPACE_CHAT_COMPOSER_INPUT,
+} from "@/config/chat";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { CoworkComposerControl } from "@/components/workspace/chat/input/CoworkComposerStrip";
@@ -6,6 +10,8 @@ import { ComposerControlButton } from "@/components/workspace/chat/input/Compose
 import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/ComposerFileMentionBadge";
 import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
+import { ComposerTextareaFrame } from "@/components/workspace/chat/input/ComposerTextareaFrame";
 import { ReviewComposerControl } from "@/components/workspace/chat/input/ReviewComposerControl";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
@@ -19,6 +25,7 @@ import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surfa
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
 import { WorkspaceMobilityOverlayView } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
+import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
@@ -61,9 +68,12 @@ import {
   MCP_ELICITATION_MIXED_REQUIRED,
   MCP_ELICITATION_MULTI_SELECT,
   MCP_ELICITATION_URL,
+  PENDING_REVIEW_COMPLETE,
+  PENDING_REVIEW_FEEDBACK_READY,
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
+  PLAYGROUND_LONG_COMPOSER_DRAFT,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
   TODOS_LONG,
@@ -76,6 +86,10 @@ import {
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
 } from "@/lib/domain/chat/__fixtures__/playground";
+import {
+  derivePendingPromptQueueRow,
+  type PendingPromptQueueEntry,
+} from "@/lib/domain/chat/pending-prompt-queue";
 
 interface PlaygroundComposerProps {
   dockRef: Ref<HTMLDivElement>;
@@ -156,13 +170,24 @@ export function PlaygroundComposer({
       >
         {selection.kind === "recording"
           ? <ReplayComposerSurface replay={replay} />
-          : scenario === "file-mention-search"
-            ? <PlaygroundFileMentionComposerSurface />
-          : <PlaygroundComposerSurface />}
+          : scenario
+            ? renderComposerSurfaceForScenario(scenario)
+            : <PlaygroundComposerSurface />}
       </ChatComposerDock>
       {scenario && renderMobilityOverlayPreview(scenario)}
     </div>
   );
+}
+
+export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {
+  switch (scenario) {
+    case "composer-long-input":
+      return <PlaygroundLongInputComposerSurface />;
+    case "file-mention-search":
+      return <PlaygroundFileMentionComposerSurface />;
+    default:
+      return <PlaygroundComposerSurface />;
+  }
 }
 
 export function renderContextSlot(scenario: ScenarioKey): ReactNode | null {
@@ -616,8 +641,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-with-approval":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_SINGLE}
+          entries={pendingQueueRows(PENDING_PROMPTS_SINGLE)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -625,8 +649,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-multi":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_MULTI}
+          entries={pendingQueueRows(PENDING_PROMPTS_MULTI)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -634,8 +657,23 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-editing":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_WITH_EDITING}
+          entries={pendingQueueRows(PENDING_PROMPTS_WITH_EDITING)}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-review-feedback-ready":
+      return (
+        <PendingPromptList
+          entries={pendingQueueRows(PENDING_REVIEW_FEEDBACK_READY)}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-review-complete":
+      return (
+        <PendingPromptList
+          entries={pendingQueueRows(PENDING_REVIEW_COMPLETE)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -644,8 +682,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "subagents-queued-wake-with-approval":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PLAYGROUND_SUBAGENT_WAKE_QUEUE}
+          entries={pendingQueueRows(PLAYGROUND_SUBAGENT_WAKE_QUEUE)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -653,6 +690,10 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     default:
       return null;
   }
+}
+
+function pendingQueueRows(entries: PendingPromptQueueEntry[]) {
+  return entries.map(derivePendingPromptQueueRow);
 }
 
 function PlaygroundComposerSurface() {
@@ -672,6 +713,48 @@ function PlaygroundComposerSurface() {
             className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
+        <div className="flex items-center justify-end gap-1 px-2 pb-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            disabled
+            aria-label="Send (playground — disabled)"
+          >
+            <ArrowUp className="size-3.5" />
+          </Button>
+        </div>
+      </form>
+    </ChatComposerSurface>
+  );
+}
+
+function PlaygroundLongInputComposerSurface() {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useComposerTextareaAutosize({
+    textareaRef,
+    value: PLAYGROUND_LONG_COMPOSER_DRAFT,
+    lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+    minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
+    maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
+    minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
+  });
+
+  return (
+    <ChatComposerSurface overflowMode="clip">
+      <form className="relative flex flex-col">
+        <ComposerTextareaFrame topInset="standard">
+          <ComposerTextarea
+            data-chat-composer-editor
+            data-telemetry-mask
+            ref={textareaRef}
+            rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
+            value={PLAYGROUND_LONG_COMPOSER_DRAFT}
+            placeholder="Playground long composer"
+            spellCheck={false}
+            readOnly
+          />
+        </ComposerTextareaFrame>
         <div className="flex items-center justify-end gap-1 px-2 pb-2">
           <Button
             type="button"

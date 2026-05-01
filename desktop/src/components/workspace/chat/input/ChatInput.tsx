@@ -1,17 +1,15 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent,
 } from "react";
 import {
-  CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-  CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM,
   CHAT_COMPOSER_LABELS,
+  WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
@@ -26,6 +24,7 @@ import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
+import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
@@ -36,6 +35,7 @@ import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
 import { ComposerTextarea } from "./ComposerTextarea";
+import { ComposerTextareaFrame } from "./ComposerTextareaFrame";
 import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
 import { ChatComposerSurface } from "./ChatComposerSurface";
@@ -117,10 +117,19 @@ export function ChatInput({
     return "Review agents are unavailable right now";
   })();
   const promptText = serializeChatDraftToPrompt(draft);
+  const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !attachments.hasAttachments && !planAttachments.hasPlans;
+    : isEmpty && !hasDraftAttachments;
   const canSubmit = !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans;
+  useComposerTextareaAutosize({
+    textareaRef,
+    value: editDraft,
+    lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+    minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
+    maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
+    minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
+  });
 
   const onSubmit = useCallback(async () => {
     if (isEditingQueuedPrompt) {
@@ -235,35 +244,12 @@ export function ChatInput({
     };
   }, [focusComposer, focusRequestNonce]);
 
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) {
-      return;
-    }
-
-    const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) {
-      return;
-    }
-
-    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const codexMinHeightPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM
-      : lineHeightPx * CHAT_COMPOSER_INPUT.minRows;
-    const minPx = Math.max(lineHeightPx * CHAT_COMPOSER_INPUT.minRows, codexMinHeightPx);
-    const maxPx = lineHeightPx * CHAT_COMPOSER_INPUT.maxRows;
-    el.style.height = "auto";
-    const contentHeight = el.scrollHeight;
-    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
-    el.style.height = `${next}px`;
-    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [editDraft, isEditingQueuedPrompt]);
-
   return (
     <DebugProfiler id="chat-composer">
       <div className="relative">
       <div ref={setMentionSearchHost} className="relative z-20 flex flex-col px-5" />
       <ChatComposerSurface
+        overflowMode="clip"
         onClick={() => {
           if (isEditingQueuedPrompt) {
             textareaRef.current?.focus();
@@ -295,9 +281,6 @@ export function ChatInput({
               </Button>
             </div>
           )}
-          {!isEditingQueuedPrompt && !attachments.hasAttachments && !planAttachments.hasPlans && (
-            <div className="h-5" aria-hidden="true" />
-          )}
           {!isEditingQueuedPrompt && (
             <DraftAttachmentPreviewList
               attachments={[...attachments.attachments, ...planAttachments.attachments]}
@@ -305,17 +288,12 @@ export function ChatInput({
             />
           )}
           {isEditingQueuedPrompt ? (
-            <div
-              className="mb-2 flex-grow select-text overflow-y-auto px-4"
-              style={{
-                minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
-                maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
-              }}
-            >
+            <ComposerTextareaFrame topInset="none">
               <ComposerTextarea
+                data-chat-composer-editor
                 data-telemetry-mask
                 ref={textareaRef}
-                rows={CHAT_COMPOSER_INPUT.minRows}
+                rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
                 value={editDraft}
                 onChange={(event) => setEditDraftText(event.target.value)}
                 onKeyDown={handleKeyDown}
@@ -324,12 +302,8 @@ export function ChatInput({
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
-                style={{
-                  minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
-                  maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
-                }}
               />
-            </div>
+            </ComposerTextareaFrame>
           ) : (
             <ComposerMentionEditor
               draft={draft}
@@ -339,8 +313,7 @@ export function ChatInput({
               disabled={isDisabled}
               onSubmit={onSubmit}
               onKeyDown={handleKeyDown}
-              minHeightRem={CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}
-              maxHeightRem={CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}
+              topInset={hasDraftAttachments ? "none" : "standard"}
               searchHostElement={mentionSearchHost}
             />
           )}

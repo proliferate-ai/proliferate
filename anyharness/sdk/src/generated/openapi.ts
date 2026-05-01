@@ -3503,6 +3503,7 @@ export interface components {
             phase: components["schemas"]["WorkspaceExecutionPhase"];
             runningCount: number;
             totalSessionCount: number;
+            updatedAt?: string | null;
         };
         /** @enum {string} */
         WorkspaceFileKind: "file" | "directory" | "symlink";

@@ -22,6 +22,8 @@ pub struct WorkspaceExecutionSummary {
     pub awaiting_interaction_count: usize,
     pub idle_count: usize,
     pub errored_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

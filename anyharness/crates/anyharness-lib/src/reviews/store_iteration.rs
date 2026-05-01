@@ -37,6 +37,7 @@ impl ReviewStore {
                          SELECT 1
                          FROM review_feedback_jobs job
                          WHERE job.review_run_id = review_runs.id
+                           AND job.review_round_id = review_runs.active_round_id
                            AND job.feedback_turn_id = ?9
                            AND job.state = 'sent'
                        )",

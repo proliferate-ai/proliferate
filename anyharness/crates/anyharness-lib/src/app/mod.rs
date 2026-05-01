@@ -38,6 +38,8 @@ use crate::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::sessions::subagents::mcp_auth::SubagentMcpAuth;
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
+use crate::sessions::workspace_naming::hooks::WorkspaceNamingSessionHooks;
+use crate::sessions::workspace_naming::mcp_auth::WorkspaceNamingMcpAuth;
 use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
@@ -80,6 +82,7 @@ pub struct AppState {
     pub review_service: Arc<ReviewService>,
     pub review_session_hooks: Arc<ReviewSessionHooks>,
     pub review_runtime: Arc<ReviewRuntime>,
+    pub workspace_naming_session_hooks: Arc<WorkspaceNamingSessionHooks>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
@@ -195,10 +198,18 @@ impl AppState {
             review_mcp_auth,
             review_hook_event_tx,
         ));
+        let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
+        let workspace_naming_session_hooks = Arc::new(WorkspaceNamingSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            workspace_naming_mcp_auth,
+            SessionStore::new(db.clone()),
+        ));
         let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> = vec![
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
+            workspace_naming_session_hooks.clone(),
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -266,6 +277,7 @@ impl AppState {
             review_service,
             review_session_hooks,
             review_runtime,
+            workspace_naming_session_hooks,
             session_service,
             session_runtime,
             workspace_access_gate,

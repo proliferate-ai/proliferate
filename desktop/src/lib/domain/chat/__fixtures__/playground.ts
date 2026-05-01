@@ -7,8 +7,8 @@ import type {
   TranscriptState,
   UserInputQuestion,
 } from "@anyharness/sdk";
-import type { PendingPromptListEntry } from "@/components/workspace/chat/input/PendingPromptList";
 import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
+import type { PendingPromptQueueEntry } from "@/lib/domain/chat/pending-prompt-queue";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
 import {
   buildCloudWorkspaceStatusScreenModel,
@@ -61,6 +61,29 @@ export const FILE_MENTION_SEARCH_RESULTS: SearchWorkspaceFilesResponse["results"
     path: "docs/frontend/chat-composer.md",
   },
 ];
+
+export const PLAYGROUND_LONG_COMPOSER_DRAFT = [
+  "Clean up the workspace chat composer expansion behavior.",
+  "",
+  "The first line should stay pinned to the same visual top inset while the composer grows upward.",
+  "The surface should not become a nested scroll area.",
+  "The editor frame should not scroll.",
+  "The textarea should keep growing until the configured workspace cap.",
+  "After sixteen rows, only the textarea should scroll internally.",
+  "Model controls and send/cancel actions need to remain visible.",
+  "Attachment preview rows should not add a second top gap above the editor.",
+  "Plan reference rows should follow the same spacing rule as file attachments.",
+  "Queued-prompt editing should use the same autosize workflow.",
+  "The Home composer remains intentionally capped at eight rows.",
+  "The file mention search tray still renders above the composer surface.",
+  "Focus behavior still depends on data-chat-composer-editor.",
+  "Telemetry masking stays on the editable text surface.",
+  "This scenario exists to make long prompt regressions visible in the playground.",
+  "It should be long enough to exceed the workspace cap.",
+  "It should make internal scrolling observable.",
+  "It should not require a live AnyHarness session.",
+  "It should share the production frame and autosize hook.",
+].join("\n");
 
 export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
   workspaceId: "workspace-arrival-created",
@@ -703,7 +726,7 @@ export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] = [
   }),
 ];
 
-export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptListEntry[] = [{
+export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptQueueEntry[] = [{
   seq: 7,
   text: [
     'Subagent "runtime-server-sdk-survey" completed a turn.',
@@ -859,11 +882,11 @@ export const PLAN_OPTIONS: PermissionOptionAction[] = [
   { optionId: "plan", label: "No, keep planning", kind: "reject_once" },
 ];
 
-export const PENDING_PROMPTS_SINGLE: PendingPromptListEntry[] = [
+export const PENDING_PROMPTS_SINGLE: PendingPromptQueueEntry[] = [
   { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: false },
 ];
 
-export const PENDING_PROMPTS_MULTI: PendingPromptListEntry[] = [
+export const PENDING_PROMPTS_MULTI: PendingPromptQueueEntry[] = [
   { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: false },
   { seq: 2, text: "and rerun the server test suite after", contentParts: [], isBeingEdited: false },
   {
@@ -874,10 +897,66 @@ export const PENDING_PROMPTS_MULTI: PendingPromptListEntry[] = [
   },
 ];
 
-export const PENDING_PROMPTS_WITH_EDITING: PendingPromptListEntry[] = [
+export const PENDING_PROMPTS_WITH_EDITING: PendingPromptQueueEntry[] = [
   { seq: 1, text: "now please make fixes!", contentParts: [], isBeingEdited: true },
   { seq: 2, text: "and rerun the server test suite after", contentParts: [], isBeingEdited: false },
 ];
+
+export const PENDING_REVIEW_FEEDBACK_READY: PendingPromptQueueEntry[] = [{
+  seq: 8,
+  text: [
+    "Review feedback is ready.",
+    "",
+    "Review run: review-run-ready",
+    "Round: 1",
+    "Target: plan",
+    "",
+    "Address the feedback you agree with, ignore feedback you can justify ignoring, and finish the revised target normally.",
+    "",
+    "## Reviewer",
+    "Status: submitted",
+    "Pass: false",
+    "",
+    "Summary:",
+    "Hidden critique body that should not render in the composer queue.",
+  ].join("\n"),
+  contentParts: [],
+  isBeingEdited: false,
+  promptProvenance: {
+    type: "reviewFeedback",
+    reviewRunId: "review-run-ready",
+    reviewRoundId: "review-round-ready",
+    feedbackJobId: "feedback-job-ready",
+  },
+}];
+
+export const PENDING_REVIEW_COMPLETE: PendingPromptQueueEntry[] = [{
+  seq: 9,
+  text: [
+    "Review is complete.",
+    "",
+    "Review run: review-run-complete",
+    "Round: 2",
+    "Target: plan",
+    "",
+    "All reviewers approved. Use the final reviewer feedback below to present the final plan.",
+    "",
+    "## Reviewer",
+    "Status: submitted",
+    "Pass: true",
+    "",
+    "Summary:",
+    "Final hidden reviewer note that should not render in the composer queue.",
+  ].join("\n"),
+  contentParts: [],
+  isBeingEdited: false,
+  promptProvenance: {
+    type: "reviewFeedback",
+    reviewRunId: "review-run-complete",
+    reviewRoundId: "review-round-complete",
+    feedbackJobId: "feedback-job-complete",
+  },
+}];
 
 export const USER_INPUT_SINGLE_OPTION: UserInputQuestion[] = [{
   questionId: "provider",
