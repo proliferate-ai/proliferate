@@ -14,6 +14,7 @@ anyharness/crates/anyharness-lib/src/api/http/mobility.rs
 anyharness/crates/anyharness-lib/src/acp/background_work/claude.rs
 anyharness/crates/anyharness-contract/src/v1/events.rs
 anyharness/crates/anyharness-contract/src/v1/sessions.rs
+anyharness/crates/anyharness-lib/src/files/service.rs
 anyharness/crates/anyharness-lib/src/reviews/runtime.rs
 anyharness/crates/anyharness-lib/src/reviews/service.rs
 anyharness/crates/anyharness-lib/src/reviews/store.rs
@@ -33,13 +34,19 @@ anyharness/sdk/src/reducer/__tests__/transcript.test.ts
 desktop/src/components/ui/icons.tsx
 desktop/src/components/playground/PlaygroundComposer.tsx
 desktop/src/components/workspace/chat/transcript/MessageList.tsx
+desktop/src/components/workspace/files/FileEditorView.tsx
+desktop/src/components/workspace/shell/right-panel/RightPanel.tsx
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/hooks/sessions/use-session-selection-actions.ts
+desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/lib/domain/chat/__fixtures__/playground.ts
 desktop/src/lib/infra/debug-measurement.ts
 desktop/src/stores/preferences/workspace-ui-store.ts
 server/tests/integration/test_cloud_api.py
+server/tests/integration/test_billing_accounting.py
+server/tests/integration/test_billing_api.py
+server/tests/integration/test_stripe_webhooks.py
 server/proliferate/db/store/billing.py
 server/proliferate/db/store/cloud_mobility.py
 server/tests/unit/test_cloud_runtime_provision.py
