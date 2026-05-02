@@ -14,6 +14,8 @@ type CloudBillingActions = ReturnType<typeof useCloudBillingActions>;
 interface CloudBillingSummaryProps {
   billingPlan: BillingPlanInfo;
   billingActions: CloudBillingActions;
+  manageBillingLabel?: string;
+  upgradeLabel?: string;
 }
 
 function formatSandboxHours(value: number | null | undefined): string {
@@ -40,12 +42,34 @@ function formatCloudRepoUsage(
   return `${activeCloudRepoCount.toLocaleString()} of ${cloudRepoLimit.toLocaleString()}`;
 }
 
+function formatCents(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "No cap";
+  }
+  return `$${(Math.max(value, 0) / 100).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}`;
+}
+
 function cloudAccessStatusLabel(billingPlan: BillingPlanInfo): string {
-  if (billingPlan.hasUnlimitedCloudHours) {
-    return "Unlimited";
+  if (billingPlan.proBillingEnabled) {
+    if (billingPlan.legacyCloudSubscription) {
+      return "Legacy Cloud";
+    }
+    if (billingPlan.isUnlimited) {
+      return "Internal unlimited";
+    }
+    if (billingPlan.isPaidCloud) {
+      return "Pro";
+    }
+    return "Free trial";
   }
   if (billingPlan.isPaidCloud) {
-    return "$200/month Cloud";
+    return "Cloud subscription";
+  }
+  if (billingPlan.hasUnlimitedCloudHours) {
+    return "Cloud access";
   }
   return "Limited free cloud";
 }
@@ -53,8 +77,21 @@ function cloudAccessStatusLabel(billingPlan: BillingPlanInfo): string {
 export function CloudBillingSummary({
   billingPlan,
   billingActions,
+  manageBillingLabel = "Manage billing",
+  upgradeLabel,
 }: CloudBillingSummaryProps) {
   const hasUnlimitedHours = billingPlan.hasUnlimitedCloudHours;
+  const proBillingLive = billingPlan.proBillingEnabled;
+  const remainingHours = proBillingLive && billingPlan.isPaidCloud
+    ? billingPlan.remainingManagedCloudHours
+    : billingPlan.remainingSandboxHours;
+  const repoLimit = proBillingLive
+    ? billingPlan.repoEnvironmentLimit
+    : billingPlan.cloudRepoLimit;
+  const showProOverage = proBillingLive
+    && billingPlan.isPaidCloud
+    && !billingPlan.legacyCloudSubscription
+    && !billingPlan.isUnlimited;
 
   return (
     <div className="space-y-3">
@@ -67,14 +104,20 @@ export function CloudBillingSummary({
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="min-w-0">
               <dt className="text-xs text-muted-foreground">
-                {hasUnlimitedHours
+                {proBillingLive
+                  ? billingPlan.isPaidCloud
+                    ? "Managed cloud left"
+                    : billingPlan.isUnlimited
+                      ? "Remaining"
+                      : "Free trial left"
+                  : hasUnlimitedHours
                   ? "Remaining"
                   : billingPlan.isPaidCloud
                     ? "Prepaid remaining"
                     : "Free hours left"}
               </dt>
               <dd className="mt-1 font-medium text-foreground">
-                {formatSandboxHours(billingPlan.remainingSandboxHours)}
+                {formatSandboxHours(remainingHours)}
               </dd>
             </div>
             <div className="min-w-0">
@@ -88,7 +131,7 @@ export function CloudBillingSummary({
               <dd className="mt-1 font-medium text-foreground">
                 {formatCloudRepoUsage(
                   billingPlan.activeCloudRepoCount,
-                  billingPlan.cloudRepoLimit,
+                  repoLimit ?? null,
                 )}
               </dd>
             </div>
@@ -105,9 +148,9 @@ export function CloudBillingSummary({
                     void billingActions.createBillingPortal().catch(() => undefined);
                   }}
                 >
-                  Manage billing
+                  {manageBillingLabel}
                 </Button>
-                {!hasUnlimitedHours && (
+                {!hasUnlimitedHours && !proBillingLive && (
                   <Button
                     type="button"
                     variant="secondary"
@@ -129,14 +172,38 @@ export function CloudBillingSummary({
                   void billingActions.createCloudCheckout().catch(() => undefined);
                 }}
               >
-                Upgrade to unlimited
+                {upgradeLabel ?? (proBillingLive ? "Upgrade to Pro" : "Upgrade")}
               </Button>
             )}
           </div>
         </div>
       </SettingsCard>
 
-      {billingPlan.isPaidCloud && !hasUnlimitedHours && (
+      {showProOverage ? (
+        <SettingsCard>
+          <div className="space-y-3 p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <p className="font-medium text-foreground">Managed cloud overage</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatCents(billingPlan.managedCloudOverageUsedCents)} used of{" "}
+                  {formatCents(billingPlan.managedCloudOverageCapCents)}
+                </p>
+              </div>
+              <Switch
+                aria-label="Toggle cloud overage billing"
+                checked={billingPlan.managedCloudOverageEnabled}
+                disabled={billingActions.updatingOverage}
+                onChange={(enabled) => {
+                  void billingActions.updateOverageEnabled({ enabled }).catch(() => undefined);
+                }}
+              />
+            </div>
+          </div>
+        </SettingsCard>
+      ) : null}
+
+      {!proBillingLive && billingPlan.isPaidCloud && !hasUnlimitedHours ? (
         <SettingsCard>
           <div className="p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -148,15 +215,15 @@ export function CloudBillingSummary({
                 checked={billingPlan.overageEnabled}
                 disabled={billingActions.updatingOverage}
                 onChange={(enabled) => {
-                  void billingActions.updateOverageEnabled(enabled).catch(() => undefined);
+                  void billingActions.updateOverageEnabled({ enabled }).catch(() => undefined);
                 }}
               />
             </div>
           </div>
         </SettingsCard>
-      )}
+      ) : null}
 
-      {billingPlan.hostedInvoiceUrl && (
+      {billingPlan.hostedInvoiceUrl && billingPlan.activeSpendHold ? (
         <SettingsCard>
           <div className="p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -175,7 +242,7 @@ export function CloudBillingSummary({
             </div>
           </div>
         </SettingsCard>
-      )}
+      ) : null}
 
       {billingPlan.billingMode === "enforce" && billingPlan.startBlocked && (
         <SettingsCard>

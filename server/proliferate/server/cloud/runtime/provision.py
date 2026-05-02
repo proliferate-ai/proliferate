@@ -807,7 +807,11 @@ async def provision_workspace(
                 status="allocating",
                 started_at=None,
                 concurrent_sandbox_limit=(
-                    settings.cloud_concurrent_sandbox_limit
+                    (
+                        authorization.active_environment_limit
+                        if authorization.active_environment_limit is not None
+                        else settings.cloud_concurrent_sandbox_limit
+                    )
                     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE
                     else None
                 ),

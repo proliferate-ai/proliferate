@@ -5,6 +5,7 @@ import {
   CircleQuestion,
   CircleUser,
   CloudIcon,
+  CreditCard,
   FolderList,
   Keyboard,
   RefreshCw,
@@ -21,6 +22,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "appearance",
   "account",
   "keyboard",
+  "billing",
   "cloud",
   "organization",
   "repo",
@@ -38,7 +40,7 @@ export type SettingsNavItem =
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "preferences" | "workflows" | "organization" | "account_cloud" | "help";
+  id: "preferences" | "organization_account" | "environments" | "workflows" | "help";
   heading: string;
   items: SettingsNavItem[];
 }
@@ -54,28 +56,29 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
   {
+    id: "organization_account",
+    heading: "Organization & Account",
+    items: [
+      { kind: "section", id: "account", label: "Account", icon: CircleUser },
+      { kind: "section", id: "organization", label: "Organization", icon: CircleUser },
+      { kind: "section", id: "billing", label: "Billing", icon: CreditCard },
+    ],
+  },
+  {
+    id: "environments",
+    heading: "Environments",
+    items: [
+      { kind: "section", id: "repo", label: "Environments", icon: FolderList },
+      { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
+    ],
+  },
+  {
     id: "workflows",
     heading: "Workflows",
     items: [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: Settings },
       { kind: "section", id: "review", label: "Review", icon: BrainOutline },
-      { kind: "section", id: "repo", label: "Environments", icon: FolderList },
-    ],
-  },
-  {
-    id: "organization",
-    heading: "Organization",
-    items: [
-      { kind: "section", id: "organization", label: "Settings", icon: CircleUser },
-    ],
-  },
-  {
-    id: "account_cloud",
-    heading: "Account & Cloud",
-    items: [
-      { kind: "section", id: "account", label: "Account", icon: CircleUser },
-      { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
     ],
   },
   {

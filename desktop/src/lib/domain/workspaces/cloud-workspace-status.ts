@@ -21,6 +21,8 @@ const GENERIC_ARCHIVED_DESCRIPTION = "This cloud workspace has been archived.";
 const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is unavailable for this workspace right now.";
 const CONCURRENCY_BLOCK_DESCRIPTION = "Archive or delete another cloud workspace before starting this one.";
 const CREDITS_EXHAUSTED_DESCRIPTION = "Cloud usage is paused because your included sandbox hours are exhausted.";
+const OVERAGE_DISABLED_DESCRIPTION = "Cloud usage is paused because managed cloud overage is disabled.";
+const CAP_EXHAUSTED_DESCRIPTION = "Cloud usage is paused because the managed cloud overage cap is exhausted.";
 const PAYMENT_HOLD_DESCRIPTION = "Cloud usage is paused because billing needs attention.";
 const ADMIN_HOLD_DESCRIPTION = "Cloud usage is paused for this account.";
 const AUTO_REFRESH_MESSAGE = "This view refreshes automatically and will switch into the workspace once the runtime is ready.";
@@ -31,6 +33,8 @@ const RETRY_HELPER_TEXT = "The workspace record is kept and we will retry setup 
 const START_BLOCK_REASONS = [
   "concurrency_limit",
   "credits_exhausted",
+  "overage_disabled",
+  "cap_exhausted",
   "payment_failed",
   "admin_hold",
   "external_billing_hold",
@@ -99,6 +103,10 @@ export function descriptionForStartBlockReason(
       return CONCURRENCY_BLOCK_DESCRIPTION;
     case "credits_exhausted":
       return CREDITS_EXHAUSTED_DESCRIPTION;
+    case "overage_disabled":
+      return OVERAGE_DISABLED_DESCRIPTION;
+    case "cap_exhausted":
+      return CAP_EXHAUSTED_DESCRIPTION;
     case "payment_failed":
     case "external_billing_hold":
       return PAYMENT_HOLD_DESCRIPTION;

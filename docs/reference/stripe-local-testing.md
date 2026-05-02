@@ -7,15 +7,15 @@ Use Stripe locally for commercial IO:
 
 ```text
 Checkout / portal / refill  -> Stripe test mode
-Stripe webhooks             -> local subscription mirror, refill grants, holds
+Stripe webhooks             -> local subscription mirror, Pro grants, refill grants, holds
 E2B lifecycle/webhooks      -> local UsageSegment ledger
 Billing authorization       -> local billing service
-Meter events                -> legacy local checks only
+Meter events                -> managed cloud overage cents
 ```
 
 Do not bill directly from E2B webhooks. They update local usage state; the
-billing accounting pass keeps local usage cursors current. Paid Cloud is flat
-unlimited, so new paid subscriptions do not export overage usage to Stripe.
+billing accounting pass keeps local usage cursors current. With Pro billing
+enabled, uncovered managed-cloud usage exports integer cents to Stripe.
 
 ## Test-Mode Resources
 
@@ -28,9 +28,9 @@ make stripe-setup-test
 The script is idempotent. It creates these test-mode resources if missing:
 
 - `Proliferate Cloud (Local Test)` product
-- $200/month Cloud test price
-- `proliferate_sandbox_seconds` billing meter
-- legacy $20 per 10-hour overage block test price
+- $20/user/month Pro test price
+- `proliferate_managed_cloud_overage_cents` billing meter
+- 1-cent managed-cloud overage meter price
 - $20 10-hour refill test price
 
 With `--write-env-local`, non-secret IDs are written to `server/.env.local`.
@@ -96,7 +96,7 @@ CLOUD_BILLING_MODE=enforce
 
 Then restart `make dev PROFILE=<name>`.
 
-## Send A Legacy Meter Hit
+## Send A Meter Hit
 
 Send one local usage hit into Stripe test mode:
 
@@ -113,18 +113,17 @@ node scripts/stripe-send-test-usage.mjs --customer cus_... --seconds 3600
 The meter payload uses:
 
 ```text
-event_name = proliferate_sandbox_seconds
+event_name = proliferate_managed_cloud_overage_cents
 payload[stripe_customer_id] = cus_...
-payload[value] = sandbox seconds
+payload[value] = overage cents
 ```
 
 Stripe meter aggregation is asynchronous, so summaries and invoice previews may
 lag after a hit is accepted.
 
-The legacy overage price must be configured as `$20` per transformed unit with
-`transform_quantity.divide_by=36000` and `transform_quantity.round=up`. The
-setup script still validates this shape for meter-event tests, but new flat
-Cloud checkouts do not attach this price.
+The Pro overage price is configured as a metered monthly price at one cent per
+unit. The server converts uncovered seconds to whole cents and sends that cents
+quantity to Stripe.
 
 ## Local Webhook Delivery
 

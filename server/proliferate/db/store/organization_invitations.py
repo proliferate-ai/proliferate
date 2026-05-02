@@ -26,6 +26,7 @@ from proliferate.db.models.organizations import (
     OrganizationInvitation,
     OrganizationMembership,
 )
+from proliferate.db.store.billing import maybe_create_org_seat_adjustment
 from proliferate.db.store.organization_records import (
     InvitationAcceptRecord,
     InvitationCreateRecord,
@@ -388,6 +389,11 @@ async def accept_invitation_handoff(
         invitation.handoff_token_hash = None
         invitation.handoff_expires_at = None
         invitation.updated_at = now
+        await maybe_create_org_seat_adjustment(
+            db,
+            organization_id=invitation.organization_id,
+            membership_id=membership.id,
+        )
         return (
             InvitationAcceptRecord(
                 organization=organization_record(organization),

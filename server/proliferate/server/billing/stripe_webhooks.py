@@ -13,26 +13,42 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_PRICE_CLASS_LEGACY_CLOUD,
+    BILLING_PRICE_CLASS_PRO,
+    PRO_INCLUDED_MANAGED_CLOUD_HOURS_PER_SEAT,
+    PRO_PERIOD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
-from proliferate.db.models.billing import BillingSubject
+from proliferate.db.models.billing import BillingSubject, BillingSubscription
 from proliferate.db.store.billing import (
     apply_payment_failed_hold,
     claim_webhook_event,
     clear_payment_failed_holds,
     ensure_billing_grant_record,
     get_billing_subject_for_stripe_reference,
+    load_billing_subscription_by_id,
+    mark_seat_adjustment_failed,
+    mark_seat_adjustment_grant_issued,
+    mark_seat_adjustment_stripe_confirmed,
     mark_webhook_event_failed_by_id,
     mark_webhook_event_processed_by_id,
+    prepare_initial_org_seat_reconcile,
     upsert_stripe_subscription_record,
 )
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.models import BillingServiceError, StripeWebhookAck
+from proliferate.server.billing.pricing import (
+    classify_monthly_price_id,
+    configured_legacy_cloud_monthly_price_id,
+    configured_managed_cloud_overage_price_id,
+    configured_pro_monthly_price_id,
+)
+from proliferate.server.billing.seats import pro_period_grant_source_ref
 
 STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300
 STRIPE_PROVIDER = "stripe"
 PAYMENT_HOLD_SOURCE = "stripe_webhook"
-LOCAL_TEST_CLOUD_PRICE_LOOKUP_KEY = "proliferate_cloud_monthly_test"
+LOCAL_TEST_CLOUD_PRICE_LOOKUP_KEY = "proliferate_pro_monthly_test"
 
 
 @dataclass(frozen=True)
@@ -213,6 +229,20 @@ def _invoice_subscription_id(invoice: dict[str, Any], lines: list[dict[str, Any]
     return None
 
 
+def _line_is_cloud_subscription(line: dict[str, Any]) -> bool:
+    price_id = _line_price_id(line)
+    if settings.pro_billing_enabled:
+        return classify_monthly_price_id(price_id) in {
+            BILLING_PRICE_CLASS_PRO,
+            BILLING_PRICE_CLASS_LEGACY_CLOUD,
+        }
+    return _price_matches(
+        line,
+        price_id=settings.stripe_cloud_monthly_price_id,
+        lookup_key=LOCAL_TEST_CLOUD_PRICE_LOOKUP_KEY,
+    )
+
+
 async def _subject_from_object(stripe_object: dict[str, Any]) -> BillingSubject | None:
     metadata = _metadata(stripe_object)
     subject_id = metadata.get("billing_subject_id")
@@ -253,7 +283,7 @@ async def _handle_checkout_session_completed(session: dict[str, Any]) -> None:
     )
 
 
-async def _sync_subscription(subscription: dict[str, Any]) -> None:
+async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscription | None:
     subscription_id = subscription.get("id")
     customer_id = _id_from_expandable(subscription.get("customer"))
     status = subscription.get("status")
@@ -262,17 +292,23 @@ async def _sync_subscription(subscription: dict[str, Any]) -> None:
         or not isinstance(customer_id, str)
         or not isinstance(status, str)
     ):
-        return
+        return None
     subject = await _subject_from_object(subscription)
     if subject is None:
-        return
-    monthly_item_id, metered_item_id = _subscription_item_ids(subscription)
+        return None
+    (
+        monthly_item_id,
+        metered_item_id,
+        monthly_price_id,
+        overage_price_id,
+        seat_quantity,
+    ) = _subscription_item_details(subscription)
     current_period_start, current_period_end = _subscription_period(
         subscription,
         monthly_item_id=monthly_item_id,
         metered_item_id=metered_item_id,
     )
-    await upsert_stripe_subscription_record(
+    record = await upsert_stripe_subscription_record(
         billing_subject_id=subject.id,
         stripe_subscription_id=subscription_id,
         stripe_customer_id=customer_id,
@@ -281,27 +317,81 @@ async def _sync_subscription(subscription: dict[str, Any]) -> None:
         canceled_at=_datetime_from_timestamp(subscription.get("canceled_at")),
         current_period_start=current_period_start,
         current_period_end=current_period_end,
-        cloud_monthly_price_id=(
-            settings.stripe_cloud_monthly_price_id if monthly_item_id is not None else None
-        ),
-        overage_price_id=(
-            settings.stripe_sandbox_overage_price_id if metered_item_id is not None else None
-        ),
+        cloud_monthly_price_id=monthly_price_id,
+        overage_price_id=overage_price_id,
         monthly_subscription_item_id=monthly_item_id,
         metered_subscription_item_id=metered_item_id,
         latest_invoice_id=_id_from_expandable(subscription.get("latest_invoice")),
         latest_invoice_status=None,
         hosted_invoice_url=None,
+        seat_quantity=seat_quantity,
+        default_pro_overage_enabled=(
+            settings.pro_billing_enabled
+            and classify_monthly_price_id(monthly_price_id) == BILLING_PRICE_CLASS_PRO
+            and status in {"active", "trialing"}
+        ),
     )
+    return await _reconcile_initial_org_subscription_seats(record)
 
 
-def _subscription_item_ids(subscription: dict[str, Any]) -> tuple[str | None, str | None]:
+async def _reconcile_initial_org_subscription_seats(
+    record: BillingSubscription,
+) -> BillingSubscription:
+    adjustment = await prepare_initial_org_seat_reconcile(
+        billing_subscription_id=record.id,
+    )
+    if adjustment is None:
+        reloaded = await load_billing_subscription_by_id(record.id)
+        return reloaded or record
+    try:
+        await stripe_billing.update_subscription_item_quantity(
+            subscription_item_id=adjustment.monthly_subscription_item_id,
+            quantity=adjustment.target_quantity,
+            idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
+        )
+        await mark_seat_adjustment_stripe_confirmed(adjustment_id=adjustment.id)
+        await mark_seat_adjustment_grant_issued(adjustment_id=adjustment.id)
+    except stripe_billing.StripeBillingError as error:
+        await mark_seat_adjustment_failed(
+            adjustment_id=adjustment.id,
+            error=error.message,
+            terminal=400 <= error.status_code < 500 and error.status_code != 429,
+        )
+        raise
+    except Exception as error:
+        await mark_seat_adjustment_failed(
+            adjustment_id=adjustment.id,
+            error=f"{type(error).__name__}: {error}",
+        )
+        raise
+    reloaded = await load_billing_subscription_by_id(record.id)
+    return reloaded or record
+
+
+def _subscription_item_details(
+    subscription: dict[str, Any],
+) -> tuple[str | None, str | None, str | None, str | None, int | None]:
     items = subscription.get("items")
     data = items.get("data") if isinstance(items, dict) else None
     monthly_item_id: str | None = None
     metered_item_id: str | None = None
+    monthly_price_id: str | None = None
+    overage_price_id: str | None = None
+    seat_quantity: int | None = None
     if not isinstance(data, list):
-        return monthly_item_id, metered_item_id
+        return monthly_item_id, metered_item_id, monthly_price_id, overage_price_id, seat_quantity
+    pro_price_id = configured_pro_monthly_price_id()
+    legacy_price_id = configured_legacy_cloud_monthly_price_id()
+    monthly_price_ids = {
+        price_id
+        for price_id in (
+            settings.stripe_cloud_monthly_price_id,
+            pro_price_id,
+            legacy_price_id,
+        )
+        if price_id
+    }
+    overage_configured_price_id = configured_managed_cloud_overage_price_id()
     for item in data:
         if not isinstance(item, dict):
             continue
@@ -309,11 +399,16 @@ def _subscription_item_ids(subscription: dict[str, Any]) -> tuple[str | None, st
         price = item.get("price")
         if not isinstance(price, dict):
             continue
-        if price.get("id") == settings.stripe_cloud_monthly_price_id:
+        price_id = price.get("id") if isinstance(price.get("id"), str) else None
+        if price_id in monthly_price_ids:
             monthly_item_id = item_id
-        if price.get("id") == settings.stripe_sandbox_overage_price_id:
+            monthly_price_id = price_id
+            quantity = item.get("quantity")
+            seat_quantity = int(quantity) if isinstance(quantity, int | float) else None
+        if price_id in {settings.stripe_sandbox_overage_price_id, overage_configured_price_id}:
             metered_item_id = item_id
-    return monthly_item_id, metered_item_id
+            overage_price_id = price_id
+    return monthly_item_id, metered_item_id, monthly_price_id, overage_price_id, seat_quantity
 
 
 def _subscription_period(
@@ -360,28 +455,45 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
     if not lines:
         lines = await stripe_billing.list_invoice_lines(invoice_id)
     cloud_line = next(
-        (
-            line
-            for line in lines
-            if _price_matches(
-                line,
-                price_id=settings.stripe_cloud_monthly_price_id,
-                lookup_key=LOCAL_TEST_CLOUD_PRICE_LOOKUP_KEY,
-            )
-        ),
+        (line for line in lines if _line_is_cloud_subscription(line)),
         None,
     )
     if cloud_line is None:
         return
     subject = await _subject_from_object(invoice)
     subscription_id = _invoice_subscription_id(invoice, lines)
+    subscription_record: BillingSubscription | None = None
     if subscription_id:
         subscription = await stripe_billing.retrieve_subscription(subscription_id)
-        await _sync_subscription(subscription)
+        subscription_record = await _sync_subscription(subscription)
         if subject is None:
             subject = await _subject_from_object(subscription)
     if subject is None:
         return
+    if (
+        settings.pro_billing_enabled
+        and subscription_record is not None
+        and classify_monthly_price_id(subscription_record.cloud_monthly_price_id)
+        == BILLING_PRICE_CLASS_PRO
+        and subscription_record.current_period_start is not None
+    ):
+        period_start_unix = int(subscription_record.current_period_start.timestamp())
+        await ensure_billing_grant_record(
+            user_id=subject.user_id,
+            billing_subject_id=subject.id,
+            grant_type=PRO_PERIOD_GRANT_TYPE,
+            hours_granted=(
+                max(subscription_record.seat_quantity or 1, 1)
+                * PRO_INCLUDED_MANAGED_CLOUD_HOURS_PER_SEAT
+            ),
+            effective_at=subscription_record.current_period_start,
+            expires_at=subscription_record.current_period_end,
+            source_ref=pro_period_grant_source_ref(
+                subscription_id=subscription_record.stripe_subscription_id,
+                period_start_unix=period_start_unix,
+            ),
+            top_up_existing=True,
+        )
     await clear_payment_failed_holds(billing_subject_id=subject.id)
 
 

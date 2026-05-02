@@ -10,6 +10,7 @@ import { GeneralPane } from "./panes/GeneralPane";
 import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";
 import { OrganizationPane } from "./panes/OrganizationPane";
 import { ReviewSettingsPane } from "./panes/ReviewSettingsPane";
+import { BillingPane } from "./panes/BillingPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
 import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
@@ -62,6 +63,9 @@ function renderSettingsSection(
   }
   if (activeSection === "account") {
     return <AccountPane />;
+  }
+  if (activeSection === "billing") {
+    return <BillingPane />;
   }
   if (activeSection === "organization") {
     return <OrganizationPane />;

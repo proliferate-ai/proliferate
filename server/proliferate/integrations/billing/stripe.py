@@ -13,6 +13,12 @@ from urllib.parse import urlencode
 import httpx
 
 from proliferate.config import settings
+from proliferate.constants.billing import PRO_SEAT_MONTHLY_AMOUNT_CENTS
+from proliferate.server.billing.pricing import (
+    configured_managed_cloud_meter_id,
+    configured_managed_cloud_overage_price_id,
+    configured_pro_monthly_price_id,
+)
 
 STRIPE_API_BASE = "https://api.stripe.com/v1"
 STRIPE_TIMEOUT_SECONDS = 10.0
@@ -88,7 +94,11 @@ async def _request(
             error = payload.get("error")
             if isinstance(error, dict) and isinstance(error.get("message"), str):
                 message = error["message"]
-        raise StripeBillingError("stripe_request_failed", message)
+        raise StripeBillingError(
+            "stripe_request_failed",
+            message,
+            status_code=response.status_code,
+        )
     if not isinstance(payload, dict):
         raise StripeBillingError("stripe_invalid_response", "Stripe returned an invalid response.")
     return payload
@@ -127,7 +137,11 @@ async def create_subscription_checkout_session(
     *,
     stripe_customer_id: str,
     billing_subject_id: str,
+    organization_id: str | None = None,
+    created_by_user_id: str | None = None,
     cloud_monthly_price_id: str,
+    overage_price_id: str | None = None,
+    seat_quantity: int = 1,
     success_url: str,
     cancel_url: str,
     idempotency_key: str,
@@ -140,12 +154,32 @@ async def create_subscription_checkout_session(
         ("allow_promotion_codes", "true"),
         ("payment_method_collection", "always"),
         ("line_items[0][price]", cloud_monthly_price_id),
-        ("line_items[0][quantity]", "1"),
+        ("line_items[0][quantity]", str(max(seat_quantity, 1))),
         ("metadata[billing_subject_id]", billing_subject_id),
         ("metadata[purpose]", "cloud_subscription"),
         ("subscription_data[metadata][billing_subject_id]", billing_subject_id),
         ("subscription_data[metadata][purpose]", "cloud_subscription"),
     ]
+    if organization_id:
+        data.extend(
+            [
+                ("metadata[organization_id]", organization_id),
+                ("subscription_data[metadata][organization_id]", organization_id),
+            ]
+        )
+    if created_by_user_id:
+        data.extend(
+            [
+                ("metadata[created_by_user_id]", created_by_user_id),
+                ("subscription_data[metadata][created_by_user_id]", created_by_user_id),
+            ]
+        )
+    if overage_price_id:
+        data.extend(
+            [
+                ("line_items[1][price]", overage_price_id),
+            ]
+        )
     payload = await _request(
         "POST",
         "/checkout/sessions",
@@ -247,16 +281,20 @@ async def create_meter_event(
     *,
     event_name: str,
     stripe_customer_id: str,
-    quantity_seconds: int,
+    quantity: int | None = None,
+    quantity_seconds: int | None = None,
     identifier: str,
     timestamp: int | None,
     idempotency_key: str,
 ) -> dict[str, Any]:
+    meter_quantity = quantity if quantity is not None else quantity_seconds
+    if meter_quantity is None:
+        raise StripeBillingError("stripe_invalid_meter_quantity", "Meter quantity is required.")
     data = [
         ("event_name", event_name),
         ("identifier", identifier),
         ("payload[stripe_customer_id]", stripe_customer_id),
-        ("payload[value]", str(quantity_seconds)),
+        ("payload[value]", str(meter_quantity)),
     ]
     if timestamp is not None:
         data.append(("timestamp", str(timestamp)))
@@ -311,6 +349,64 @@ async def validate_cloud_subscription_price_configuration() -> None:
     _assert_price(
         _recurring(cloud).get("interval") == "month",
         "Cloud monthly price must recur monthly.",
+    )
+
+
+async def validate_pro_subscription_price_configuration() -> None:
+    pro_price_id = configured_pro_monthly_price_id()
+    overage_price_id = configured_managed_cloud_overage_price_id()
+    if not pro_price_id:
+        raise StripeBillingError(
+            "stripe_price_unconfigured",
+            "Stripe Pro monthly price ID is not configured.",
+            status_code=503,
+        )
+    if not overage_price_id:
+        raise StripeBillingError(
+            "stripe_price_unconfigured",
+            "Stripe managed cloud overage price ID is not configured.",
+            status_code=503,
+        )
+
+    pro_price = await retrieve_price(pro_price_id)
+    _assert_price(pro_price.get("currency") == "usd", "Pro monthly price must be USD.")
+    _assert_price(
+        pro_price.get("unit_amount") == PRO_SEAT_MONTHLY_AMOUNT_CENTS,
+        "Pro monthly price must be $20/month.",
+    )
+    _assert_price(_recurring(pro_price).get("interval") == "month", "Pro price must recur monthly.")
+
+    overage = await retrieve_price(overage_price_id)
+    recurring = _recurring(overage)
+    _assert_price(overage.get("currency") == "usd", "Overage price must be USD.")
+    _assert_price(overage.get("unit_amount") == 1, "Overage price must be 1 cent per unit.")
+    _assert_price(recurring.get("interval") == "month", "Overage price must recur monthly.")
+    _assert_price(
+        recurring.get("usage_type") == "metered",
+        "Overage price must be a metered recurring price.",
+    )
+    meter_id = configured_managed_cloud_meter_id()
+    if meter_id:
+        _assert_price(
+            recurring.get("meter") == meter_id,
+            "Overage price must use the configured managed cloud meter.",
+        )
+
+
+async def update_subscription_item_quantity(
+    *,
+    subscription_item_id: str,
+    quantity: int,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    return await _request(
+        "POST",
+        f"/subscription_items/{subscription_item_id}",
+        data=[
+            ("quantity", str(max(quantity, 1))),
+            ("proration_behavior", "always_invoice"),
+        ],
+        idempotency_key=idempotency_key,
     )
 
 

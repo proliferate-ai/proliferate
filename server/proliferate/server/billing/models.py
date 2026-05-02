@@ -34,6 +34,18 @@ class BillingSnapshot:
     hold_reason: str | None
     remaining_seconds: float | None
     hosted_invoice_url: str | None
+    pro_billing_enabled: bool = False
+    billable_seat_count: int | None = None
+    included_managed_cloud_hours: float | None = None
+    remaining_managed_cloud_hours: float | None = None
+    managed_cloud_overage_enabled: bool = False
+    managed_cloud_overage_cap_cents: int | None = None
+    managed_cloud_overage_used_cents: int = 0
+    overage_price_per_hour_cents: int = 200
+    active_environment_limit: int | None = None
+    repo_environment_limit: int | None = None
+    byo_runtime_allowed: bool = False
+    legacy_cloud_subscription: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,6 +59,7 @@ class SandboxStartAuthorization:
     message: str | None
     active_sandbox_count: int
     remaining_seconds: float | None
+    active_environment_limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -91,16 +104,15 @@ class BillingBaseModel(BaseModel):
 class PlanInfo(BillingBaseModel):
     plan: str
     usage_minutes: int = Field(alias="usageMinutes")
+    pro_billing_enabled: bool = Field(alias="proBillingEnabled")
 
 
 class CloudPlanInfo(BillingBaseModel):
     plan: str = Field(
-        description=(
-            "`cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited "
-            "entitlement, and both grant unlimited Cloud hours."
-        )
+        description="Public billing plan. Values are `free` or `pro`."
     )
     billing_mode: str = Field(alias="billingMode")
+    pro_billing_enabled: bool = Field(alias="proBillingEnabled")
     is_unlimited: bool = Field(alias="isUnlimited")
     has_unlimited_cloud_hours: bool = Field(alias="hasUnlimitedCloudHours")
     over_quota: bool = Field(alias="overQuota")
@@ -119,16 +131,34 @@ class CloudPlanInfo(BillingBaseModel):
     start_block_reason: str | None = Field(default=None, alias="startBlockReason")
     active_spend_hold: bool = Field(alias="activeSpendHold")
     hold_reason: str | None = Field(default=None, alias="holdReason")
+    billable_seat_count: int | None = Field(default=None, alias="billableSeatCount")
+    included_managed_cloud_hours: float | None = Field(
+        default=None,
+        alias="includedManagedCloudHours",
+    )
+    remaining_managed_cloud_hours: float | None = Field(
+        default=None,
+        alias="remainingManagedCloudHours",
+    )
+    managed_cloud_overage_enabled: bool = Field(alias="managedCloudOverageEnabled")
+    managed_cloud_overage_cap_cents: int | None = Field(
+        default=None,
+        alias="managedCloudOverageCapCents",
+    )
+    managed_cloud_overage_used_cents: int = Field(alias="managedCloudOverageUsedCents")
+    overage_price_per_hour_cents: int = Field(alias="overagePricePerHourCents")
+    active_environment_limit: int | None = Field(default=None, alias="activeEnvironmentLimit")
+    repo_environment_limit: int | None = Field(default=None, alias="repoEnvironmentLimit")
+    byo_runtime_allowed: bool = Field(alias="byoRuntimeAllowed")
+    legacy_cloud_subscription: bool = Field(alias="legacyCloudSubscription")
 
 
 class BillingOverview(BillingBaseModel):
     plan: str = Field(
-        description=(
-            "`cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited "
-            "entitlement, and both grant unlimited Cloud hours."
-        )
+        description="Public billing plan. Values are `free` or `pro`."
     )
     billing_mode: str = Field(alias="billingMode")
+    pro_billing_enabled: bool = Field(alias="proBillingEnabled")
     is_unlimited: bool = Field(alias="isUnlimited")
     has_unlimited_cloud_hours: bool = Field(alias="hasUnlimitedCloudHours")
     over_quota: bool = Field(alias="overQuota")
@@ -147,6 +177,26 @@ class BillingOverview(BillingBaseModel):
     start_block_reason: str | None = Field(default=None, alias="startBlockReason")
     active_spend_hold: bool = Field(alias="activeSpendHold")
     hold_reason: str | None = Field(default=None, alias="holdReason")
+    billable_seat_count: int | None = Field(default=None, alias="billableSeatCount")
+    included_managed_cloud_hours: float | None = Field(
+        default=None,
+        alias="includedManagedCloudHours",
+    )
+    remaining_managed_cloud_hours: float | None = Field(
+        default=None,
+        alias="remainingManagedCloudHours",
+    )
+    managed_cloud_overage_enabled: bool = Field(alias="managedCloudOverageEnabled")
+    managed_cloud_overage_cap_cents: int | None = Field(
+        default=None,
+        alias="managedCloudOverageCapCents",
+    )
+    managed_cloud_overage_used_cents: int = Field(alias="managedCloudOverageUsedCents")
+    overage_price_per_hour_cents: int = Field(alias="overagePricePerHourCents")
+    active_environment_limit: int | None = Field(default=None, alias="activeEnvironmentLimit")
+    repo_environment_limit: int | None = Field(default=None, alias="repoEnvironmentLimit")
+    byo_runtime_allowed: bool = Field(alias="byoRuntimeAllowed")
+    legacy_cloud_subscription: bool = Field(alias="legacyCloudSubscription")
 
 
 class StripeWebhookAck(BillingBaseModel):
@@ -170,6 +220,7 @@ class BillingOwnerSelection(BillingBaseModel):
 
 class OverageSettingsRequest(BillingBaseModel):
     enabled: bool
+    cap_cents_per_seat: int | None = Field(default=None, alias="capCentsPerSeat")
     owner_scope: Literal["personal", "organization"] = Field(
         default="personal",
         alias="ownerScope",
@@ -179,3 +230,7 @@ class OverageSettingsRequest(BillingBaseModel):
 
 class OverageSettingsResponse(BillingBaseModel):
     overage_enabled: bool = Field(alias="overageEnabled")
+    overage_cap_cents_per_seat: int | None = Field(
+        default=None,
+        alias="overageCapCentsPerSeat",
+    )

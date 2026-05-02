@@ -47,6 +47,7 @@ def test_repo_limit_applies_in_observe_and_enforce_modes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
 
     assert (
         repo_limit_for_billing_snapshot(

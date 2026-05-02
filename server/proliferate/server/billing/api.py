@@ -39,7 +39,13 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 async def get_plan(
     user: User = Depends(current_active_user),
 ) -> PlanInfo:
-    return await get_current_plan(user.id)
+    try:
+        return await get_current_plan(user.id)
+    except BillingServiceError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error
 
 
 @router.get("/cloud-plan", response_model=CloudPlanInfo)
@@ -142,6 +148,7 @@ async def update_overage_settings_endpoint(
         return await update_overage_settings(
             user,
             enabled=request.enabled,
+            cap_cents_per_seat=request.cap_cents_per_seat,
             owner_selection=OwnerSelection(
                 owner_scope=request.owner_scope,
                 organization_id=request.organization_id,
