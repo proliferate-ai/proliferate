@@ -312,6 +312,12 @@ pub enum ContentPart {
         size: Option<u64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         preview: Option<String>,
+        #[serde(rename = "previewTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview_truncated: Option<bool>,
+        #[serde(rename = "previewOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview_original_bytes: Option<u64>,
     },
     ResourceLink {
         uri: String,
@@ -347,6 +353,12 @@ pub enum ContentPart {
         event: TerminalLifecycleEvent,
         #[serde(skip_serializing_if = "Option::is_none")]
         data: Option<String>,
+        #[serde(rename = "dataTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        data_truncated: Option<bool>,
+        #[serde(rename = "dataOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        data_original_bytes: Option<u64>,
         #[serde(rename = "exitCode")]
         #[serde(skip_serializing_if = "Option::is_none")]
         exit_code: Option<i64>,
@@ -372,6 +384,12 @@ pub enum ContentPart {
         end_line: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         preview: Option<String>,
+        #[serde(rename = "previewTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview_truncated: Option<bool>,
+        #[serde(rename = "previewOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview_original_bytes: Option<u64>,
     },
     FileChange {
         operation: FileChangeOperation,
@@ -399,8 +417,20 @@ pub enum ContentPart {
         deletions: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         patch: Option<String>,
+        #[serde(rename = "patchTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        patch_truncated: Option<bool>,
+        #[serde(rename = "patchOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        patch_original_bytes: Option<u64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         preview: Option<String>,
+        #[serde(rename = "previewTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview_truncated: Option<bool>,
+        #[serde(rename = "previewOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview_original_bytes: Option<u64>,
         #[serde(rename = "nativeToolName")]
         #[serde(skip_serializing_if = "Option::is_none")]
         native_tool_name: Option<String>,
@@ -467,9 +497,21 @@ pub enum ContentPart {
     },
     ToolInputText {
         text: String,
+        #[serde(rename = "textTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        text_truncated: Option<bool>,
+        #[serde(rename = "textOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        text_original_bytes: Option<u64>,
     },
     ToolResultText {
         text: String,
+        #[serde(rename = "textTruncated")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        text_truncated: Option<bool>,
+        #[serde(rename = "textOriginalBytes")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        text_original_bytes: Option<u64>,
     },
 }
 

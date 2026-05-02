@@ -7,13 +7,16 @@ use std::time::Instant;
 use anyharness_contract::v1::{
     ConfigApplyState, InteractionKind, McpElicitationSubmittedField,
     McpElicitationUrlRevealResponse, PromptInputBlock, ProposedPlanDecisionState,
-    ReplayRecordingSummary, Session, SessionExecutionSummary, SessionLiveConfigSnapshot,
-    SessionMcpBindingSummary, UserInputSubmittedAnswer, WorkspaceExecutionSummary,
+    ReplayRecordingSummary, Session, SessionExecutionSummary, SessionLinkSummary,
+    SessionLiveConfigSnapshot, SessionMcpBindingSummary, UserInputSubmittedAnswer,
+    WorkspaceExecutionSummary,
 };
 
 use super::execution_summary::{
     idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
 };
+use super::links::model::{SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation};
+use super::links::service::SessionLinkService;
 use super::mcp::{
     decrypt_bindings, encrypt_bindings, serialize_binding_summaries, SessionDataCipher,
     SessionMcpBindingsError, SessionMcpServer, SessionMcpSummaryError,
@@ -28,9 +31,9 @@ use super::service::{SessionService, WorkspaceSessionLaunchCatalogData};
 use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
 use crate::acp::session_actor::{
-    InteractionResolution, LiveSessionHandle, PromptAcceptError, PromptAcceptance,
-    QueueMutationError, ResolveInteractionCommandError, SessionCommand, SessionStartupStrategy,
-    SetConfigOptionCommandError,
+    ForkSessionCommandError, InteractionResolution, LiveSessionHandle, PromptAcceptError,
+    PromptAcceptance, QueueMutationError, ResolveInteractionCommandError, SessionCommand,
+    SessionStartupStrategy, SetConfigOptionCommandError,
 };
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::agents::registry::built_in_registry;
@@ -53,6 +56,7 @@ use crate::workspaces::runtime::WorkspaceRuntime;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
+    session_link_service: SessionLinkService,
     workspace_runtime: Arc<WorkspaceRuntime>,
     acp_manager: AcpManager,
     runtime_home: PathBuf,
@@ -118,6 +122,29 @@ pub enum SendPromptOutcome {
         session: SessionRecord,
         seq: i64,
     },
+}
+
+#[derive(Debug)]
+pub enum ForkSessionError {
+    SessionNotFound(String),
+    Unsupported(String),
+    Busy,
+    Invalid(String),
+    MissingNativeSessionId,
+    MissingDataKey,
+    StartFailed {
+        session: SessionRecord,
+        link: SessionLinkRecord,
+        error: anyhow::Error,
+    },
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub struct ForkSessionOutcome {
+    pub session: SessionRecord,
+    pub link: SessionLinkRecord,
+    pub child_started: bool,
 }
 
 #[derive(Debug)]
@@ -216,6 +243,25 @@ fn choose_session_startup_strategy(
     record: &SessionRecord,
     session_store: &crate::sessions::store::SessionStore,
 ) -> anyhow::Result<SessionStartupStrategy> {
+    if session_store.has_inbound_link_relation(&record.id, SessionLinkRelation::Fork)? {
+        if let Some(native_session_id) = record.native_session_id.clone() {
+            return Ok(SessionStartupStrategy::LoadNativeNoFallback(
+                native_session_id,
+            ));
+        }
+        let parent = session_store
+            .find_parent_by_inbound_link_relation(&record.id, SessionLinkRelation::Fork)?
+            .ok_or_else(|| anyhow::anyhow!("fork child is missing its parent link"))?;
+        let parent_native_session_id = parent
+            .native_session_id
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("fork parent is missing native session id"))?;
+        return Ok(SessionStartupStrategy::ForkFromNative {
+            parent_native_session_id,
+        });
+    }
+
     let Some(native_session_id) = record.native_session_id.clone() else {
         return Ok(SessionStartupStrategy::Fresh);
     };
@@ -237,6 +283,7 @@ fn choose_session_startup_strategy(
 impl SessionRuntime {
     pub fn new(
         session_service: Arc<SessionService>,
+        session_link_service: SessionLinkService,
         workspace_runtime: Arc<WorkspaceRuntime>,
         acp_manager: AcpManager,
         runtime_home: PathBuf,
@@ -247,6 +294,7 @@ impl SessionRuntime {
     ) -> Self {
         Self {
             session_service,
+            session_link_service,
             workspace_runtime,
             acp_manager,
             runtime_home,
@@ -419,6 +467,244 @@ impl SessionRuntime {
         Ok(record)
     }
 
+    pub async fn fork_session(
+        &self,
+        session_id: &str,
+        target: Option<anyharness_contract::v1::ForkSessionTarget>,
+    ) -> Result<ForkSessionOutcome, ForkSessionError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| ForkSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
+        if target.is_some() {
+            return Err(ForkSessionError::Unsupported(
+                "targeted fork is not enabled for this adapter".to_string(),
+            ));
+        }
+
+        let parent = self
+            .get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(session_id) => {
+                    ForkSessionError::SessionNotFound(session_id)
+                }
+                SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
+            })?;
+
+        validate_fork_parent(&parent, &self.session_link_service)?;
+
+        let handle = self
+            .ensure_live_session_handle(&parent, None, None)
+            .await
+            .map_err(map_start_error_to_fork)?;
+        let parent = self
+            .get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(session_id) => {
+                    ForkSessionError::SessionNotFound(session_id)
+                }
+                SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
+            })?;
+        validate_fork_parent(&parent, &self.session_link_service)?;
+        let parent_native_session_id = handle
+            .native_session_id()
+            .or_else(|| parent.native_session_id.clone())
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .ok_or(ForkSessionError::MissingNativeSessionId)?;
+        let capabilities =
+            super::model::parse_action_capabilities(parent.action_capabilities_json.as_deref());
+        if !capabilities.fork {
+            return Err(ForkSessionError::Unsupported(
+                "session agent does not advertise fork support".to_string(),
+            ));
+        }
+        if !self
+            .session_service
+            .store()
+            .list_pending_prompts(session_id)
+            .map_err(ForkSessionError::Internal)?
+            .is_empty()
+        {
+            return Err(ForkSessionError::Busy);
+        }
+
+        let execution = handle.execution_snapshot().await;
+        if execution.phase != anyharness_contract::v1::SessionExecutionPhase::Idle
+            || !execution.pending_interactions.is_empty()
+            || handle.busy.load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err(ForkSessionError::Busy);
+        }
+
+        let child_actor_forks = parent.agent_kind == AgentKind::Claude.as_str();
+        let forked = if child_actor_forks {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            handle
+                .command_tx
+                .send(SessionCommand::VerifyForkReady { respond_to: tx })
+                .await
+                .map_err(|_| {
+                    ForkSessionError::Internal(anyhow::anyhow!("session actor channel closed"))
+                })?;
+            rx.await
+                .map_err(|_| {
+                    ForkSessionError::Internal(anyhow::anyhow!(
+                        "session actor dropped fork readiness response"
+                    ))
+                })?
+                .map_err(map_fork_command_error)?;
+            None
+        } else {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            handle
+                .command_tx
+                .send(SessionCommand::Fork { respond_to: tx })
+                .await
+                .map_err(|_| {
+                    ForkSessionError::Internal(anyhow::anyhow!("session actor channel closed"))
+                })?;
+            Some(
+                rx.await
+                    .map_err(|_| {
+                        ForkSessionError::Internal(anyhow::anyhow!(
+                            "session actor dropped fork response"
+                        ))
+                    })?
+                    .map_err(map_fork_command_error)?,
+            )
+        };
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let child = SessionRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            workspace_id: parent.workspace_id.clone(),
+            agent_kind: parent.agent_kind.clone(),
+            native_session_id: forked
+                .as_ref()
+                .map(|forked| forked.native_session_id.clone()),
+            requested_model_id: parent.requested_model_id.clone(),
+            current_model_id: parent.current_model_id.clone(),
+            requested_mode_id: parent.requested_mode_id.clone(),
+            current_mode_id: parent.current_mode_id.clone(),
+            title: None,
+            thinking_level_id: parent.thinking_level_id.clone(),
+            thinking_budget_tokens: parent.thinking_budget_tokens,
+            status: "starting".to_string(),
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: parent.mcp_bindings_ciphertext.clone(),
+            mcp_binding_summaries_json: parent.mcp_binding_summaries_json.clone(),
+            mcp_binding_policy: parent.mcp_binding_policy,
+            system_prompt_append: parent.system_prompt_append.clone(),
+            subagents_enabled: parent.subagents_enabled,
+            action_capabilities_json: parent.action_capabilities_json.clone(),
+            origin: parent.origin.clone(),
+        };
+        let link = SessionLinkRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            relation: SessionLinkRelation::Fork,
+            parent_session_id: parent.id.clone(),
+            child_session_id: child.id.clone(),
+            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            label: None,
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+            created_at: now,
+        };
+        let insert_result = if child_actor_forks {
+            self.session_service
+                .store()
+                .insert_fork_session_with_link_and_event_snapshot(&child, &link)
+                .map(|copied_events| {
+                    tracing::info!(
+                        parent_session_id = %parent.id,
+                        child_session_id = %child.id,
+                        copied_events,
+                        "snapshotted parent transcript into fork child"
+                    );
+                })
+        } else {
+            self.session_service
+                .store()
+                .insert_session_with_link(&child, &link)
+        };
+        if let Err(error) = insert_result {
+            if let Some(forked) = forked.as_ref().filter(|forked| forked.supports_close) {
+                let (close_tx, close_rx) = tokio::sync::oneshot::channel();
+                let _ = handle
+                    .command_tx
+                    .send(SessionCommand::CloseNativeSession {
+                        native_session_id: forked.native_session_id.clone(),
+                        respond_to: close_tx,
+                    })
+                    .await;
+                let _ = close_rx.await;
+            }
+            return Err(ForkSessionError::Internal(error));
+        }
+
+        let child_loaded_from_forked_native_id = forked.is_some();
+        let startup_strategy = if let Some(forked) = forked {
+            SessionStartupStrategy::LoadNativeNoFallback(forked.native_session_id)
+        } else {
+            SessionStartupStrategy::ForkFromNative {
+                parent_native_session_id,
+            }
+        };
+
+        match self
+            .start_live_session(
+                &child,
+                startup_strategy,
+                child.system_prompt_append.clone(),
+                None,
+            )
+            .await
+        {
+            Ok((_handle, native_session_id)) => {
+                self.persist_live_session_state(&child.id, &native_session_id);
+                let updated = self
+                    .session_service
+                    .get_session(&child.id)
+                    .map_err(ForkSessionError::Internal)?
+                    .unwrap_or(child);
+                Ok(ForkSessionOutcome {
+                    session: updated,
+                    link,
+                    child_started: true,
+                })
+            }
+            Err(error) => {
+                // If the native child id was persisted before failure, later
+                // resumes should retry fork startup from the parent boundary instead
+                // of looping forever on an ACP-side child id that did not load.
+                if child_loaded_from_forked_native_id {
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let _ = self
+                        .session_service
+                        .store()
+                        .clear_native_session_id(&child.id, &now);
+                }
+                self.mark_session_errored(&child.id);
+                let errored = self
+                    .session_service
+                    .get_session(&child.id)
+                    .map_err(ForkSessionError::Internal)?
+                    .unwrap_or(child);
+                Err(ForkSessionError::StartFailed {
+                    session: errored,
+                    link,
+                    error: map_start_session_error_to_anyhow(error),
+                })
+            }
+        }
+    }
+
     pub fn list_replay_recordings(&self) -> Result<Vec<ReplayRecordingSummary>, ReplayError> {
         list_recordings(&self.runtime_home)
     }
@@ -502,6 +788,7 @@ impl SessionRuntime {
             mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: Some(OriginContext::system_local_runtime()),
         };
         self.session_service
@@ -1919,12 +2206,87 @@ fn merge_system_prompt_append(
     }
 }
 
+pub(crate) fn session_link_to_summary(record: &SessionLinkRecord) -> SessionLinkSummary {
+    SessionLinkSummary {
+        id: record.id.clone(),
+        relation: record.relation.as_str().to_string(),
+        parent_session_id: record.parent_session_id.clone(),
+        child_session_id: record.child_session_id.clone(),
+        workspace_relation: record.workspace_relation.as_str().to_string(),
+        label: record.label.clone(),
+        created_at: record.created_at.clone(),
+    }
+}
+
+fn validate_fork_parent(
+    parent: &SessionRecord,
+    links: &SessionLinkService,
+) -> Result<(), ForkSessionError> {
+    if parent.closed_at.is_some() || parent.dismissed_at.is_some() || parent.status == "closed" {
+        return Err(ForkSessionError::Invalid(
+            "closed or dismissed sessions cannot be forked".to_string(),
+        ));
+    }
+    let inbound = links
+        .list_by_child(&parent.id)
+        .map_err(ForkSessionError::Internal)?;
+    if inbound
+        .iter()
+        .any(|link| link.relation != SessionLinkRelation::Fork)
+    {
+        return Err(ForkSessionError::Invalid(
+            "linked child sessions cannot be forked".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
     match error {
         SessionLifecycleError::SessionNotFound(session_id) => {
             SendPromptError::SessionNotFound(session_id)
         }
         SessionLifecycleError::Internal(error) => SendPromptError::Internal(error),
+    }
+}
+
+fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
+    match error {
+        StartSessionError::WorkspaceNotFound => {
+            ForkSessionError::Internal(anyhow::anyhow!("workspace not found for session"))
+        }
+        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
+            ForkSessionError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
+        }
+        StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
+        StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
+        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
+            ForkSessionError::Internal(error)
+        }
+    }
+}
+
+fn map_fork_command_error(error: ForkSessionCommandError) -> ForkSessionError {
+    match error {
+        ForkSessionCommandError::Busy => ForkSessionError::Busy,
+        ForkSessionCommandError::Unsupported(detail) => ForkSessionError::Unsupported(detail),
+        ForkSessionCommandError::Failed(detail) => {
+            ForkSessionError::Internal(anyhow::anyhow!(detail))
+        }
+    }
+}
+
+fn map_start_session_error_to_anyhow(error: StartSessionError) -> anyhow::Error {
+    match error {
+        StartSessionError::WorkspaceNotFound => anyhow::anyhow!("workspace not found for session"),
+        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
+            anyhow::anyhow!("agent descriptor not found: {agent_kind}")
+        }
+        StartSessionError::MissingDataKey => {
+            anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
+        }
+        StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
+        StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
     }
 }
 
@@ -2033,6 +2395,7 @@ mod tests {
 
     use super::{
         build_session_launch_env, choose_session_startup_strategy, join_system_prompt_append,
+        validate_fork_parent,
     };
     use crate::acp::session_actor::SessionStartupStrategy;
     use crate::agents::model::{
@@ -2040,7 +2403,13 @@ mod tests {
         ResolvedArtifact,
     };
     use crate::agents::registry::built_in_registry;
+    use crate::origin::OriginContext;
     use crate::persistence::Db;
+    use crate::sessions::links::model::{
+        SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+    };
+    use crate::sessions::links::service::SessionLinkService;
+    use crate::sessions::links::store::SessionLinkStore;
     use crate::sessions::{model::SessionEventRecord, model::SessionRecord, store::SessionStore};
 
     fn resolved_agent(kind: AgentKind, native_path: Option<&str>) -> ResolvedAgent {
@@ -2109,7 +2478,27 @@ mod tests {
             mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: None,
+        }
+    }
+
+    fn link_record(
+        id: &str,
+        relation: SessionLinkRelation,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> SessionLinkRecord {
+        SessionLinkRecord {
+            id: id.to_string(),
+            relation,
+            parent_session_id: parent_session_id.to_string(),
+            child_session_id: child_session_id.to_string(),
+            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            label: None,
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+            created_at: "2026-03-25T00:00:00Z".to_string(),
         }
     }
 
@@ -2255,5 +2644,125 @@ mod tests {
             strategy,
             SessionStartupStrategy::LoadNative("native-1".to_string())
         );
+    }
+
+    #[test]
+    fn choose_startup_strategy_loads_fork_children_without_fresh_fallback() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let mut parent = session_record("claude");
+        parent.id = "parent-session".to_string();
+        store.insert(&parent).expect("insert parent");
+
+        let mut child = session_record("claude");
+        child.id = "fork-child".to_string();
+        child.native_session_id = Some("fork-native".to_string());
+        let link = link_record(
+            "fork-link",
+            SessionLinkRelation::Fork,
+            "parent-session",
+            "fork-child",
+        );
+        store
+            .insert_session_with_link(&child, &link)
+            .expect("insert fork child and link");
+
+        let strategy =
+            choose_session_startup_strategy(&child, &store).expect("select startup strategy");
+
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::LoadNativeNoFallback("fork-native".to_string())
+        );
+    }
+
+    #[test]
+    fn choose_startup_strategy_forks_unstarted_fork_children_from_parent_native_id() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let mut parent = session_record("claude");
+        parent.id = "parent-session".to_string();
+        parent.native_session_id = Some("parent-native".to_string());
+        store.insert(&parent).expect("insert parent");
+
+        let mut child = session_record("claude");
+        child.id = "fork-child".to_string();
+        child.native_session_id = None;
+        let link = link_record(
+            "fork-link",
+            SessionLinkRelation::Fork,
+            "parent-session",
+            "fork-child",
+        );
+        store
+            .insert_session_with_link(&child, &link)
+            .expect("insert fork child and link");
+
+        let strategy =
+            choose_session_startup_strategy(&child, &store).expect("select startup strategy");
+
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::ForkFromNative {
+                parent_native_session_id: "parent-native".to_string()
+            }
+        );
+        assert!(
+            strategy.resumes_durable_history(),
+            "fork startup appends after the copied parent transcript snapshot"
+        );
+    }
+
+    #[test]
+    fn fork_parent_validation_allows_api_origin_as_advisory_provenance() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db.clone());
+        let link_service = SessionLinkService::new(SessionLinkStore::new(db), store);
+        let mut record = session_record("claude");
+        record.origin = Some(OriginContext::api_local_runtime());
+
+        validate_fork_parent(&record, &link_service).expect("api-origin session can fork");
+    }
+
+    #[test]
+    fn fork_link_child_unique_index_rejects_multiple_fork_parents() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db.clone());
+        let mut parent_one = session_record("claude");
+        parent_one.id = "parent-one".to_string();
+        store.insert(&parent_one).expect("insert parent one");
+        let mut parent_two = session_record("claude");
+        parent_two.id = "parent-two".to_string();
+        store.insert(&parent_two).expect("insert parent two");
+
+        let mut child = session_record("claude");
+        child.id = "fork-child".to_string();
+        let first_link = link_record(
+            "fork-link-one",
+            SessionLinkRelation::Fork,
+            "parent-one",
+            "fork-child",
+        );
+        store
+            .insert_session_with_link(&child, &first_link)
+            .expect("insert fork child");
+
+        let second_link = link_record(
+            "fork-link-two",
+            SessionLinkRelation::Fork,
+            "parent-two",
+            "fork-child",
+        );
+        let link_store = SessionLinkStore::new(db);
+
+        assert!(link_store.insert(&second_link).is_err());
     }
 }

@@ -1005,7 +1005,14 @@ fn claude_registry() -> ModelRegistryMetadata {
                     Some("Most capable for complex work · 1M context"),
                     false,
                     ModelCatalogStatus::Active,
-                    vec!["claude-opus-4-5", "claude-opus-4-6-1m", "opus"],
+                    vec![
+                        "claude-opus-4-5",
+                        "claude-opus-4-5-1m",
+                        "claude-opus-4-6-1m",
+                        "claude-opus-4-7",
+                        "claude-opus-4-7-1m",
+                        "opus",
+                    ],
                     None,
                 ),
                 claude_default_controls(),
@@ -1174,18 +1181,7 @@ fn opencode_registry() -> ModelRegistryMetadata {
     registry(
         "opencode",
         "OpenCode",
-        vec![
-            model("opencode/big-pickle", "Big Pickle", None, true),
-            model("opencode/claude-opus-4-6", "Claude Opus 4.6", None, false),
-            model(
-                "opencode/claude-sonnet-4-5",
-                "Claude Sonnet 4.5",
-                None,
-                false,
-            ),
-            model("opencode/gpt-5.3-codex", "GPT 5.3 Codex", None, false),
-            model("opencode/gemini-3-pro", "Gemini 3 Pro", None, false),
-        ],
+        vec![model("opencode/big-pickle", "Big Pickle", None, true)],
     )
 }
 
@@ -1311,11 +1307,19 @@ mod tests {
             .aliases
             .iter()
             .any(|alias| alias == "claude-opus-4-6"));
-        assert!(labels.contains(&(
-            "claude-opus-4-6",
-            "Opus 4.6",
-            Some("Pinned previous Opus model"),
-        )));
+        assert!(opus_47
+            .aliases
+            .iter()
+            .any(|alias| alias == "claude-opus-4-6-1m"));
+        assert!(opus_47
+            .aliases
+            .iter()
+            .any(|alias| alias == "claude-opus-4-7"));
+        assert!(labels.iter().any(|(id, name, description)| {
+            *id == "claude-opus-4-6"
+                && *name == "Opus 4.6"
+                && description.unwrap_or("").contains("Pinned previous Opus")
+        }));
     }
 
     #[test]

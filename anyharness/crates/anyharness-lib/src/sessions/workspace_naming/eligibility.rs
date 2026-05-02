@@ -145,6 +145,7 @@ mod tests {
             creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
+            cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,
             cleanup_attempted_at: None,
@@ -177,6 +178,7 @@ mod tests {
             mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: Some(OriginContext::human_desktop()),
         }
     }

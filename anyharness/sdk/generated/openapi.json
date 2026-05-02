@@ -1656,6 +1656,93 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/fork": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "fork_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ForkSessionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Forked session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForkSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fork request or target session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot be forked now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Fork failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
       "post": {
         "tags": [
@@ -2750,6 +2837,35 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "purge_workspace",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purge workspace result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePurgeResponse"
                 }
               }
             }
@@ -4171,6 +4287,88 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/purge/preflight": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "purge_workspace_preflight",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purge preflight",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePurgePreflightResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/purge/retry": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retry_purge_workspace",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purge retry result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePurgeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/retire": {
       "post": {
         "tags": [
@@ -4679,6 +4877,134 @@
           }
         }
       }
+    },
+    "/v1/worktrees/inventory": {
+      "get": {
+        "tags": [
+          "worktrees"
+        ],
+        "operationId": "get_worktree_inventory",
+        "responses": {
+          "200": {
+            "description": "Worktree inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorktreeInventoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worktrees/orphans/prune": {
+      "post": {
+        "tags": [
+          "worktrees"
+        ],
+        "operationId": "prune_orphan_worktree",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PruneOrphanWorktreeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated worktree inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorktreeInventoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worktrees/retention-policy": {
+      "get": {
+        "tags": [
+          "worktrees"
+        ],
+        "operationId": "get_worktree_retention_policy",
+        "responses": {
+          "200": {
+            "description": "Worktree retention policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorktreeRetentionPolicy"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "worktrees"
+        ],
+        "operationId": "update_worktree_retention_policy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorktreeRetentionPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated worktree retention policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorktreeRetentionPolicy"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid retention policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/worktrees/retention/run": {
+      "post": {
+        "tags": [
+          "worktrees"
+        ],
+        "operationId": "run_worktree_retention",
+        "responses": {
+          "200": {
+            "description": "Worktree retention run result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunWorktreeRetentionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5173,6 +5499,20 @@
                   "null"
                 ]
               },
+              "previewOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "previewTruncated": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
               "size": {
                 "type": [
                   "integer",
@@ -5310,6 +5650,20 @@
                   "null"
                 ]
               },
+              "dataOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "dataTruncated": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
               "event": {
                 "$ref": "#/components/schemas/TerminalLifecycleEvent"
               },
@@ -5370,6 +5724,20 @@
               "preview": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "previewOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "previewTruncated": {
+                "type": [
+                  "boolean",
                   "null"
                 ]
               },
@@ -5475,12 +5843,40 @@
                   "null"
                 ]
               },
+              "patchOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "patchTruncated": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
               "path": {
                 "type": "string"
               },
               "preview": {
                 "type": [
                   "string",
+                  "null"
+                ]
+              },
+              "previewOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "previewTruncated": {
+                "type": [
+                  "boolean",
                   "null"
                 ]
               },
@@ -5678,6 +6074,20 @@
               "text": {
                 "type": "string"
               },
+              "textOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "textTruncated": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
               "type": {
                 "type": "string",
                 "enum": [
@@ -5695,6 +6105,20 @@
             "properties": {
               "text": {
                 "type": "string"
+              },
+              "textOriginalBytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "textTruncated": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "type": {
                 "type": "string",
@@ -6691,6 +7115,103 @@
           "line",
           "range",
           "unknown"
+        ]
+      },
+      "ForkChildStartStatus": {
+        "type": "string",
+        "enum": [
+          "started",
+          "failed"
+        ]
+      },
+      "ForkChildStartSummary": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ForkChildStartStatus"
+          }
+        }
+      },
+      "ForkSessionRequest": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkSessionTarget"
+              }
+            ]
+          }
+        }
+      },
+      "ForkSessionResponse": {
+        "type": "object",
+        "required": [
+          "session",
+          "sessionLink"
+        ],
+        "properties": {
+          "childStart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ForkChildStartSummary"
+              }
+            ]
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "sessionLink": {
+            "$ref": "#/components/schemas/SessionLinkSummary"
+          }
+        }
+      },
+      "ForkSessionTarget": {
+        "type": "object",
+        "required": [
+          "type",
+          "turnId"
+        ],
+        "properties": {
+          "itemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ForkSessionTargetType"
+          }
+        }
+      },
+      "ForkSessionTargetType": {
+        "type": "string",
+        "enum": [
+          "before_user_message"
         ]
       },
       "GetSessionLiveConfigResponse": {
@@ -8606,6 +9127,9 @@
           "updatedAt"
         ],
         "properties": {
+          "actionCapabilities": {
+            "$ref": "#/components/schemas/SessionActionCapabilities"
+          },
           "agentKind": {
             "type": "string"
           },
@@ -10177,6 +10701,17 @@
           }
         }
       },
+      "PruneOrphanWorktreeRequest": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
       "PullRequestState": {
         "type": "string",
         "enum": [
@@ -11428,6 +11963,62 @@
           }
         }
       },
+      "RunWorktreeRetentionResponse": {
+        "type": "object",
+        "required": [
+          "policy",
+          "alreadyRunning",
+          "consideredCount",
+          "attemptedCount",
+          "retiredCount",
+          "blockedCount",
+          "skippedCount",
+          "failedCount",
+          "moreEligibleRemaining",
+          "rows"
+        ],
+        "properties": {
+          "alreadyRunning": {
+            "type": "boolean"
+          },
+          "attemptedCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "blockedCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "consideredCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "moreEligibleRemaining": {
+            "type": "boolean"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/WorktreeRetentionPolicy"
+          },
+          "retiredCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorktreeRetentionRunRow"
+            }
+          },
+          "skippedCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "RuntimeCapabilities": {
         "type": "object",
         "required": [
@@ -11450,6 +12041,9 @@
           "updatedAt"
         ],
         "properties": {
+          "actionCapabilities": {
+            "$ref": "#/components/schemas/SessionActionCapabilities"
+          },
           "agentKind": {
             "type": "string"
           },
@@ -11566,6 +12160,17 @@
           },
           "workspaceId": {
             "type": "string"
+          }
+        }
+      },
+      "SessionActionCapabilities": {
+        "type": "object",
+        "properties": {
+          "fork": {
+            "type": "boolean"
+          },
+          "targetedFork": {
+            "type": "boolean"
           }
         }
       },
@@ -12218,6 +12823,43 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "SessionLinkSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "relation",
+          "parentSessionId",
+          "childSessionId",
+          "workspaceRelation",
+          "createdAt"
+        ],
+        "properties": {
+          "childSessionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "workspaceRelation": {
+            "type": "string"
           }
         }
       },
@@ -13466,6 +14108,19 @@
           }
         }
       },
+      "UpdateWorktreeRetentionPolicyRequest": {
+        "type": "object",
+        "required": [
+          "maxMaterializedWorktreesPerRepo"
+        ],
+        "properties": {
+          "maxMaterializedWorktreesPerRepo": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
       "UsageUpdatePayload": {
         "type": "object",
         "required": [
@@ -13600,6 +14255,16 @@
               "null"
             ]
           },
+          "cleanupOperation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
+              }
+            ]
+          },
           "cleanupState": {
             "$ref": "#/components/schemas/WorkspaceCleanupState"
           },
@@ -13676,6 +14341,13 @@
             "type": "string"
           }
         }
+      },
+      "WorkspaceCleanupOperation": {
+        "type": "string",
+        "enum": [
+          "retire",
+          "purge"
+        ]
       },
       "WorkspaceCleanupState": {
         "type": "string",
@@ -14146,6 +14818,111 @@
           }
         }
       },
+      "WorkspacePurgeOutcome": {
+        "type": "string",
+        "enum": [
+          "deleted",
+          "blocked",
+          "cleanup_failed"
+        ]
+      },
+      "WorkspacePurgePreflightResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "workspaceKind",
+          "lifecycleState",
+          "cleanupState",
+          "canPurge",
+          "materialized",
+          "blockers"
+        ],
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRetireBlocker"
+            }
+          },
+          "canPurge": {
+            "type": "boolean"
+          },
+          "cleanupOperation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
+              }
+            ]
+          },
+          "cleanupState": {
+            "$ref": "#/components/schemas/WorkspaceCleanupState"
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/WorkspaceLifecycleState"
+          },
+          "materialized": {
+            "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspaceKind": {
+            "$ref": "#/components/schemas/WorkspaceKind"
+          }
+        }
+      },
+      "WorkspacePurgeResponse": {
+        "type": "object",
+        "required": [
+          "outcome",
+          "alreadyDeleted",
+          "cleanupAttempted",
+          "cleanupSucceeded"
+        ],
+        "properties": {
+          "alreadyDeleted": {
+            "type": "boolean"
+          },
+          "cleanupAttempted": {
+            "type": "boolean"
+          },
+          "cleanupMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupSucceeded": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WorkspacePurgeOutcome"
+          },
+          "preflight": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspacePurgePreflightResponse"
+              }
+            ]
+          },
+          "workspace": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Workspace"
+              }
+            ]
+          }
+        }
+      },
       "WorkspaceRetireBlocker": {
         "type": "object",
         "required": [
@@ -14277,6 +15054,16 @@
           },
           "canRetire": {
             "type": "boolean"
+          },
+          "cleanupOperation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
+              }
+            ]
           },
           "cleanupState": {
             "$ref": "#/components/schemas/WorkspaceCleanupState"
@@ -14414,6 +15201,240 @@
           "standard",
           "cowork"
         ]
+      },
+      "WorktreeInventoryAction": {
+        "type": "string",
+        "enum": [
+          "prune_checkout",
+          "delete_workspace_history",
+          "retry_purge",
+          "delete_orphan_checkout"
+        ]
+      },
+      "WorktreeInventoryResponse": {
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorktreeInventoryRow"
+            }
+          }
+        }
+      },
+      "WorktreeInventoryRow": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "path",
+          "managed",
+          "materialized",
+          "associatedWorkspaces",
+          "totalSessionCount",
+          "blockers",
+          "availableActions"
+        ],
+        "properties": {
+          "associatedWorkspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorktreeInventoryWorkspaceSummary"
+            }
+          },
+          "availableActions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorktreeInventoryAction"
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRetireBlocker"
+            }
+          },
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canonicalPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupOperation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
+              }
+            ]
+          },
+          "cleanupState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCleanupState"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "materialized": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "repoRootId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repoRootName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorktreeInventoryState"
+          },
+          "totalSessionCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "WorktreeInventoryState": {
+        "type": "string",
+        "enum": [
+          "associated",
+          "orphan_checkout",
+          "missing_checkout",
+          "conflict"
+        ]
+      },
+      "WorktreeInventoryWorkspaceSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "lifecycleState",
+          "cleanupState",
+          "sessionCount"
+        ],
+        "properties": {
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupOperation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCleanupOperation"
+              }
+            ]
+          },
+          "cleanupState": {
+            "$ref": "#/components/schemas/WorkspaceCleanupState"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkspaceKind"
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/WorkspaceLifecycleState"
+          },
+          "sessionCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "WorktreeRetentionPolicy": {
+        "type": "object",
+        "required": [
+          "maxMaterializedWorktreesPerRepo",
+          "updatedAt"
+        ],
+        "properties": {
+          "maxMaterializedWorktreesPerRepo": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorktreeRetentionRowOutcome": {
+        "type": "string",
+        "enum": [
+          "retired",
+          "blocked",
+          "skipped",
+          "failed"
+        ]
+      },
+      "WorktreeRetentionRunRow": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "path",
+          "outcome",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WorktreeRetentionRowOutcome"
+          },
+          "path": {
+            "type": "string"
+          },
+          "repoRootId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
       }
     }
   }

@@ -31,6 +31,9 @@ export {
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
+  anyHarnessWorkspacePurgePreflightKey,
+  anyHarnessWorktreesInventoryKey,
+  anyHarnessWorktreesRetentionPolicyKey,
   anyHarnessRepoRootsKey,
   anyHarnessRepoRootGitBranchesKey,
   anyHarnessRepoRootDetectSetupKey,
@@ -119,9 +122,19 @@ export {
   useCreateWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
   useRetireWorkspacePreflightQuery,
+  usePurgeWorkspacePreflightQuery,
   useRetireWorkspaceMutation,
   useRetryRetireCleanupMutation,
+  usePurgeWorkspaceMutation,
+  useRetryPurgeWorkspaceMutation,
 } from "./hooks/workspaces.js";
+export {
+  useWorktreeInventoryQuery,
+  usePruneOrphanWorktreeMutation,
+  useWorktreeRetentionPolicyQuery,
+  useUpdateWorktreeRetentionPolicyMutation,
+  useRunWorktreeRetentionMutation,
+} from "./hooks/worktrees.js";
 export {
   useWorkspaceSessionsQuery,
   useSessionQuery,
@@ -132,6 +145,7 @@ export {
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,
   usePromptSessionTextMutation,
+  useForkSessionMutation,
   useEditPendingPromptMutation,
   useDeletePendingPromptMutation,
   useResumeSessionMutation,

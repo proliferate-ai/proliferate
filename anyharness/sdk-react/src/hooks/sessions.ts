@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSessionRequest,
+  ForkSessionRequest,
   ListSessionEventsOptions,
   PromptInputBlock,
   PromptSessionRequest,
@@ -261,6 +262,37 @@ export function usePromptSessionTextMutation(options?: { workspaceId?: string | 
       await queryClient.invalidateQueries({
         queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, variables.sessionId),
       });
+    },
+  });
+}
+
+export function useForkSessionMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; request?: ForkSessionRequest }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.fork(input.sessionId, input.request ?? {});
+    },
+    onSuccess: async (response, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, response.session.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, response.session.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+        }),
+      ]);
     },
   });
 }

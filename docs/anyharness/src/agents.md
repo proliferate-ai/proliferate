@@ -143,6 +143,12 @@ Credential detection is layered:
 Provider-specific local discovery currently checks known local config/auth files
 for Claude, Codex, Gemini, OpenCode, Cursor, and Amp.
 
+OpenCode is intentionally treated as provider-managed for readiness. AnyHarness
+may detect `~/.local/share/opencode/auth.json` as a positive signal, but it does
+not require AnyHarness-owned `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` env vars for
+OpenCode. OpenCode owns its provider universe, config files, AWS credential
+chain support, public/free model behavior, and live ACP-reported model list.
+
 Code path:
 
 - `anyharness/crates/anyharness-lib/src/agents/credentials.rs`

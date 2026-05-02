@@ -51,6 +51,7 @@ export function FileTabWithMenu({
         onCloseRight();
         return;
       case "create-group":
+      case "fork":
       case "dismiss":
       case "collapse-group":
       case "expand-group":

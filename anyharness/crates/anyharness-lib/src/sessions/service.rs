@@ -219,6 +219,7 @@ impl SessionService {
             mcp_binding_policy,
             system_prompt_append,
             subagents_enabled,
+            action_capabilities_json: None,
             origin: Some(origin),
         };
 

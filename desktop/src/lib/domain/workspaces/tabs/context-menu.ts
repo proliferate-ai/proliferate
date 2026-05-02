@@ -2,6 +2,7 @@ import type { ShortcutKey } from "@/config/shortcuts";
 
 export type WorkspaceTabContextMenuCommand =
   | "rename"
+  | "fork"
   | "create-group"
   | "close"
   | "close-others"
@@ -55,11 +56,13 @@ export const FILE_TAB_CONTEXT_MENU_ITEMS: readonly WorkspaceTabContextMenuItem[]
 
 export function buildChatTabContextMenuItems({
   canRename,
+  canFork = false,
   canDismiss,
   canCreateGroup = false,
   isChild = false,
 }: {
   canRename: boolean;
+  canFork?: boolean;
   canDismiss: boolean;
   canCreateGroup?: boolean;
   isChild?: boolean;
@@ -80,6 +83,14 @@ export function buildChatTabContextMenuItems({
       kind: "action",
       command: "create-group",
       label: "Create Group",
+    });
+  }
+
+  if (canFork && !isChild) {
+    items.push({
+      kind: "action",
+      command: "fork",
+      label: "Fork Session",
     });
   }
 
@@ -166,6 +177,7 @@ export function resolveFileTabContextMenuPaths(
       return index >= 0 ? openTabs.slice(index + 1) : [];
     }
     case "create-group":
+    case "fork":
     case "dismiss":
     case "collapse-group":
     case "expand-group":
@@ -192,6 +204,7 @@ export function resolveChatTabContextMenuSessionIds(
       return index >= 0 ? renderedTabSessionIds.slice(index + 1) : [];
     }
     case "create-group":
+    case "fork":
     case "dismiss":
     case "collapse-group":
     case "expand-group":

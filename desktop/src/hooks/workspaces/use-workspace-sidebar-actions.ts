@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import type { WorkspaceRetireResponse } from "@anyharness/sdk";
+import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
@@ -155,11 +155,11 @@ export function useWorkspaceSidebarActions() {
           if (result.outcome === "blocked") {
             showToast(workspaceRetireBlockedMessage(result));
           } else if (result.outcome === "cleanup_failed") {
-            showToast("Workspace marked done, but cleanup needs attention.");
+            showToast("Workspace delete started, but cleanup needs attention.");
           }
         }).catch((error) => {
           const message = error instanceof Error ? error.message : String(error);
-          showToast(`Failed to mark done: ${message}`);
+          showToast(`Failed to delete workspace: ${message}`);
         });
         return;
       case "keep_workspace_active":
@@ -184,11 +184,11 @@ export function useWorkspaceSidebarActions() {
       if (result.outcome === "blocked") {
         showToast(workspaceRetireBlockedMessage(result));
       } else if (result.outcome === "cleanup_failed") {
-        showToast("Workspace marked done, but cleanup needs attention.");
+        showToast("Workspace delete started, but cleanup needs attention.");
       }
     }).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to mark done: ${message}`);
+      showToast(`Failed to delete workspace: ${message}`);
     });
   }, [markDone, showToast]);
 
@@ -299,14 +299,14 @@ export function useWorkspaceSidebarActions() {
   };
 }
 
-function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse): string {
-  const blocker = result.preflight.blockers[0];
+function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse | WorkspacePurgeResponse): string {
+  const blocker = result.preflight?.blockers[0];
   if (blocker) {
-    const extraCount = result.preflight.blockers.length - 1;
+    const extraCount = (result.preflight?.blockers.length ?? 0) - 1;
     return extraCount > 0
       ? `${blocker.message} (+${extraCount} more)`
       : blocker.message;
   }
 
-  return result.cleanupMessage?.trim() || "Workspace is not ready to mark done.";
+  return result.cleanupMessage?.trim() || "Workspace is not ready to delete.";
 }

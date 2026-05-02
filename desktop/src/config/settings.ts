@@ -7,6 +7,7 @@ import {
   CloudIcon,
   CreditCard,
   FolderList,
+  GitBranch,
   Keyboard,
   RefreshCw,
   Settings,
@@ -26,6 +27,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "cloud",
   "organization",
   "repo",
+  "worktrees",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
@@ -69,6 +71,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Environments",
     items: [
       { kind: "section", id: "repo", label: "Environments", icon: FolderList },
+      { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
       { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
     ],
   },

@@ -5,6 +5,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Fork,
   Pencil,
   Trash,
   X,
@@ -56,6 +57,8 @@ function renderTabContextMenuIcon(command: WorkspaceTabContextMenuCommand) {
       return <Pencil className="size-3.5" />;
     case "create-group":
       return <FolderPlus className="size-3.5" />;
+    case "fork":
+      return <Fork className="size-3.5" />;
     case "collapse-group":
       return <ChevronDown className="size-3.5" />;
     case "expand-group":

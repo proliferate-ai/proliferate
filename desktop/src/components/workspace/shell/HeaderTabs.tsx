@@ -20,6 +20,7 @@ import {
 } from "@/components/workspace/shell/tabs/tab-rendering";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionForkActions } from "@/hooks/sessions/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
@@ -76,6 +77,13 @@ export function HeaderTabs() {
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
   const shellTabOrderActions = useShellTabOrderActions({
     workspaceId: viewModel.workspaceUiKey,
+  });
+  const handleSessionForked = useCallback((response: { session: { id: string } }) => {
+    chatVisibilityActions.showChatSessionTab(response.session.id, { select: true });
+  }, [chatVisibilityActions.showChatSessionTab]);
+  const { forkSession } = useSessionForkActions({
+    workspaceId: viewModel.selectedWorkspaceId,
+    onForked: handleSessionForked,
   });
 
   useShortcutHandler("session.rename", () => {
@@ -341,6 +349,10 @@ export function HeaderTabs() {
                 onCreateGroup={() =>
                   groupEditorWorkflow.openCreateGroupEditor(multiSelect.selectedTopLevelSessionIds)
                 }
+                onFork={() => {
+                  multiSelect.clearSelection();
+                  forkSession(tab.id);
+                }}
                 onSelectPointerDownCapture={(event) => {
                   if (!canMultiSelect || !isPrimaryMultiSelectPointer(event)) {
                     return;

@@ -37,6 +37,7 @@ function resolveCurrentModelDisplayName(args: {
       args.liveConfigLabel,
       model?.displayName,
     ],
+    preferKnownAlias: true,
   });
 }
 
@@ -56,6 +57,12 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
   const launchCatalog = useChatLaunchCatalog({
     activeSelection: scopedLaunchIdentity ?? configuredLaunch.selection,
+    activeModelControl: scopedLaunchIdentity && scopedModelControl
+      ? {
+        kind: scopedLaunchIdentity.kind,
+        values: scopedModelControl.values,
+      }
+      : null,
   });
   const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
 

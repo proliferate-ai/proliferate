@@ -460,6 +460,7 @@ export function useSessionCreationActions() {
           modelId: launchedSession.modelId ?? options.modelId,
           modeId: launchedSession.modeId ?? resolvedModeId ?? null,
           title: launchedSession.title ?? null,
+          actionCapabilities: launchedSession.actionCapabilities,
           liveConfig: launchedLiveConfig,
           executionSummary: launchedSession.executionSummary ?? null,
           mcpBindingSummaries: launchedSession.mcpBindingSummaries ?? null,

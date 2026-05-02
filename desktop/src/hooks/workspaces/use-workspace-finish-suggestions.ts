@@ -20,7 +20,9 @@ export function useWorkspaceFinishSuggestions(
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const dismissals = useWorkspaceUiStore((state) => state.finishSuggestionDismissalsByWorkspaceId);
   const workspaces = collections?.localWorkspaces.filter((workspace) =>
-    workspace.kind === "worktree" && workspace.lifecycleState !== "retired"
+    workspace.kind === "worktree"
+    && (workspace.surface ?? "standard") === "standard"
+    && workspace.lifecycleState !== "retired"
   ) ?? [];
 
   const queries = useQueries({

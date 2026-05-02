@@ -701,6 +701,12 @@
   description: Profile-specific AnyHarness runtime state directory used by the local dev launcher
   tags: [local-dev]
 
+- name: ANYHARNESS_WORKTREES_ROOT
+  secret: false
+  default: ""
+  description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
+  tags: [local-dev, self-hosted]
+
 # ═══════════════════════════════════════════════════════════════════════
 # Deploy: Docker Compose / Bootstrap
 # ═══════════════════════════════════════════════════════════════════════

@@ -184,11 +184,51 @@ impl WorkspaceStore {
         })
     }
 
+    pub fn list_standard_active_worktrees_by_activity(
+        &self,
+    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "WITH session_activity AS (
+                    SELECT workspace_id,
+                           MAX(MAX(COALESCE(last_prompt_at, ''), COALESCE(updated_at, ''))) AS session_at
+                      FROM sessions
+                     GROUP BY workspace_id
+                  ),
+                  terminal_activity AS (
+                    SELECT workspace_id,
+                           MAX(MAX(COALESCE(completed_at, ''), COALESCE(updated_at, ''), COALESCE(created_at, ''))) AS terminal_at
+                      FROM terminal_command_runs
+                     GROUP BY workspace_id
+                  )
+                  SELECT w.*
+                    FROM workspaces w
+                    LEFT JOIN session_activity sa ON sa.workspace_id = w.id
+                    LEFT JOIN terminal_activity ta ON ta.workspace_id = w.id
+                   WHERE w.kind = 'worktree'
+                     AND w.surface = 'standard'
+                     AND w.lifecycle_state = 'active'
+                   ORDER BY w.repo_root_id ASC,
+                            MAX(
+                              COALESCE(sa.session_at, ''),
+                              COALESCE(ta.terminal_at, ''),
+                              COALESCE(w.updated_at, ''),
+                              COALESCE(w.created_at, '')
+                            ) DESC,
+                            w.created_at DESC,
+                            w.id ASC",
+            )?;
+            let rows = stmt.query_map([], map_row)?;
+            rows.collect()
+        })
+    }
+
     pub fn update_lifecycle_cleanup_state(
         &self,
         workspace_id: &str,
         lifecycle_state: &str,
         cleanup_state: &str,
+        cleanup_operation: Option<&str>,
         cleanup_error_message: Option<&str>,
         cleanup_failed_at: Option<&str>,
         cleanup_attempted_at: Option<&str>,
@@ -199,15 +239,17 @@ impl WorkspaceStore {
                 "UPDATE workspaces
                  SET lifecycle_state = ?2,
                      cleanup_state = ?3,
-                     cleanup_error_message = ?4,
-                     cleanup_failed_at = ?5,
-                     cleanup_attempted_at = ?6,
-                     updated_at = ?7
+                     cleanup_operation = ?4,
+                     cleanup_error_message = ?5,
+                     cleanup_failed_at = ?6,
+                     cleanup_attempted_at = ?7,
+                     updated_at = ?8
                  WHERE id = ?1",
                 params![
                     workspace_id,
                     lifecycle_state,
                     cleanup_state,
+                    cleanup_operation,
                     cleanup_error_message,
                     cleanup_failed_at,
                     cleanup_attempted_at,
@@ -258,32 +300,69 @@ impl WorkspaceStore {
 
     pub fn delete_by_id(&self, workspace_id: &str) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
-            // Workspace-scoped rows do not all cascade today, so clear them
-            // explicitly before removing the workspace record itself.
-            conn.execute(
-                "DELETE FROM workspace_access_modes WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            conn.execute(
-                "DELETE FROM cowork_threads WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            conn.execute(
-                "DELETE FROM cowork_managed_workspaces WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            conn.execute(
-                "DELETE FROM workspace_setup_state WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            conn.execute(
-                "DELETE FROM terminal_command_runs WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            conn.execute("DELETE FROM workspaces WHERE id = ?1", [workspace_id])?;
+            delete_workspace_scoped_rows_in_tx(conn, workspace_id)?;
+            delete_workspace_row_in_tx(conn, workspace_id)?;
             Ok(())
         })
     }
+
+    pub fn purge_workspace_with_sessions(&self, workspace_id: &str) -> anyhow::Result<()> {
+        self.db.with_tx(|conn| {
+            let session_ids = list_workspace_session_ids_in_tx(conn, workspace_id)?;
+            for session_id in session_ids {
+                crate::sessions::store::delete_session_in_tx(conn, &session_id)?;
+            }
+            delete_workspace_scoped_rows_in_tx(conn, workspace_id)?;
+            delete_workspace_row_in_tx(conn, workspace_id)?;
+            Ok(())
+        })
+    }
+}
+
+fn list_workspace_session_ids_in_tx(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT id FROM sessions WHERE workspace_id = ?1")?;
+    let rows = stmt.query_map([workspace_id], |row| row.get::<_, String>(0))?;
+    let session_ids = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(session_ids)
+}
+
+pub(crate) fn delete_workspace_scoped_rows_in_tx(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
+    // Workspace-scoped rows do not all cascade today, so clear them explicitly.
+    conn.execute(
+        "DELETE FROM workspace_access_modes WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM cowork_threads WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM cowork_managed_workspaces WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM workspace_setup_state WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM terminal_command_runs WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn delete_workspace_row_in_tx(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM workspaces WHERE id = ?1", [workspace_id])?;
+    Ok(())
 }
 
 fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
@@ -293,9 +372,9 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, source_repo_root_path, source_workspace_id,
             git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
-            origin_json, creator_context_json, lifecycle_state, cleanup_state,
+            origin_json, creator_context_json, lifecycle_state, cleanup_state, cleanup_operation,
             cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         params![
             r.id,
             r.kind,
@@ -314,6 +393,7 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
             creator_context_json,
             r.lifecycle_state,
             r.cleanup_state,
+            r.cleanup_operation,
             r.cleanup_error_message,
             r.cleanup_failed_at,
             r.cleanup_attempted_at,
@@ -346,6 +426,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
         creator_context: decode_creator_context_json("workspaces", &id, creator_context_json),
         lifecycle_state: row.get("lifecycle_state")?,
         cleanup_state: row.get("cleanup_state")?,
+        cleanup_operation: row.get("cleanup_operation")?,
         cleanup_error_message: row.get("cleanup_error_message")?,
         cleanup_failed_at: row.get("cleanup_failed_at")?,
         cleanup_attempted_at: row.get("cleanup_attempted_at")?,
@@ -361,6 +442,11 @@ mod tests {
     use crate::persistence::Db;
     use crate::sessions::model::SessionRecord;
     use crate::sessions::store::SessionStore;
+    use crate::terminals::model::{
+        TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus,
+        TerminalPurpose,
+    };
+    use crate::terminals::store::TerminalStore;
     use crate::workspaces::creator_context::WorkspaceCreatorContext;
 
     fn workspace_record(id: &str, kind: &str, path: &str) -> WorkspaceRecord {
@@ -382,6 +468,7 @@ mod tests {
             creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
+            cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,
             cleanup_attempted_at: None,
@@ -414,7 +501,35 @@ mod tests {
             mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: None,
+        }
+    }
+
+    fn terminal_run_record(
+        id: &str,
+        workspace_id: &str,
+        completed_at: &str,
+        updated_at: &str,
+    ) -> TerminalCommandRunRecord {
+        TerminalCommandRunRecord {
+            id: id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            terminal_id: None,
+            purpose: TerminalPurpose::Run,
+            command: "echo ok".to_string(),
+            status: TerminalCommandRunStatus::Succeeded,
+            exit_code: Some(0),
+            output_mode: TerminalCommandOutputMode::Combined,
+            stdout: None,
+            stderr: None,
+            combined_output: None,
+            output_truncated: false,
+            started_at: None,
+            completed_at: Some(completed_at.to_string()),
+            duration_ms: Some(1),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: updated_at.to_string(),
         }
     }
 
@@ -647,6 +762,7 @@ mod tests {
                 &workspace.id,
                 "retired",
                 "failed",
+                Some("retire"),
                 Some("permission denied"),
                 Some("2026-04-29T12:00:00Z"),
                 Some("2026-04-29T11:59:00Z"),
@@ -660,6 +776,7 @@ mod tests {
             .expect("workspace should still exist");
         assert_eq!(stored.lifecycle_state, "retired");
         assert_eq!(stored.cleanup_state, "failed");
+        assert_eq!(stored.cleanup_operation.as_deref(), Some("retire"));
         assert_eq!(
             stored.cleanup_error_message.as_deref(),
             Some("permission denied")
@@ -673,6 +790,71 @@ mod tests {
             Some("2026-04-29T11:59:00Z")
         );
         assert_eq!(stored.updated_at, "2026-04-29T12:00:01Z");
+    }
+
+    #[test]
+    fn active_worktree_activity_order_uses_true_row_max() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db.clone());
+        let session_store = SessionStore::new(db.clone());
+        let terminal_store = TerminalStore::new(db.clone());
+
+        let mut session_newer =
+            workspace_record("workspace-session-newer", "worktree", "/tmp/session-newer");
+        session_newer.repo_root_id = Some("repo-root-1".to_string());
+        let mut terminal_newer = workspace_record(
+            "workspace-terminal-newer",
+            "worktree",
+            "/tmp/terminal-newer",
+        );
+        terminal_newer.repo_root_id = Some("repo-root-1".to_string());
+        let mut older = workspace_record("workspace-older", "worktree", "/tmp/older");
+        older.repo_root_id = Some("repo-root-1".to_string());
+
+        store.insert(&session_newer).expect("insert session newer");
+        store
+            .insert(&terminal_newer)
+            .expect("insert terminal newer");
+        store.insert(&older).expect("insert older");
+
+        let mut session = session_record("session-newer", &session_newer.id);
+        session.last_prompt_at = Some("2025-01-02T00:00:00Z".to_string());
+        session.updated_at = "2025-01-11T00:00:00Z".to_string();
+        session_store
+            .insert(&session)
+            .expect("insert newer session");
+
+        let mut older_session = session_record("session-older", &older.id);
+        older_session.last_prompt_at = Some("2025-01-09T00:00:00Z".to_string());
+        older_session.updated_at = "2025-01-09T00:00:00Z".to_string();
+        session_store
+            .insert(&older_session)
+            .expect("insert older session");
+
+        terminal_store
+            .insert_command_run(&terminal_run_record(
+                "terminal-run-newer",
+                &terminal_newer.id,
+                "2025-01-03T00:00:00Z",
+                "2025-01-10T00:00:00Z",
+            ))
+            .expect("insert terminal run");
+
+        let ids = store
+            .list_standard_active_worktrees_by_activity()
+            .expect("list by activity")
+            .into_iter()
+            .map(|workspace| workspace.id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            ids,
+            vec![
+                "workspace-session-newer".to_string(),
+                "workspace-terminal-newer".to_string(),
+                "workspace-older".to_string(),
+            ]
+        );
     }
 
     #[test]

@@ -327,6 +327,7 @@ mod tests {
                     crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
+                action_capabilities_json: None,
                 origin: None,
             })
             .expect("insert session");

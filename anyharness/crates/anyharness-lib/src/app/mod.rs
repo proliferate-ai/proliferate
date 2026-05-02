@@ -44,7 +44,13 @@ use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
+use crate::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::workspaces::inventory::WorktreeInventoryService;
 use crate::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::workspaces::purge::WorkspacePurgeService;
+use crate::workspaces::retention::WorkspaceRetentionService;
+use crate::workspaces::retention_policy::WorktreeRetentionPolicyStore;
+use crate::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
 use crate::workspaces::store::WorkspaceStore;
@@ -88,6 +94,11 @@ pub struct AppState {
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
     pub workspace_operation_gate: Arc<WorkspaceOperationGate>,
+    pub checkout_deletion_gate: Arc<CheckoutDeletionGate>,
+    pub retire_preflight_checker: Arc<RetirePreflightChecker>,
+    pub workspace_purge_service: Arc<WorkspacePurgeService>,
+    pub workspace_retention_service: Arc<WorkspaceRetentionService>,
+    pub worktree_inventory_service: Arc<WorktreeInventoryService>,
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
@@ -123,6 +134,7 @@ impl AppState {
         model_catalog_service.spawn_refresh();
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
+        let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
         let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
@@ -142,6 +154,12 @@ impl AppState {
         let acp_manager = AcpManager::new(plan_service.clone());
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
+            runtime_home.clone(),
+        ));
+        let worktree_inventory_service = Arc::new(WorktreeInventoryService::new(
+            WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            checkout_deletion_gate.clone(),
             runtime_home.clone(),
         ));
         let workspace_access_gate = Arc::new(WorkspaceAccessGate::new(
@@ -180,7 +198,7 @@ impl AppState {
         let review_service = Arc::new(ReviewService::new(
             ReviewStore::new(db.clone()),
             SessionStore::new(db.clone()),
-            session_link_service,
+            session_link_service.clone(),
             plan_service.clone(),
         ));
         acp_manager.set_review_service(review_service.clone());
@@ -216,6 +234,7 @@ impl AppState {
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
+            session_link_service.clone(),
             workspace_runtime.clone(),
             acp_manager.clone(),
             runtime_home.clone(),
@@ -223,6 +242,31 @@ impl AppState {
             session_extensions,
             workspace_access_gate.clone(),
             plan_service.clone(),
+        ));
+        let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
+            workspace_runtime.clone(),
+            workspace_access_gate.clone(),
+            workspace_operation_gate.clone(),
+            session_runtime.clone(),
+            session_service.clone(),
+            terminal_service.clone(),
+        ));
+        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
+            workspace_runtime.clone(),
+            WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            workspace_operation_gate.clone(),
+            checkout_deletion_gate.clone(),
+            retire_preflight_checker.clone(),
+        ));
+        let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
+            workspace_runtime.clone(),
+            WorkspaceStore::new(db.clone()),
+            WorktreeRetentionPolicyStore::new(db.clone()),
+            retire_preflight_checker.clone(),
+            workspace_operation_gate.clone(),
+            checkout_deletion_gate.clone(),
+            runtime_home.clone(),
         ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
@@ -258,6 +302,8 @@ impl AppState {
         review_runtime
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
+        #[cfg(not(test))]
+        workspace_retention_service.clone().spawn_startup_pass();
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -285,6 +331,11 @@ impl AppState {
             session_runtime,
             workspace_access_gate,
             workspace_operation_gate,
+            checkout_deletion_gate,
+            retire_preflight_checker,
+            workspace_purge_service,
+            workspace_retention_service,
+            worktree_inventory_service,
             mobility_service,
             plan_service,
             plan_runtime,
@@ -419,143 +470,4 @@ pub(crate) mod test_support {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-    use std::sync::Mutex;
-
-    use super::{proliferate_home_dir_name, test_support, AppState};
-    use crate::{agents::seed::AgentSeedStore, persistence::Db};
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn app_state_allows_missing_bearer_token_when_not_required() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _guard = test_support::set_bearer_token_env(None);
-        let _data_key_guard = test_support::set_data_key_env(None);
-
-        let state = AppState::new(
-            PathBuf::from("/tmp/anyharness-app-state-no-token"),
-            "http://127.0.0.1:8457".to_string(),
-            Db::open_in_memory().expect("expected in-memory db"),
-            false,
-            AgentSeedStore::not_configured_dev(),
-        )
-        .expect("expected app state");
-
-        assert_eq!(state.bearer_token, None);
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn app_state_rejects_missing_bearer_token_when_required() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _guard = test_support::set_bearer_token_env(None);
-        let _data_key_guard = test_support::set_data_key_env(None);
-
-        let error = AppState::new(
-            PathBuf::from("/tmp/anyharness-app-state-required-token"),
-            "http://127.0.0.1:8457".to_string(),
-            Db::open_in_memory().expect("expected in-memory db"),
-            true,
-            AgentSeedStore::not_configured_dev(),
-        )
-        .err()
-        .expect("expected missing bearer token error");
-
-        assert_eq!(
-            error.to_string(),
-            "ANYHARNESS_BEARER_TOKEN is required when --require-bearer-auth is set, but the \
-environment variable is missing or empty. Refusing to start without authentication."
-        );
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn app_state_rejects_blank_bearer_token_when_required() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _guard = test_support::set_bearer_token_env(Some("   "));
-        let _data_key_guard = test_support::set_data_key_env(None);
-
-        let error = AppState::new(
-            PathBuf::from("/tmp/anyharness-app-state-blank-token"),
-            "http://127.0.0.1:8457".to_string(),
-            Db::open_in_memory().expect("expected in-memory db"),
-            true,
-            AgentSeedStore::not_configured_dev(),
-        )
-        .err()
-        .expect("expected blank bearer token error");
-
-        assert_eq!(
-            error.to_string(),
-            "ANYHARNESS_BEARER_TOKEN is required when --require-bearer-auth is set, but the \
-environment variable is missing or empty. Refusing to start without authentication."
-        );
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn app_state_rejects_invalid_data_key() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _guard = test_support::set_bearer_token_env(None);
-        let _data_key_guard = test_support::set_data_key_env(Some("not-base64"));
-
-        let error = AppState::new(
-            PathBuf::from("/tmp/anyharness-app-state-invalid-data-key"),
-            "http://127.0.0.1:8457".to_string(),
-            Db::open_in_memory().expect("expected in-memory db"),
-            false,
-            AgentSeedStore::not_configured_dev(),
-        )
-        .err()
-        .expect("expected invalid data key error");
-
-        assert!(
-            error
-                .to_string()
-                .starts_with("Invalid ANYHARNESS_DATA_KEY:"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn proliferate_home_dir_name_uses_local_dir_for_debug_builds() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _dev_guard = test_support::set_proliferate_dev_env(None);
-
-        assert_eq!(proliferate_home_dir_name(true), ".proliferate-local");
-    }
-
-    #[test]
-    fn proliferate_home_dir_name_uses_local_dir_when_env_is_set() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _dev_guard = test_support::set_proliferate_dev_env(Some("1"));
-
-        assert_eq!(proliferate_home_dir_name(false), ".proliferate-local");
-    }
-
-    #[test]
-    fn proliferate_home_dir_name_uses_production_dir_for_release_without_env() {
-        let _lock = test_support::ENV_MUTEX
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("expected env mutex");
-        let _dev_guard = test_support::set_proliferate_dev_env(None);
-
-        assert_eq!(proliferate_home_dir_name(false), ".proliferate");
-    }
-}
+mod tests;

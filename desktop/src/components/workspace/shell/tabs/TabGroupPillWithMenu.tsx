@@ -54,6 +54,7 @@ export function TabGroupPillWithMenu({
         return;
       case "rename":
       case "create-group":
+      case "fork":
       case "close":
       case "close-others":
       case "close-right":

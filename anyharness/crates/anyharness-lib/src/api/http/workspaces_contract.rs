@@ -1,8 +1,8 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
-    SetupScriptStatus, Workspace, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceSessionLaunchAgent, WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel,
-    WorkspaceSurface,
+    SetupScriptStatus, Workspace, WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind,
+    WorkspaceLifecycleState, WorkspaceSessionLaunchAgent, WorkspaceSessionLaunchCatalog,
+    WorkspaceSessionLaunchModel, WorkspaceSurface,
 };
 
 use super::error::ApiError;
@@ -108,6 +108,9 @@ pub(super) fn workspace_to_contract_with_summary(
             "failed" => WorkspaceCleanupState::Failed,
             _ => WorkspaceCleanupState::None,
         },
+        cleanup_operation: workspace_cleanup_operation_to_contract(
+            record.cleanup_operation.as_deref(),
+        ),
         cleanup_error_message: record.cleanup_error_message,
         cleanup_failed_at: record.cleanup_failed_at,
         cleanup_attempted_at: record.cleanup_attempted_at,
@@ -122,6 +125,16 @@ pub(super) fn workspace_to_contract_with_summary(
             .map(crate::workspaces::creator_context::WorkspaceCreatorContext::to_contract),
         created_at: record.created_at,
         updated_at: record.updated_at,
+    }
+}
+
+pub(super) fn workspace_cleanup_operation_to_contract(
+    operation: Option<&str>,
+) -> Option<WorkspaceCleanupOperation> {
+    match operation {
+        Some("retire") => Some(WorkspaceCleanupOperation::Retire),
+        Some("purge") => Some(WorkspaceCleanupOperation::Purge),
+        _ => None,
     }
 }
 

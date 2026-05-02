@@ -1,10 +1,9 @@
 import { useEffect, useMemo } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
-import {
-  useWorkspaceHeaderSubagentHierarchy,
-} from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
+import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
   collectHierarchyChildren,
+  getKnownSessionCanFork,
   getKnownSessionAgentKind,
   getKnownSessionId,
   getKnownSessionTitle,
@@ -12,17 +11,9 @@ import {
   getLinkedChildViewState,
   type KnownHeaderSession,
 } from "@/hooks/workspaces/tabs/workspace-header-tabs-model-helpers";
-import {
-  buildGroupedChatTabs,
-  type GroupedChatTab,
-} from "@/lib/domain/workspaces/tabs/grouping";
-import {
-  buildHeaderStripRows,
-  type HeaderStripRow,
-} from "@/lib/domain/workspaces/tabs/group-rows";
-import {
-  type HeaderShellStripRow,
-} from "@/lib/domain/workspaces/tabs/shell-rows";
+import { buildGroupedChatTabs, type GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
+import { buildHeaderStripRows, type HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
+import { type HeaderShellStripRow } from "@/lib/domain/workspaces/tabs/shell-rows";
 import {
   deriveManualChatGroupsForDisplay,
   isManualChatGroupId,
@@ -44,10 +35,7 @@ import {
   useWorkspaceShellTabsState,
 } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import {
-  useWorkspaceFilesStore,
-  type WorkspaceFileBuffer,
-} from "@/stores/editor/workspace-files-store";
+import { useWorkspaceFilesStore, type WorkspaceFileBuffer } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
@@ -63,6 +51,7 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   title: string;
   agentKind: string;
   viewState: SessionViewState;
+  canFork: boolean;
   isReviewAgentChild: boolean;
   isActive: boolean;
   groupColor: string | null;
@@ -152,7 +141,12 @@ export function useWorkspaceHeaderTabsViewModel() {
       map.set(session.id, { kind: "session", session });
     }
     for (const slot of liveSlots) {
-      map.set(slot.sessionId, { kind: "slot", slot });
+      const existing = map.get(slot.sessionId);
+      map.set(slot.sessionId, {
+        kind: "slot",
+        slot,
+        session: existing?.kind === "session" ? existing.session : existing?.session,
+      });
     }
     return map;
   }, [liveSlots, selectedWorkspaceId, workspaceSessionsQuery.data]);
@@ -402,6 +396,7 @@ export function useWorkspaceHeaderTabsViewModel() {
           viewState: known
             ? getKnownSessionViewState(known)
             : getLinkedChildViewState(hierarchyChild!),
+          canFork: known ? getKnownSessionCanFork(known) : false,
           isReviewAgentChild: hierarchyChild?.source === "review",
           isActive: grouped.sessionId === activeChatSessionIdForTabs,
           groupColor,

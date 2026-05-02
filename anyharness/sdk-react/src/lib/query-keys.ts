@@ -48,6 +48,21 @@ export function anyHarnessWorkspaceRetirePreflightKey(
   return [...anyHarnessRuntimeWorkspacesKey(runtimeUrl), workspaceId ?? null, "retire", "preflight"] as const;
 }
 
+export function anyHarnessWorkspacePurgePreflightKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeWorkspacesKey(runtimeUrl), workspaceId ?? null, "purge", "preflight"] as const;
+}
+
+export function anyHarnessWorktreesInventoryKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "worktrees", "inventory"] as const;
+}
+
+export function anyHarnessWorktreesRetentionPolicyKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "worktrees", "retention-policy"] as const;
+}
+
 export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
 }

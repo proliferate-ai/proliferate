@@ -4,6 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 
+use super::persistence_sanitizer::sanitize_session_event_for_sqlite;
 use crate::plans::service::PlanEventContext;
 use crate::sessions::model::{SessionBackgroundWorkState, SessionEventRecord};
 use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
@@ -793,7 +794,11 @@ impl SessionEventSink {
             },
         ));
 
-        let replacement_parts = vec![ContentPart::ToolResultText { text: result_text }];
+        let replacement_parts = vec![ContentPart::ToolResultText {
+            text: result_text,
+            text_truncated: None,
+            text_original_bytes: None,
+        }];
         self.emit_with_ids(
             SessionEvent::ItemDelta(ItemDeltaEvent {
                 delta: TranscriptItemDeltaPayload {
@@ -1174,7 +1179,8 @@ pub(crate) fn publish_session_event(
         event,
     };
 
-    let payload_json = serde_json::to_string(&envelope.event).unwrap_or_default();
+    let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
+    let payload_json = serde_json::to_string(&persisted_event).unwrap_or_default();
     tracing::debug!(session_id = %session_id, seq = seq, "event_sink: event persisted");
     let record = SessionEventRecord {
         id: 0,
@@ -1215,7 +1221,8 @@ pub(crate) fn publish_session_event_strict(
         item_id: item_id.clone(),
         event,
     };
-    let payload_json = serde_json::to_string(&envelope.event)
+    let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
+    let payload_json = serde_json::to_string(&persisted_event)
         .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
     let record = SessionEventRecord {
         id: 0,
@@ -1331,7 +1338,11 @@ fn merge_file_change_part(previous: ContentPart, next: ContentPart) -> ContentPa
         additions: previous_additions,
         deletions: previous_deletions,
         patch: previous_patch,
+        patch_truncated: previous_patch_truncated,
+        patch_original_bytes: previous_patch_original_bytes,
         preview: previous_preview,
+        preview_truncated: previous_preview_truncated,
+        preview_original_bytes: previous_preview_original_bytes,
         native_tool_name: previous_native_tool_name,
     } = previous
     else {
@@ -1350,7 +1361,11 @@ fn merge_file_change_part(previous: ContentPart, next: ContentPart) -> ContentPa
         additions,
         deletions,
         patch,
+        patch_truncated,
+        patch_original_bytes,
         preview,
+        preview_truncated,
+        preview_original_bytes,
         native_tool_name,
     } = next
     else {
@@ -1366,7 +1381,11 @@ fn merge_file_change_part(previous: ContentPart, next: ContentPart) -> ContentPa
             additions: previous_additions,
             deletions: previous_deletions,
             patch: previous_patch,
+            patch_truncated: previous_patch_truncated,
+            patch_original_bytes: previous_patch_original_bytes,
             preview: previous_preview,
+            preview_truncated: previous_preview_truncated,
+            preview_original_bytes: previous_preview_original_bytes,
             native_tool_name: previous_native_tool_name,
         };
     };
@@ -1394,7 +1413,11 @@ fn merge_file_change_part(previous: ContentPart, next: ContentPart) -> ContentPa
         additions: additions.or(previous_additions),
         deletions: deletions.or(previous_deletions),
         patch: merged_patch,
+        patch_truncated: patch_truncated.or(previous_patch_truncated),
+        patch_original_bytes: patch_original_bytes.or(previous_patch_original_bytes),
         preview: choose_option_string(preview, previous_preview),
+        preview_truncated: preview_truncated.or(previous_preview_truncated),
+        preview_original_bytes: preview_original_bytes.or(previous_preview_original_bytes),
         native_tool_name: choose_option_string(native_tool_name, previous_native_tool_name),
     }
 }
@@ -1469,6 +1492,8 @@ fn normalize_terminal_parts(payload: &AcpToolPayload, meta: &ParsedMeta) -> Vec<
             terminal_id: info.terminal_id.clone(),
             event: anyharness_contract::v1::TerminalLifecycleEvent::Start,
             data: None,
+            data_truncated: None,
+            data_original_bytes: None,
             exit_code: None,
             signal: None,
         });
@@ -1482,6 +1507,8 @@ fn normalize_terminal_parts(payload: &AcpToolPayload, meta: &ParsedMeta) -> Vec<
                         terminal_id: terminal_id.to_string(),
                         event: anyharness_contract::v1::TerminalLifecycleEvent::Start,
                         data: None,
+                        data_truncated: None,
+                        data_original_bytes: None,
                         exit_code: None,
                         signal: None,
                     });
@@ -1495,6 +1522,8 @@ fn normalize_terminal_parts(payload: &AcpToolPayload, meta: &ParsedMeta) -> Vec<
             terminal_id: output.terminal_id.clone(),
             event: anyharness_contract::v1::TerminalLifecycleEvent::Output,
             data: Some(output.data.clone()),
+            data_truncated: None,
+            data_original_bytes: None,
             exit_code: None,
             signal: None,
         });
@@ -1505,6 +1534,8 @@ fn normalize_terminal_parts(payload: &AcpToolPayload, meta: &ParsedMeta) -> Vec<
             terminal_id: exit.terminal_id.clone(),
             event: anyharness_contract::v1::TerminalLifecycleEvent::Exit,
             data: None,
+            data_truncated: None,
+            data_original_bytes: None,
             exit_code: Some(exit.exit_code),
             signal: exit.signal.clone(),
         });
@@ -1640,7 +1671,11 @@ fn normalize_file_parts(
                 additions,
                 deletions,
                 patch,
+                patch_truncated: None,
+                patch_original_bytes: None,
                 preview: new_text,
+                preview_truncated: None,
+                preview_original_bytes: None,
                 native_tool_name: native_tool_name.clone(),
             });
         }
@@ -1669,6 +1704,8 @@ fn normalize_file_parts(
                 start_line: line_scope.start_line,
                 end_line: line_scope.end_line,
                 preview: extract_preview(raw_output),
+                preview_truncated: None,
+                preview_original_bytes: None,
             }];
         }
         return vec![];
@@ -1696,7 +1733,11 @@ fn normalize_file_parts(
                 additions: None,
                 deletions: None,
                 patch: None,
+                patch_truncated: None,
+                patch_original_bytes: None,
                 preview: extract_preview(raw_input).or_else(|| extract_preview(raw_output)),
+                preview_truncated: None,
+                preview_original_bytes: None,
                 native_tool_name,
             }];
         }
@@ -1725,16 +1766,28 @@ fn normalize_text_parts(
 
     if is_subagent_tool(tool_kind, native_tool_name) {
         if let Some(text) = extract_subagent_input_text(meta, raw_input) {
-            parts.push(ContentPart::ToolInputText { text });
+            parts.push(ContentPart::ToolInputText {
+                text,
+                text_truncated: None,
+                text_original_bytes: None,
+            });
         }
         if let Some(text) = extract_subagent_result_text(payload, raw_output, meta) {
-            parts.push(ContentPart::ToolResultText { text });
+            parts.push(ContentPart::ToolResultText {
+                text,
+                text_truncated: None,
+                text_original_bytes: None,
+            });
         }
         return parts;
     }
 
     if let Some(text) = extract_result_text(payload, raw_output, raw_input) {
-        parts.push(ContentPart::ToolResultText { text });
+        parts.push(ContentPart::ToolResultText {
+            text,
+            text_truncated: None,
+            text_original_bytes: None,
+        });
     }
 
     parts
@@ -2985,6 +3038,7 @@ mod tests {
                     crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
+                action_capabilities_json: None,
                 origin: None,
             })
             .expect("seed session");

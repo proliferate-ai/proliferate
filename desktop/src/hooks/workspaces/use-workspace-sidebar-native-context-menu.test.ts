@@ -37,7 +37,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     expect(items).toMatchObject([{ id: "unarchive", label: "Unarchive" }]);
   });
 
-  it("shows mark done before archive when supported", () => {
+  it("shows delete workspace before archive when supported", () => {
     const items = buildWorkspaceSidebarNativeContextMenuItems({
       canRename: false,
       archived: false,
@@ -51,7 +51,7 @@ describe("buildWorkspaceSidebarNativeContextMenuItems", () => {
     });
 
     expect(items).toMatchObject([
-      { id: "mark-done", label: "Mark done..." },
+      { id: "mark-done", label: "Delete workspace..." },
       { id: "archive", label: "Archive" },
     ]);
   });

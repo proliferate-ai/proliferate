@@ -928,6 +928,8 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         mimeType: coerceNullableString(raw.mimeType ?? raw.mime_type),
         size: coerceNullableNumber(raw.size),
         preview: coerceNullableString(raw.preview),
+        previewTruncated: coerceNullableBoolean(raw.previewTruncated ?? raw.preview_truncated),
+        previewOriginalBytes: coerceNullableNumber(raw.previewOriginalBytes ?? raw.preview_original_bytes),
       };
 
     case "resource_link":
@@ -963,6 +965,8 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         terminalId: coerceString(raw.terminalId ?? raw.terminal_id),
         event: coerceTerminalEvent(raw.event),
         data: coerceNullableString(raw.data),
+        dataTruncated: coerceNullableBoolean(raw.dataTruncated ?? raw.data_truncated),
+        dataOriginalBytes: coerceNullableNumber(raw.dataOriginalBytes ?? raw.data_original_bytes),
         exitCode: coerceNullableNumber(raw.exitCode ?? raw.exit_code),
         signal: coerceNullableString(raw.signal),
       };
@@ -978,6 +982,8 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         startLine: coerceNullableNumber(raw.startLine ?? raw.start_line),
         endLine: coerceNullableNumber(raw.endLine ?? raw.end_line),
         preview: coerceNullableString(raw.preview),
+        previewTruncated: coerceNullableBoolean(raw.previewTruncated ?? raw.preview_truncated),
+        previewOriginalBytes: coerceNullableNumber(raw.previewOriginalBytes ?? raw.preview_original_bytes),
       };
 
     case "file_change":
@@ -994,7 +1000,11 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         additions: coerceNullableNumber(raw.additions),
         deletions: coerceNullableNumber(raw.deletions),
         patch: coerceNullableString(raw.patch),
+        patchTruncated: coerceNullableBoolean(raw.patchTruncated ?? raw.patch_truncated),
+        patchOriginalBytes: coerceNullableNumber(raw.patchOriginalBytes ?? raw.patch_original_bytes),
         preview: coerceNullableString(raw.preview),
+        previewTruncated: coerceNullableBoolean(raw.previewTruncated ?? raw.preview_truncated),
+        previewOriginalBytes: coerceNullableNumber(raw.previewOriginalBytes ?? raw.preview_original_bytes),
         nativeToolName: coerceNullableString(raw.nativeToolName ?? raw.native_tool_name),
       };
 
@@ -1048,12 +1058,16 @@ function normalizeContentPart(part: ContentPart): ContentPart {
       return {
         type: "tool_input_text",
         text: coerceString(raw.text),
+        textTruncated: coerceNullableBoolean(raw.textTruncated ?? raw.text_truncated),
+        textOriginalBytes: coerceNullableNumber(raw.textOriginalBytes ?? raw.text_original_bytes),
       };
 
     case "tool_result_text":
       return {
         type: "tool_result_text",
         text: coerceString(raw.text),
+        textTruncated: coerceNullableBoolean(raw.textTruncated ?? raw.text_truncated),
+        textOriginalBytes: coerceNullableNumber(raw.textOriginalBytes ?? raw.text_original_bytes),
       };
   }
 }
@@ -1183,7 +1197,11 @@ function mergeFileChangePart(
     additions: next.additions ?? previous.additions ?? null,
     deletions: next.deletions ?? previous.deletions ?? null,
     patch,
+    patchTruncated: next.patchTruncated ?? previous.patchTruncated ?? null,
+    patchOriginalBytes: next.patchOriginalBytes ?? previous.patchOriginalBytes ?? null,
     preview: chooseNullableString(next.preview, previous.preview),
+    previewTruncated: next.previewTruncated ?? previous.previewTruncated ?? null,
+    previewOriginalBytes: next.previewOriginalBytes ?? previous.previewOriginalBytes ?? null,
     nativeToolName: chooseNullableString(
       next.nativeToolName,
       previous.nativeToolName,
@@ -1215,6 +1233,10 @@ function coerceNullableString(value: unknown): string | null {
 
 function coerceNullableNumber(value: unknown): number | null {
   return typeof value === "number" ? value : null;
+}
+
+function coerceNullableBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 function coerceTerminalEvent(value: unknown): "start" | "output" | "exit" {

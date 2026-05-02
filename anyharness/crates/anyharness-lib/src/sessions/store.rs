@@ -6,8 +6,12 @@ use super::model::{
     SessionBackgroundWorkTrackerKind, SessionEventRecord, SessionLiveConfigSnapshotRecord,
     SessionMcpBindingPolicy, SessionRawNotificationRecord, SessionRecord,
 };
+use crate::acp::persistence_sanitizer::{
+    sanitize_raw_notification_json_for_sqlite, sanitize_session_event_for_sqlite,
+};
 use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::persistence::Db;
+use crate::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::sessions::prompt::PromptPayload;
 
 #[derive(Clone)]
@@ -27,97 +31,51 @@ impl SessionStore {
         })
     }
 
-    pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
+    pub fn insert_session_with_link(
+        &self,
+        record: &SessionRecord,
+        link: &SessionLinkRecord,
+    ) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
-            // Several durable tables still reference sessions without
-            // database-level cascade rules, so session deletion must clear
-            // dependent rows explicitly.
-            conn.execute("DELETE FROM cowork_threads WHERE session_id = ?1", [id])?;
-            conn.execute(
-                "DELETE FROM cowork_managed_workspaces WHERE parent_session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_background_work WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_feedback_jobs
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_run_candidate_plans
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_assignments
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 ) OR reviewer_session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_rounds
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute("DELETE FROM review_runs WHERE parent_session_id = ?1", [id])?;
-            conn.execute(
-                "DELETE FROM session_link_wake_schedules
-                 WHERE session_link_id IN (
-                    SELECT id FROM session_links
-                    WHERE parent_session_id = ?1 OR child_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_link_completions
-                 WHERE session_link_id IN (
-                    SELECT id FROM session_links
-                    WHERE parent_session_id = ?1 OR child_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_links WHERE parent_session_id = ?1 OR child_session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_pending_prompts WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_prompt_attachments WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_pending_config_changes WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_live_config_snapshots WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_raw_notifications WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
-            conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+            insert_session_row(conn, record)?;
+            insert_session_link_row(conn, link)?;
             Ok(())
         })
+    }
+
+    pub fn insert_fork_session_with_link_and_event_snapshot(
+        &self,
+        record: &SessionRecord,
+        link: &SessionLinkRecord,
+    ) -> anyhow::Result<usize> {
+        anyhow::ensure!(
+            link.relation == SessionLinkRelation::Fork,
+            "event snapshots are only supported for fork links"
+        );
+        anyhow::ensure!(
+            link.child_session_id == record.id,
+            "fork link child id must match inserted session"
+        );
+
+        self.db.with_tx(|conn| {
+            insert_session_row(conn, record)?;
+            insert_session_link_row(conn, link)?;
+            let copied = conn.execute(
+                "INSERT INTO session_events (
+                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json
+                 )
+                 SELECT ?1, seq, timestamp, event_type, turn_id, item_id, payload_json
+                 FROM session_events
+                 WHERE session_id = ?2
+                 ORDER BY seq ASC",
+                params![record.id, link.parent_session_id],
+            )?;
+            Ok(copied)
+        })
+    }
+
+    pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
+        self.db.with_tx(|conn| delete_session_in_tx(conn, id))
     }
 
     pub fn find_by_id(&self, id: &str) -> anyhow::Result<Option<SessionRecord>> {
@@ -164,6 +122,64 @@ impl SessionStore {
                 params![mcp_binding_summaries_json, now, id],
             )?;
             Ok(())
+        })
+    }
+
+    pub fn update_action_capabilities_json(
+        &self,
+        id: &str,
+        action_capabilities_json: Option<String>,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE sessions
+                 SET action_capabilities_json = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![action_capabilities_json, now, id],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn has_inbound_link_relation(
+        &self,
+        session_id: &str,
+        relation: SessionLinkRelation,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM session_links
+                    WHERE child_session_id = ?1 AND relation = ?2
+                )",
+                params![session_id, relation.as_str()],
+                |row| row.get(0),
+            )
+            .map_err(Into::into)
+        })
+    }
+
+    pub fn find_parent_by_inbound_link_relation(
+        &self,
+        session_id: &str,
+        relation: SessionLinkRelation,
+    ) -> anyhow::Result<Option<SessionRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT sessions.*
+                 FROM session_links
+                 JOIN sessions ON sessions.id = session_links.parent_session_id
+                 WHERE session_links.child_session_id = ?1
+                   AND session_links.relation = ?2
+                 ORDER BY session_links.created_at ASC, session_links.id ASC
+                 LIMIT 1",
+                params![session_id, relation.as_str()],
+                map_session,
+            )
+            .optional()
+            .map_err(Into::into)
         })
     }
 
@@ -259,6 +275,16 @@ impl SessionStore {
             conn.execute(
                 "UPDATE sessions SET native_session_id = ?1, updated_at = ?2 WHERE id = ?3",
                 params![native_session_id, now, id],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn clear_native_session_id(&self, id: &str, now: &str) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE sessions SET native_session_id = NULL, updated_at = ?1 WHERE id = ?2",
+                params![now, id],
             )?;
             Ok(())
         })
@@ -937,7 +963,8 @@ impl SessionStore {
                 item_id: None,
                 event,
             };
-            let payload_json = serde_json::to_string(&envelope.event)
+            let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
+            let payload_json = serde_json::to_string(&persisted_event)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
             conn.execute(
                 "INSERT INTO session_events (
@@ -962,13 +989,14 @@ impl SessionStore {
         timestamp: &str,
         payload_json: &str,
     ) -> anyhow::Result<()> {
+        let sanitized_payload_json = sanitize_raw_notification_json_for_sqlite(payload_json);
         self.db.with_conn(|conn| {
             conn.execute(
                 "INSERT INTO session_raw_notifications (session_id, seq, timestamp, notification_kind, payload_json)
                  SELECT ?1, COALESCE(MAX(seq), 0) + 1, ?2, ?3, ?4
                  FROM session_raw_notifications
                  WHERE session_id = ?1",
-                params![session_id, timestamp, notification_kind, payload_json],
+                params![session_id, timestamp, notification_kind, sanitized_payload_json],
             )?;
             Ok(())
         })
@@ -1375,6 +1403,96 @@ impl SessionStore {
     }
 }
 
+pub(crate) fn delete_session_in_tx(conn: &rusqlite::Connection, id: &str) -> rusqlite::Result<()> {
+    // Several durable tables still reference sessions without database-level
+    // cascade rules, so session deletion must clear dependent rows explicitly.
+    conn.execute("DELETE FROM cowork_threads WHERE session_id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM cowork_managed_workspaces WHERE parent_session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_background_work WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_feedback_jobs
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_run_candidate_plans
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_assignments
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         ) OR reviewer_session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_rounds
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute("DELETE FROM review_runs WHERE parent_session_id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM session_link_wake_schedules
+         WHERE session_link_id IN (
+            SELECT id FROM session_links
+            WHERE parent_session_id = ?1 OR child_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_link_completions
+         WHERE session_link_id IN (
+            SELECT id FROM session_links
+            WHERE parent_session_id = ?1 OR child_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_links WHERE parent_session_id = ?1 OR child_session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_pending_prompts WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_prompt_attachments WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_pending_config_changes WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_live_config_snapshots WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_raw_notifications WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
+    conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+    Ok(())
+}
+
 fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
     let id: String = row.get("id")?;
     let origin_json: Option<String> = row.get("origin_json")?;
@@ -1403,6 +1521,7 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         ),
         system_prompt_append: row.get("system_prompt_append")?,
         subagents_enabled: row.get::<_, i64>("subagents_enabled")? != 0,
+        action_capabilities_json: row.get("action_capabilities_json")?,
         origin: decode_origin_json("sessions", &id, origin_json),
     })
 }
@@ -1492,8 +1611,8 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
          title, thinking_level_id, thinking_budget_tokens, status, created_at,
          updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
          mcp_binding_summaries_json, mcp_binding_policy, system_prompt_append,
-         subagents_enabled, origin_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+         subagents_enabled, action_capabilities_json, origin_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
         params![
             record.id,
             record.workspace_id,
@@ -1517,7 +1636,32 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
             record.mcp_binding_policy.as_str(),
             record.system_prompt_append,
             if record.subagents_enabled { 1 } else { 0 },
+            record.action_capabilities_json,
             origin_json,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_session_link_row(
+    conn: &rusqlite::Connection,
+    record: &SessionLinkRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_links (
+            id, relation, parent_session_id, child_session_id, workspace_relation,
+            label, created_by_turn_id, created_by_tool_call_id, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            record.id,
+            record.relation.as_str(),
+            record.parent_session_id,
+            record.child_session_id,
+            record.workspace_relation.as_str(),
+            record.label,
+            record.created_by_turn_id,
+            record.created_by_tool_call_id,
+            record.created_at,
         ],
     )?;
     Ok(())
@@ -1633,6 +1777,7 @@ fn insert_event_row(
     conn: &rusqlite::Connection,
     record: &SessionEventRecord,
 ) -> rusqlite::Result<()> {
+    let payload_json = sanitize_session_event_payload_json(&record.payload_json)?;
     conn.execute(
         "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -1643,16 +1788,27 @@ fn insert_event_row(
             record.event_type,
             record.turn_id,
             record.item_id,
-            record.payload_json,
+            payload_json,
         ],
     )?;
     Ok(())
+}
+
+fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<String> {
+    let Ok(event) = serde_json::from_str::<anyharness_contract::v1::SessionEvent>(payload_json)
+    else {
+        return Ok(payload_json.to_string());
+    };
+    let sanitized = sanitize_session_event_for_sqlite(&event);
+    serde_json::to_string(&sanitized)
+        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }
 
 fn insert_raw_notification_row(
     conn: &rusqlite::Connection,
     record: &SessionRawNotificationRecord,
 ) -> rusqlite::Result<()> {
+    let payload_json = sanitize_raw_notification_json_for_sqlite(&record.payload_json);
     conn.execute(
         "INSERT INTO session_raw_notifications (session_id, seq, timestamp, notification_kind, payload_json)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1661,7 +1817,7 @@ fn insert_raw_notification_row(
             record.seq,
             record.timestamp,
             record.notification_kind,
-            record.payload_json,
+            payload_json,
         ],
     )?;
     Ok(())
@@ -1693,6 +1849,7 @@ mod tests {
     use super::*;
     use crate::origin::OriginContext;
     use crate::persistence::Db;
+    use crate::sessions::links::model::SessionLinkWorkspaceRelation;
     use crate::sessions::prompt::{PromptPayload, PromptProvenance};
 
     fn count_rows(db: &Db, table: &str, session_id: &str) -> i64 {
@@ -1743,8 +1900,134 @@ mod tests {
             mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
+            action_capabilities_json: None,
             origin: None,
         }
+    }
+
+    fn fork_link_record(
+        id: &str,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> SessionLinkRecord {
+        SessionLinkRecord {
+            id: id.to_string(),
+            relation: SessionLinkRelation::Fork,
+            parent_session_id: parent_session_id.to_string(),
+            child_session_id: child_session_id.to_string(),
+            workspace_relation: SessionLinkWorkspaceRelation::SameWorkspace,
+            label: None,
+            created_by_turn_id: None,
+            created_by_tool_call_id: None,
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn insert_session_with_link_rolls_back_child_when_link_insert_fails() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let mut parent = session_record();
+        parent.id = "parent-session".to_string();
+        store.insert(&parent).expect("insert parent session");
+
+        let mut child = session_record();
+        child.id = "child-session".to_string();
+        child.native_session_id = Some("native-child".to_string());
+        let first_link = fork_link_record("duplicate-link", "parent-session", "child-session");
+        store
+            .insert_session_with_link(&child, &first_link)
+            .expect("insert first child and link");
+
+        let mut second_child = session_record();
+        second_child.id = "second-child".to_string();
+        second_child.native_session_id = Some("native-second-child".to_string());
+        let duplicate_link = fork_link_record("duplicate-link", "parent-session", "second-child");
+
+        store
+            .insert_session_with_link(&second_child, &duplicate_link)
+            .expect_err("duplicate link id rejects transaction");
+
+        assert!(store
+            .find_by_id("second-child")
+            .expect("find second child")
+            .is_none());
+    }
+
+    #[test]
+    fn insert_fork_session_with_link_snapshots_parent_events() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db.clone());
+        let mut parent = session_record();
+        parent.id = "parent-session".to_string();
+        store.insert(&parent).expect("insert parent session");
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "parent-session".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:00Z".to_string(),
+                event_type: "turn_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: None,
+                payload_json: r#"{"type":"turn_started"}"#.to_string(),
+            })
+            .expect("append parent turn");
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "parent-session".to_string(),
+                seq: 2,
+                timestamp: "2026-03-25T00:01:01Z".to_string(),
+                event_type: "item_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: Some("item-1".to_string()),
+                payload_json: r#"{"type":"item_started","item":{"kind":"user_message","status":"completed","contentParts":[{"type":"text","text":"hi"}]}}"#.to_string(),
+            })
+            .expect("append parent item");
+        store
+            .append_raw_notification(
+                "parent-session",
+                "agent_message_chunk",
+                "2026-03-25T00:01:02Z",
+                r#"{"chunk":"raw"}"#,
+            )
+            .expect("append parent raw notification");
+
+        let mut child = session_record();
+        child.id = "child-session".to_string();
+        child.native_session_id = None;
+        let link = fork_link_record("fork-link", "parent-session", "child-session");
+        let copied = store
+            .insert_fork_session_with_link_and_event_snapshot(&child, &link)
+            .expect("insert fork child with event snapshot");
+
+        assert_eq!(copied, 2);
+        assert_eq!(store.next_event_seq("child-session").expect("next seq"), 3);
+        let events = store
+            .list_events("child-session")
+            .expect("list child events");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].seq, 1);
+        assert_eq!(events[0].event_type, "turn_started");
+        assert_eq!(events[0].turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(events[1].seq, 2);
+        assert_eq!(events[1].item_id.as_deref(), Some("item-1"));
+        assert_eq!(
+            events[1].payload_json,
+            r#"{"type":"item_started","item":{"kind":"user_message","status":"completed","contentParts":[{"type":"text","text":"hi"}]}}"#
+        );
+        assert!(
+            store
+                .list_raw_notifications("child-session")
+                .expect("list child raw notifications")
+                .is_empty(),
+            "fork transcript snapshots must not copy raw ACP notifications"
+        );
     }
 
     #[test]

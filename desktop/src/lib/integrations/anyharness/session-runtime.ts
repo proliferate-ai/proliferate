@@ -1,11 +1,18 @@
 import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import {
   createTranscriptState,
-  type ContentPart,
   type PendingPromptEntry,
   streamSession,
 } from "@anyharness/sdk";
-import type { Session, SessionEventEnvelope, SessionExecutionSummary, SessionLiveConfigSnapshot, SessionMcpBindingSummary, SessionStreamHandle } from "@anyharness/sdk";
+import type {
+  Session,
+  SessionActionCapabilities,
+  SessionEventEnvelope,
+  SessionExecutionSummary,
+  SessionLiveConfigSnapshot,
+  SessionMcpBindingSummary,
+  SessionStreamHandle,
+} from "@anyharness/sdk";
 import {
   resolveSessionViewState,
   resolveStatusFromExecutionSummary,
@@ -27,13 +34,6 @@ import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness
 import type { SessionSlot } from "@/stores/sessions/harness-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
-type DevSSEEventRecord = {
-  sessionId: string;
-  receivedAt: string;
-  status: "applied" | "duplicate" | "gap";
-  envelope: SessionEventEnvelope;
-};
-
 interface SessionStreamCallbacks {
   onHandle?: (handle: SessionStreamHandle) => void;
   onOpen: () => void;
@@ -48,6 +48,10 @@ export interface FlushAwareSessionStreamHandle extends SessionStreamHandle {
 }
 
 const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_SESSION_ACTION_CAPABILITIES: SessionActionCapabilities = {
+  fork: false,
+  targetedFork: false,
+};
 
 function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
   return { runtimeUrl: baseUrl, authToken };
@@ -79,98 +83,8 @@ async function measureSessionWorkflowStep<T>(
   }
 }
 
-export function logDevSSEEvent(
-  sessionId: string,
-  envelope: SessionEventEnvelope,
-  status: DevSSEEventRecord["status"],
-): void {
-  if (!import.meta.env.DEV) {
-    return;
-  }
+export { logDevSSEEvent } from "./session-runtime-dev-sse";
 
-  const debugGlobal = globalThis as typeof globalThis & {
-    __APOLLO_SSE_EVENTS__?: DevSSEEventRecord[];
-  };
-
-  const record: DevSSEEventRecord = {
-    sessionId,
-    receivedAt: new Date().toISOString(),
-    status,
-    envelope: sanitizeDevSSEEnvelope(envelope),
-  };
-
-  const existing = debugGlobal.__APOLLO_SSE_EVENTS__ ?? [];
-  debugGlobal.__APOLLO_SSE_EVENTS__ = [...existing.slice(-499), record];
-}
-
-function sanitizeDevSSEEnvelope(envelope: SessionEventEnvelope): SessionEventEnvelope {
-  const event = envelope.event;
-  if (event.type === "item_started" || event.type === "item_completed") {
-    return {
-      ...envelope,
-      event: {
-        ...event,
-        item: {
-          ...event.item,
-          contentParts: sanitizeContentParts(event.item.contentParts ?? []),
-          rawInput: undefined,
-          rawOutput: undefined,
-        },
-      },
-    };
-  }
-  if (event.type === "item_delta") {
-    return {
-      ...envelope,
-      event: {
-        ...event,
-        delta: {
-          ...event.delta,
-          replaceContentParts: event.delta.replaceContentParts
-            ? sanitizeContentParts(event.delta.replaceContentParts)
-            : undefined,
-          appendContentParts: event.delta.appendContentParts
-            ? sanitizeContentParts(event.delta.appendContentParts)
-            : undefined,
-          rawInput: undefined,
-          rawOutput: undefined,
-        },
-      },
-    };
-  }
-  if (event.type === "pending_prompt_added" || event.type === "pending_prompt_updated") {
-    return {
-      ...envelope,
-      event: {
-        ...event,
-        text: summarizeSanitizedContent(event.contentParts ?? [], event.text),
-        contentParts: sanitizeContentParts(event.contentParts ?? []),
-      },
-    };
-  }
-  return envelope;
-}
-
-function sanitizeContentParts(parts: ContentPart[]): ContentPart[] {
-  return parts.map((part) => {
-    switch (part.type) {
-      case "text":
-        return { type: "text", text: `[text:${part.text.length}]` };
-      case "resource":
-        return { ...part, preview: part.preview ? `[preview:${part.preview.length}]` : undefined };
-      case "tool_input_text":
-        return { type: "tool_input_text", text: `[text:${part.text.length}]` };
-      case "tool_result_text":
-        return { type: "tool_result_text", text: `[text:${part.text.length}]` };
-      default:
-        return part;
-    }
-  });
-}
-
-function summarizeSanitizedContent(parts: ContentPart[], fallback: string): string {
-  return parts.length > 0 ? `[content_parts:${parts.length}]` : `[text:${fallback.length}]`;
-}
 
 export function createPendingSessionId(agentKind: string): string {
   return `pending-session:${agentKind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
@@ -188,6 +102,7 @@ export function createEmptySessionSlot(
     modelId?: string | null;
     modeId?: string | null;
     title?: string | null;
+    actionCapabilities?: SessionActionCapabilities | null;
     liveConfig?: SessionLiveConfigSnapshot | null;
     executionSummary?: SessionExecutionSummary | null;
     mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
@@ -207,6 +122,7 @@ export function createEmptySessionSlot(
     modelId: config?.modelId ?? null,
     modeId: resolvedModeId,
     title,
+    actionCapabilities: config?.actionCapabilities ?? DEFAULT_SESSION_ACTION_CAPABILITIES,
     liveConfig: config?.liveConfig ?? null,
     executionSummary: config?.executionSummary ?? null,
     mcpBindingSummaries: config?.mcpBindingSummaries ?? null,
@@ -249,6 +165,7 @@ export function createSessionSlotFromSummary(
       modelId: session.modelId ?? null,
       modeId,
       title,
+      actionCapabilities: session.actionCapabilities,
       liveConfig: session.liveConfig ?? null,
       executionSummary: session.executionSummary ?? null,
       mcpBindingSummaries: session.mcpBindingSummaries ?? null,
@@ -490,13 +407,13 @@ export function detachAndCloseSessionSlotStreams(
   }
 
   const state = useHarnessStore.getState();
-  const streams: { sessionId: string; handle: SessionStreamHandle }[] = [];
+  const streams: { sessionId: string; handle: FlushAwareSessionStreamHandle }[] = [];
   for (const sessionId of uniqueSessionIds) {
     const slot = state.sessionSlots[sessionId];
     if (!slot?.sseHandle) {
       continue;
     }
-    streams.push({ sessionId, handle: slot.sseHandle });
+    streams.push({ sessionId, handle: slot.sseHandle as FlushAwareSessionStreamHandle });
   }
 
   if (streams.length === 0) {
@@ -504,7 +421,16 @@ export function detachAndCloseSessionSlotStreams(
   }
 
   for (const { sessionId, handle } of streams) {
-    handle.close();
+    try {
+      handle.flushPendingEvents?.();
+    } catch (error) {
+      console.error("Failed to flush session stream before detach", { sessionId, error });
+    }
+    try {
+      handle.close();
+    } catch (error) {
+      console.error("Failed to close session stream during detach", { sessionId, error });
+    }
     clearSessionReconnectTimer(sessionId);
   }
 

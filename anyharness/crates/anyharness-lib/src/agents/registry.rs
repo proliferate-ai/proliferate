@@ -255,7 +255,7 @@ fn opencode_descriptor() -> AgentDescriptor {
             default_args: vec![],
         },
         auth: AuthSpec {
-            env_vars: vec!["OPENAI_API_KEY".into(), "ANTHROPIC_API_KEY".into()],
+            env_vars: vec![],
             login: None,
             discovery: CredentialDiscoveryKind::OpenCode,
         },
@@ -341,5 +341,14 @@ mod tests {
                 descriptor.kind
             );
         }
+    }
+
+    #[test]
+    fn opencode_credentials_are_provider_managed() {
+        let descriptor = opencode_descriptor();
+
+        assert!(descriptor.auth.env_vars.is_empty());
+        assert_eq!(descriptor.auth.discovery, CredentialDiscoveryKind::OpenCode);
+        assert!(descriptor.auth.login.is_none());
     }
 }

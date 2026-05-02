@@ -20,6 +20,7 @@ pub mod session_config;
 pub mod sessions;
 pub mod terminals;
 pub mod workspaces;
+pub mod worktrees;
 
 pub use agents::*;
 pub use cowork::*;
@@ -43,3 +44,4 @@ pub use session_config::*;
 pub use sessions::*;
 pub use terminals::*;
 pub use workspaces::*;
+pub use worktrees::*;

@@ -5,6 +5,8 @@ import type {
 import type {
   CreateSessionRequest,
   EditPendingPromptRequest,
+  ForkSessionRequest,
+  ForkSessionResponse,
   GetSessionLiveConfigResponse,
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
@@ -20,6 +22,7 @@ import type {
 } from "../types/sessions.js";
 import { normalizeSessionEventEnvelope } from "../types/events.js";
 import {
+  normalizeForkSessionResponse,
   normalizeSession,
   normalizeSessionLiveConfigSnapshot,
 } from "../types/sessions.js";
@@ -143,6 +146,20 @@ export class SessionsClient {
     return this.prompt(sessionId, {
       blocks: [{ type: "text", text }],
     }, options);
+  }
+
+  async fork(
+    sessionId: string,
+    input: ForkSessionRequest = {},
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ForkSessionResponse> {
+    return normalizeForkSessionResponse(
+      await this.transport.post<ForkSessionResponse>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/fork`,
+        input,
+        options,
+      ),
+    );
   }
 
   async fetchPromptAttachment(

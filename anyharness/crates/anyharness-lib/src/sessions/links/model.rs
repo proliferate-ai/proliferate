@@ -5,6 +5,7 @@ pub enum SessionLinkRelation {
     Subagent,
     CoworkCodingSession,
     ReviewAgent,
+    Fork,
 }
 
 impl SessionLinkRelation {
@@ -13,6 +14,7 @@ impl SessionLinkRelation {
             Self::Subagent => "subagent",
             Self::CoworkCodingSession => "cowork_coding_session",
             Self::ReviewAgent => "review_agent",
+            Self::Fork => "fork",
         }
     }
 
@@ -21,6 +23,7 @@ impl SessionLinkRelation {
             "subagent" => Ok(Self::Subagent),
             "cowork_coding_session" => Ok(Self::CoworkCodingSession),
             "review_agent" => Ok(Self::ReviewAgent),
+            "fork" => Ok(Self::Fork),
             other => Err(SessionLinkParseError::UnknownRelation(other.to_string())),
         }
     }
@@ -102,6 +105,11 @@ mod tests {
         assert_eq!(
             SessionLinkRelation::parse("review_agent").expect("parse relation"),
             SessionLinkRelation::ReviewAgent
+        );
+        assert_eq!(SessionLinkRelation::Fork.as_str(), "fork");
+        assert_eq!(
+            SessionLinkRelation::parse("fork").expect("parse relation"),
+            SessionLinkRelation::Fork
         );
     }
 

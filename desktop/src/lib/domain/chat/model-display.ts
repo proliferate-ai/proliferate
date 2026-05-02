@@ -35,6 +35,20 @@ function normalizeDisplayLabel(label: string): string {
   );
 }
 
+function hasOneMillionContextHint(labels: Array<string | null | undefined>): boolean {
+  return labels.some((label) => /\b1m\b|1m context/i.test(label ?? ""));
+}
+
+function withContextHint(
+  label: string,
+  sourceLabels: Array<string | null | undefined>,
+): string {
+  if (!hasOneMillionContextHint(sourceLabels) || /\b1m\b|1m context/i.test(label)) {
+    return label;
+  }
+  return `${label} (1M context)`;
+}
+
 type ModelControlLabelSource = {
   currentValue?: string | null;
   values: Array<{
@@ -62,19 +76,28 @@ function formatGptModelId(modelId: string): string | null {
 }
 
 function formatClaudeModelId(modelId: string): string | null {
-  const match = /^claude-([a-z]+)-(\d)-(\d)(?:-(\d+m))?$/.exec(modelId);
+  const match = /claude-([a-z]+)-(\d)-(\d)(?:-[\d-]+)?/.exec(modelId);
   if (!match) {
     return null;
   }
 
-  const [, family, major, minor, contextHint] = match;
-  return normalizeWhitespace(
-    `Claude ${titleCaseToken(family)} ${major}.${minor}${contextHint ? ` (${contextHint.toUpperCase()})` : ""}`,
-  );
+  const [, family, major, minor] = match;
+  const contextHint = /\[1m\]|-1m\b|\b1m\b/i.test(modelId) ? " (1M context)" : "";
+  return normalizeWhitespace(`${titleCaseToken(family)} ${major}.${minor}${contextHint}`);
 }
 
 export function shouldHideModel(agentKind: string, modelId: string): boolean {
-  return HIDDEN_MODEL_IDS.has(modelKey(agentKind, modelId));
+  if (HIDDEN_MODEL_IDS.has(modelKey(agentKind, modelId))) {
+    return true;
+  }
+
+  if (agentKind !== "claude") {
+    return false;
+  }
+
+  return /^claude-opus-4-(?:1|5)(?:-|$|\[)/.test(modelId)
+    || modelId === "claude-opus-4-6-1m"
+    || modelId === "claude-opus-4-6[1m]";
 }
 
 export function resolveMatchingModelControlLabel(args: {
@@ -94,10 +117,23 @@ export function resolveModelDisplayName(args: {
   agentKind: string;
   modelId: string;
   sourceLabels?: Array<string | null | undefined>;
+  preferKnownAlias?: boolean;
 }): string | null {
-  const { agentKind, modelId, sourceLabels = [] } = args;
+  const { agentKind, modelId, sourceLabels = [], preferKnownAlias = false } = args;
   if (shouldHideModel(agentKind, modelId)) {
     return null;
+  }
+
+  const alias = MODEL_DISPLAY_ALIASES[modelKey(agentKind, modelId)];
+  if (preferKnownAlias && alias) {
+    return withContextHint(alias, sourceLabels);
+  }
+
+  if (preferKnownAlias && agentKind === "claude") {
+    const formatted = formatClaudeModelId(modelId);
+    if (formatted) {
+      return withContextHint(formatted, sourceLabels);
+    }
   }
 
   for (const candidate of sourceLabels) {
@@ -112,9 +148,8 @@ export function resolveModelDisplayName(args: {
     return normalized;
   }
 
-  const alias = MODEL_DISPLAY_ALIASES[modelKey(agentKind, modelId)];
   if (alias) {
-    return alias;
+    return withContextHint(alias, sourceLabels);
   }
 
   return formatGptModelId(modelId)
