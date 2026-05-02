@@ -65,12 +65,12 @@ export async function createRefillCheckoutSession(
 }
 
 export async function updateOverageSettings(
-  enabled: boolean,
+  input: { enabled: boolean; capCentsPerSeat?: number | null },
   owner?: CloudOwnerSelection,
 ): Promise<OverageSettingsResponse> {
   return (
     await getProliferateClient().POST("/v1/billing/overage-settings", {
-      body: { enabled, ...ownerBody(owner) },
+      body: { ...input, ...ownerBody(owner) },
     })
   ).data!;
 }

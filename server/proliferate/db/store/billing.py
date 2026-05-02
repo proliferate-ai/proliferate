@@ -19,7 +19,9 @@ from proliferate.constants.billing import (
     BILLING_HOLD_STATUS_ACTIVE,
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
+    BILLING_PRICE_CLASS_PRO,
     BILLING_RECONCILER_LOCK_KEY,
+    BILLING_SEAT_ADJUSTMENT_MAX_ATTEMPTS,
     BILLING_SUBJECT_KIND_ORGANIZATION,
     BILLING_SUBJECT_KIND_PERSONAL,
     BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
@@ -28,11 +30,17 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_PENDING,
     BILLING_USAGE_EXPORT_STATUS_SENDING,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
+    BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
     FREE_INCLUDED_GRANT_TYPE,
+    FREE_TRIAL_V2_GRANT_TYPE,
     MONTHLY_CLOUD_GRANT_TYPE,
+    PRO_PERIOD_GRANT_TYPE,
+    PRO_SEAT_PRORATION_GRANT_TYPE,
+    PRO_FREE_TRIAL_HOURS,
     REFILL_10H_GRANT_TYPE,
     USAGE_SEGMENT_RECENT_LOOKBACK_DAYS,
 )
+from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
 from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import (
     BillingDecisionEvent,
@@ -40,6 +48,8 @@ from proliferate.db.models.billing import (
     BillingGrant,
     BillingGrantConsumption,
     BillingHold,
+    BillingOverageRemainder,
+    BillingSeatAdjustment,
     BillingSubject,
     BillingSubscription,
     BillingUsageCursor,
@@ -53,7 +63,14 @@ from proliferate.db.models.cloud import (
     CloudSandbox,
     CloudWorkspace,
 )
+from proliferate.db.models.organizations import OrganizationMembership
+from proliferate.server.billing.accounting import overage_seconds_to_cents
 from proliferate.server.billing.models import coerce_utc, utcnow
+from proliferate.server.billing.pricing import classify_monthly_price_id
+from proliferate.server.billing.seats import (
+    initial_seat_reconcile_source_ref,
+    seat_adjustment_source_ref,
+)
 
 T = TypeVar("T")
 
@@ -71,6 +88,8 @@ class BillingSnapshotState:
     active_cloud_repo_count: int = 0
     unaccounted_billable_seconds: float = 0.0
     historical_billable_seconds: float = 0.0
+    active_seat_count: int = 1
+    managed_cloud_overage_used_cents: int = 0
 
 
 @dataclass(frozen=True)
@@ -87,6 +106,7 @@ class ClaimedUsageExport:
     billing_subject_id: UUID
     stripe_customer_id: str | None
     quantity_seconds: float
+    meter_quantity_cents: int | None
     idempotency_key: str
     accounted_until: datetime
 
@@ -100,9 +120,37 @@ class BillingSubjectStripeState:
     stripe_customer_id: str | None
 
 
+@dataclass(frozen=True)
+class ClaimedSeatAdjustment:
+    id: UUID
+    billing_subject_id: UUID
+    billing_subscription_id: UUID
+    user_id: UUID | None
+    membership_id: UUID | None
+    stripe_subscription_id: str
+    monthly_subscription_item_id: str
+    previous_quantity: int | None
+    target_quantity: int
+    grant_quantity: int
+    period_start: datetime | None
+    period_end: datetime | None
+    effective_at: datetime | None
+    source_ref: str
+
+
+@dataclass(frozen=True)
+class InitialSeatReconcileAdjustment:
+    id: UUID
+    monthly_subscription_item_id: str
+    target_quantity: int
+
+
 class _GrantKind(StrEnum):
     FREE = FREE_INCLUDED_GRANT_TYPE
+    FREE_TRIAL_V2 = FREE_TRIAL_V2_GRANT_TYPE
     MONTHLY = MONTHLY_CLOUD_GRANT_TYPE
+    PRO_PERIOD = PRO_PERIOD_GRANT_TYPE
+    PRO_SEAT_PRORATION = PRO_SEAT_PRORATION_GRANT_TYPE
     REFILL = REFILL_10H_GRANT_TYPE
 
 
@@ -191,6 +239,46 @@ async def ensure_free_included_grant(db: AsyncSession, user_id: UUID) -> bool:
             effective_at=now,
             expires_at=None,
             source_ref=f"{FREE_INCLUDED_GRANT_TYPE}:{user_id}",
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(index_elements=[BillingGrant.source_ref])
+    )
+    return (result.rowcount or 0) > 0
+
+
+async def ensure_free_trial_v2_grant(db: AsyncSession, subject: BillingSubject) -> bool:
+    if subject.kind != BILLING_SUBJECT_KIND_PERSONAL or subject.user_id is None:
+        return False
+    now = utcnow()
+    used_seconds = await sum_all_time_billable_usage_seconds(db, subject.id, now=now)
+    remaining_seconds = max(PRO_FREE_TRIAL_HOURS * 3600.0 - used_seconds, 0.0)
+    old_grants = (
+        await db.execute(
+            select(BillingGrant)
+            .where(
+                BillingGrant.billing_subject_id == subject.id,
+                BillingGrant.grant_type == FREE_INCLUDED_GRANT_TYPE,
+                BillingGrant.expires_at.is_(None),
+            )
+            .with_for_update()
+        )
+    ).scalars()
+    for grant in old_grants.all():
+        grant.expires_at = now
+        grant.remaining_seconds = 0.0
+        grant.updated_at = now
+    result = await db.execute(
+        pg_insert(BillingGrant)
+        .values(
+            user_id=subject.user_id,
+            billing_subject_id=subject.id,
+            grant_type=FREE_TRIAL_V2_GRANT_TYPE,
+            hours_granted=remaining_seconds / 3600.0,
+            remaining_seconds=remaining_seconds,
+            effective_at=now,
+            expires_at=None,
+            source_ref=f"{FREE_TRIAL_V2_GRANT_TYPE}:{subject.id}",
             created_at=now,
             updated_at=now,
         )
@@ -450,7 +538,28 @@ async def set_billing_subject_overage_enabled(
     subject = await db.get(BillingSubject, billing_subject_id)
     if subject is None:
         raise RuntimeError("Billing subject not found.")
+    now = utcnow()
     subject.overage_enabled = overage_enabled
+    subject.overage_preference_set_at = now
+    subject.updated_at = now
+    await db.flush()
+    return subject
+
+
+async def set_billing_subject_overage_policy(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    overage_enabled: bool,
+    overage_cap_cents_per_seat: int | None = None,
+) -> BillingSubject:
+    subject = await set_billing_subject_overage_enabled(
+        db,
+        billing_subject_id=billing_subject_id,
+        overage_enabled=overage_enabled,
+    )
+    if overage_cap_cents_per_seat is not None:
+        subject.overage_cap_cents_per_seat = overage_cap_cents_per_seat
     subject.updated_at = utcnow()
     await db.flush()
     return subject
@@ -500,37 +609,39 @@ async def bind_stripe_customer_to_billing_subject(
         return state
 
 
-async def set_overage_enabled_for_user(
+async def set_overage_policy_for_user(
     *,
     user_id: UUID,
     overage_enabled: bool,
-) -> BillingSubjectStripeState:
+    overage_cap_cents_per_seat: int | None = None,
+) -> BillingSubject:
     async with db_engine.async_session_factory() as db:
         subject = await ensure_personal_billing_subject(db, user_id)
-        subject = await set_billing_subject_overage_enabled(
+        subject = await set_billing_subject_overage_policy(
             db,
             billing_subject_id=subject.id,
             overage_enabled=overage_enabled,
+            overage_cap_cents_per_seat=overage_cap_cents_per_seat,
         )
-        state = _billing_subject_stripe_state(subject)
         await db.commit()
-        return state
+        return subject
 
 
-async def set_overage_enabled_for_subject(
+async def set_overage_policy_for_subject(
     *,
     billing_subject_id: UUID,
     overage_enabled: bool,
-) -> BillingSubjectStripeState:
+    overage_cap_cents_per_seat: int | None = None,
+) -> BillingSubject:
     async with db_engine.async_session_factory() as db:
-        subject = await set_billing_subject_overage_enabled(
+        subject = await set_billing_subject_overage_policy(
             db,
             billing_subject_id=billing_subject_id,
             overage_enabled=overage_enabled,
+            overage_cap_cents_per_seat=overage_cap_cents_per_seat,
         )
-        state = _billing_subject_stripe_state(subject)
         await db.commit()
-        return state
+        return subject
 
 
 async def get_billing_subject_for_stripe_reference(
@@ -564,6 +675,7 @@ async def upsert_billing_subscription(
     latest_invoice_id: str | None,
     latest_invoice_status: str | None,
     hosted_invoice_url: str | None,
+    seat_quantity: int | None = None,
 ) -> BillingSubscription:
     now = utcnow()
     values = {
@@ -577,6 +689,7 @@ async def upsert_billing_subscription(
         "current_period_end": coerce_utc(current_period_end),
         "cloud_monthly_price_id": cloud_monthly_price_id,
         "overage_price_id": overage_price_id,
+        "seat_quantity": seat_quantity,
         "monthly_subscription_item_id": monthly_subscription_item_id,
         "metered_subscription_item_id": metered_subscription_item_id,
         "latest_invoice_id": latest_invoice_id,
@@ -609,13 +722,14 @@ async def upsert_billing_subscription(
 async def ensure_billing_grant(
     db: AsyncSession,
     *,
-    user_id: UUID,
+    user_id: UUID | None,
     billing_subject_id: UUID,
     grant_type: str,
     hours_granted: float,
     effective_at: datetime,
     expires_at: datetime | None,
     source_ref: str,
+    top_up_existing: bool = False,
 ) -> BillingGrant:
     now = utcnow()
     remaining_seconds = max(hours_granted * 3600.0, 0.0)
@@ -643,6 +757,12 @@ async def ensure_billing_grant(
         ).scalar_one_or_none()
         if existing is None:
             raise RuntimeError("Billing grant insert conflicted but no grant was found.")
+        if top_up_existing and hours_granted > existing.hours_granted:
+            delta_seconds = (hours_granted - existing.hours_granted) * 3600.0
+            existing.hours_granted = hours_granted
+            existing.remaining_seconds = max(existing.remaining_seconds + delta_seconds, 0.0)
+            existing.expires_at = coerce_utc(expires_at)
+            existing.updated_at = now
         return existing
     grant = await db.get(BillingGrant, grant_id)
     if grant is None:
@@ -667,6 +787,8 @@ async def upsert_stripe_subscription_record(
     latest_invoice_id: str | None,
     latest_invoice_status: str | None,
     hosted_invoice_url: str | None,
+    seat_quantity: int | None = None,
+    default_pro_overage_enabled: bool = False,
 ) -> BillingSubscription:
     async with db_engine.async_session_factory() as db:
         subscription = await upsert_billing_subscription(
@@ -686,20 +808,265 @@ async def upsert_stripe_subscription_record(
             latest_invoice_id=latest_invoice_id,
             latest_invoice_status=latest_invoice_status,
             hosted_invoice_url=hosted_invoice_url,
+            seat_quantity=seat_quantity,
         )
+        if default_pro_overage_enabled:
+            subject = await db.get(BillingSubject, billing_subject_id)
+            if subject is not None and subject.overage_preference_set_at is None:
+                now = utcnow()
+                subject.overage_enabled = True
+                subject.overage_preference_set_at = now
+                subject.updated_at = now
         await db.commit()
         return subscription
 
 
+async def maybe_create_org_seat_adjustment(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    membership_id: UUID | None,
+) -> bool:
+    if not settings.pro_billing_enabled:
+        return False
+    subject = (
+        await db.execute(
+            select(BillingSubject)
+            .where(
+                BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
+                BillingSubject.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if subject is None:
+        return False
+    subscription = (
+        await db.execute(
+            select(BillingSubscription)
+            .where(
+                BillingSubscription.billing_subject_id == subject.id,
+                BillingSubscription.status.in_(["active", "trialing"]),
+            )
+            .order_by(
+                BillingSubscription.current_period_end.desc().nulls_last(),
+                BillingSubscription.updated_at.desc(),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if (
+        subscription is None
+        or subscription.monthly_subscription_item_id is None
+        or classify_monthly_price_id(subscription.cloud_monthly_price_id) != BILLING_PRICE_CLASS_PRO
+        or subscription.current_period_start is None
+    ):
+        return False
+    target_quantity = await count_active_seats_for_billing_subject(db, subject)
+    previous_quantity = (
+        int(subscription.seat_quantity)
+        if subscription.seat_quantity is not None
+        else target_quantity
+    )
+    period_start = coerce_utc(subscription.current_period_start) or subscription.current_period_start
+    now = utcnow()
+    grant_quantity = 0
+    if target_quantity > previous_quantity and membership_id is not None:
+        membership = await db.get(OrganizationMembership, membership_id)
+        had_current_period_decrease = await _has_current_period_seat_decrease_for_membership(
+            db,
+            billing_subscription_id=subscription.id,
+            membership_id=membership_id,
+            period_start=subscription.current_period_start,
+        )
+        if (
+            membership is not None
+            and membership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+            and now >= period_start
+            and not had_current_period_decrease
+        ):
+            grant_quantity = min(target_quantity - previous_quantity, 1)
+    if target_quantity == previous_quantity and grant_quantity == 0:
+        return False
+    source_ref = seat_adjustment_source_ref(
+        subscription_id=subscription.stripe_subscription_id,
+        membership_id=str(membership_id or organization_id),
+        period_start_unix=int(subscription.current_period_start.timestamp()),
+        event_unix_microseconds=int(now.timestamp() * 1_000_000),
+    )
+    result = await db.execute(
+        pg_insert(BillingSeatAdjustment)
+        .values(
+            billing_subject_id=subject.id,
+            billing_subscription_id=subscription.id,
+            organization_id=organization_id,
+            membership_id=membership_id,
+            stripe_subscription_id=subscription.stripe_subscription_id,
+            monthly_subscription_item_id=subscription.monthly_subscription_item_id,
+            previous_quantity=previous_quantity,
+            target_quantity=target_quantity,
+            grant_quantity=grant_quantity,
+            attempt_count=0,
+            period_start=subscription.current_period_start,
+            effective_at=now,
+            source_ref=source_ref,
+            status="pending",
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(index_elements=[BillingSeatAdjustment.source_ref])
+    )
+    return (result.rowcount or 0) > 0
+
+
+async def claim_pending_seat_adjustments(limit: int = 100) -> list[ClaimedSeatAdjustment]:
+    async with db_engine.async_session_factory() as db:
+        rows = (
+            await db.execute(
+                select(BillingSeatAdjustment, BillingSubscription, BillingSubject)
+                .join(
+                    BillingSubscription,
+                    BillingSubscription.id == BillingSeatAdjustment.billing_subscription_id,
+                )
+                .join(BillingSubject, BillingSubject.id == BillingSeatAdjustment.billing_subject_id)
+                .where(BillingSeatAdjustment.status.in_(["pending", "failed_retryable"]))
+                .order_by(BillingSeatAdjustment.created_at.asc())
+                .limit(limit)
+                .with_for_update(
+                    skip_locked=True,
+                    of=(BillingSeatAdjustment, BillingSubscription, BillingSubject),
+                )
+            )
+        ).all()
+        now = utcnow()
+        claimed: list[ClaimedSeatAdjustment] = []
+        for adjustment, subscription, subject in rows:
+            if adjustment.monthly_subscription_item_id is None:
+                adjustment.status = "failed_terminal"
+                adjustment.last_error = "Missing Stripe subscription item id."
+                adjustment.updated_at = now
+                continue
+            if adjustment.stripe_confirmed_at is None:
+                current_quantity = await count_active_seats_for_billing_subject(db, subject)
+                confirmed_quantity = (
+                    int(subscription.seat_quantity)
+                    if subscription.seat_quantity is not None
+                    else adjustment.previous_quantity
+                )
+                if confirmed_quantity is None:
+                    confirmed_quantity = current_quantity
+                grant_quantity = 0
+                period_start = coerce_utc(adjustment.period_start)
+                # Use the persisted adjustment time when reclaiming rows; a retry may run
+                # much later than the membership activation that created the adjustment.
+                effective_at = coerce_utc(adjustment.effective_at or adjustment.created_at)
+                membership = (
+                    await db.get(OrganizationMembership, adjustment.membership_id)
+                    if adjustment.membership_id is not None
+                    else None
+                )
+                if (
+                    current_quantity > confirmed_quantity
+                    and membership is not None
+                    and membership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
+                    and period_start is not None
+                    and effective_at is not None
+                    and effective_at >= period_start
+                    and not await _has_current_period_seat_decrease_for_membership(
+                        db,
+                        billing_subscription_id=subscription.id,
+                        membership_id=adjustment.membership_id,
+                        period_start=adjustment.period_start,
+                    )
+                ):
+                    grant_quantity = min(current_quantity - confirmed_quantity, 1)
+
+                adjustment.previous_quantity = confirmed_quantity
+                adjustment.target_quantity = current_quantity
+                adjustment.grant_quantity = grant_quantity
+                adjustment.updated_at = now
+                if current_quantity == confirmed_quantity and grant_quantity == 0:
+                    adjustment.status = "succeeded"
+                    adjustment.stripe_confirmed_at = now
+                    adjustment.grant_issued_at = now
+                    adjustment.last_error = "stale_seat_adjustment_noop"
+                    continue
+            claimed.append(
+                ClaimedSeatAdjustment(
+                    id=adjustment.id,
+                    billing_subject_id=adjustment.billing_subject_id,
+                    billing_subscription_id=adjustment.billing_subscription_id,
+                    user_id=subject.user_id,
+                    membership_id=adjustment.membership_id,
+                    stripe_subscription_id=adjustment.stripe_subscription_id,
+                    monthly_subscription_item_id=adjustment.monthly_subscription_item_id,
+                    previous_quantity=adjustment.previous_quantity,
+                    target_quantity=adjustment.target_quantity,
+                    grant_quantity=adjustment.grant_quantity,
+                    period_start=adjustment.period_start,
+                    period_end=subscription.current_period_end,
+                    effective_at=adjustment.effective_at or adjustment.created_at,
+                    source_ref=adjustment.source_ref,
+                )
+            )
+        await db.commit()
+        return claimed
+
+
+async def mark_seat_adjustment_stripe_confirmed(*, adjustment_id: UUID) -> None:
+    async with db_engine.async_session_factory() as db:
+        adjustment = await db.get(BillingSeatAdjustment, adjustment_id)
+        if adjustment is not None:
+            adjustment.stripe_confirmed_at = utcnow()
+            adjustment.last_error = None
+            adjustment.updated_at = utcnow()
+            subscription = await db.get(BillingSubscription, adjustment.billing_subscription_id)
+            if subscription is not None:
+                subscription.seat_quantity = adjustment.target_quantity
+                subscription.updated_at = utcnow()
+        await db.commit()
+
+
+async def mark_seat_adjustment_grant_issued(*, adjustment_id: UUID) -> None:
+    async with db_engine.async_session_factory() as db:
+        adjustment = await db.get(BillingSeatAdjustment, adjustment_id)
+        if adjustment is not None:
+            adjustment.grant_issued_at = utcnow()
+            adjustment.status = "succeeded"
+            adjustment.last_error = None
+            adjustment.updated_at = utcnow()
+        await db.commit()
+
+
+async def mark_seat_adjustment_failed(
+    *,
+    adjustment_id: UUID,
+    error: str,
+    terminal: bool = False,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        adjustment = await db.get(BillingSeatAdjustment, adjustment_id)
+        if adjustment is not None:
+            adjustment.attempt_count = int(adjustment.attempt_count or 0) + 1
+            should_terminal = terminal or (
+                adjustment.attempt_count >= BILLING_SEAT_ADJUSTMENT_MAX_ATTEMPTS
+            )
+            adjustment.status = "failed_terminal" if should_terminal else "failed_retryable"
+            adjustment.last_error = error[:4000]
+            adjustment.updated_at = utcnow()
+        await db.commit()
+
+
 async def ensure_billing_grant_record(
     *,
-    user_id: UUID,
+    user_id: UUID | None,
     billing_subject_id: UUID,
     grant_type: str,
     hours_granted: float,
     effective_at: datetime,
     expires_at: datetime | None,
     source_ref: str,
+    top_up_existing: bool = False,
 ) -> BillingGrant:
     async with db_engine.async_session_factory() as db:
         grant = await ensure_billing_grant(
@@ -711,6 +1078,7 @@ async def ensure_billing_grant_record(
             effective_at=effective_at,
             expires_at=expires_at,
             source_ref=source_ref,
+            top_up_existing=top_up_existing,
         )
         await db.commit()
         return grant
@@ -861,6 +1229,337 @@ async def estimate_unaccounted_billable_seconds(
         if segment_end > accounted_from:
             total += (segment_end - accounted_from).total_seconds()
     return max(total, 0.0)
+
+
+async def sum_all_time_billable_usage_seconds(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+    *,
+    now: datetime,
+) -> float:
+    completed = await db.scalar(
+        select(
+            func.coalesce(
+                func.sum(func.extract("epoch", UsageSegment.ended_at - UsageSegment.started_at)),
+                0.0,
+            )
+        ).where(
+            UsageSegment.billing_subject_id == billing_subject_id,
+            UsageSegment.is_billable.is_(True),
+            UsageSegment.ended_at.is_not(None),
+        )
+    )
+    open_rows = (
+        await db.execute(
+            select(UsageSegment.started_at).where(
+                UsageSegment.billing_subject_id == billing_subject_id,
+                UsageSegment.is_billable.is_(True),
+                UsageSegment.ended_at.is_(None),
+            )
+        )
+    ).scalars()
+    current_time = coerce_utc(now) or now
+    open_seconds = sum(
+        max((current_time - (coerce_utc(started_at) or current_time)).total_seconds(), 0.0)
+        for started_at in open_rows.all()
+    )
+    return max(float(completed or 0.0) + open_seconds, 0.0)
+
+
+_CAP_COUNTING_EXPORT_STATUSES = {
+    BILLING_USAGE_EXPORT_STATUS_PENDING,
+    BILLING_USAGE_EXPORT_STATUS_SENDING,
+    BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
+    # Retryable rows are durable billable exports that have already advanced usage
+    # cursors. Keep them in cap spend so later accounting passes cannot overrun
+    # the cap while Stripe delivery is being retried for the same row.
+    BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
+    BILLING_USAGE_EXPORT_STATUS_OBSERVED,
+}
+
+
+async def sum_meter_quantity_cents_for_subject(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+    *,
+    period_start: datetime | None = None,
+) -> int:
+    conditions = [
+        BillingUsageExport.billing_subject_id == billing_subject_id,
+        BillingUsageExport.status.in_(_CAP_COUNTING_EXPORT_STATUSES),
+        BillingUsageExport.meter_quantity_cents.is_not(None),
+    ]
+    if period_start is not None:
+        conditions.append(
+            BillingUsageExport.period_start == (coerce_utc(period_start) or period_start)
+        )
+    result = await db.scalar(
+        select(func.coalesce(func.sum(BillingUsageExport.meter_quantity_cents), 0)).where(
+            *conditions
+        )
+    )
+    return int(result or 0)
+
+
+async def count_active_seats_for_billing_subject(
+    db: AsyncSession,
+    subject: BillingSubject,
+) -> int:
+    if subject.kind == BILLING_SUBJECT_KIND_ORGANIZATION and subject.organization_id is not None:
+        count = await db.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.organization_id == subject.organization_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+        )
+        return max(int(count or 0), 1)
+    return 1
+
+
+async def count_active_seats_for_billing_subject_id(billing_subject_id: UUID) -> int:
+    async with db_engine.async_session_factory() as db:
+        subject = await db.get(BillingSubject, billing_subject_id)
+        if subject is None:
+            return 1
+        return await count_active_seats_for_billing_subject(db, subject)
+
+
+async def prepare_initial_org_seat_reconcile(
+    *,
+    billing_subscription_id: UUID,
+) -> InitialSeatReconcileAdjustment | None:
+    if not settings.pro_billing_enabled:
+        return None
+    async with db_engine.async_session_factory() as db:
+        subscription = await db.get(
+            BillingSubscription,
+            billing_subscription_id,
+            with_for_update=True,
+        )
+        if subscription is None:
+            return None
+        subject = await db.get(BillingSubject, subscription.billing_subject_id, with_for_update=True)
+        if (
+            subject is None
+            or subject.kind != BILLING_SUBJECT_KIND_ORGANIZATION
+            or subject.organization_id is None
+            or subscription.status not in {"active", "trialing"}
+            or subscription.monthly_subscription_item_id is None
+            or subscription.current_period_start is None
+            or classify_monthly_price_id(subscription.cloud_monthly_price_id)
+            != BILLING_PRICE_CLASS_PRO
+        ):
+            return None
+
+        target_quantity = await count_active_seats_for_billing_subject(db, subject)
+        previous_quantity = (
+            int(subscription.seat_quantity)
+            if subscription.seat_quantity is not None
+            else target_quantity
+        )
+        period_start_unix = int(subscription.current_period_start.timestamp())
+        source_ref = initial_seat_reconcile_source_ref(
+            subscription_id=subscription.stripe_subscription_id,
+            period_start_unix=period_start_unix,
+        )
+        now = utcnow()
+        existing = (
+            await db.execute(
+                select(BillingSeatAdjustment)
+                .where(BillingSeatAdjustment.source_ref == source_ref)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            if existing.status == "succeeded":
+                if target_quantity == existing.target_quantity:
+                    if subscription.seat_quantity != existing.target_quantity:
+                        subscription.seat_quantity = existing.target_quantity
+                        subscription.updated_at = now
+                    await db.commit()
+                    return None
+                # Webhook retries are idempotent, but a later subscription update in the
+                # same period can still reveal active-seat drift. Reuse the per-period
+                # reconcile row and let the Stripe idempotency key include the new target.
+                existing.status = "pending"
+                existing.stripe_confirmed_at = None
+                existing.grant_issued_at = None
+                existing.last_error = None
+                existing.previous_quantity = previous_quantity
+                existing.target_quantity = target_quantity
+                existing.grant_quantity = 0
+                existing.attempt_count = 0
+                existing.updated_at = now
+                if subscription.seat_quantity != previous_quantity:
+                    subscription.seat_quantity = previous_quantity
+                    subscription.updated_at = now
+                await db.commit()
+                return InitialSeatReconcileAdjustment(
+                    id=existing.id,
+                    monthly_subscription_item_id=existing.monthly_subscription_item_id
+                    or subscription.monthly_subscription_item_id,
+                    target_quantity=existing.target_quantity,
+                )
+            if existing.stripe_confirmed_at is None:
+                existing.previous_quantity = previous_quantity
+                existing.target_quantity = target_quantity
+                existing.grant_quantity = 0
+                existing.attempt_count = 0
+                existing.updated_at = now
+            await db.commit()
+            return InitialSeatReconcileAdjustment(
+                id=existing.id,
+                monthly_subscription_item_id=existing.monthly_subscription_item_id
+                or subscription.monthly_subscription_item_id,
+                target_quantity=existing.target_quantity,
+            )
+
+        if target_quantity == previous_quantity:
+            return None
+
+        result = await db.execute(
+            pg_insert(BillingSeatAdjustment)
+            .values(
+                billing_subject_id=subject.id,
+                billing_subscription_id=subscription.id,
+                organization_id=subject.organization_id,
+                membership_id=None,
+                stripe_subscription_id=subscription.stripe_subscription_id,
+                monthly_subscription_item_id=subscription.monthly_subscription_item_id,
+                previous_quantity=previous_quantity,
+                target_quantity=target_quantity,
+                grant_quantity=0,
+                attempt_count=0,
+                period_start=subscription.current_period_start,
+                effective_at=now,
+                source_ref=source_ref,
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=[BillingSeatAdjustment.source_ref])
+            .returning(BillingSeatAdjustment.id)
+        )
+        adjustment_id = result.scalar_one_or_none()
+        if adjustment_id is None:
+            await db.commit()
+            return None
+        await db.commit()
+        return InitialSeatReconcileAdjustment(
+            id=adjustment_id,
+            monthly_subscription_item_id=subscription.monthly_subscription_item_id,
+            target_quantity=target_quantity,
+        )
+
+
+async def load_billing_subscription_by_id(
+    billing_subscription_id: UUID,
+) -> BillingSubscription | None:
+    async with db_engine.async_session_factory() as db:
+        return await db.get(BillingSubscription, billing_subscription_id)
+
+
+async def _has_current_period_seat_decrease_for_membership(
+    db: AsyncSession,
+    *,
+    billing_subscription_id: UUID,
+    membership_id: UUID,
+    period_start: datetime,
+) -> bool:
+    # A same-period decrease means that seat was already covered by the period grant.
+    # Re-adding it should sync Stripe quantity without issuing another prorated grant.
+    return (
+        await db.execute(
+            select(BillingSeatAdjustment.id)
+            .where(
+                BillingSeatAdjustment.billing_subscription_id == billing_subscription_id,
+                BillingSeatAdjustment.membership_id == membership_id,
+                BillingSeatAdjustment.period_start == period_start,
+                BillingSeatAdjustment.previous_quantity.is_not(None),
+                BillingSeatAdjustment.previous_quantity > BillingSeatAdjustment.target_quantity,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none() is not None
+
+
+def _active_pro_period_start(
+    subscriptions: list[BillingSubscription],
+    *,
+    now: datetime,
+) -> datetime | None:
+    active_periods: list[tuple[datetime, datetime, datetime]] = []
+    for subscription in subscriptions:
+        if (
+            subscription.status not in {"active", "trialing"}
+            or classify_monthly_price_id(subscription.cloud_monthly_price_id)
+            != BILLING_PRICE_CLASS_PRO
+            or subscription.current_period_start is None
+        ):
+            continue
+        period_start = coerce_utc(subscription.current_period_start)
+        if period_start is None:
+            continue
+        period_end = coerce_utc(subscription.current_period_end) or datetime.max.replace(
+            tzinfo=period_start.tzinfo,
+        )
+        if period_end < now:
+            continue
+        active_periods.append(
+            (
+                period_end,
+                coerce_utc(subscription.updated_at)
+                or datetime.min.replace(tzinfo=period_start.tzinfo),
+                period_start,
+            )
+        )
+    if not active_periods:
+        return None
+    return max(active_periods)[2]
+
+
+async def get_or_create_overage_remainder(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    billing_subscription_id: UUID | None,
+    period_start: datetime,
+) -> BillingOverageRemainder:
+    now = utcnow()
+    period_start_utc = coerce_utc(period_start) or period_start
+    result = await db.execute(
+        pg_insert(BillingOverageRemainder)
+        .values(
+            billing_subject_id=billing_subject_id,
+            billing_subscription_id=billing_subscription_id,
+            period_start=period_start_utc,
+            fractional_cents=0.0,
+            created_at=now,
+            updated_at=now,
+        )
+        .on_conflict_do_nothing(
+            constraint="uq_billing_overage_remainder_subject_period",
+        )
+        .returning(BillingOverageRemainder.id)
+    )
+    remainder_id = result.scalar_one_or_none()
+    if remainder_id is None:
+        remainder = (
+            await db.execute(
+                select(BillingOverageRemainder)
+                .where(
+                    BillingOverageRemainder.billing_subject_id == billing_subject_id,
+                    BillingOverageRemainder.period_start == period_start_utc,
+                )
+                .with_for_update()
+            )
+        ).scalar_one()
+    else:
+        remainder = await db.get(BillingOverageRemainder, remainder_id)
+        if remainder is None:
+            raise RuntimeError("Billing overage remainder disappeared after creation.")
+        await db.refresh(remainder, with_for_update=True)
+    return remainder
 
 
 async def get_open_usage_segment(
@@ -1223,6 +1922,10 @@ async def create_usage_export(
     accounted_from: datetime,
     accounted_until: datetime,
     quantity_seconds: float,
+    meter_quantity_cents: int | None = None,
+    cap_cents_snapshot: int | None = None,
+    cap_used_cents_snapshot: int | None = None,
+    writeoff_reason: str | None = None,
     idempotency_key: str,
     status: str,
 ) -> BillingUsageExport:
@@ -1238,6 +1941,10 @@ async def create_usage_export(
             accounted_from=coerce_utc(accounted_from) or accounted_from,
             accounted_until=coerce_utc(accounted_until) or accounted_until,
             quantity_seconds=quantity_seconds,
+            meter_quantity_cents=meter_quantity_cents,
+            cap_cents_snapshot=cap_cents_snapshot,
+            cap_used_cents_snapshot=cap_used_cents_snapshot,
+            writeoff_reason=writeoff_reason,
             idempotency_key=idempotency_key,
             stripe_meter_event_identifier=None,
             status=status,
@@ -1331,7 +2038,18 @@ def _ordered_accounting_grants(
     is_paid_cloud: bool,
     at: datetime,
 ) -> list[BillingGrant]:
-    if is_paid_cloud:
+    if settings.pro_billing_enabled and is_paid_cloud:
+        grant_type_order = {
+            _GrantKind.PRO_PERIOD: 0,
+            _GrantKind.PRO_SEAT_PRORATION: 1,
+            _GrantKind.REFILL: 2,
+        }
+    elif settings.pro_billing_enabled:
+        grant_type_order = {
+            _GrantKind.FREE_TRIAL_V2: 0,
+            _GrantKind.REFILL: 1,
+        }
+    elif is_paid_cloud:
         grant_type_order = {
             _GrantKind.MONTHLY: 0,
             _GrantKind.FREE: 1,
@@ -1416,6 +2134,7 @@ async def account_usage_for_billing_subject(
     period_end: datetime | None,
     overage_enabled: bool,
     billing_mode: str,
+    overage_cap_cents: int | None = None,
     consume_grants: bool = True,
     export_overage: bool = True,
     scan_until: datetime | None = None,
@@ -1479,6 +2198,20 @@ async def account_usage_for_billing_subject(
         accounting_boundaries = (
             (period_start_utc,) if is_paid_cloud and period_start_utc is not None else ()
         )
+        cap_used_cents = 0
+        overage_remainder: BillingOverageRemainder | None = None
+        if can_export_overage and period_start_utc is not None:
+            cap_used_cents = await sum_meter_quantity_cents_for_subject(
+                db,
+                billing_subject_id,
+                period_start=period_start_utc,
+            )
+            overage_remainder = await get_or_create_overage_remainder(
+                db,
+                billing_subject_id=billing_subject_id,
+                billing_subscription_id=billing_subscription_id,
+                period_start=period_start_utc,
+            )
 
         for segment, range_start, range_end in usage_ranges:
             accounted_from = range_start
@@ -1529,26 +2262,78 @@ async def account_usage_for_billing_subject(
                     period_start_utc is None or accounted_from >= period_start_utc
                 )
                 if uncovered_seconds > 0 and can_export_overage and slice_is_in_paid_period:
-                    await create_usage_export(
-                        db,
-                        billing_subject_id=billing_subject_id,
-                        billing_subscription_id=billing_subscription_id,
-                        usage_segment_id=segment.id,
-                        period_start=period_start,
-                        period_end=period_end,
-                        accounted_from=accounted_from,
-                        accounted_until=accounted_until,
-                        quantity_seconds=uncovered_seconds,
-                        idempotency_key=_usage_export_idempotency_key(
+                    remainder_cents = (
+                        float(overage_remainder.fractional_cents)
+                        if overage_remainder is not None
+                        else 0.0
+                    )
+                    meter_cents, fractional_cents = overage_seconds_to_cents(
+                        uncovered_seconds,
+                        fractional_cents=remainder_cents,
+                    )
+                    if overage_remainder is not None:
+                        overage_remainder.fractional_cents = fractional_cents
+                        overage_remainder.updated_at = now
+
+                    if meter_cents > 0:
+                        cap_remaining_cents = (
+                            max(overage_cap_cents - cap_used_cents, 0)
+                            if overage_cap_cents is not None
+                            else meter_cents
+                        )
+                        billable_cents = min(meter_cents, cap_remaining_cents)
+                        writeoff_cents = max(meter_cents - billable_cents, 0)
+                        base_idempotency_key = _usage_export_idempotency_key(
                             billing_subject_id=billing_subject_id,
                             usage_segment_id=segment.id,
                             accounted_from=accounted_from,
                             accounted_until=accounted_until,
-                        ),
-                        status=export_status,
-                    )
-                    export_seconds += uncovered_seconds
-                    export_count += 1
+                        )
+                        billable_seconds = (
+                            uncovered_seconds * billable_cents / meter_cents
+                            if billable_cents > 0
+                            else 0.0
+                        )
+                        writeoff_seconds = max(uncovered_seconds - billable_seconds, 0.0)
+                        if billable_cents > 0:
+                            await create_usage_export(
+                                db,
+                                billing_subject_id=billing_subject_id,
+                                billing_subscription_id=billing_subscription_id,
+                                usage_segment_id=segment.id,
+                                period_start=period_start,
+                                period_end=period_end,
+                                accounted_from=accounted_from,
+                                accounted_until=accounted_until,
+                                quantity_seconds=billable_seconds,
+                                meter_quantity_cents=billable_cents,
+                                cap_cents_snapshot=overage_cap_cents,
+                                cap_used_cents_snapshot=cap_used_cents,
+                                idempotency_key=f"{base_idempotency_key}:billable",
+                                status=export_status,
+                            )
+                            cap_used_cents += billable_cents
+                            export_seconds += billable_seconds
+                            export_count += 1
+                        if writeoff_cents > 0:
+                            await create_usage_export(
+                                db,
+                                billing_subject_id=billing_subject_id,
+                                billing_subscription_id=billing_subscription_id,
+                                usage_segment_id=segment.id,
+                                period_start=period_start,
+                                period_end=period_end,
+                                accounted_from=accounted_from,
+                                accounted_until=accounted_until,
+                                quantity_seconds=writeoff_seconds,
+                                meter_quantity_cents=0,
+                                cap_cents_snapshot=overage_cap_cents,
+                                cap_used_cents_snapshot=cap_used_cents,
+                                writeoff_reason="overage_cap_exhausted",
+                                idempotency_key=f"{base_idempotency_key}:writeoff",
+                                status=BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
+                            )
+                            export_count += 1
 
                 await upsert_usage_cursor(
                     db,
@@ -1571,6 +2356,10 @@ async def claim_usage_exports_for_sending(limit: int = 100) -> list[ClaimedUsage
     async with db_engine.async_session_factory() as db:
         now = utcnow()
         stale_sending_before = now - timedelta(minutes=5)
+        claim_conditions = [
+            BillingUsageExport.meter_quantity_cents > 0,
+            BillingUsageExport.meter_quantity_cents.is_(None),
+        ]
         rows = (
             await db.execute(
                 select(BillingUsageExport, BillingSubject.stripe_customer_id)
@@ -1579,6 +2368,7 @@ async def claim_usage_exports_for_sending(limit: int = 100) -> list[ClaimedUsage
                     BillingSubject.id == BillingUsageExport.billing_subject_id,
                 )
                 .where(
+                    or_(*claim_conditions),
                     or_(
                         BillingUsageExport.status.in_(
                             [
@@ -1606,6 +2396,7 @@ async def claim_usage_exports_for_sending(limit: int = 100) -> list[ClaimedUsage
                     billing_subject_id=export.billing_subject_id,
                     stripe_customer_id=stripe_customer_id,
                     quantity_seconds=export.quantity_seconds,
+                    meter_quantity_cents=export.meter_quantity_cents,
                     idempotency_key=export.idempotency_key,
                     accounted_until=export.accounted_until,
                 )
@@ -1743,6 +2534,8 @@ async def _build_billing_snapshot_state_for_subject(
     recent_window_started_at = now - timedelta(days=USAGE_SEGMENT_RECENT_LOOKBACK_DAYS)
     grants = await list_grants(db, billing_subject_id)
     entitlements = await list_entitlements(db, billing_subject_id)
+    subscriptions = await list_subscriptions(db, billing_subject_id)
+    active_pro_period_start = _active_pro_period_start(subscriptions, now=now)
     return BillingSnapshotState(
         subject=subject,
         billing_subject_id=billing_subject_id,
@@ -1750,7 +2543,7 @@ async def _build_billing_snapshot_state_for_subject(
         grants=grants,
         entitlements=entitlements,
         holds=await list_active_holds(db, billing_subject_id),
-        subscriptions=await list_subscriptions(db, billing_subject_id),
+        subscriptions=subscriptions,
         usage_segments=await list_usage_segments(
             db,
             billing_subject_id,
@@ -1770,13 +2563,26 @@ async def _build_billing_snapshot_state_for_subject(
             billing_subject_id,
             window_started_at=recent_window_started_at,
         ),
+        active_seat_count=await count_active_seats_for_billing_subject(db, subject),
+        managed_cloud_overage_used_cents=(
+            await sum_meter_quantity_cents_for_subject(
+                db,
+                billing_subject_id,
+                period_start=active_pro_period_start,
+            )
+            if active_pro_period_start is not None
+            else 0
+        ),
     )
 
 
 async def load_billing_snapshot_state(user_id: UUID) -> BillingSnapshotState:
     async with db_engine.async_session_factory() as db:
         subject = await ensure_personal_billing_subject(db, user_id)
-        await ensure_free_included_grant(db, user_id)
+        if settings.pro_billing_enabled:
+            await ensure_free_trial_v2_grant(db, subject)
+        else:
+            await ensure_free_included_grant(db, user_id)
         await db.commit()
         return await _build_billing_snapshot_state_for_subject(db, subject.id)
 
@@ -1789,7 +2595,10 @@ async def load_billing_snapshot_state_for_subject(
         if subject is None:
             raise RuntimeError("Billing subject not found.")
         if subject.kind == BILLING_SUBJECT_KIND_PERSONAL and subject.user_id is not None:
-            await ensure_free_included_grant(db, subject.user_id)
+            if settings.pro_billing_enabled:
+                await ensure_free_trial_v2_grant(db, subject)
+            else:
+                await ensure_free_included_grant(db, subject.user_id)
             await db.commit()
         return await _build_billing_snapshot_state_for_subject(db, billing_subject_id)
 

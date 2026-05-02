@@ -1699,11 +1699,13 @@ export interface components {
         BillingOverview: {
             /**
              * Plan
-             * @description `cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited entitlement, and both grant unlimited Cloud hours.
+             * @description Public billing plan. Values are `free` or `pro`.
              */
             plan: string;
             /** Billingmode */
             billingMode: string;
+            /** Probillingenabled */
+            proBillingEnabled: boolean;
             /** Isunlimited */
             isUnlimited: boolean;
             /** Hasunlimitedcloudhours */
@@ -1740,6 +1742,28 @@ export interface components {
             activeSpendHold: boolean;
             /** Holdreason */
             holdReason?: string | null;
+            /** Billableseatcount */
+            billableSeatCount?: number | null;
+            /** Includedmanagedcloudhours */
+            includedManagedCloudHours?: number | null;
+            /** Remainingmanagedcloudhours */
+            remainingManagedCloudHours?: number | null;
+            /** Managedcloudoverageenabled */
+            managedCloudOverageEnabled: boolean;
+            /** Managedcloudoveragecapcents */
+            managedCloudOverageCapCents?: number | null;
+            /** Managedcloudoverageusedcents */
+            managedCloudOverageUsedCents: number;
+            /** Overagepriceperhourcents */
+            overagePricePerHourCents: number;
+            /** Activeenvironmentlimit */
+            activeEnvironmentLimit?: number | null;
+            /** Repoenvironmentlimit */
+            repoEnvironmentLimit?: number | null;
+            /** Byoruntimeallowed */
+            byoRuntimeAllowed: boolean;
+            /** Legacycloudsubscription */
+            legacyCloudSubscription: boolean;
         };
         /** BillingOwnerSelection */
         BillingOwnerSelection: {
@@ -1857,11 +1881,13 @@ export interface components {
         CloudPlanInfo: {
             /**
              * Plan
-             * @description `cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited entitlement, and both grant unlimited Cloud hours.
+             * @description Public billing plan. Values are `free` or `pro`.
              */
             plan: string;
             /** Billingmode */
             billingMode: string;
+            /** Probillingenabled */
+            proBillingEnabled: boolean;
             /** Isunlimited */
             isUnlimited: boolean;
             /** Hasunlimitedcloudhours */
@@ -1898,6 +1924,28 @@ export interface components {
             activeSpendHold: boolean;
             /** Holdreason */
             holdReason?: string | null;
+            /** Billableseatcount */
+            billableSeatCount?: number | null;
+            /** Includedmanagedcloudhours */
+            includedManagedCloudHours?: number | null;
+            /** Remainingmanagedcloudhours */
+            remainingManagedCloudHours?: number | null;
+            /** Managedcloudoverageenabled */
+            managedCloudOverageEnabled: boolean;
+            /** Managedcloudoveragecapcents */
+            managedCloudOverageCapCents?: number | null;
+            /** Managedcloudoverageusedcents */
+            managedCloudOverageUsedCents: number;
+            /** Overagepriceperhourcents */
+            overagePricePerHourCents: number;
+            /** Activeenvironmentlimit */
+            activeEnvironmentLimit?: number | null;
+            /** Repoenvironmentlimit */
+            repoEnvironmentLimit?: number | null;
+            /** Byoruntimeallowed */
+            byoRuntimeAllowed: boolean;
+            /** Legacycloudsubscription */
+            legacyCloudSubscription: boolean;
         };
         /** CloudRepoConfigResponse */
         CloudRepoConfigResponse: {
@@ -2818,6 +2866,8 @@ export interface components {
         OverageSettingsRequest: {
             /** Enabled */
             enabled: boolean;
+            /** Capcentsperseat */
+            capCentsPerSeat?: number | null;
             /**
              * Ownerscope
              * @default personal
@@ -2831,6 +2881,8 @@ export interface components {
         OverageSettingsResponse: {
             /** Overageenabled */
             overageEnabled: boolean;
+            /** Overagecapcentsperseat */
+            overageCapCentsPerSeat?: number | null;
         };
         /** PatchCloudMcpConnectionRequest */
         PatchCloudMcpConnectionRequest: {
@@ -2866,6 +2918,8 @@ export interface components {
             plan: string;
             /** Usageminutes */
             usageMinutes: number;
+            /** Probillingenabled */
+            proBillingEnabled: boolean;
         };
         /** PutCloudMcpSecretAuthRequest */
         PutCloudMcpSecretAuthRequest: {

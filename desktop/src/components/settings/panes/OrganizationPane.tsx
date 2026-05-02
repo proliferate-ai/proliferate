@@ -11,7 +11,7 @@ import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { CloudUpload, Mail, RefreshCw, Trash } from "@/components/ui/icons";
+import { ChevronRight, CloudUpload, Mail, RefreshCw, Trash } from "@/components/ui/icons";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
@@ -204,7 +204,7 @@ export function OrganizationPane() {
         <SettingsCard>
           <SettingsCardRow
             label="Active organization"
-            description="This only changes the settings context."
+            description="Choose which organization to view and manage here."
           >
             <Select
               value={activeOrganizationId ?? ""}
@@ -281,6 +281,24 @@ export function OrganizationPane() {
             onLogoImageFile={handleLogoImageFile}
             onSubmit={handleUpdateOrganization}
           />
+
+          <OrganizationSection title="Billing">
+            <SettingsCard>
+              <SettingsCardRow
+                label="Organization billing"
+                description="Manage organization plan, seats, and overage from Billing."
+              >
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
+                >
+                  Open billing
+                  <ChevronRight className="size-4" />
+                </Button>
+              </SettingsCardRow>
+            </SettingsCard>
+          </OrganizationSection>
 
           <OrganizationSection title="Members">
             <SettingsCard>
@@ -392,7 +410,7 @@ function OrganizationSettingsCard({
         <form onSubmit={(event) => { void onSubmit(event); }}>
           <SettingsCardRow
             label="Organization image"
-            description="Defaults to the image we can infer from your email domain."
+            description="Used in the organization switcher and settings."
           >
             <div className="flex items-center gap-2">
               <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />

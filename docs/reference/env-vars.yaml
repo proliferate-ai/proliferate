@@ -213,6 +213,12 @@
   description: "Billing mode: off, observe, or enforce"
   tags: [production]
 
+- name: PRO_BILLING_ENABLED
+  secret: false
+  default: "false"
+  description: Enables Pro billing policy, free-v2 trial behavior, and Pro response fields
+  tags: [production]
+
 - name: STRIPE_SECRET_KEY
   secret: true
   default: ""
@@ -228,19 +234,49 @@
 - name: STRIPE_CLOUD_MONTHLY_PRICE_ID
   secret: false
   default: ""
-  description: Stripe $200 Cloud monthly price ID
+  description: Transitional alias for STRIPE_PRO_MONTHLY_PRICE_ID when no legacy Cloud price is configured
+  tags: [local-dev, production]
+
+- name: STRIPE_PRO_MONTHLY_PRICE_ID
+  secret: false
+  default: ""
+  description: Stripe Pro monthly seat price ID at $20/user/month
+  tags: [local-dev, production]
+
+- name: STRIPE_LEGACY_CLOUD_MONTHLY_PRICE_ID
+  secret: false
+  default: ""
+  description: Optional legacy $200 Cloud monthly price ID for grandfathered subscriptions
+  tags: [production]
+
+- name: STRIPE_MANAGED_CLOUD_OVERAGE_PRICE_ID
+  secret: false
+  default: ""
+  description: Stripe metered price ID for managed cloud overage cents
   tags: [local-dev, production]
 
 - name: STRIPE_SANDBOX_METER_ID
   secret: false
   default: ""
-  description: Stripe billing meter ID for sandbox usage
+  description: Legacy alias for the managed cloud overage meter ID
   tags: [local-dev, production]
 
 - name: STRIPE_SANDBOX_METER_EVENT_NAME
   secret: false
   default: "proliferate_sandbox_seconds"
-  description: Stripe billing meter event name for sandbox usage
+  description: Legacy sandbox usage meter event name
+  tags: [local-dev, production]
+
+- name: STRIPE_MANAGED_CLOUD_OVERAGE_METER_ID
+  secret: false
+  default: ""
+  description: Stripe billing meter ID for managed cloud overage cents
+  tags: [local-dev, production]
+
+- name: STRIPE_MANAGED_CLOUD_OVERAGE_METER_EVENT_NAME
+  secret: false
+  default: "proliferate_managed_cloud_overage_cents"
+  description: Stripe billing meter event name for managed cloud overage cents
   tags: [local-dev, production]
 
 - name: STRIPE_SANDBOX_OVERAGE_PRICE_ID

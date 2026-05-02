@@ -13,12 +13,12 @@ const WRITE_ENV_FLAG = "--write-env-local";
 const writeEnvLocal = process.argv.includes(WRITE_ENV_FLAG);
 
 const PRODUCT_KEY = "proliferate_cloud_local_test";
-const METER_EVENT_NAME = "proliferate_sandbox_seconds";
-const CLOUD_MONTHLY_LOOKUP_KEY = "proliferate_cloud_monthly_test";
-const SANDBOX_OVERAGE_LOOKUP_KEY = "proliferate_cloud_sandbox_10h_overage_test";
+const METER_EVENT_NAME = "proliferate_managed_cloud_overage_cents";
+const CLOUD_MONTHLY_LOOKUP_KEY = "proliferate_pro_monthly_test";
+const SANDBOX_OVERAGE_LOOKUP_KEY = "proliferate_managed_cloud_overage_cent_test";
 const REFILL_10H_LOOKUP_KEY = "proliferate_cloud_refill_10h_20usd_test";
-const CLOUD_MONTHLY_UNIT_AMOUNT = 20000;
-const SANDBOX_OVERAGE_UNIT_AMOUNT = 2000;
+const CLOUD_MONTHLY_UNIT_AMOUNT = 2000;
+const SANDBOX_OVERAGE_UNIT_AMOUNT = 1;
 const REFILL_10H_UNIT_AMOUNT = 2000;
 const TEN_SANDBOX_HOURS_SECONDS = 36000;
 
@@ -68,7 +68,7 @@ function ensureMeter() {
     "meters",
     "create",
     "--display-name",
-    "Proliferate Sandbox Seconds (Local Test)",
+    "Proliferate Managed Cloud Overage Cents (Local Test)",
     "--event-name",
     METER_EVENT_NAME,
     "--default-aggregation.formula",
@@ -103,38 +103,30 @@ function assertPriceShape(condition, message) {
 function validateMonthlyCloudPrice(price) {
   assertPriceShape(
     price.unit_amount === CLOUD_MONTHLY_UNIT_AMOUNT,
-    `Cloud monthly price ${price.id} must be $200/month.`,
+    `Pro monthly price ${price.id} must be $20/user/month.`,
   );
   assertPriceShape(
     price.recurring?.interval === "month",
-    `Cloud monthly price ${price.id} must recur monthly.`,
+    `Pro monthly price ${price.id} must recur monthly.`,
   );
 }
 
 function validateSandboxOveragePrice(price, meterId) {
   assertPriceShape(
     price.unit_amount === SANDBOX_OVERAGE_UNIT_AMOUNT,
-    `Sandbox overage price ${price.id} must be $20 per transformed unit.`,
+    `Managed cloud overage price ${price.id} must be one cent per unit.`,
   );
   assertPriceShape(
     price.recurring?.usage_type === "metered",
-    `Sandbox overage price ${price.id} must be metered.`,
+    `Managed cloud overage price ${price.id} must be metered.`,
   );
   assertPriceShape(
     price.recurring?.interval === "month",
-    `Sandbox overage price ${price.id} must recur monthly.`,
+    `Managed cloud overage price ${price.id} must recur monthly.`,
   );
   assertPriceShape(
     !price.recurring?.meter || price.recurring.meter === meterId,
-    `Sandbox overage price ${price.id} must point at meter ${meterId}.`,
-  );
-  assertPriceShape(
-    price.transform_quantity?.divide_by === TEN_SANDBOX_HOURS_SECONDS,
-    `Sandbox overage price ${price.id} must divide usage by ${TEN_SANDBOX_HOURS_SECONDS}.`,
-  );
-  assertPriceShape(
-    price.transform_quantity?.round === "up",
-    `Sandbox overage price ${price.id} must round transformed usage up.`,
+    `Managed cloud overage price ${price.id} must point at meter ${meterId}.`,
   );
 }
 
@@ -169,11 +161,11 @@ function ensureCloudMonthlyPrice(productId) {
     "--lookup-key",
     CLOUD_MONTHLY_LOOKUP_KEY,
     "--nickname",
-    "Cloud monthly (local test)",
+    "Pro monthly seat (local test)",
     "-d",
     "metadata[environment]=local_test",
     "-d",
-    "metadata[proliferate_plan]=cloud",
+    "metadata[proliferate_plan]=pro",
   ]);
   validateMonthlyCloudPrice(price);
   return price;
@@ -200,18 +192,14 @@ function ensureSandboxOveragePrice(productId, meterId) {
     "metered",
     "--recurring.meter",
     meterId,
-    "--transform-quantity.divide-by",
-    `${TEN_SANDBOX_HOURS_SECONDS}`,
-    "--transform-quantity.round",
-    "up",
     "--lookup-key",
     SANDBOX_OVERAGE_LOOKUP_KEY,
     "--nickname",
-    "10 sandbox-hour overage block (local test)",
+    "Managed cloud overage cent (local test)",
     "-d",
     "metadata[environment]=local_test",
     "-d",
-    "metadata[proliferate_usage_unit]=sandbox_10h_block",
+    "metadata[proliferate_usage_unit]=managed_cloud_overage_cent",
   ]);
   validateSandboxOveragePrice(price, meterId);
   return price;
@@ -271,6 +259,11 @@ const overage = ensureSandboxOveragePrice(product.id, meter.id);
 const refill = ensureRefillPrice(product.id);
 
 const envValues = {
+  PRO_BILLING_ENABLED: "true",
+  STRIPE_PRO_MONTHLY_PRICE_ID: cloudMonthly.id,
+  STRIPE_MANAGED_CLOUD_OVERAGE_METER_ID: meter.id,
+  STRIPE_MANAGED_CLOUD_OVERAGE_METER_EVENT_NAME: meter.event_name,
+  STRIPE_MANAGED_CLOUD_OVERAGE_PRICE_ID: overage.id,
   STRIPE_CLOUD_MONTHLY_PRICE_ID: cloudMonthly.id,
   STRIPE_SANDBOX_METER_ID: meter.id,
   STRIPE_SANDBOX_METER_EVENT_NAME: meter.event_name,
@@ -290,8 +283,8 @@ console.log(JSON.stringify({
   product: { id: product.id, name: product.name },
   meter: { id: meter.id, eventName: meter.event_name },
   prices: {
-    cloudMonthly: cloudMonthly.id,
-    sandbox10hOverageBlock: overage.id,
+    proMonthly: cloudMonthly.id,
+    managedCloudOverageCent: overage.id,
     refill10h: refill.id,
   },
   wroteEnvLocal: writeEnvLocal,

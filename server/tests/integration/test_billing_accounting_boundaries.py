@@ -43,6 +43,7 @@ async def test_accounting_splits_pre_subscription_usage_before_unlimited_hours(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
     user_id = uuid.uuid4()
     subject_id, segment = await seed_usage_segment(
@@ -142,6 +143,7 @@ async def test_accounting_uses_stable_subscription_start_after_renewal(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
     user_id = uuid.uuid4()
     subject_id, segment = await seed_usage_segment(
@@ -284,6 +286,7 @@ async def test_pending_usage_export_is_sent_as_raw_seconds(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
     monkeypatch.setattr(settings, "stripe_sandbox_meter_event_name", "proliferate_sandbox_seconds")
     user_id = uuid.uuid4()
     subject_id, segment = await seed_usage_segment(

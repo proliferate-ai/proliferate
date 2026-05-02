@@ -14,6 +14,7 @@ import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { openExternal } from "@/platform/tauri/shell";
+import { useAuthStore } from "@/stores/auth/auth-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { cloudBillingKey, type CloudOwnerSelectionKey } from "./query-keys";
 
@@ -22,8 +23,14 @@ function hasUsableBillingPlan(
 ): billingPlan is BillingPlanInfo {
   if (!billingPlan) return false;
 
+  const nullableNumber = (value: unknown) => value === null || Number.isFinite(value);
+  const optionalNullableString = (value: unknown) =>
+    value === null || value === undefined || typeof value === "string";
+
   return (
-    typeof billingPlan.billingMode === "string"
+    typeof billingPlan.plan === "string"
+    && typeof billingPlan.billingMode === "string"
+    && typeof billingPlan.proBillingEnabled === "boolean"
     && typeof billingPlan.isUnlimited === "boolean"
     && typeof billingPlan.hasUnlimitedCloudHours === "boolean"
     && typeof billingPlan.overQuota === "boolean"
@@ -33,20 +40,59 @@ function hasUsableBillingPlan(
     && typeof billingPlan.paymentHealthy === "boolean"
     && typeof billingPlan.overageEnabled === "boolean"
     && Number.isFinite(billingPlan.usedSandboxHours)
-    && (billingPlan.cloudRepoLimit === null
-      || Number.isFinite(billingPlan.cloudRepoLimit))
+    && nullableNumber(billingPlan.cloudRepoLimit)
     && Number.isFinite(billingPlan.activeCloudRepoCount)
-    && (billingPlan.concurrentSandboxLimit === null
-      || Number.isFinite(billingPlan.concurrentSandboxLimit))
+    && nullableNumber(billingPlan.concurrentSandboxLimit)
     && Number.isFinite(billingPlan.activeSandboxCount)
-    && (billingPlan.hostedInvoiceUrl === null
-      || billingPlan.hostedInvoiceUrl === undefined
-      || typeof billingPlan.hostedInvoiceUrl === "string")
-    && (billingPlan.remainingSandboxHours === null
-      || Number.isFinite(billingPlan.remainingSandboxHours))
-    && (billingPlan.freeSandboxHours === null
-      || Number.isFinite(billingPlan.freeSandboxHours))
+    && optionalNullableString(billingPlan.hostedInvoiceUrl)
+    && nullableNumber(billingPlan.remainingSandboxHours)
+    && nullableNumber(billingPlan.freeSandboxHours)
+    && (billingPlan.billableSeatCount === null
+      || Number.isFinite(billingPlan.billableSeatCount))
+    && nullableNumber(billingPlan.includedManagedCloudHours)
+    && nullableNumber(billingPlan.remainingManagedCloudHours)
+    && typeof billingPlan.managedCloudOverageEnabled === "boolean"
+    && nullableNumber(billingPlan.managedCloudOverageCapCents)
+    && Number.isFinite(billingPlan.managedCloudOverageUsedCents)
+    && Number.isFinite(billingPlan.overagePricePerHourCents)
+    && nullableNumber(billingPlan.activeEnvironmentLimit)
+    && nullableNumber(billingPlan.repoEnvironmentLimit)
+    && typeof billingPlan.byoRuntimeAllowed === "boolean"
+    && typeof billingPlan.legacyCloudSubscription === "boolean"
   );
+}
+
+function billingPlanShapeDiagnostics(billingPlan: BillingPlanInfo | null | undefined) {
+  if (!billingPlan) {
+    return { missingFields: ["payload"], invalidFields: [] };
+  }
+
+  const requiredFields = [
+    "plan",
+    "billingMode",
+    "proBillingEnabled",
+    "isUnlimited",
+    "hasUnlimitedCloudHours",
+    "overQuota",
+    "startBlocked",
+    "activeSpendHold",
+    "isPaidCloud",
+    "paymentHealthy",
+    "overageEnabled",
+    "managedCloudOverageEnabled",
+    "managedCloudOverageUsedCents",
+    "overagePricePerHourCents",
+    "activeEnvironmentLimit",
+    "repoEnvironmentLimit",
+    "byoRuntimeAllowed",
+    "legacyCloudSubscription",
+  ] as const;
+
+  const missingFields = requiredFields.filter((field) => !(field in billingPlan));
+  const invalidFields = Object.entries(billingPlan)
+    .filter(([, value]) => value === undefined)
+    .map(([field]) => field);
+  return { missingFields, invalidFields };
 }
 
 function ownerKey(owner?: CloudOwnerSelection): CloudOwnerSelectionKey {
@@ -56,18 +102,27 @@ function ownerKey(owner?: CloudOwnerSelection): CloudOwnerSelectionKey {
   };
 }
 
-export function useCloudBilling(owner?: CloudOwnerSelection) {
+export function useCloudBilling(
+  owner?: CloudOwnerSelection,
+  options?: { enabled?: boolean },
+) {
   const { billingEnabled } = useAppCapabilities();
   const { cloudActive } = useCloudAvailabilityState();
-  const billingAccessible = billingEnabled && cloudActive;
+  const authStatus = useAuthStore((state) => state.status);
   const billingOwnerKey = ownerKey(owner);
+  const billingAccessible = billingEnabled
+    && (
+      billingOwnerKey.ownerScope === "organization"
+        ? authStatus === "authenticated" && Boolean(billingOwnerKey.organizationId)
+        : cloudActive
+    );
 
   return useQuery<BillingPlanInfo | null>({
     meta: {
       telemetryHandled: true,
     },
     queryKey: cloudBillingKey(billingOwnerKey),
-    enabled: billingAccessible,
+    enabled: billingAccessible && (options?.enabled ?? true),
     placeholderData: null,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -83,7 +138,7 @@ export function useCloudBilling(owner?: CloudOwnerSelection) {
                 route: "settings",
               },
               extras: {
-                billing_plan: billingPlan,
+                billing_plan_shape: billingPlanShapeDiagnostics(billingPlan),
               },
             },
           );
@@ -113,12 +168,12 @@ export function useCloudBillingActions(owner?: CloudOwnerSelection) {
   const billingOwnerKey = ownerKey(owner);
 
   async function invalidateCloudBillingState() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: cloudBillingKey(billingOwnerKey) }),
-      queryClient.invalidateQueries({
+    await queryClient.invalidateQueries({ queryKey: cloudBillingKey(billingOwnerKey) });
+    if (billingOwnerKey.ownerScope === "personal") {
+      await queryClient.invalidateQueries({
         queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-      }),
-    ]);
+      });
+    }
   }
 
   async function openBillingUrl(response: BillingUrlResponse) {
@@ -169,7 +224,8 @@ export function useCloudBillingActions(owner?: CloudOwnerSelection) {
   });
 
   const overageMutation = useMutation({
-    mutationFn: (enabled: boolean) => updateOverageSettings(enabled, owner),
+    mutationFn: (input: { enabled: boolean; capCentsPerSeat?: number | null }) =>
+      updateOverageSettings(input, owner),
     onSuccess: invalidateCloudBillingState,
     onError: (error) => {
       captureTelemetryException(error, {

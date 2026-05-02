@@ -22,14 +22,26 @@ from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
+    BILLING_PLAN_FREE,
+    BILLING_PLAN_PRO,
+    BILLING_PRICE_CLASS_LEGACY_CLOUD,
+    BILLING_PRICE_CLASS_PRO,
     FREE_INCLUDED_GRANT_TYPE,
+    FREE_TRIAL_V2_GRANT_TYPE,
     MONTHLY_CLOUD_GRANT_TYPE,
+    PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT,
+    PRO_OVERAGE_CAP_CENTS_PER_SEAT_MAX,
+    PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
+    PRO_PERIOD_GRANT_TYPE,
+    PRO_SEAT_PRORATION_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
     UNLIMITED_CLOUD_ENTITLEMENT,
     WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
+    WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
+    WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
@@ -47,6 +59,9 @@ from proliferate.db.store.billing import (
     account_usage_for_billing_subject,
     bind_stripe_customer_to_billing_subject,
     claim_usage_exports_for_sending,
+    claim_pending_seat_adjustments,
+    count_active_seats_for_billing_subject_id,
+    ensure_billing_grant_record,
     get_or_create_stripe_customer_state_for_organization,
     get_or_create_stripe_customer_state_for_user,
     list_billing_subject_ids_for_usage_accounting,
@@ -54,10 +69,13 @@ from proliferate.db.store.billing import (
     load_billing_snapshot_state_for_subject,
     mark_usage_export_failed,
     mark_usage_export_succeeded,
+    mark_seat_adjustment_failed,
+    mark_seat_adjustment_grant_issued,
+    mark_seat_adjustment_stripe_confirmed,
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
-    set_overage_enabled_for_subject,
-    set_overage_enabled_for_user,
+    set_overage_policy_for_subject,
+    set_overage_policy_for_user,
 )
 from proliferate.db.store.organizations import load_organization_by_billing_subject
 from proliferate.integrations.billing import stripe as stripe_billing
@@ -73,6 +91,17 @@ from proliferate.server.billing.models import (
     coerce_utc,
     duration_seconds,
     utcnow,
+)
+from proliferate.server.billing.policy import free_v2_policy, pro_policy, unlimited_numeric_policy
+from proliferate.server.billing.pricing import (
+    classify_monthly_price_id,
+    configured_managed_cloud_meter_event_name,
+    configured_managed_cloud_overage_price_id,
+    configured_pro_monthly_price_id,
+)
+from proliferate.server.billing.seats import (
+    prorated_seat_grant_hours,
+    seat_proration_grant_source_ref,
 )
 from proliferate.server.organizations.service import (
     OrganizationServiceError,
@@ -102,6 +131,7 @@ class UnlimitedCloudHoursState:
     manual_entitlement: BillingEntitlement | None
     has_unlimited_cloud_hours: bool
     unlimited_window_start: datetime | None
+    legacy_cloud_subscription: bool
 
 
 def _grant_is_active(grant: BillingGrant, now: datetime) -> bool:
@@ -163,12 +193,16 @@ def _compute_unlimited_cloud_hours_state(
 ) -> UnlimitedCloudHoursState:
     subscription = _latest_healthy_cloud_subscription(subscriptions, now)
     manual_entitlement = _active_unlimited_cloud_entitlement(entitlements, now)
+    legacy_cloud_subscription = (
+        subscription is not None
+        and (not settings.pro_billing_enabled or _subscription_is_legacy_cloud(subscription))
+    )
     unlimited_boundaries = [
         boundary
         for boundary in (
             (
                 _subscription_unlimited_window_start(subscription, now)
-                if subscription is not None
+                if legacy_cloud_subscription
                 else None
             ),
             (
@@ -182,8 +216,9 @@ def _compute_unlimited_cloud_hours_state(
     return UnlimitedCloudHoursState(
         subscription=subscription,
         manual_entitlement=manual_entitlement,
-        has_unlimited_cloud_hours=subscription is not None or manual_entitlement is not None,
+        has_unlimited_cloud_hours=legacy_cloud_subscription or manual_entitlement is not None,
         unlimited_window_start=min(unlimited_boundaries) if unlimited_boundaries else None,
+        legacy_cloud_subscription=legacy_cloud_subscription,
     )
 
 
@@ -196,10 +231,26 @@ def _hold_reason(holds: list[BillingHold]) -> str | None:
 
 
 def _subscription_is_cloud(subscription: BillingSubscription) -> bool:
-    configured_price_id = settings.stripe_cloud_monthly_price_id
-    if not configured_price_id:
+    if not settings.pro_billing_enabled:
+        configured_price_id = settings.stripe_cloud_monthly_price_id
+        return bool(configured_price_id) and subscription.cloud_monthly_price_id == configured_price_id
+    return classify_monthly_price_id(subscription.cloud_monthly_price_id) in {
+        BILLING_PRICE_CLASS_PRO,
+        BILLING_PRICE_CLASS_LEGACY_CLOUD,
+    }
+
+
+def _subscription_is_pro(subscription: BillingSubscription) -> bool:
+    return classify_monthly_price_id(subscription.cloud_monthly_price_id) == BILLING_PRICE_CLASS_PRO
+
+
+def _subscription_is_legacy_cloud(subscription: BillingSubscription) -> bool:
+    if not settings.pro_billing_enabled:
         return False
-    return subscription.cloud_monthly_price_id == configured_price_id
+    return (
+        classify_monthly_price_id(subscription.cloud_monthly_price_id)
+        == BILLING_PRICE_CLASS_LEGACY_CLOUD
+    )
 
 
 def _subscription_is_healthy(subscription: BillingSubscription, now: datetime) -> bool:
@@ -248,12 +299,22 @@ def _latest_healthy_cloud_subscription(
 def repo_limit_for_billing_snapshot(snapshot: BillingSnapshot) -> int | None:
     if snapshot.billing_mode == BILLING_MODE_OFF:
         return None
+    if settings.pro_billing_enabled:
+        return snapshot.repo_environment_limit
     if snapshot.is_paid_cloud or snapshot.has_unlimited_cloud_hours:
         return settings.cloud_paid_repo_limit
     return settings.cloud_free_repo_limit
 
 
 def _grant_applies_to_paid_state(grant: BillingGrant, *, is_paid_cloud: bool) -> bool:
+    if settings.pro_billing_enabled and is_paid_cloud:
+        return grant.grant_type in {
+            PRO_PERIOD_GRANT_TYPE,
+            PRO_SEAT_PRORATION_GRANT_TYPE,
+            REFILL_10H_GRANT_TYPE,
+        }
+    if settings.pro_billing_enabled:
+        return grant.grant_type in {FREE_TRIAL_V2_GRANT_TYPE, REFILL_10H_GRANT_TYPE}
     if is_paid_cloud:
         return grant.grant_type in {
             MONTHLY_CLOUD_GRANT_TYPE,
@@ -292,6 +353,12 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         now=now,
     )
     healthy_subscription = unlimited_state.subscription
+    is_pro_subscription = (
+        settings.pro_billing_enabled
+        and healthy_subscription is not None
+        and _subscription_is_pro(healthy_subscription)
+    )
+    active_manual_unlimited = unlimited_state.manual_entitlement is not None
     is_paid_cloud = healthy_subscription is not None
     payment_healthy = is_paid_cloud
     eligible_grants = [
@@ -309,7 +376,6 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         0.0,
     )
 
-    active_manual_unlimited = unlimited_state.manual_entitlement is not None
     has_unlimited_cloud_hours = unlimited_state.has_unlimited_cloud_hours
     remaining_seconds_value = None if has_unlimited_cloud_hours else max(remaining_seconds, 0.0)
 
@@ -317,26 +383,53 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         1 for sandbox in state.sandboxes if sandbox.status in ACTIVE_SANDBOX_STATUSES
     )
 
+    if settings.pro_billing_enabled:
+        if is_pro_subscription:
+            numeric_policy = pro_policy(
+                billable_seat_count=state.active_seat_count,
+                overage_cap_cents_per_seat=state.subject.overage_cap_cents_per_seat,
+            )
+        elif has_unlimited_cloud_hours:
+            numeric_policy = unlimited_numeric_policy(byo_runtime_allowed=True)
+        else:
+            numeric_policy = free_v2_policy()
+    else:
+        numeric_policy = None
+
     rollover_grace = _subscription_in_rollover_grace(healthy_subscription, now)
     over_quota = not has_unlimited_cloud_hours and remaining_seconds <= 0 and not rollover_grace
-    # Overage plumbing is intentionally retained for legacy/refill controls and possible
-    # future finite paid plans; flat paid Cloud makes this false today.
+    managed_cloud_overage_cap_cents = (
+        numeric_policy.managed_cloud_overage_cap_cents if numeric_policy is not None else None
+    )
+    cap_exhausted = (
+        is_pro_subscription
+        and managed_cloud_overage_cap_cents is not None
+        and state.managed_cloud_overage_used_cents >= managed_cloud_overage_cap_cents
+    )
     paid_overage_allowed = (
         not has_unlimited_cloud_hours
         and is_paid_cloud
         and state.subject.overage_enabled
         and payment_healthy
+        and not cap_exhausted
     )
-    concurrent_sandbox_limit = None if is_paid_cloud else settings.cloud_concurrent_sandbox_limit
+    concurrent_sandbox_limit = (
+        numeric_policy.active_environment_limit
+        if numeric_policy is not None
+        else (None if is_paid_cloud else settings.cloud_concurrent_sandbox_limit)
+    )
     concurrency_limited = (
         concurrent_sandbox_limit is not None and active_sandbox_count >= concurrent_sandbox_limit
     )
     hold_reason = _hold_reason(state.holds)
-    credit_reason = (
-        WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
-        if over_quota and not paid_overage_allowed
-        else None
-    )
+    credit_reason = None
+    if over_quota and not paid_overage_allowed:
+        if is_pro_subscription and not state.subject.overage_enabled:
+            credit_reason = WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED
+        elif is_pro_subscription and cap_exhausted:
+            credit_reason = WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED
+        else:
+            credit_reason = WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
     concurrency_reason = (
         WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT if concurrency_limited else None
     )
@@ -344,11 +437,52 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     active_spend_hold_reason = hold_reason or credit_reason
     start_blocked = start_block_reason is not None
     active_spend_hold = active_spend_hold_reason is not None
+    legacy_cloud_subscription = (
+        unlimited_state.legacy_cloud_subscription and settings.pro_billing_enabled
+    )
+    if settings.pro_billing_enabled:
+        plan = BILLING_PLAN_PRO if (is_paid_cloud or active_manual_unlimited) else BILLING_PLAN_FREE
+        cloud_repo_limit = numeric_policy.repo_environment_limit if numeric_policy is not None else None
+        billable_seat_count = (
+            numeric_policy.billable_seat_count if numeric_policy is not None else None
+        )
+        included_managed_cloud_hours = (
+            numeric_policy.included_managed_cloud_hours if numeric_policy is not None else None
+        )
+        remaining_managed_cloud_hours = (
+            remaining_seconds_value / 3600.0
+            if included_managed_cloud_hours is not None and remaining_seconds_value is not None
+            else None
+        )
+        repo_environment_limit = (
+            numeric_policy.repo_environment_limit if numeric_policy is not None else None
+        )
+        active_environment_limit = (
+            numeric_policy.active_environment_limit if numeric_policy is not None else None
+        )
+        byo_runtime_allowed = (
+            numeric_policy.byo_runtime_allowed if numeric_policy is not None else False
+        )
+    else:
+        plan = "cloud" if is_paid_cloud else ("unlimited" if active_manual_unlimited else "free")
+        cloud_repo_limit = (
+            settings.cloud_paid_repo_limit
+            if is_paid_cloud or has_unlimited_cloud_hours
+            else settings.cloud_free_repo_limit
+        )
+        billable_seat_count = None
+        included_managed_cloud_hours = None
+        remaining_managed_cloud_hours = None
+        managed_cloud_overage_cap_cents = None
+        repo_environment_limit = cloud_repo_limit
+        active_environment_limit = concurrent_sandbox_limit
+        byo_runtime_allowed = False
 
     return BillingSnapshot(
         billing_subject_id=state.billing_subject_id,
-        plan="cloud" if is_paid_cloud else ("unlimited" if active_manual_unlimited else "free"),
+        plan=plan,
         billing_mode=settings.cloud_billing_mode,
+        pro_billing_enabled=settings.pro_billing_enabled,
         is_unlimited=active_manual_unlimited,
         has_unlimited_cloud_hours=has_unlimited_cloud_hours,
         over_quota=over_quota,
@@ -358,11 +492,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         included_hours=None if has_unlimited_cloud_hours else included_seconds / 3600.0,
         used_hours=used_seconds / 3600.0,
         remaining_hours=(None if has_unlimited_cloud_hours else remaining_seconds_value / 3600.0),
-        cloud_repo_limit=(
-            settings.cloud_paid_repo_limit
-            if is_paid_cloud or has_unlimited_cloud_hours
-            else settings.cloud_free_repo_limit
-        ),
+        cloud_repo_limit=cloud_repo_limit,
         active_cloud_repo_count=state.active_cloud_repo_count,
         concurrent_sandbox_limit=concurrent_sandbox_limit,
         active_sandbox_count=active_sandbox_count,
@@ -374,6 +504,19 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         hosted_invoice_url=(
             healthy_subscription.hosted_invoice_url if healthy_subscription is not None else None
         ),
+        billable_seat_count=billable_seat_count,
+        included_managed_cloud_hours=included_managed_cloud_hours,
+        remaining_managed_cloud_hours=remaining_managed_cloud_hours,
+        managed_cloud_overage_enabled=state.subject.overage_enabled,
+        managed_cloud_overage_cap_cents=managed_cloud_overage_cap_cents,
+        managed_cloud_overage_used_cents=(
+            0 if has_unlimited_cloud_hours else state.managed_cloud_overage_used_cents
+        ),
+        overage_price_per_hour_cents=PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
+        active_environment_limit=active_environment_limit,
+        repo_environment_limit=repo_environment_limit,
+        byo_runtime_allowed=byo_runtime_allowed,
+        legacy_cloud_subscription=legacy_cloud_subscription,
     )
 
 
@@ -385,6 +528,10 @@ def _authorization_message(reason: str | None) -> str | None:
         )
     if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
         return "Cloud usage is paused because your included sandbox hours are exhausted."
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED:
+        return "Cloud usage is paused because included managed cloud hours are exhausted."
+    if reason == WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED:
+        return "Cloud usage is paused because the managed cloud overage cap is exhausted."
     if reason == WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED:
         return "Cloud usage is paused because billing needs attention."
     if reason == WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD:
@@ -429,37 +576,13 @@ async def authorize_sandbox_start(
         message=_authorization_message(reason),
         active_sandbox_count=snapshot.active_sandbox_count,
         remaining_seconds=snapshot.remaining_seconds,
+        active_environment_limit=snapshot.active_environment_limit,
     )
 
 
 async def get_billing_overview(user_id: UUID) -> BillingOverview:
     snapshot = await get_billing_snapshot(user_id)
-    return BillingOverview(
-        plan=snapshot.plan,
-        billing_mode=snapshot.billing_mode,
-        is_unlimited=snapshot.is_unlimited,
-        has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
-        over_quota=snapshot.over_quota,
-        included_hours=(
-            round(snapshot.included_hours, 2) if snapshot.included_hours is not None else None
-        ),
-        used_hours=round(snapshot.used_hours, 4),
-        remaining_hours=(
-            round(snapshot.remaining_hours, 4) if snapshot.remaining_hours is not None else None
-        ),
-        cloud_repo_limit=snapshot.cloud_repo_limit,
-        active_cloud_repo_count=snapshot.active_cloud_repo_count,
-        concurrent_sandbox_limit=snapshot.concurrent_sandbox_limit,
-        active_sandbox_count=snapshot.active_sandbox_count,
-        is_paid_cloud=snapshot.is_paid_cloud,
-        payment_healthy=snapshot.payment_healthy,
-        overage_enabled=snapshot.overage_enabled,
-        hosted_invoice_url=snapshot.hosted_invoice_url,
-        start_blocked=snapshot.start_blocked,
-        start_block_reason=snapshot.start_block_reason,
-        active_spend_hold=snapshot.active_spend_hold,
-        hold_reason=snapshot.hold_reason,
-    )
+    return _billing_overview_from_snapshot(snapshot)
 
 
 async def get_billing_overview_for_owner(
@@ -476,6 +599,7 @@ async def get_current_plan(user_id: UUID) -> PlanInfo:
     return PlanInfo(
         plan=snapshot.plan,
         usage_minutes=int(round(snapshot.used_hours * 60.0)),
+        pro_billing_enabled=snapshot.pro_billing_enabled,
     )
 
 
@@ -497,6 +621,7 @@ def _billing_overview_from_snapshot(snapshot: BillingSnapshot) -> BillingOvervie
     return BillingOverview(
         plan=snapshot.plan,
         billing_mode=snapshot.billing_mode,
+        pro_billing_enabled=snapshot.pro_billing_enabled,
         is_unlimited=snapshot.is_unlimited,
         has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
         over_quota=snapshot.over_quota,
@@ -519,6 +644,25 @@ def _billing_overview_from_snapshot(snapshot: BillingSnapshot) -> BillingOvervie
         start_block_reason=snapshot.start_block_reason,
         active_spend_hold=snapshot.active_spend_hold,
         hold_reason=snapshot.hold_reason,
+        billable_seat_count=snapshot.billable_seat_count,
+        included_managed_cloud_hours=(
+            round(snapshot.included_managed_cloud_hours, 2)
+            if snapshot.included_managed_cloud_hours is not None
+            else None
+        ),
+        remaining_managed_cloud_hours=(
+            round(snapshot.remaining_managed_cloud_hours, 4)
+            if snapshot.remaining_managed_cloud_hours is not None
+            else None
+        ),
+        managed_cloud_overage_enabled=snapshot.managed_cloud_overage_enabled,
+        managed_cloud_overage_cap_cents=snapshot.managed_cloud_overage_cap_cents,
+        managed_cloud_overage_used_cents=snapshot.managed_cloud_overage_used_cents,
+        overage_price_per_hour_cents=snapshot.overage_price_per_hour_cents,
+        active_environment_limit=snapshot.active_environment_limit,
+        repo_environment_limit=snapshot.repo_environment_limit,
+        byo_runtime_allowed=snapshot.byo_runtime_allowed,
+        legacy_cloud_subscription=snapshot.legacy_cloud_subscription,
     )
 
 
@@ -526,6 +670,7 @@ def _cloud_plan_from_snapshot(snapshot: BillingSnapshot) -> CloudPlanInfo:
     return CloudPlanInfo(
         plan=snapshot.plan,
         billing_mode=snapshot.billing_mode,
+        pro_billing_enabled=snapshot.pro_billing_enabled,
         is_unlimited=snapshot.is_unlimited,
         has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
         over_quota=snapshot.over_quota,
@@ -548,10 +693,31 @@ def _cloud_plan_from_snapshot(snapshot: BillingSnapshot) -> CloudPlanInfo:
         start_block_reason=snapshot.start_block_reason,
         active_spend_hold=snapshot.active_spend_hold,
         hold_reason=snapshot.hold_reason,
+        billable_seat_count=snapshot.billable_seat_count,
+        included_managed_cloud_hours=(
+            round(snapshot.included_managed_cloud_hours, 2)
+            if snapshot.included_managed_cloud_hours is not None
+            else None
+        ),
+        remaining_managed_cloud_hours=(
+            round(snapshot.remaining_managed_cloud_hours, 4)
+            if snapshot.remaining_managed_cloud_hours is not None
+            else None
+        ),
+        managed_cloud_overage_enabled=snapshot.managed_cloud_overage_enabled,
+        managed_cloud_overage_cap_cents=snapshot.managed_cloud_overage_cap_cents,
+        managed_cloud_overage_used_cents=snapshot.managed_cloud_overage_used_cents,
+        overage_price_per_hour_cents=snapshot.overage_price_per_hour_cents,
+        active_environment_limit=snapshot.active_environment_limit,
+        repo_environment_limit=snapshot.repo_environment_limit,
+        byo_runtime_allowed=snapshot.byo_runtime_allowed,
+        legacy_cloud_subscription=snapshot.legacy_cloud_subscription,
     )
 
 
 def is_free_included_grant(grant_type: str) -> bool:
+    if settings.pro_billing_enabled:
+        return grant_type == FREE_TRIAL_V2_GRANT_TYPE
     return grant_type == FREE_INCLUDED_GRANT_TYPE
 
 
@@ -675,15 +841,36 @@ async def create_cloud_checkout_session(
     user: User,
     owner_selection: OwnerSelection | None = None,
 ) -> BillingUrlResponse:
+    selection = owner_selection or OwnerSelection()
+    org_context: OwnerContext | None = None
+    if selection.owner_scope == "organization":
+        org_context = await _resolve_billing_owner_context(user, selection)
+        try:
+            require_org_role(org_context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+        except OrganizationServiceError as error:
+            raise BillingServiceError(
+                error.code,
+                error.message,
+                status_code=error.status_code,
+            ) from error
+        if not settings.pro_billing_enabled:
+            raise BillingServiceError(
+                "org_pro_billing_disabled",
+                "Organization Pro billing is not available yet.",
+                status_code=409,
+            )
     success_url, cancel_url, portal_return_url = _require_redirect_urls()
     try:
-        await stripe_billing.validate_cloud_subscription_price_configuration()
+        if settings.pro_billing_enabled:
+            await stripe_billing.validate_pro_subscription_price_configuration()
+        else:
+            await stripe_billing.validate_cloud_subscription_price_configuration()
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
 
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
         user,
-        owner_selection or OwnerSelection(),
+        selection,
     )
     snapshot = await get_billing_snapshot_for_subject(subject_id)
     if snapshot.is_paid_cloud:
@@ -698,13 +885,39 @@ async def create_cloud_checkout_session(
         return BillingUrlResponse(url=portal.url)
 
     try:
+        monthly_price_id = (
+            configured_pro_monthly_price_id()
+            if settings.pro_billing_enabled
+            else settings.stripe_cloud_monthly_price_id
+        )
+        seat_quantity = (
+            await count_active_seats_for_billing_subject_id(subject_id)
+            if org_context is not None
+            else 1
+        )
         checkout = await stripe_billing.create_subscription_checkout_session(
             stripe_customer_id=stripe_customer_id,
             billing_subject_id=str(subject_id),
-            cloud_monthly_price_id=settings.stripe_cloud_monthly_price_id,
+            organization_id=(
+                str(org_context.organization_id)
+                if org_context is not None and org_context.organization_id is not None
+                else None
+            ),
+            created_by_user_id=str(user.id) if org_context is not None else None,
+            cloud_monthly_price_id=monthly_price_id,
+            overage_price_id=(
+                configured_managed_cloud_overage_price_id()
+                if settings.pro_billing_enabled
+                else None
+            ),
+            seat_quantity=seat_quantity,
             success_url=success_url,
             cancel_url=cancel_url,
-            idempotency_key=f"cloud-checkout:{subject_id}",
+            idempotency_key=(
+                f"cloud-checkout:org:{subject_id}:seats:{seat_quantity}"
+                if org_context is not None
+                else f"cloud-checkout:{subject_id}"
+            ),
         )
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
@@ -715,6 +928,19 @@ async def create_refill_checkout_session(
     user: User,
     owner_selection: OwnerSelection | None = None,
 ) -> BillingUrlResponse:
+    selection = owner_selection or OwnerSelection()
+    if selection.owner_scope == "organization":
+        raise BillingServiceError(
+            "refill_checkout_not_supported_for_org",
+            "Refill checkout is not supported for organizations.",
+            status_code=409,
+        )
+    if settings.pro_billing_enabled:
+        raise BillingServiceError(
+            "refill_checkout_disabled",
+            "Refill checkout is not available for Pro billing.",
+            status_code=409,
+        )
     success_url, cancel_url, _portal_return_url = _require_redirect_urls()
     try:
         await stripe_billing.validate_refill_price_configuration()
@@ -722,7 +948,7 @@ async def create_refill_checkout_session(
         raise _map_stripe_error(error) from error
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
         user,
-        owner_selection or OwnerSelection(),
+        selection,
     )
     try:
         checkout = await stripe_billing.create_refill_checkout_session(
@@ -762,11 +988,24 @@ async def update_overage_settings(
     user: User,
     *,
     enabled: bool,
+    cap_cents_per_seat: int | None = None,
     owner_selection: OwnerSelection | None = None,
 ) -> OverageSettingsResponse:
+    if cap_cents_per_seat is not None and not (
+        0 <= cap_cents_per_seat <= PRO_OVERAGE_CAP_CENTS_PER_SEAT_MAX
+    ):
+        raise BillingServiceError(
+            "invalid_overage_cap",
+            "Overage cap must be between 0 and 1000000 cents per seat.",
+            status_code=400,
+        )
     selection = owner_selection or OwnerSelection()
     if selection.owner_scope == "personal":
-        await set_overage_enabled_for_user(user_id=user.id, overage_enabled=enabled)
+        subject = await set_overage_policy_for_user(
+            user_id=user.id,
+            overage_enabled=enabled,
+            overage_cap_cents_per_seat=cap_cents_per_seat,
+        )
     else:
         context = await _resolve_billing_owner_context(user, selection)
         try:
@@ -777,11 +1016,15 @@ async def update_overage_settings(
                 error.message,
                 status_code=error.status_code,
             ) from error
-        await set_overage_enabled_for_subject(
+        subject = await set_overage_policy_for_subject(
             billing_subject_id=context.billing_subject_id,
             overage_enabled=enabled,
+            overage_cap_cents_per_seat=cap_cents_per_seat,
         )
-    return OverageSettingsResponse(overage_enabled=enabled)
+    return OverageSettingsResponse(
+        overage_enabled=enabled,
+        overage_cap_cents_per_seat=subject.overage_cap_cents_per_seat,
+    )
 
 
 async def _account_usage_for_snapshot_state(
@@ -798,9 +1041,19 @@ async def _account_usage_for_snapshot_state(
         period_start=subscription.current_period_start if subscription is not None else None,
         period_end=subscription.current_period_end if subscription is not None else None,
         overage_enabled=state.subject.overage_enabled if subscription is not None else False,
+        overage_cap_cents=(
+            max(state.active_seat_count, 1)
+            * int(
+                state.subject.overage_cap_cents_per_seat
+                if state.subject.overage_cap_cents_per_seat is not None
+                else PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT
+            )
+            if subscription is not None and settings.pro_billing_enabled
+            else None
+        ),
         billing_mode=settings.cloud_billing_mode,
         consume_grants=consume_grants,
-        export_overage=False,
+        export_overage=subscription is not None and settings.pro_billing_enabled,
         scan_until=scan_until,
     )
 
@@ -808,6 +1061,8 @@ async def _account_usage_for_snapshot_state(
 async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
     if settings.cloud_billing_mode not in {BILLING_MODE_OBSERVE, BILLING_MODE_ENFORCE}:
         return
+
+    await process_pending_seat_adjustments()
 
     subject_ids = await list_billing_subject_ids_for_usage_accounting(limit=subject_limit)
     for billing_subject_id in subject_ids:
@@ -819,6 +1074,15 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
             now=now,
         )
         results = []
+        pro_subscription = (
+            unlimited_state.subscription
+            if (
+                settings.pro_billing_enabled
+                and unlimited_state.subscription is not None
+                and _subscription_is_pro(unlimited_state.subscription)
+            )
+            else None
+        )
         if unlimited_state.has_unlimited_cloud_hours:
             if unlimited_state.unlimited_window_start is not None:
                 results.append(
@@ -834,7 +1098,16 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
                     state,
                     scan_until=now,
                     consume_grants=False,
-                    subscription=unlimited_state.subscription,
+                    subscription=None,
+                )
+            )
+        elif pro_subscription is not None:
+            results.append(
+                await _account_usage_for_snapshot_state(
+                    state,
+                    scan_until=now,
+                    consume_grants=True,
+                    subscription=pro_subscription,
                 )
             )
         else:
@@ -870,6 +1143,65 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
         await send_pending_usage_exports()
 
 
+async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
+    if not settings.pro_billing_enabled or settings.cloud_billing_mode == BILLING_MODE_OFF:
+        return
+
+    adjustments = await claim_pending_seat_adjustments(limit=limit)
+    for adjustment in adjustments:
+        try:
+            await stripe_billing.update_subscription_item_quantity(
+                subscription_item_id=adjustment.monthly_subscription_item_id,
+                quantity=adjustment.target_quantity,
+                idempotency_key=f"seat-quantity:{adjustment.id}:seats:{adjustment.target_quantity}",
+            )
+            await mark_seat_adjustment_stripe_confirmed(adjustment_id=adjustment.id)
+            if (
+                adjustment.period_start is not None
+                and adjustment.period_end is not None
+                and adjustment.effective_at is not None
+                and adjustment.membership_id is not None
+                and adjustment.grant_quantity > 0
+            ):
+                period_start_unix = int(adjustment.period_start.timestamp())
+                grant_source_ref = seat_proration_grant_source_ref(
+                    subscription_id=adjustment.stripe_subscription_id,
+                    membership_id=str(adjustment.membership_id),
+                    period_start_unix=period_start_unix,
+                )
+                hours_granted = prorated_seat_grant_hours(
+                    added_seats=adjustment.grant_quantity,
+                    period_start=adjustment.period_start,
+                    period_end=adjustment.period_end,
+                    effective_at=adjustment.effective_at,
+                )
+                await ensure_billing_grant_record(
+                    user_id=adjustment.user_id,
+                    billing_subject_id=adjustment.billing_subject_id,
+                    grant_type=PRO_SEAT_PRORATION_GRANT_TYPE,
+                    hours_granted=hours_granted,
+                    effective_at=adjustment.effective_at,
+                    expires_at=adjustment.period_end,
+                    source_ref=grant_source_ref,
+                )
+            await mark_seat_adjustment_grant_issued(adjustment_id=adjustment.id)
+        except stripe_billing.StripeBillingError as error:
+            await mark_seat_adjustment_failed(
+                adjustment_id=adjustment.id,
+                error=error.message,
+                terminal=_stripe_error_is_terminal(error),
+            )
+        except Exception as error:
+            await mark_seat_adjustment_failed(
+                adjustment_id=adjustment.id,
+                error=f"{type(error).__name__}: {error}",
+            )
+
+
+def _stripe_error_is_terminal(error: stripe_billing.StripeBillingError) -> bool:
+    return 400 <= error.status_code < 500 and error.status_code != 429
+
+
 async def send_pending_usage_exports(*, limit: int = 100) -> None:
     if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
         return
@@ -896,17 +1228,30 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
             )
             continue
 
-        quantity_seconds = max(1, math.ceil(export.quantity_seconds))
+        legacy_seconds_export = export.meter_quantity_cents is None
+        quantity = (
+            max(1, math.ceil(export.quantity_seconds))
+            if legacy_seconds_export
+            else max(1, int(export.meter_quantity_cents or 0))
+        )
         identifier = f"usage_export:{export.id}"
         try:
-            payload = await stripe_billing.create_meter_event(
-                event_name=settings.stripe_sandbox_meter_event_name,
-                stripe_customer_id=export.stripe_customer_id,
-                quantity_seconds=quantity_seconds,
-                identifier=identifier,
-                timestamp=int((coerce_utc(export.accounted_until) or now).timestamp()),
-                idempotency_key=export.idempotency_key,
-            )
+            meter_kwargs = {
+                "event_name": (
+                    settings.stripe_sandbox_meter_event_name
+                    if legacy_seconds_export
+                    else configured_managed_cloud_meter_event_name()
+                ),
+                "stripe_customer_id": export.stripe_customer_id,
+                "identifier": identifier,
+                "timestamp": int((coerce_utc(export.accounted_until) or now).timestamp()),
+                "idempotency_key": export.idempotency_key,
+            }
+            if legacy_seconds_export:
+                meter_kwargs["quantity_seconds"] = quantity
+            else:
+                meter_kwargs["quantity"] = quantity
+            payload = await stripe_billing.create_meter_event(**meter_kwargs)
         except stripe_billing.StripeBillingError as error:
             await mark_usage_export_failed(
                 export_id=export.id,

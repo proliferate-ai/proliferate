@@ -53,6 +53,15 @@ class BillingSubject(Base):
         default=False,
         server_default=text("false"),
     )
+    overage_cap_cents_per_seat: Mapped[int] = mapped_column(
+        Integer,
+        default=2000,
+        server_default=text("2000"),
+    )
+    overage_preference_set_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -81,6 +90,7 @@ class BillingSubscription(Base):
     )
     cloud_monthly_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     overage_price_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seat_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     monthly_subscription_item_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     metered_subscription_item_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     latest_invoice_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -190,6 +200,10 @@ class BillingUsageExport(Base):
     accounted_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     accounted_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     quantity_seconds: Mapped[float] = mapped_column(Float)
+    meter_quantity_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cap_cents_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cap_used_cents_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    writeoff_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True)
     stripe_meter_event_identifier: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(64), index=True)
@@ -212,6 +226,67 @@ class BillingEntitlement(Base):
     effective_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class BillingSeatAdjustment(Base):
+    __tablename__ = "billing_seat_adjustment"
+    __table_args__ = (
+        UniqueConstraint("source_ref", name="uq_billing_seat_adjustment_source_ref"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    billing_subscription_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    membership_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    stripe_subscription_id: Mapped[str] = mapped_column(String(255), index=True)
+    monthly_subscription_item_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    previous_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_quantity: Mapped[int] = mapped_column(Integer)
+    grant_quantity: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_ref: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(32), index=True, default="pending")
+    stripe_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    grant_issued_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class BillingOverageRemainder(Base):
+    __tablename__ = "billing_overage_remainder"
+    __table_args__ = (
+        UniqueConstraint(
+            "billing_subject_id",
+            "period_start",
+            name="uq_billing_overage_remainder_subject_period",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    billing_subscription_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    fractional_cents: Mapped[float] = mapped_column(Float, default=0.0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

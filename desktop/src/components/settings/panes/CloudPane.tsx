@@ -7,7 +7,6 @@ import { ChevronRight } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { CloudBillingSummary } from "@/components/settings/panes/CloudBillingSummary";
 import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
 import { CLOUD_CREDENTIAL_PROVIDER_ORDER } from "@/config/cloud-providers";
 import { getProviderDisplayName } from "@/config/providers";
@@ -20,10 +19,6 @@ import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
-import {
-  useCloudBilling,
-  useCloudBillingActions,
-} from "@/hooks/cloud/use-cloud-billing";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
 import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
@@ -45,8 +40,6 @@ interface CloudPaneProps {
 export function CloudPane({ repositories }: CloudPaneProps) {
   const navigate = useNavigate();
   const { data: credentialStatuses = EMPTY_CLOUD_CREDENTIAL_STATUSES } = useCloudCredentials();
-  const { data: billingPlan } = useCloudBilling();
-  const billingActions = useCloudBillingActions();
   const { data: repoConfigs } = useCloudRepoConfigs();
   const runtimeInputSync = useRuntimeInputSyncSummary(repositories);
   const { syncCloudCredential, deleteCloudCredential } = useCloudCredentialActions();
@@ -107,17 +100,8 @@ export function CloudPane({ repositories }: CloudPaneProps) {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Cloud"
-        description="Cloud access, syncing, and environment configuration."
+        description="Cloud syncing and environment configuration."
       />
-
-      {billingPlan && (
-        <CloudPaneSection title="Access">
-          <CloudBillingSummary
-            billingPlan={billingPlan}
-            billingActions={billingActions}
-          />
-        </CloudPaneSection>
-      )}
 
       <CloudPaneSection title="Automatic syncing">
         <SettingsCard>

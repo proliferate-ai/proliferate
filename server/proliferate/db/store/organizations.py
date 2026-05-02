@@ -17,7 +17,10 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingSubject
 from proliferate.db.models.organizations import Organization, OrganizationMembership
-from proliferate.db.store.billing import ensure_organization_billing_subject
+from proliferate.db.store.billing import (
+    ensure_organization_billing_subject,
+    maybe_create_org_seat_adjustment,
+)
 from proliferate.db.store.organization_records import (
     MemberRecord,
     MembershipRecord,
@@ -298,6 +301,12 @@ async def update_organization_membership(
                 membership.joined_at = now
         membership.updated_at = now
         await db.flush()
+        if status is not None:
+            await maybe_create_org_seat_adjustment(
+                db,
+                organization_id=organization_id,
+                membership_id=membership.id,
+            )
         return membership_record(membership), None
 
 

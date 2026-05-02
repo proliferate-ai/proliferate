@@ -60,3 +60,9 @@ Declared but not used by the current implementation:
   - `server/tests/unit/auth/test_desktop_customerio.py`
   - `server/tests/integration/test_desktop_auth_customerio.py`
 
+## Billing Labels
+- Billing lifecycle sync is intentionally not implemented in the Pro billing
+  slice.
+- Future billing-owned analytics labels should use `free` and `pro`; `cloud`
+  was the legacy paid label before the Pro billing cutover documented on
+  2026-05-01.
