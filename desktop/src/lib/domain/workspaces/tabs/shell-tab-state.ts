@@ -14,6 +14,7 @@ import {
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import type { ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 
 export interface ResolveWorkspaceShellTabsStateArgs<TTab extends ShellChatTab> {
   selectedWorkspaceId: string | null;
@@ -21,7 +22,7 @@ export interface ResolveWorkspaceShellTabsStateArgs<TTab extends ShellChatTab> {
   storedActiveShellTabKey: WorkspaceShellTabKey | null;
   persistedShellOrderKeys: readonly WorkspaceShellTabKey[];
   shellChatSessionIds: readonly string[];
-  openTabs: string[];
+  openTargets: ViewerTarget[];
   stripRows: HeaderStripRow<TTab>[];
   displayManualGroups: readonly DisplayManualChatGroup[];
   subagentChildIdsByParentId: ReadonlyMap<string, readonly string[]>;
@@ -41,7 +42,7 @@ export function resolveWorkspaceShellTabsState<TTab extends ShellChatTab>({
   storedActiveShellTabKey,
   persistedShellOrderKeys,
   shellChatSessionIds,
-  openTabs,
+  openTargets,
   stripRows,
   displayManualGroups,
   subagentChildIdsByParentId,
@@ -55,7 +56,7 @@ export function resolveWorkspaceShellTabsState<TTab extends ShellChatTab>({
       ]),
     ),
     visibleChatSessionIds: [...shellChatSessionIds],
-    openTabs,
+    openTargets,
     orderKeys: persistedShellOrderKeys,
   });
   const orderedShellTabKeys = orderedTabs.map(getWorkspaceShellTabKey);
@@ -73,7 +74,7 @@ export function resolveWorkspaceShellTabsState<TTab extends ShellChatTab>({
   const activeShellTabKey = activeShellTab ? getWorkspaceShellTabKey(activeShellTab) : null;
   const shellRows = buildHeaderShellRows({
     stripRows,
-    openTabs,
+    openTargets,
     orderedTabs,
     manualGroups: displayManualGroups,
     subagentChildIdsByParentId,

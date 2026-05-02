@@ -46,7 +46,13 @@ import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-act
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import {
+  viewerTargetKey,
+  viewerTargetLabel,
+  viewerTargetDisplayPath,
+  viewerTargetEditablePath,
+} from "@/lib/domain/workspaces/viewer-target";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
@@ -70,8 +76,8 @@ export function HeaderTabs() {
     removeSessions: removeSessionsFromManualChatGroups,
   } = useManualChatGroupActions();
 
-  const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
-  const { activateFileTab } = useWorkspaceShellActivation();
+  const closeTarget = useWorkspaceViewerTabsStore((state) => state.closeTarget);
+  const { activateViewerTarget } = useWorkspaceShellActivation();
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
@@ -133,7 +139,7 @@ export function HeaderTabs() {
   ]);
 
   const {
-    closeFilePaths,
+    closeWorkspaceTabs,
     closeOtherWorkspaceTabs,
     closeWorkspaceTabsToRight,
   } = useHeaderTabsCloseActions({
@@ -142,7 +148,7 @@ export function HeaderTabs() {
     activeShellTab: viewModel.activeShellTab,
     orderedTabs: viewModel.orderedTabs,
     buffersByPath: viewModel.buffersByPath,
-    closeTab,
+    closeTarget,
     showChatSessionTab: chatVisibilityActions.showChatSessionTab,
     hideChatSessionTabs: chatVisibilityActions.hideChatSessionTabs,
   });
@@ -193,16 +199,20 @@ export function HeaderTabs() {
           const rowId = getShellDragRowId(shellRow);
           const isDragging = shellDrag.isDraggingRow(rowId);
           const dragOffset = shellDrag.getRowDragOffset(rowId);
-          if (shellRow.kind === "file") {
-            const path = shellRow.path;
-            const isActive = viewModel.activeShellTab?.kind === "file"
-              && viewModel.activeShellTab.path === path;
-            const buf = viewModel.buffersByPath[path];
+          if (shellRow.kind === "viewer") {
+            const target = shellRow.target;
+            const targetKey = viewerTargetKey(target);
+            const displayPath = viewerTargetDisplayPath(target);
+            const isActive = viewModel.activeShellTab?.kind === "viewer"
+              && viewerTargetKey(viewModel.activeShellTab.target) === targetKey;
+            const bufferPath = viewerTargetEditablePath(target);
+            const buf = bufferPath ? viewModel.buffersByPath[bufferPath] : null;
             const isDirty = buf?.isDirty ?? false;
-            const isDiff = viewModel.tabModes[path] === "diff";
+            const isAllChanges = target.kind === "allChanges";
+            const isDiff = !isAllChanges && viewModel.tabModes[targetKey] === "diff";
             return (
               <div
-                key={path}
+                key={targetKey}
                 {...shellDrag.getRowDragProps(rowId)}
                 onPointerEnter={handleHeaderTabHover}
                 className={`absolute bottom-0 h-9 app-region-no-drag ${
@@ -216,10 +226,12 @@ export function HeaderTabs() {
                 }}
               >
                 <FileTabWithMenu
-                  path={path}
+                  path={displayPath ?? viewerTargetLabel(target)}
+                  label={viewerTargetLabel(target)}
                   isActive={isActive}
                   isDirty={isDirty}
                   isDiff={isDiff}
+                  isAllChanges={isAllChanges}
                   width={width}
                   hideLeftDivider={index === 0}
                   hideRightDivider={index === viewModel.shellRows.length - 1}
@@ -228,17 +240,17 @@ export function HeaderTabs() {
                       return;
                     }
                     if (viewModel.selectedWorkspaceId) {
-                      activateFileTab({
+                      activateViewerTarget({
                         workspaceId: viewModel.selectedWorkspaceId,
                         shellWorkspaceId: viewModel.workspaceUiKey,
-                        path,
+                        target,
                         mode: "focus-existing",
                       });
                     }
                   }}
-                  onClose={() => closeFilePaths([path])}
-                  onCloseOthers={() => closeOtherWorkspaceTabs({ kind: "file", path })}
-                  onCloseRight={() => closeWorkspaceTabsToRight({ kind: "file", path })}
+                  onClose={() => closeWorkspaceTabs([{ kind: "viewer", target }])}
+                  onCloseOthers={() => closeOtherWorkspaceTabs({ kind: "viewer", target })}
+                  onCloseRight={() => closeWorkspaceTabsToRight({ kind: "viewer", target })}
                 />
               </div>
             );

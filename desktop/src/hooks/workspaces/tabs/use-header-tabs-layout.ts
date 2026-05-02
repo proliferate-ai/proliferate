@@ -102,21 +102,21 @@ export function useHeaderTabsLayout({
 }
 
 export function getShellDragRowId(row: HeaderWorkspaceShellStripRow): string {
-  if (row.kind === "file") {
+  if (row.kind === "viewer") {
     return row.shellKey;
   }
   return row.row.kind === "pill" ? `pill:${row.row.groupId}` : `chat:${row.row.tab.id}`;
 }
 
 function getShellDragSourceId(row: HeaderWorkspaceShellStripRow): string {
-  if (row.kind === "file") {
+  if (row.kind === "viewer") {
     return row.shellKey;
   }
   return row.row.kind === "pill" ? row.shellKeys[0] ?? row.row.groupId : row.shellKeys[0];
 }
 
 function getShellDragUnitIds(row: HeaderWorkspaceShellStripRow): WorkspaceShellTabKey[] {
-  if (row.kind === "file") {
+  if (row.kind === "viewer") {
     return [row.shellKey];
   }
   return row.shellKeys.length > 0

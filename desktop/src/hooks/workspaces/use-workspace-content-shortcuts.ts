@@ -1,18 +1,17 @@
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import { getFocusZone } from "@/lib/domain/focus-zone";
+import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
 import type { WorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 
-interface WorkspaceContentShortcutActions extends Pick<
+type WorkspaceContentShortcutActions = Pick<
   WorkspaceTabActions,
   | "activateRelativeTab"
   | "activateTabByShortcutIndex"
   | "closeActiveWorkspaceTab"
   | "openNewSessionTab"
   | "restoreLastDismissedTab"
-> {
-  createNewTerminalTab?: () => void;
-}
+>;
 
 export function useWorkspaceContentShortcuts(
   actions: WorkspaceContentShortcutActions,
@@ -25,7 +24,6 @@ export function useWorkspaceContentShortcuts(
     closeActiveWorkspaceTab,
     openNewSessionTab,
     restoreLastDismissedTab,
-    createNewTerminalTab,
   } = actions;
 
   useShortcutHandler("workspace.previous-tab", () => {
@@ -49,9 +47,9 @@ export function useWorkspaceContentShortcuts(
   }, { enabled });
 
   useShortcutHandler("workspace.new-session-tab", () => {
-    if (createNewTerminalTab && getFocusZone() === "terminal") {
-      createNewTerminalTab();
-      return;
+    const focusZone = getFocusZone();
+    if (focusZone === "terminal" || focusZone === "browser") {
+      return requestRightPanelNewTabMenu("terminal");
     }
 
     return openNewSessionTab();

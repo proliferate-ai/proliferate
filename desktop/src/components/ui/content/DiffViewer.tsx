@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import { SplitDiffViewer } from "@/components/ui/content/diff/SplitDiffViewer";
 import { useResolvedMode } from "@/hooks/theme/use-theme";
 import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
 import type {
@@ -17,6 +18,7 @@ interface DiffViewerProps {
   viewportClassName?: string;
   wrapLongLines?: boolean;
   variant?: "default" | "chat";
+  layout?: "unified" | "split";
 }
 
 const LINE_BG: Record<DiffLine["type"], string> = {
@@ -440,6 +442,7 @@ export function DiffViewer({
   viewportClassName,
   wrapLongLines = false,
   variant = "default",
+  layout = "unified",
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath);
   if (variant === "chat") {
@@ -455,6 +458,17 @@ export function DiffViewer({
 
   const rootClass =
     "font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]";
+
+  if (layout === "split") {
+    return (
+      <SplitDiffViewer
+        parsed={parsed}
+        tokens={tokens}
+        className={`${rootClass} ${className ?? ""}`}
+        viewportClassName={viewportClassName}
+      />
+    );
+  }
 
   return (
     <AutoHideScrollArea

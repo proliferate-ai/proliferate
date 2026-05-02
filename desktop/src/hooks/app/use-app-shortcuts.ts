@@ -13,6 +13,11 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import {
+  runRedoCommand,
+  runSelectAllCommand,
+  runUndoCommand,
+} from "@/lib/infra/dom-select-all";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -36,6 +41,18 @@ export function useAppShortcuts(actions: AppCommandActions): void {
 
   useShortcutHandler("app.open-settings", () => {
     actions.openSettings.execute("shortcut");
+  });
+
+  useShortcutHandler("app.select-all", () => {
+    return runSelectAllCommand();
+  });
+
+  useShortcutHandler("app.undo", () => {
+    return runUndoCommand();
+  });
+
+  useShortcutHandler("app.redo", () => {
+    return runRedoCommand();
   });
 
   useShortcutHandler("workspace.by-index", ({ digit }) => {

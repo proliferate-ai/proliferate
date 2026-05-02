@@ -8,6 +8,18 @@ describe("shortcut dispatch policy", () => {
   });
 
   it("respects defaultPrevented for non-rename shortcuts", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(false);
+  });
+
+  it("allows settings through when the WebView marks Cmd+, as handled", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openSettings, {
       key: ",",
       metaKey: true,
@@ -16,7 +28,7 @@ describe("shortcut dispatch policy", () => {
       altKey: false,
       defaultPrevented: true,
       target: null,
-    } as KeyboardEvent)).toBe(false);
+    } as KeyboardEvent)).toBe(true);
   });
 
   it("allows the reload-blocked rename shortcut through", () => {
@@ -79,5 +91,35 @@ describe("shortcut dispatch policy", () => {
       defaultPrevented: false,
       target: null,
     } as KeyboardEvent)).toBe(false);
+  });
+
+  it("allows tab cycling from text-entry targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTab, {
+      key: "ArrowLeft",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows tab cycling when text inputs mark Cmd+Option+Arrow as handled", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTab, {
+      key: "ArrowRight",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
   });
 });

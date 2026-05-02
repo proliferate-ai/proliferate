@@ -1,7 +1,9 @@
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -25,6 +27,7 @@ import {
 import { ToolHeaderButton } from "@/components/workspace/shell/right-panel/ToolHeaderButton";
 import { TerminalHeaderButton } from "@/components/workspace/shell/right-panel/TerminalHeaderButton";
 import { BrowserHeaderButton } from "@/components/workspace/shell/right-panel/BrowserHeaderButton";
+import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
 
 const HEADER_DRAG_THRESHOLD_PX = 4;
 
@@ -54,6 +57,8 @@ interface RightPanelHeaderTabsProps {
   unreadByTerminal: Record<string, boolean>;
   isWorkspaceReady: boolean;
   canCreateBrowserTab: boolean;
+  newTabMenuRequestToken: number;
+  newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
   onActivateTool: (tool: RightPanelTool) => void;
   onSelectTerminal: (terminalId: string) => void;
   onSelectBrowser: (browserId: string) => void;
@@ -75,6 +80,8 @@ export function RightPanelHeaderTabs({
   unreadByTerminal,
   isWorkspaceReady,
   canCreateBrowserTab,
+  newTabMenuRequestToken,
+  newTabMenuDefaultKind,
   onActivateTool,
   onSelectTerminal,
   onSelectBrowser,
@@ -87,6 +94,7 @@ export function RightPanelHeaderTabs({
   onReorderHeaderEntry,
 }: RightPanelHeaderTabsProps) {
   const [headerDragPreview, setHeaderDragPreview] = useState<HeaderDragPreview | null>(null);
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const draggedHeaderKey = headerDragPreview?.key ?? null;
   const headerEntryNodesRef = useRef(new Map<RightPanelHeaderEntryKey, HTMLDivElement>());
   const headerDragSessionRef = useRef<HeaderDragSession | null>(null);
@@ -133,6 +141,12 @@ export function RightPanelHeaderTabs({
     suppressNextHeaderClickRef.current = false;
     return true;
   }, []);
+
+  useEffect(() => {
+    if (newTabMenuRequestToken > 0) {
+      setNewTabMenuOpen(true);
+    }
+  }, [newTabMenuRequestToken]);
 
   const handleHeaderPointerDown = useCallback((
     entryKey: RightPanelHeaderEntryKey,
@@ -370,6 +384,8 @@ export function RightPanelHeaderTabs({
             >
               <PopoverButton
                 align="end"
+                externalOpen={newTabMenuOpen}
+                onOpenChange={setNewTabMenuOpen}
                 trigger={
                   <IconButton
                     size="xs"
@@ -383,34 +399,84 @@ export function RightPanelHeaderTabs({
                 className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
               >
                 {(close) => (
-                  <>
-                    <PopoverMenuItem
-                      label="Terminal"
-                      variant="sidebar"
-                      icon={<TerminalIcon className="size-4" />}
-                      disabled={!isWorkspaceReady}
-                      onClick={() => {
-                        close();
-                        onCreateTerminal();
-                      }}
-                    />
-                    <PopoverMenuItem
-                      label="Browser"
-                      variant="sidebar"
-                      icon={<Globe className="size-4" />}
-                      disabled={!isWorkspaceReady || !canCreateBrowserTab}
-                      onClick={() => {
-                        close();
-                        onCreateBrowser();
-                      }}
-                    />
-                  </>
+                  <NewTabMenuContent
+                    defaultKind={newTabMenuDefaultKind}
+                    isWorkspaceReady={isWorkspaceReady}
+                    canCreateBrowserTab={canCreateBrowserTab}
+                    onCreateTerminal={() => {
+                      close();
+                      onCreateTerminal();
+                    }}
+                    onCreateBrowser={() => {
+                      close();
+                      onCreateBrowser();
+                    }}
+                  />
                 )}
               </PopoverButton>
             </Tooltip>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function NewTabMenuContent({
+  defaultKind,
+  isWorkspaceReady,
+  canCreateBrowserTab,
+  onCreateTerminal,
+  onCreateBrowser,
+}: {
+  defaultKind: RightPanelNewTabMenuDefault;
+  isWorkspaceReady: boolean;
+  canCreateBrowserTab: boolean;
+  onCreateTerminal: () => void;
+  onCreateBrowser: () => void;
+}) {
+  const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+
+    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+      "button:not(:disabled)",
+    )];
+    if (buttons.length === 0) {
+      return;
+    }
+
+    const activeButton = document.activeElement instanceof HTMLButtonElement
+      ? document.activeElement
+      : null;
+    const currentIndex = activeButton ? buttons.indexOf(activeButton) : -1;
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    const nextIndex = currentIndex < 0
+      ? 0
+      : (currentIndex + direction + buttons.length) % buttons.length;
+    buttons[nextIndex]?.focus();
+    event.preventDefault();
+  }, []);
+
+  return (
+    <div onKeyDown={handleKeyDown}>
+      <PopoverMenuItem
+        label="Terminal"
+        variant="sidebar"
+        icon={<TerminalIcon className="size-4" />}
+        disabled={!isWorkspaceReady}
+        autoFocus={defaultKind === "terminal"}
+        onClick={onCreateTerminal}
+      />
+      <PopoverMenuItem
+        label="Browser"
+        variant="sidebar"
+        icon={<Globe className="size-4" />}
+        disabled={!isWorkspaceReady || !canCreateBrowserTab}
+        autoFocus={defaultKind === "browser"}
+        onClick={onCreateBrowser}
+      />
     </div>
   );
 }

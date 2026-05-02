@@ -49,7 +49,7 @@ export const DEFAULT_RIGHT_PANEL_DURABLE_STATE: RightPanelDurableState = {
   width: RIGHT_PANEL_DEFAULT_WIDTH,
 };
 export const DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE: RightPanelMaterializedState = {
-  activeEntryKey: "tool:git",
+  activeEntryKey: "tool:files",
   headerOrder: DEFAULT_RIGHT_PANEL_HEADER_ORDER,
   browserTabsById: {},
 };
@@ -446,8 +446,8 @@ function resolveRightPanelActiveEntryKey(
 function resolveFallbackRightPanelActiveEntryKey(
   headerOrder: readonly RightPanelHeaderEntryKey[],
 ): RightPanelActiveEntryKey {
-  if (headerOrder.includes("tool:git")) {
-    return "tool:git";
+  if (headerOrder.includes("tool:files")) {
+    return "tool:files";
   }
   return headerOrder[0] ?? "tool:files";
 }

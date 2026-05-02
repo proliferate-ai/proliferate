@@ -9,8 +9,23 @@ import {
 import { resolveNextShellTabAfterClose } from "@/lib/domain/workspaces/tabs/shell-activation";
 import type {
   WorkspaceFileBuffer,
-} from "@/stores/editor/workspace-files-store";
+} from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
+import {
+  fileViewerTarget,
+  viewerTargetEditablePath,
+  viewerTargetKey,
+  type ViewerTargetKey,
+} from "@/lib/domain/workspaces/viewer-target";
+import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
+
+function isStringPath(path: string | null): path is string {
+  return path !== null;
+}
+
+function workspaceTabEditablePath(tab: WorkspaceShellTab): string | null {
+  return tab.kind === "viewer" ? viewerTargetEditablePath(tab.target) : null;
+}
 
 export function useHeaderTabsCloseActions({
   selectedWorkspaceId,
@@ -18,7 +33,7 @@ export function useHeaderTabsCloseActions({
   activeShellTab,
   orderedTabs,
   buffersByPath,
-  closeTab,
+  closeTarget,
   showChatSessionTab,
   hideChatSessionTabs,
 }: {
@@ -27,7 +42,7 @@ export function useHeaderTabsCloseActions({
   activeShellTab: WorkspaceShellTab | null;
   orderedTabs: WorkspaceShellTab[];
   buffersByPath: Record<string, WorkspaceFileBuffer>;
-  closeTab: (path: string) => void;
+  closeTarget: (targetKey: ViewerTargetKey) => void;
   showChatSessionTab: (
     sessionId: string,
     options?: { select?: boolean },
@@ -37,7 +52,8 @@ export function useHeaderTabsCloseActions({
     options?: { selectFallback?: boolean },
   ) => boolean;
 }) {
-  const { activateChatShell, activateFileTab } = useWorkspaceShellActivation();
+  const { activateChatShell, activateViewerTarget } = useWorkspaceShellActivation();
+  const clearBuffer = useWorkspaceFileBuffersStore((state) => state.clearBuffer);
 
   const activateFallbackAfterClosingTabs = useCallback((closingTabs: WorkspaceShellTab[]) => {
     if (!selectedWorkspaceId || !activeShellTab || closingTabs.length === 0) {
@@ -69,11 +85,11 @@ export function useHeaderTabsCloseActions({
       showChatSessionTab(fallback.sessionId, { select: true });
       return;
     }
-    if (fallback?.kind === "file") {
-      activateFileTab({
+    if (fallback?.kind === "viewer") {
+      activateViewerTarget({
         workspaceId: selectedWorkspaceId,
         shellWorkspaceId,
-        path: fallback.path,
+        target: fallback.target,
         mode: "focus-existing",
       });
       return;
@@ -87,38 +103,54 @@ export function useHeaderTabsCloseActions({
   }, [
     activeShellTab,
     activateChatShell,
-    activateFileTab,
+    activateViewerTarget,
     orderedTabs,
     selectedWorkspaceId,
     shellWorkspaceId,
     showChatSessionTab,
   ]);
 
-  const closeFilePathsOnly = useCallback((paths: string[]) => {
-    const dirtyPaths = paths.filter((path) => buffersByPath[path]?.isDirty);
+  const closeViewerTabsOnly = useCallback((tabs: WorkspaceShellTab[]) => {
+    const targets = tabs
+      .filter((tab): tab is Extract<WorkspaceShellTab, { kind: "viewer" }> => tab.kind === "viewer")
+      .map((tab) => tab.target);
+    const bufferPaths = Array.from(new Set(targets
+      .map(viewerTargetEditablePath)
+      .filter(isStringPath)));
+    const closingKeys = new Set(tabs.map(getWorkspaceShellTabKey));
+    const remainingBufferPaths = new Set(orderedTabs
+      .filter((tab) => !closingKeys.has(getWorkspaceShellTabKey(tab)))
+      .map(workspaceTabEditablePath)
+      .filter(isStringPath));
+    const discardedBufferPaths = bufferPaths
+      .filter((path) => !remainingBufferPaths.has(path));
+    const dirtyPaths = discardedBufferPaths
+      .filter((path) => buffersByPath[path]?.isDirty);
     if (
       dirtyPaths.length > 0
       && !window.confirm("Discard unsaved changes in the selected tabs?")
     ) {
       return false;
     }
-    paths.forEach((path) => closeTab(path));
+    targets.forEach((target) => closeTarget(viewerTargetKey(target)));
+    discardedBufferPaths.forEach(clearBuffer);
     return true;
-  }, [buffersByPath, closeTab]);
+  }, [buffersByPath, clearBuffer, closeTarget, orderedTabs]);
 
   const closeFilePaths = useCallback((paths: string[]) => {
-    if (!closeFilePathsOnly(paths)) {
+    const tabs = paths.map((path) => ({
+      kind: "viewer" as const,
+      target: fileViewerTarget(path),
+    }));
+    if (!closeViewerTabsOnly(tabs)) {
       return false;
     }
-    activateFallbackAfterClosingTabs(paths.map((path) => ({ kind: "file", path })));
+    activateFallbackAfterClosingTabs(tabs);
     return true;
-  }, [activateFallbackAfterClosingTabs, closeFilePathsOnly]);
+  }, [activateFallbackAfterClosingTabs, closeViewerTabsOnly]);
 
   const closeWorkspaceTabs = useCallback((tabs: WorkspaceShellTab[]) => {
-    const filePaths = tabs
-      .filter((tab): tab is Extract<WorkspaceShellTab, { kind: "file" }> => tab.kind === "file")
-      .map((tab) => tab.path);
-    if (!closeFilePathsOnly(filePaths)) {
+    if (!closeViewerTabsOnly(tabs)) {
       return false;
     }
 
@@ -133,7 +165,7 @@ export function useHeaderTabsCloseActions({
     }
     activateFallbackAfterClosingTabs(tabs);
     return true;
-  }, [activateFallbackAfterClosingTabs, closeFilePathsOnly, hideChatSessionTabs]);
+  }, [activateFallbackAfterClosingTabs, closeViewerTabsOnly, hideChatSessionTabs]);
 
   const closeOtherWorkspaceTabs = useCallback((anchorTab: WorkspaceShellTab) => {
     return closeWorkspaceTabs(
@@ -169,6 +201,7 @@ export function useHeaderTabsCloseActions({
 
   return {
     closeFilePaths,
+    closeWorkspaceTabs,
     closeOtherWorkspaceTabs,
     closeWorkspaceTabsToRight,
   };

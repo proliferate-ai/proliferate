@@ -98,11 +98,11 @@ export function useMainScreenActions({
       setRightPanelOpen(false);
     } else {
       const activeEntry = parseRightPanelHeaderEntryKey(rightPanelState.activeEntryKey);
-      if (activeEntry?.kind === "tool") {
-        openRightPanelTool(activeEntry.tool);
+      if (activeEntry?.kind === "browser" || activeEntry?.kind === "terminal") {
+        setRightPanelOpen(true);
         return;
       }
-      setRightPanelOpen(true);
+      openRightPanelTool("files");
     }
   }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeEntryKey, setRightPanelOpen]);
 

@@ -27,12 +27,8 @@ vi.mock("@/hooks/workspaces/selection/use-workspace-selection", () => ({
   }),
 }));
 
-vi.mock("@/stores/editor/workspace-files-store", () => ({
-  useWorkspaceFilesStore: {
-    getState: () => ({
-      reset: mocks.resetWorkspaceFiles,
-    }),
-  },
+vi.mock("@/stores/editor/workspace-editor-state", () => ({
+  resetWorkspaceEditorState: mocks.resetWorkspaceFiles,
 }));
 
 vi.mock("@/stores/chat/chat-input-store", () => ({

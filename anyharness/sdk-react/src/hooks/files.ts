@@ -4,7 +4,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { WriteWorkspaceFileRequest } from "@anyharness/sdk";
+import type {
+  ReadWorkspaceFileResponse,
+  RenameWorkspaceFileEntryRequest,
+  WriteWorkspaceFileRequest,
+} from "@anyharness/sdk";
 import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
@@ -16,9 +20,12 @@ import {
   useReportAnyHarnessCacheDecision,
 } from "../lib/timing-options.js";
 import {
+  anyHarnessGitDiffScopeKey,
+  anyHarnessGitStatusKey,
   anyHarnessWorkspaceFileKey,
   anyHarnessWorkspaceFileSearchKey,
   anyHarnessWorkspaceFileSearchScopeKey,
+  anyHarnessWorkspaceFilesScopeKey,
   anyHarnessWorkspaceFileStatKey,
   anyHarnessWorkspaceFileTreeKey,
 } from "../lib/query-keys.js";
@@ -176,6 +183,7 @@ export function useWriteWorkspaceFileMutation(options?: { workspaceId?: string |
       return client.files.write(resolved.connection.anyharnessWorkspaceId, input);
     },
     onSuccess: async (_response, input) => {
+      const parentPath = parentDirectoryPath(input.path);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
@@ -184,12 +192,188 @@ export function useWriteWorkspaceFileMutation(options?: { workspaceId?: string |
           queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, ""),
+          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, parentPath),
         }),
         queryClient.invalidateQueries({
           queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
         }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+        }),
       ]);
     },
   });
+}
+
+export function useCreateWorkspaceFileMutation(options?: { workspaceId?: string | null }) {
+  return useCreateWorkspaceEntryMutation("file", options);
+}
+
+export function useCreateWorkspaceDirectoryMutation(options?: { workspaceId?: string | null }) {
+  return useCreateWorkspaceEntryMutation("directory", options);
+}
+
+export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: RenameWorkspaceFileEntryRequest) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.files.renameEntry(resolved.connection.anyharnessWorkspaceId, input);
+    },
+    onSuccess: async (response, input) => {
+      const oldParentPath = parentDirectoryPath(input.path);
+      const newParentPath = parentDirectoryPath(response.entry.path);
+      const invalidations = [
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, oldParentPath),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, newParentPath),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, response.entry.path),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, response.entry.path),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+        }),
+      ];
+      if (response.entry.kind === "directory") {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: anyHarnessWorkspaceFilesScopeKey(runtimeUrl, workspaceId),
+          }),
+        );
+      }
+      await Promise.all(invalidations);
+    },
+  });
+}
+
+export function useDeleteWorkspaceEntryMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { path: string }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.files.deleteEntry(resolved.connection.anyharnessWorkspaceId, input.path);
+    },
+    onSuccess: async (response, input) => {
+      const parentPath = parentDirectoryPath(input.path);
+      const invalidations = [
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, parentPath),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+        }),
+      ];
+      if (response.kind === "directory") {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: anyHarnessWorkspaceFilesScopeKey(runtimeUrl, workspaceId),
+          }),
+        );
+      }
+      await Promise.all(invalidations);
+    },
+  });
+}
+
+function useCreateWorkspaceEntryMutation(
+  kind: "file" | "directory",
+  options?: { workspaceId?: string | null },
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { path: string; content?: string }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.files.createEntry(resolved.connection.anyharnessWorkspaceId, {
+        kind,
+        path: input.path,
+        ...(kind === "file" ? { content: input.content ?? "" } : {}),
+      });
+    },
+    onSuccess: async (response, input) => {
+      const parentPath = parentDirectoryPath(input.path);
+      if (kind === "file" && response.file) {
+        queryClient.setQueryData(
+          anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+          response.file satisfies ReadWorkspaceFileResponse,
+        );
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, parentPath),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+        }),
+        kind === "file"
+          ? queryClient.invalidateQueries({
+              queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+            })
+          : Promise.resolve(),
+        kind === "file"
+          ? queryClient.invalidateQueries({
+              queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+            })
+          : Promise.resolve(),
+        kind === "file"
+          ? queryClient.invalidateQueries({
+              queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+            })
+          : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+function parentDirectoryPath(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
 }

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { fileWorkspaceShellTabKey } from "./shell-tabs";
 import { deriveWorkspaceFileTabSeed } from "./shell-file-seed";
 
 describe("deriveWorkspaceFileTabSeed", () => {
@@ -13,9 +15,16 @@ describe("deriveWorkspaceFileTabSeed", () => {
       ],
       activeShellTabKey: "file:README.md",
     })).toEqual({
-      shellOrderKeys: ["chat:s1", "file:src/App.tsx", "file:README.md"],
-      initialOpenTabs: ["src/App.tsx", "README.md"],
-      initialActiveFilePath: "README.md",
+      shellOrderKeys: [
+        "chat:s1",
+        fileWorkspaceShellTabKey("src/App.tsx"),
+        fileWorkspaceShellTabKey("README.md"),
+      ],
+      initialOpenTargets: [
+        fileViewerTarget("src/App.tsx"),
+        fileViewerTarget("README.md"),
+      ],
+      initialActiveTargetKey: fileWorkspaceShellTabKey("README.md"),
     });
   });
 
@@ -24,7 +33,7 @@ describe("deriveWorkspaceFileTabSeed", () => {
       expect(deriveWorkspaceFileTabSeed({
         shellOrderKeys: ["chat:s1", "file:src/App.tsx"],
         activeShellTabKey,
-      }).initialActiveFilePath).toBeNull();
+      }).initialActiveTargetKey).toBeNull();
     }
   });
 });

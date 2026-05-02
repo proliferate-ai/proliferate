@@ -1,58 +1,30 @@
-export type WorkspaceFileKind = "file" | "directory" | "symlink";
+import type { components } from "../generated/openapi.js";
 
-export interface WorkspaceFileEntry {
-  path: string;
-  name: string;
-  kind: WorkspaceFileKind;
-  hasChildren?: boolean;
-  sizeBytes?: number;
-  modifiedAt?: string;
-  isText?: boolean;
-}
-
-export interface ListWorkspaceFilesResponse {
-  directoryPath: string;
-  entries: WorkspaceFileEntry[];
-}
-
-export interface WorkspaceFileSearchResult {
-  path: string;
-  name: string;
-}
-
-export interface SearchWorkspaceFilesResponse {
-  results: WorkspaceFileSearchResult[];
-}
-
-export interface ReadWorkspaceFileResponse {
-  path: string;
-  kind: WorkspaceFileKind;
-  content: string | null;
-  versionToken: string | null;
-  encoding: "utf-8" | null;
-  sizeBytes: number;
-  modifiedAt?: string;
-  isText: boolean;
-  tooLarge: boolean;
-}
-
-export interface WriteWorkspaceFileRequest {
-  path: string;
-  content: string;
-  expectedVersionToken: string;
-}
-
-export interface WriteWorkspaceFileResponse {
-  path: string;
-  versionToken: string;
-  sizeBytes: number;
-  modifiedAt?: string;
-}
-
-export interface StatWorkspaceFileResponse {
-  path: string;
-  kind: WorkspaceFileKind;
-  sizeBytes?: number;
-  modifiedAt?: string;
-  isText?: boolean;
-}
+export type WorkspaceFileKind = components["schemas"]["WorkspaceFileKind"];
+export type WorkspaceFileEntry = components["schemas"]["WorkspaceFileEntry"];
+export type ListWorkspaceFilesResponse =
+  components["schemas"]["ListWorkspaceFilesResponse"];
+export type CreateWorkspaceFileEntryKind =
+  components["schemas"]["CreateWorkspaceFileEntryKind"];
+export type CreateWorkspaceFileEntryRequest =
+  components["schemas"]["CreateWorkspaceFileEntryRequest"];
+export type CreateWorkspaceFileEntryResponse =
+  components["schemas"]["CreateWorkspaceFileEntryResponse"];
+export type RenameWorkspaceFileEntryRequest =
+  components["schemas"]["RenameWorkspaceFileEntryRequest"];
+export type RenameWorkspaceFileEntryResponse =
+  components["schemas"]["RenameWorkspaceFileEntryResponse"];
+export type DeleteWorkspaceFileEntryResponse =
+  components["schemas"]["DeleteWorkspaceFileEntryResponse"];
+export type WorkspaceFileSearchResult =
+  components["schemas"]["WorkspaceFileSearchResult"];
+export type SearchWorkspaceFilesResponse =
+  components["schemas"]["SearchWorkspaceFilesResponse"];
+export type ReadWorkspaceFileResponse =
+  components["schemas"]["ReadWorkspaceFileResponse"];
+export type WriteWorkspaceFileRequest =
+  components["schemas"]["WriteWorkspaceFileRequest"];
+export type WriteWorkspaceFileResponse =
+  components["schemas"]["WriteWorkspaceFileResponse"];
+export type StatWorkspaceFileResponse =
+  components["schemas"]["StatWorkspaceFileResponse"];

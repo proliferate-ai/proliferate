@@ -410,6 +410,15 @@ export function FileIcon({ className, ...props }: IconProps) {
   );
 }
 
+export function StackedFiles({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4.5 2.25h4.25l3.75 3.75v7a.75.75 0 0 1-.75.75H4.5a1 1 0 0 1-1-1v-9.5a1 1 0 0 1 1-1Z" />
+      <path d="M8.75 2.25v3.5a.25.25 0 0 0 .25.25h3.5" />
+    </svg>
+  );
+}
+
 export function FilePen({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

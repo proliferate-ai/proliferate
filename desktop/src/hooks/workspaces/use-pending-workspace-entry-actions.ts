@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
@@ -133,7 +133,7 @@ export function usePendingWorkspaceEntryActions() {
         clearWorkspaceRuntimeState(selectedWorkspaceId, { clearSelection: true });
       } else {
         setPendingWorkspaceEntry(null);
-        useWorkspaceFilesStore.getState().reset();
+        resetWorkspaceEditorState();
       }
       navigate("/");
       return;

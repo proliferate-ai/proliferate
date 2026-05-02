@@ -3076,6 +3076,331 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/files/entries": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "list_entries",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Directory path relative to workspace root",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace file entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListWorkspaceFilesResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "create_entry",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspaceFileEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace file entry create result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateWorkspaceFileEntryResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "delete_entry",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Path relative to workspace root",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace file entry delete result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteWorkspaceFileEntryResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "rename_entry",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameWorkspaceFileEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace file entry rename result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenameWorkspaceFileEntryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/files/file": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "read_file",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path relative to workspace root",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadWorkspaceFileResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "write_file",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteWorkspaceFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace file write result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteWorkspaceFileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/files/search": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "search_files",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace file search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchWorkspaceFilesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/files/stat": {
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "operationId": "stat_file",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Path relative to workspace root",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace file metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatWorkspaceFileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/branches": {
       "get": {
         "tags": [
@@ -6793,6 +7118,55 @@
           }
         }
       },
+      "CreateWorkspaceFileEntryKind": {
+        "type": "string",
+        "enum": [
+          "file",
+          "directory"
+        ]
+      },
+      "CreateWorkspaceFileEntryRequest": {
+        "type": "object",
+        "required": [
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreateWorkspaceFileEntryKind"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateWorkspaceFileEntryResponse": {
+        "type": "object",
+        "required": [
+          "entry"
+        ],
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/WorkspaceFileEntry"
+          },
+          "file": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReadWorkspaceFileResponse"
+              }
+            ]
+          }
+        }
+      },
       "CreateWorkspaceRequest": {
         "type": "object",
         "required": [
@@ -6919,6 +7293,21 @@
                 "$ref": "#/components/schemas/PullRequestSummary"
               }
             ]
+          }
+        }
+      },
+      "DeleteWorkspaceFileEntryResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/WorkspaceFileKind"
+          },
+          "path": {
+            "type": "string"
           }
         }
       },
@@ -8218,6 +8607,24 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ReplayRecordingSummary"
+            }
+          }
+        }
+      },
+      "ListWorkspaceFilesResponse": {
+        "type": "object",
+        "required": [
+          "directoryPath",
+          "entries"
+        ],
+        "properties": {
+          "directoryPath": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFileEntry"
             }
           }
         }
@@ -11022,6 +11429,36 @@
           "failed"
         ]
       },
+      "RenameWorkspaceFileEntryRequest": {
+        "type": "object",
+        "required": [
+          "path",
+          "newPath"
+        ],
+        "properties": {
+          "newPath": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "RenameWorkspaceFileEntryResponse": {
+        "type": "object",
+        "required": [
+          "oldPath",
+          "entry"
+        ],
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/WorkspaceFileEntry"
+          },
+          "oldPath": {
+            "type": "string"
+          }
+        }
+      },
       "ReplayRecordingSummary": {
         "type": "object",
         "required": [
@@ -12027,6 +12464,20 @@
         "properties": {
           "replay": {
             "type": "boolean"
+          }
+        }
+      },
+      "SearchWorkspaceFilesResponse": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceFileSearchResult"
+            }
           }
         }
       },
@@ -13567,6 +14018,41 @@
           }
         }
       },
+      "StatWorkspaceFileResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "isText": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkspaceFileKind"
+          },
+          "modifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "StopReason": {
         "type": "string",
         "enum": [
@@ -14512,6 +14998,51 @@
           }
         }
       },
+      "WorkspaceFileEntry": {
+        "type": "object",
+        "required": [
+          "path",
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "hasChildren": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "isText": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkspaceFileKind"
+          },
+          "modifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "WorkspaceFileKind": {
         "type": "string",
         "enum": [
@@ -14519,6 +15050,21 @@
           "directory",
           "symlink"
         ]
+      },
+      "WorkspaceFileSearchResult": {
+        "type": "object",
+        "required": [
+          "path",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
       },
       "WorkspaceKind": {
         "type": "string",
@@ -15432,6 +15978,52 @@
             ]
           },
           "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WriteWorkspaceFileRequest": {
+        "type": "object",
+        "required": [
+          "path",
+          "content",
+          "expectedVersionToken"
+        ],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "expectedVersionToken": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "WriteWorkspaceFileResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "versionToken",
+          "sizeBytes"
+        ],
+        "properties": {
+          "modifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "versionToken": {
             "type": "string"
           }
         }

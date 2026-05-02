@@ -1,10 +1,10 @@
-export type FocusZone = "chat" | "terminal" | "unknown";
+export type FocusZone = "browser" | "chat" | "terminal" | "unknown";
 
 const FOCUS_ZONE_ATTR = "data-focus-zone";
 
 /**
  * Derives the current focus zone from the DOM (no store).
- * Components mark their focusable regions with `data-focus-zone="chat" | "terminal"`.
+ * Components mark their focusable regions with `data-focus-zone="browser" | "chat" | "terminal"`.
  */
 export function getFocusZone(): FocusZone {
   const active = document.activeElement;
@@ -14,7 +14,7 @@ export function getFocusZone(): FocusZone {
   if (!zone) return "unknown";
 
   const value = zone.getAttribute(FOCUS_ZONE_ATTR);
-  if (value === "chat" || value === "terminal") return value;
+  if (value === "browser" || value === "chat" || value === "terminal") return value;
   return "unknown";
 }
 

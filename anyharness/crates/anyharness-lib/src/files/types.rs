@@ -22,6 +22,30 @@ pub struct ListWorkspaceFilesResult {
     pub entries: Vec<WorkspaceFileEntry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CreateWorkspaceFileEntryKind {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateWorkspaceFileEntryResult {
+    pub entry: WorkspaceFileEntry,
+    pub file: Option<ReadWorkspaceFileResult>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RenameWorkspaceFileEntryResult {
+    pub old_path: String,
+    pub entry: WorkspaceFileEntry,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteWorkspaceFileEntryResult {
+    pub path: String,
+    pub kind: WorkspaceFileKind,
+}
+
 #[derive(Debug, Clone)]
 pub struct ReadWorkspaceFileResult {
     pub path: String,

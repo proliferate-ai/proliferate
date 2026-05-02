@@ -3,7 +3,11 @@ import { useWorkspaceFileTreeUiStore } from "./workspace-file-tree-ui-store";
 
 describe("workspace file tree ui store", () => {
   beforeEach(() => {
-    useWorkspaceFileTreeUiStore.setState({ expandedDirectoriesByTreeKey: {} });
+    useWorkspaceFileTreeUiStore.setState({
+      expandedDirectoriesByTreeKey: {},
+      selectedDirectoryByTreeKey: {},
+      createDraftByTreeKey: {},
+    });
   });
 
   it("tracks expanded directories per tree key", () => {

@@ -3,11 +3,12 @@ import type {
 } from "@/lib/domain/workspaces/tabs/group-rows";
 import {
   chatWorkspaceShellTabKey,
-  fileWorkspaceShellTabKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
+  viewerWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
+import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 
 export interface ShellChatTab extends GroupedChatTab {
   id: string;
@@ -21,8 +22,8 @@ export type HeaderShellStripRow<TTab extends ShellChatTab> =
     shellKeys: WorkspaceShellTabKey[];
   }
   | {
-    kind: "file";
-    path: string;
+    kind: "viewer";
+    target: ViewerTarget;
     shellKey: WorkspaceShellTabKey;
   };
 
@@ -38,13 +39,13 @@ interface ChatShellSlice<TTab extends ShellChatTab> {
 
 export function buildHeaderShellRows<TTab extends ShellChatTab>({
   stripRows,
-  openTabs,
+  openTargets,
   orderedTabs,
   manualGroups,
   subagentChildIdsByParentId,
 }: {
   stripRows: HeaderStripRow<TTab>[];
-  openTabs: readonly string[];
+  openTargets: readonly ViewerTarget[];
   orderedTabs: readonly WorkspaceShellTab[];
   manualGroups: readonly ManualGroupForShellRows[];
   subagentChildIdsByParentId?: ReadonlyMap<string, readonly string[]>;
@@ -63,15 +64,16 @@ export function buildHeaderShellRows<TTab extends ShellChatTab>({
 
   const emittedSlices = new Set<ChatShellSlice<TTab>>();
   const rows: HeaderShellStripRow<TTab>[] = [];
-  const liveFilePaths = new Set(openTabs);
+  const liveViewerTargetKeys = new Set(openTargets.map(viewerTargetKey));
 
   for (const tab of orderedTabs) {
-    if (tab.kind === "file") {
-      if (liveFilePaths.has(tab.path)) {
+    if (tab.kind === "viewer") {
+      const shellKey = viewerWorkspaceShellTabKey(tab.target);
+      if (liveViewerTargetKeys.has(shellKey)) {
         rows.push({
-          kind: "file",
-          path: tab.path,
-          shellKey: fileWorkspaceShellTabKey(tab.path),
+          kind: "viewer",
+          target: tab.target,
+          shellKey,
         });
       }
       continue;

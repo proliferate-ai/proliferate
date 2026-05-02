@@ -25,7 +25,8 @@ import {
 } from "@/lib/domain/sessions/activity";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useWorkspaceActiveChatTabId } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import type { ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
@@ -57,11 +58,11 @@ export interface HeaderChatMenuEntry {
 
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
 
-const EMPTY_OPEN_TABS: string[] = [];
+const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 
 export function useWorkspaceHeaderTabsModel() {
-  const rawOpenTabs = useWorkspaceFilesStore((s) => s.openTabs);
-  const fileStoreMaterializedWorkspaceId = useWorkspaceFilesStore(
+  const rawOpenTargets = useWorkspaceViewerTabsStore((s) => s.openTargets);
+  const viewerStoreMaterializedWorkspaceId = useWorkspaceViewerTabsStore(
     (s) => s.materializedWorkspaceId,
   );
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
@@ -72,10 +73,10 @@ export function useWorkspaceHeaderTabsModel() {
     selectedLogicalWorkspaceId,
     materializedWorkspaceId: selectedWorkspaceId,
   });
-  const openTabs = materializedWorkspaceId
-    && fileStoreMaterializedWorkspaceId === materializedWorkspaceId
-    ? rawOpenTabs
-    : EMPTY_OPEN_TABS;
+  const openTargets = materializedWorkspaceId
+    && viewerStoreMaterializedWorkspaceId === materializedWorkspaceId
+    ? rawOpenTargets
+    : EMPTY_OPEN_TARGETS;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);
@@ -320,7 +321,7 @@ export function useWorkspaceHeaderTabsModel() {
     selectedWorkspaceId,
     workspaceUiKey,
     materializedWorkspaceId,
-    openTabs,
+    openTargets,
     chatTabs,
     stripRows,
     stripChatSessionIds,

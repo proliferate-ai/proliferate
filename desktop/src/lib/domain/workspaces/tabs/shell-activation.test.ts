@@ -4,15 +4,19 @@ import {
   resolveWorkspaceShellActivation,
   type WorkspaceShellActivationInput,
 } from "@/lib/domain/workspaces/tabs/shell-activation";
+import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import type { ViewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
+
+const APP_KEY = fileWorkspaceShellTabKey("src/App.tsx") as ViewerTargetKey;
 
 const BASE_INPUT: WorkspaceShellActivationInput = {
   workspaceId: "workspace-1",
   storedIntent: null,
-  orderedTabs: ["chat:a", "chat:b", "file:src/App.tsx"],
+  orderedTabs: ["chat:a", "chat:b", APP_KEY],
   activeSessionId: null,
-  activeFilePath: null,
+  activeViewerTargetKey: null,
   liveChatSessionIds: new Set(["a", "b"]),
-  openFilePaths: new Set(["src/App.tsx"]),
+  openViewerTargetKeys: new Set([APP_KEY]),
   pendingChatActivation: null,
   currentShellActivationEpoch: 0,
   currentSessionActivationEpoch: 0,
@@ -68,7 +72,7 @@ describe("resolveWorkspaceShellActivation", () => {
     expect(resolveWorkspaceShellActivation({
       ...BASE_INPUT,
       activeSessionId: "a",
-      activeFilePath: "src/App.tsx",
+      activeViewerTargetKey: APP_KEY,
     })).toEqual({
       renderSurface: { kind: "chat-shell" },
       highlightedTabKey: null,
@@ -79,15 +83,15 @@ describe("resolveWorkspaceShellActivation", () => {
 describe("resolveNextShellTabAfterClose", () => {
   it("chooses the nearest tab after the closed tab, then before", () => {
     expect(resolveNextShellTabAfterClose({
-      orderedTabs: ["chat:a", "chat:b", "file:src/App.tsx"],
+      orderedTabs: ["chat:a", "chat:b", APP_KEY],
       closingTabKeys: ["chat:b"],
       currentTabKey: "chat:b",
-    })).toBe("file:src/App.tsx");
+    })).toBe(APP_KEY);
 
     expect(resolveNextShellTabAfterClose({
-      orderedTabs: ["chat:a", "chat:b", "file:src/App.tsx"],
-      closingTabKeys: ["file:src/App.tsx"],
-      currentTabKey: "file:src/App.tsx",
+      orderedTabs: ["chat:a", "chat:b", APP_KEY],
+      closingTabKeys: [APP_KEY],
+      currentTabKey: APP_KEY,
     })).toBe("chat:b");
   });
 });

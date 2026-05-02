@@ -1,7 +1,7 @@
 # Files
 
 `anyharness-lib/src/files/**` owns safe workspace-relative file browsing and
-read/write operations.
+file entry operations.
 
 ## Core Concepts
 
@@ -12,6 +12,8 @@ It owns:
 - safe path resolution inside a workspace
 - directory listing
 - text-file reads
+- create-only file and directory operations
+- rename and delete file or directory operations
 - version-token-based writes
 - lightweight file metadata
 
@@ -30,6 +32,9 @@ The files types are transport-friendly internal results:
 - `WorkspaceFileEntry`
 - `ListWorkspaceFilesResult`
 - `ReadWorkspaceFileResult`
+- `CreateWorkspaceFileEntryResult`
+- `RenameWorkspaceFileEntryResult`
+- `DeleteWorkspaceFileEntryResult`
 - `WriteWorkspaceFileResult`
 - `StatWorkspaceFileResult`
 
@@ -91,6 +96,59 @@ This is the main security boundary for the files subsystem.
 5. renames atomically into place
 6. returns the new version token and metadata
 
+### Creating
+
+`create_entry(...)`
+(`anyharness/crates/anyharness-lib/src/files/service.rs`) is create-only.
+It is exposed as `POST /v1/workspaces/{workspace_id}/files/entries`; the
+existing `PUT /files/file` write surface keeps its compatibility upsert
+behavior.
+
+Create semantics:
+
+1. resolves a safe path
+2. rejects an empty path
+3. rejects `content` for directory creation
+4. requires the parent directory to already exist
+5. requires the final path to not exist
+6. creates files with race-safe create-new behavior
+7. creates directories with single-directory `create_dir`
+8. invalidates file search cache in the runtime layer
+9. returns the created entry, plus read metadata/version for files
+
+### Renaming
+
+`rename_entry(...)` is exposed as `PATCH
+/v1/workspaces/{workspace_id}/files/entries`.
+
+Rename semantics:
+
+1. resolves the source and destination paths safely
+2. rejects an empty source or destination path
+3. requires the source path to exist
+4. requires the destination parent directory to already exist
+5. requires the destination path to not exist
+6. rejects moving a directory inside itself
+7. rejects cowork artifact paths and their ancestors in the runtime layer
+8. invalidates file search cache in the runtime layer
+9. returns the old path and renamed entry metadata
+
+### Deleting
+
+`delete_entry(...)` is exposed as `DELETE
+/v1/workspaces/{workspace_id}/files/entries?path=...`.
+
+Delete semantics:
+
+1. resolves the path safely
+2. rejects an empty path so callers cannot delete the workspace root
+3. requires the path to exist
+4. removes files and symlinks with `remove_file`
+5. removes directories recursively with `remove_dir_all`
+6. rejects cowork artifact paths and their ancestors in the runtime layer
+7. invalidates file search cache in the runtime layer
+8. returns the deleted path and entry kind
+
 ## Boundaries
 
 ### Files Owns
@@ -99,6 +157,8 @@ This is the main security boundary for the files subsystem.
 - text/binary sniffing
 - optimistic version tokens
 - file read/write/list/stat behavior
+- create-only file and directory behavior
+- rename and delete file or directory behavior
 
 ### Files Does Not Own
 
@@ -113,6 +173,11 @@ This is the main security boundary for the files subsystem.
 - File access must remain inside the workspace.
 - `.git` must stay hidden and inaccessible through this surface.
 - Writes must stay atomic.
+- Create-only operations must not create missing parents or overwrite existing
+  entries.
+- Rename operations must not create missing parents or overwrite existing
+  entries.
+- Delete operations must not allow deleting the workspace root.
 - Version mismatches must reject stale writes rather than silently overwrite.
 - Oversized or binary files should degrade to metadata, not crash reads.
 

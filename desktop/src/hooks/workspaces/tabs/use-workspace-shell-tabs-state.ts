@@ -13,6 +13,7 @@ import {
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 import {
   resolveWorkspaceShellActivation,
   type WorkspaceShellActivation,
@@ -21,7 +22,7 @@ import {
   resolveWithWorkspaceFallback,
   sameStringArray,
 } from "@/lib/domain/workspaces/workspace-keyed-preferences";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
@@ -48,7 +49,7 @@ export function useWorkspaceActiveChatTabId({
     ? parseWorkspaceShellTabKey(storedActiveShellTabKey)
     : null;
 
-  if (storedActiveShellTab?.kind === "file" || storedActiveShellTabKey === "chat-shell") {
+  if (storedActiveShellTab?.kind === "viewer" || storedActiveShellTabKey === "chat-shell") {
     return null;
   }
   if (!storedActiveShellTabKey) {
@@ -65,7 +66,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   materializedWorkspaceId,
   activeSessionId,
   shellChatSessionIds,
-  openTabs,
+  openTargets,
   stripRows,
   displayManualGroups,
   subagentChildIdsByParentId,
@@ -74,7 +75,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   materializedWorkspaceId: string | null;
   activeSessionId: string | null;
   shellChatSessionIds: readonly string[];
-  openTabs: string[];
+  openTargets: ViewerTarget[];
   stripRows: HeaderStripRow<TTab>[];
   displayManualGroups: readonly DisplayManualChatGroup[];
   subagentChildIdsByParentId: ReadonlyMap<string, readonly string[]>;
@@ -98,8 +99,8 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   const setShellTabOrder = useWorkspaceUiStore(
     (state) => state.setShellTabOrderForWorkspace,
   );
-  const activeFilePath = useWorkspaceFilesStore((state) => state.activeFilePath);
-  const fileRestoreMarker = useWorkspaceFilesStore((state) => state.fileRestoreMarker);
+  const activeTargetKey = useWorkspaceViewerTabsStore((state) => state.activeTargetKey);
+  const viewerRestoreMarker = useWorkspaceViewerTabsStore((state) => state.viewerRestoreMarker);
   const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
   const sessionActivationEpoch = useHarnessStore((state) =>
     materializedWorkspaceId
@@ -132,23 +133,23 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   const storedActiveShellTabKey = activeShellTabFallback.value ?? null;
   const persistedShellOrderKeys =
     shellOrderFallback.value ?? EMPTY_SHELL_TAB_ORDER_KEYS;
-  const persistedShellStateIncludesFile = useMemo(
+  const persistedShellStateIncludesViewer = useMemo(
     () => {
       if (persistedShellOrderKeys.some((key) =>
-        parseWorkspaceShellTabKey(key)?.kind === "file"
+        parseWorkspaceShellTabKey(key)?.kind === "viewer"
       )) {
         return true;
       }
       return storedActiveShellTabKey
-        ? parseWorkspaceShellTabKey(storedActiveShellTabKey)?.kind === "file"
+        ? parseWorkspaceShellTabKey(storedActiveShellTabKey)?.kind === "viewer"
         : false;
     },
     [persistedShellOrderKeys, storedActiveShellTabKey],
   );
-  const fileRestoreReady = !persistedShellStateIncludesFile || Boolean(
-    fileRestoreMarker?.ready
-      && fileRestoreMarker.workspaceUiKey === workspaceUiKey
-      && fileRestoreMarker.materializedWorkspaceId === materializedWorkspaceId,
+  const viewerRestoreReady = !persistedShellStateIncludesViewer || Boolean(
+    viewerRestoreMarker?.ready
+      && viewerRestoreMarker.workspaceUiKey === workspaceUiKey
+      && viewerRestoreMarker.materializedWorkspaceId === materializedWorkspaceId,
   );
 
   const orderedTabs = useMemo(
@@ -161,12 +162,12 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
         ]),
       ),
       visibleChatSessionIds: [...shellChatSessionIds],
-      openTabs,
+      openTargets,
       orderKeys: persistedShellOrderKeys,
     }),
     [
       materializedWorkspaceId,
-      openTabs,
+      openTargets,
       persistedShellOrderKeys,
       shellChatSessionIds,
     ],
@@ -180,18 +181,18 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     storedIntent: storedActiveShellTabKey,
     orderedTabs: orderedShellTabKeys,
     activeSessionId,
-    activeFilePath,
+    activeViewerTargetKey: activeTargetKey,
     liveChatSessionIds: new Set(shellChatSessionIds),
-    openFilePaths: new Set(openTabs),
+    openViewerTargetKeys: new Set(openTargets.map(viewerTargetKey)),
     pendingChatActivation,
     currentShellActivationEpoch: shellActivationEpoch,
     currentSessionActivationEpoch: sessionActivationEpoch,
     currentWorkspaceSelectionNonce: workspaceSelectionNonce,
   }), [
-    activeFilePath,
+    activeTargetKey,
     activeSessionId,
     materializedWorkspaceId,
-    openTabs,
+    openTargets,
     orderedShellTabKeys,
     pendingChatActivation,
     sessionActivationEpoch,
@@ -205,22 +206,27 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
       case "chat-session":
       case "chat-session-pending":
         return { kind: "chat", sessionId: activation.renderSurface.sessionId };
-      case "file":
-        return { kind: "file", path: activation.renderSurface.path };
+      case "viewer": {
+        const targetKey = activation.renderSurface.targetKey;
+        const target = openTargets.find((candidate) =>
+          viewerTargetKey(candidate) === targetKey
+        );
+        return target ? { kind: "viewer", target } : null;
+      }
       case "chat-shell":
         return null;
     }
-  }, [activation.renderSurface]);
+  }, [activation.renderSurface, openTargets]);
   const activeShellTabKey = activeShellTab ? getWorkspaceShellTabKey(activeShellTab) : null;
   const shellRows = useMemo<HeaderShellStripRow<TTab>[]>(
     () => buildHeaderShellRows({
       stripRows,
-      openTabs,
+      openTargets,
       orderedTabs,
       manualGroups: displayManualGroups,
       subagentChildIdsByParentId,
     }),
-    [displayManualGroups, openTabs, orderedTabs, stripRows, subagentChildIdsByParentId],
+    [displayManualGroups, openTargets, orderedTabs, stripRows, subagentChildIdsByParentId],
   );
 
   useEffect(() => {
@@ -236,7 +242,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
       setActiveShellTabKey(workspaceUiKey, activeShellTabFallback.value ?? null);
       wroteFallback = true;
     }
-    if (wroteFallback || !fileRestoreReady) {
+    if (wroteFallback || !viewerRestoreReady) {
       return;
     }
     if (!sameStringArray(persistedShellOrderKeys, orderedShellTabKeys)) {
@@ -245,7 +251,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   }, [
     activeShellTabFallback.shouldWriteBack,
     activeShellTabFallback.value,
-    fileRestoreReady,
+    viewerRestoreReady,
     orderedShellTabKeys,
     persistedShellOrderKeys,
     setActiveShellTabKey,

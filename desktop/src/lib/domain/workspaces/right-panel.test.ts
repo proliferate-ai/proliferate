@@ -28,7 +28,7 @@ describe("right panel domain", () => {
     });
   });
 
-  it("drops cloud settings for local workspaces and falls back to git", () => {
+  it("drops cloud settings for local workspaces and falls back to files", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
         activeEntryKey: "tool:settings",
@@ -37,7 +37,7 @@ describe("right panel domain", () => {
       { isCloudWorkspaceSelected: false },
     );
 
-    expect(state.activeEntryKey).toBe("tool:git");
+    expect(state.activeEntryKey).toBe("tool:files");
     expect(state.headerOrder).toEqual(["tool:files", "tool:git"]);
   });
 
@@ -67,7 +67,7 @@ describe("right panel domain", () => {
     );
 
     expect(state.headerOrder).toEqual(["tool:git", "terminal:t2", "tool:files", "terminal:t1"]);
-    expect(state.activeEntryKey).toBe("tool:git");
+    expect(state.activeEntryKey).toBe("tool:files");
   });
 
   it("does not append setup terminals unless already in the header", () => {

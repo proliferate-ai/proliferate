@@ -3,8 +3,12 @@ use axum::Json;
 use serde::Deserialize;
 
 use anyharness_contract::v1::{
-    ListWorkspaceFilesResponse, ReadWorkspaceFileResponse, SearchWorkspaceFilesResponse,
-    StatWorkspaceFileResponse, WorkspaceFileEntry as ContractWorkspaceFileEntry,
+    CreateWorkspaceFileEntryKind as ContractCreateWorkspaceFileEntryKind,
+    CreateWorkspaceFileEntryRequest, CreateWorkspaceFileEntryResponse,
+    DeleteWorkspaceFileEntryResponse, ListWorkspaceFilesResponse, ReadWorkspaceFileResponse,
+    RenameWorkspaceFileEntryRequest, RenameWorkspaceFileEntryResponse,
+    SearchWorkspaceFilesResponse, StatWorkspaceFileResponse,
+    WorkspaceFileEntry as ContractWorkspaceFileEntry,
     WorkspaceFileKind as ContractWorkspaceFileKind,
     WorkspaceFileSearchResult as ContractWorkspaceFileSearchResult, WriteWorkspaceFileRequest,
     WriteWorkspaceFileResponse,
@@ -13,7 +17,9 @@ use anyharness_contract::v1::{
 use crate::app::AppState;
 use crate::files::service::FileServiceError;
 use crate::files::types::{
-    ListWorkspaceFilesResult, ReadWorkspaceFileResult, StatWorkspaceFileResult,
+    CreateWorkspaceFileEntryKind as InternalCreateWorkspaceFileEntryKind,
+    CreateWorkspaceFileEntryResult, DeleteWorkspaceFileEntryResult, ListWorkspaceFilesResult,
+    ReadWorkspaceFileResult, RenameWorkspaceFileEntryResult, StatWorkspaceFileResult,
     WorkspaceFileEntry as InternalWorkspaceFileEntry,
     WorkspaceFileKind as InternalWorkspaceFileKind, WriteWorkspaceFileResult,
 };
@@ -62,6 +68,16 @@ pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/files/entries",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("path" = Option<String>, Query, description = "Directory path relative to workspace root"),
+    ),
+    responses((status = 200, description = "Workspace file entries", body = ListWorkspaceFilesResponse)),
+    tag = "files"
+)]
 pub async fn list_entries(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
@@ -84,6 +100,16 @@ pub async fn list_entries(
     Ok(Json(response))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/files/file",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("path" = String, Query, description = "File path relative to workspace root"),
+    ),
+    responses((status = 200, description = "Workspace file", body = ReadWorkspaceFileResponse)),
+    tag = "files"
+)]
 pub async fn read_file(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
@@ -106,6 +132,17 @@ pub async fn read_file(
     Ok(Json(response))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/files/search",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("q" = Option<String>, Query, description = "Search query"),
+        ("limit" = Option<usize>, Query, description = "Maximum results"),
+    ),
+    responses((status = 200, description = "Workspace file search results", body = SearchWorkspaceFilesResponse)),
+    tag = "files"
+)]
 pub async fn search_files(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
@@ -131,6 +168,14 @@ pub async fn search_files(
     Ok(Json(response))
 }
 
+#[utoipa::path(
+    put,
+    path = "/v1/workspaces/{workspace_id}/files/file",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = WriteWorkspaceFileRequest,
+    responses((status = 200, description = "Workspace file write result", body = WriteWorkspaceFileResponse)),
+    tag = "files"
+)]
 pub async fn write_file(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
@@ -155,6 +200,111 @@ pub async fn write_file(
     Ok(Json(response))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/files/entries",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = CreateWorkspaceFileEntryRequest,
+    responses((status = 200, description = "Workspace file entry create result", body = CreateWorkspaceFileEntryResponse)),
+    tag = "files"
+)]
+pub async fn create_entry(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Json(body): Json<CreateWorkspaceFileEntryRequest>,
+) -> Result<Json<CreateWorkspaceFileEntryResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::FileWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
+    let path = body.path;
+    let content = body.content;
+    let kind = create_kind_to_internal(body.kind);
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("create file entry", move || {
+        files_runtime
+            .create_entry(&workspace_id, &path, kind, content.as_deref())
+            .map(create_entry_response_to_contract)
+            .map_err(map_service_error)
+    })
+    .await?;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/v1/workspaces/{workspace_id}/files/entries",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = RenameWorkspaceFileEntryRequest,
+    responses((status = 200, description = "Workspace file entry rename result", body = RenameWorkspaceFileEntryResponse)),
+    tag = "files"
+)]
+pub async fn rename_entry(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Json(body): Json<RenameWorkspaceFileEntryRequest>,
+) -> Result<Json<RenameWorkspaceFileEntryResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::FileWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
+    let path = body.path;
+    let new_path = body.new_path;
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("rename file entry", move || {
+        files_runtime
+            .rename_entry(&workspace_id, &path, &new_path)
+            .map(rename_entry_response_to_contract)
+            .map_err(map_service_error)
+    })
+    .await?;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/v1/workspaces/{workspace_id}/files/entries",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("path" = String, Query, description = "Path relative to workspace root"),
+    ),
+    responses((status = 200, description = "Workspace file entry delete result", body = DeleteWorkspaceFileEntryResponse)),
+    tag = "files"
+)]
+pub async fn delete_entry(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Query(query): Query<FilePathQuery>,
+) -> Result<Json<DeleteWorkspaceFileEntryResponse>, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::FileWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
+    let path = query.path;
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("delete file entry", move || {
+        files_runtime
+            .delete_entry(&workspace_id, &path)
+            .map(delete_entry_response_to_contract)
+            .map_err(map_service_error)
+    })
+    .await?;
+    Ok(Json(response))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/files/stat",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("path" = String, Query, description = "Path relative to workspace root"),
+    ),
+    responses((status = 200, description = "Workspace file metadata", body = StatWorkspaceFileResponse)),
+    tag = "files"
+)]
 pub async fn stat_file(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
@@ -221,6 +371,33 @@ fn write_response_to_contract(result: WriteWorkspaceFileResult) -> WriteWorkspac
     }
 }
 
+fn create_entry_response_to_contract(
+    result: CreateWorkspaceFileEntryResult,
+) -> CreateWorkspaceFileEntryResponse {
+    CreateWorkspaceFileEntryResponse {
+        entry: file_entry_to_contract(result.entry),
+        file: result.file.map(read_response_to_contract),
+    }
+}
+
+fn rename_entry_response_to_contract(
+    result: RenameWorkspaceFileEntryResult,
+) -> RenameWorkspaceFileEntryResponse {
+    RenameWorkspaceFileEntryResponse {
+        old_path: result.old_path,
+        entry: file_entry_to_contract(result.entry),
+    }
+}
+
+fn delete_entry_response_to_contract(
+    result: DeleteWorkspaceFileEntryResult,
+) -> DeleteWorkspaceFileEntryResponse {
+    DeleteWorkspaceFileEntryResponse {
+        path: result.path,
+        kind: file_kind_to_contract(result.kind),
+    }
+}
+
 fn stat_response_to_contract(result: StatWorkspaceFileResult) -> StatWorkspaceFileResponse {
     StatWorkspaceFileResponse {
         path: result.path,
@@ -255,5 +432,16 @@ fn file_kind_to_contract(kind: InternalWorkspaceFileKind) -> ContractWorkspaceFi
         InternalWorkspaceFileKind::File => ContractWorkspaceFileKind::File,
         InternalWorkspaceFileKind::Directory => ContractWorkspaceFileKind::Directory,
         InternalWorkspaceFileKind::Symlink => ContractWorkspaceFileKind::Symlink,
+    }
+}
+
+fn create_kind_to_internal(
+    kind: ContractCreateWorkspaceFileEntryKind,
+) -> InternalCreateWorkspaceFileEntryKind {
+    match kind {
+        ContractCreateWorkspaceFileEntryKind::File => InternalCreateWorkspaceFileEntryKind::File,
+        ContractCreateWorkspaceFileEntryKind::Directory => {
+            InternalCreateWorkspaceFileEntryKind::Directory
+        }
     }
 }

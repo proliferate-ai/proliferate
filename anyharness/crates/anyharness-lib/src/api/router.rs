@@ -237,7 +237,10 @@ pub fn build_router(state: AppState) -> Router {
         // Workspace files
         .route(
             "/workspaces/{workspace_id}/files/entries",
-            get(files::list_entries),
+            get(files::list_entries)
+                .post(files::create_entry)
+                .patch(files::rename_entry)
+                .delete(files::delete_entry),
         )
         .route(
             "/workspaces/{workspace_id}/files/search",

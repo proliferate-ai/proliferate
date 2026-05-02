@@ -5,7 +5,12 @@ import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspa
 import {
   resolveFallbackWorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import {
+  viewerTargetEditablePath,
+  viewerTargetKey,
+} from "@/lib/domain/workspaces/viewer-target";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";
 
@@ -18,9 +23,10 @@ function discardDirtyFileTab(isDirty: boolean): boolean {
 }
 
 export function useCloseActiveWorkspaceTab() {
-  const buffersByPath = useWorkspaceFilesStore((state) => state.buffersByPath);
-  const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
-  const { activateChatShell, activateFileTab } = useWorkspaceShellActivation();
+  const buffersByPath = useWorkspaceFileBuffersStore((state) => state.buffersByPath);
+  const clearBuffer = useWorkspaceFileBuffersStore((state) => state.clearBuffer);
+  const closeTarget = useWorkspaceViewerTabsStore((state) => state.closeTarget);
+  const { activateChatShell, activateViewerTarget } = useWorkspaceShellActivation();
   const headerTabs = useWorkspaceHeaderTabsViewModel();
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: headerTabs.workspaceUiKey,
@@ -32,9 +38,19 @@ export function useCloseActiveWorkspaceTab() {
 
   return useCallback((): CloseActiveWorkspaceTabResult => {
     const activeShellTab = headerTabs.activeShellTab;
-    if (activeShellTab?.kind === "file") {
-      const path = activeShellTab.path;
-      const isDirty = buffersByPath[path]?.isDirty ?? false;
+    if (activeShellTab?.kind === "viewer") {
+      const bufferPath = viewerTargetEditablePath(activeShellTab.target);
+      const activeTargetKey = viewerTargetKey(activeShellTab.target);
+      const shouldClearBuffer = bufferPath
+        ? !headerTabs.orderedTabs.some((tab) =>
+            tab.kind === "viewer"
+            && viewerTargetKey(tab.target) !== activeTargetKey
+            && viewerTargetEditablePath(tab.target) === bufferPath
+          )
+        : false;
+      const isDirty = shouldClearBuffer && bufferPath
+        ? buffersByPath[bufferPath]?.isDirty ?? false
+        : false;
       if (!discardDirtyFileTab(isDirty)) {
         return "blocked";
       }
@@ -44,15 +60,18 @@ export function useCloseActiveWorkspaceTab() {
         closingTabs: [activeShellTab],
         activeTab: activeShellTab,
       });
-      closeTab(path);
+      closeTarget(activeTargetKey);
+      if (bufferPath && shouldClearBuffer) {
+        clearBuffer(bufferPath);
+      }
       if (fallback && headerTabs.selectedWorkspaceId) {
         if (fallback.kind === "chat") {
           chatVisibilityActions.showChatSessionTab(fallback.sessionId, { select: true });
         } else {
-          activateFileTab({
+          activateViewerTarget({
             workspaceId: headerTabs.selectedWorkspaceId,
             shellWorkspaceId: headerTabs.workspaceUiKey,
-            path: fallback.path,
+            target: fallback.target,
             mode: "focus-existing",
           });
         }
@@ -78,9 +97,10 @@ export function useCloseActiveWorkspaceTab() {
   }, [
     buffersByPath,
     activateChatShell,
-    activateFileTab,
+    activateViewerTarget,
     chatVisibilityActions,
-    closeTab,
+    clearBuffer,
+    closeTarget,
     headerTabs.activeShellTab,
     headerTabs.orderedTabs,
     headerTabs.selectedWorkspaceId,

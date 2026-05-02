@@ -143,7 +143,7 @@ describe("useMainScreenActions right panel actions", () => {
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
   });
 
-  it("toggles a closed right panel from the active tool entry", () => {
+  it("toggles a closed right panel to files when a singleton tool is active", () => {
     const { result, spies } = renderActions({
       rightPanelState: {
         ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
@@ -158,7 +158,7 @@ describe("useMainScreenActions right panel actions", () => {
       DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
       lastCallArg(spies.setRightPanelState),
     );
-    expect(nextState.activeEntryKey).toBe("tool:settings");
+    expect(nextState.activeEntryKey).toBe("tool:files");
     expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
   });
 

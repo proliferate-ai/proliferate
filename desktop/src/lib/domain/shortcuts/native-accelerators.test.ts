@@ -12,7 +12,7 @@ describe("getShortcutNativeAccelerator", () => {
   });
 
   it("converts modifier and named-key shortcuts", () => {
-    expect(getShortcutNativeAccelerator(SHORTCUTS.previousTab)).toBe("CmdOrCtrl+Shift+Left");
+    expect(getShortcutNativeAccelerator(SHORTCUTS.previousTab)).toBe("CmdOrCtrl+Alt+Left");
   });
 
   it("does not invent accelerators for shortcut ranges or platform-specific matches", () => {

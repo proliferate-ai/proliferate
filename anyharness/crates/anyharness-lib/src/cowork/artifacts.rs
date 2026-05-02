@@ -250,6 +250,27 @@ impl CoworkArtifactRuntime {
             .any(|entry| normalize_compare_path(&entry.path) == normalized))
     }
 
+    pub fn is_protected_relative_path_or_ancestor(
+        &self,
+        workspace: &WorkspaceRecord,
+        relative_path: &str,
+    ) -> Result<bool, CoworkArtifactError> {
+        ensure_cowork_workspace(workspace)?;
+        let normalized = normalize_compare_path(relative_path);
+        if is_same_or_ancestor_path(&normalized, COWORK_ARTIFACT_MANIFEST_RELATIVE_PATH) {
+            return Ok(true);
+        }
+
+        let workspace_root = Path::new(&workspace.path);
+        let Some(manifest) = load_manifest_if_present(workspace_root)? else {
+            return Ok(false);
+        };
+
+        Ok(manifest.artifacts.values().any(|entry| {
+            is_same_or_ancestor_path(&normalized, &normalize_compare_path(&entry.path))
+        }))
+    }
+
     fn workspace_lock(&self, workspace_id: &str) -> Arc<Mutex<()>> {
         let mut locks = self
             .workspace_locks
@@ -286,6 +307,10 @@ fn normalize_compare_path(path: &str) -> String {
     parts.join("/")
 }
 
+fn is_same_or_ancestor_path(candidate: &str, protected_path: &str) -> bool {
+    candidate == protected_path || protected_path.starts_with(&format!("{candidate}/"))
+}
+
 fn temp_path_for(target_path: &Path) -> Result<PathBuf, CoworkArtifactError> {
     let parent = target_path
         .parent()
@@ -316,6 +341,93 @@ fn write_manifest_temp(
 
 fn cleanup_temp_file(path: &Path) {
     let _ = std::fs::remove_file(path);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protected_path_or_ancestor_matches_manifest_and_artifact_ancestors() {
+        let workspace = TestCoworkWorkspace::new();
+        let runtime = CoworkArtifactRuntime::new();
+        runtime
+            .create_artifact(
+                workspace.record(),
+                CreateCoworkArtifactInput {
+                    path: "reports/plan.md".to_string(),
+                    content: "plan".to_string(),
+                    title: "Plan".to_string(),
+                    description: None,
+                },
+            )
+            .expect("create artifact");
+
+        assert!(runtime
+            .is_protected_relative_path_or_ancestor(workspace.record(), "reports")
+            .expect("check reports"));
+        assert!(runtime
+            .is_protected_relative_path_or_ancestor(workspace.record(), "reports/plan.md")
+            .expect("check artifact"));
+        assert!(runtime
+            .is_protected_relative_path_or_ancestor(workspace.record(), ".proliferate")
+            .expect("check manifest parent"));
+        assert!(!runtime
+            .is_protected_relative_path_or_ancestor(workspace.record(), "reports-plan")
+            .expect("check sibling prefix"));
+    }
+
+    struct TestCoworkWorkspace {
+        path: PathBuf,
+        record: WorkspaceRecord,
+    }
+
+    impl TestCoworkWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "anyharness-cowork-artifacts-test-{}",
+                Uuid::new_v4()
+            ));
+            std::fs::create_dir(&path).expect("create temp workspace");
+            let now = chrono::Utc::now().to_rfc3339();
+            let record = WorkspaceRecord {
+                id: format!("workspace-{}", Uuid::new_v4()),
+                kind: "local".to_string(),
+                repo_root_id: None,
+                path: path.to_string_lossy().to_string(),
+                surface: "cowork".to_string(),
+                source_repo_root_path: path.to_string_lossy().to_string(),
+                source_workspace_id: None,
+                git_provider: None,
+                git_owner: None,
+                git_repo_name: None,
+                original_branch: None,
+                current_branch: None,
+                display_name: None,
+                origin: None,
+                creator_context: None,
+                lifecycle_state: "ready".to_string(),
+                cleanup_state: "none".to_string(),
+                cleanup_operation: None,
+                cleanup_error_message: None,
+                cleanup_failed_at: None,
+                cleanup_attempted_at: None,
+                created_at: now.clone(),
+                updated_at: now,
+            };
+            Self { path, record }
+        }
+
+        fn record(&self) -> &WorkspaceRecord {
+            &self.record
+        }
+    }
+
+    impl Drop for TestCoworkWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
 }
 
 fn commit_create(

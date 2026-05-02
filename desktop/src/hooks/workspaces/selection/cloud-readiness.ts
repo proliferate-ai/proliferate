@@ -6,7 +6,7 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { isWorkspaceSelectionCurrent } from "./guards";
 import type { CloudReadinessResult, WorkspaceSelectionContext } from "./types";
@@ -37,7 +37,7 @@ export async function resolveCloudWorkspaceReadiness(
   }
 
   if (cloudWorkspace.status !== "ready") {
-    useWorkspaceFilesStore.getState().reset();
+    resetWorkspaceEditorState();
     markWorkspaceViewed(context.workspaceId);
     logLatency("workspace.select.cloud_not_ready", {
       workspaceId: context.workspaceId,
