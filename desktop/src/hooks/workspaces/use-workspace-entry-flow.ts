@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
@@ -48,7 +48,7 @@ export function useWorkspaceEntryFlow() {
       baseBranchName: entry.baseBranchName,
       originKind: entry.originTarget.kind,
     });
-    useWorkspaceFilesStore.getState().reset();
+    resetWorkspaceEditorState();
     enterPendingWorkspaceShell(entry);
     requestChatInputFocus();
   }, [enterPendingWorkspaceShell]);

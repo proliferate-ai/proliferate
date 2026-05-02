@@ -14,8 +14,8 @@ export async function listenForShortcutMenuEvents(
     return () => {};
   }
 
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  return await getCurrentWindow().listen<string>(SHORTCUT_TRIGGERED_EVENT, (event) => {
+  const { listen } = await import("@tauri-apps/api/event");
+  return await listen<string>(SHORTCUT_TRIGGERED_EVENT, (event) => {
     if (typeof event.payload === "string") {
       handler(event.payload);
     }

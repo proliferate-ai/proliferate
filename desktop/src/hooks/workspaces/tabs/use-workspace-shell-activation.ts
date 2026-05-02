@@ -9,10 +9,11 @@ import {
 import {
   chatShellWorkspaceIntentKey,
   chatWorkspaceShellTabKey,
-  fileWorkspaceShellTabKey,
+  viewerWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { fileViewerTarget, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/workspace-ui-key";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
@@ -20,8 +21,8 @@ import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
 
 export type ShellActivationOutcome =
-  | { result: "completed"; surface: "file" | "chat-shell"; shellActivationEpoch: number }
-  | { result: "stale"; surface: "file" | "chat-shell"; reason: "intent-replaced" | "workspace-changed" };
+  | { result: "completed"; surface: "viewer" | "chat-shell"; shellActivationEpoch: number }
+  | { result: "stale"; surface: "viewer" | "chat-shell"; reason: "intent-replaced" | "workspace-changed" };
 
 export interface SelectSessionOptionsWithoutGuard {
   latencyFlowId?: string | null;
@@ -31,40 +32,58 @@ export interface SelectSessionOptionsWithoutGuard {
 }
 
 export function useWorkspaceShellActivation() {
-  const setActiveFileTab = useWorkspaceFilesStore((state) => state.setActiveTab);
+  const setActiveViewerTarget = useWorkspaceViewerTabsStore((state) => state.setActiveTarget);
   const writeShellIntent = useWorkspaceUiStore((state) => state.writeShellIntent);
   const setPendingChatActivation = useWorkspaceUiStore((state) => state.setPendingChatActivation);
   const clearPendingChatActivation = useWorkspaceUiStore((state) => state.clearPendingChatActivation);
   const rollbackShellIntent = useWorkspaceUiStore((state) => state.rollbackShellIntent);
   const { selectSession } = useSessionActions();
 
+  const activateViewerTarget = useCallback(({
+    workspaceId,
+    shellWorkspaceId,
+    target,
+  }: {
+    workspaceId: string;
+    shellWorkspaceId?: string | null;
+    target: ViewerTarget;
+    mode?: "focus-existing" | "open-or-focus";
+  }): ShellActivationOutcome => {
+    const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
+    invalidateSessionActivationIntent(workspaceId);
+    const targetKey = viewerWorkspaceShellTabKey(target);
+    setActiveViewerTarget(targetKey);
+    const write = writeShellIntent({
+      workspaceId: shellStateKey,
+      intent: targetKey,
+    });
+    clearCurrentPendingForWorkspace(shellStateKey);
+    return {
+      result: "completed",
+      surface: "viewer",
+      shellActivationEpoch: write.epoch,
+    };
+  }, [
+    setActiveViewerTarget,
+    writeShellIntent,
+  ]);
+
   const activateFileTab = useCallback(({
     workspaceId,
     shellWorkspaceId,
     path,
+    mode,
   }: {
     workspaceId: string;
     shellWorkspaceId?: string | null;
     path: string;
     mode?: "focus-existing" | "open-or-focus";
-  }): ShellActivationOutcome => {
-    const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
-    invalidateSessionActivationIntent(workspaceId);
-    setActiveFileTab(path);
-    const write = writeShellIntent({
-      workspaceId: shellStateKey,
-      intent: fileWorkspaceShellTabKey(path),
-    });
-    clearCurrentPendingForWorkspace(shellStateKey);
-    return {
-      result: "completed",
-      surface: "file",
-      shellActivationEpoch: write.epoch,
-    };
-  }, [
-    setActiveFileTab,
-    writeShellIntent,
-  ]);
+  }) => activateViewerTarget({
+    workspaceId,
+    shellWorkspaceId,
+    target: fileViewerTarget(path),
+    mode,
+  }), [activateViewerTarget]);
 
   const activateChatShell = useCallback(({
     workspaceId,
@@ -186,6 +205,7 @@ export function useWorkspaceShellActivation() {
     activateChatShell,
     activateChatTab,
     activateFileTab,
+    activateViewerTarget,
   };
 }
 

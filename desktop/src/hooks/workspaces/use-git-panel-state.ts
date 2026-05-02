@@ -14,6 +14,7 @@ import {
 } from "@/lib/domain/workspaces/logical-workspaces";
 import {
   buildGitPanelFiles,
+  buildGitPanelSections,
   countVisibleStatusFiles,
   gitPanelModeLabel,
   gitPanelRuntimeBlockWorkspaceId,
@@ -89,6 +90,10 @@ export function useGitPanelState(mode: GitPanelMode) {
     () => buildGitPanelFiles({ mode, statusFiles, branchFiles }),
     [branchFiles, mode, statusFiles],
   );
+  const sections = useMemo(
+    () => buildGitPanelSections({ mode, statusFiles, branchFiles }),
+    [branchFiles, mode, statusFiles],
+  );
 
   const totalChangedCount = mode === "branch"
     ? files.length
@@ -106,8 +111,11 @@ export function useGitPanelState(mode: GitPanelMode) {
     activeWorkspaceId,
     baseRef,
     files,
+    sections,
     totalChangedCount,
-    visibleChangedCount: files.length,
+    visibleChangedCount: mode === "working_tree_composite"
+      ? sections.reduce((count, section) => count + section.files.length, 0)
+      : files.length,
     activeFilterLabel,
     isRuntimeReady,
     runtimeBlockedReason,

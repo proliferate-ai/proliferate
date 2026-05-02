@@ -1,12 +1,11 @@
 import type {
   GitChangedFile,
   GitDiffFile,
-  GitDiffScope,
   RepoRoot,
 } from "@anyharness/sdk";
 
-export type GitPanelMode = "unstaged" | "staged" | "branch";
-export type GitPanelOpenAction = "diff" | "file" | "disabled";
+export type GitPanelMode = "working_tree_composite" | "unstaged" | "staged" | "branch";
+export type GitPanelSectionScope = "unstaged" | "staged" | "branch";
 
 export interface GitPanelFile {
   key: string;
@@ -18,6 +17,12 @@ export interface GitPanelFile {
   additions: number;
   deletions: number;
   binary: boolean;
+}
+
+export interface GitPanelSection {
+  scope: GitPanelSectionScope;
+  label: string;
+  files: GitPanelFile[];
 }
 
 export interface BuildGitPanelFilesInput {
@@ -33,6 +38,7 @@ export interface ResolveGitPanelBaseRefInput {
 }
 
 export const GIT_PANEL_MODE_OPTIONS: { id: GitPanelMode; label: string }[] = [
+  { id: "working_tree_composite", label: "Working tree" },
   { id: "unstaged", label: "Unstaged" },
   { id: "staged", label: "Staged" },
   { id: "branch", label: "This branch" },
@@ -59,6 +65,29 @@ export function buildGitPanelFiles({
     .map((file) => toPanelFile(file, file.includedState));
 }
 
+export function buildGitPanelSections(input: BuildGitPanelFilesInput): GitPanelSection[] {
+  if (input.mode === "working_tree_composite") {
+    return [
+      {
+        scope: "unstaged" as const,
+        label: "Unstaged",
+        files: buildGitPanelFiles({ ...input, mode: "unstaged" }),
+      },
+      {
+        scope: "staged" as const,
+        label: "Staged",
+        files: buildGitPanelFiles({ ...input, mode: "staged" }),
+      },
+    ].filter((section) => section.files.length > 0);
+  }
+  const scope: GitPanelSectionScope = input.mode;
+  return [{
+    scope,
+    label: gitPanelModeLabel(input.mode),
+    files: buildGitPanelFiles(input),
+  }];
+}
+
 export function countVisibleStatusFiles(statusFiles: readonly GitChangedFile[]): number {
   return statusFiles.filter((file) => isVisibleGitPath(file.path)).length;
 }
@@ -79,6 +108,9 @@ export function gitPanelModeLabel(mode: GitPanelMode): string {
 }
 
 export function gitPanelEmptyMessage(mode: GitPanelMode): string {
+  if (mode === "working_tree_composite") {
+    return "Working tree clean";
+  }
   if (mode === "staged") {
     return "No staged changes";
   }
@@ -88,28 +120,11 @@ export function gitPanelEmptyMessage(mode: GitPanelMode): string {
   return "No unstaged changes";
 }
 
-export function gitPanelDiffScope(mode: GitPanelMode): GitDiffScope {
-  if (mode === "staged") {
-    return "staged";
-  }
-  if (mode === "branch") {
-    return "branch";
-  }
-  return "unstaged";
-}
-
 export function gitPanelRuntimeBlockWorkspaceId(
   selectedWorkspaceId: string | null,
   _selectedLogicalWorkspaceId: string | null,
 ): string | null {
   return selectedWorkspaceId;
-}
-
-export function gitPanelOpenAction(mode: GitPanelMode, file: GitPanelFile): GitPanelOpenAction {
-  if (mode !== "branch") {
-    return "diff";
-  }
-  return file.status === "deleted" ? "disabled" : "file";
 }
 
 export function sourceRootForGitPanel(

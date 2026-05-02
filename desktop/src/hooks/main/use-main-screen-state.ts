@@ -36,6 +36,7 @@ import {
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
   reconcileRightPanelWorkspaceState,
+  type RightPanelDurableState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
@@ -99,6 +100,9 @@ export function useMainScreenState(): MainScreenState {
     materializedWorkspaceId: string;
     nonce: number;
   } | null>(null);
+  // The right panel frame is shell-level; only its selected content is workspace-scoped.
+  const [rightPanelSessionDurableState, setRightPanelSessionDurableState] =
+    useState<RightPanelDurableState | null>(null);
   const [terminalActivationRequest, setTerminalActivationRequest] =
     useState<TerminalActivationRequest | null>(null);
   const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
@@ -115,7 +119,6 @@ export function useMainScreenState(): MainScreenState {
     materializedWorkspaceId: selectedWorkspaceId,
   });
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const isCloudWorkspaceSelected = selectedCloudWorkspaceId !== null;
   const sidebarOpen = useWorkspaceUiStore((state) => state.sidebarOpen);
@@ -139,9 +142,11 @@ export function useMainScreenState(): MainScreenState {
     workspaceUiKey,
     materializedWorkspaceId,
   );
-  const rightPanelDurableState = normalizeRightPanelDurableState(
+  const persistedRightPanelDurableState = normalizeRightPanelDurableState(
     rightPanelDurableFallback.value ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   );
+  const rightPanelDurableState = rightPanelSessionDurableState
+    ?? persistedRightPanelDurableState;
   const rightPanelMaterializedState = materializedWorkspaceId
     ? rightPanelMaterializedByWorkspace[materializedWorkspaceId]
       ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE
@@ -201,10 +206,12 @@ export function useMainScreenState(): MainScreenState {
       const nextWidth = typeof value === "function"
         ? (value as (previous: number) => number)(rightPanelDurableState.width)
         : value;
-      setRightPanelDurableForWorkspace(workspaceUiKey, {
+      const nextDurableState = {
         ...rightPanelDurableState,
         width: clampRightPanelWidth(nextWidth),
-      });
+      };
+      setRightPanelSessionDurableState(nextDurableState);
+      setRightPanelDurableForWorkspace(workspaceUiKey, nextDurableState);
     },
     [
       rightPanelDurableState,
@@ -220,10 +227,12 @@ export function useMainScreenState(): MainScreenState {
       const nextOpen = typeof value === "function"
         ? (value as (previous: boolean) => boolean)(rightPanelDurableState.open)
         : value;
-      setRightPanelDurableForWorkspace(workspaceUiKey, {
+      const nextDurableState = {
         ...rightPanelDurableState,
         open: nextOpen,
-      });
+      };
+      setRightPanelSessionDurableState(nextDurableState);
+      setRightPanelDurableForWorkspace(workspaceUiKey, nextDurableState);
       if (nextOpen && materializedWorkspaceId) {
         setRightPanelUserOpenOverride((current) => ({
           materializedWorkspaceId,
@@ -300,13 +309,7 @@ export function useMainScreenState(): MainScreenState {
     [selectedCloudWorkspaceId, workspaceCollections?.cloudWorkspaces],
   );
 
-  const rightPanelSuppressed = Boolean(
-    pendingWorkspaceEntry
-    || (
-      workspaceArrivalEvent?.workspaceId
-      && workspaceArrivalEvent.workspaceId === materializedWorkspaceId
-    ),
-  );
+  const rightPanelSuppressed = Boolean(pendingWorkspaceEntry);
   const userOpenOverrideActive = Boolean(
     rightPanelUserOpenOverride
     && rightPanelUserOpenOverride.materializedWorkspaceId === materializedWorkspaceId

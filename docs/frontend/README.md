@@ -15,6 +15,8 @@ Read [chat-composer.md](chat-composer.md) when the change touches the chat
 composer area — the input, the panels that sit above it (todo tracker,
 approval card, workspace status, cloud runtime), or the Claude plan card in
 the transcript.
+Read [workspace-files.md](workspace-files.md) when the change touches workspace
+file browsing, file viewing, diff viewing, Changes, or all-changes review.
 
 Cloud note:
 

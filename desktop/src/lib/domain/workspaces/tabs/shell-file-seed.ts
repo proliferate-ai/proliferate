@@ -1,13 +1,14 @@
 import {
-  fileWorkspaceShellTabKey,
+  getWorkspaceShellTabKey,
   parseWorkspaceShellTabKey,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 
 export interface WorkspaceFileTabSeed {
   shellOrderKeys: WorkspaceShellTabKey[];
-  initialOpenTabs: string[];
-  initialActiveFilePath: string | null;
+  initialOpenTargets: ViewerTarget[];
+  initialActiveTargetKey: string | null;
 }
 
 export function sanitizeWorkspaceShellTabKeys(
@@ -21,9 +22,7 @@ export function sanitizeWorkspaceShellTabKeys(
     if (!parsed) {
       continue;
     }
-    const canonicalKey = parsed.kind === "chat"
-      ? `chat:${parsed.sessionId}`
-      : fileWorkspaceShellTabKey(parsed.path);
+    const canonicalKey = getWorkspaceShellTabKey(parsed);
     if (!seen.has(canonicalKey)) {
       seen.add(canonicalKey);
       next.push(canonicalKey);
@@ -38,29 +37,33 @@ export function deriveWorkspaceFileTabSeed(args: {
   activeShellTabKey: WorkspaceShellTabKey | null | undefined;
 }): WorkspaceFileTabSeed {
   const shellOrderKeys = sanitizeWorkspaceShellTabKeys(args.shellOrderKeys);
-  const initialOpenTabs: string[] = [];
-  const seenPaths = new Set<string>();
+  const initialOpenTargets: ViewerTarget[] = [];
+  const seenTargetKeys = new Set<string>();
 
   for (const key of shellOrderKeys) {
     const parsed = parseWorkspaceShellTabKey(key);
-    if (parsed?.kind !== "file" || seenPaths.has(parsed.path)) {
+    if (parsed?.kind !== "viewer") {
       continue;
     }
-    seenPaths.add(parsed.path);
-    initialOpenTabs.push(parsed.path);
+    const targetKey = viewerTargetKey(parsed.target);
+    if (seenTargetKeys.has(targetKey)) {
+      continue;
+    }
+    seenTargetKeys.add(targetKey);
+    initialOpenTargets.push(parsed.target);
   }
 
   const activeParsed = args.activeShellTabKey
     ? parseWorkspaceShellTabKey(args.activeShellTabKey)
     : null;
-  const initialActiveFilePath = activeParsed?.kind === "file"
-    && seenPaths.has(activeParsed.path)
-    ? activeParsed.path
+  const initialActiveTargetKey = activeParsed?.kind === "viewer"
+    && seenTargetKeys.has(viewerTargetKey(activeParsed.target))
+    ? viewerTargetKey(activeParsed.target)
     : null;
 
   return {
     shellOrderKeys,
-    initialOpenTabs,
-    initialActiveFilePath,
+    initialOpenTargets,
+    initialActiveTargetKey,
   };
 }

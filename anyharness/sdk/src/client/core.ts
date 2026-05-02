@@ -63,6 +63,9 @@ export type AnyHarnessTimingCategory =
   | "session.stream"
   | "file.list"
   | "file.search"
+  | "file.create"
+  | "file.rename"
+  | "file.delete"
   | "file.read"
   | "file.stat"
   | "git.status";

@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use super::service::{FileServiceError, WorkspaceFilesService};
 use super::types::{
-    ListWorkspaceFilesResult, ReadWorkspaceFileResult, StatWorkspaceFileResult,
-    WriteWorkspaceFileResult,
+    CreateWorkspaceFileEntryKind, CreateWorkspaceFileEntryResult, DeleteWorkspaceFileEntryResult,
+    ListWorkspaceFilesResult, ReadWorkspaceFileResult, RenameWorkspaceFileEntryResult,
+    StatWorkspaceFileResult, WriteWorkspaceFileResult,
 };
 use crate::cowork::artifacts::CoworkArtifactRuntime;
 use crate::git::file_search::WorkspaceFileSearchMatch;
@@ -86,6 +87,91 @@ impl WorkspaceFilesRuntime {
             content,
             expected_version_token,
         )?;
+        self.workspace_file_search_cache.invalidate(workspace_id);
+        Ok(result)
+    }
+
+    pub fn create_entry(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+        kind: CreateWorkspaceFileEntryKind,
+        content: Option<&str>,
+    ) -> Result<CreateWorkspaceFileEntryResult, FileServiceError> {
+        let workspace = self.resolve_workspace(workspace_id)?;
+        if workspace.surface == "cowork" {
+            let is_protected = self
+                .cowork_artifact_runtime
+                .is_protected_relative_path(&workspace, relative_path)
+                .map_err(|error| FileServiceError::ProtectedPath(error.to_string()))?;
+            if is_protected {
+                return Err(FileServiceError::ProtectedPath(relative_path.to_string()));
+            }
+        }
+
+        let result = WorkspaceFilesService::create_entry(
+            &PathBuf::from(&workspace.path),
+            relative_path,
+            kind,
+            content,
+        )?;
+        self.workspace_file_search_cache.invalidate(workspace_id);
+        Ok(result)
+    }
+
+    pub fn rename_entry(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+        new_relative_path: &str,
+    ) -> Result<RenameWorkspaceFileEntryResult, FileServiceError> {
+        let workspace = self.resolve_workspace(workspace_id)?;
+        if workspace.surface == "cowork" {
+            let source_is_protected = self
+                .cowork_artifact_runtime
+                .is_protected_relative_path_or_ancestor(&workspace, relative_path)
+                .map_err(|error| FileServiceError::ProtectedPath(error.to_string()))?;
+            if source_is_protected {
+                return Err(FileServiceError::ProtectedPath(relative_path.to_string()));
+            }
+            let destination_is_protected = self
+                .cowork_artifact_runtime
+                .is_protected_relative_path(&workspace, new_relative_path)
+                .map_err(|error| FileServiceError::ProtectedPath(error.to_string()))?;
+            if destination_is_protected {
+                return Err(FileServiceError::ProtectedPath(
+                    new_relative_path.to_string(),
+                ));
+            }
+        }
+
+        let result = WorkspaceFilesService::rename_entry(
+            &PathBuf::from(&workspace.path),
+            relative_path,
+            new_relative_path,
+        )?;
+        self.workspace_file_search_cache.invalidate(workspace_id);
+        Ok(result)
+    }
+
+    pub fn delete_entry(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+    ) -> Result<DeleteWorkspaceFileEntryResult, FileServiceError> {
+        let workspace = self.resolve_workspace(workspace_id)?;
+        if workspace.surface == "cowork" {
+            let is_protected = self
+                .cowork_artifact_runtime
+                .is_protected_relative_path_or_ancestor(&workspace, relative_path)
+                .map_err(|error| FileServiceError::ProtectedPath(error.to_string()))?;
+            if is_protected {
+                return Err(FileServiceError::ProtectedPath(relative_path.to_string()));
+            }
+        }
+
+        let result =
+            WorkspaceFilesService::delete_entry(&PathBuf::from(&workspace.path), relative_path)?;
         self.workspace_file_search_cache.invalidate(workspace_id);
         Ok(result)
     }

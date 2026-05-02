@@ -3,7 +3,7 @@ import {
   partitionWorkspaceShellTabKeys,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useShellTabOrderActions({
@@ -11,7 +11,7 @@ export function useShellTabOrderActions({
 }: {
   workspaceId: string | null;
 }) {
-  const reorderOpenTabs = useWorkspaceFilesStore((state) => state.reorderOpenTabs);
+  const reorderOpenTargets = useWorkspaceViewerTabsStore((state) => state.reorderOpenTargets);
   const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
     (state) => state.setVisibleChatSessionIdsForWorkspace,
   );
@@ -21,12 +21,12 @@ export function useShellTabOrderActions({
     if (!workspaceId) {
       return;
     }
-    const { chatSessionIds, filePaths } = partitionWorkspaceShellTabKeys(nextKeys);
+    const { chatSessionIds, viewerTargetKeys } = partitionWorkspaceShellTabKeys(nextKeys);
     setShellTabOrder(workspaceId, nextKeys);
     setVisibleChatSessionIdsForWorkspace(workspaceId, chatSessionIds);
-    reorderOpenTabs(filePaths);
+    reorderOpenTargets(viewerTargetKeys);
   }, [
-    reorderOpenTabs,
+    reorderOpenTargets,
     setShellTabOrder,
     setVisibleChatSessionIdsForWorkspace,
     workspaceId,

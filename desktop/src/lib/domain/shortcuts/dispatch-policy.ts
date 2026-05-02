@@ -39,11 +39,47 @@ function isReloadBlockedRShortcut(
   return false;
 }
 
+function canBypassDefaultPrevented(
+  shortcut: Pick<ShortcutDef, "id">,
+  event: KeyboardShortcutEventLike,
+): boolean {
+  if (isReloadBlockedRShortcut(shortcut, event)) {
+    return true;
+  }
+
+  return shortcut.id === SHORTCUTS.openSettings.id
+    && (event.metaKey || event.ctrlKey)
+    && !event.altKey
+    && !event.shiftKey
+    && event.key === ",";
+}
+
+function isTabCyclingShortcut(
+  shortcut: Pick<ShortcutDef, "id">,
+  event: KeyboardShortcutEventLike,
+): boolean {
+  if (!(event.metaKey || event.ctrlKey) || event.shiftKey || !event.altKey) {
+    return false;
+  }
+
+  return (
+    shortcut.id === SHORTCUTS.previousTab.id
+    && event.key === "ArrowLeft"
+  ) || (
+    shortcut.id === SHORTCUTS.nextTab.id
+    && event.key === "ArrowRight"
+  );
+}
+
 export function shouldDispatchKeyboardShortcut(
   shortcut: Pick<ShortcutDef, "allowInInputs" | "id">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  if (event.defaultPrevented && !isReloadBlockedRShortcut(shortcut, event)) {
+  if (
+    event.defaultPrevented
+    && !canBypassDefaultPrevented(shortcut, event)
+    && !isTabCyclingShortcut(shortcut, event)
+  ) {
     return false;
   }
 

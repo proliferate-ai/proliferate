@@ -19,7 +19,7 @@ use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
-    AppHandle, Emitter, EventTarget, Runtime,
+    AppHandle, Emitter, Runtime,
 };
 #[cfg(any(target_os = "linux", windows))]
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -27,13 +27,31 @@ use tauri_plugin_deep_link::DeepLinkExt;
 #[cfg(target_os = "macos")]
 const CLOSE_ACTIVE_TAB_MENU_ID: &str = "workspace.close-active-tab";
 #[cfg(target_os = "macos")]
+const PREVIOUS_TAB_MENU_ID: &str = "workspace.previous-tab";
+#[cfg(target_os = "macos")]
+const NEXT_TAB_MENU_ID: &str = "workspace.next-tab";
+#[cfg(target_os = "macos")]
 const APP_QUIT_MENU_ID: &str = "app.quit";
 #[cfg(target_os = "macos")]
 const OPEN_SETTINGS_MENU_ID: &str = "app.open-settings";
 #[cfg(target_os = "macos")]
+const SELECT_ALL_MENU_ID: &str = "app.select-all";
+#[cfg(target_os = "macos")]
+const UNDO_MENU_ID: &str = "app.undo";
+#[cfg(target_os = "macos")]
+const REDO_MENU_ID: &str = "app.redo";
+#[cfg(target_os = "macos")]
 const SHORTCUT_TRIGGERED_EVENT: &str = "shortcut://triggered";
 #[cfg(target_os = "macos")]
-const KNOWN_SHORTCUT_IDS: &[&str] = &[CLOSE_ACTIVE_TAB_MENU_ID, OPEN_SETTINGS_MENU_ID];
+const KNOWN_SHORTCUT_IDS: &[&str] = &[
+    CLOSE_ACTIVE_TAB_MENU_ID,
+    PREVIOUS_TAB_MENU_ID,
+    NEXT_TAB_MENU_ID,
+    OPEN_SETTINGS_MENU_ID,
+    SELECT_ALL_MENU_ID,
+    UNDO_MENU_ID,
+    REDO_MENU_ID,
+];
 
 #[cfg(target_os = "macos")]
 fn dev_profile_display_name() -> Option<String> {
@@ -84,8 +102,23 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
     let close_tab_item = MenuItemBuilder::with_id(CLOSE_ACTIVE_TAB_MENU_ID, "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
+    let previous_tab_item = MenuItemBuilder::with_id(PREVIOUS_TAB_MENU_ID, "Previous Tab")
+        .accelerator("CmdOrCtrl+Alt+Left")
+        .build(app)?;
+    let next_tab_item = MenuItemBuilder::with_id(NEXT_TAB_MENU_ID, "Next Tab")
+        .accelerator("CmdOrCtrl+Alt+Right")
+        .build(app)?;
     let open_settings_item = MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Settings...")
         .accelerator("CmdOrCtrl+Comma")
+        .build(app)?;
+    let select_all_item = MenuItemBuilder::with_id(SELECT_ALL_MENU_ID, "Select All")
+        .accelerator("CmdOrCtrl+A")
+        .build(app)?;
+    let undo_item = MenuItemBuilder::with_id(UNDO_MENU_ID, "Undo")
+        .accelerator("CmdOrCtrl+Z")
+        .build(app)?;
+    let redo_item = MenuItemBuilder::with_id(REDO_MENU_ID, "Redo")
+        .accelerator("CmdOrCtrl+Shift+Z")
         .build(app)?;
 
     // Custom Quit item (not PredefinedMenuItem::quit()) so the accelerator
@@ -114,13 +147,13 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
         .build()?;
 
     let edit_menu = SubmenuBuilder::new(app, "Edit")
-        .undo()
-        .redo()
+        .item(&undo_item)
+        .item(&redo_item)
         .separator()
         .cut()
         .copy()
         .paste()
-        .select_all()
+        .item(&select_all_item)
         .build()?;
 
     let view_menu = SubmenuBuilder::new(app, "View")
@@ -128,6 +161,9 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
         .build()?;
 
     let window_menu = SubmenuBuilder::new(app, "Window")
+        .item(&previous_tab_item)
+        .item(&next_tab_item)
+        .separator()
         .minimize()
         .maximize()
         .build()?;
@@ -210,11 +246,7 @@ pub fn run() {
     let builder = builder.menu(build_macos_menu).on_menu_event(|app, event| {
         let event_id = event.id().as_ref();
         if KNOWN_SHORTCUT_IDS.contains(&event_id) {
-            let _ = app.emit_to(
-                EventTarget::webview_window("main"),
-                SHORTCUT_TRIGGERED_EVENT,
-                event_id.to_string(),
-            );
+            let _ = app.emit(SHORTCUT_TRIGGERED_EVENT, event_id.to_string());
         } else if event_id == APP_QUIT_MENU_ID {
             quit_flow::prompt_quit_confirmation(app);
         }

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
@@ -65,10 +65,10 @@ export function useWorkspaceSidebarActions() {
 
     if (selectedWorkspaceId) {
       deselectWorkspacePreservingSlots();
-      useWorkspaceFilesStore.getState().reset();
+      resetWorkspaceEditorState();
     } else if (pendingWorkspaceEntry) {
       setPendingWorkspaceEntry(null);
-      useWorkspaceFilesStore.getState().reset();
+      resetWorkspaceEditorState();
     }
     navigate(path);
   }, [

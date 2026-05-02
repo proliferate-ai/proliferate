@@ -197,6 +197,10 @@ export {
   useReadWorkspaceFileQuery,
   useStatWorkspaceFileQuery,
   useWriteWorkspaceFileMutation,
+  useCreateWorkspaceFileMutation,
+  useCreateWorkspaceDirectoryMutation,
+  useRenameWorkspaceEntryMutation,
+  useDeleteWorkspaceEntryMutation,
 } from "./hooks/files.js";
 export {
   useTerminalsQuery,

@@ -242,10 +242,6 @@ export function StandardWorkspaceShell() {
             {hasWorkspaceShell ? (
               <>
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
-                  />
                   <WorkspaceContentView />
                 </div>
 

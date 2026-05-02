@@ -2,8 +2,6 @@ import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import {
   buildGitPanelFiles,
-  gitPanelDiffScope,
-  gitPanelOpenAction,
   gitPanelRuntimeBlockWorkspaceId,
   resolveGitPanelBaseRef,
 } from "./git-panel-diff";
@@ -55,7 +53,7 @@ describe("git panel diff domain", () => {
     }).map((file) => file.path)).toEqual(["partial.ts", "staged.ts"]);
   });
 
-  it("preserves oldPath and disables editor open for deleted branch rows", () => {
+  it("preserves oldPath for branch rows", () => {
     const files = buildGitPanelFiles({
       mode: "branch",
       statusFiles: [],
@@ -70,11 +68,13 @@ describe("git panel diff domain", () => {
       oldPath: "old.ts",
       displayPath: "old.ts -> new.ts",
     });
-    expect(gitPanelOpenAction("branch", files[0])).toBe("file");
-    expect(gitPanelOpenAction("branch", files[1])).toBe("disabled");
+    expect(files[1]).toMatchObject({
+      path: "deleted.ts",
+      status: "deleted",
+    });
   });
 
-  it("resolves branch base-ref precedence and mode scopes", () => {
+  it("resolves branch base-ref precedence", () => {
     expect(resolveGitPanelBaseRef({
       repoPreferenceDefaultBranch: " release ",
       repoRootDefaultBranch: "main",
@@ -91,9 +91,6 @@ describe("git panel diff domain", () => {
       suggestedBaseBranch: "develop",
     })).toBe("develop");
 
-    expect(gitPanelDiffScope("unstaged")).toBe("unstaged");
-    expect(gitPanelDiffScope("staged")).toBe("staged");
-    expect(gitPanelDiffScope("branch")).toBe("branch");
   });
 
   it("checks runtime blocking against the materialized workspace selection", () => {

@@ -35,7 +35,15 @@ import {
   useWorkspaceShellTabsState,
 } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceFilesStore, type WorkspaceFileBuffer } from "@/stores/editor/workspace-files-store";
+import type {
+  FileViewerMode,
+  ViewerTarget,
+} from "@/lib/domain/workspaces/viewer-target";
+import {
+  useWorkspaceFileBuffersStore,
+  type WorkspaceFileBuffer,
+} from "@/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
@@ -72,17 +80,16 @@ export interface HeaderChatMenuEntry {
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
 export type HeaderWorkspaceShellStripRow = HeaderShellStripRow<HeaderChatTabEntry>;
 
-const EMPTY_OPEN_TABS: string[] = [];
-type WorkspaceFileTabMode = "edit" | "diff";
+const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 
 const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};
-const EMPTY_TAB_MODES: Record<string, WorkspaceFileTabMode> = {};
+const EMPTY_TAB_MODES: Record<string, FileViewerMode> = {};
 
 export function useWorkspaceHeaderTabsViewModel() {
-  const rawOpenTabs = useWorkspaceFilesStore((s) => s.openTabs);
-  const rawBuffersByPath = useWorkspaceFilesStore((s) => s.buffersByPath);
-  const rawTabModes = useWorkspaceFilesStore((s) => s.tabModes);
-  const fileStoreMaterializedWorkspaceId = useWorkspaceFilesStore(
+  const rawOpenTargets = useWorkspaceViewerTabsStore((s) => s.openTargets);
+  const rawBuffersByPath = useWorkspaceFileBuffersStore((s) => s.buffersByPath);
+  const rawTabModes = useWorkspaceViewerTabsStore((s) => s.modeByTargetKey);
+  const viewerStoreMaterializedWorkspaceId = useWorkspaceViewerTabsStore(
     (s) => s.materializedWorkspaceId,
   );
 
@@ -95,13 +102,13 @@ export function useWorkspaceHeaderTabsViewModel() {
     materializedWorkspaceId: selectedWorkspaceId,
   });
   const { workspaceUiKey, materializedWorkspaceId } = selectedIdentity;
-  const isFileStoreCurrent = Boolean(
+  const isViewerStoreCurrent = Boolean(
     materializedWorkspaceId
-      && fileStoreMaterializedWorkspaceId === materializedWorkspaceId,
+      && viewerStoreMaterializedWorkspaceId === materializedWorkspaceId,
   );
-  const openTabs = isFileStoreCurrent ? rawOpenTabs : EMPTY_OPEN_TABS;
-  const buffersByPath = isFileStoreCurrent ? rawBuffersByPath : EMPTY_BUFFERS_BY_PATH;
-  const tabModes = isFileStoreCurrent ? rawTabModes : EMPTY_TAB_MODES;
+  const openTargets = isViewerStoreCurrent ? rawOpenTargets : EMPTY_OPEN_TARGETS;
+  const buffersByPath = isViewerStoreCurrent ? rawBuffersByPath : EMPTY_BUFFERS_BY_PATH;
+  const tabModes = isViewerStoreCurrent ? rawTabModes : EMPTY_TAB_MODES;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);
@@ -454,7 +461,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     materializedWorkspaceId,
     activeSessionId,
     shellChatSessionIds: stripVisibleChatSessionIds,
-    openTabs,
+    openTargets,
     stripRows,
     displayManualGroups,
     subagentChildIdsByParentId: hierarchyChildren.childIdsByParentSessionId,
@@ -574,7 +581,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     selectedWorkspaceId,
     workspaceUiKey,
     materializedWorkspaceId,
-    openTabs,
+    openTargets,
     buffersByPath,
     tabModes,
     chatTabs,

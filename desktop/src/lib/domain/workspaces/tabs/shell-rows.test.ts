@@ -8,6 +8,7 @@ import {
   chatWorkspaceShellTabKey,
   fileWorkspaceShellTabKey,
 } from "./shell-tabs";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 
 describe("buildHeaderShellRows", () => {
   const chatRows: HeaderStripRow<ShellChatTab>[] = [
@@ -28,9 +29,9 @@ describe("buildHeaderShellRows", () => {
   it("keeps chat group rows atomic when ordered by any member key", () => {
     const rows = buildHeaderShellRows({
       stripRows: chatRows,
-      openTabs: ["src/a.ts"],
+      openTargets: [fileViewerTarget("src/a.ts")],
       orderedTabs: [
-        { kind: "file", path: "src/a.ts" },
+        { kind: "viewer", target: fileViewerTarget("src/a.ts") },
         { kind: "chat", sessionId: "b" },
         { kind: "chat", sessionId: "a" },
         { kind: "chat", sessionId: "c" },
@@ -50,10 +51,10 @@ describe("buildHeaderShellRows", () => {
   it("pushes files outside a group slice when order keys split the group", () => {
     const rows = buildHeaderShellRows({
       stripRows: chatRows,
-      openTabs: ["src/a.ts"],
+      openTargets: [fileViewerTarget("src/a.ts")],
       orderedTabs: [
         { kind: "chat", sessionId: "a" },
-        { kind: "file", path: "src/a.ts" },
+        { kind: "viewer", target: fileViewerTarget("src/a.ts") },
         { kind: "chat", sessionId: "b" },
       ],
       manualGroups: [{ id: "manual:1", sessionIds: ["a", "b"] }],
@@ -80,9 +81,9 @@ describe("buildHeaderShellRows", () => {
           isCollapsed: true,
         },
       ],
-      openTabs: ["src/a.ts"],
+      openTargets: [fileViewerTarget("src/a.ts")],
       orderedTabs: [
-        { kind: "file", path: "src/a.ts" },
+        { kind: "viewer", target: fileViewerTarget("src/a.ts") },
       ],
       manualGroups: [{ id: "manual:1", sessionIds: ["a", "b"] }],
     });
@@ -113,10 +114,10 @@ describe("buildHeaderShellRows", () => {
           isCollapsed: true,
         },
       ],
-      openTabs: ["src/a.ts"],
+      openTargets: [fileViewerTarget("src/a.ts")],
       orderedTabs: [
         { kind: "chat", sessionId: "child" },
-        { kind: "file", path: "src/a.ts" },
+        { kind: "viewer", target: fileViewerTarget("src/a.ts") },
       ],
       manualGroups: [],
       subagentChildIdsByParentId: new Map([["parent", ["child"]]]),
@@ -148,7 +149,7 @@ function chatTab(sessionId: string, visualGroupId: string | null): ShellChatTab 
 }
 
 function rowKey(row: ReturnType<typeof buildHeaderShellRows<ShellChatTab>>[number]): string {
-  if (row.kind === "file") {
+  if (row.kind === "viewer") {
     return row.shellKey;
   }
   return row.row.kind === "pill"

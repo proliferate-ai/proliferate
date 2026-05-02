@@ -1,5 +1,10 @@
 import type {
   ListWorkspaceFilesResponse,
+  CreateWorkspaceFileEntryRequest,
+  CreateWorkspaceFileEntryResponse,
+  DeleteWorkspaceFileEntryResponse,
+  RenameWorkspaceFileEntryRequest,
+  RenameWorkspaceFileEntryResponse,
   SearchWorkspaceFilesResponse,
   ReadWorkspaceFileResponse,
   StatWorkspaceFileResponse,
@@ -38,6 +43,58 @@ export class FilesClient {
     return this.transport.get<SearchWorkspaceFilesResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/files/search?${params.toString()}`,
       withTimingCategory(options, "file.search"),
+    );
+  }
+
+  async createEntry(
+    workspaceId: string,
+    input: CreateWorkspaceFileEntryRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<CreateWorkspaceFileEntryResponse> {
+    return this.transport.post<CreateWorkspaceFileEntryResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/files/entries`,
+      input,
+      withTimingCategory(options, "file.create"),
+    );
+  }
+
+  async createFile(
+    workspaceId: string,
+    path: string,
+    content = "",
+    options?: AnyHarnessRequestOptions,
+  ): Promise<CreateWorkspaceFileEntryResponse> {
+    return this.createEntry(workspaceId, { kind: "file", path, content }, options);
+  }
+
+  async createDirectory(
+    workspaceId: string,
+    path: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<CreateWorkspaceFileEntryResponse> {
+    return this.createEntry(workspaceId, { kind: "directory", path }, options);
+  }
+
+  async renameEntry(
+    workspaceId: string,
+    input: RenameWorkspaceFileEntryRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<RenameWorkspaceFileEntryResponse> {
+    return this.transport.patch<RenameWorkspaceFileEntryResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/files/entries`,
+      input,
+      withTimingCategory(options, "file.rename"),
+    );
+  }
+
+  async deleteEntry(
+    workspaceId: string,
+    path: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<DeleteWorkspaceFileEntryResponse> {
+    return this.transport.deleteJson<DeleteWorkspaceFileEntryResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/files/entries?path=${encodeURIComponent(path)}`,
+      withTimingCategory(options, "file.delete"),
     );
   }
 

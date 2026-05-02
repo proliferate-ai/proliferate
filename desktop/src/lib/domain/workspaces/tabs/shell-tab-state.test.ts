@@ -6,6 +6,7 @@ import {
   fileWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type { ShellChatTab } from "@/lib/domain/workspaces/tabs/shell-rows";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 
 interface TestChatTab extends ShellChatTab {
   title: string;
@@ -34,19 +35,19 @@ describe("resolveWorkspaceShellTabsState", () => {
         chatWorkspaceShellTabKey("session-b"),
       ],
       shellChatSessionIds: ["session-a", "session-b"],
-      openTabs: ["src/App.tsx"],
+      openTargets: [fileViewerTarget("src/App.tsx")],
       stripRows: [],
       displayManualGroups: [],
       subagentChildIdsByParentId: new Map(),
     });
 
     expect(state.orderedTabs).toEqual([
-      { kind: "file", path: "src/App.tsx" },
+      { kind: "viewer", target: fileViewerTarget("src/App.tsx") },
       { kind: "chat", sessionId: "session-b" },
       { kind: "chat", sessionId: "session-a" },
     ]);
     expect(state.orderedShellTabKeys).toEqual([
-      "file:src/App.tsx",
+      fileWorkspaceShellTabKey("src/App.tsx"),
       "chat:session-b",
       "chat:session-a",
     ]);
@@ -60,14 +61,14 @@ describe("resolveWorkspaceShellTabsState", () => {
       storedActiveShellTabKey: fileWorkspaceShellTabKey("README.md"),
       persistedShellOrderKeys: [],
       shellChatSessionIds: ["session-a"],
-      openTabs: ["README.md"],
+      openTargets: [fileViewerTarget("README.md")],
       stripRows: [],
       displayManualGroups: [],
       subagentChildIdsByParentId: new Map(),
     });
 
-    expect(state.activeShellTab).toEqual({ kind: "file", path: "README.md" });
-    expect(state.activeShellTabKey).toBe("file:README.md");
+    expect(state.activeShellTab).toEqual({ kind: "viewer", target: fileViewerTarget("README.md") });
+    expect(state.activeShellTabKey).toBe(fileWorkspaceShellTabKey("README.md"));
   });
 
   it("builds shell rows without mutating tab stores", () => {
@@ -84,12 +85,12 @@ describe("resolveWorkspaceShellTabsState", () => {
       storedActiveShellTabKey: null,
       persistedShellOrderKeys: [],
       shellChatSessionIds: ["session-a"],
-      openTabs: ["README.md"],
+      openTargets: [fileViewerTarget("README.md")],
       stripRows,
       displayManualGroups: [],
       subagentChildIdsByParentId: new Map(),
     });
 
-    expect(state.shellRows.map((row) => row.kind)).toEqual(["chat", "file"]);
+    expect(state.shellRows.map((row) => row.kind)).toEqual(["chat", "viewer"]);
   });
 });

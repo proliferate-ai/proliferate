@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import {
@@ -132,7 +132,7 @@ export function useWorkspaceEntryActions() {
       baseBranchName: entry.baseBranchName,
       originKind: entry.originTarget.kind,
     });
-    useWorkspaceFilesStore.getState().reset();
+    resetWorkspaceEditorState();
     enterPendingWorkspaceShell(entry);
     requestChatInputFocus();
   }, [enterPendingWorkspaceShell]);

@@ -31,7 +31,7 @@ import {
 } from "@/lib/infra/debug-latency";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";

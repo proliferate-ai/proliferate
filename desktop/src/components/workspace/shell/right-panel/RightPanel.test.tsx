@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
@@ -10,7 +10,9 @@ import {
   rightPanelBrowserHeaderKey,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
+import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
+import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
 
 const terminalActionsMocks = vi.hoisted(() => ({
   closeTab: vi.fn(async () => "closed"),
@@ -65,7 +67,11 @@ vi.mock("@/components/workspace/browser/WorkspaceBrowserPanel", () => ({
 }));
 
 vi.mock("@/components/workspace/files/panel/WorkspaceFilesPanel", () => ({
-  WorkspaceFilesPanel: () => <div data-testid="files-panel" />,
+  WorkspaceFilesPanel: () => (
+    <div data-testid="files-panel">
+      <input data-testid="files-panel-input" />
+    </div>
+  ),
 }));
 
 vi.mock("@/components/workspace/git/GitPanel", () => ({
@@ -89,12 +95,60 @@ vi.mock("@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel", () 
   CloudWorkspaceSettingsPanel: () => <div data-testid="settings-panel" />,
 }));
 
+beforeEach(() => {
+  vi.mocked(useTerminalsQuery).mockImplementation((options) => {
+    const enabled = Boolean((options as { enabled?: boolean } | undefined)?.enabled);
+    return ({
+      data: enabled ? [] : undefined,
+      isError: false,
+      isLoading: !enabled,
+      isSuccess: Boolean(enabled),
+      refetch: vi.fn(async () => ({ data: [] })),
+    }) as unknown as ReturnType<typeof useTerminalsQuery>;
+  });
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
 describe("RightPanel terminal activation", () => {
+  it("creates one default terminal lazily without leaving the Files panel", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+
+    await waitFor(() => expect(terminalActionsMocks.createTab).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("files-panel")).toBeTruthy();
+  });
+
+  it("opens the new tab menu with Terminal focused from a right-panel request", async () => {
+    const terminal = terminalRecord("terminal-1");
+    vi.mocked(useTerminalsQuery).mockImplementation((options) => {
+      const enabled = Boolean((options as { enabled?: boolean } | undefined)?.enabled);
+      return ({
+        data: enabled ? [terminal] : undefined,
+        isError: false,
+        isLoading: !enabled,
+        isSuccess: Boolean(enabled),
+        refetch: vi.fn(async () => ({ data: [terminal] })),
+      }) as unknown as ReturnType<typeof useTerminalsQuery>;
+    });
+
+    render(<RightPanelHarness isWorkspaceReady />);
+
+    requestRightPanelNewTabMenu("terminal");
+
+    const terminalButton = await screen.findByRole("button", { name: "Terminal" });
+    const browserButton = screen.getByRole("button", { name: "Browser" });
+    await waitFor(() => expect(document.activeElement).toBe(terminalButton));
+
+    fireEvent.keyDown(terminalButton, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(browserButton);
+
+    fireEvent.keyDown(browserButton, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(terminalButton);
+  });
+
   it("replays no-id terminal activation once workspace content becomes renderable", async () => {
     const terminal = terminalRecord("terminal-1");
     const refetch = vi.fn(async () => ({ data: [terminal] }));
@@ -236,6 +290,35 @@ describe("RightPanel browser visibility", () => {
   });
 });
 
+describe("RightPanel tab shortcuts", () => {
+  it("uses primary-number shortcuts after clicking non-focusable panel content", async () => {
+    const { container } = render(<RightPanelHarness isWorkspaceReady />);
+    const root = container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+
+    fireEvent.pointerDown(root);
+    expect(document.activeElement).toBe(root);
+
+    fireEvent.keyDown(window, primaryDigitEvent(2));
+
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+  });
+
+  it("uses primary-number shortcuts from right-panel text inputs", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+    const input = screen.getByTestId("files-panel-input");
+
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.keyDown(window, primaryDigitEvent(2));
+
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+  });
+});
+
 function RightPanelHarness({
   initialState = DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   isOpen = true,
@@ -327,4 +410,12 @@ function terminalRecord(id: string): TerminalRecord {
     updatedAt: "2026-01-01T00:00:00Z",
     workspaceId: "workspace-1",
   } as unknown as TerminalRecord;
+}
+
+function primaryDigitEvent(digit: number) {
+  return {
+    key: String(digit),
+    code: `Digit${digit}`,
+    ...(isApplePlatform() ? { metaKey: true } : { ctrlKey: true }),
+  };
 }

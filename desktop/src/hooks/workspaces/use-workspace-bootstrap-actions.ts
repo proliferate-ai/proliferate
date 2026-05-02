@@ -10,7 +10,7 @@ import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
-import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";

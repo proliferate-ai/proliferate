@@ -59,6 +59,8 @@ export function useShortcutDispatcher(): void {
       const consumed = runShortcutHandler(resolved.id, resolved.trigger);
       if (consumed) {
         event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
       }
     };
 
@@ -80,12 +82,12 @@ export function useShortcutDispatcher(): void {
       unlistenMenu = dispose;
     });
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
       disposed = true;
       unlistenMenu();
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
   }, []);
 }

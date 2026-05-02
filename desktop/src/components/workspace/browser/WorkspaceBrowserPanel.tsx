@@ -111,6 +111,7 @@ export function WorkspaceBrowserPanel({
     <div
       className="flex h-full flex-col bg-sidebar-background text-sidebar-foreground"
       data-telemetry-block
+      data-focus-zone="browser"
     >
       <div className="shrink-0 border-b border-sidebar-border bg-sidebar-background">
         <form className="flex h-10 min-w-0 items-center gap-1.5 px-2" onSubmit={handleSubmit}>

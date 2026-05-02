@@ -1,11 +1,19 @@
 import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
+import {
+  fileViewerTarget,
+  parseViewerTargetKey,
+  viewerTargetKey,
+  type ViewerTarget,
+  type ViewerTargetKey,
+} from "@/lib/domain/workspaces/viewer-target";
 
 export type WorkspaceShellTab =
   | { kind: "chat"; sessionId: string }
-  | { kind: "file"; path: string };
+  | { kind: "viewer"; target: ViewerTarget };
 
 export type WorkspaceShellTabKey = string;
 export type ChatWorkspaceShellTabKey = `chat:${string}`;
+export type ViewerWorkspaceShellTabKey = ViewerTargetKey;
 export type WorkspaceShellIntentKey = WorkspaceShellTabKey | "chat-shell";
 
 const CHAT_TAB_KEY_PREFIX = "chat:";
@@ -21,7 +29,11 @@ export function chatWorkspaceShellTabKey(sessionId: string): ChatWorkspaceShellT
 }
 
 export function fileWorkspaceShellTabKey(path: string): WorkspaceShellTabKey {
-  return `${FILE_TAB_KEY_PREFIX}${path}`;
+  return viewerTargetKey(fileViewerTarget(path));
+}
+
+export function viewerWorkspaceShellTabKey(target: ViewerTarget): ViewerWorkspaceShellTabKey {
+  return viewerTargetKey(target);
 }
 
 export function chatShellWorkspaceIntentKey(): WorkspaceShellIntentKey {
@@ -31,7 +43,7 @@ export function chatShellWorkspaceIntentKey(): WorkspaceShellIntentKey {
 export function getWorkspaceShellTabKey(tab: WorkspaceShellTab): WorkspaceShellTabKey {
   return tab.kind === "chat"
     ? chatWorkspaceShellTabKey(tab.sessionId)
-    : fileWorkspaceShellTabKey(tab.path);
+    : viewerWorkspaceShellTabKey(tab.target);
 }
 
 export function parseWorkspaceShellTabKey(key: string): WorkspaceShellTab | null {
@@ -40,9 +52,14 @@ export function parseWorkspaceShellTabKey(key: string): WorkspaceShellTab | null
     return sessionId ? { kind: "chat", sessionId } : null;
   }
 
+  const viewerTarget = parseViewerTargetKey(key);
+  if (viewerTarget) {
+    return { kind: "viewer", target: viewerTarget };
+  }
+
   if (key.startsWith(FILE_TAB_KEY_PREFIX)) {
     const path = key.slice(FILE_TAB_KEY_PREFIX.length);
-    return path ? { kind: "file", path } : null;
+    return path ? { kind: "viewer", target: fileViewerTarget(path) } : null;
   }
 
   return null;
@@ -52,21 +69,21 @@ export function partitionWorkspaceShellTabKeys(
   keys: readonly WorkspaceShellTabKey[],
 ): {
   chatSessionIds: string[];
-  filePaths: string[];
+  viewerTargetKeys: ViewerTargetKey[];
 } {
   const chatSessionIds: string[] = [];
-  const filePaths: string[] = [];
+  const viewerTargetKeys: ViewerTargetKey[] = [];
 
   for (const key of keys) {
     const tab = parseWorkspaceShellTabKey(key);
     if (tab?.kind === "chat") {
       chatSessionIds.push(tab.sessionId);
-    } else if (tab?.kind === "file") {
-      filePaths.push(tab.path);
+    } else if (tab?.kind === "viewer") {
+      viewerTargetKeys.push(viewerTargetKey(tab.target));
     }
   }
 
-  return { chatSessionIds, filePaths };
+  return { chatSessionIds, viewerTargetKeys };
 }
 
 export function isSameWorkspaceShellTab(
@@ -81,8 +98,8 @@ export function isSameWorkspaceShellTab(
     return left.sessionId === right.sessionId;
   }
 
-  if (left.kind === "file" && right.kind === "file") {
-    return left.path === right.path;
+  if (left.kind === "viewer" && right.kind === "viewer") {
+    return viewerTargetKey(left.target) === viewerTargetKey(right.target);
   }
 
   return false;
@@ -92,7 +109,7 @@ export function buildWorkspaceShellTabs(args: {
   selectedWorkspaceId: string | null;
   sessionSlots: Record<string, WorkspaceSessionTabCandidate>;
   visibleChatSessionIds?: string[];
-  openTabs: string[];
+  openTargets: ViewerTarget[];
   orderKeys?: readonly WorkspaceShellTabKey[];
 }): WorkspaceShellTab[] {
   const visibleSet = args.visibleChatSessionIds
@@ -115,13 +132,13 @@ export function buildWorkspaceShellTabs(args: {
       .filter((tab): tab is WorkspaceShellTab & { kind: "chat" } => !!tab)
     : liveChatTabs;
 
-  const fileTabs = args.openTabs.map<WorkspaceShellTab>((path) => ({
-    kind: "file",
-    path,
+  const viewerTabs = args.openTargets.map<WorkspaceShellTab>((target) => ({
+    kind: "viewer",
+    target,
   }));
 
   return orderWorkspaceShellTabs({
-    tabs: [...chatTabs, ...fileTabs],
+    tabs: [...chatTabs, ...viewerTabs],
     orderKeys: args.orderKeys,
   });
 }
@@ -152,7 +169,9 @@ export function orderWorkspaceShellTabs(args: {
   const ordered: WorkspaceShellTab[] = [];
   const seen = new Set<WorkspaceShellTabKey>();
 
-  for (const key of args.orderKeys) {
+  for (const rawKey of args.orderKeys) {
+    const parsed = parseWorkspaceShellTabKey(rawKey);
+    const key = parsed ? getWorkspaceShellTabKey(parsed) : rawKey;
     const tab = tabByKey.get(key);
     if (!tab || seen.has(key)) {
       continue;
@@ -229,7 +248,9 @@ export function resolveRelativeWorkspaceShellTab(args: {
   }
 
   if (!activeTab) {
-    return tabs[0] ?? null;
+    return delta < 0
+      ? tabs[tabs.length - 1] ?? null
+      : tabs[0] ?? null;
   }
 
   const activeIndex = tabs.findIndex((tab) => isSameWorkspaceShellTab(tab, activeTab));

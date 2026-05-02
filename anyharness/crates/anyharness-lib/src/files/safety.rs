@@ -12,8 +12,103 @@ pub fn resolve_safe_path(
     workspace_root: &Path,
     relative_path: &str,
 ) -> Result<PathBuf, SafetyError> {
-    if relative_path.is_empty() {
+    let rel = validate_relative_path(relative_path)?;
+
+    let candidate = workspace_root.join(rel);
+    let canonical_root = workspace_root
+        .canonicalize()
+        .map_err(|e| SafetyError::IoError(e.to_string()))?;
+    let canonical_git = canonical_git_path(workspace_root)?;
+
+    // If the target exists, canonicalize and verify containment
+    if candidate.exists() {
+        let canonical = candidate
+            .canonicalize()
+            .map_err(|e| SafetyError::IoError(e.to_string()))?;
+
+        if !canonical.starts_with(&canonical_root) {
+            return Err(SafetyError::OutsideWorkspace);
+        }
+        reject_git_path(&canonical, canonical_git.as_deref())?;
+        Ok(canonical)
+    } else {
+        // For writes to new files, verify the nearest existing ancestor stays
+        // inside the workspace. This blocks symlink escapes even when multiple
+        // parent segments do not exist yet.
+        let mut current = candidate.parent();
+        while let Some(parent) = current {
+            if parent.exists() {
+                let canonical_parent = parent
+                    .canonicalize()
+                    .map_err(|e| SafetyError::IoError(e.to_string()))?;
+                if !canonical_parent.starts_with(&canonical_root) {
+                    return Err(SafetyError::OutsideWorkspace);
+                }
+                reject_git_path(&canonical_parent, canonical_git.as_deref())?;
+                break;
+            }
+            current = parent.parent();
+        }
+        Ok(candidate)
+    }
+}
+
+/// Resolve a workspace-relative entry path without following the final path
+/// component. Use this for mutations that operate on the entry itself, such as
+/// renaming or deleting a symlink.
+pub fn resolve_safe_entry_path(
+    workspace_root: &Path,
+    relative_path: &str,
+) -> Result<PathBuf, SafetyError> {
+    let rel = validate_relative_path(relative_path)?;
+    if rel.as_os_str().is_empty() {
         return Ok(workspace_root.to_path_buf());
+    }
+
+    let candidate = workspace_root.join(rel);
+    let canonical_root = workspace_root
+        .canonicalize()
+        .map_err(|e| SafetyError::IoError(e.to_string()))?;
+    let canonical_git = canonical_git_path(workspace_root)?;
+    let file_name = candidate
+        .file_name()
+        .ok_or(SafetyError::InvalidPath)?
+        .to_owned();
+
+    if let Some(parent) = candidate.parent() {
+        if parent.exists() {
+            let canonical_parent = parent
+                .canonicalize()
+                .map_err(|e| SafetyError::IoError(e.to_string()))?;
+            if !canonical_parent.starts_with(&canonical_root) {
+                return Err(SafetyError::OutsideWorkspace);
+            }
+            reject_git_path(&canonical_parent, canonical_git.as_deref())?;
+            return Ok(canonical_parent.join(file_name));
+        }
+    }
+
+    let mut current = candidate.parent();
+    while let Some(parent) = current {
+        if parent.exists() {
+            let canonical_parent = parent
+                .canonicalize()
+                .map_err(|e| SafetyError::IoError(e.to_string()))?;
+            if !canonical_parent.starts_with(&canonical_root) {
+                return Err(SafetyError::OutsideWorkspace);
+            }
+            reject_git_path(&canonical_parent, canonical_git.as_deref())?;
+            break;
+        }
+        current = parent.parent();
+    }
+
+    Ok(candidate)
+}
+
+fn validate_relative_path(relative_path: &str) -> Result<&Path, SafetyError> {
+    if relative_path.is_empty() {
+        return Ok(Path::new(relative_path));
     }
 
     let rel = Path::new(relative_path);
@@ -38,40 +133,24 @@ pub fn resolve_safe_path(
         }
     }
 
-    let candidate = workspace_root.join(rel);
-    let canonical_root = workspace_root
-        .canonicalize()
-        .map_err(|e| SafetyError::IoError(e.to_string()))?;
+    Ok(rel)
+}
 
-    // If the target exists, canonicalize and verify containment
-    if candidate.exists() {
-        let canonical = candidate
-            .canonicalize()
-            .map_err(|e| SafetyError::IoError(e.to_string()))?;
-
-        if !canonical.starts_with(&canonical_root) {
-            return Err(SafetyError::OutsideWorkspace);
-        }
-        Ok(canonical)
-    } else {
-        // For writes to new files, verify the nearest existing ancestor stays
-        // inside the workspace. This blocks symlink escapes even when multiple
-        // parent segments do not exist yet.
-        let mut current = candidate.parent();
-        while let Some(parent) = current {
-            if parent.exists() {
-                let canonical_parent = parent
-                    .canonicalize()
-                    .map_err(|e| SafetyError::IoError(e.to_string()))?;
-                if !canonical_parent.starts_with(&canonical_root) {
-                    return Err(SafetyError::OutsideWorkspace);
-                }
-                break;
-            }
-            current = parent.parent();
-        }
-        Ok(candidate)
+fn canonical_git_path(workspace_root: &Path) -> Result<Option<PathBuf>, SafetyError> {
+    match workspace_root.join(".git").canonicalize() {
+        Ok(path) => Ok(Some(path)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(SafetyError::IoError(error.to_string())),
     }
+}
+
+fn reject_git_path(canonical_path: &Path, canonical_git: Option<&Path>) -> Result<(), SafetyError> {
+    if let Some(git_path) = canonical_git {
+        if canonical_path == git_path || canonical_path.starts_with(git_path) {
+            return Err(SafetyError::GitDirectory);
+        }
+    }
+    Ok(())
 }
 
 /// Sniff whether `data` is valid UTF-8 text (not binary).

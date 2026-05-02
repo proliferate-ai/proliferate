@@ -7,17 +7,23 @@ import {
   partitionWorkspaceShellTabKeys,
   parseWorkspaceShellTabKey,
   resolveFallbackWorkspaceShellTab,
+  resolveRelativeWorkspaceShellTab,
   sanitizeWorkspaceShellTabOrder,
   type WorkspaceShellTab,
 } from "./shell-tabs";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 
 describe("workspace shell tab keys", () => {
   it("parses file paths without splitting on later colons", () => {
     const key = fileWorkspaceShellTabKey("src/routes/http:debug.ts");
 
     expect(parseWorkspaceShellTabKey(key)).toEqual({
-      kind: "file",
-      path: "src/routes/http:debug.ts",
+      kind: "viewer",
+      target: fileViewerTarget("src/routes/http:debug.ts"),
+    });
+    expect(parseWorkspaceShellTabKey("file:src/routes/http:debug.ts")).toEqual({
+      kind: "viewer",
+      target: fileViewerTarget("src/routes/http:debug.ts"),
     });
   });
 
@@ -37,7 +43,7 @@ describe("workspace shell tab keys", () => {
       "unknown:key",
     ])).toEqual({
       chatSessionIds: ["session-1"],
-      filePaths: ["src/routes/http:debug.ts"],
+      viewerTargetKeys: [fileWorkspaceShellTabKey("src/routes/http:debug.ts")],
     });
   });
 });
@@ -46,7 +52,7 @@ describe("workspace shell tab ordering", () => {
   const tabs: WorkspaceShellTab[] = [
     { kind: "chat", sessionId: "a" },
     { kind: "chat", sessionId: "b" },
-    { kind: "file", path: "src/a.ts" },
+    { kind: "viewer", target: fileViewerTarget("src/a.ts") },
   ];
 
   it("orders tabs from explicit shell keys and appends missing live tabs", () => {
@@ -57,7 +63,7 @@ describe("workspace shell tab ordering", () => {
         chatWorkspaceShellTabKey("a"),
       ],
     })).toEqual([
-      { kind: "file", path: "src/a.ts" },
+      { kind: "viewer", target: fileViewerTarget("src/a.ts") },
       { kind: "chat", sessionId: "a" },
       { kind: "chat", sessionId: "b" },
     ]);
@@ -88,10 +94,23 @@ describe("workspace shell tab ordering", () => {
     })).toEqual({ kind: "chat", sessionId: "b" });
   });
 
+  it("wraps relative activation when no tab is active", () => {
+    expect(resolveRelativeWorkspaceShellTab({
+      tabs,
+      activeTab: null,
+      delta: -1,
+    })).toEqual(tabs[2]);
+    expect(resolveRelativeWorkspaceShellTab({
+      tabs,
+      activeTab: null,
+      delta: 1,
+    })).toEqual(tabs[0]);
+  });
+
   it("exposes stable keys for tab identities", () => {
     expect(getWorkspaceShellTabKey({ kind: "chat", sessionId: "a" }))
       .toBe(chatWorkspaceShellTabKey("a"));
-    expect(getWorkspaceShellTabKey({ kind: "file", path: "src/a.ts" }))
+    expect(getWorkspaceShellTabKey({ kind: "viewer", target: fileViewerTarget("src/a.ts") }))
       .toBe(fileWorkspaceShellTabKey("src/a.ts"));
   });
 });

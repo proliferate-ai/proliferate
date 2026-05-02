@@ -1,4 +1,5 @@
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
+import { StackedFiles } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
@@ -10,9 +11,11 @@ import {
 
 export function FileTabWithMenu({
   path,
+  label,
   isActive,
   isDirty,
   isDiff,
+  isAllChanges,
   width,
   hideLeftDivider,
   hideRightDivider,
@@ -22,9 +25,11 @@ export function FileTabWithMenu({
   onCloseRight,
 }: {
   path: string;
+  label?: string;
   isActive: boolean;
   isDirty: boolean;
   isDiff: boolean;
+  isAllChanges?: boolean;
   width: number;
   hideLeftDivider: boolean;
   hideRightDivider: boolean;
@@ -33,7 +38,7 @@ export function FileTabWithMenu({
   onCloseOthers: () => void;
   onCloseRight: () => void;
 }) {
-  const basename = path.split("/").pop() ?? path;
+  const basename = label ?? path.split("/").pop() ?? path;
   const { onContextMenuCapture } = useWorkspaceTabNativeContextMenu({
     items: FILE_TAB_CONTEXT_MENU_ITEMS,
     onSelect: handleContextMenuCommand,
@@ -79,19 +84,23 @@ export function FileTabWithMenu({
             hideLeftDivider={hideLeftDivider}
             hideRightDivider={hideRightDivider}
             icon={(
-              <FileTreeEntryIcon
-                name={basename}
-                path={path}
-                kind="file"
-                className="size-3 shrink-0"
-              />
+              isAllChanges
+                ? <StackedFiles className="size-3.5 shrink-0 text-muted-foreground" />
+                : (
+                    <FileTreeEntryIcon
+                      name={basename}
+                      path={path}
+                      kind="file"
+                      className="size-3 shrink-0"
+                    />
+                  )
             )}
             label={basename}
             onSelect={onSelect}
             onClose={onClose}
             badge={(
               <>
-                {isDiff && (
+                {isDiff && !isAllChanges && (
                   <span className="shrink-0 text-xs font-medium text-git-green">DIFF</span>
                 )}
                 {isDirty && (

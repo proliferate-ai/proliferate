@@ -1,10 +1,11 @@
 import {
   chatWorkspaceShellTabKey,
-  fileWorkspaceShellTabKey,
   parseWorkspaceShellTabKey,
+  viewerWorkspaceShellTabKey,
   type WorkspaceShellIntentKey,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import type { ViewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
 
 export interface PendingChatActivation {
   attemptId: string;
@@ -19,7 +20,7 @@ export interface PendingChatActivation {
 export type WorkspaceRenderSurface =
   | { kind: "chat-session"; sessionId: string }
   | { kind: "chat-session-pending"; sessionId: string }
-  | { kind: "file"; path: string }
+  | { kind: "viewer"; targetKey: ViewerTargetKey }
   | { kind: "chat-shell" };
 
 export interface WorkspaceShellActivationInput {
@@ -27,9 +28,9 @@ export interface WorkspaceShellActivationInput {
   storedIntent: WorkspaceShellIntentKey | null;
   orderedTabs: readonly WorkspaceShellTabKey[];
   activeSessionId: string | null;
-  activeFilePath: string | null;
+  activeViewerTargetKey: ViewerTargetKey | null;
   liveChatSessionIds: ReadonlySet<string>;
-  openFilePaths: ReadonlySet<string>;
+  openViewerTargetKeys: ReadonlySet<string>;
   pendingChatActivation: PendingChatActivation | null;
   currentShellActivationEpoch: number;
   currentSessionActivationEpoch: number;
@@ -71,15 +72,15 @@ export function resolveWorkspaceShellActivation(
       return chatShellActivation();
     }
 
-    if (parsed?.kind === "file") {
-      const key = fileWorkspaceShellTabKey(parsed.path);
+    if (parsed?.kind === "viewer") {
+      const key = viewerWorkspaceShellTabKey(parsed.target);
       if (
-        input.activeFilePath === parsed.path
-        && input.openFilePaths.has(parsed.path)
+        input.activeViewerTargetKey === key
+        && input.openViewerTargetKeys.has(key)
         && input.orderedTabs.includes(key)
       ) {
         return {
-          renderSurface: { kind: "file", path: parsed.path },
+          renderSurface: { kind: "viewer", targetKey: key },
           highlightedTabKey: key,
         };
       }
@@ -157,27 +158,26 @@ function inferNullIntentActivation(
   input: WorkspaceShellActivationInput,
 ): WorkspaceShellActivation {
   const chatKey = input.activeSessionId ? chatWorkspaceShellTabKey(input.activeSessionId) : null;
-  const fileKey = input.activeFilePath ? fileWorkspaceShellTabKey(input.activeFilePath) : null;
+  const viewerKey = input.activeViewerTargetKey;
   const hasLiveChat = !!input.activeSessionId
     && !!chatKey
     && input.liveChatSessionIds.has(input.activeSessionId)
     && input.orderedTabs.includes(chatKey);
-  const hasLiveFile = !!input.activeFilePath
-    && !!fileKey
-    && input.openFilePaths.has(input.activeFilePath)
-    && input.orderedTabs.includes(fileKey);
+  const hasLiveViewer = !!viewerKey
+    && input.openViewerTargetKeys.has(viewerKey)
+    && input.orderedTabs.includes(viewerKey);
 
-  if (hasLiveChat && !hasLiveFile && input.activeSessionId && chatKey) {
+  if (hasLiveChat && !hasLiveViewer && input.activeSessionId && chatKey) {
     return {
       renderSurface: { kind: "chat-session", sessionId: input.activeSessionId },
       highlightedTabKey: chatKey,
     };
   }
 
-  if (hasLiveFile && !hasLiveChat && input.activeFilePath && fileKey) {
+  if (hasLiveViewer && !hasLiveChat && viewerKey) {
     return {
-      renderSurface: { kind: "file", path: input.activeFilePath },
-      highlightedTabKey: fileKey,
+      renderSurface: { kind: "viewer", targetKey: viewerKey },
+      highlightedTabKey: viewerKey,
     };
   }
 

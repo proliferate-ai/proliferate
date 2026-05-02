@@ -2,13 +2,24 @@ import { create } from "zustand";
 
 interface WorkspaceFileTreeUiState {
   expandedDirectoriesByTreeKey: Record<string, Record<string, true>>;
+  selectedDirectoryByTreeKey: Record<string, string>;
+  createDraftByTreeKey: Record<string, { kind: "file" | "directory"; parentPath: string } | undefined>;
   expandDirectory: (treeKey: string, dirPath: string) => void;
   collapseDirectory: (treeKey: string, dirPath: string) => void;
   removeExpandedDirectory: (treeKey: string, dirPath: string) => void;
+  collapseAllDirectories: (treeKey: string) => void;
+  setSelectedDirectory: (treeKey: string, dirPath: string) => void;
+  startCreateDraft: (
+    treeKey: string,
+    draft: { kind: "file" | "directory"; parentPath: string },
+  ) => void;
+  clearCreateDraft: (treeKey: string) => void;
 }
 
 export const useWorkspaceFileTreeUiStore = create<WorkspaceFileTreeUiState>((set) => ({
   expandedDirectoriesByTreeKey: {},
+  selectedDirectoryByTreeKey: {},
+  createDraftByTreeKey: {},
 
   expandDirectory: (treeKey, dirPath) => {
     set((current) => {
@@ -79,6 +90,50 @@ export const useWorkspaceFileTreeUiStore = create<WorkspaceFileTreeUiState>((set
           [treeKey]: nextTreeState,
         },
       };
+    });
+  },
+
+  collapseAllDirectories: (treeKey) => {
+    set((current) => {
+      if (!current.expandedDirectoriesByTreeKey[treeKey]) {
+        return current;
+      }
+      const nextExpandedDirectoriesByTreeKey = { ...current.expandedDirectoriesByTreeKey };
+      delete nextExpandedDirectoriesByTreeKey[treeKey];
+      return { expandedDirectoriesByTreeKey: nextExpandedDirectoriesByTreeKey };
+    });
+  },
+
+  setSelectedDirectory: (treeKey, dirPath) => {
+    set((current) => ({
+      selectedDirectoryByTreeKey: {
+        ...current.selectedDirectoryByTreeKey,
+        [treeKey]: dirPath,
+      },
+    }));
+  },
+
+  startCreateDraft: (treeKey, draft) => {
+    set((current) => ({
+      createDraftByTreeKey: {
+        ...current.createDraftByTreeKey,
+        [treeKey]: draft,
+      },
+      selectedDirectoryByTreeKey: {
+        ...current.selectedDirectoryByTreeKey,
+        [treeKey]: draft.parentPath,
+      },
+    }));
+  },
+
+  clearCreateDraft: (treeKey) => {
+    set((current) => {
+      if (!current.createDraftByTreeKey[treeKey]) {
+        return current;
+      }
+      const next = { ...current.createDraftByTreeKey };
+      delete next[treeKey];
+      return { createDraftByTreeKey: next };
     });
   },
 }));

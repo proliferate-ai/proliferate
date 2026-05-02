@@ -17,7 +17,7 @@ function readTextFileContent(
   response: ReadWorkspaceFileResponse,
   relativePath: string,
 ): string {
-  if (!response.isText || response.tooLarge || response.content === null) {
+  if (!response.isText || response.tooLarge || typeof response.content !== "string") {
     throw new Error(`Only text files up to 1 MiB can be synced: ${relativePath}`);
   }
   return response.content;

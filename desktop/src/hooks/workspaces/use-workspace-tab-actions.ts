@@ -20,7 +20,7 @@ import {
 
 export function useWorkspaceTabActions() {
   const headerTabs = useWorkspaceHeaderTabsViewModel();
-  const { activateFileTab } = useWorkspaceShellActivation();
+  const { activateViewerTarget } = useWorkspaceShellActivation();
   const showToast = useToastStore((state) => state.show);
   const closeActiveWorkspaceTab = useCloseActiveWorkspaceTab();
   const chatVisibilityActions = useChatTabVisibilityActions({
@@ -46,16 +46,16 @@ export function useWorkspaceTabActions() {
     }
 
     if (headerTabs.selectedWorkspaceId) {
-      activateFileTab({
+      activateViewerTarget({
         workspaceId: headerTabs.selectedWorkspaceId,
         shellWorkspaceId: headerTabs.workspaceUiKey,
-        path: tab.path,
+        target: tab.target,
         mode: "focus-existing",
       });
     }
     return true;
   }, [
-    activateFileTab,
+    activateViewerTarget,
     chatVisibilityActions,
     headerTabs.workspaceUiKey,
     headerTabs.selectedWorkspaceId,

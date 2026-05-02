@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
@@ -41,9 +42,13 @@ import {
   resolvePrimaryDigitShortcutIndex,
   rightPanelStateEqual,
 } from "@/lib/domain/workspaces/right-panel-view";
-import { isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import {
+  RIGHT_PANEL_NEW_TAB_MENU_EVENT,
+  rightPanelNewTabMenuDefaultFromEvent,
+  type RightPanelNewTabMenuDefault,
+} from "@/lib/infra/right-panel-new-tab-menu";
 import {
   RightPanelHeaderTabs,
   type HeaderEntry,
@@ -51,6 +56,28 @@ import {
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 
 const EMPTY_TERMINALS: never[] = [];
+
+function shouldPreservePointerFocus(target: EventTarget): boolean {
+  if (!(target instanceof Element)) {
+    return true;
+  }
+
+  return Boolean(target.closest(
+    [
+      "a",
+      "button",
+      "input",
+      "select",
+      "textarea",
+      "iframe",
+      "[contenteditable='true']",
+      "[role='button']",
+      "[tabindex]:not([tabindex='-1'])",
+      "[data-focus-zone='terminal']",
+      "[data-focus-zone='browser']",
+    ].join(","),
+  ));
+}
 
 interface TerminalActivationRequest {
   token: number;
@@ -92,8 +119,15 @@ export function RightPanel({
   const unreadByTerminal = useTerminalStore((store) => store.unreadByTerminal);
   const showToast = useToastStore((store) => store.show);
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
+  const [newTabMenuRequest, setNewTabMenuRequest] = useState<{
+    token: number;
+    defaultKind: RightPanelNewTabMenuDefault;
+  }>({ token: 0, defaultKind: "terminal" });
   const rootRef = useRef<HTMLDivElement>(null);
   const handledActivationRequestRef = useRef<string | null>(null);
+  // One-shot per mounted shell: users who close the starter terminal should not
+  // get a replacement every time they revisit the workspace in the same session.
+  const autoTerminalWorkspaceIdsRef = useRef(new Set<string>());
   const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
   const terminalsQuery = useTerminalsQuery({
     workspaceId,
@@ -235,21 +269,24 @@ export function RightPanel({
     setTerminalFocusNonce((nonce) => nonce + 1);
   }, [setActiveTerminalForWorkspace, updateState, workspaceId]);
 
-  const createTerminal = useCallback(async () => {
+  const createTerminal = useCallback(async (options?: { activate?: boolean }) => {
     if (!workspaceId || !shouldRenderContent) {
       return null;
     }
+    const activate = options?.activate ?? true;
     try {
       const terminalId = await createTab(workspaceId, 120, 40);
       const terminalKey = rightPanelTerminalHeaderKey(terminalId);
       updateState((previous) => ({
         ...previous,
-        activeEntryKey: terminalKey,
+        activeEntryKey: activate ? terminalKey : previous.activeEntryKey,
         headerOrder: previous.headerOrder.includes(terminalKey)
           ? previous.headerOrder
           : [...previous.headerOrder, terminalKey],
       }));
-      setTerminalFocusNonce((nonce) => nonce + 1);
+      if (activate) {
+        setTerminalFocusNonce((nonce) => nonce + 1);
+      }
       return terminalId;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -257,6 +294,46 @@ export function RightPanel({
       return null;
     }
   }, [createTab, shouldRenderContent, showToast, updateState, workspaceId]);
+
+  useEffect(() => {
+    const handleNewTabMenuRequest = (event: Event) => {
+      setNewTabMenuRequest((current) => ({
+        token: current.token + 1,
+        defaultKind: rightPanelNewTabMenuDefaultFromEvent(event),
+      }));
+    };
+
+    window.addEventListener(RIGHT_PANEL_NEW_TAB_MENU_EVENT, handleNewTabMenuRequest);
+    return () => {
+      window.removeEventListener(RIGHT_PANEL_NEW_TAB_MENU_EVENT, handleNewTabMenuRequest);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !workspaceId
+      || !isOpen
+      || !shouldRenderContent
+      || !terminalsQuery.isSuccess
+      || autoTerminalWorkspaceIdsRef.current.has(workspaceId)
+    ) {
+      return;
+    }
+
+    autoTerminalWorkspaceIdsRef.current.add(workspaceId);
+    if (visibleTerminals.length > 0) {
+      return;
+    }
+
+    void createTerminal({ activate: false });
+  }, [
+    createTerminal,
+    isOpen,
+    shouldRenderContent,
+    terminalsQuery.isSuccess,
+    visibleTerminals.length,
+    workspaceId,
+  ]);
 
   const activateTerminalTool = useCallback(async () => {
     setTerminalFocusNonce((nonce) => nonce + 1);
@@ -280,7 +357,7 @@ export function RightPanel({
     );
 
     if (records.length === 0) {
-      await createTerminal();
+      await createTerminal({ activate: true });
       return;
     }
 
@@ -353,6 +430,14 @@ export function RightPanel({
     [activateTool, selectBrowser, selectTerminal],
   );
 
+  const handleRootPointerDownCapture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (shouldPreservePointerFocus(event.target)) {
+      return;
+    }
+
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const shortcutIndex = resolvePrimaryDigitShortcutIndex(event);
@@ -363,14 +448,6 @@ export function RightPanel({
       const root = rootRef.current;
       const activeElement = document.activeElement;
       if (!root || !(activeElement instanceof Element) || !root.contains(activeElement)) {
-        return;
-      }
-
-      const eventTargetElement = event.target instanceof Element ? event.target : null;
-      const isTerminalTarget = Boolean(
-        eventTargetElement?.closest('[data-focus-zone="terminal"]'),
-      );
-      if (isTextEntryTarget(event.target) && !isTerminalTarget) {
         return;
       }
 
@@ -486,7 +563,9 @@ export function RightPanel({
       ref={rootRef}
       data-right-panel-root="true"
       data-group="true"
-      className="relative flex h-full flex-col overflow-hidden rounded-tl-lg border-l border-t border-sidebar-border bg-sidebar-background"
+      tabIndex={-1}
+      onPointerDownCapture={handleRootPointerDownCapture}
+      className="relative flex h-full flex-col overflow-hidden rounded-tl-lg border-l border-t border-sidebar-border bg-sidebar-background outline-none"
     >
       <RightPanelHeaderTabs
         entries={headerEntries}
@@ -494,6 +573,8 @@ export function RightPanel({
         unreadByTerminal={unreadByTerminal}
         isWorkspaceReady={isWorkspaceReady}
         canCreateBrowserTab={canCreateBrowserTab}
+        newTabMenuRequestToken={newTabMenuRequest.token}
+        newTabMenuDefaultKind={newTabMenuRequest.defaultKind}
         onActivateTool={activateTool}
         onSelectTerminal={selectTerminal}
         onSelectBrowser={selectBrowser}
@@ -501,7 +582,7 @@ export function RightPanel({
         onCloseBrowser={handleCloseBrowser}
         onRenameTerminal={handleRenameTerminal}
         onCreateTerminal={() => {
-          void createTerminal();
+          void createTerminal({ activate: true });
         }}
         onCreateBrowser={handleCreateBrowser}
         onReorderHeaderEntry={handleReorderHeaderEntry}
@@ -558,7 +639,7 @@ export function RightPanel({
                   focusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
                   unreadByTerminal={unreadByTerminal}
                   onNewTerminal={() => {
-                    void createTerminal();
+                    void createTerminal({ activate: true });
                   }}
                   onSelectTerminal={selectTerminal}
                   onCloseTerminal={handleCloseTerminal}

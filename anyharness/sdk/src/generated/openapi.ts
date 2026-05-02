@@ -964,6 +964,70 @@ export interface paths {
         patch: operations["update_workspace_display_name"];
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/files/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_entries"];
+        put?: never;
+        post: operations["create_entry"];
+        delete: operations["delete_entry"];
+        options?: never;
+        head?: never;
+        patch: operations["rename_entry"];
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/files/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["read_file"];
+        put: operations["write_file"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/files/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["search_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/files/stat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stat_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/branches": {
         parameters: {
             query?: never;
@@ -1982,6 +2046,17 @@ export interface components {
             startupCommandTimeoutMs?: number | null;
             title?: string | null;
         };
+        /** @enum {string} */
+        CreateWorkspaceFileEntryKind: "file" | "directory";
+        CreateWorkspaceFileEntryRequest: {
+            content?: string | null;
+            kind: components["schemas"]["CreateWorkspaceFileEntryKind"];
+            path: string;
+        };
+        CreateWorkspaceFileEntryResponse: {
+            entry: components["schemas"]["WorkspaceFileEntry"];
+            file?: null | components["schemas"]["ReadWorkspaceFileResponse"];
+        };
         CreateWorkspaceRequest: {
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             origin?: null | components["schemas"]["OriginContext"];
@@ -2005,6 +2080,10 @@ export interface components {
         };
         CurrentPullRequestResponse: {
             pullRequest?: null | components["schemas"]["PullRequestSummary"];
+        };
+        DeleteWorkspaceFileEntryResponse: {
+            kind: components["schemas"]["WorkspaceFileKind"];
+            path: string;
         };
         DestroyWorkspaceMobilitySourceRequest: Record<string, never>;
         DestroyWorkspaceMobilitySourceResponse: {
@@ -2304,6 +2383,10 @@ export interface components {
         };
         ListReplayRecordingsResponse: {
             recordings: components["schemas"]["ReplayRecordingSummary"][];
+        };
+        ListWorkspaceFilesResponse: {
+            directoryPath: string;
+            entries: components["schemas"]["WorkspaceFileEntry"][];
         };
         LoginCommand: {
             args: string[];
@@ -3001,6 +3084,14 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
+        RenameWorkspaceFileEntryRequest: {
+            newPath: string;
+            path: string;
+        };
+        RenameWorkspaceFileEntryResponse: {
+            entry: components["schemas"]["WorkspaceFileEntry"];
+            oldPath: string;
+        };
         ReplayRecordingSummary: {
             createdAt?: string | null;
             id: string;
@@ -3220,6 +3311,9 @@ export interface components {
         };
         RuntimeCapabilities: {
             replay: boolean;
+        };
+        SearchWorkspaceFilesResponse: {
+            results: components["schemas"]["WorkspaceFileSearchResult"][];
         };
         Session: {
             actionCapabilities?: components["schemas"]["SessionActionCapabilities"];
@@ -3565,6 +3659,14 @@ export interface components {
             baseRef?: string | null;
             command: string;
         };
+        StatWorkspaceFileResponse: {
+            isText?: boolean | null;
+            kind: components["schemas"]["WorkspaceFileKind"];
+            modifiedAt?: string | null;
+            path: string;
+            /** Format: int64 */
+            sizeBytes?: number | null;
+        };
         /** @enum {string} */
         StopReason: "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled";
         SubagentCompletionSummary: {
@@ -3779,8 +3881,22 @@ export interface components {
             totalSessionCount: number;
             updatedAt?: string | null;
         };
+        WorkspaceFileEntry: {
+            hasChildren?: boolean | null;
+            isText?: boolean | null;
+            kind: components["schemas"]["WorkspaceFileKind"];
+            modifiedAt?: string | null;
+            name: string;
+            path: string;
+            /** Format: int64 */
+            sizeBytes?: number | null;
+        };
         /** @enum {string} */
         WorkspaceFileKind: "file" | "directory" | "symlink";
+        WorkspaceFileSearchResult: {
+            name: string;
+            path: string;
+        };
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
         /** @enum {string} */
@@ -3973,6 +4089,18 @@ export interface components {
             path: string;
             repoRootId?: string | null;
             workspaceId: string;
+        };
+        WriteWorkspaceFileRequest: {
+            content: string;
+            expectedVersionToken: string;
+            path: string;
+        };
+        WriteWorkspaceFileResponse: {
+            modifiedAt?: string | null;
+            path: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            versionToken: string;
         };
     };
     responses: never;
@@ -6319,6 +6447,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_entries: {
+        parameters: {
+            query?: {
+                /** @description Directory path relative to workspace root */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace file entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListWorkspaceFilesResponse"];
+                };
+            };
+        };
+    };
+    create_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkspaceFileEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace file entry create result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateWorkspaceFileEntryResponse"];
+                };
+            };
+        };
+    };
+    delete_entry: {
+        parameters: {
+            query: {
+                /** @description Path relative to workspace root */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace file entry delete result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteWorkspaceFileEntryResponse"];
+                };
+            };
+        };
+    };
+    rename_entry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameWorkspaceFileEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace file entry rename result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenameWorkspaceFileEntryResponse"];
+                };
+            };
+        };
+    };
+    read_file: {
+        parameters: {
+            query: {
+                /** @description File path relative to workspace root */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadWorkspaceFileResponse"];
+                };
+            };
+        };
+    };
+    write_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteWorkspaceFileRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace file write result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteWorkspaceFileResponse"];
+                };
+            };
+        };
+    };
+    search_files: {
+        parameters: {
+            query?: {
+                /** @description Search query */
+                q?: string;
+                /** @description Maximum results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace file search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchWorkspaceFilesResponse"];
+                };
+            };
+        };
+    };
+    stat_file: {
+        parameters: {
+            query: {
+                /** @description Path relative to workspace root */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace file metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatWorkspaceFileResponse"];
                 };
             };
         };

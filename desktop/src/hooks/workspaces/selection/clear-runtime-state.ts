@@ -1,4 +1,4 @@
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -26,6 +26,6 @@ export function clearWorkspaceRuntimeState(
 
   if (options?.clearSelection && selectedWorkspaceId === workspaceId) {
     deps.clearSelection();
-    useWorkspaceFilesStore.getState().reset();
+    resetWorkspaceEditorState();
   }
 }
