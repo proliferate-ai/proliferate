@@ -17,23 +17,20 @@ export function isConnectorCatalogEntryAvailable(
 }
 
 export function getConnectorAuthStyleLabel(entry: ConnectorCatalogEntry): string {
+  if (entry.authKind === "oauth") {
+    return "oauth";
+  }
+  if (entry.authKind === "none") {
+    return "none";
+  }
   if (entry.transport === "http") {
-    if (entry.authKind === "oauth") {
-      return "oauth";
-    }
-    if (entry.authKind === "none") {
-      return "none";
-    }
     return entry.authStyle?.kind ?? "secret";
   }
-  return "none";
+  return "secret";
 }
 
 export function getPrimarySecretField(catalogEntry: ConnectorCatalogEntry) {
-  if (
-    catalogEntry.transport === "http"
-    && (catalogEntry.authKind === "oauth" || catalogEntry.authKind === "none")
-  ) {
+  if (catalogEntry.authKind === "oauth" || catalogEntry.authKind === "none") {
     return null;
   }
   return (catalogEntry.secretFields[0] ?? catalogEntry.requiredFields[0]) ?? null;
@@ -55,7 +52,7 @@ export function connectorHasMissingSecrets(
   catalogEntry: ConnectorCatalogEntry,
   secretValues: Record<string, string>,
 ): boolean {
-  if (catalogEntry.transport === "http" && catalogEntry.authKind === "oauth") {
+  if (catalogEntry.authKind === "oauth") {
     return false;
   }
   return getConnectorSecretFields(catalogEntry).some((field) => !secretValues[field.id]);
@@ -82,6 +79,12 @@ export function isOAuthConnectorCatalogEntry(
   entry: ConnectorCatalogEntry,
 ): entry is Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "oauth" }> {
   return entry.transport === "http" && entry.authKind === "oauth";
+}
+
+export function isSecretConnectorCatalogEntry(
+  entry: ConnectorCatalogEntry,
+): entry is Extract<ConnectorCatalogEntry, { authKind: "secret" }> {
+  return entry.authKind === "secret";
 }
 
 export function isSecretHttpConnectorCatalogEntry(

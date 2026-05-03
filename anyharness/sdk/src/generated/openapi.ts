@@ -3510,7 +3510,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        SessionMcpBindingNotAppliedReason: "missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error";
+        SessionMcpBindingNotAppliedReason: "missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error" | "invalid_settings";
         /** @enum {string} */
         SessionMcpBindingOutcome: "applied" | "not_applied";
         SessionMcpBindingSummary: {

@@ -97,7 +97,7 @@ export function reportConnectorLaunchWarnings(
 
   for (const warning of warnings) {
     trackProductEvent("connector_skipped_at_launch", {
-      connector_id: warning.catalogEntryId,
+      connector_id: warning.catalogEntryId ?? warning.customDefinitionId ?? "custom",
       reason_kind: warning.kind,
     });
   }

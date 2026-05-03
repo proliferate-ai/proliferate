@@ -109,7 +109,7 @@ export async function finalizeLocalStdioCandidates(
     mcpServers.push({
       transport: "stdio",
       connectionId: candidate.connectionId,
-      catalogEntryId: candidate.catalogEntryId,
+      catalogEntryId: candidate.catalogEntryId ?? undefined,
       serverName: candidate.serverName,
       command: candidate.command,
       args: resolved.args,
@@ -177,7 +177,8 @@ function buildWarning(
   return {
     kind,
     connectionId: candidate.connectionId,
-    catalogEntryId: candidate.catalogEntryId as ConnectorLaunchResolutionWarning["catalogEntryId"],
+    catalogEntryId: candidate.catalogEntryId ?? undefined,
+    customDefinitionId: candidate.customDefinitionId ?? undefined,
     connectorName: candidate.connectorName,
   };
 }

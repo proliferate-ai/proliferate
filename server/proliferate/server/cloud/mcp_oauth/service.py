@@ -203,6 +203,12 @@ async def start_cloud_mcp_oauth_flow(
     connection = await get_user_connection(user_id, connection_id)
     if connection is None:
         raise CloudApiError("not_found", "MCP connection was not found.", status_code=404)
+    if connection.catalog_entry_id is None:
+        raise CloudApiError(
+            "invalid_payload",
+            "Custom MCP connections do not support OAuth.",
+            status_code=400,
+        )
     entry = get_catalog_entry(connection.catalog_entry_id)
     if entry is None or entry.auth_kind != "oauth":
         raise CloudApiError(
@@ -241,6 +247,11 @@ async def start_cloud_mcp_oauth_flow(
         )
         state = random_urlsafe(32)
         verifier = random_urlsafe(48)
+        requested_scope = (
+            " ".join(entry.requested_scopes)
+            if entry.requested_scopes
+            else protected.challenged_scope
+        )
         authorization_url = build_authorization_url(
             metadata=auth_metadata,
             client_id=client.client_id,
@@ -248,7 +259,7 @@ async def start_cloud_mcp_oauth_flow(
             state=state,
             verifier=verifier,
             resource=resource,
-            scope=protected.challenged_scope,
+            scope=requested_scope,
         )
     except McpOAuthProviderError as exc:
         raise CloudApiError(
@@ -266,9 +277,7 @@ async def start_cloud_mcp_oauth_flow(
         resource=resource,
         client_id=client.client_id,
         token_endpoint=auth_metadata.token_endpoint,
-        requested_scopes=json.dumps(
-            protected.challenged_scope.split() if protected.challenged_scope else []
-        ),
+        requested_scopes=json.dumps(requested_scope.split() if requested_scope else []),
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
         expires_at=datetime.now(UTC) + OAUTH_FLOW_TTL,
@@ -318,7 +327,7 @@ async def complete_cloud_mcp_oauth_callback(
         await fail_oauth_flow(flow_id=flow.id, failure_code="invalid_flow")
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
     connection = await get_user_connection_by_db_id(flow.user_id, flow.connection_db_id)
-    if connection is None:
+    if connection is None or connection.catalog_entry_id is None:
         await fail_oauth_flow(flow_id=flow.id, failure_code="invalid_flow")
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
     oauth_client = await get_oauth_client(

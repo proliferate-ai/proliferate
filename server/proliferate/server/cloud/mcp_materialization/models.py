@@ -98,7 +98,11 @@ class LocalStdioOAuthMetadataModel(BaseModel):
 
 class LocalStdioCandidateModel(BaseModel):
     connection_id: str = Field(serialization_alias="connectionId")
-    catalog_entry_id: str = Field(serialization_alias="catalogEntryId")
+    catalog_entry_id: str | None = Field(default=None, serialization_alias="catalogEntryId")
+    custom_definition_id: str | None = Field(
+        default=None,
+        serialization_alias="customDefinitionId",
+    )
     server_name: str = Field(serialization_alias="serverName")
     connector_name: str = Field(serialization_alias="connectorName")
     setup_kind: Literal["none", "local_oauth"] = Field(
@@ -117,7 +121,11 @@ class LocalStdioCandidateModel(BaseModel):
 
 class CloudMcpMaterializationWarningModel(BaseModel):
     connection_id: str = Field(serialization_alias="connectionId")
-    catalog_entry_id: str = Field(serialization_alias="catalogEntryId")
+    catalog_entry_id: str | None = Field(default=None, serialization_alias="catalogEntryId")
+    custom_definition_id: str | None = Field(
+        default=None,
+        serialization_alias="customDefinitionId",
+    )
     connector_name: str = Field(serialization_alias="connectorName")
     server_name: str | None = Field(default=None, serialization_alias="serverName")
     kind: McpWarningKind

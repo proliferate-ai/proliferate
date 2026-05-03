@@ -355,6 +355,12 @@
   description: "Slack MCP token endpoint auth method: client_secret_post or client_secret_basic"
   tags: [local-dev, self-hosted, production]
 
+- name: CLOUD_MCP_VERCEL_ENABLED
+  secret: false
+  default: "false"
+  description: Shows the Vercel MCP connector after provider approval or smoke-test verification
+  tags: [local-dev, self-hosted, production]
+
 - name: CLOUD_MCP_GOOGLE_WORKSPACE_ENABLED
   secret: false
   default: "false"

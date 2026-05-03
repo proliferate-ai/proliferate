@@ -56,6 +56,7 @@ export function unavailableInstalledCatalogEntry(
     settingsSchema: [gmailEmailSettingField()],
     capabilities: ["Search and read Gmail messages locally"],
     transport: "stdio",
+    authKind: "none",
     command: "",
     args: [],
     env: [],

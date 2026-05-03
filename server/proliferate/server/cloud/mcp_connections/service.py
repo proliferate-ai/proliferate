@@ -19,7 +19,15 @@ from proliferate.db.store.cloud_mcp.connections import (
     patch_user_connection,
     upsert_user_connection,
 )
-from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
+from proliferate.db.store.cloud_mcp.custom_definitions import (
+    get_custom_definition,
+    get_custom_definition_by_db_id,
+    list_custom_definitions_by_db_ids,
+)
+from proliferate.db.store.cloud_mcp.types import (
+    CloudMcpConnectionRecord,
+    CloudMcpCustomDefinitionRecord,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import (
@@ -48,7 +56,14 @@ from proliferate.server.cloud.mcp_connections.models import (
     cloud_mcp_connection_payload,
     cloud_mcp_connection_status_payload,
 )
-from proliferate.utils.crypto import encrypt_json
+from proliferate.server.cloud.mcp_custom_definitions.models import (
+    CustomMcpDefinitionSummaryModel,
+)
+from proliferate.server.cloud.mcp_custom_definitions.service import (
+    custom_definition_summary,
+    custom_definition_to_catalog_entry,
+)
+from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 _CONNECTION_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
 _SERVER_NAME_CHARS = re.compile(r"[^a-z0-9]+")
@@ -80,12 +95,22 @@ def _normalize_server_name_base(value: str) -> str:
 def _generate_server_name(
     entry: CatalogEntry,
     existing_names: set[str],
-    connection_id: str,
+    connection_id: str = "",
 ) -> str:
     base = _normalize_server_name_base(entry.server_name_base)
     if base not in existing_names:
         return base
-    return f"{base}_{connection_id.replace('-', '')[:6]}"
+    suffix = connection_id.replace("-", "")[:6]
+    if suffix:
+        candidate = f"{base}_{suffix}"
+        if candidate not in existing_names:
+            return candidate
+    counter = 2
+    while True:
+        candidate = f"{base}_{counter}"
+        if candidate not in existing_names:
+            return candidate
+        counter += 1
 
 
 def _settings_json(settings: dict[str, object]) -> str:
@@ -135,30 +160,151 @@ def _clean_secret_fields(entry: CatalogEntry, secret_fields: dict[str, str]) -> 
         _invalid_payload(str(exc))
 
 
+def _connection_target_kind(
+    body: CreateCloudMcpConnectionRequest,
+) -> tuple[str, str]:
+    if body.target_kind is None:
+        if body.catalog_entry_id and not body.custom_definition_id:
+            return "curated", body.catalog_entry_id
+        _invalid_payload("Connection target must be specified.")
+    if body.target_kind == "curated":
+        if body.catalog_entry_id and not body.custom_definition_id:
+            return "curated", body.catalog_entry_id
+        _invalid_payload("Curated MCP connections require only catalogEntryId.")
+    if body.custom_definition_id and not body.catalog_entry_id:
+        return "custom", body.custom_definition_id
+    _invalid_payload("Custom MCP connections require only customDefinitionId.")
+
+
+async def _custom_definitions_for_records(
+    user_id: UUID,
+    records: list[CloudMcpConnectionRecord],
+) -> dict[UUID, CloudMcpCustomDefinitionRecord]:
+    definition_ids = {
+        record.custom_definition_db_id
+        for record in records
+        if record.custom_definition_db_id is not None
+    }
+    definitions = await list_custom_definitions_by_db_ids(user_id, definition_ids)
+    return {definition.id: definition for definition in definitions}
+
+
+async def _definition_for_record(
+    record: CloudMcpConnectionRecord,
+    custom_definitions: dict[UUID, CloudMcpCustomDefinitionRecord] | None,
+) -> CloudMcpCustomDefinitionRecord | None:
+    if record.custom_definition_db_id is None:
+        return None
+    if custom_definitions is not None:
+        return custom_definitions.get(record.custom_definition_db_id)
+    return await get_custom_definition_by_db_id(
+        record.user_id,
+        record.custom_definition_db_id,
+    )
+
+
+async def _entry_for_record(
+    record: CloudMcpConnectionRecord,
+    custom_definitions: dict[UUID, CloudMcpCustomDefinitionRecord] | None = None,
+) -> CatalogEntry | None:
+    if record.catalog_entry_id is not None:
+        return get_catalog_entry(record.catalog_entry_id)
+    definition = await _definition_for_record(record, custom_definitions)
+    if definition is None:
+        return None
+    try:
+        return custom_definition_to_catalog_entry(definition)
+    except ValueError:
+        return None
+
+
+async def _custom_definition_payload_for_record(
+    record: CloudMcpConnectionRecord,
+    custom_definitions: dict[UUID, CloudMcpCustomDefinitionRecord] | None = None,
+) -> CustomMcpDefinitionSummaryModel | None:
+    definition = await _definition_for_record(record, custom_definitions)
+    if definition is None:
+        return None
+    try:
+        return custom_definition_summary(definition)
+    except ValueError:
+        return None
+
+
 def _auth_state(
     record: CloudMcpConnectionRecord,
+    entry: CatalogEntry | None,
 ) -> tuple[CloudMcpAuthKind, CloudMcpAuthStatus]:
-    entry = get_catalog_entry(record.catalog_entry_id)
     auth_kind: CloudMcpAuthKind = _connection_auth_kind(entry)
     if record.auth is None:
         if record.payload_ciphertext:
             return auth_kind, "needs_reconnect"
         return auth_kind, "ready" if auth_kind == "none" else "needs_reconnect"
+    if auth_kind == "none":
+        return auth_kind, "ready"
+    if record.auth.auth_kind != auth_kind:
+        return auth_kind, "needs_reconnect"
+    if auth_kind == "secret":
+        auth_status = _connection_auth_status(record.auth.auth_status)
+        if auth_status != "ready" or entry is None:
+            return auth_kind, auth_status
+        if _secret_auth_matches_entry(record, entry):
+            return auth_kind, "ready"
+        return auth_kind, "needs_reconnect"
     return auth_kind, _connection_auth_status(record.auth.auth_status)
 
 
-def _connection_payload(record: CloudMcpConnectionRecord) -> CloudMcpConnectionResponse:
-    auth_kind, auth_status = _auth_state(record)
-    entry = get_catalog_entry(record.catalog_entry_id)
+def _secret_auth_matches_entry(
+    record: CloudMcpConnectionRecord,
+    entry: CatalogEntry,
+) -> bool:
+    if (
+        record.auth is None
+        or record.auth.auth_kind != "secret"
+        or record.auth.payload_format != "secret-fields-v1"
+        or not record.auth.payload_ciphertext
+    ):
+        return False
+    try:
+        payload = decrypt_json(record.auth.payload_ciphertext)
+    except Exception:
+        return False
+    secret_fields = payload.get("secretFields")
+    if not isinstance(secret_fields, dict):
+        return False
+    try:
+        validate_secret_fields(
+            entry,
+            {str(key): str(value) for key, value in secret_fields.items()},
+        )
+    except CatalogConfigurationError:
+        return False
+    return True
+
+
+async def _connection_payload(
+    record: CloudMcpConnectionRecord,
+    custom_definitions: dict[UUID, CloudMcpCustomDefinitionRecord] | None = None,
+) -> CloudMcpConnectionResponse:
+    entry = await _entry_for_record(record, custom_definitions)
+    auth_kind, auth_status = _auth_state(record, entry)
     parsed_settings = _parse_settings(record.settings_json)
     if entry is not None:
         with suppress(CatalogConfigurationError):
             parsed_settings = catalog_validate_settings(entry, parsed_settings)
+    custom_definition = await _custom_definition_payload_for_record(
+        record,
+        custom_definitions,
+    )
     return cloud_mcp_connection_payload(
         record,
         parsed_settings,
         auth_kind,
         auth_status,
+        custom_definition_id=(
+            custom_definition.definition_id if custom_definition is not None else None
+        ),
+        custom_definition=custom_definition,
     )
 
 
@@ -178,8 +324,11 @@ def _connection_auth_status(value: str) -> CloudMcpAuthStatus:
 
 async def list_cloud_mcp_connections(user_id: UUID) -> CloudMcpConnectionsResponse:
     records = await list_user_connections(user_id)
+    custom_definitions = await _custom_definitions_for_records(user_id, records)
     return CloudMcpConnectionsResponse(
-        connections=[_connection_payload(record) for record in records]
+        connections=[
+            await _connection_payload(record, custom_definitions) for record in records
+        ]
     )
 
 
@@ -187,15 +336,36 @@ async def create_cloud_mcp_connection(
     user_id: UUID,
     body: CreateCloudMcpConnectionRequest,
 ) -> CloudMcpConnectionResponse:
-    catalog_entry_id = body.catalog_entry_id.strip()
-    entry = get_catalog_entry(catalog_entry_id)
-    if entry is None:
-        _invalid_payload("Connector catalog entry was not found.")
-    if not catalog_entry_is_configured(entry):
-        _invalid_payload("Connector catalog entry is not configured for this deployment.")
+    target_kind, target_id = _connection_target_kind(body)
+    if target_kind == "custom":
+        definition_id = target_id.strip()
+        definition = await get_custom_definition(user_id, definition_id)
+        if definition is None or definition.deleted_at is not None or not definition.enabled:
+            _invalid_payload("Custom MCP definition was not found.")
+        try:
+            entry = custom_definition_to_catalog_entry(definition)
+        except ValueError as exc:
+            _invalid_payload(str(exc))
+        catalog_entry_id = None
+        custom_definition_db_id = definition.id
+    else:
+        catalog_entry_id = target_id.strip()
+        curated_entry = get_catalog_entry(catalog_entry_id)
+        if curated_entry is None:
+            _invalid_payload("Connector catalog entry was not found.")
+        entry = curated_entry
+        if not catalog_entry_is_configured(entry):
+            _invalid_payload("Connector catalog entry is not configured for this deployment.")
+        custom_definition_db_id = None
     settings = _validate_settings(entry, body.settings)
     existing = await list_user_connections(user_id)
-    if any(record.catalog_entry_id == entry.id for record in existing):
+    if catalog_entry_id is not None and any(
+        record.catalog_entry_id == catalog_entry_id for record in existing
+    ):
+        _invalid_payload(f"{entry.name} is already connected.")
+    if custom_definition_db_id is not None and any(
+        record.custom_definition_db_id == custom_definition_db_id for record in existing
+    ):
         _invalid_payload(f"{entry.name} is already connected.")
     connection_id = ""
     server_name = _generate_server_name(
@@ -205,7 +375,8 @@ async def create_cloud_mcp_connection(
     )
     record = await upsert_user_connection(
         user_id=user_id,
-        catalog_entry_id=entry.id,
+        catalog_entry_id=catalog_entry_id,
+        custom_definition_db_id=custom_definition_db_id,
         catalog_entry_version=entry.version,
         server_name=server_name,
         settings_json=_settings_json(settings),
@@ -223,7 +394,7 @@ async def create_cloud_mcp_connection(
         if refreshed is None:
             _not_found()
         record = refreshed
-    return _connection_payload(record)
+    return await _connection_payload(record)
 
 
 async def patch_cloud_mcp_connection(
@@ -235,9 +406,9 @@ async def patch_cloud_mcp_connection(
     existing = await get_user_connection(user_id, cleaned_connection_id)
     if existing is None:
         _not_found()
-    entry = get_catalog_entry(existing.catalog_entry_id)
+    entry = await _entry_for_record(existing)
     if entry is None:
-        _invalid_payload("Connector catalog entry was not found.")
+        _invalid_payload("MCP connector definition was not found.")
     settings_json = None
     if body.settings is not None:
         new_settings = _validate_settings(entry, body.settings)
@@ -258,7 +429,7 @@ async def patch_cloud_mcp_connection(
     )
     if record is None:
         _not_found()
-    return _connection_payload(record)
+    return await _connection_payload(record)
 
 
 async def put_cloud_mcp_connection_secret_auth(
@@ -270,9 +441,9 @@ async def put_cloud_mcp_connection_secret_auth(
     record = await get_user_connection(user_id, cleaned_connection_id)
     if record is None:
         _not_found()
-    entry = get_catalog_entry(record.catalog_entry_id)
+    entry = await _entry_for_record(record)
     if entry is None:
-        _invalid_payload("Connector catalog entry was not found.")
+        _invalid_payload("MCP connector definition was not found.")
     cleaned = _clean_secret_fields(entry, body.secret_fields)
     await upsert_connection_auth(
         connection_db_id=record.id,
@@ -284,7 +455,7 @@ async def put_cloud_mcp_connection_secret_auth(
     updated = await get_user_connection(user_id, cleaned_connection_id)
     if updated is None:
         _not_found()
-    return _connection_payload(updated)
+    return await _connection_payload(updated)
 
 
 async def delete_cloud_mcp_connection_for_user(
@@ -300,6 +471,7 @@ async def list_cloud_mcp_connection_statuses(
     return [
         cloud_mcp_connection_status_payload(record)
         for record in await legacy_list_connections(user_id)
+        if record.catalog_entry_id is not None
     ]
 
 
@@ -309,6 +481,9 @@ async def sync_cloud_mcp_connection_for_user(
     body: SyncCloudMcpConnectionRequest,
 ) -> None:
     cleaned_connection_id = validate_connection_id(connection_id)
+    existing_record = await get_user_connection(user_id, cleaned_connection_id)
+    if existing_record is not None and existing_record.catalog_entry_id is None:
+        _invalid_payload("Legacy MCP sync does not support custom MCP definitions.")
     entry = get_catalog_entry(body.catalog_entry_id.strip())
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")

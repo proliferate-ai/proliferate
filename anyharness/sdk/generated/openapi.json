@@ -13404,7 +13404,8 @@
           "unsupported_target",
           "workspace_path_unresolved",
           "policy_disabled",
-          "resolver_error"
+          "resolver_error",
+          "invalid_settings"
         ]
       },
       "SessionMcpBindingOutcome": {

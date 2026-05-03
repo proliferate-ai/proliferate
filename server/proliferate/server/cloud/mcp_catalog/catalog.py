@@ -33,8 +33,23 @@ from proliferate.server.cloud.mcp_catalog.types import (
     UrlVariant,
 )
 
-CATALOG_VERSION = "2026-04-30.1"
+CATALOG_VERSION = "2026-05-03.1"
 GOOGLE_WORKSPACE_MCP_PACKAGE = "workspace-mcp==1.20.1"
+SLACK_READ_ONLY_SCOPES = (
+    "search:read.public",
+    "search:read.private",
+    "search:read.mpim",
+    "search:read.im",
+    "search:read.files",
+    "search:read.users",
+    "channels:history",
+    "groups:history",
+    "mpim:history",
+    "im:history",
+    "canvases:read",
+    "users:read",
+    "users:read.email",
+)
 
 __all__ = [
     "ArgTemplate",
@@ -318,6 +333,47 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
     ),
     *HOSTED_CONNECTOR_CATALOG,
     CatalogEntry(
+        id="brave",
+        version=1,
+        name="Brave Search",
+        one_liner="Search the web through Brave Search locally.",
+        description=(
+            "Use Brave Search when Proliferate needs web search context from a "
+            "local Brave Search MCP server."
+        ),
+        docs_url="https://github.com/brave/brave-search-mcp-server",
+        availability="local_only",
+        transport="stdio",
+        auth_kind="secret",
+        command="npx",
+        args=(
+            ArgTemplate(kind="static", value="-y"),
+            ArgTemplate(kind="static", value="@brave/brave-search-mcp-server"),
+            ArgTemplate(kind="static", value="--transport"),
+            ArgTemplate(kind="static", value="stdio"),
+        ),
+        env=(EnvTemplate(name="BRAVE_API_KEY", kind="secret", field_id="api_key"),),
+        server_name_base="brave",
+        icon_id="brave",
+        secret_fields=(
+            _secret_field(
+                "api_key",
+                "API key",
+                "BSA...",
+                "Create or copy a Brave Search API key.",
+                (
+                    "Open the Brave Search API dashboard, create or copy an API key, "
+                    "and paste it here."
+                ),
+            ),
+        ),
+        capabilities=(
+            "Search the web",
+            "Retrieve current external context",
+            "Use local-only stdio launch with an encrypted API key",
+        ),
+    ),
+    CatalogEntry(
         id="linear",
         version=1,
         name="Linear",
@@ -354,6 +410,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         transport="http",
         auth_kind="oauth",
         oauth_client_mode="static",
+        requested_scopes=SLACK_READ_ONLY_SCOPES,
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.slack.com/mcp"),
             display_url="https://mcp.slack.com/mcp",
@@ -363,8 +420,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         capabilities=(
             "Search messages, files, users, and channels",
             "Read channel and thread history with authorized scopes",
-            "Draft and send Slack messages when granted write access",
-            "Read and manage Slack canvases when granted canvas scopes",
+            "Read Slack canvases when granted canvas scopes",
         ),
     ),
     CatalogEntry(
@@ -558,9 +614,42 @@ def _google_workspace_catalog_entry() -> CatalogEntry | None:
     )
 
 
+def _vercel_catalog_entry() -> CatalogEntry | None:
+    if not settings.cloud_mcp_vercel_enabled:
+        return None
+    return CatalogEntry(
+        id="vercel",
+        version=1,
+        name="Vercel",
+        one_liner="Inspect Vercel projects, deployments, and runtime context.",
+        description=(
+            "Use Vercel to inspect projects, deployments, logs, and infrastructure "
+            "context through Vercel's hosted MCP server."
+        ),
+        docs_url="https://vercel.com/docs/agent-resources/vercel-mcp",
+        availability="universal",
+        transport="http",
+        auth_kind="oauth",
+        oauth_client_mode="dcr",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.vercel.com"),
+            display_url="https://mcp.vercel.com",
+        ),
+        server_name_base="vercel",
+        icon_id="vercel",
+        capabilities=(
+            "Inspect Vercel projects and deployments",
+            "Review logs and deployment context",
+            "Bring Vercel infrastructure context into sessions",
+        ),
+    )
+
+
 def build_connector_catalog() -> tuple[CatalogEntry, ...]:
     dynamic_entries = tuple(
-        entry for entry in (_google_workspace_catalog_entry(),) if entry is not None
+        entry
+        for entry in (_google_workspace_catalog_entry(), _vercel_catalog_entry())
+        if entry is not None
     )
     return (*BASE_CONNECTOR_CATALOG, *dynamic_entries)
 

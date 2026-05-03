@@ -4,10 +4,10 @@ export type ConnectorAuthLabel = "OAuth" | "API key" | "No credentials";
 export type ConnectorAvailabilityLabel = "Local + Cloud" | "Local only" | "Cloud only";
 
 export function getConnectorAuthLabel(entry: ConnectorCatalogEntry): ConnectorAuthLabel {
-  if (entry.transport === "http" && entry.authKind === "oauth") {
+  if (entry.authKind === "oauth") {
     return "OAuth";
   }
-  if (entry.transport === "http" && entry.authKind === "secret") {
+  if (entry.authKind === "secret") {
     return "API key";
   }
   return "No credentials";

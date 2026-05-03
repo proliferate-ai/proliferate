@@ -817,6 +817,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/mcp/custom-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Custom Mcp Definitions Endpoint */
+        get: operations["list_custom_mcp_definitions_endpoint_v1_cloud_mcp_custom_definitions_get"];
+        put?: never;
+        /** Create Custom Mcp Definition Endpoint */
+        post: operations["create_custom_mcp_definition_endpoint_v1_cloud_mcp_custom_definitions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mcp/custom-definitions/{definition_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Custom Mcp Definition Endpoint */
+        delete: operations["delete_custom_mcp_definition_endpoint_v1_cloud_mcp_custom_definitions__definition_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Custom Mcp Definition Endpoint */
+        patch: operations["patch_custom_mcp_definition_endpoint_v1_cloud_mcp_custom_definitions__definition_id__patch"];
+        trace?: never;
+    };
     "/v1/cloud/mcp/materialize": {
         parameters: {
             query?: never;
@@ -1795,8 +1831,16 @@ export interface components {
         CloudMcpConnectionResponse: {
             /** Connectionid */
             connectionId: string;
+            /**
+             * Targetkind
+             * @enum {string}
+             */
+            targetKind: "curated" | "custom";
             /** Catalogentryid */
-            catalogEntryId: string;
+            catalogEntryId?: string | null;
+            /** Customdefinitionid */
+            customDefinitionId?: string | null;
+            customDefinition?: components["schemas"]["CustomMcpDefinitionSummaryModel"] | null;
             /** Catalogentryversion */
             catalogEntryVersion: number;
             /** Servername */
@@ -1847,7 +1891,9 @@ export interface components {
             /** Connectionid */
             connectionId: string;
             /** Catalogentryid */
-            catalogEntryId: string;
+            catalogEntryId?: string | null;
+            /** Customdefinitionid */
+            customDefinitionId?: string | null;
             /** Connectorname */
             connectorName: string;
             /** Servername */
@@ -2231,8 +2277,12 @@ export interface components {
         };
         /** CreateCloudMcpConnectionRequest */
         CreateCloudMcpConnectionRequest: {
+            /** Targetkind */
+            targetKind?: ("curated" | "custom") | null;
             /** Catalogentryid */
-            catalogEntryId: string;
+            catalogEntryId?: string | null;
+            /** Customdefinitionid */
+            customDefinitionId?: string | null;
             /** Settings */
             settings?: {
                 [key: string]: unknown;
@@ -2269,6 +2319,43 @@ export interface components {
             /** Organizationid */
             organizationId?: string | null;
         };
+        /** CreateCustomMcpDefinitionRequest */
+        CreateCustomMcpDefinitionRequest: {
+            /** Definitionid */
+            definitionId?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Availability
+             * @default local_only
+             * @enum {string}
+             */
+            availability: "universal" | "local_only" | "cloud_only";
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "http" | "stdio";
+            /**
+             * Authkind
+             * @enum {string}
+             */
+            authKind: "secret" | "none";
+            http?: components["schemas"]["CustomMcpHttpTemplateModel"] | null;
+            stdio?: components["schemas"]["CustomMcpStdioTemplateModel"] | null;
+            /** Secretfields */
+            secretFields?: components["schemas"]["CustomMcpSecretFieldModel"][];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
         /** CredentialStatus */
         CredentialStatus: {
             /** Provider */
@@ -2286,6 +2373,109 @@ export interface components {
             synced: boolean;
             /** Lastsyncedat */
             lastSyncedAt?: string | null;
+        };
+        /** CustomMcpDefinitionSummaryModel */
+        CustomMcpDefinitionSummaryModel: {
+            /** Definitionid */
+            definitionId: string;
+            /** Version */
+            version: number;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "universal" | "local_only" | "cloud_only";
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "http" | "stdio";
+            /**
+             * Authkind
+             * @enum {string}
+             */
+            authKind: "secret" | "none";
+            /** Displayurl */
+            displayUrl: string;
+            /** Servernamebase */
+            serverNameBase: string;
+            /** Iconid */
+            iconId: string;
+            /** Secretfields */
+            secretFields: components["schemas"]["CustomMcpSecretFieldModel"][];
+            /** Enabled */
+            enabled: boolean;
+            /** Deletedat */
+            deletedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** CustomMcpDefinitionsResponse */
+        CustomMcpDefinitionsResponse: {
+            /** Definitions */
+            definitions: components["schemas"]["CustomMcpDefinitionSummaryModel"][];
+        };
+        /** CustomMcpHttpTemplateModel */
+        CustomMcpHttpTemplateModel: {
+            /** Url */
+            url: string;
+            /** Headers */
+            headers?: components["schemas"]["CustomMcpTemplateValueModel"][];
+            /** Query */
+            query?: components["schemas"]["CustomMcpTemplateValueModel"][];
+        };
+        /** CustomMcpSecretFieldModel */
+        CustomMcpSecretFieldModel: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Placeholder
+             * @default
+             */
+            placeholder: string;
+            /**
+             * Helpertext
+             * @default
+             */
+            helperText: string;
+            /**
+             * Gettokeninstructions
+             * @default
+             */
+            getTokenInstructions: string;
+            /** Prefixhint */
+            prefixHint?: string | null;
+        };
+        /** CustomMcpStdioEnvTemplateModel */
+        CustomMcpStdioEnvTemplateModel: {
+            /** Name */
+            name: string;
+            /** Valuetemplate */
+            valueTemplate: string;
+        };
+        /** CustomMcpStdioTemplateModel */
+        CustomMcpStdioTemplateModel: {
+            /** Command */
+            command: string;
+            /** Args */
+            args?: string[];
+            /** Env */
+            env?: components["schemas"]["CustomMcpStdioEnvTemplateModel"][];
+        };
+        /** CustomMcpTemplateValueModel */
+        CustomMcpTemplateValueModel: {
+            /** Name */
+            name: string;
+            /** Valuetemplate */
+            valueTemplate: string;
         };
         /** E2BWebhookReceipt */
         E2BWebhookReceipt: {
@@ -2496,7 +2686,9 @@ export interface components {
             /** Connectionid */
             connectionId: string;
             /** Catalogentryid */
-            catalogEntryId: string;
+            catalogEntryId?: string | null;
+            /** Customdefinitionid */
+            customDefinitionId?: string | null;
             /** Servername */
             serverName: string;
             /** Connectorname */
@@ -2890,6 +3082,25 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
+            /** Enabled */
+            enabled?: boolean | null;
+        };
+        /** PatchCustomMcpDefinitionRequest */
+        PatchCustomMcpDefinitionRequest: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Availability */
+            availability?: ("universal" | "local_only" | "cloud_only") | null;
+            /** Transport */
+            transport?: ("http" | "stdio") | null;
+            /** Authkind */
+            authKind?: ("secret" | "none") | null;
+            http?: components["schemas"]["CustomMcpHttpTemplateModel"] | null;
+            stdio?: components["schemas"]["CustomMcpStdioTemplateModel"] | null;
+            /** Secretfields */
+            secretFields?: components["schemas"]["CustomMcpSecretFieldModel"][] | null;
             /** Enabled */
             enabled?: boolean | null;
         };
@@ -5469,6 +5680,125 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_custom_mcp_definitions_endpoint_v1_cloud_mcp_custom_definitions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomMcpDefinitionsResponse"];
+                };
+            };
+        };
+    };
+    create_custom_mcp_definition_endpoint_v1_cloud_mcp_custom_definitions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomMcpDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomMcpDefinitionSummaryModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_custom_mcp_definition_endpoint_v1_cloud_mcp_custom_definitions__definition_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_custom_mcp_definition_endpoint_v1_cloud_mcp_custom_definitions__definition_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchCustomMcpDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomMcpDefinitionSummaryModel"];
                 };
             };
             /** @description Validation Error */

@@ -84,7 +84,8 @@ export async function resolveSessionMcpServersForLaunch(
     warnings: [
       ...materialized.warnings.map((warning) => ({
         connectionId: warning.connectionId,
-        catalogEntryId: warning.catalogEntryId as ConnectorLaunchResolutionWarning["catalogEntryId"],
+        catalogEntryId: warning.catalogEntryId ?? undefined,
+        customDefinitionId: warning.customDefinitionId ?? undefined,
         connectorName: warning.connectorName,
         kind: warning.kind,
       } as ConnectorLaunchResolutionWarning)),
