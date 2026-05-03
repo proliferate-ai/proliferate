@@ -1,6 +1,10 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CreateWorktreeWorkspaceResponse, Workspace } from "@anyharness/sdk";
+import {
+  AnyHarnessError,
+  type CreateWorktreeWorkspaceResponse,
+  type Workspace,
+} from "@anyharness/sdk";
 import { workspaceCollectionsScopeKey } from "./query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
@@ -40,6 +44,21 @@ import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
 interface CreateWorktreeMutationInput {
   params: WorktreeCreationParams;
   latencyFlowId?: string | null;
+}
+
+interface CreateLocalWorkspaceResult {
+  workspace: Workspace;
+  created: boolean;
+}
+
+function isExistingWorkspacePathError(error: unknown): boolean {
+  if (error instanceof AnyHarnessError) {
+    return error.problem.code === "WORKSPACE_CREATE_FAILED"
+      && error.problem.detail?.includes("a workspace record already exists for path") === true;
+  }
+
+  return error instanceof Error
+    && error.message.includes("a workspace record already exists for path");
 }
 
 export function useWorkspaceActions() {
@@ -102,25 +121,45 @@ export function useWorkspaceActions() {
     });
   };
 
-  const createLocalWorkspaceMutation = useMutation<Workspace, Error, string>({
+  const createLocalWorkspaceMutation = useMutation<CreateLocalWorkspaceResult, Error, string>({
     meta: {
       telemetryHandled: true,
     },
     mutationFn: async (sourceRoot) => {
       const readyRuntimeUrl = await ensureRuntimeReady();
-      const response = await getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl }).workspaces.create({
+      const client = getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl });
+      const request = {
         path: sourceRoot,
         origin: DESKTOP_ORIGIN,
-      });
-      return response.workspace;
+      };
+
+      try {
+        const response = await client.workspaces.create(request);
+        return {
+          workspace: response.workspace,
+          created: true,
+        };
+      } catch (error) {
+        if (!isExistingWorkspacePathError(error)) {
+          throw error;
+        }
+
+        const response = await client.workspaces.resolveFromPath(request);
+        return {
+          workspace: response.workspace,
+          created: false,
+        };
+      }
     },
-    onSuccess: (workspace) => {
+    onSuccess: ({ workspace, created }) => {
       primeWorkspaceCollections(workspace, "local_create");
       refreshWorkspaceCollections("local_create", workspace.id);
-      trackProductEvent("workspace_created", {
-        workspace_kind: "local",
-        creation_kind: "local",
-      });
+      if (created) {
+        trackProductEvent("workspace_created", {
+          workspace_kind: "local",
+          creation_kind: "local",
+        });
+      }
     },
     onError: (error) => {
       captureTelemetryException(error, {
@@ -237,7 +276,8 @@ export function useWorkspaceActions() {
         repoConfig: repoPreferences.repoConfigs[repoRoot.path] ?? null,
       });
     },
-    createLocalWorkspace: createLocalWorkspaceMutation.mutateAsync,
+    createLocalWorkspace: async (sourceRoot: string) =>
+      (await createLocalWorkspaceMutation.mutateAsync(sourceRoot)).workspace,
     isCreatingLocalWorkspace: createLocalWorkspaceMutation.isPending,
     createWorktreeWorkspace: (
       params: WorktreeCreationParams,
