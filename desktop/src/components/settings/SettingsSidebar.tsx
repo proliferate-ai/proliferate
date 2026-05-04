@@ -126,15 +126,16 @@ export function SettingsSidebar({
 
   return (
     <div className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
-      <SupportDialog
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        context={{
-          source: "settings",
-          intent: "general",
-          pathname: `${location.pathname}${location.search}`,
-        }}
-      />
+      {supportOpen && (
+        <SupportDialog
+          onClose={() => setSupportOpen(false)}
+          context={{
+            source: "settings",
+            intent: "general",
+            pathname: `${location.pathname}${location.search}`,
+          }}
+        />
+      )}
       <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
       <Button

@@ -172,11 +172,12 @@ export function MainSidebar() {
   return (
     <DebugProfiler id="workspace-sidebar">
       <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
-      <SupportDialog
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        context={supportContext}
-      />
+      {supportOpen && (
+        <SupportDialog
+          onClose={() => setSupportOpen(false)}
+          context={supportContext}
+        />
+      )}
       <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
         {/* Top actions */}
         <div className="px-2">
