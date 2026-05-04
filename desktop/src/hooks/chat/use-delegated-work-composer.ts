@@ -45,6 +45,7 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
   const cowork = useCoworkComposerStrip();
   const subagents = useSubagentComposerStrip();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
   const activeWorkspaceId = useHarnessStore((state) => (
     state.activeSessionId ? state.sessionSlots[state.activeSessionId]?.workspaceId ?? null : null
   ));
@@ -124,8 +125,7 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
       ...subagents,
       isSchedulingWake: scheduleWakeMutation.isPending,
       scheduleWake: (childSessionId) => {
-        const parentSessionId = subagents.parent?.parentSessionId
-          ?? useHarnessStore.getState().activeSessionId;
+        const parentSessionId = subagents.parent?.parentSessionId ?? activeSessionId;
         if (!parentSessionId) {
           showToast("Select a parent session before scheduling a wake.");
           return;
@@ -138,7 +138,7 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
         });
       },
     };
-  }, [scheduleWakeMutation, showToast, subagents]);
+  }, [activeSessionId, scheduleWakeMutation, showToast, subagents]);
 
   const summary = useMemo(() => deriveDelegatedWorkSummary([
     ...reviewSummaryCandidates(review),

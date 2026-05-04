@@ -20,16 +20,14 @@ import { PopoverSection } from "./PopoverSection";
 export function AgentsPopoverReviewSection({
   review,
   detail,
-  showTitle = true,
   onClose,
 }: {
   review: NonNullable<DelegatedWorkComposerViewModel["review"]>;
   detail?: string | null;
-  showTitle?: boolean;
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Reviews" detail={detail} showTitle={showTitle}>
+    <PopoverSection title="Reviews" detail={detail}>
       {review.run ? (
         <ReviewRunRows run={review.run} review={review} onClose={onClose} />
       ) : review.startingReview ? (
