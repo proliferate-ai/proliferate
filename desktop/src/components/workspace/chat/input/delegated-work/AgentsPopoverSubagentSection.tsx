@@ -5,13 +5,15 @@ import { PopoverSection } from "./PopoverSection";
 
 export function AgentsPopoverSubagentSection({
   subagents,
+  showTitle = true,
   onClose,
 }: {
   subagents: NonNullable<DelegatedWorkComposerViewModel["subagents"]>;
+  showTitle?: boolean;
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Subagents">
+    <PopoverSection title="Subagents" showTitle={showTitle}>
       {subagents.parent && (
         <Button
           type="button"

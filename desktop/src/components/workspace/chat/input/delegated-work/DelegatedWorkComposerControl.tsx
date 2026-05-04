@@ -12,6 +12,20 @@ export function DelegatedWorkComposerControl({
 }: {
   viewModel: DelegatedWorkComposerViewModel;
 }) {
+  const sectionCount = [
+    viewModel.review,
+    viewModel.cowork,
+    viewModel.subagents,
+  ].filter(Boolean).length;
+  const singleSectionTitle = viewModel.review
+    ? "Reviews"
+    : viewModel.cowork
+      ? "Cowork"
+      : viewModel.subagents
+        ? "Subagents"
+        : "Agents";
+  const headerTitle = sectionCount === 1 ? singleSectionTitle : "Agents";
+
   return (
     <PopoverButton
       trigger={(
@@ -31,22 +45,34 @@ export function DelegatedWorkComposerControl({
     >
       {(close) => (
         <ComposerPopoverSurface
-          className="w-[min(24rem,calc(100vw-1rem))] p-1.5"
+          className="w-[min(22rem,calc(100vw-1rem))] p-1"
           data-telemetry-mask
         >
-          <div className="flex items-center justify-between gap-2 px-1.5 pb-1">
-            <span className="text-xs font-medium text-foreground">Agents</span>
+          <div className="flex h-7 items-center justify-between gap-2 px-2">
+            <span className="text-xs font-medium text-foreground">{headerTitle}</span>
             <span className="text-xs text-muted-foreground">{viewModel.summary.label}</span>
           </div>
           <div className="max-h-[min(22rem,calc(100vh-10rem))] overflow-y-auto">
             {viewModel.review && (
-              <AgentsPopoverReviewSection review={viewModel.review} onClose={close} />
+              <AgentsPopoverReviewSection
+                review={viewModel.review}
+                showTitle={sectionCount > 1}
+                onClose={close}
+              />
             )}
             {viewModel.cowork && (
-              <AgentsPopoverCoworkSection cowork={viewModel.cowork} onClose={close} />
+              <AgentsPopoverCoworkSection
+                cowork={viewModel.cowork}
+                showTitle={sectionCount > 1}
+                onClose={close}
+              />
             )}
             {viewModel.subagents && (
-              <AgentsPopoverSubagentSection subagents={viewModel.subagents} onClose={close} />
+              <AgentsPopoverSubagentSection
+                subagents={viewModel.subagents}
+                showTitle={sectionCount > 1}
+                onClose={close}
+              />
             )}
           </div>
         </ComposerPopoverSurface>

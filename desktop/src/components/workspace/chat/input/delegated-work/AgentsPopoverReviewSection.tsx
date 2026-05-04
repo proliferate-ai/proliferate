@@ -19,13 +19,15 @@ import { PopoverSection } from "./PopoverSection";
 
 export function AgentsPopoverReviewSection({
   review,
+  showTitle = true,
   onClose,
 }: {
   review: NonNullable<DelegatedWorkComposerViewModel["review"]>;
+  showTitle?: boolean;
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Reviews">
+    <PopoverSection title="Reviews" showTitle={showTitle}>
       {review.run ? (
         <ReviewRunRows run={review.run} review={review} onClose={onClose} />
       ) : review.startingReview ? (
@@ -56,6 +58,7 @@ function ReviewRunRows({
   const canReviewRevision = run.status === "waiting_for_revision" && hasNextRound;
   const canFinishReview = run.status === "waiting_for_revision" && !hasNextRound;
   const canStop = !isTerminal && run.status !== "waiting_for_revision";
+  const hasActionMessage = !!deliveryLabel || !!failureDisplay;
 
   return (
     <>
@@ -85,14 +88,14 @@ function ReviewRunRows({
         || canStop
         || isTerminal
       ) && (
-        <div className="mt-1 flex min-w-0 items-center justify-between gap-2 px-1.5 pt-1">
+        <div className="mt-1 flex min-w-0 items-center gap-2 px-1.5 pt-1">
           {deliveryLabel && (
             <div className="min-w-0 truncate text-xs text-muted-foreground">{deliveryLabel}</div>
           )}
           {failureDisplay && (
             <div className="min-w-0 truncate text-xs text-destructive">{failureDisplay}</div>
           )}
-          <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className={`${hasActionMessage ? "ml-auto" : ""} flex shrink-0 items-center gap-1`}>
             {run.status === "feedback_ready" && (
               <Button
                 type="button"
