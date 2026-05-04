@@ -1,5 +1,4 @@
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { MessageSquare } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
@@ -24,7 +23,6 @@ export function DelegatedWorkComposerControl({
     <PopoverButton
       trigger={(
         <ComposerControlButton
-          icon={<MessageSquare className="size-3.5" />}
           label="Agents"
           detail={viewModel.summary.label}
           active={viewModel.summary.active}
