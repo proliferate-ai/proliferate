@@ -61,6 +61,8 @@ export interface MainScreenLayoutState {
   setSidebarWidth: Dispatch<SetStateAction<number>>;
   rightPanelOpen: boolean;
   setRightPanelOpen: Dispatch<SetStateAction<boolean>>;
+  rightPanelFocusRequestToken: number;
+  requestRightPanelFocus: () => void;
   terminalActivationRequest: TerminalActivationRequest | null;
   setTerminalActivationRequest: Dispatch<SetStateAction<TerminalActivationRequest | null>>;
   publishDialog: PublishDialogState;
@@ -105,6 +107,7 @@ export function useMainScreenState(): MainScreenState {
     useState<RightPanelDurableState | null>(null);
   const [terminalActivationRequest, setTerminalActivationRequest] =
     useState<TerminalActivationRequest | null>(null);
+  const [rightPanelFocusRequestToken, setRightPanelFocusRequestToken] = useState(0);
   const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
     CLOSED_PUBLISH_DIALOG_STATE,
   );
@@ -250,6 +253,9 @@ export function useMainScreenState(): MainScreenState {
       workspaceUiKey,
     ],
   );
+  const requestRightPanelFocus = useCallback(() => {
+    setRightPanelFocusRequestToken((token) => token + 1);
+  }, []);
 
   const onLeftSeparatorDown = useResize({
     direction: "horizontal",
@@ -342,6 +348,8 @@ export function useMainScreenState(): MainScreenState {
       setSidebarWidth,
       rightPanelOpen,
       setRightPanelOpen,
+      rightPanelFocusRequestToken,
+      requestRightPanelFocus,
       terminalActivationRequest,
       setTerminalActivationRequest,
       publishDialog,

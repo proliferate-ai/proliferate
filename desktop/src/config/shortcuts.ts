@@ -13,6 +13,10 @@ export type ShortcutMatch =
     key: string;
   } & ShortcutModifierMatch)
   | ({
+    kind: "fixed-code";
+    code: string;
+  } & ShortcutModifierMatch)
+  | ({
     kind: "digit-key";
   } & ShortcutModifierMatch)
   | ({
@@ -44,6 +48,15 @@ export const SHORTCUTS = {
     description: "Open settings",
     owner: "native-menu",
     match: { kind: "fixed", key: ",", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  goHome: {
+    id: "app.go-home",
+    label: "⌘⇧,",
+    nonMacLabel: "Ctrl+Shift+,",
+    description: "Go home",
+    owner: "js",
+    match: { kind: "fixed-code", code: "Comma", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
   selectAll: {
@@ -203,8 +216,8 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+B",
     description: "Toggle left sidebar",
     owner: "js",
-    match: { kind: "fixed", key: "b", meta: true, shift: false, alt: false },
-    allowInInputs: false,
+    match: { kind: "fixed-code", code: "KeyB", meta: true, shift: false, alt: false },
+    allowInInputs: true,
   },
   toggleRightPanel: {
     id: "workspace.toggle-right-panel",
@@ -212,8 +225,8 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+Alt+B",
     description: "Toggle right panel",
     owner: "js",
-    match: { kind: "fixed", key: "b", meta: true, shift: false, alt: true },
-    allowInInputs: false,
+    match: { kind: "fixed-code", code: "KeyB", meta: true, shift: false, alt: true },
+    allowInInputs: true,
   },
   openCommandPalette: {
     id: "workspace.open-command-palette",
@@ -272,6 +285,7 @@ export const SHORTCUT_GROUPS = [
     title: "App",
     shortcutKeys: [
       "openSettings",
+      "goHome",
     ],
   },
   {

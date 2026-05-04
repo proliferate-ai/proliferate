@@ -41,6 +41,28 @@ describe("workspace ui tab persistence", () => {
     expect(state.manualChatGroupsByWorkspace).toEqual({});
   });
 
+  it("defaults and sanitizes persisted archived visibility", () => {
+    const missingState = {
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 8,
+    } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
+    delete missingState.showArchived;
+
+    const missing = migrateWorkspaceUiState(
+      missingState as typeof WORKSPACE_UI_DEFAULTS,
+    );
+    const invalid = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 8,
+      showArchived: "yes" as never,
+    });
+
+    expect(missing.didMigrate).toBe(false);
+    expect(missing.state.showArchived).toBe(false);
+    expect(invalid.didMigrate).toBe(true);
+    expect(invalid.state.showArchived).toBe(false);
+  });
+
   it("defaults missing session error views without bumping migration", () => {
     const legacyState = {
       ...WORKSPACE_UI_DEFAULTS,
@@ -252,6 +274,17 @@ describe("workspace ui tab persistence", () => {
     store.markWorkspaceViewed("w2");
     expect(useWorkspaceUiStore.getState().lastViewedAt.w2)
       .toBe("2026-04-04T00:00:30.000Z");
+  });
+
+  it("stores archived workspace visibility", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    useWorkspaceUiStore.getState().setShowArchived(true);
+
+    expect(useWorkspaceUiStore.getState().showArchived).toBe(true);
   });
 
   it("stores right panel preferences per workspace", () => {

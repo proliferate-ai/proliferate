@@ -45,6 +45,7 @@ export function useMainScreenActions({
     setRightPanelState,
     setSidebarOpen,
     setRightPanelOpen,
+    requestRightPanelFocus,
     setTerminalActivationRequest,
     setCommandPaletteOpen,
     setPublishDialog,
@@ -56,7 +57,8 @@ export function useMainScreenActions({
       activeEntryKey: rightPanelToolHeaderKey(tool),
     }));
     setRightPanelOpen(true);
-  }, [setRightPanelOpen, setRightPanelState]);
+    requestRightPanelFocus();
+  }, [requestRightPanelFocus, setRightPanelOpen, setRightPanelState]);
 
   const openTerminalPanel = useCallback((terminalId?: string) => {
     if (!selectedWorkspaceId) {
@@ -100,11 +102,18 @@ export function useMainScreenActions({
       const activeEntry = parseRightPanelHeaderEntryKey(rightPanelState.activeEntryKey);
       if (activeEntry?.kind === "browser" || activeEntry?.kind === "terminal") {
         setRightPanelOpen(true);
+        requestRightPanelFocus();
         return;
       }
       openRightPanelTool("files");
     }
-  }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeEntryKey, setRightPanelOpen]);
+  }, [
+    openRightPanelTool,
+    requestRightPanelFocus,
+    rightPanelOpen,
+    rightPanelState.activeEntryKey,
+    setRightPanelOpen,
+  ]);
 
   const openPrInBrowser = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
     const url = pullRequest?.url ?? existingPr?.url;

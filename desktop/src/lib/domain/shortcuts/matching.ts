@@ -86,6 +86,8 @@ export function matchShortcut(
   switch (match.kind) {
     case "fixed":
       return normalizeKey(event.key) === normalizeKey(match.key) ? {} : null;
+    case "fixed-code":
+      return event.code === match.code ? {} : null;
     case "digit-key": {
       const digit = getShortcutDigitByKey(event.key);
       return digit ? { digit } : null;

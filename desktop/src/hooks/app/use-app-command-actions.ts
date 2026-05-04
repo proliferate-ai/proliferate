@@ -8,6 +8,8 @@ import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspac
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
+import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";
+import { APP_ROUTES } from "@/config/app-routes";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
@@ -36,6 +38,7 @@ export interface AppCommandAction {
 
 export interface AppCommandActions {
   openSettings: AppCommandAction;
+  goHome: AppCommandAction;
   addRepository: AppCommandAction;
   newLocalWorkspace: AppCommandAction;
   newWorktreeWorkspace: AppCommandAction;
@@ -46,6 +49,7 @@ export function useAppCommandActions(): AppCommandActions {
   const navigate = useNavigate();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
+  const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
   const { cloudActive } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
@@ -107,6 +111,9 @@ export function useAppCommandActions(): AppCommandActions {
   const openSettings = useCallback(() => {
     navigate("/settings");
   }, [navigate]);
+  const goHome = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.home);
+  }, [goToTopLevelRoute]);
 
   const addRepositoryDisabledReason = isAddingRepo
     ? "Action already in progress."
@@ -234,6 +241,10 @@ export function useAppCommandActions(): AppCommandActions {
       execute: openSettings,
       disabledReason: null,
     },
+    goHome: {
+      execute: goHome,
+      disabledReason: null,
+    },
     addRepository: {
       execute: addRepository,
       disabledReason: addRepositoryDisabledReason,
@@ -259,6 +270,7 @@ export function useAppCommandActions(): AppCommandActions {
     newLocalWorkspace,
     newWorktreeDisabledReason,
     newWorktreeWorkspace,
+    goHome,
     openSettings,
   ]);
 }
