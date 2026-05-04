@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -6,13 +6,10 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
-
-function isDocumentVisibleAndFocused(): boolean {
-  if (typeof document === "undefined" || typeof window === "undefined") {
-    return false;
-  }
-  return document.visibilityState === "visible" && document.hasFocus();
-}
+import {
+  isDocumentVisibleAndFocused,
+  useDocumentFocusVisibilityNonce,
+} from "@/hooks/ui/use-document-focus-visibility";
 
 export function useSessionErrorAcknowledgement(): void {
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
@@ -44,27 +41,7 @@ export function useSessionErrorAcknowledgement(): void {
   const markSessionErrorViewed = useWorkspaceUiStore(
     (state) => state.markSessionErrorViewed,
   );
-  const [focusVisibilityNonce, setFocusVisibilityNonce] = useState(0);
-
-  useEffect(() => {
-    if (typeof document === "undefined" || typeof window === "undefined") {
-      return;
-    }
-
-    const bumpFocusVisibilityNonce = () => {
-      setFocusVisibilityNonce((value) => value + 1);
-    };
-
-    document.addEventListener("visibilitychange", bumpFocusVisibilityNonce);
-    window.addEventListener("focus", bumpFocusVisibilityNonce);
-    window.addEventListener("blur", bumpFocusVisibilityNonce);
-
-    return () => {
-      document.removeEventListener("visibilitychange", bumpFocusVisibilityNonce);
-      window.removeEventListener("focus", bumpFocusVisibilityNonce);
-      window.removeEventListener("blur", bumpFocusVisibilityNonce);
-    };
-  }, []);
+  const focusVisibilityNonce = useDocumentFocusVisibilityNonce();
 
   useEffect(() => {
     if (!activeSessionId || !isChatActiveShellTab || !errorAttentionKey) {

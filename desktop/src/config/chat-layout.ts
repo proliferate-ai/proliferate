@@ -10,6 +10,7 @@ interface ChatSurfaceBottomInsetArgs {
   dockHeightPx: number;
   composerSurfaceHeightPx: number;
   composerSurfaceOffsetTopPx: number;
+  composerFooterHeightPx?: number;
 }
 
 export function computeChatSurfaceBottomInsetPx({
@@ -28,10 +29,14 @@ export function computeChatSurfaceBottomInsetPx({
   );
 }
 
-export function computeChatStickyBottomInsetPx(dockHeightPx: number): number {
-  const dockHeight = Math.max(0, Math.ceil(dockHeightPx));
+export function computeChatStableBottomInsetPx({
+  composerSurfaceHeightPx,
+  composerFooterHeightPx = 0,
+}: Pick<ChatSurfaceBottomInsetArgs, "composerSurfaceHeightPx" | "composerFooterHeightPx">): number {
+  const surfaceHeight = Math.max(0, Math.ceil(composerSurfaceHeightPx));
+  const footerHeight = Math.max(0, Math.ceil(composerFooterHeightPx));
 
-  return dockHeight + CHAT_SCROLL_BASE_BOTTOM_PADDING_PX;
+  return surfaceHeight + footerHeight + CHAT_SCROLL_BASE_BOTTOM_PADDING_PX;
 }
 
 export function computeChatDockLowerBackdropTopPx({

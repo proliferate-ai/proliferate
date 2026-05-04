@@ -25,6 +25,8 @@ export interface CoworkCodingToolPresentation {
   sourceWorkspaceId: string | null;
   workspaceId: string | null;
   codingSessionId: string | null;
+  sessionLinkId: string | null;
+  parentSessionId: string | null;
   eventCount: number | null;
   truncated: boolean | null;
   wakeScheduled: boolean | null;
@@ -83,6 +85,8 @@ export function deriveCoworkCodingToolPresentation(
     workspaceId: readString(output, "workspaceId") ?? readString(input, "workspaceId"),
     codingSessionId:
       readString(output, "codingSessionId") ?? readString(input, "codingSessionId"),
+    sessionLinkId: readString(output, "sessionLinkId") ?? readString(input, "sessionLinkId"),
+    parentSessionId: readString(output, "parentSessionId") ?? readString(input, "parentSessionId"),
     eventCount,
     truncated,
     wakeScheduled: readBoolean(output, "wakeScheduled"),

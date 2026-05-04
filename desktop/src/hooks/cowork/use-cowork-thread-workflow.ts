@@ -229,6 +229,7 @@ export function useCoworkThreadWorkflow() {
         launchedSession.id,
         createSessionSlotFromSummary(launchedSession, result.workspace.id, {
           transcriptHydrated: true,
+          sessionRelationship: { kind: "root" },
         }),
       );
       if (input.draftText?.length) {

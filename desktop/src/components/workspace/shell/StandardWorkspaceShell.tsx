@@ -22,6 +22,7 @@ import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/use-workspace-activity-acknowledgement";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
@@ -32,6 +33,11 @@ import {
 
 export function StandardWorkspaceShell() {
   useDebugRenderCount("workspace-shell");
+  // Workspace activity is a shell-level read receipt: if the selected workspace
+  // is visible, activity in any shell tab is considered consumed. Session error
+  // acknowledgement intentionally stays in ChatView because errors are
+  // transcript-scoped and need the chat surface for context.
+  useWorkspaceActivityAcknowledgement();
   const { layout, data } = useMainScreenState();
   const actions = useMainScreenActions({
     layout,

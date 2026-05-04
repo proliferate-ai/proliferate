@@ -26,6 +26,7 @@ import {
   reviewRoundProgress,
   reviewRunReplacesStartingReview,
 } from "@/lib/domain/reviews/review-runs";
+import { collectReviewSessionRelationshipHints } from "@/lib/domain/reviews/session-relationship-hints";
 import {
   type StartingReviewState,
   useReviewUiStore,
@@ -46,6 +47,9 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
   const actions = useReviewActions();
   const { activateChatTab } = useWorkspaceShellActivation();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const recordSessionRelationshipHint = useHarnessStore(
+    (state) => state.recordSessionRelationshipHint,
+  );
   const openCritique = useReviewUiStore((state) => state.openCritique);
   const dismissTerminalNotice = useReviewUiStore((state) => state.dismissTerminalNotice);
   const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
@@ -60,6 +64,21 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
     }
   }, [clearStartingReview, runReplacesStartingReview]);
 
+  useEffect(() => {
+    if (!run) {
+      return;
+    }
+    for (const hint of collectReviewSessionRelationshipHints([run])) {
+      recordSessionRelationshipHint(hint.sessionId, {
+        kind: "review_child",
+        parentSessionId: hint.parentSessionId,
+        sessionLinkId: hint.sessionLinkId,
+        relation: "review",
+        workspaceId: selectedWorkspaceId,
+      });
+    }
+  }, [recordSessionRelationshipHint, run, selectedWorkspaceId]);
+
   const handleOpenCritique = (assignment: ReviewAssignmentDetail) => {
     if (!run) {
       return;
@@ -72,6 +91,17 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
   };
   const handleOpenReviewerSession = (sessionId: string) => {
     if (!selectedWorkspaceId) return;
+    const hint = collectReviewSessionRelationshipHints(run ? [run] : [])
+      .find((candidate) => candidate.sessionId === sessionId);
+    if (hint) {
+      recordSessionRelationshipHint(sessionId, {
+        kind: "review_child",
+        parentSessionId: hint.parentSessionId,
+        sessionLinkId: hint.sessionLinkId,
+        relation: "review",
+        workspaceId: selectedWorkspaceId,
+      });
+    }
     void activateChatTab({
       workspaceId: selectedWorkspaceId,
       sessionId,

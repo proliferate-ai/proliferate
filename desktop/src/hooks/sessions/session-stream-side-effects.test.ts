@@ -12,11 +12,13 @@ import {
 } from "@anyharness/sdk";
 import { applyBatchedStreamSideEffects } from "@/hooks/sessions/session-stream-side-effects";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
+import type { SessionRelationship } from "@/stores/sessions/harness-store";
 
 const mocks = vi.hoisted(() => ({
   effectOrder: [] as string[],
   trackWorkspaceInteraction: vi.fn(),
   notifyTurnEnd: vi.fn(),
+  notifyUserFacingTurnEnd: vi.fn(),
   clearPendingConfigRollbackCheck: vi.fn(),
   schedulePendingConfigRollbackCheck: vi.fn(),
 }));
@@ -27,6 +29,7 @@ vi.mock("@/stores/preferences/workspace-ui-store", () => ({
 
 vi.mock("@/lib/integrations/anyharness/turn-end-events", () => ({
   notifyTurnEnd: mocks.notifyTurnEnd,
+  notifyUserFacingTurnEnd: mocks.notifyUserFacingTurnEnd,
 }));
 
 vi.mock("@/hooks/sessions/session-runtime-pending-config", () => ({
@@ -43,6 +46,9 @@ describe("applyBatchedStreamSideEffects", () => {
     });
     mocks.notifyTurnEnd.mockImplementation((sessionId: string, eventType: string) => {
       mocks.effectOrder.push(`notify:${sessionId}:${eventType}`);
+    });
+    mocks.notifyUserFacingTurnEnd.mockImplementation((sessionId: string, eventType: string) => {
+      mocks.effectOrder.push(`notify-user:${sessionId}:${eventType}`);
     });
     mocks.clearPendingConfigRollbackCheck.mockImplementation((sessionId: string) => {
       mocks.effectOrder.push(`clear-rollback:${sessionId}`);
@@ -94,6 +100,27 @@ describe("applyBatchedStreamSideEffects", () => {
     );
   });
 
+  it("acknowledges selected activity in the same side-effect pass", () => {
+    const acknowledgeWorkspaceActivity = vi.fn((workspaceId: string, timestamp: string) => {
+      mocks.effectOrder.push(`ack:${workspaceId}:${timestamp}`);
+    });
+
+    applyBatchedStreamSideEffects({
+      ...baseInput(),
+      acknowledgeWorkspaceActivity,
+      envelopes: [
+        turnStarted(2),
+      ],
+    });
+
+    expect(mocks.effectOrder).toEqual([
+      "activity:workspace-1:2026-04-04T00:00:02Z",
+      "ack:workspace-1:2026-04-04T00:00:02Z",
+      "clear-rollback:session-1",
+      "clear-rollback:session-1",
+    ]);
+  });
+
   it("notifies once for every terminal event in a batch", () => {
     applyBatchedStreamSideEffects({
       ...baseInput(),
@@ -106,12 +133,33 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(mocks.notifyTurnEnd).toHaveBeenCalledTimes(2);
     expect(mocks.notifyTurnEnd).toHaveBeenNthCalledWith(1, "session-1", "turn_ended");
     expect(mocks.notifyTurnEnd).toHaveBeenNthCalledWith(2, "session-1", "error");
+    expect(mocks.notifyUserFacingTurnEnd).not.toHaveBeenCalled();
+  });
+
+  it("emits user-facing completion only for explicitly root sessions", () => {
+    applyBatchedStreamSideEffects({
+      ...baseInput({
+        sessionRelationship: { kind: "root" },
+      }),
+      envelopes: [
+        turnEnded(2),
+        errorEvent(3),
+      ],
+    });
+
+    expect(mocks.notifyTurnEnd).toHaveBeenCalledTimes(2);
+    expect(mocks.notifyUserFacingTurnEnd).toHaveBeenCalledTimes(2);
+    expect(mocks.notifyUserFacingTurnEnd).toHaveBeenNthCalledWith(1, "session-1", "turn_ended");
+    expect(mocks.notifyUserFacingTurnEnd).toHaveBeenNthCalledWith(2, "session-1", "error");
   });
 });
 
 function baseInput(overrides?: {
   pendingConfigChanges?: PendingSessionConfigChanges;
+  sessionRelationship?: SessionRelationship | null;
 }) {
+  const sessionRelationship: SessionRelationship | null =
+    overrides?.sessionRelationship ?? { kind: "pending" };
   return {
     queryClient: new QueryClient(),
     sessionId: "session-1",
@@ -123,6 +171,9 @@ function baseInput(overrides?: {
     pendingConfigChanges: overrides?.pendingConfigChanges ?? {},
     reconciledIntents: [],
     mountSubagentChildSession: vi.fn(),
+    recordSessionRelationshipHint: vi.fn(),
+    getSessionRelationship: vi.fn((sessionId: string) =>
+      sessionId === "session-1" ? sessionRelationship : null),
     persistReconciledModePreferences: vi.fn(),
     refreshSessionSlotMeta: vi.fn(),
     showToast: vi.fn(),

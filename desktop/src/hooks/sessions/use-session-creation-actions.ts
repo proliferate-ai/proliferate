@@ -226,6 +226,7 @@ export function useSessionCreationActions() {
         modelId: options.modelId,
         modeId: resolvedModeId ?? null,
         optimisticPrompt: null,
+        sessionRelationship: { kind: "root" },
       }),
       status: "starting",
       transcriptHydrated: true,
@@ -466,6 +467,7 @@ export function useSessionCreationActions() {
           mcpBindingSummaries: launchedSession.mcpBindingSummaries ?? null,
           lastPromptAt: launchedSession.lastPromptAt ?? null,
           optimisticPrompt: null,
+          sessionRelationship: { kind: "root" },
         }),
         status: resolveStatusFromExecutionSummary(
           launchedSession.executionSummary,

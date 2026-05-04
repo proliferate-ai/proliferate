@@ -85,39 +85,41 @@ export function WorkspaceArrivalCloudPanel({
       expanded={expanded}
       onToggleExpanded={() => setExpanded((value) => !value)}
     >
-      <SectionRow label="Repository">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
-          <span className="text-foreground">{model.repoLabel}</span>
-          <span>{model.branchLabel}</span>
-        </div>
-      </SectionRow>
-
-      {model.footer.kind === "action" ? (
-        <SectionRow label="Actions">
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              loading={isPrimaryActionPending}
-              onClick={onPrimaryAction ?? undefined}
-            >
-              {model.footer.label}
-            </Button>
-            <span className="text-sm text-muted-foreground">{model.footer.helperText}</span>
+      <div className="max-h-[min(32vh,280px)] overflow-y-auto">
+        <SectionRow label="Repository">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
+            <span className="text-foreground">{model.repoLabel}</span>
+            <span>{model.branchLabel}</span>
           </div>
         </SectionRow>
-      ) : (
-        <SectionRow label="Status">
-          <span className="text-sm text-muted-foreground">{model.footer.message}</span>
-        </SectionRow>
-      )}
 
-      {pendingPromptCount > 0 ? (
-        <SectionRow label="Prompt">
-          <span className="text-sm text-muted-foreground">
-            Queued prompt will send when this cloud workspace is ready.
-          </span>
-        </SectionRow>
-      ) : null}
+        {model.footer.kind === "action" ? (
+          <SectionRow label="Actions">
+            <div className="flex items-center gap-3">
+              <Button
+                size="sm"
+                loading={isPrimaryActionPending}
+                onClick={onPrimaryAction ?? undefined}
+              >
+                {model.footer.label}
+              </Button>
+              <span className="text-sm text-muted-foreground">{model.footer.helperText}</span>
+            </div>
+          </SectionRow>
+        ) : (
+          <SectionRow label="Status">
+            <span className="text-sm text-muted-foreground">{model.footer.message}</span>
+          </SectionRow>
+        )}
+
+        {pendingPromptCount > 0 ? (
+          <SectionRow label="Prompt">
+            <span className="text-sm text-muted-foreground">
+              Queued prompt will send when this cloud workspace is ready.
+            </span>
+          </SectionRow>
+        ) : null}
+      </div>
     </ComposerAttachedPanel>
   );
 }

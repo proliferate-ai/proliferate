@@ -23,7 +23,14 @@ import {
   resolveSubagentLaunchDisplay,
 } from "@/lib/domain/chat/subagent-launch";
 import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
-import { notifyTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
+import {
+  notifyTurnEnd,
+  notifyUserFacingTurnEnd,
+} from "@/lib/integrations/anyharness/turn-end-events";
+import type {
+  SessionChildRelationship,
+  SessionRelationship,
+} from "@/stores/sessions/harness-store";
 import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,
@@ -60,8 +67,16 @@ export function applyBatchedStreamSideEffects(input: {
     childSessionId: string;
     label: string | null;
     workspaceId: string | null;
+    parentSessionId: string | null;
+    sessionLinkId?: string | null;
     requestHeaders?: HeadersInit;
   }) => Promise<void> | void;
+  recordSessionRelationshipHint: (
+    sessionId: string,
+    relationship: SessionChildRelationship,
+  ) => void;
+  getSessionRelationship: (sessionId: string) => SessionRelationship | null;
+  acknowledgeWorkspaceActivity?: (workspaceId: string, timestamp: string) => void;
   persistReconciledModePreferences: (
     workspaceId: string | null | undefined,
     agentKind: string | null | undefined,
@@ -136,10 +151,19 @@ export function applyBatchedStreamSideEffects(input: {
       });
     }
     if (event.type === "subagent_turn_completed") {
+      input.recordSessionRelationshipHint(event.childSessionId, {
+        kind: "subagent_child",
+        parentSessionId: event.parentSessionId,
+        sessionLinkId: event.sessionLinkId,
+        relation: "subagent",
+        workspaceId: input.workspaceId,
+      });
       void input.mountSubagentChildSession({
         childSessionId: event.childSessionId,
         label: event.label ?? null,
         workspaceId: input.workspaceId,
+        parentSessionId: event.parentSessionId,
+        sessionLinkId: event.sessionLinkId,
         requestHeaders: input.requestHeaders,
       });
       shouldInvalidateSessionSubagents = true;
@@ -148,7 +172,22 @@ export function applyBatchedStreamSideEffects(input: {
       event.type === "session_link_turn_completed"
       && event.relation === "cowork_coding_session"
     ) {
+      input.recordSessionRelationshipHint(event.childSessionId, {
+        kind: "cowork_child",
+        parentSessionId: event.parentSessionId,
+        sessionLinkId: event.sessionLinkId,
+        relation: event.relation,
+        workspaceId: input.workspaceId,
+      });
       shouldInvalidateCowork = true;
+    } else if (event.type === "session_link_turn_completed") {
+      input.recordSessionRelationshipHint(event.childSessionId, {
+        kind: "linked_child",
+        parentSessionId: event.parentSessionId,
+        sessionLinkId: event.sessionLinkId,
+        relation: event.relation,
+        workspaceId: input.workspaceId,
+      });
     }
     if (event.type === "review_run_updated") {
       reviewParentSessionIds.add(event.parentSessionId);
@@ -159,10 +198,19 @@ export function applyBatchedStreamSideEffects(input: {
         const launchResult = parseSubagentLaunchResult(item);
         const display = resolveSubagentLaunchDisplay(item);
         if (launchResult?.childSessionId) {
+          input.recordSessionRelationshipHint(launchResult.childSessionId, {
+            kind: "subagent_child",
+            parentSessionId: input.sessionId,
+            sessionLinkId: launchResult.sessionLinkId,
+            relation: "subagent",
+            workspaceId: input.workspaceId,
+          });
           void input.mountSubagentChildSession({
             childSessionId: launchResult.childSessionId,
             label: display.title,
             workspaceId: input.workspaceId,
+            parentSessionId: input.sessionId,
+            sessionLinkId: launchResult.sessionLinkId,
             requestHeaders: input.requestHeaders,
           });
         }
@@ -196,6 +244,7 @@ export function applyBatchedStreamSideEffects(input: {
   }
   if (lastActivityTimestamp && input.workspaceId) {
     trackWorkspaceInteraction(input.workspaceId, lastActivityTimestamp);
+    input.acknowledgeWorkspaceActivity?.(input.workspaceId, lastActivityTimestamp);
   }
   if (shouldInvalidateSessionSubagents) {
     void input.queryClient.invalidateQueries({
@@ -255,6 +304,9 @@ export function applyBatchedStreamSideEffects(input: {
         break;
       case "notify_turn_end":
         notifyTurnEnd(input.sessionId, effect.eventType);
+        if (input.getSessionRelationship(input.sessionId)?.kind === "root") {
+          notifyUserFacingTurnEnd(input.sessionId, effect.eventType);
+        }
         break;
     }
   }

@@ -129,6 +129,7 @@ import type {
   TurnRecord,
   TerminalOutputContentPart,
 } from "@anyharness/sdk";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import { VirtualTranscriptRowList } from "@/components/workspace/chat/transcript/VirtualTranscriptRowList";
 import {
@@ -891,11 +892,12 @@ function TranscriptItemBlock({
   switch (item.kind) {
     case "user_message": {
       if (isSubagentWakeProvenance(item.promptProvenance)) {
+        const wakeProvenance = item.promptProvenance;
         const completion =
-          transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null;
+          transcript.linkCompletionsByCompletionId[wakeProvenance.completionId] ?? null;
         const childRole: TranscriptOpenSessionRole =
-          item.promptProvenance.type === "linkWake"
-          && item.promptProvenance.relation === "cowork_coding_session"
+          wakeProvenance.type === "linkWake"
+          && wakeProvenance.relation === "cowork_coding_session"
             ? "cowork-coding-child"
             : "linked-child";
         const childSessionId = completion?.childSessionId ?? null;
@@ -905,17 +907,32 @@ function TranscriptItemBlock({
         return (
           <div className="flex justify-end">
             <SubagentWakeBadge
-              label={item.promptProvenance.label ?? completion?.label ?? null}
+              label={wakeProvenance.label ?? completion?.label ?? null}
               childSessionId={childSessionId}
               outcome={completion?.outcome ?? null}
               titleFallback={
-                item.promptProvenance.type === "linkWake"
-                && item.promptProvenance.relation === "cowork_coding_session"
+                wakeProvenance.type === "linkWake"
+                && wakeProvenance.relation === "cowork_coding_session"
                   ? "Coding session"
                   : "Subagent"
               }
               onOpenChild={canOpenChild
-                ? (targetSessionId) => openSession(targetSessionId, childRole)
+                ? (targetSessionId) => {
+                  useHarnessStore.getState().recordSessionRelationshipHint(targetSessionId, {
+                    kind: wakeProvenance.type === "subagentWake"
+                      ? "subagent_child"
+                      : childRole === "cowork-coding-child"
+                        ? "cowork_child"
+                        : "linked_child",
+                    parentSessionId: sessionId,
+                    sessionLinkId: wakeProvenance.sessionLinkId,
+                    relation: wakeProvenance.type === "linkWake"
+                      ? wakeProvenance.relation
+                      : "subagent",
+                    workspaceId,
+                  });
+                  openSession(targetSessionId, childRole);
+                }
                 : undefined}
             />
           </div>

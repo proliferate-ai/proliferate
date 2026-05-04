@@ -15,6 +15,7 @@ import { useOpenCoworkCodingSession } from "./use-open-cowork-coding-session";
 export interface CoworkComposerSessionRow {
   sessionLinkId: string;
   codingSessionId: string;
+  parentSessionId: string;
   label: string;
   agentKind: string;
   statusLabel: string;
@@ -28,6 +29,7 @@ export interface CoworkComposerSessionRow {
 export interface CoworkComposerWorkspaceRow {
   ownershipId: string;
   workspaceId: string;
+  parentSessionId: string;
   label: string;
   sessionCount: number;
   active: boolean;
@@ -44,7 +46,12 @@ export interface CoworkComposerStripViewModel {
   rows: CoworkComposerWorkspaceRow[];
   summary: CoworkComposerStripSummary;
   openWorkspace: (workspaceId: string) => void;
-  openSession: (input: { workspaceId: string; sessionId: string }) => void;
+  openSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }
 
 export function useCoworkComposerStrip(): CoworkComposerStripViewModel | null {
@@ -69,16 +76,22 @@ export function useCoworkComposerStrip(): CoworkComposerStripViewModel | null {
     buildWorkspaceRow({
       workspace,
       index,
+      parentSessionId: activeThread?.sessionId ?? activeSessionId ?? "",
       selectedWorkspaceId,
       activeCodingSessionId,
     })
-  )), [activeCodingSessionId, selectedWorkspaceId, workspaces]);
+  )), [activeCodingSessionId, activeSessionId, activeThread?.sessionId, selectedWorkspaceId, workspaces]);
   const summary = useMemo(() => buildSummary(rows), [rows]);
 
   const openWorkspace = useCallback((workspaceId: string) => {
     void selectWorkspace(workspaceId, { force: true });
   }, [selectWorkspace]);
-  const openSession = useCallback((input: { workspaceId: string; sessionId: string }) => {
+  const openSession = useCallback((input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => {
     void openCodingSession(input);
   }, [openCodingSession]);
 
@@ -97,18 +110,20 @@ export function useCoworkComposerStrip(): CoworkComposerStripViewModel | null {
 function buildWorkspaceRow(args: {
   workspace: CoworkManagedWorkspaceSummary;
   index: number;
+  parentSessionId: string;
   selectedWorkspaceId: string | null;
   activeCodingSessionId: string | null;
 }): CoworkComposerWorkspaceRow {
-  const { workspace, index, selectedWorkspaceId, activeCodingSessionId } = args;
+  const { workspace, index, parentSessionId, selectedWorkspaceId, activeCodingSessionId } = args;
   return {
     ownershipId: workspace.ownershipId,
     workspaceId: workspace.workspaceId,
+    parentSessionId,
     label: workspaceLabel(workspace, index),
     sessionCount: workspace.sessions.length,
     active: selectedWorkspaceId === workspace.workspaceId,
     sessions: workspace.sessions.map((session, sessionIndex) => (
-      buildSessionRow(session, sessionIndex, activeCodingSessionId)
+      buildSessionRow(session, sessionIndex, parentSessionId, activeCodingSessionId)
     )),
   };
 }
@@ -116,11 +131,13 @@ function buildWorkspaceRow(args: {
 function buildSessionRow(
   session: CoworkCodingSessionSummary,
   index: number,
+  parentSessionId: string,
   activeCodingSessionId: string | null,
 ): CoworkComposerSessionRow {
   return {
     sessionLinkId: session.sessionLinkId,
     codingSessionId: session.codingSessionId,
+    parentSessionId,
     label: sessionLabel(session, index),
     agentKind: session.agentKind,
     statusLabel: sessionStatusLabel(session),

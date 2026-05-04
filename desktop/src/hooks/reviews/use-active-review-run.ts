@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useSessionReviewsQuery } from "@anyharness/sdk-react";
 import type { ReviewRunDetail } from "@anyharness/sdk";
 import {
@@ -6,6 +6,7 @@ import {
   isReviewRunBusy,
   selectComposerReviewRun,
 } from "@/lib/domain/reviews/review-runs";
+import { collectReviewSessionRelationshipHints } from "@/lib/domain/reviews/session-relationship-hints";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import type { StartingReviewState } from "@/stores/reviews/review-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -23,6 +24,9 @@ export function useActiveReviewRun(): {
     (state) => state.dismissedTerminalNoticeRunIds,
   );
   const startingReview = useReviewUiStore((state) => state.startingReview);
+  const recordSessionRelationshipHint = useHarnessStore(
+    (state) => state.recordSessionRelationshipHint,
+  );
   const activeStartingReview = startingReview?.parentSessionId === activeSessionId
     ? startingReview
     : null;
@@ -32,6 +36,18 @@ export function useActiveReviewRun(): {
     refetchInterval: 5000,
   });
   const reviews = reviewsQuery.data?.reviews ?? null;
+
+  useEffect(() => {
+    for (const hint of collectReviewSessionRelationshipHints(reviews)) {
+      recordSessionRelationshipHint(hint.sessionId, {
+        kind: "review_child",
+        parentSessionId: hint.parentSessionId,
+        sessionLinkId: hint.sessionLinkId,
+        relation: "review",
+        workspaceId: selectedWorkspaceId,
+      });
+    }
+  }, [recordSessionRelationshipHint, reviews, selectedWorkspaceId]);
 
   const run = useMemo(() => {
     return selectComposerReviewRun(reviews, dismissedTerminalNoticeRunIds);

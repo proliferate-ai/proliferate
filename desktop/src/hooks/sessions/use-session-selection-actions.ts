@@ -10,6 +10,8 @@ import {
 } from "@/lib/domain/sessions/activity";
 import {
   useHarnessStore,
+  type SessionChildRelationship,
+  type SessionRelationship,
 } from "@/stores/sessions/harness-store";
 import {
   createEmptySessionSlot,
@@ -67,6 +69,23 @@ export interface SelectSessionOptionsWithoutGuard {
 type SessionLatencyFlowOptions = SelectSessionOptionsWithoutGuard & {
   guard?: SessionActivationGuard;
 };
+
+export function classifyTrustedSessionSelection(sessionId: string): SessionRelationship {
+  const state = useHarnessStore.getState();
+  const slot = state.sessionSlots[sessionId] ?? null;
+  if (slot && slot.sessionRelationship.kind !== "pending") {
+    return slot.sessionRelationship;
+  }
+  const relationshipHint =
+    state.sessionRelationshipHints[sessionId] as SessionChildRelationship | undefined;
+  const relationship = relationshipHint ?? { kind: "root" as const };
+  if (relationship.kind === "root") {
+    state.setSessionRelationship(sessionId, relationship);
+  } else {
+    state.recordSessionRelationshipHint(sessionId, relationship);
+  }
+  return relationship;
+}
 
 export async function fetchWorkspaceSessions(
   runtimeUrl: string,
@@ -208,7 +227,7 @@ export function useSessionSelectionActions() {
       maxDurationMs: 30_000,
     });
     const current = useHarnessStore.getState();
-    const existingSlot = current.sessionSlots[sessionId] ?? null;
+    let existingSlot = current.sessionSlots[sessionId] ?? null;
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
     logLatency("session.select.start", {
       sessionId,
@@ -218,6 +237,14 @@ export function useSessionSelectionActions() {
     });
     if (guard && !isSessionActivationCurrent(guard)) {
       return staleSelection("intent-replaced");
+    }
+
+    const sessionSelectionRelationship = classifyTrustedSessionSelection(sessionId);
+    if (existingSlot?.sessionRelationship.kind === "pending") {
+      existingSlot = {
+        ...existingSlot,
+        sessionRelationship: sessionSelectionRelationship,
+      };
     }
 
     if (existingSlot) {
@@ -252,7 +279,7 @@ export function useSessionSelectionActions() {
         }
         const nonce = useHarnessStore.getState().workspaceSelectionNonce;
         useHarnessStore.getState().setHotPaintGate({
-          workspaceId: existingSlot.workspaceId,
+          workspaceId: existingSlot.workspaceId!,
           sessionId,
           nonce,
           operationId: hotOperationId,
@@ -391,6 +418,7 @@ export function useSessionSelectionActions() {
           executionSummary: sessionMeta?.executionSummary ?? null,
           mcpBindingSummaries: sessionMeta?.mcpBindingSummaries ?? null,
           lastPromptAt: sessionMeta?.lastPromptAt ?? null,
+          sessionRelationship: sessionSelectionRelationship,
         }),
         status: resolveStatusFromExecutionSummary(
           sessionMeta?.executionSummary ?? null,

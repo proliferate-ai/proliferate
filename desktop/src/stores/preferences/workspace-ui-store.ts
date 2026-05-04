@@ -133,6 +133,7 @@ export interface WorkspaceUiState {
   resetWorkspaceShellTabs: (workspaceId: string) => void;
   toggleSidebarWorkspaceType: (type: SidebarWorkspaceVariant) => void;
   markWorkspaceViewed: (workspaceId: string) => void;
+  markWorkspaceViewedAt: (workspaceId: string, timestamp: string) => void;
   setLastViewedSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearLastViewedSessionForWorkspace: (workspaceId: string, sessionId?: string) => void;
   markSessionErrorViewed: (sessionId: string, errorAt: string) => void;
@@ -973,6 +974,21 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     });
   },
 
+  markWorkspaceViewedAt: (workspaceId, timestamp) => {
+    set((state) => {
+      const current = state.lastViewedAt[workspaceId];
+      if (current && new Date(current).getTime() >= new Date(timestamp).getTime()) {
+        return state;
+      }
+      return {
+        lastViewedAt: {
+          ...state.lastViewedAt,
+          [workspaceId]: timestamp,
+        },
+      };
+    });
+  },
+
   setLastViewedSessionForWorkspace: (workspaceId, sessionId) => {
     set({
       lastViewedSessionByWorkspace: {
@@ -1252,6 +1268,10 @@ export function trackWorkspaceInteraction(workspaceId: string, timestamp: string
 
 export function markWorkspaceViewed(workspaceId: string) {
   useWorkspaceUiStore.getState().markWorkspaceViewed(workspaceId);
+}
+
+export function markWorkspaceViewedAt(workspaceId: string, timestamp: string) {
+  useWorkspaceUiStore.getState().markWorkspaceViewedAt(workspaceId, timestamp);
 }
 
 export function rememberLastViewedSession(workspaceId: string, sessionId: string) {

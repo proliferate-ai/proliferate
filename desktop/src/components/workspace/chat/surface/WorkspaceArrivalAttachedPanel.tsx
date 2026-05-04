@@ -77,33 +77,35 @@ export function WorkspaceArrivalAttachedPanelView({
       expanded={expanded}
       onToggleExpanded={onToggleExpanded}
     >
-      <SectionRow label="Setup">
-        <div className="flex items-center gap-2 text-base">
-          {isSetupRunning && (
-            <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
-          )}
-          <span className={`shrink-0 whitespace-nowrap ${setupToneColor}`}>{viewModel.setupStatusLabel}</span>
-          <span className="text-muted-foreground/40">·</span>
-          <span className="group/setup-error relative min-w-0 truncate text-muted-foreground">
-            {viewModel.setupSummary}
-            {viewModel.setupDetail && (
-              <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 font-mono text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
-                {viewModel.setupDetail}
-              </span>
+      <div className="max-h-[min(32vh,280px)] overflow-y-auto">
+        <SectionRow label="Setup">
+          <div className="flex items-center gap-2 text-base">
+            {isSetupRunning && (
+              <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
             )}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onSetupAction}
-            className="ml-auto h-6 shrink-0 px-1.5"
-          >
-            {viewModel.setupActionLabel}
-            {viewModel.setupTone !== "destructive" && <ArrowUpRight className="size-3" />}
-          </Button>
-        </div>
-      </SectionRow>
+            <span className={`shrink-0 whitespace-nowrap ${setupToneColor}`}>{viewModel.setupStatusLabel}</span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="group/setup-error relative min-w-0 truncate text-muted-foreground">
+              {viewModel.setupSummary}
+              {viewModel.setupDetail && (
+                <span className="pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 hidden max-w-md whitespace-pre-wrap rounded-lg border border-border/60 bg-popover px-3 py-2 font-mono text-xs text-popover-foreground shadow-floating group-hover/setup-error:block">
+                  {viewModel.setupDetail}
+                </span>
+              )}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onSetupAction}
+              className="ml-auto h-6 shrink-0 px-1.5"
+            >
+              {viewModel.setupActionLabel}
+              {viewModel.setupTone !== "destructive" && <ArrowUpRight className="size-3" />}
+            </Button>
+          </div>
+        </SectionRow>
+      </div>
     </ComposerAttachedPanel>
   );
 }
@@ -246,45 +248,47 @@ export function WorkspaceArrivalAttachedPanel() {
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
       >
-        {panelState.detail && (
-          <SectionRow label="Details">
-            <span className="truncate text-base text-muted-foreground">
-              {panelState.detail}
-            </span>
-          </SectionRow>
-        )}
+        <div className="max-h-[min(32vh,280px)] overflow-y-auto">
+          {panelState.detail && (
+            <SectionRow label="Details">
+              <span className="truncate text-base text-muted-foreground">
+                {panelState.detail}
+              </span>
+            </SectionRow>
+          )}
 
-        {deferredPromptCount > 0 ? (
-          <SectionRow label="Prompt">
-            <span className="truncate text-base text-muted-foreground">
-              Queued prompt will send when this cloud workspace is ready.
-            </span>
-          </SectionRow>
-        ) : null}
+          {deferredPromptCount > 0 ? (
+            <SectionRow label="Prompt">
+              <span className="truncate text-base text-muted-foreground">
+                Queued prompt will send when this cloud workspace is ready.
+              </span>
+            </SectionRow>
+          ) : null}
 
-        {panelState.isFailed && (
-          <SectionRow label="Actions">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  void handleBack(panelState.entry);
-                }}
-              >
-                Back
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  void handleRetry(panelState.entry);
-                }}
-              >
-                Retry
-              </Button>
-            </div>
-          </SectionRow>
-        )}
+          {panelState.isFailed && (
+            <SectionRow label="Actions">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void handleBack(panelState.entry);
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void handleRetry(panelState.entry);
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            </SectionRow>
+          )}
+        </div>
       </ComposerAttachedPanel>
     );
   }
