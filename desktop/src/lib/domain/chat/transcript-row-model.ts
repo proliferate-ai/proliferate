@@ -6,18 +6,25 @@ import type {
 } from "@anyharness/sdk";
 import {
   buildTurnPresentation,
+  type TurnDisplayBlock,
   type TurnPresentation,
 } from "@/lib/domain/chat/transcript-presentation";
 
 export const TURN_CONTENT_BLOCK_KEY = "content";
+export const TURN_COMPLETED_HISTORY_BLOCK_KEY = "completed-history";
+
+const SPLIT_TURN_MIN_ITEM_COUNT = 24;
 
 export type TranscriptRow =
   | {
     kind: "turn";
     key: `turn:${string}:block:${string}`;
     turnId: string;
-    blockKey: typeof TURN_CONTENT_BLOCK_KEY;
+    blockKey: string;
     presentation: TurnPresentation;
+    renderPresentation: TurnPresentation;
+    isFirstTurnRow: boolean;
+    isLastTurnRow: boolean;
   }
   | {
     kind: "pending_prompt";
@@ -39,7 +46,7 @@ export interface TranscriptRowModelCache {
 interface CachedTurnRow {
   turn: TurnRecord;
   itemRefs: readonly (TranscriptItem | null)[];
-  row: Extract<TranscriptRow, { kind: "turn" }>;
+  rows: readonly Extract<TranscriptRow, { kind: "turn" }>[];
 }
 
 export function createTranscriptRowModelCache(): TranscriptRowModelCache {
@@ -75,7 +82,7 @@ export function buildTranscriptRowModel({
     }
 
     seenTurnIds.add(turnId);
-    rows.push(buildTurnRow(turn, transcript, cache));
+    rows.push(...buildTurnRows(turn, transcript, cache));
   }
 
   if (visibleOptimisticPrompt) {
@@ -102,17 +109,24 @@ export function buildTurnContentRowKey(
   return `turn:${turnId}:block:${TURN_CONTENT_BLOCK_KEY}`;
 }
 
+function buildTurnBlockRowKey(
+  turnId: string,
+  blockKey: string,
+): `turn:${string}:block:${string}` {
+  return `turn:${turnId}:block:${blockKey}`;
+}
+
 export function buildPendingPromptRowKey(
   activeSessionId: string,
 ): `pending-prompt:${string}` {
   return `pending-prompt:${activeSessionId}`;
 }
 
-function buildTurnRow(
+function buildTurnRows(
   turn: TurnRecord,
   transcript: TranscriptState,
   cache?: TranscriptRowModelCache,
-): Extract<TranscriptRow, { kind: "turn" }> {
+): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
   const itemRefs = collectTurnItemRefs(turn, transcript);
   const cached = cache?.turnRowsById.get(turn.turnId) ?? null;
   if (
@@ -120,22 +134,141 @@ function buildTurnRow(
     && cached.turn === turn
     && areItemRefsEqual(cached.itemRefs, itemRefs)
   ) {
-    return cached.row;
+    return cached.rows;
   }
 
-  const row: Extract<TranscriptRow, { kind: "turn" }> = {
-    kind: "turn",
-    key: buildTurnContentRowKey(turn.turnId),
-    turnId: turn.turnId,
-    blockKey: TURN_CONTENT_BLOCK_KEY,
-    presentation: buildTurnPresentation(turn, transcript),
-  };
+  const presentation = buildTurnPresentation(turn, transcript);
+  const rows = buildRowsForTurnPresentation(turn, presentation);
   cache?.turnRowsById.set(turn.turnId, {
     turn,
     itemRefs,
-    row,
+    rows,
   });
-  return row;
+  return rows;
+}
+
+function buildRowsForTurnPresentation(
+  turn: TurnRecord,
+  presentation: TurnPresentation,
+): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
+  const chunks = shouldSplitTurnIntoRows(turn, presentation)
+    ? chunkTurnDisplayBlocks(presentation)
+    : [];
+  if (chunks.length <= 1) {
+    return [buildTurnRow({
+      turnId: turn.turnId,
+      blockKey: TURN_CONTENT_BLOCK_KEY,
+      presentation,
+      renderPresentation: presentation,
+      isFirstTurnRow: true,
+      isLastTurnRow: true,
+    })];
+  }
+
+  return chunks.map((chunk, index) => {
+    const renderPresentation: TurnPresentation = {
+      ...presentation,
+      displayBlocks: chunk.blocks,
+    };
+    return buildTurnRow({
+      turnId: turn.turnId,
+      blockKey: chunk.blockKey,
+      presentation,
+      renderPresentation,
+      isFirstTurnRow: index === 0,
+      isLastTurnRow: index === chunks.length - 1,
+    });
+  });
+}
+
+function buildTurnRow(input: {
+  turnId: string;
+  blockKey: string;
+  presentation: TurnPresentation;
+  renderPresentation: TurnPresentation;
+  isFirstTurnRow: boolean;
+  isLastTurnRow: boolean;
+}): Extract<TranscriptRow, { kind: "turn" }> {
+  return {
+    kind: "turn",
+    key: input.blockKey === TURN_CONTENT_BLOCK_KEY
+      ? buildTurnContentRowKey(input.turnId)
+      : buildTurnBlockRowKey(input.turnId, input.blockKey),
+    turnId: input.turnId,
+    blockKey: input.blockKey,
+    presentation: input.presentation,
+    renderPresentation: input.renderPresentation,
+    isFirstTurnRow: input.isFirstTurnRow,
+    isLastTurnRow: input.isLastTurnRow,
+  };
+}
+
+function shouldSplitTurnIntoRows(
+  turn: TurnRecord,
+  presentation: TurnPresentation,
+): boolean {
+  return turn.itemOrder.length >= SPLIT_TURN_MIN_ITEM_COUNT
+    && presentation.displayBlocks.length > 1;
+}
+
+interface TurnDisplayBlockChunk {
+  blockKey: string;
+  blocks: TurnDisplayBlock[];
+}
+
+function chunkTurnDisplayBlocks(
+  presentation: TurnPresentation,
+): TurnDisplayBlockChunk[] {
+  const completedHistoryRootIds = new Set(presentation.completedHistoryRootIds);
+  const chunks: TurnDisplayBlockChunk[] = [];
+  let completedHistoryBlocks: TurnDisplayBlock[] = [];
+
+  const flushCompletedHistory = () => {
+    if (completedHistoryBlocks.length === 0) {
+      return;
+    }
+    chunks.push({
+      blockKey: TURN_COMPLETED_HISTORY_BLOCK_KEY,
+      blocks: completedHistoryBlocks,
+    });
+    completedHistoryBlocks = [];
+  };
+
+  for (const block of presentation.displayBlocks) {
+    if (
+      presentation.completedHistorySummary
+      && blockBelongsToCompletedHistory(block, completedHistoryRootIds)
+    ) {
+      completedHistoryBlocks.push(block);
+      continue;
+    }
+
+    flushCompletedHistory();
+    chunks.push({
+      blockKey: getTurnDisplayBlockKey(block),
+      blocks: [block],
+    });
+  }
+
+  flushCompletedHistory();
+  return chunks;
+}
+
+function blockBelongsToCompletedHistory(
+  block: TurnDisplayBlock,
+  completedHistoryRootIds: ReadonlySet<string>,
+): boolean {
+  if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+    return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
+  }
+  return completedHistoryRootIds.has(block.itemId);
+}
+
+function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
+  if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
+    return block.blockId;
+  }
+  return block.itemId;
 }
 
 function collectTurnItemRefs(

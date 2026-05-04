@@ -52,7 +52,7 @@ export function PopoverButton({
   trigger,
   children,
   align = "start",
-  side = "bottom",
+  side = "auto",
   offset = 4,
   className = "w-56 rounded-xl border border-border bg-popover p-1 shadow-floating",
   stopPropagation = false,

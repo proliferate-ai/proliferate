@@ -216,14 +216,25 @@ export function MessageList({
     )
     : null;
   const virtualRows = useTranscriptRowModel({
-      activeSessionId,
-      transcript,
-      visibleOptimisticPrompt,
-      latestTurnId,
-      latestTurnHasAssistantRenderableContent,
-    });
+    activeSessionId,
+    transcript,
+    visibleOptimisticPrompt,
+    latestTurnId,
+    latestTurnHasAssistantRenderableContent,
+  });
   const visibleTurnIds = useMemo(
-    () => virtualRows.flatMap((row) => row.kind === "turn" ? [row.turnId] : []),
+    () => {
+      const ids: string[] = [];
+      const seen = new Set<string>();
+      for (const row of virtualRows) {
+        if (row.kind !== "turn" || seen.has(row.turnId)) {
+          continue;
+        }
+        seen.add(row.turnId);
+        ids.push(row.turnId);
+      }
+      return ids;
+    },
     [virtualRows],
   );
   const latestTurnInProgress = !!latestTurn && !latestTurn.completedAt;
@@ -398,6 +409,7 @@ export function MessageList({
     const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
     const hasFileBadges = turn.fileBadges.length > 0;
     const presentation = row.presentation;
+    const renderPresentation = row.renderPresentation;
     const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
     const tailAssistantProseRootId = findTailAssistantProseRootId(
       presentation,
@@ -417,7 +429,9 @@ export function MessageList({
     // Hide the trailing indicator only while the assistant prose item
     // itself is actively streaming. If Codex closes the prose item but
     // keeps working internally, the trailing indicator should return.
-    const trailingStatus = isLatestTurn
+    const trailingStatus = !row.isLastTurnRow
+      ? null
+      : isLatestTurn
       ? latestLiveStatus
       : shouldAllowTurnTrailingStatus({
           turn,
@@ -446,14 +460,15 @@ export function MessageList({
             turn={turn}
             transcript={transcript}
             isTurnComplete={!!turn.completedAt}
-            presentation={presentation}
+            presentation={renderPresentation}
             forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
             tailAssistantProseRootId={tailAssistantProseRootId}
+            showCompletedArtifactFallback={row.isLastTurnRow}
             workspaceId={selectedWorkspaceId}
             onOpenArtifact={openArtifact}
             onHandOffPlanToNewSession={onHandOffPlanToNewSession}
           />
-          {turn.completedAt && hasFileBadges && (
+          {row.isLastTurnRow && turn.completedAt && hasFileBadges && (
             <TurnDiffPanel
               turn={turn}
               transcript={transcript}
@@ -462,8 +477,8 @@ export function MessageList({
           )}
           <TurnAssistantActionRow
             content={tailAssistantCopyContent}
-            showCopyButton={!!turn.completedAt}
-            reserveSlot={shouldReserveTurnAssistantActionSlot}
+            showCopyButton={row.isLastTurnRow && !!turn.completedAt}
+            reserveSlot={row.isLastTurnRow && shouldReserveTurnAssistantActionSlot}
             timestampLabel={tailAssistantActionTime}
           />
           {trailingStatus && (
@@ -621,6 +636,7 @@ function TurnItemSequence({
   presentation,
   forceExpandedCollapsedActionBlockId,
   tailAssistantProseRootId,
+  showCompletedArtifactFallback,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -631,6 +647,7 @@ function TurnItemSequence({
   presentation: ReturnType<typeof buildTurnPresentation>;
   forceExpandedCollapsedActionBlockId?: string | null;
   tailAssistantProseRootId: string | null;
+  showCompletedArtifactFallback: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -719,7 +736,7 @@ function TurnItemSequence({
           />
         );
       })}
-      {tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
+      {showCompletedArtifactFallback && tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
         <div className="space-y-1.5">
           {completedArtifactToolCalls.map((item) => (
             <CoworkArtifactTurnCard

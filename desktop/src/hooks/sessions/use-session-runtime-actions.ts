@@ -331,7 +331,13 @@ export function useSessionRuntimeActions() {
 
         if (!nextState.applied) {
           finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed");
-          return false;
+          logLatency("session.history.rehydrate.noop", {
+            sessionId,
+            eventCount: events.length,
+            afterSeq,
+            elapsedMs: Math.round(performance.now() - startedAt),
+          });
+          return true;
         }
 
         const storeStartedAt = performance.now();

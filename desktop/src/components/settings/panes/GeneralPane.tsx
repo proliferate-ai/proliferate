@@ -185,7 +185,7 @@ export function GeneralPane() {
           </SettingsCardRow>
           <SettingsCardRow
             label="Plugins setup"
-            description="Connector setup, auth, and enablement stay on the Plugins page."
+            description="Configure your plugins."
           >
             <Button
               type="button"

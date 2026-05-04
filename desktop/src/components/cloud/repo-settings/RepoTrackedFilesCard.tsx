@@ -64,7 +64,7 @@ export function RepoTrackedFilesCard({
       >
         <div className="space-y-3">
           <PopoverButton
-            align="start"
+            align="end"
             trigger={(
               <Button
                 type="button"
