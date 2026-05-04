@@ -22,6 +22,7 @@ import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
 import type { PromptAttachmentController } from "@/hooks/chat/use-chat-prompt-attachments";
+import { useComposerSubmitGate } from "@/hooks/chat/use-composer-submit-gate";
 import { usePlanDraftAttachments } from "@/hooks/plans/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
@@ -83,6 +84,7 @@ export function ChatInput({
   const { handleSubmit, handleCancel } = useChatPromptActions({
     forceNewSession: suppressActiveSessionState,
   });
+  const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const reviewActions = useReviewActions();
   const activeReview = useActiveReviewRun();
   const {
@@ -98,7 +100,7 @@ export function ChatInput({
     sdkWorkspaceId: materializedWorkspaceId,
   });
   const canUseUtilityActions =
-    !effectiveIsEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
+    !effectiveIsEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled && !isSubmitting;
   const canAttach = canUseUtilityActions && attachments.canAttachFiles;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
@@ -141,7 +143,8 @@ export function ChatInput({
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
     : isEmpty && !hasDraftAttachments;
-  const canSubmit = !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans;
+  const canSubmit =
+    !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans && !isSubmitting;
   useComposerTextareaAutosize({
     textareaRef,
     value: editDraft,
@@ -152,25 +155,35 @@ export function ChatInput({
   });
 
   const onSubmit = useCallback(async () => {
-    if (effectiveIsEditingQueuedPrompt) {
-      await commitEdit();
-      return;
-    }
-    if (planAttachments.hasUnresolvedPlans) {
-      return;
-    }
-    const blocks = [
-      ...await attachments.buildBlocks(promptText.trim()),
-      ...planAttachments.blocks,
-    ];
-    const optimisticContentParts = [
-      ...(promptText.trim() ? [{ type: "text" as const, text: promptText.trim() }] : []),
-      ...planAttachments.contentParts,
-    ];
-    await handleSubmit({ text: promptText, blocks, optimisticContentParts });
-    attachments.clearAttachments();
-    planAttachments.clearPlans();
-  }, [attachments, commitEdit, effectiveIsEditingQueuedPrompt, handleSubmit, planAttachments, promptText]);
+    await runSubmit(async () => {
+      if (effectiveIsEditingQueuedPrompt) {
+        await commitEdit();
+        return;
+      }
+      if (planAttachments.hasUnresolvedPlans) {
+        return;
+      }
+      const blocks = [
+        ...await attachments.buildBlocks(promptText.trim()),
+        ...planAttachments.blocks,
+      ];
+      const optimisticContentParts = [
+        ...(promptText.trim() ? [{ type: "text" as const, text: promptText.trim() }] : []),
+        ...planAttachments.contentParts,
+      ];
+      await handleSubmit({ text: promptText, blocks, optimisticContentParts });
+      attachments.clearAttachments();
+      planAttachments.clearPlans();
+    });
+  }, [
+    attachments,
+    commitEdit,
+    effectiveIsEditingQueuedPrompt,
+    handleSubmit,
+    planAttachments,
+    promptText,
+    runSubmit,
+  ]);
 
   const onCancel = useCallback(() => {
     if (effectiveIsEditingQueuedPrompt) {
@@ -371,7 +384,7 @@ export function ChatInput({
               <ChatComposerActions
                 isRunning={isRunningForUi}
                 isEmpty={effectiveIsEmpty}
-                isDisabled={isDisabled || planAttachments.hasUnresolvedPlans}
+                isDisabled={isDisabled || planAttachments.hasUnresolvedPlans || isSubmitting}
                 isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
                 onSubmit={onSubmit}
                 onCancel={onCancel}

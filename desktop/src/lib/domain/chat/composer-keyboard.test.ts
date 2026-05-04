@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   isComposerMentionSelectKey,
+  isRepeatedComposerSubmitKey,
   isComposerSubmitKey,
   isRawComposerSubmitKey,
   type ComposerKeyboardEventLike,
@@ -10,6 +11,7 @@ function event(overrides: Partial<ComposerKeyboardEventLike> = {}): ComposerKeyb
   return {
     ...{
       key: "Enter",
+      repeat: false,
       shiftKey: false,
       altKey: false,
       ctrlKey: false,
@@ -62,6 +64,44 @@ describe("composer keyboard predicates", () => {
     expect(isComposerSubmitKey(event({ ctrlKey: true }))).toBe(true);
     expect(isComposerSubmitKey(event({ metaKey: true }))).toBe(false);
     expect(isComposerSubmitKey(event({ ctrlKey: true, altKey: true }))).toBe(false);
+  });
+
+  it("classifies repeated raw Enter as repeated submit", () => {
+    vi.stubGlobal("navigator", {
+      platform: "Linux x86_64",
+      userAgent: "Linux",
+    });
+
+    expect(isRepeatedComposerSubmitKey(event({ repeat: true }))).toBe(true);
+    expect(isRepeatedComposerSubmitKey(event({ repeat: false }))).toBe(false);
+    expect(isRepeatedComposerSubmitKey(event({ repeat: true, shiftKey: true }))).toBe(false);
+  });
+
+  it("classifies repeated platform submit shortcuts", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+    expect(isRepeatedComposerSubmitKey(event({ repeat: true, metaKey: true }))).toBe(true);
+    expect(isRepeatedComposerSubmitKey(event({ repeat: true, ctrlKey: true }))).toBe(false);
+
+    vi.stubGlobal("navigator", {
+      platform: "Linux x86_64",
+      userAgent: "Linux",
+    });
+    expect(isRepeatedComposerSubmitKey(event({ repeat: true, ctrlKey: true }))).toBe(true);
+    expect(isRepeatedComposerSubmitKey(event({ repeat: true, metaKey: true }))).toBe(false);
+  });
+
+  it("does not classify composing events as submit repeats", () => {
+    expect(isComposerSubmitKey(event({
+      repeat: true,
+      nativeEvent: { isComposing: true },
+    }))).toBe(false);
+    expect(isRepeatedComposerSubmitKey(event({
+      repeat: true,
+      nativeEvent: { isComposing: true },
+    }))).toBe(false);
   });
 
   it("uses raw Enter or unshifted Tab for mention selection only", () => {
