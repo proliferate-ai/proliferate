@@ -2,6 +2,8 @@
 node_modules/
 .venv/
 
+reference/
+
 # Build output
 dist/
 out/
