@@ -16,7 +16,9 @@ export function ConnectedReviewSetupDialog() {
       modelsLoading={state.modelsLoading}
       validationError={state.validationError}
       isSubmitting={state.isSubmitting}
+      saveAsDefault={state.saveAsDefault}
       onDraftChange={state.setDraft}
+      onSaveAsDefaultChange={state.setSaveAsDefault}
       onSubmit={state.submit}
       onClose={state.close}
       onManagePersonalities={state.managePersonalities}

@@ -46,6 +46,7 @@ const DIFF_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
 ];
 
 const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
+  "agents-cowork-only",
   "subagents-composer-few",
   "subagents-composer-many",
   "subagents-review-starting-plan",
@@ -99,9 +100,10 @@ describe("playground scenarios", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(DIFF_PLAYGROUND_SCENARIOS));
   });
 
-  it("includes subagent composer and wake scenarios for visual iteration", () => {
+  it("includes delegated agents composer and wake scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(SUBAGENT_PLAYGROUND_SCENARIOS));
     expect(PLAYGROUND_SUBAGENT_STRIP_ROWS.length).toBeGreaterThan(6);
+    expect(isValidElement(renderDelegationSlot("agents-cowork-only"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-composer-few"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-composer-many"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-review-starting-plan"))).toBe(true);
@@ -125,11 +127,9 @@ describe("playground scenarios", () => {
 
     const reviewStartingHtml = renderToStaticMarkup(renderDelegationSlot("subagents-review-starting-plan"));
     expect(reviewStartingHtml).toContain("3 agents reviewing plan");
-    expect(reviewStartingHtml).toContain("Plan review · round 1/2");
 
     const reviewReadyHtml = renderToStaticMarkup(renderDelegationSlot("subagents-review-feedback-ready"));
-    expect(reviewReadyHtml).toContain("3 agents critiqued plan");
-    expect(reviewReadyHtml).toContain("Feedback ready · 3/3");
+    expect(reviewReadyHtml).toContain("feedback ready");
     expect(reviewReadyHtml).not.toMatch(/Codex|Claude|Gemini|gpt-|sonnet|opus|model/i);
 
     for (const state of Object.values(PLAYGROUND_REVIEW_COMPOSER_STATES)) {
@@ -234,13 +234,13 @@ describe("playground scenarios", () => {
     expect(order).toEqual([...order].sort((left, right) => left - right));
   });
 
-  it("keeps subagents closest to the composer inside the delegation stack", () => {
+  it("renders mixed delegated work as a single agents control", () => {
     const html = renderToStaticMarkup(renderDelegationSlot("subagents-coding-review-with-approval"));
-    const order = ["Review agents", "Cowork coding workspaces", "Subagents"]
-      .map((label) => html.indexOf(`aria-label="${label}"`));
-    expect(order.every((index) => index >= 0)).toBe(true);
-    expect(order).toEqual([...order].sort((left, right) => left - right));
     expect(html.match(/aria-label="Delegated work"/g)).toHaveLength(1);
+    expect(html).toContain("Agents");
+    expect(html).not.toContain('aria-label="Review agents"');
+    expect(html).not.toContain('aria-label="Cowork coding workspaces"');
+    expect(html).not.toContain('aria-label="Subagents"');
   });
 
   it("keeps in-flight mobility in the footer and renders recovery as an overlay", () => {

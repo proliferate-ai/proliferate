@@ -35,6 +35,13 @@ export function describeToolCallDisplay(
   switch (item.semanticKind) {
     case "subagent": {
       const subagentDisplay = resolveSubagentLaunchDisplay(item);
+      if ((item.nativeToolName ?? "").trim().toLowerCase() === "mcp__subagents__schedule_subagent_wake") {
+        return {
+          label: "Schedule wake",
+          hint: "Subagent",
+          iconKey: "clipboard-list",
+        };
+      }
       const description = readString(raw?.description) ?? undefined;
       return {
         label: subagentDisplay.title,

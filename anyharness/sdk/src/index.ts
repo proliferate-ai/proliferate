@@ -216,6 +216,8 @@ export type {
   PendingPromptSummary,
   EditPendingPromptRequest,
   SessionSubagentsResponse,
+  ScheduleSubagentWakeRequest,
+  ScheduleSubagentWakeResponse,
   ParentSubagentLinkSummary,
   ChildSubagentSummary,
   SubagentCompletionSummary,

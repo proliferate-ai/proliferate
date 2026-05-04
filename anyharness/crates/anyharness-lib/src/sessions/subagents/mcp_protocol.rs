@@ -132,7 +132,7 @@ pub(super) fn build_tool_list() -> Vec<Value> {
         ),
         tool_definition(
             "create_subagent",
-            "Create a same-workspace child agent session and send it an initial prompt. Set wakeOnCompletion when you want AnyHarness to prompt you after this child's next completed turn. Call get_subagent_launch_options first when choosing agentKind, modelId, or modeId.",
+            "Create a same-workspace child agent session and send it an initial prompt. Call get_subagent_launch_options first when choosing agentKind, modelId, or modeId. To be prompted after the child's next completed turn, call schedule_subagent_wake after creating the child.",
             json!({
                 "type": "object",
                 "properties": {
@@ -140,8 +140,7 @@ pub(super) fn build_tool_list() -> Vec<Value> {
                     "label": { "type": "string" },
                     "agentKind": { "type": "string" },
                     "modelId": { "type": "string" },
-                    "modeId": { "type": "string" },
-                    "wakeOnCompletion": { "type": "boolean" }
+                    "modeId": { "type": "string" }
                 },
                 "required": ["prompt"]
             }),
@@ -153,13 +152,12 @@ pub(super) fn build_tool_list() -> Vec<Value> {
         ),
         tool_definition(
             "send_subagent_message",
-            "Send another prompt to an owned child session. Set wakeOnCompletion when you want AnyHarness to prompt you after this child's next completed turn.",
+            "Send another prompt to an owned child session. To be prompted after the child's next completed turn, call schedule_subagent_wake after sending the message.",
             json!({
                 "type": "object",
                 "properties": {
                     "childSessionId": { "type": "string" },
-                    "prompt": { "type": "string" },
-                    "wakeOnCompletion": { "type": "boolean" }
+                    "prompt": { "type": "string" }
                 },
                 "required": ["childSessionId", "prompt"]
             }),
@@ -228,5 +226,14 @@ mod tests {
 
         assert_eq!(names.first().copied(), Some("get_subagent_launch_options"));
         assert!(names.contains(&"create_subagent"));
+    }
+
+    #[test]
+    fn tool_list_does_not_advertise_inline_wake_on_completion() {
+        let tools = build_tool_list();
+        let serialized = serde_json::to_string(&tools).expect("serialize tool list");
+
+        assert!(!serialized.contains("wakeOnCompletion"));
+        assert!(serialized.contains("schedule_subagent_wake"));
     }
 }

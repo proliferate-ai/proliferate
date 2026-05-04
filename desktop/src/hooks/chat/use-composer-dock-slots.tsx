@@ -5,19 +5,15 @@ import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerP
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
-import { CoworkComposerControl } from "@/components/workspace/chat/input/CoworkComposerStrip";
-import { ConnectedComposerReviewRunControl } from "@/components/workspace/chat/input/ComposerReviewRunPanel";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
-import { SubagentComposerControl } from "@/components/workspace/chat/input/SubagentComposerStrip";
+import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
-import { useCoworkComposerStrip } from "@/hooks/cowork/use-cowork-composer-strip";
 import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
 } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useDelegatedWorkComposer } from "@/hooks/chat/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/use-active-todo-tracker";
-import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
-import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
 
@@ -34,12 +30,7 @@ export function useComposerDockSlots(options?: {
   const { primaryPendingInteraction } = useActivePendingInteractionState();
   const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
-  const activeReviewRun = useActiveReviewRun();
-  const subagentComposerStrip = useSubagentComposerStrip();
-  const coworkComposerStrip = useCoworkComposerStrip();
-  const reviewComposerStrip = activeReviewRun.run || activeReviewRun.startingReview
-    ? <ConnectedComposerReviewRunControl />
-    : null;
+  const delegatedWorkComposer = useDelegatedWorkComposer();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
 
@@ -61,27 +52,10 @@ export function useComposerDockSlots(options?: {
     : interactionPanel || (activeTodoTracker
       ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
       : null);
-  const delegatedWorkSlot: ReactNode | null = reviewComposerStrip || subagentComposerStrip || coworkComposerStrip
+  const delegatedWorkSlot: ReactNode | null = delegatedWorkComposer
     ? (
       <DelegatedWorkComposerPanel>
-        {reviewComposerStrip}
-        {coworkComposerStrip && (
-          <CoworkComposerControl
-            rows={coworkComposerStrip.rows}
-            summary={coworkComposerStrip.summary}
-            onOpenWorkspace={coworkComposerStrip.openWorkspace}
-            onOpenSession={coworkComposerStrip.openSession}
-          />
-        )}
-        {subagentComposerStrip && (
-          <SubagentComposerControl
-            rows={subagentComposerStrip.rows}
-            parent={subagentComposerStrip.parent}
-            summary={subagentComposerStrip.summary}
-            onOpenSubagent={subagentComposerStrip.openSubagent}
-            onOpenParent={subagentComposerStrip.openParent}
-          />
-        )}
+        <DelegatedWorkComposerControl viewModel={delegatedWorkComposer} />
       </DelegatedWorkComposerPanel>
     )
     : null;

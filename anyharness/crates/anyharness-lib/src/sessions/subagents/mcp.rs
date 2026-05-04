@@ -48,7 +48,7 @@ pub async fn handle_json_rpc(
                         "name": "proliferate-subagents",
                         "version": env!("CARGO_PKG_VERSION"),
                     },
-                    "instructions": "Use get_subagent_launch_options to inspect defaults, limits, and supported agent/model choices. Use subagent tools to create and manage same-workspace child agent sessions. Child completions are passive by default. Set wakeOnCompletion when creating or messaging a child, or call schedule_subagent_wake for an already-running child, if you want AnyHarness to prompt you after the child's next completed turn. Inspect child output with read_subagent_events before continuing."
+                    "instructions": "Use get_subagent_launch_options to inspect defaults, limits, and supported agent/model choices. Use subagent tools to create and manage same-workspace child agent sessions. Child completions are passive by default. After creating or messaging a child, call schedule_subagent_wake if you want AnyHarness to prompt you after the child's next completed turn. Inspect child output with read_subagent_events before continuing."
                 }),
             )))
         }
@@ -227,7 +227,7 @@ fn get_subagent_launch_options(
             "agentKind and modelId are validated against the launch catalog before the child session is created.",
             "modeId is currently a launch hint stored on the child session; available mode options can only be inferred from the parent session's live config snapshot.",
             "Subagents are same-workspace normal sessions. They cannot create grandchildren and do not inherit the parent's MCP bindings in this PR.",
-            "Completions are passive by default. Set wakeOnCompletion on create_subagent/send_subagent_message, or call schedule_subagent_wake, when you want to be prompted after the child's next completed turn."
+            "Completions are passive by default. Call schedule_subagent_wake after create_subagent or send_subagent_message when you want to be prompted after the child's next completed turn."
         ]
     }))
 }

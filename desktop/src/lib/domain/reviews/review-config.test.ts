@@ -164,13 +164,19 @@ describe("review setup config", () => {
       storedDefaults: {
         maxRounds: 2,
         autoIterate: true,
-        reviewers: [
-          reviewer({
-            id: "plan-skeptic",
-            label: "Local edit",
-            prompt: "Local prompt edit.",
-          }),
-        ],
+        agentKind: "",
+        modelId: "",
+        modeId: "",
+        reviewers: {
+          mode: "custom",
+          items: [
+            reviewer({
+              id: "plan-skeptic",
+              label: "Local edit",
+              prompt: "Local prompt edit.",
+            }),
+          ],
+        },
       },
     });
 
@@ -201,7 +207,8 @@ describe("review setup config", () => {
       ],
     }, templates);
 
-    expect(stored.reviewers[0]).toMatchObject({
+    expect(stored.reviewers.mode).toBe("custom");
+    expect(stored.reviewers.mode === "custom" ? stored.reviewers.items[0] : null).toMatchObject({
       label: "Strict plan reviewer",
       prompt: "Use the reusable prompt.",
     });

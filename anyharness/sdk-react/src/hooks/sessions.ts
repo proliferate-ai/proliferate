@@ -171,6 +171,31 @@ export function useSessionSubagentsQuery(
   });
 }
 
+export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; childSessionId: string }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.scheduleSubagentWake(input.sessionId, input.childSessionId);
+    },
+    onSuccess: async (_response, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, variables.sessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, variables.childSessionId),
+        }),
+      ]);
+    },
+  });
+}
+
 export function useCreateSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();

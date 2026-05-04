@@ -2304,6 +2304,86 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/subagents/{child_session_id}/wake": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "schedule_subagent_wake",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "child_session_id",
+            "in": "path",
+            "description": "Child subagent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleSubagentWakeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Scheduled a one-shot parent wake for the child subagent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSubagentWakeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid subagent wake request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Workspace or subagent state blocks wake scheduling",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/title": {
       "patch": {
         "tags": [
@@ -12463,6 +12543,36 @@
         ],
         "properties": {
           "replay": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ScheduleSubagentWakeRequest": {
+        "type": "object"
+      },
+      "ScheduleSubagentWakeResponse": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "childSessionId",
+          "sessionLinkId",
+          "wakeScheduled",
+          "alreadyScheduled"
+        ],
+        "properties": {
+          "alreadyScheduled": {
+            "type": "boolean"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "wakeScheduled": {
             "type": "boolean"
           }
         }

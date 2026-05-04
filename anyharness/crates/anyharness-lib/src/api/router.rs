@@ -357,6 +357,10 @@ pub fn build_router(state: AppState) -> Router {
             get(subagents::get_session_subagents),
         )
         .route(
+            "/sessions/{session_id}/subagents/{child_session_id}/wake",
+            post(subagents::schedule_subagent_wake),
+        )
+        .route(
             "/sessions/{session_id}/reviews",
             get(reviews::get_session_reviews),
         )

@@ -111,6 +111,10 @@ export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
 export type SessionSubagentsResponse =
   components["schemas"]["SessionSubagentsResponse"];
+export type ScheduleSubagentWakeRequest =
+  components["schemas"]["ScheduleSubagentWakeRequest"];
+export type ScheduleSubagentWakeResponse =
+  components["schemas"]["ScheduleSubagentWakeResponse"];
 export type ParentSubagentLinkSummary =
   components["schemas"]["ParentSubagentLinkSummary"];
 export type ChildSubagentSummary =
