@@ -2,6 +2,10 @@ import type { ContentPart, PromptCapabilities, ProposedPlanDetail } from "@anyha
 
 export const PROMPT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const PROMPT_TEXT_RESOURCE_MAX_BYTES = 256 * 1024;
+export const PROMPT_PASTE_ATTACHMENT_MIN_CHARS = 2_000;
+export const PROMPT_PASTE_ATTACHMENT_MIN_LINES = 25;
+
+export type PromptAttachmentSource = "upload" | "paste";
 
 export interface PromptAttachmentDescriptor {
   id: string;
@@ -9,6 +13,7 @@ export interface PromptAttachmentDescriptor {
   mimeType: string;
   size: number;
   kind: "image" | "text_resource";
+  source: PromptAttachmentSource;
   objectUrl: string | null;
 }
 
@@ -62,6 +67,7 @@ export interface PromptDisplayPartBase {
   attachmentId?: string;
   objectUrl?: string | null;
   uri?: string;
+  source?: PromptAttachmentSource;
 }
 
 export interface PromptDisplayTextPart extends PromptDisplayPartBase {
@@ -121,6 +127,24 @@ export function isTextFileCandidate(file: File): boolean {
     .test(file.name);
 }
 
+export function shouldCreatePasteAttachment(text: string): boolean {
+  return text.length >= PROMPT_PASTE_ATTACHMENT_MIN_CHARS
+    || text.split(/\r\n|\r|\n/u).length >= PROMPT_PASTE_ATTACHMENT_MIN_LINES;
+}
+
+export function pasteAttachmentName(): string {
+  const now = new Date();
+  const stamp = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join("-");
+  return `paste-${stamp}.txt`;
+}
+
 export function normalizeContentParts(
   parts: readonly ContentPart[],
   fallbackText = "",
@@ -159,6 +183,7 @@ export function normalizeContentParts(
           size: part.size ?? undefined,
           sizeLabel: formatPromptFileSize(part.size),
           uri: part.uri ?? undefined,
+          source: part.source ?? "upload",
         }];
       }
 
@@ -174,6 +199,7 @@ export function normalizeContentParts(
           sizeLabel: formatPromptFileSize(part.size),
           preview: part.preview ?? undefined,
           uri: part.uri,
+          source: part.source ?? "upload",
         }];
       }
 
@@ -245,6 +271,7 @@ export function normalizeDraftAttachments(
       size: attachment.size,
       sizeLabel: formatPromptFileSize(attachment.size),
       objectUrl: attachment.objectUrl,
+      source: attachment.source,
     };
 
     if (attachment.kind === "image") {
@@ -291,7 +318,7 @@ export function promptPartSummary(part: PromptDisplayPart): string {
     case "image":
       return `[image: ${part.name}]`;
     case "file":
-      return `[file: ${part.name}]`;
+      return part.source === "paste" ? `[paste: ${part.name}]` : `[file: ${part.name}]`;
     case "link":
       return `[link: ${part.name}]`;
     case "plan_reference":

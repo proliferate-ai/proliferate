@@ -114,6 +114,9 @@ Owns session-facing transport types:
 `PromptInputBlock::PlanReference` with only `planId` and `snapshotHash`; the
 runtime must resolve the trusted plan snapshot from its own store before any
 agent input is produced. Clients must not send plan markdown as authority.
+Image and embedded resource prompt blocks may carry optional attachment
+`source` metadata (`upload` or `paste`). Source is display metadata only and
+must not be used as an authorization, trust, or storage boundary.
 
 Prompt provenance is a read-only display model on transcript user-message
 payloads and pending-prompt summaries/events. Public prompt request bodies must
@@ -201,6 +204,9 @@ represent different workflows even though they carry the same immutable plan
 snapshot fields. `ProposedPlan` is agent-emitted transcript content with
 decision UI. `PlanReference` is a user-prompt echo showing that a stored plan
 snapshot was attached to a prompt.
+`ContentPart::Image` and `ContentPart::Resource` may echo attachment `source`
+metadata so clients can render uploaded and pasted resources differently
+without inferring behavior from names or URIs.
 
 ## Transport-Only Rule
 

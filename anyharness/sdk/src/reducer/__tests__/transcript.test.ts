@@ -170,6 +170,7 @@ describe("transcript reducer", () => {
         mimeType: "image/png",
         name: "screenshot.png",
         size: 2048,
+        source: "upload",
       },
       {
         type: "resource",
@@ -179,6 +180,7 @@ describe("transcript reducer", () => {
         mimeType: "text/markdown",
         size: 1024,
         preview: "# Readme",
+        source: "paste",
       },
       {
         type: "resource_link",

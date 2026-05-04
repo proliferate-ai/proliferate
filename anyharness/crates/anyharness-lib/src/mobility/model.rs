@@ -36,10 +36,16 @@ pub struct WorkspaceMobilitySessionBundleData {
     pub live_config_snapshot: Option<SessionLiveConfigSnapshotRecord>,
     pub pending_config_changes: Vec<PendingConfigChangeRecord>,
     pub pending_prompts: Vec<PendingPromptRecord>,
-    pub prompt_attachments: Vec<PromptAttachmentRecord>,
+    pub prompt_attachments: Vec<MobilityPromptAttachmentData>,
     pub events: Vec<SessionEventRecord>,
     pub raw_notifications: Vec<SessionRawNotificationRecord>,
     pub agent_artifacts: Vec<MobilityFileData>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MobilityPromptAttachmentData {
+    pub record: PromptAttachmentRecord,
+    pub content: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]

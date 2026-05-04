@@ -917,6 +917,7 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         name: coerceNullableString(raw.name),
         uri: coerceNullableString(raw.uri),
         size: coerceNullableNumber(raw.size),
+        source: coercePromptAttachmentSource(raw.source),
       };
 
     case "resource":
@@ -930,6 +931,7 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         preview: coerceNullableString(raw.preview),
         previewTruncated: coerceNullableBoolean(raw.previewTruncated ?? raw.preview_truncated),
         previewOriginalBytes: coerceNullableNumber(raw.previewOriginalBytes ?? raw.preview_original_bytes),
+        source: coercePromptAttachmentSource(raw.source),
       };
 
     case "resource_link":
@@ -1237,6 +1239,10 @@ function coerceNullableNumber(value: unknown): number | null {
 
 function coerceNullableBoolean(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
+}
+
+function coercePromptAttachmentSource(value: unknown): "upload" | "paste" {
+  return value === "paste" ? "paste" : "upload";
 }
 
 function coerceTerminalEvent(value: unknown): "start" | "output" | "exit" {

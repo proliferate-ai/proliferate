@@ -104,6 +104,7 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
+    pasteAttachmentsEnabled: defaults.pasteAttachmentsEnabled,
     reviewDefaultsByKind: defaults.reviewDefaultsByKind,
     reviewPersonalitiesByKind: defaults.reviewPersonalitiesByKind,
   };
@@ -156,6 +157,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
+    pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
     reviewDefaultsByKind: state.reviewDefaultsByKind,
     reviewPersonalitiesByKind: state.reviewPersonalitiesByKind,
   };

@@ -157,6 +157,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0042_fork_link_child_unique",
         include_str!("sql/0042_fork_link_child_unique.sql"),
     ),
+    (
+        "0043_prompt_attachment_file_storage",
+        include_str!("sql/0043_prompt_attachment_file_storage.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

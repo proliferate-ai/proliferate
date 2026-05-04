@@ -1756,6 +1756,7 @@ export interface components {
             name?: string | null;
             /** Format: int64 */
             size?: number | null;
+            source?: null | components["schemas"]["PromptAttachmentSource"];
             /** @enum {string} */
             type: "image";
             uri?: string | null;
@@ -1769,6 +1770,7 @@ export interface components {
             previewTruncated?: boolean | null;
             /** Format: int64 */
             size?: number | null;
+            source?: null | components["schemas"]["PromptAttachmentSource"];
             /** @enum {string} */
             type: "resource";
             uri: string;
@@ -2528,6 +2530,7 @@ export interface components {
             sha256: string;
             /** Format: int64 */
             sizeBytes: number;
+            source?: string;
             sourceUri?: string | null;
             state: string;
             updatedAt: string;
@@ -2864,6 +2867,8 @@ export interface components {
             title: string;
             type: string;
         };
+        /** @enum {string} */
+        PromptAttachmentSource: "upload" | "paste";
         PromptCapabilities: {
             audio?: boolean;
             embeddedContext?: boolean;
@@ -2878,6 +2883,7 @@ export interface components {
             data?: string | null;
             mimeType: string;
             name?: string | null;
+            source?: null | components["schemas"]["PromptAttachmentSource"];
             /** @enum {string} */
             type: "image";
             uri?: string | null;
@@ -2887,6 +2893,7 @@ export interface components {
             name?: string | null;
             /** Format: int64 */
             size?: number | null;
+            source?: null | components["schemas"]["PromptAttachmentSource"];
             text?: string | null;
             /** @enum {string} */
             type: "resource";
