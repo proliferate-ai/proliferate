@@ -42,7 +42,6 @@ describe("runAddRepoWorkflow", () => {
     expect(resolveRepoRootFromPath).toHaveBeenCalledWith("/tmp/proliferate");
     expect(unhideRepoRoot).toHaveBeenCalledWith("repo-root-1");
     expect(openRepoSetupModal).toHaveBeenCalledWith({
-      repoRootId: "repo-root-1",
       sourceRoot: "/tmp/proliferate",
       repoName: "proliferate",
     });
@@ -76,7 +75,6 @@ describe("runAddRepoWorkflow", () => {
     });
 
     expect(openRepoSetupModal).toHaveBeenCalledWith({
-      repoRootId: "repo-root-existing",
       sourceRoot: "/tmp/existing-repo",
       repoName: "existing-repo",
     });

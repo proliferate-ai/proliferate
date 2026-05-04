@@ -6,11 +6,10 @@ import { RepoSetupModalHost } from "./RepoSetupModalHost";
 const repoSetupModalStore = vi.hoisted(() => {
   const state = {
     modal: null as {
-      repoRootId: string;
       sourceRoot: string;
       repoName: string;
     } | null,
-    open: (modal: { repoRootId: string; sourceRoot: string; repoName: string }) => {
+    open: (modal: { sourceRoot: string; repoName: string }) => {
       state.modal = modal;
     },
     close: () => {
@@ -34,18 +33,16 @@ vi.mock("@/stores/ui/repo-setup-modal-store", () => ({
 
 vi.mock("./RepoSetupModal", () => ({
   RepoSetupModal: ({
-    repoRootId,
     sourceRoot,
     repoName,
   }: {
-    repoRootId: string;
     sourceRoot: string;
     repoName: string;
     onClose: () => void;
   }) => createElement(
     "div",
     { "data-testid": "repo-setup-modal" },
-    `${repoRootId}:${sourceRoot}:${repoName}`,
+    `${sourceRoot}:${repoName}`,
   ),
 }));
 
@@ -56,7 +53,6 @@ describe("RepoSetupModalHost", () => {
 
   it("renders the repo setup modal when the store is opened outside the sidebar tree", () => {
     repoSetupModalStore.state.open({
-      repoRootId: "repo-1",
       sourceRoot: "/tmp/proliferate",
       repoName: "proliferate",
     });
@@ -64,7 +60,7 @@ describe("RepoSetupModalHost", () => {
     const html = renderToStaticMarkup(createElement(RepoSetupModalHost));
 
     expect(html).toContain("data-testid=\"repo-setup-modal\"");
-    expect(html).toContain("repo-1:/tmp/proliferate:proliferate");
+    expect(html).toContain("/tmp/proliferate:proliferate");
   });
 
   it("renders nothing when the modal store is closed", () => {

@@ -1,185 +1,67 @@
-import { useMemo } from "react";
-import type { GitBranchRef } from "@anyharness/sdk";
-import {
-  useDetectRepoRootSetupQuery,
-  useRepoRootGitBranchesQuery,
-} from "@anyharness/sdk-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
-import {
-  EnvironmentAdvancedDisclosure,
-  EnvironmentField,
-  EnvironmentPanel,
-  EnvironmentPanelRow,
-} from "@/components/ui/EnvironmentLayout";
-import { EnvironmentSearchSelect } from "@/components/ui/EnvironmentSearchSelect";
-import { Input } from "@/components/ui/Input";
+import { ArrowRight, CheckCircleFilled } from "@/components/ui/icons";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { useRepoSetupModalState } from "@/hooks/workspaces/use-repo-setup-modal-state";
-import { resolveAutoDetectedBranch } from "@/lib/domain/settings/branch-selection";
-import { SetupCommandEditor } from "./SetupCommandEditor";
-
-const EMPTY_BRANCHES: GitBranchRef[] = [];
+import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 interface RepoSetupModalProps {
-  repoRootId: string;
   sourceRoot: string;
   repoName: string;
   onClose: () => void;
 }
 
 export function RepoSetupModal({
-  repoRootId,
   sourceRoot,
   repoName,
   onClose,
 }: RepoSetupModalProps) {
-  const {
-    defaultBranch,
-    setDefaultBranch,
-    setupScript,
-    setSetupScript,
-    runCommand,
-    setRunCommand,
-    save,
-  } = useRepoSetupModalState(sourceRoot);
+  const navigate = useNavigate();
 
-  const { data: detectionResult, isLoading: isDetecting } =
-    useDetectRepoRootSetupQuery({ repoRootId });
-  const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({ repoRootId });
-
-  const branches = useMemo(
-    () => branchRefs
-      .filter((b) => !b.isRemote)
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [branchRefs],
-  );
-
-  const autoDetectedBranch = useMemo(
-    () => resolveAutoDetectedBranch(branchRefs),
-    [branchRefs],
-  );
-
-  const branchButtonLabel = defaultBranch
-    ? defaultBranch
-    : autoDetectedBranch
-      ? `Auto-detect (${autoDetectedBranch})`
-      : "Auto-detect";
-
-  const branchOptions = useMemo(() => [
-    {
-      id: "__auto__",
-      label: "Auto-detect",
-      detail: autoDetectedBranch ? `Uses ${autoDetectedBranch}` : "Uses the runtime default",
-    },
-    ...branches.map((b) => ({ id: b.name, label: b.name, detail: null })),
-  ], [autoDetectedBranch, branches]);
-
-  function handleSave() {
-    save();
+  function handleCustomizeDefaults() {
     onClose();
-  }
-
-  function handleSkip() {
-    onClose();
+    navigate(buildSettingsHref({
+      section: "repo",
+      repo: sourceRoot,
+    }));
   }
 
   return (
     <ModalShell
       open
-      onClose={handleSkip}
-      title="Repository ready"
-      description={`${repoName} is available for new worktrees. Customize defaults only if this repo needs them.`}
-      sizeClassName="max-w-xl"
+      onClose={onClose}
+      title="Repository added"
+      description="Available for new worktrees."
+      sizeClassName="max-w-md"
       footer={
         <>
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             size="md"
-            onClick={handleSkip}
+            onClick={handleCustomizeDefaults}
           >
-            Skip
+            Customize defaults
+            <ArrowRight className="size-4" />
           </Button>
           <Button
             type="button"
             variant="primary"
             size="md"
-            onClick={handleSave}
+            onClick={onClose}
           >
-            Save
+            Done
           </Button>
         </>
       }
     >
-      <div className="space-y-4">
-        <div className="min-w-0 pr-1">
-          <div className="truncate text-sm font-medium text-foreground">{repoName}</div>
-          <div className="truncate text-xs text-muted-foreground">{sourceRoot}</div>
+      <div className="rounded-lg border border-border bg-foreground/5 p-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <CheckCircleFilled className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-foreground">{repoName}</div>
+            <div className="truncate text-xs text-muted-foreground">{sourceRoot}</div>
+          </div>
         </div>
-
-        <EnvironmentAdvancedDisclosure
-          title="Customize defaults"
-          description="Branch, run command, and setup commands for new local worktrees."
-        >
-          <EnvironmentPanel>
-            <EnvironmentPanelRow>
-              <EnvironmentField
-                label="Default branch"
-                description="Auto-detect keeps the branch unset and uses the runtime default."
-              >
-                <EnvironmentSearchSelect
-                  label={branchButtonLabel}
-                  searchPlaceholder="Search branches"
-                  emptyLabel="No branches found"
-                  className="w-full"
-                  menuClassName="w-80"
-                  options={branchOptions.map((option) => ({
-                    id: option.id,
-                    label: option.label,
-                    detail: option.detail,
-                    selected: option.id === "__auto__"
-                      ? defaultBranch === null
-                      : defaultBranch === option.id,
-                    onSelect: () => setDefaultBranch(option.id === "__auto__" ? null : option.id),
-                  }))}
-                />
-              </EnvironmentField>
-            </EnvironmentPanelRow>
-
-            <EnvironmentPanelRow>
-              <EnvironmentField
-                label="Local action command"
-                description="Command launched by the workspace header Run button for this repo."
-              >
-                <Input
-                  value={runCommand}
-                  onChange={(event) => setRunCommand(event.target.value)}
-                  placeholder="make dev PROFILE=my-profile"
-                  className="font-mono text-sm leading-[var(--readable-code-line-height)]"
-                />
-              </EnvironmentField>
-            </EnvironmentPanelRow>
-
-            <EnvironmentPanelRow>
-              <EnvironmentField
-                label="Setup script"
-                description="Commands to run after creating a new worktree."
-              >
-                <SetupCommandEditor
-                  hints={detectionResult?.hints ?? []}
-                  currentScript={setupScript}
-                  onChange={setSetupScript}
-                  isLoading={isDetecting}
-                />
-                <p className="mt-2 text-xs text-muted-foreground/80">
-                  Available vars: <code>PROLIFERATE_WORKTREE_DIR</code>,{" "}
-                  <code>PROLIFERATE_REPO_DIR</code>, <code>PROLIFERATE_BRANCH</code>,{" "}
-                  <code>PROLIFERATE_BASE_REF</code>.
-                </p>
-              </EnvironmentField>
-            </EnvironmentPanelRow>
-          </EnvironmentPanel>
-        </EnvironmentAdvancedDisclosure>
       </div>
     </ModalShell>
   );
