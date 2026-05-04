@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -99,7 +100,7 @@ interface RightPanelProps {
   onTerminalActivationRequestHandled: (request: TerminalActivationRequest) => void;
 }
 
-export function RightPanel({
+export const RightPanel = memo(function RightPanel({
   workspaceId,
   isWorkspaceReady,
   isOpen,
@@ -668,4 +669,4 @@ export function RightPanel({
       </div>
     </div>
   );
-}
+});

@@ -1,5 +1,4 @@
 import { useId, type ComponentType, type SVGProps } from "react";
-import { useBrailleSweep } from "@/hooks/ui/use-braille-sweep";
 
 export type IconProps = SVGProps<SVGSVGElement>;
 
@@ -977,17 +976,15 @@ export function Spinner({ className }: { className?: string }) {
 /**
  * Animated braille-sweep badge — the diagonal-fill loading vocabulary used
  * across the app (transcript indicator, chat tab badges, sidebar workspace
- * rows). Driven by the shared useBrailleSweep ticker so every instance
- * animates in lockstep. Pass `className` for size and color.
+ * rows). The frames are CSS-driven so loaders do not force React commits while
+ * they are visible. Pass `className` for size and color.
  */
 export function BrailleSweepBadge({ className }: { className?: string }) {
-  const frame = useBrailleSweep();
   return (
     <span
-      className={`inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] ${className ?? ""}`}
-    >
-      {frame}
-    </span>
+      aria-hidden="true"
+      className={`braille-sweep-frame inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] ${className ?? ""}`}
+    />
   );
 }
 
@@ -1125,7 +1122,7 @@ export function ProliferateIcon({ className, ...props }: IconProps) {
 
 
 /**
- * Proliferate loading mark — uses the shared braille sweep so the loading
+ * Proliferate loading mark — uses the shared CSS braille sweep so the loading
  * vocabulary stays consistent across the app. Sized via `className` with a
  * `text-Xl` token (the braille is a glyph, not an SVG).
  */

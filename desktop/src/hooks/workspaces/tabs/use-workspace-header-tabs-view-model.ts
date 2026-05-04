@@ -45,7 +45,7 @@ import {
 } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
@@ -84,6 +84,7 @@ const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 
 const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};
 const EMPTY_TAB_MODES: Record<string, FileViewerMode> = {};
+const EMPTY_LIVE_SLOTS: SessionSlot[] = [];
 
 export function useWorkspaceHeaderTabsViewModel() {
   const rawOpenTargets = useWorkspaceViewerTabsStore((s) => s.openTargets);
@@ -111,7 +112,11 @@ export function useWorkspaceHeaderTabsViewModel() {
   const tabModes = isViewerStoreCurrent ? rawTabModes : EMPTY_TAB_MODES;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
-  const sessionSlots = useHarnessStore((s) => s.sessionSlots);
+  const liveSlotsSelector = useMemo(
+    () => createWorkspaceHeaderLiveSlotsSelector(selectedWorkspaceId),
+    [selectedWorkspaceId],
+  );
+  const liveSlots = useHarnessStore(liveSlotsSelector);
 
   const visibleByWorkspace = useWorkspaceUiStore((s) => s.visibleChatSessionIdsByWorkspace);
   const hiddenByWorkspace = useWorkspaceUiStore((s) => s.recentlyHiddenChatSessionIdsByWorkspace);
@@ -135,11 +140,6 @@ export function useWorkspaceHeaderTabsViewModel() {
     enabled: !!selectedWorkspaceId && !hotPaintPending,
   });
 
-  const liveSlots = useMemo(
-    () => Object.values(sessionSlots)
-      .filter((slot) => sessionSlotBelongsToWorkspace(slot, selectedWorkspaceId)),
-    [selectedWorkspaceId, sessionSlots],
-  );
   const knownSessions = useMemo<Map<string, KnownHeaderSession>>(() => {
     const map = new Map<string, KnownHeaderSession>();
     for (const session of workspaceSessionsQuery.data ?? []) {
@@ -573,7 +573,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     ],
   );
 
-  return {
+  return useMemo(() => ({
     activeSessionId,
     activeShellTab,
     activeShellTabKey,
@@ -597,5 +597,114 @@ export function useWorkspaceHeaderTabsViewModel() {
     childrenByParentSessionId: hierarchy.childrenByParentSessionId,
     hierarchyResolvedSessionIds: hierarchy.resolvedSessionIds,
     displayManualGroups,
+  }), [
+    activeSessionId,
+    activeShellTab,
+    activeShellTabKey,
+    activation,
+    buffersByPath,
+    chatTabs,
+    displayManualGroups,
+    hierarchy.childToParent,
+    hierarchy.childrenByParentSessionId,
+    hierarchy.resolvedSessionIds,
+    liveChatSessionIds,
+    materializedWorkspaceId,
+    menuChatTabs,
+    openTargets,
+    orderedShellTabKeys,
+    orderedTabs,
+    selectedWorkspaceId,
+    displayShellRows,
+    stripChatSessionIds,
+    stripRows,
+    tabModes,
+    visibleChatSessionIds,
+    workspaceUiKey,
+  ]);
+}
+
+type HarnessStoreSnapshot = ReturnType<typeof useHarnessStore.getState>;
+
+function createWorkspaceHeaderLiveSlotsSelector(
+  workspaceId: string | null,
+): (state: HarnessStoreSnapshot) => SessionSlot[] {
+  let previousSignature = "";
+  let previousSlots = EMPTY_LIVE_SLOTS;
+
+  return (state) => {
+    if (!workspaceId) {
+      previousSignature = "";
+      previousSlots = EMPTY_LIVE_SLOTS;
+      return EMPTY_LIVE_SLOTS;
+    }
+
+    const signature = buildWorkspaceHeaderLiveSlotsSignature(
+      state.sessionSlots,
+      workspaceId,
+    );
+    if (signature === previousSignature) {
+      return previousSlots;
+    }
+
+    previousSignature = signature;
+    previousSlots = Object.values(state.sessionSlots)
+      .filter((slot) => sessionSlotBelongsToWorkspace(slot, workspaceId));
+    return previousSlots;
   };
+}
+
+function buildWorkspaceHeaderLiveSlotsSignature(
+  sessionSlots: Record<string, SessionSlot>,
+  workspaceId: string,
+): string {
+  let signature = "";
+  for (const slot of Object.values(sessionSlots)) {
+    if (!sessionSlotBelongsToWorkspace(slot, workspaceId)) {
+      continue;
+    }
+    signature += buildHeaderSlotSignature(slot);
+    signature += "\u001e";
+  }
+  return signature;
+}
+
+function buildHeaderSlotSignature(slot: SessionSlot): string {
+  return [
+    slot.sessionId,
+    slot.workspaceId ?? "",
+    slot.agentKind,
+    slot.title ?? "",
+    slot.status ?? "",
+    slot.executionSummary?.phase ?? "",
+    pendingInteractionSignature(slot.executionSummary?.pendingInteractions),
+    slot.streamConnectionState,
+    slot.transcript.isStreaming ? "streaming" : "idle",
+    slot.transcript.sessionMeta.title ?? "",
+    pendingInteractionSignature(slot.transcript.pendingInteractions),
+    slot.actionCapabilities.fork ? "fork" : "no-fork",
+  ].join("\u001f");
+}
+
+function pendingInteractionSignature(
+  interactions: readonly HeaderPendingInteraction[] | null | undefined,
+): string {
+  if (!interactions || interactions.length === 0) {
+    return "";
+  }
+  return interactions
+    .map((interaction) => [
+      interaction.requestId ?? "",
+      interaction.linkedPlanId ?? "",
+      interaction.source?.linkedPlanId ?? "",
+    ].join(":"))
+    .join(",");
+}
+
+interface HeaderPendingInteraction {
+  requestId?: string;
+  linkedPlanId?: string | null;
+  source?: {
+    linkedPlanId?: string | null;
+  } | null;
 }

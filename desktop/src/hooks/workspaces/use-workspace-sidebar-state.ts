@@ -3,8 +3,6 @@ import type { Workspace } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  collectWorkspaceSidebarActivityStatesWithErrorAttention,
-  resolveSessionErrorAttentionKey,
   type SidebarSessionActivityState,
 } from "@/lib/domain/sessions/activity";
 import {
@@ -19,6 +17,7 @@ import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/use-workspace-metadata-sync";
 import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/use-workspace-finish-suggestions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
@@ -54,28 +53,9 @@ export function useWorkspaceSidebarState({
     state.lastViewedSessionErrorAtBySession
     ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION
   );
-  const workspaceActivities = useHarnessStore(useShallow((state) =>
-    collectWorkspaceSidebarActivityStatesWithErrorAttention(
-      Object.fromEntries(
-        Object.entries(state.sessionSlots).map(([sessionId, slot]) => [
-          sessionId,
-          {
-            sessionId: slot.sessionId,
-            workspaceId: slot.workspaceId,
-            status: slot.status,
-            executionSummary: slot.executionSummary,
-            streamConnectionState: slot.streamConnectionState,
-            transcript: {
-              isStreaming: slot.transcript.isStreaming,
-              pendingInteractions: slot.transcript.pendingInteractions,
-            },
-            errorAttentionKey: resolveSessionErrorAttentionKey(slot),
-          },
-        ]),
-      ),
-      lastViewedSessionErrorAtBySession,
-    )
-  ));
+  const workspaceActivities = useWorkspaceSidebarActivityStatesWithErrorAttention(
+    lastViewedSessionErrorAtBySession,
+  );
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const activeSessionTitle = useHarnessStore((state) => {
     const sessionId = state.activeSessionId;

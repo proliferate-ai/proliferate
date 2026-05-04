@@ -11,6 +11,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
 import {
   finishMeasurementOperation,
+  finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
@@ -126,6 +127,7 @@ export function runHotWorkspaceReopen(
   scheduleAfterNextPaint(() => {
     const current = useHarnessStore.getState();
     if (current.hotPaintGate?.nonce !== nonce) {
+      finishOrCancelMeasurementOperation(operationId, "aborted");
       return;
     }
     recordMeasurementWorkflowStep({

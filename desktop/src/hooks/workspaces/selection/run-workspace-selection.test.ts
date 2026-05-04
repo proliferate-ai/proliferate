@@ -185,4 +185,66 @@ describe("runWorkspaceSelection", () => {
     expect(bootstrapWorkspace).not.toHaveBeenCalled();
     expect(listActiveLatencyFlows()).toEqual([]);
   });
+
+  it("does not activate a remembered session unless its slot is already retained", async () => {
+    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-workspace-1",
+      },
+    });
+    useWorkspaceUiStore.setState({
+      lastViewedSessionByWorkspace: {
+        "logical:workspace-1": "session-forgotten",
+      },
+    });
+
+    await runWorkspaceSelection({
+      queryClient: {} as never,
+      logicalWorkspaces,
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: vi.fn(),
+      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace: vi.fn().mockResolvedValue({ sessions: [] }),
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "workspace-1",
+    });
+
+    expect(useHarnessStore.getState().selectedWorkspaceId).toBe("workspace-1");
+    expect(useHarnessStore.getState().activeSessionId).toBeNull();
+  });
+
+  it("preserves an explicit initial active session even when the slot is not retained", async () => {
+    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-workspace-1",
+      },
+    });
+
+    await runWorkspaceSelection({
+      queryClient: {} as never,
+      logicalWorkspaces,
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: vi.fn(),
+      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace: vi.fn().mockResolvedValue({ sessions: [] }),
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "workspace-1",
+      options: { initialActiveSessionId: "session-explicit" },
+    });
+
+    expect(useHarnessStore.getState().selectedWorkspaceId).toBe("workspace-1");
+    expect(useHarnessStore.getState().activeSessionId).toBe("session-explicit");
+  });
 });

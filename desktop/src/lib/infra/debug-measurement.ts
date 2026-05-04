@@ -14,6 +14,7 @@ export type MeasurementOperationId = AnyHarnessMeasurementOperationId;
 
 export type MeasurementOperationKind =
   | "workspace_open"
+  | "workspace_collections_refresh"
   | "workspace_hot_reopen"
   | "session_switch"
   | "session_hot_switch"

@@ -2,9 +2,11 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  memo,
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
@@ -14,6 +16,7 @@ import {
 } from "@/config/chat-layout";
 import {
   shouldStickToVirtualBottom,
+  type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
@@ -48,6 +51,11 @@ const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:enableTranscriptVirtualization";
 const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:disableTranscriptVirtualization";
+
+type TranscriptVirtualRowRenderer = (
+  row: TranscriptVirtualRow,
+  rowIndex: number,
+) => ReactNode;
 
 interface VirtualScrollAnchor {
   key: TranscriptRenderableRow["key"];
@@ -534,15 +542,14 @@ function VirtualizedTranscriptRowList({
             }
 
             return (
-              <div
+              <MemoizedVirtualTranscriptRow
                 key={row.key}
-                ref={virtualizer.measureElement}
-                data-transcript-virtual-row="true"
-                data-index={virtualRow.index}
-                className="w-full"
-              >
-                {renderRow(row, renderableRow.rowIndex)}
-              </div>
+                row={row}
+                rowIndex={renderableRow.rowIndex}
+                virtualIndex={virtualRow.index}
+                renderRow={renderRow}
+                measureElement={virtualizer.measureElement}
+              />
             );
           })}
           {bottomSpacerHeight > 0 && (
@@ -553,6 +560,37 @@ function VirtualizedTranscriptRowList({
     </AutoHideScrollArea>
   );
 }
+
+const MemoizedVirtualTranscriptRow = memo(function MemoizedVirtualTranscriptRow({
+  row,
+  rowIndex,
+  virtualIndex,
+  renderRow,
+  measureElement,
+}: {
+  row: TranscriptVirtualRow;
+  rowIndex: number;
+  virtualIndex: number;
+  renderRow: TranscriptVirtualRowRenderer;
+  measureElement: (element: Element | null) => void;
+}) {
+  return (
+    <div
+      ref={measureElement}
+      data-transcript-virtual-row="true"
+      data-index={virtualIndex}
+      className="w-full"
+    >
+      {renderRow(row, rowIndex)}
+    </div>
+  );
+}, (prev, next) =>
+  prev.row === next.row
+  && prev.rowIndex === next.rowIndex
+  && prev.virtualIndex === next.virtualIndex
+  && prev.renderRow === next.renderRow
+  && prev.measureElement === next.measureElement
+);
 
 function readTranscriptVirtualizationMode(): TranscriptVirtualizationMode {
   if (typeof window === "undefined") {

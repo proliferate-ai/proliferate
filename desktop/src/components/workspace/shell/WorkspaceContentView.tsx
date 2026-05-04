@@ -1,14 +1,15 @@
+import { memo } from "react";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/use-workspace-content-shortcuts";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
-import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
 import { viewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
 
-export function WorkspaceContentView() {
+export const WorkspaceContentView = memo(function WorkspaceContentView() {
   const tabActions = useWorkspaceTabActions();
-  const headerTabs = useWorkspaceHeaderTabsViewModel();
+  const headerTabs = useWorkspaceHeaderTabsViewModelContext();
   useWorkspaceContentShortcuts(tabActions);
 
   return (
@@ -33,4 +34,4 @@ export function WorkspaceContentView() {
       </div>
     </div>
   );
-}
+});

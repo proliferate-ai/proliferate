@@ -37,6 +37,7 @@ import {
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/latency-flow";
 import {
+  finishOrCancelMeasurementOperation,
   finishMeasurementOperation,
   getMeasurementRequestOptions,
   markOperationForNextCommit,
@@ -57,7 +58,6 @@ import {
 export type WorkspaceSession = Session & { workspaceId: string };
 
 const INITIAL_SESSION_HISTORY_EVENT_BUDGET = 3_000;
-const INITIAL_SESSION_HISTORY_TURN_LIMIT = 40;
 
 export interface SelectSessionOptionsWithoutGuard {
   latencyFlowId?: string | null;
@@ -306,6 +306,7 @@ export function useSessionSelectionActions() {
             currentState.hotPaintGate?.nonce !== nonce
             || currentState.activeSessionId !== sessionId
           ) {
+            finishOrCancelMeasurementOperation(hotOperationId, "aborted");
             return;
           }
           currentState.clearHotPaintGate(nonce);
@@ -477,9 +478,43 @@ export function useSessionSelectionActions() {
     }
 
     const currentSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+    let streamConnectDeferredUntilHydrate = false;
+    const scheduleStreamConnect = () => {
+      const streamStartedAt = performance.now();
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "session.select.stream_connect_scheduled",
+        startedAt: streamStartedAt,
+        outcome: "completed",
+      });
+      void ensureSessionStreamConnected(sessionId, {
+        allowColdIdleNoStream: options?.allowColdIdleNoStream,
+        resumeIfActive: true,
+        requestHeaders,
+        skipInitialRefresh: true,
+        refreshOnStartupReady: true,
+        isCurrent: () => {
+          if (guard && !isSessionActivationCurrent(guard)) {
+            return false;
+          }
+          const state = useHarnessStore.getState();
+          return state.activeSessionId === sessionId
+            && state.selectedWorkspaceId === workspaceId;
+        },
+      });
+      logLatency("session.select.stream_connected", {
+        sessionId,
+        workspaceId,
+        flowId: options?.latencyFlowId ?? null,
+        scheduled: true,
+        elapsedMs: Math.round(performance.now() - streamStartedAt),
+        totalElapsedMs: elapsedMs(startedAt),
+      });
+    };
     if (!currentSlot?.transcriptHydrated) {
       const hydrateStartedAt = startLatencyTimer();
       const selectionNonce = useHarnessStore.getState().workspaceSelectionNonce;
+      const afterSeq = currentSlot?.transcript.lastSeq ?? 0;
       const isStillSelected = () => {
         if (guard && !isSessionActivationCurrent(guard)) {
           return false;
@@ -489,75 +524,57 @@ export function useSessionSelectionActions() {
           && state.activeSessionId === sessionId
           && state.selectedWorkspaceId === workspaceId;
       };
-      const hydrated = await rehydrateSessionSlotFromHistory(sessionId, {
-        limit: INITIAL_SESSION_HISTORY_EVENT_BUDGET,
-        turnLimit: INITIAL_SESSION_HISTORY_TURN_LIMIT,
-        requestHeaders,
-        measurementOperationId,
-        isCurrent: isStillSelected,
-      });
-      if (!isStillSelected()) {
-        if (measurementOperationId) {
-          finishMeasurementOperation(measurementOperationId, "aborted");
-        }
-        return guard
-          ? { result: "stale", sessionId, guard, reason: "selection-replaced" }
-          : undefined;
-      }
+      streamConnectDeferredUntilHydrate = true;
       useHarnessStore.getState().patchSessionSlot(sessionId, { transcriptHydrated: true });
       recordMeasurementWorkflowStep({
         operationId: measurementOperationId,
         step: "session.select.history_hydrate",
         startedAt: hydrateStartedAt,
-        outcome: hydrated ? "completed" : "error_sanitized",
+        outcome: "completed",
       });
-      logLatency("session.select.history_hydrated", {
+      logLatency("session.select.history_hydrate_deferred", {
         sessionId,
         workspaceId,
-        hydrated,
+        afterSeq,
         flowId: options?.latencyFlowId ?? null,
-        elapsedMs: elapsedMs(hydrateStartedAt),
         totalElapsedMs: elapsedMs(startedAt),
+      });
+      scheduleAfterNextPaint(() => {
+        if (!isStillSelected()) {
+          return;
+        }
+        void rehydrateSessionSlotFromHistory(sessionId, {
+          afterSeq,
+          limit: INITIAL_SESSION_HISTORY_EVENT_BUDGET,
+          requestHeaders,
+          isCurrent: isStillSelected,
+        }).then((hydrated) => {
+          logLatency("session.select.history_hydrated", {
+            sessionId,
+            workspaceId,
+            hydrated,
+            flowId: options?.latencyFlowId ?? null,
+            elapsedMs: elapsedMs(hydrateStartedAt),
+            totalElapsedMs: elapsedMs(startedAt),
+          });
+        }).finally(() => {
+          if (isStillSelected()) {
+            scheduleStreamConnect();
+          }
+        });
       });
       logLatency("session.select.full_history_backfill_skipped", {
         sessionId,
         workspaceId,
-        hydrated,
+        hydrated: true,
         reason: "protect_interactivity",
         flowId: options?.latencyFlowId ?? null,
       });
     }
 
-    const streamStartedAt = performance.now();
-    recordMeasurementWorkflowStep({
-      operationId: measurementOperationId,
-      step: "session.select.stream_connect_scheduled",
-      startedAt: streamStartedAt,
-      outcome: "completed",
-    });
-    void ensureSessionStreamConnected(sessionId, {
-      allowColdIdleNoStream: options?.allowColdIdleNoStream,
-      resumeIfActive: true,
-      requestHeaders,
-      skipInitialRefresh: true,
-      refreshOnStartupReady: true,
-      isCurrent: () => {
-        if (guard && !isSessionActivationCurrent(guard)) {
-          return false;
-        }
-        const state = useHarnessStore.getState();
-        return state.activeSessionId === sessionId
-          && state.selectedWorkspaceId === workspaceId;
-      },
-    });
-    logLatency("session.select.stream_connected", {
-      sessionId,
-      workspaceId,
-      flowId: options?.latencyFlowId ?? null,
-      scheduled: true,
-      elapsedMs: Math.round(performance.now() - streamStartedAt),
-      totalElapsedMs: elapsedMs(startedAt),
-    });
+    if (!streamConnectDeferredUntilHydrate) {
+      scheduleStreamConnect();
+    }
     logLatency("session.select.completed", {
       sessionId,
       workspaceId,

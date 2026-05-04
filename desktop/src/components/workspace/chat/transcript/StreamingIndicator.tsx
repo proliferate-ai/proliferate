@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useBrailleSweep } from "@/hooks/ui/use-braille-sweep";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { BrailleSweepBadge } from "@/components/ui/icons";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 interface StreamingIndicatorProps {
@@ -10,7 +10,6 @@ interface StreamingIndicatorProps {
 export function StreamingIndicator({ startedAt }: StreamingIndicatorProps) {
   useDebugRenderCount("loading-braille");
   const [elapsed, setElapsed] = useState(() => computeElapsed(startedAt));
-  const frame = useBrailleSweep();
 
   useEffect(() => {
     setElapsed(computeElapsed(startedAt));
@@ -23,9 +22,7 @@ export function StreamingIndicator({ startedAt }: StreamingIndicatorProps) {
   return (
     <DebugProfiler id="loading-braille">
       <div className="flex items-end gap-1 py-1 text-muted-foreground">
-      <span className="scale-[.8] inline-block w-[1.25em] font-mono text-[1.125rem] leading-none tracking-[-0.18em] text-foreground">
-        {frame}
-      </span>
+      <BrailleSweepBadge className="scale-[.8] w-[1.25em] text-[1.125rem] text-foreground" />
       <span className="text-[0.5rem] leading-none tabular-nums">{elapsed}s</span>
       </div>
     </DebugProfiler>
