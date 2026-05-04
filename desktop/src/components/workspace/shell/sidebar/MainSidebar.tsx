@@ -47,8 +47,6 @@ import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sid
 import { useSidebarRepoGroupState } from "@/hooks/workspaces/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
-import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
-import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
@@ -120,8 +118,6 @@ export function MainSidebar() {
       cooldownMs: 2000,
     });
   }, []);
-  const repoSetupModal = useRepoSetupModalStore((s) => s.modal);
-  const closeRepoSetupModal = useRepoSetupModalStore((s) => s.close);
   const configuredCloudRepoKeys = useMemo(
     () => buildConfiguredCloudRepoKeys(cloudRepoConfigs?.configs),
     [cloudRepoConfigs?.configs],
@@ -352,15 +348,6 @@ export function MainSidebar() {
       </div>
 
       <SidebarFooter />
-
-      {repoSetupModal && (
-        <RepoSetupModal
-          repoRootId={repoSetupModal.repoRootId}
-          sourceRoot={repoSetupModal.sourceRoot}
-          repoName={repoSetupModal.repoName}
-          onClose={closeRepoSetupModal}
-        />
-      )}
       </div>
     </DebugProfiler>
   );
