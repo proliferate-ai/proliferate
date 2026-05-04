@@ -19,15 +19,17 @@ import { PopoverSection } from "./PopoverSection";
 
 export function AgentsPopoverReviewSection({
   review,
+  detail,
   showTitle = true,
   onClose,
 }: {
   review: NonNullable<DelegatedWorkComposerViewModel["review"]>;
+  detail?: string | null;
   showTitle?: boolean;
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Reviews" showTitle={showTitle}>
+    <PopoverSection title="Reviews" detail={detail} showTitle={showTitle}>
       {review.run ? (
         <ReviewRunRows run={review.run} review={review} onClose={onClose} />
       ) : review.startingReview ? (
@@ -88,7 +90,7 @@ function ReviewRunRows({
         || canStop
         || isTerminal
       ) && (
-        <div className="mt-1 flex min-w-0 items-center gap-2 px-1.5 pt-1">
+        <div className="mt-0.5 flex min-w-0 items-center gap-2 px-1 pt-0.5">
           {deliveryLabel && (
             <div className="min-w-0 truncate text-xs text-muted-foreground">{deliveryLabel}</div>
           )}
@@ -140,7 +142,7 @@ function ReviewRunRows({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2"
+                className="h-7 px-1.5"
                 onClick={() => {
                   review.stop(run.id);
                   onClose();
@@ -155,7 +157,7 @@ function ReviewRunRows({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2"
+                className="h-7 px-1.5"
                 onClick={() => {
                   review.dismiss(run.id);
                   onClose();

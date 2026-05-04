@@ -17,14 +17,8 @@ export function DelegatedWorkComposerControl({
     viewModel.cowork,
     viewModel.subagents,
   ].filter(Boolean).length;
-  const singleSectionTitle = viewModel.review
-    ? "Reviews"
-    : viewModel.cowork
-      ? "Cowork"
-      : viewModel.subagents
-        ? "Subagents"
-        : "Agents";
-  const headerTitle = sectionCount === 1 ? singleSectionTitle : "Agents";
+  const singleSection = sectionCount === 1;
+  const singleSectionDetail = singleSection ? viewModel.summary.label : null;
 
   return (
     <PopoverButton
@@ -45,32 +39,28 @@ export function DelegatedWorkComposerControl({
     >
       {(close) => (
         <ComposerPopoverSurface
-          className="w-[min(22rem,calc(100vw-1rem))] p-1"
+          className="w-[min(20rem,calc(100vw-1rem))] p-1"
           data-telemetry-mask
         >
-          <div className="flex h-7 items-center justify-between gap-2 px-2">
-            <span className="text-xs font-medium text-foreground">{headerTitle}</span>
-            <span className="text-xs text-muted-foreground">{viewModel.summary.label}</span>
-          </div>
-          <div className="max-h-[min(22rem,calc(100vh-10rem))] overflow-y-auto">
+          <div className="max-h-[min(20rem,calc(100vh-10rem))] overflow-y-auto">
             {viewModel.review && (
               <AgentsPopoverReviewSection
                 review={viewModel.review}
-                showTitle={sectionCount > 1}
+                detail={singleSectionDetail}
                 onClose={close}
               />
             )}
             {viewModel.cowork && (
               <AgentsPopoverCoworkSection
                 cowork={viewModel.cowork}
-                showTitle={sectionCount > 1}
+                detail={singleSectionDetail}
                 onClose={close}
               />
             )}
             {viewModel.subagents && (
               <AgentsPopoverSubagentSection
                 subagents={viewModel.subagents}
-                showTitle={sectionCount > 1}
+                detail={singleSectionDetail}
                 onClose={close}
               />
             )}

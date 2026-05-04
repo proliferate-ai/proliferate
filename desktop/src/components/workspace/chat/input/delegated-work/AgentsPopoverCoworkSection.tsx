@@ -4,15 +4,17 @@ import { PopoverSection } from "./PopoverSection";
 
 export function AgentsPopoverCoworkSection({
   cowork,
+  detail,
   showTitle = true,
   onClose,
 }: {
   cowork: NonNullable<DelegatedWorkComposerViewModel["cowork"]>;
+  detail?: string | null;
   showTitle?: boolean;
   onClose: () => void;
 }) {
   return (
-    <PopoverSection title="Cowork" showTitle={showTitle}>
+    <PopoverSection title="Cowork" detail={detail} showTitle={showTitle}>
       <div className="space-y-0.5">
         {cowork.rows.map((workspace) => (
           <div key={workspace.ownershipId} className="rounded-md px-1 py-0.5 hover:bg-muted/40">

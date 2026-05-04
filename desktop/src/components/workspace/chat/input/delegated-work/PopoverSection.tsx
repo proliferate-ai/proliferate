@@ -2,18 +2,23 @@ import type { ReactNode } from "react";
 
 export function PopoverSection({
   title,
+  detail,
   showTitle = true,
   children,
 }: {
   title: string;
+  detail?: string | null;
   showTitle?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="py-0.5">
+    <section>
       {showTitle && (
-        <div className="flex h-6 items-center px-2 text-xs font-medium text-muted-foreground">
-          {title}
+        <div className="flex h-7 items-center justify-between gap-2 px-2">
+          <span className="text-xs font-medium text-foreground">{title}</span>
+          {detail ? (
+            <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>
+          ) : null}
         </div>
       )}
       {children}
