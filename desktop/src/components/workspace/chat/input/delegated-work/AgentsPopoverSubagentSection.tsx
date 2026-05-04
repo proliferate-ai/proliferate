@@ -17,7 +17,7 @@ export function AgentsPopoverSubagentSection({
           type="button"
           variant="ghost"
           size="sm"
-          className="mb-1 flex h-auto w-full justify-between gap-2 rounded-lg px-2 py-2 text-left hover:bg-muted/40"
+          className="mb-0.5 flex h-7 w-full justify-between gap-2 rounded-md px-1.5 py-0 text-left hover:bg-muted/40"
           onClick={() => {
             subagents.openParent(subagents.parent!.parentSessionId);
             onClose();
@@ -27,43 +27,35 @@ export function AgentsPopoverSubagentSection({
           <ExternalLink className="size-3.5 text-muted-foreground" />
         </Button>
       )}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {subagents.rows.map((row) => (
           <div
             key={row.sessionLinkId}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-lg px-2 py-2 hover:bg-muted/40"
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/40"
           >
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-auto min-w-0 flex-col items-start gap-0 whitespace-normal rounded-md px-0 py-0 text-left hover:bg-transparent"
+              className="h-7 w-full min-w-0 justify-between rounded-md px-1.5 py-0 text-left hover:bg-transparent"
               onClick={() => {
                 subagents.openSubagent(row.childSessionId);
                 onClose();
               }}
             >
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium text-foreground">
-                  {row.label}
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {row.statusLabel}
-                </span>
+              <span className="min-w-0 truncate text-sm text-foreground">
+                {row.label}
               </span>
-              {(row.latestCompletionLabel || row.wakeScheduled) && (
-                <span className="block truncate text-xs text-muted-foreground">
-                  {[row.latestCompletionLabel, row.wakeScheduled ? "Wake scheduled" : null]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              )}
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {row.wakeScheduled ? "Wake" : row.statusLabel}
+              </span>
             </Button>
             {!row.wakeScheduled && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="h-7 px-2"
                 loading={subagents.isSchedulingWake}
                 onClick={() => subagents.scheduleWake(row.childSessionId)}
               >

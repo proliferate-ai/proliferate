@@ -59,7 +59,7 @@ function ReviewRunRows({
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {round?.assignments.map((assignment) => (
           <ReviewAssignmentRow
             key={assignment.id}
@@ -85,18 +85,19 @@ function ReviewRunRows({
         || canStop
         || isTerminal
       ) && (
-        <div className="mt-2 border-t border-border/60 pt-2">
+        <div className="mt-1 flex min-w-0 items-center justify-between gap-2 px-1.5 pt-1">
           {deliveryLabel && (
-            <div className="mb-2 text-xs text-muted-foreground">{deliveryLabel}</div>
+            <div className="min-w-0 truncate text-xs text-muted-foreground">{deliveryLabel}</div>
           )}
           {failureDisplay && (
-            <div className="mb-2 text-xs text-destructive">{failureDisplay}</div>
+            <div className="min-w-0 truncate text-xs text-destructive">{failureDisplay}</div>
           )}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             {run.status === "feedback_ready" && (
               <Button
                 type="button"
                 size="sm"
+                className="h-7 px-2"
                 onClick={() => {
                   review.sendFeedback(run.id);
                   onClose();
@@ -109,6 +110,7 @@ function ReviewRunRows({
               <Button
                 type="button"
                 size="sm"
+                className="h-7 px-2"
                 onClick={() => {
                   review.markRevisionReady(run.id);
                   onClose();
@@ -121,6 +123,7 @@ function ReviewRunRows({
               <Button
                 type="button"
                 size="sm"
+                className="h-7 px-2"
                 onClick={() => {
                   review.stop(run.id);
                   onClose();
@@ -132,8 +135,9 @@ function ReviewRunRows({
             {canStop && (
               <Button
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 size="sm"
+                className="h-7 px-2"
                 onClick={() => {
                   review.stop(run.id);
                   onClose();
@@ -148,6 +152,7 @@ function ReviewRunRows({
                 type="button"
                 variant="ghost"
                 size="sm"
+                className="h-7 px-2"
                 onClick={() => {
                   review.dismiss(run.id);
                   onClose();
@@ -179,31 +184,30 @@ function ReviewAssignmentRow({
   const canRetry = assignment.status === "retryable_failed"
     && assignment.failureReason === "provider_rate_limit";
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-lg px-2 py-2 hover:bg-muted/40">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/40">
       <Button
         type="button"
         variant="ghost"
         size="sm"
         disabled={!canOpenSession}
-        className="h-auto min-w-0 flex-col items-start gap-0 whitespace-normal rounded-md px-0 py-0 text-left hover:bg-transparent disabled:cursor-default"
+        className="h-7 w-full min-w-0 justify-between rounded-md px-1.5 py-0 text-left hover:bg-transparent disabled:cursor-default"
         onClick={() => canOpenSession && onOpenReviewerSession(assignment.reviewerSessionId!)}
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
-            {assignment.personaLabel}
-          </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {reviewAssignmentStatusLabel(assignment)}
-          </span>
+        <span className="min-w-0 truncate text-sm text-foreground">
+          {assignment.personaLabel}
         </span>
-        {assignment.summary && (
-          <span className="block truncate text-xs text-muted-foreground">
-            {assignment.summary}
-          </span>
-        )}
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {reviewAssignmentStatusLabel(assignment)}
+        </span>
       </Button>
       {canRetry ? (
-        <Button type="button" variant="secondary" size="sm" onClick={onRetryAssignment}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2"
+          onClick={onRetryAssignment}
+        >
           <RefreshCw className="size-3.5" />
           Retry
         </Button>
@@ -212,6 +216,7 @@ function ReviewAssignmentRow({
           type="button"
           variant="ghost"
           size="icon-sm"
+          className="h-7 w-7"
           aria-label="Open critique"
           onClick={onOpenCritique}
         >
@@ -224,11 +229,11 @@ function ReviewAssignmentRow({
 
 function StartingReviewRows({ startingReview }: { startingReview: StartingReviewState }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {startingReview.reviewers.map((reviewer, index) => (
         <div
           key={`${reviewer.id}-${index}`}
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2"
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1"
         >
           <span className="truncate text-sm font-medium text-foreground">{reviewer.label}</span>
           <span className="text-xs text-muted-foreground">Starting</span>

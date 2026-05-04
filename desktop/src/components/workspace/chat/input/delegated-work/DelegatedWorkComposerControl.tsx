@@ -31,14 +31,14 @@ export function DelegatedWorkComposerControl({
     >
       {(close) => (
         <ComposerPopoverSurface
-          className="w-[min(34rem,calc(100vw-2rem))] p-0"
+          className="w-[min(24rem,calc(100vw-1rem))] p-1.5"
           data-telemetry-mask
         >
-          <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
-            <span className="text-sm font-medium text-foreground">Agents</span>
+          <div className="flex items-center justify-between gap-2 px-1.5 pb-1">
+            <span className="text-xs font-medium text-foreground">Agents</span>
             <span className="text-xs text-muted-foreground">{viewModel.summary.label}</span>
           </div>
-          <div className="max-h-[min(28rem,calc(100vh-10rem))] overflow-y-auto p-2">
+          <div className="max-h-[min(22rem,calc(100vh-10rem))] overflow-y-auto">
             {viewModel.review && (
               <AgentsPopoverReviewSection review={viewModel.review} onClose={close} />
             )}

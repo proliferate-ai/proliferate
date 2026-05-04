@@ -11,14 +11,14 @@ export function AgentsPopoverCoworkSection({
 }) {
   return (
     <PopoverSection title="Cowork">
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {cowork.rows.map((workspace) => (
-          <div key={workspace.ownershipId} className="rounded-lg px-2 py-2 hover:bg-muted/40">
+          <div key={workspace.ownershipId} className="rounded-md px-1 py-0.5 hover:bg-muted/40">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="flex h-auto w-full min-w-0 justify-between gap-2 rounded-md px-0 py-0 text-left hover:bg-transparent"
+              className="flex h-7 w-full min-w-0 justify-between gap-2 rounded-md px-1.5 py-0 text-left hover:bg-transparent"
               onClick={() => {
                 cowork.openWorkspace(workspace.workspaceId);
                 onClose();
@@ -37,7 +37,7 @@ export function AgentsPopoverCoworkSection({
                 variant="ghost"
                 size="sm"
                 key={session.codingSessionId}
-                className="mt-1 flex h-auto w-full min-w-0 justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted/60"
+                className="mt-0.5 flex h-6 w-full min-w-0 justify-between gap-2 rounded-md px-1.5 py-0 text-left hover:bg-muted/60"
                 onClick={() => {
                   cowork.openSession({
                     workspaceId: workspace.workspaceId,

@@ -8,8 +8,8 @@ export function PopoverSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-1 py-1">
-      <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{title}</div>
+    <section className="py-1">
+      <div className="px-1.5 pb-1 text-[11px] font-medium text-muted-foreground">{title}</div>
       {children}
     </section>
   );
