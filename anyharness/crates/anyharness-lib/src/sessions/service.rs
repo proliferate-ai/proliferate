@@ -3,9 +3,10 @@ use std::time::Instant;
 
 use uuid::Uuid;
 
+use super::attachment_storage::PromptAttachmentStorage;
 use super::live_config::snapshot_from_record;
 use super::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionMcpBindingPolicy, SessionRawNotificationRecord,
     SessionRecord,
 };
@@ -14,11 +15,13 @@ use crate::agents::catalog::ModelCatalogService;
 use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
 use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
+use crate::mobility::model::MobilityPromptAttachmentData;
 use crate::origin::OriginContext;
 use crate::workspaces::store::WorkspaceStore;
 
 pub struct SessionService {
     session_store: SessionStore,
+    attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
     runtime_home: std::path::PathBuf,
     model_catalog_service: Arc<ModelCatalogService>,
@@ -79,6 +82,7 @@ impl SessionService {
     ) -> Self {
         Self {
             session_store,
+            attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
             runtime_home,
             model_catalog_service,
@@ -333,6 +337,21 @@ impl SessionService {
         &self.session_store
     }
 
+    pub fn attachment_storage(&self) -> &PromptAttachmentStorage {
+        &self.attachment_storage
+    }
+
+    pub fn read_prompt_attachment_content(
+        &self,
+        record: &super::model::PromptAttachmentRecord,
+    ) -> anyhow::Result<Vec<u8>> {
+        read_prompt_attachment_content_with_legacy_fallback(
+            &self.session_store,
+            &self.attachment_storage,
+            record,
+        )
+    }
+
     pub fn import_session_bundle(
         &self,
         workspace_id: &str,
@@ -340,26 +359,54 @@ impl SessionService {
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
-        prompt_attachments: &[PromptAttachmentRecord],
+        prompt_attachments: &[MobilityPromptAttachmentData],
         events: &[SessionEventRecord],
         raw_notifications: &[SessionRawNotificationRecord],
     ) -> anyhow::Result<()> {
         self.workspace_store
             .find_by_id(workspace_id)?
             .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
-        self.session_store.import_bundle(
+        let mut records = Vec::with_capacity(prompt_attachments.len());
+        for attachment in prompt_attachments {
+            if let Err(error) = self.attachment_storage.write_new(
+                &attachment.record.session_id,
+                &attachment.record.attachment_id,
+                &attachment.content,
+            ) {
+                for record in &records {
+                    let _ = self.attachment_storage.delete_record(record);
+                }
+                return Err(error);
+            }
+            records.push(attachment.record.clone());
+        }
+        let result = self.session_store.import_bundle(
             session,
             live_config_snapshot,
             pending_config_changes,
             pending_prompts,
-            prompt_attachments,
+            &records,
             events,
             raw_notifications,
-        )
+        );
+        if result.is_err() {
+            for record in &records {
+                let _ = self.attachment_storage.delete_record(record);
+            }
+        }
+        result
     }
 
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
-        self.session_store.delete_session(session_id)
+        self.session_store.delete_session(session_id)?;
+        if let Err(error) = self.attachment_storage.delete_session_dir(session_id) {
+            tracing::warn!(
+                session_id = %session_id,
+                error = %error,
+                "failed to delete session prompt attachment directory"
+            );
+        }
+        Ok(())
     }
 
     pub fn update_session_title(
@@ -470,6 +517,47 @@ impl SessionService {
         })
     }
 }
+
+pub fn read_prompt_attachment_content_with_legacy_fallback(
+    store: &SessionStore,
+    attachment_storage: &PromptAttachmentStorage,
+    record: &super::model::PromptAttachmentRecord,
+) -> anyhow::Result<Vec<u8>> {
+    let has_storage_path = !record.storage_path.trim().is_empty();
+    if has_storage_path {
+        match attachment_storage.read(record) {
+            Ok(content) => return Ok(content),
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %record.session_id,
+                    attachment_id = %record.attachment_id,
+                    error = %error,
+                    "failed to read file-backed prompt attachment; trying legacy content"
+                );
+            }
+        }
+    }
+
+    let content = store
+        .read_legacy_prompt_attachment_content(&record.session_id, &record.attachment_id)?
+        .ok_or_else(|| anyhow::anyhow!("prompt attachment bytes missing"))?;
+    if content.is_empty()
+        && has_storage_path
+        && !(record.size_bytes == 0 && record.sha256 == EMPTY_SHA256)
+    {
+        anyhow::bail!("prompt attachment file is missing and legacy placeholder is empty");
+    }
+    let storage_path =
+        attachment_storage.write_new(&record.session_id, &record.attachment_id, &content)?;
+    store.update_prompt_attachment_storage_path(
+        &record.session_id,
+        &record.attachment_id,
+        &storage_path,
+    )?;
+    Ok(content)
+}
+
+const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 fn find_model_registry<'a>(
     configs: &'a [ModelRegistryMetadata],

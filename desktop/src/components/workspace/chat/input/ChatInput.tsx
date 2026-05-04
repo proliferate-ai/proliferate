@@ -227,10 +227,18 @@ export function ChatInput({
   }, [attachments, planAttachments]);
 
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
-    if (!canAttach || event.clipboardData.files.length === 0) {
+    if (!canAttach) {
       return;
     }
-    attachments.addFiles(event.clipboardData.files);
+    if (event.clipboardData.files.length > 0) {
+      attachments.addFiles(event.clipboardData.files);
+      event.preventDefault();
+      return;
+    }
+    const text = event.clipboardData.getData("text/plain");
+    if (text && attachments.addTextPaste(text)) {
+      event.preventDefault();
+    }
   }, [attachments, canAttach]);
 
   useEffect(() => {

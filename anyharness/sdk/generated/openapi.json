@@ -5779,6 +5779,16 @@
                 "format": "int64",
                 "minimum": 0
               },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PromptAttachmentSource"
+                  }
+                ]
+              },
               "type": {
                 "type": "string",
                 "enum": [
@@ -5845,6 +5855,16 @@
                 ],
                 "format": "int64",
                 "minimum": 0
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PromptAttachmentSource"
+                  }
+                ]
               },
               "type": {
                 "type": "string",
@@ -9298,6 +9318,9 @@
             "format": "int64",
             "minimum": 0
           },
+          "source": {
+            "type": "string"
+          },
           "sourceUri": {
             "type": [
               "string",
@@ -10549,6 +10572,13 @@
           }
         }
       },
+      "PromptAttachmentSource": {
+        "type": "string",
+        "enum": [
+          "upload",
+          "paste"
+        ]
+      },
       "PromptCapabilities": {
         "type": "object",
         "properties": {
@@ -10611,6 +10641,16 @@
                   "null"
                 ]
               },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PromptAttachmentSource"
+                  }
+                ]
+              },
               "type": {
                 "type": "string",
                 "enum": [
@@ -10657,6 +10697,16 @@
                 ],
                 "format": "int64",
                 "minimum": 0
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PromptAttachmentSource"
+                  }
+                ]
               },
               "text": {
                 "type": [

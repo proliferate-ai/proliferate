@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::agents::portability::delete_session_agent_artifacts;
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::workspaces::model::WorkspaceRecord;
@@ -31,6 +32,7 @@ pub struct WorkspacePurgeService {
     workspace_runtime: Arc<WorkspaceRuntime>,
     workspace_store: WorkspaceStore,
     session_store: SessionStore,
+    attachment_storage: PromptAttachmentStorage,
     operation_gate: Arc<WorkspaceOperationGate>,
     checkout_gate: Arc<CheckoutDeletionGate>,
     preflight_checker: Arc<RetirePreflightChecker>,
@@ -41,6 +43,7 @@ impl WorkspacePurgeService {
         workspace_runtime: Arc<WorkspaceRuntime>,
         workspace_store: WorkspaceStore,
         session_store: SessionStore,
+        attachment_storage: PromptAttachmentStorage,
         operation_gate: Arc<WorkspaceOperationGate>,
         checkout_gate: Arc<CheckoutDeletionGate>,
         preflight_checker: Arc<RetirePreflightChecker>,
@@ -49,6 +52,7 @@ impl WorkspacePurgeService {
             workspace_runtime,
             workspace_store,
             session_store,
+            attachment_storage,
             operation_gate,
             checkout_gate,
             preflight_checker,
@@ -121,8 +125,12 @@ impl WorkspacePurgeService {
             return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
         }
 
+        let sessions = self.session_store.list_by_workspace(workspace_id)?;
+        let session_ids = sessions
+            .iter()
+            .map(|session| session.id.clone())
+            .collect::<Vec<_>>();
         let artifact_cleanup = {
-            let sessions = self.session_store.list_by_workspace(workspace_id)?;
             let workspace_path = pending.path.clone();
             tokio::task::spawn_blocking(move || {
                 for session in sessions {
@@ -142,6 +150,15 @@ impl WorkspacePurgeService {
             .purge_workspace_with_sessions(workspace_id)
         {
             return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
+        }
+        for session_id in session_ids {
+            if let Err(error) = self.attachment_storage.delete_session_dir(&session_id) {
+                tracing::warn!(
+                    session_id = %session_id,
+                    error = %error,
+                    "failed to delete session prompt attachment directory during workspace purge"
+                );
+            }
         }
 
         Ok(WorkspacePurgeServiceOutcome::Deleted {

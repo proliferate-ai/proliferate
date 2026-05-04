@@ -2,15 +2,19 @@ use std::collections::HashSet;
 
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
-    ContentPart, PromptCapabilities, PromptInputBlock, PromptProvenance as PublicPromptProvenance,
-    SessionLiveConfigSnapshot,
+    ContentPart, PromptAttachmentSource as ContractPromptAttachmentSource, PromptCapabilities,
+    PromptInputBlock, PromptProvenance as PublicPromptProvenance, SessionLiveConfigSnapshot,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::plans::{document, model::PlanRecord};
-use crate::sessions::model::{PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentState};
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::sessions::model::{
+    PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentSource, PromptAttachmentState,
+};
+use crate::sessions::service::read_prompt_attachment_content_with_legacy_fallback;
 use crate::sessions::store::SessionStore;
 
 pub const MAX_PROMPT_BLOCKS: usize = 32;
@@ -30,6 +34,7 @@ pub trait PlanReferenceResolver {
 
 pub struct PromptPrepareContext<'a> {
     pub store: &'a SessionStore,
+    pub attachment_storage: &'a PromptAttachmentStorage,
     pub session_id: &'a str,
     pub workspace_id: &'a str,
     pub capabilities: PromptCapabilities,
@@ -138,6 +143,7 @@ impl PromptPayload {
     pub fn to_acp_blocks(
         &self,
         store: &SessionStore,
+        attachment_storage: &PromptAttachmentStorage,
         session_id: &str,
     ) -> Result<Vec<acp::ContentBlock>, PromptValidationError> {
         let mut blocks = Vec::with_capacity(self.blocks.len());
@@ -165,11 +171,19 @@ impl PromptPayload {
                                 "image attachment not found",
                             )
                         })?;
-                    let image = acp::ImageContent::new(
-                        BASE64_STANDARD.encode(&attachment.content),
-                        mime_type.clone(),
+                    let content = read_prompt_attachment_content_with_legacy_fallback(
+                        store,
+                        attachment_storage,
+                        &attachment,
                     )
-                    .uri(uri.clone());
+                    .map_err(|error| {
+                        PromptValidationError::internal(format!(
+                            "failed to read image attachment: {error}"
+                        ))
+                    })?;
+                    let image =
+                        acp::ImageContent::new(BASE64_STANDARD.encode(content), mime_type.clone())
+                            .uri(uri.clone());
                     blocks.push(acp::ContentBlock::Image(image));
                 }
                 StoredPromptBlock::Resource {
@@ -191,7 +205,17 @@ impl PromptPayload {
                                 "resource attachment not found",
                             )
                         })?;
-                    let text = String::from_utf8(attachment.content).map_err(|_| {
+                    let content = read_prompt_attachment_content_with_legacy_fallback(
+                        store,
+                        attachment_storage,
+                        &attachment,
+                    )
+                    .map_err(|error| {
+                        PromptValidationError::internal(format!(
+                            "failed to read resource attachment: {error}"
+                        ))
+                    })?;
+                    let text = String::from_utf8(content).map_err(|_| {
                         PromptValidationError::new(
                             "PROMPT_UNSUPPORTED_BINARY_RESOURCE",
                             "embedded resources must be UTF-8 text",
@@ -377,6 +401,8 @@ pub enum StoredPromptBlock {
         #[serde(skip_serializing_if = "Option::is_none")]
         uri: Option<String>,
         size: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<ContractPromptAttachmentSource>,
     },
     #[serde(rename = "resource")]
     Resource {
@@ -392,6 +418,8 @@ pub enum StoredPromptBlock {
         size: u64,
         #[serde(skip_serializing_if = "Option::is_none")]
         preview: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<ContractPromptAttachmentSource>,
     },
     #[serde(rename = "resource_link")]
     ResourceLink {
@@ -455,12 +483,14 @@ impl StoredPromptBlock {
                 name,
                 uri,
                 size,
+                source,
             } => ContentPart::Image {
                 attachment_id: attachment_id.clone(),
                 mime_type: mime_type.clone(),
                 name: name.clone(),
                 uri: uri.clone(),
                 size: Some(*size),
+                source: *source,
             },
             Self::Resource {
                 attachment_id,
@@ -469,6 +499,7 @@ impl StoredPromptBlock {
                 mime_type,
                 size,
                 preview,
+                source,
             } => ContentPart::Resource {
                 attachment_id: attachment_id.clone(),
                 uri: uri.clone(),
@@ -478,6 +509,7 @@ impl StoredPromptBlock {
                 preview: preview.clone(),
                 preview_truncated: None,
                 preview_original_bytes: None,
+                source: *source,
             },
             Self::ResourceLink {
                 uri,
@@ -523,13 +555,50 @@ impl StoredPromptBlock {
 #[derive(Debug, Clone)]
 pub struct PreparedPrompt {
     pub payload: PromptPayload,
-    pub attachments: Vec<PromptAttachmentRecord>,
+    pub attachments: Vec<PreparedPromptAttachment>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedPromptAttachment {
+    pub record: PromptAttachmentRecord,
+    pub content: Vec<u8>,
 }
 
 impl PreparedPrompt {
-    pub fn persist_attachments(&self, store: &SessionStore) -> anyhow::Result<()> {
+    pub fn persist_attachments(
+        &self,
+        store: &SessionStore,
+        attachment_storage: &PromptAttachmentStorage,
+    ) -> anyhow::Result<()> {
+        let mut written = Vec::new();
         for attachment in &self.attachments {
-            store.insert_prompt_attachment(attachment)?;
+            if let Err(error) = attachment_storage.write_new(
+                &attachment.record.session_id,
+                &attachment.record.attachment_id,
+                &attachment.content,
+            ) {
+                let ids = written
+                    .iter()
+                    .map(|record: &PromptAttachmentRecord| record.attachment_id.as_str())
+                    .collect::<Vec<_>>();
+                let _ = store.delete_prompt_attachments(&attachment.record.session_id, &ids);
+                for record in &written {
+                    let _ = attachment_storage.delete_record(record);
+                }
+                return Err(error);
+            }
+            written.push(attachment.record.clone());
+            if let Err(error) = store.insert_prompt_attachment(&attachment.record) {
+                let ids = written
+                    .iter()
+                    .map(|record| record.attachment_id.as_str())
+                    .collect::<Vec<_>>();
+                let _ = store.delete_prompt_attachments(&attachment.record.session_id, &ids);
+                for record in &written {
+                    let _ = attachment_storage.delete_record(record);
+                }
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -537,14 +606,19 @@ impl PreparedPrompt {
     pub fn cleanup_attachments(
         &self,
         store: &SessionStore,
+        attachment_storage: &PromptAttachmentStorage,
         session_id: &str,
     ) -> anyhow::Result<()> {
         let ids = self
             .attachments
             .iter()
-            .map(|attachment| attachment.attachment_id.as_str())
+            .map(|attachment| attachment.record.attachment_id.as_str())
             .collect::<Vec<_>>();
-        store.delete_prompt_attachments(session_id, &ids)
+        store.delete_prompt_attachments(session_id, &ids)?;
+        for attachment in &self.attachments {
+            let _ = attachment_storage.delete_record(&attachment.record);
+        }
+        Ok(())
     }
 }
 
@@ -603,6 +677,7 @@ pub fn prepare_prompt(
     }
 
     let store = context.store;
+    let attachment_storage = context.attachment_storage;
     let session_id = context.session_id;
     let workspace_id = context.workspace_id;
     let capabilities = context.capabilities;
@@ -629,7 +704,9 @@ pub fn prepare_prompt(
                 mime_type,
                 name,
                 uri,
+                source,
             } => {
+                let source = prompt_attachment_source(source);
                 if !capabilities.image {
                     return Err(PromptValidationError::new(
                         "PROMPT_CAPABILITY_DENIED",
@@ -667,21 +744,24 @@ pub fn prepare_prompt(
                         let attachment_id = uuid::Uuid::new_v4().to_string();
                         let size = bytes.len() as u64;
                         attachments.push(new_attachment(
+                            attachment_storage,
                             session_id,
                             attachment_id.clone(),
                             state,
                             PromptAttachmentKind::Image,
+                            source,
                             Some(mime_type.clone()),
                             name.clone(),
                             uri.clone(),
                             bytes,
                         ));
                         stored_blocks.push(StoredPromptBlock::Image {
+                            uri: Some(managed_attachment_uri(session_id, &attachment_id)),
                             attachment_id,
                             mime_type,
                             name,
-                            uri,
                             size,
+                            source: Some(source.into_contract()),
                         });
                     }
                     (None, Some(attachment_id)) => {
@@ -697,7 +777,7 @@ pub fn prepare_prompt(
                                 "image attachment MIME type does not match the prompt block",
                             ));
                         }
-                        let byte_len = attachment.content.len();
+                        let byte_len = attachment.size_bytes.max(0) as usize;
                         if byte_len > MAX_IMAGE_BYTES {
                             return Err(PromptValidationError::new(
                                 "PROMPT_IMAGE_TOO_LARGE",
@@ -713,11 +793,12 @@ pub fn prepare_prompt(
                         )?;
                         attachment_count = checked_attachment_count(attachment_count + 1)?;
                         stored_blocks.push(StoredPromptBlock::Image {
+                            uri: Some(managed_attachment_uri(session_id, &attachment_id)),
                             attachment_id,
                             mime_type,
                             name,
-                            uri,
                             size: byte_len as u64,
+                            source: Some(attachment.source.into_contract()),
                         });
                     }
                     (Some(_), Some(_)) => {
@@ -741,7 +822,9 @@ pub fn prepare_prompt(
                 name,
                 mime_type,
                 size: declared_size,
+                source,
             } => {
+                let source = prompt_attachment_source(source);
                 if !capabilities.embedded_context {
                     return Err(PromptValidationError::new(
                         "PROMPT_CAPABILITY_DENIED",
@@ -775,22 +858,25 @@ pub fn prepare_prompt(
                         let size = bytes.len() as u64;
                         let preview = bounded_preview(&text);
                         attachments.push(new_attachment(
+                            attachment_storage,
                             session_id,
                             attachment_id.clone(),
                             state,
                             PromptAttachmentKind::TextResource,
+                            source,
                             mime_type.clone(),
                             name.clone(),
                             Some(uri.clone()),
                             bytes,
                         ));
                         stored_blocks.push(StoredPromptBlock::Resource {
+                            uri: managed_attachment_uri(session_id, &attachment_id),
                             attachment_id: Some(attachment_id),
-                            uri,
                             name,
                             mime_type,
                             size,
                             preview,
+                            source: Some(source.into_contract()),
                         });
                     }
                     (None, Some(attachment_id)) => {
@@ -800,7 +886,7 @@ pub fn prepare_prompt(
                             &attachment_id,
                             PromptAttachmentKind::TextResource,
                         )?;
-                        let byte_len = attachment.content.len();
+                        let byte_len = attachment.size_bytes.max(0) as usize;
                         if byte_len > MAX_TEXT_RESOURCE_BYTES {
                             return Err(PromptValidationError::new(
                                 "PROMPT_RESOURCE_TOO_LARGE",
@@ -816,12 +902,13 @@ pub fn prepare_prompt(
                         )?;
                         attachment_count = checked_attachment_count(attachment_count + 1)?;
                         stored_blocks.push(StoredPromptBlock::Resource {
+                            uri: managed_attachment_uri(session_id, &attachment_id),
                             attachment_id: Some(attachment_id),
-                            uri,
                             name,
                             mime_type: mime_type.or_else(|| attachment.mime_type.clone()),
                             size: declared_size.unwrap_or(byte_len as u64),
                             preview: None,
+                            source: Some(attachment.source.into_contract()),
                         });
                     }
                     (Some(_), Some(_)) => {
@@ -1029,32 +1116,59 @@ fn validate_referenced_attachment(
 }
 
 fn new_attachment(
+    attachment_storage: &PromptAttachmentStorage,
     session_id: &str,
     attachment_id: String,
     state: PromptAttachmentState,
     kind: PromptAttachmentKind,
+    source: PromptAttachmentSource,
     mime_type: Option<String>,
     display_name: Option<String>,
     source_uri: Option<String>,
     content: Vec<u8>,
-) -> PromptAttachmentRecord {
+) -> PreparedPromptAttachment {
     let now = chrono::Utc::now().to_rfc3339();
     let mut hasher = Sha256::new();
     hasher.update(&content);
     let sha256 = format!("{:x}", hasher.finalize());
-    PromptAttachmentRecord {
-        attachment_id,
+    let storage_path = attachment_storage.storage_path(session_id, &attachment_id);
+    let record = PromptAttachmentRecord {
+        attachment_id: attachment_id.clone(),
         session_id: session_id.to_string(),
         state,
         kind,
+        source,
         mime_type,
         display_name,
         source_uri,
+        storage_path,
         size_bytes: content.len().try_into().unwrap_or(i64::MAX),
         sha256,
-        content,
         created_at: now.clone(),
         updated_at: now,
+    };
+    PreparedPromptAttachment { record, content }
+}
+
+fn prompt_attachment_source(
+    source: Option<ContractPromptAttachmentSource>,
+) -> PromptAttachmentSource {
+    match source {
+        Some(ContractPromptAttachmentSource::Paste) => PromptAttachmentSource::Paste,
+        _ => PromptAttachmentSource::Upload,
+    }
+}
+
+fn managed_attachment_uri(session_id: &str, attachment_id: &str) -> String {
+    format!("anyharness-attachment://sessions/{session_id}/attachments/{attachment_id}")
+}
+
+impl PromptAttachmentSource {
+    fn into_contract(self) -> ContractPromptAttachmentSource {
+        match self {
+            PromptAttachmentSource::Upload => ContractPromptAttachmentSource::Upload,
+            PromptAttachmentSource::Paste => ContractPromptAttachmentSource::Paste,
+        }
     }
 }
 
@@ -1218,7 +1332,7 @@ mod tests {
         .expect("prepare resource")
         .payload;
         let resource_blocks = resource_payload
-            .to_acp_blocks(&store, "session-1")
+            .to_acp_blocks(&store, test_attachment_storage(), "session-1")
             .expect("to acp");
         assert!(matches!(
             resource_blocks.as_slice(),
@@ -1235,7 +1349,7 @@ mod tests {
         .expect("prepare text")
         .payload;
         let text_blocks = text_payload
-            .to_acp_blocks(&store, "session-1")
+            .to_acp_blocks(&store, test_attachment_storage(), "session-1")
             .expect("to acp");
         assert!(matches!(
             text_blocks.as_slice(),
@@ -1270,6 +1384,7 @@ mod tests {
     ) -> PromptPrepareContext<'a> {
         PromptPrepareContext {
             store,
+            attachment_storage: test_attachment_storage(),
             session_id: "session-1",
             workspace_id,
             capabilities: PromptCapabilities {
@@ -1279,6 +1394,12 @@ mod tests {
             attachment_state: PromptAttachmentState::Pending,
             plan_resolver: resolver,
         }
+    }
+
+    fn test_attachment_storage() -> &'static PromptAttachmentStorage {
+        Box::leak(Box::new(PromptAttachmentStorage::new(
+            std::env::temp_dir().join(format!("anyharness-test-{}", uuid::Uuid::new_v4())),
+        )))
     }
 
     fn fixture(workspace_id: &str, body_markdown: &str) -> (SessionStore, TestPlanResolver) {

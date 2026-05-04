@@ -56,6 +56,7 @@ export interface UserPreferences {
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
+  pasteAttachmentsEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
   reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
 }
@@ -78,6 +79,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
+  pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
 };
@@ -102,6 +104,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
+  pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
 };
@@ -126,6 +129,7 @@ const USER_PREFERENCE_KEYS = [
   "subagentsEnabled",
   "coworkWorkspaceDelegationEnabled",
   "cloudRuntimeInputSyncEnabled",
+  "pasteAttachmentsEnabled",
   "reviewDefaultsByKind",
   "reviewPersonalitiesByKind",
 ] as const satisfies readonly (keyof UserPreferences)[];
@@ -498,6 +502,11 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
 
   if (typeof next.cloudRuntimeInputSyncEnabled !== "boolean") {
     next.cloudRuntimeInputSyncEnabled = PERSISTED_RECORD_BACKFILL.cloudRuntimeInputSyncEnabled;
+    changed = true;
+  }
+
+  if (typeof next.pasteAttachmentsEnabled !== "boolean") {
+    next.pasteAttachmentsEnabled = PERSISTED_RECORD_BACKFILL.pasteAttachmentsEnabled;
     changed = true;
   }
 
