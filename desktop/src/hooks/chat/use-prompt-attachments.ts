@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PromptCapabilities, PromptInputBlock } from "@anyharness/sdk";
 import {
   isTextFileCandidate,
+  pasteAttachmentName,
   PROMPT_IMAGE_MAX_BYTES,
   PROMPT_TEXT_RESOURCE_MAX_BYTES,
+  shouldCreatePasteAttachment,
   type PromptAttachmentDescriptor,
 } from "@/lib/domain/chat/prompt-content";
 
@@ -96,6 +98,7 @@ export function usePromptAttachments(
             mimeType: file.type || "image/png",
             size: file.size,
             kind: "image",
+            source: "upload",
             objectUrl: URL.createObjectURL(file),
           },
         });
@@ -115,6 +118,7 @@ export function usePromptAttachments(
             mimeType: file.type || "text/plain",
             size: file.size,
             kind: "text_resource",
+            source: "upload",
             objectUrl: null,
           },
         });
@@ -128,6 +132,33 @@ export function usePromptAttachments(
 
     setEntries((current) => [...current, ...next].slice(0, MAX_PROMPT_ATTACHMENTS));
   }, [capabilities?.embeddedContext, capabilities?.image]);
+
+  const addTextPaste = useCallback((text: string): boolean => {
+    if (!capabilities?.embeddedContext || !shouldCreatePasteAttachment(text)) {
+      return false;
+    }
+    if (entriesRef.current.length >= MAX_PROMPT_ATTACHMENTS) {
+      return false;
+    }
+    const file = new File([text], pasteAttachmentName(), { type: "text/plain" });
+    if (file.size > PROMPT_TEXT_RESOURCE_MAX_BYTES) {
+      return false;
+    }
+    const entry: AttachmentEntry = {
+      file,
+      descriptor: {
+        id: createAttachmentId(),
+        name: file.name,
+        mimeType: "text/plain",
+        size: file.size,
+        kind: "text_resource",
+        source: "paste",
+        objectUrl: null,
+      },
+    };
+    setEntries((current) => [...current, entry].slice(0, MAX_PROMPT_ATTACHMENTS));
+    return true;
+  }, [capabilities?.embeddedContext]);
 
   const removeAttachment = useCallback((id: string) => {
     setEntries((current) => {
@@ -161,6 +192,7 @@ export function usePromptAttachments(
           data: await readAsBase64(entry.file),
           mimeType: entry.descriptor.mimeType,
           name: entry.descriptor.name,
+          source: entry.descriptor.source,
         });
         continue;
       }
@@ -172,6 +204,7 @@ export function usePromptAttachments(
         name: entry.descriptor.name,
         mimeType: entry.descriptor.mimeType,
         size: entry.descriptor.size,
+        source: entry.descriptor.source,
       });
     }
 
@@ -181,6 +214,7 @@ export function usePromptAttachments(
   return {
     attachments: descriptors,
     addFiles,
+    addTextPaste,
     removeAttachment,
     clearAttachments,
     buildBlocks,

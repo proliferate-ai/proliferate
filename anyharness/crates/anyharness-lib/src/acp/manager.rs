@@ -15,6 +15,7 @@ use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::service::PlanService;
 use crate::reviews::service::ReviewService;
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{
@@ -63,6 +64,7 @@ impl AcpManager {
         workspace_env: std::collections::BTreeMap<String, String>,
         session_launch_env: std::collections::BTreeMap<String, String>,
         session_store: SessionStore,
+        attachment_storage: PromptAttachmentStorage,
         mcp_servers: Vec<SessionMcpServer>,
         startup_strategy: SessionStartupStrategy,
         system_prompt_append: Option<String>,
@@ -157,6 +159,7 @@ impl AcpManager {
                 .and_then(|guard| guard.clone()),
             event_tx,
             session_store,
+            attachment_storage,
             mcp_servers,
             startup_strategy,
             last_seq,
@@ -418,7 +421,7 @@ mod tests {
     use tokio::sync::{broadcast, mpsc, watch};
     use tokio::time::{sleep, Duration};
 
-    use super::AcpManager;
+    use super::{AcpManager, PromptAttachmentStorage};
     use crate::acp::session_actor::{LiveSessionHandle, SessionStartupStrategy};
     use crate::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
@@ -510,6 +513,12 @@ mod tests {
         store
     }
 
+    fn test_attachment_storage() -> PromptAttachmentStorage {
+        PromptAttachmentStorage::new(
+            std::env::temp_dir().join(format!("anyharness-test-{}", uuid::Uuid::new_v4())),
+        )
+    }
+
     fn subagent_turn_completed_event() -> RuntimeInjectedSessionEvent {
         RuntimeInjectedSessionEvent::SubagentTurnCompleted(SubagentTurnCompletedPayload {
             completion_id: "completion-1".to_string(),
@@ -550,6 +559,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 SessionStore::new(Db::open_in_memory().expect("open db")),
+                test_attachment_storage(),
                 vec![],
                 SessionStartupStrategy::ResumeSeqFreshNative,
                 None,
@@ -599,6 +609,7 @@ mod tests {
                     Default::default(),
                     Default::default(),
                     SessionStore::new(Db::open_in_memory().expect("open db")),
+                    test_attachment_storage(),
                     vec![],
                     SessionStartupStrategy::ResumeSeqFreshNative,
                     None,

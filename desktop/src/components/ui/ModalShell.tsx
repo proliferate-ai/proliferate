@@ -16,6 +16,7 @@ export interface ModalShellProps {
   bodyClassName?: string;
   overlayClassName?: string;
   panelClassName?: string;
+  telemetryBlocked?: boolean;
 }
 
 export function ModalShell({
@@ -31,6 +32,7 @@ export function ModalShell({
   bodyClassName = "px-5 pb-5 pt-4",
   overlayClassName = "bg-black/70 backdrop-blur-sm",
   panelClassName = "border-border bg-background shadow-lg",
+  telemetryBlocked = false,
 }: ModalShellProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -74,6 +76,7 @@ export function ModalShell({
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={description ? descriptionId : undefined}
+          data-telemetry-block={telemetryBlocked ? true : undefined}
           className={`relative flex w-full flex-col overflow-hidden rounded-2xl border ${panelClassName} ${sizeClassName}`}
           onClick={(event) => event.stopPropagation()}
         >

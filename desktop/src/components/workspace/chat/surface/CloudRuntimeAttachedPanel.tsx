@@ -83,23 +83,25 @@ export function CloudRuntimeAttachedPanelView({
       expanded={expanded}
       onToggleExpanded={() => setExpanded((value) => !value)}
     >
-      <SectionRow label="Status">
-        <span className="text-base text-muted-foreground">
-          {state.actionBlockReason}
-        </span>
-      </SectionRow>
-      {state.showRetry && retry && (
-        <SectionRow label="Actions">
-          <Button
-            size="sm"
-            onClick={() => {
-              retry?.();
-            }}
-          >
-            Retry
-          </Button>
+      <div className="max-h-[min(32vh,280px)] overflow-y-auto">
+        <SectionRow label="Status">
+          <span className="text-base text-muted-foreground">
+            {state.actionBlockReason}
+          </span>
         </SectionRow>
-      )}
+        {state.showRetry && retry && (
+          <SectionRow label="Actions">
+            <Button
+              size="sm"
+              onClick={() => {
+                retry?.();
+              }}
+            >
+              Retry
+            </Button>
+          </SectionRow>
+        )}
+      </div>
     </ComposerAttachedPanel>
   );
 }

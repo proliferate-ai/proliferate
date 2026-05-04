@@ -5,6 +5,7 @@ import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
 } from "@/hooks/chat/use-active-chat-session-selectors";
+import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
 
@@ -59,6 +60,11 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
   const children = parentSubagentsQuery.data?.children
     ?? subagentsQuery.data?.children
     ?? EMPTY_CHILDREN;
+  const childParentSessionId = parentSessionId ?? activeSessionId;
+  const childBySessionId = useMemo(
+    () => new Map(children.map((child) => [child.childSessionId, child])),
+    [children],
+  );
 
   const rows = useMemo(
     () => children.map((child, index) => (
@@ -76,13 +82,20 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
   );
 
   const openSubagent = useCallback((childSessionId: string) => {
-    if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId || !childParentSessionId) return;
+    const child = childBySessionId.get(childSessionId);
+    recordSubagentChildRelationshipHint({
+      sessionId: childSessionId,
+      parentSessionId: childParentSessionId,
+      sessionLinkId: child?.sessionLinkId ?? null,
+      workspaceId: activeWorkspaceId,
+    });
     void activateChatTab({
       workspaceId: activeWorkspaceId,
       sessionId: childSessionId,
       source: "subagent-composer-strip",
     });
-  }, [activateChatTab, activeWorkspaceId]);
+  }, [activateChatTab, activeWorkspaceId, childBySessionId, childParentSessionId]);
   const openParent = useCallback((parentSessionId: string) => {
     if (!activeWorkspaceId) return;
     void activateChatTab({

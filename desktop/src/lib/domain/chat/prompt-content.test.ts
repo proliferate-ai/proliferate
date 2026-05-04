@@ -17,6 +17,7 @@ describe("prompt content normalization", () => {
       mimeType: "image/png",
       name: "screenshot.png",
       size: 2048,
+      source: "upload",
     }];
 
     const [part] = normalizeContentParts(parts);
@@ -42,6 +43,7 @@ describe("prompt content normalization", () => {
       mimeType: "text/markdown",
       size: 1536,
       preview: "# Hello",
+      source: "paste",
     }];
 
     const [part] = normalizeContentParts(parts);
@@ -56,8 +58,9 @@ describe("prompt content normalization", () => {
       sizeLabel: "1.5 KB",
       preview: "# Hello",
       uri: "file:///README.md",
+      source: "paste",
     });
-    expect(part && promptPartSummary(part)).toBe("[file: README.md]");
+    expect(part && promptPartSummary(part)).toBe("[paste: README.md]");
   });
 
   it("normalizes resource links as link display parts", () => {
@@ -133,6 +136,7 @@ describe("prompt content normalization", () => {
         mimeType: "image/png",
         size: 512,
         kind: "image",
+        source: "upload",
         objectUrl: "blob:image",
       },
       {
@@ -141,6 +145,7 @@ describe("prompt content normalization", () => {
         mimeType: "text/plain",
         size: 42,
         kind: "text_resource",
+        source: "paste",
         objectUrl: null,
       },
       {
@@ -164,6 +169,7 @@ describe("prompt content normalization", () => {
         size: 512,
         sizeLabel: "512 B",
         objectUrl: "blob:image",
+        source: "upload",
       },
       {
         type: "file",
@@ -173,6 +179,7 @@ describe("prompt content normalization", () => {
         size: 42,
         sizeLabel: "42 B",
         objectUrl: null,
+        source: "paste",
       },
       {
         type: "plan_reference",

@@ -2,7 +2,10 @@ import { useCallback, type KeyboardEvent } from "react";
 import { getPreviousSessionModeValue } from "@/lib/domain/chat/session-mode-control";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
-import { isComposerSubmitKey } from "@/lib/domain/chat/composer-keyboard";
+import {
+  isComposerSubmitKey,
+  isRepeatedComposerSubmitKey,
+} from "@/lib/domain/chat/composer-keyboard";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
 
 interface UseChatComposerKeyboardArgs {
@@ -81,10 +84,12 @@ export function useChatComposerKeyboard({
       }
     }
 
-    if (
-      isComposerSubmitKey(event)
-      && canSubmit
-    ) {
+    if (isRepeatedComposerSubmitKey(event)) {
+      event.preventDefault();
+      return;
+    }
+
+    if (isComposerSubmitKey(event) && canSubmit) {
       event.preventDefault();
       void handleSubmit();
     }

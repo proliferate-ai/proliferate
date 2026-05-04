@@ -18,6 +18,7 @@ import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-
 import {
   isComposerMentionSelectKey,
   isRawComposerSubmitKey,
+  isRepeatedComposerSubmitKey,
 } from "@/lib/domain/chat/composer-keyboard";
 import {
   createTextDraft,
@@ -202,6 +203,11 @@ export function ComposerMentionEditor({
 
     onKeyDown?.(event);
     if (event.defaultPrevented) {
+      return;
+    }
+
+    if (isRepeatedComposerSubmitKey(event)) {
+      event.preventDefault();
       return;
     }
 

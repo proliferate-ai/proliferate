@@ -10,6 +10,7 @@ import {
   resumeSession,
 } from "./session-runtime";
 import type { Session, SessionStreamHandle } from "@anyharness/sdk";
+import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 
 const mocks = vi.hoisted(() => ({
   listEvents: vi.fn(),
@@ -48,6 +49,7 @@ beforeEach(() => {
   useHarnessStore.setState({
     runtimeUrl: "http://localhost:5173",
     selectedWorkspaceId: "workspace-1",
+    sessionRelationshipHints: {},
     sessionSlots: {
       "session-1": createEmptySessionSlot("session-1", "codex", {
         workspaceId: "workspace-1",
@@ -111,6 +113,39 @@ describe("fetchSessionHistory", () => {
 describe("collectInactiveSessionStreamIds", () => {
   it("initializes empty pending config changes on new slots", () => {
     expect(createEmptySessionSlot("session-1", "codex").pendingConfigChanges).toEqual({});
+  });
+
+  it("defaults generic slots to pending relationships", () => {
+    expect(createEmptySessionSlot("session-1", "codex").sessionRelationship)
+      .toEqual({ kind: "pending" });
+  });
+
+  it("applies and prunes relationship hints when slots mount later", () => {
+    useHarnessStore.getState().recordSessionRelationshipHint("child-session", {
+      kind: "subagent_child",
+      parentSessionId: "parent-session",
+      sessionLinkId: "link-1",
+      relation: "subagent",
+      workspaceId: "workspace-1",
+    });
+
+    useHarnessStore.getState().putSessionSlot(
+      "child-session",
+      createEmptySessionSlot("child-session", "codex", {
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    expect(useHarnessStore.getState().sessionSlots["child-session"].sessionRelationship)
+      .toEqual({
+        kind: "subagent_child",
+        parentSessionId: "parent-session",
+        sessionLinkId: "link-1",
+        relation: "subagent",
+        workspaceId: "workspace-1",
+      });
+    expect(useHarnessStore.getState().sessionRelationshipHints["child-session"])
+      .toBeUndefined();
   });
 
   it("prunes only idle, non-pending sessions with open stream handles", () => {
@@ -228,6 +263,42 @@ describe("createSessionSlotFromSummary", () => {
     expect(slot.transcript.sessionMeta.title).toBe("haiku-test");
     expect(slot.transcriptHydrated).toBe(false);
     expect(slot.status).toBe("idle");
+  });
+
+  it("preserves existing relationship metadata across summary patches", () => {
+    const relationship = {
+      kind: "review_child" as const,
+      parentSessionId: "parent-session",
+      sessionLinkId: "review-link-1",
+      relation: "review",
+      workspaceId: "workspace-1",
+    };
+    const slot = createEmptySessionSlot("review-session", "codex", {
+      workspaceId: "workspace-1",
+      sessionRelationship: relationship,
+    });
+    useHarnessStore.getState().putSessionSlot("review-session", slot);
+
+    const patch = buildSessionSlotPatchFromSummary(
+      {
+        id: "review-session",
+        agentKind: "codex",
+        modelId: "gpt-5.4",
+        modeId: "default",
+        title: "Reviewer",
+        status: "idle",
+        liveConfig: null,
+        executionSummary: null,
+        mcpBindingSummaries: null,
+        lastPromptAt: null,
+      } as Session,
+      "workspace-1",
+      slot.transcript,
+    );
+    useHarnessStore.getState().patchSessionSlot("review-session", patch);
+
+    expect(useHarnessStore.getState().sessionSlots["review-session"].sessionRelationship)
+      .toEqual(relationship);
   });
 });
 

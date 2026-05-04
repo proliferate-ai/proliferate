@@ -47,8 +47,6 @@ import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sid
 import { useSidebarRepoGroupState } from "@/hooks/workspaces/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
-import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
-import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
@@ -78,8 +76,18 @@ export function MainSidebar() {
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
+  const {
+    showArchived,
+    setShowArchived,
+    workspaceTypes,
+    toggleSidebarWorkspaceType,
+  } = useWorkspaceUiStore(useShallow((state) => ({
+    showArchived: state.showArchived,
+    setShowArchived: state.setShowArchived,
+    workspaceTypes: state.workspaceTypes,
+    toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
+  })));
   const {
     groups,
     selectedWorkspaceId,
@@ -98,13 +106,6 @@ export function MainSidebar() {
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
   const unarchiveWorkspaces = useWorkspaceUiStore((s) => s.unarchiveWorkspaces);
-  const {
-    workspaceTypes,
-    toggleSidebarWorkspaceType,
-  } = useWorkspaceUiStore(useShallow((state) => ({
-    workspaceTypes: state.workspaceTypes,
-    toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
-  })));
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
   const handleRenameWorkspace = useCallback(
     (workspaceId: string, displayName: string | null) =>
@@ -120,8 +121,6 @@ export function MainSidebar() {
       cooldownMs: 2000,
     });
   }, []);
-  const repoSetupModal = useRepoSetupModalStore((s) => s.modal);
-  const closeRepoSetupModal = useRepoSetupModalStore((s) => s.close);
   const configuredCloudRepoKeys = useMemo(
     () => buildConfiguredCloudRepoKeys(cloudRepoConfigs?.configs),
     [cloudRepoConfigs?.configs],
@@ -176,11 +175,12 @@ export function MainSidebar() {
   return (
     <DebugProfiler id="workspace-sidebar">
       <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
-      <SupportDialog
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        context={supportContext}
-      />
+      {supportOpen && (
+        <SupportDialog
+          onClose={() => setSupportOpen(false)}
+          context={supportContext}
+        />
+      )}
       <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
         {/* Top actions */}
         <div className="px-2">
@@ -281,7 +281,7 @@ export function MainSidebar() {
                       <>
                         <PopoverMenuItem
                           onClick={() => {
-                            setShowArchived((value) => !value);
+                            setShowArchived(!showArchived);
                           }}
                           variant="sidebar"
                           icon={<Archive className="size-3.5 text-muted-foreground" />}
@@ -352,15 +352,6 @@ export function MainSidebar() {
       </div>
 
       <SidebarFooter />
-
-      {repoSetupModal && (
-        <RepoSetupModal
-          repoRootId={repoSetupModal.repoRootId}
-          sourceRoot={repoSetupModal.sourceRoot}
-          repoName={repoSetupModal.repoName}
-          onClose={closeRepoSetupModal}
-        />
-      )}
       </div>
     </DebugProfiler>
   );

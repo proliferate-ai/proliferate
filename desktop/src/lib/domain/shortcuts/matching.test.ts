@@ -61,6 +61,25 @@ describe("shortcut matching", () => {
     )).toEqual({ digit: 7 });
   });
 
+  it("matches fixed physical-key shortcuts by code", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(matchShortcutDef(
+      SHORTCUTS.goHome,
+      {
+        key: "<",
+        code: "Comma",
+        metaKey: true,
+        ctrlKey: false,
+        shiftKey: true,
+        altKey: false,
+      } as KeyboardEvent,
+    )).toEqual({});
+  });
+
   it("requires exact shift and alt modifiers", () => {
     expect(matchShortcut(
       { kind: "fixed", key: "p", meta: true, shift: false, alt: false },

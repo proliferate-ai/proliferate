@@ -2,6 +2,7 @@ import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 
 export interface ComposerKeyboardEventLike {
   key: string;
+  repeat?: boolean;
   shiftKey: boolean;
   altKey: boolean;
   ctrlKey: boolean;
@@ -39,6 +40,10 @@ export function isModifiedComposerSubmitKey(event: ComposerKeyboardEventLike): b
 
 export function isComposerSubmitKey(event: ComposerKeyboardEventLike): boolean {
   return isRawComposerSubmitKey(event) || isModifiedComposerSubmitKey(event);
+}
+
+export function isRepeatedComposerSubmitKey(event: ComposerKeyboardEventLike): boolean {
+  return event.repeat === true && isComposerSubmitKey(event);
 }
 
 export function isComposerMentionSelectKey(event: ComposerKeyboardEventLike): boolean {

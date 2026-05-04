@@ -1,4 +1,4 @@
-import type { ComponentType, SVGProps } from "react";
+import { useId, type ComponentType, type SVGProps } from "react";
 import { useBrailleSweep } from "@/hooks/ui/use-braille-sweep";
 
 export type IconProps = SVGProps<SVGSVGElement>;
@@ -77,6 +77,29 @@ export function Mail({ className, ...props }: IconProps) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m4 7 8 6 8-6" />
+    </svg>
+  );
+}
+
+export function MailAppIcon({ className, ...props }: IconProps) {
+  const gradientId = useId();
+
+  return (
+    <svg className={className} viewBox="0 0 90 90" fill="none" {...props}>
+      <defs>
+        <linearGradient id={gradientId} x1="45" y1="90" x2="45" y2="0" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#70efff" />
+          <stop offset="1" stopColor="#5770ff" />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${gradientId})`}
+        d="M20.653 0h48.694C80.789 0 90 9.211 90 20.653v48.694C90 80.789 80.789 90 69.347 90H20.653C9.211 90 0 80.789 0 69.347V20.653C0 9.211 9.211 0 20.653 0Z"
+      />
+      <path
+        fill="#fff"
+        d="M19.719 25.594c-.474 0-.921.082-1.344.25l8.469 8.719 8.562 8.875.156.187.25.25.25.25.5.531 7.344 7.532c.122.076.477.404.753.542.357.179.743.343 1.142.357.43.015.869-.108 1.256-.296.29-.141.419-.343.755-.604l8.5-8.781 8.594-8.844 8.281-8.53c-.532-.289-1.12-.438-1.75-.438H19.719Zm-2.594 1.062c-.903.856-1.469 2.142-1.469 3.594v28.625c0 1.175.378 2.243 1 3.063l1.188-1.126 8.843-8.593 7.844-7.594-.156-.187-8.594-8.844-8.594-8.875-.062-.063Zm57.187.282-8.375 8.656-8.562 8.844-.156.156 8.156 7.906 8.844 8.594.531.5c.476-.764.75-1.705.75-2.719V30.25c0-1.294-.449-2.468-1.188-3.312ZM35.531 45.656l-7.812 7.594-8.875 8.594-1.125 1.094c.593.381 1.268.624 2 .624h51.719c.88 0 1.678-.338 2.343-.874l-.562-.563-8.875-8.594-8.156-7.875-7.344 7.563c-.397.263-.663.555-1.051.735-.625.289-1.309.533-1.997.523-.69-.011-1.366-.281-1.986-.586-.31-.153-.476-.305-.84-.61l-7.439-7.625Z"
+      />
     </svg>
   );
 }

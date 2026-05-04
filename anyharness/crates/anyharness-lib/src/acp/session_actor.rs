@@ -26,6 +26,7 @@ use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::model::{NewPlan, PlanRecord};
 use crate::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
 use crate::reviews::service::ReviewService;
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, option_matches_key, snapshot_from_record,
@@ -34,7 +35,8 @@ use crate::sessions::live_config::{
 };
 use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
 use crate::sessions::model::{
-    serialize_action_capabilities, PendingConfigChangeRecord, SessionRecord,
+    serialize_action_capabilities, PendingConfigChangeRecord, PromptAttachmentRecord,
+    PromptAttachmentState, SessionRecord,
 };
 use crate::sessions::prompt::{capabilities_from_acp, PromptPayload};
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
@@ -645,6 +647,7 @@ pub struct SessionActorConfig {
     pub review_service: Option<Arc<ReviewService>>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
+    pub attachment_storage: PromptAttachmentStorage,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup_strategy: SessionStartupStrategy,
     pub last_seq: i64,
@@ -1188,6 +1191,7 @@ async fn run_actor(
     let (notification_tx, mut notification_rx) =
         mpsc::unbounded_channel::<acp::SessionNotification>();
     let store = config.session_store.clone();
+    let attachment_storage = config.attachment_storage.clone();
 
     let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
         SessionEventSink::resume_from_seq(
@@ -1731,7 +1735,7 @@ async fn run_actor(
                                     prompt_id = latency_fields.prompt_id,
                                     "[workspace-latency] session.actor.prompt.received"
                                 );
-                                let mut acp_blocks = match current_payload.to_acp_blocks(&store, &session_id) {
+                                let mut acp_blocks = match current_payload.to_acp_blocks(&store, &attachment_storage, &session_id) {
                                     Ok(blocks) => blocks,
                                     Err(error) => {
                                         let detail = error.detail.clone();
@@ -2084,10 +2088,10 @@ async fn run_actor(
                                                 }
                                             }
                                             Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
-                                                let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, payload).await);
+                                                let _ = respond_to.send(handle_edit_pending_prompt(&store, &attachment_storage, &event_sink, &session_id, seq, payload).await);
                                             }
                                             Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
-                                                let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
+                                                let _ = respond_to.send(handle_delete_pending_prompt(&store, &attachment_storage, &event_sink, &session_id, seq).await);
                                             }
                                             Some(SessionCommand::ReplayAdvance { respond_to }) => {
                                                 let _ = respond_to.send(Err(anyhow::anyhow!("session is not a replay session")));
@@ -2335,10 +2339,10 @@ async fn run_actor(
                         }
                     }
                     Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
-                        let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, payload).await);
+                        let _ = respond_to.send(handle_edit_pending_prompt(&store, &attachment_storage, &event_sink, &session_id, seq, payload).await);
                     }
                     Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
-                        let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
+                        let _ = respond_to.send(handle_delete_pending_prompt(&store, &attachment_storage, &event_sink, &session_id, seq).await);
                     }
                     Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
                         let result = handle_resolve_interaction(
@@ -4511,6 +4515,7 @@ fn config_request_matches_current_state(
 
 async fn handle_edit_pending_prompt(
     store: &SessionStore,
+    attachment_storage: &PromptAttachmentStorage,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     seq: i64,
@@ -4528,6 +4533,7 @@ async fn handle_edit_pending_prompt(
                 .filter(|old_id| !new_attachment_ids.contains(old_id))
                 .map(String::as_str)
                 .collect::<Vec<_>>();
+            let removed_records = pending_attachment_records(store, session_id, &removed);
             if let Err(error) = store.delete_prompt_attachments(session_id, &removed) {
                 tracing::warn!(
                     session_id = %session_id,
@@ -4536,6 +4542,7 @@ async fn handle_edit_pending_prompt(
                     "failed to delete removed pending prompt attachments",
                 );
             }
+            delete_pending_attachment_files(attachment_storage, &removed_records);
             let mut sink = event_sink.lock().await;
             let content_parts = payload.content_parts();
             sink.pending_prompt_updated(PendingPromptUpdatedPayload {
@@ -4565,6 +4572,7 @@ async fn handle_edit_pending_prompt(
 
 async fn handle_delete_pending_prompt(
     store: &SessionStore,
+    attachment_storage: &PromptAttachmentStorage,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     seq: i64,
@@ -4576,6 +4584,7 @@ async fn handle_delete_pending_prompt(
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>();
+            let removed_records = pending_attachment_records(store, session_id, &attachment_refs);
             if let Err(error) = store.delete_prompt_attachments(session_id, &attachment_refs) {
                 tracing::warn!(
                     session_id = %session_id,
@@ -4584,6 +4593,7 @@ async fn handle_delete_pending_prompt(
                     "failed to delete pending prompt attachments",
                 );
             }
+            delete_pending_attachment_files(attachment_storage, &removed_records);
             let mut sink = event_sink.lock().await;
             sink.pending_prompt_removed(PendingPromptRemovedPayload {
                 seq,
@@ -4600,6 +4610,39 @@ async fn handle_delete_pending_prompt(
                 "failed to delete pending prompt",
             );
             Err(QueueMutationError::NotFound)
+        }
+    }
+}
+
+fn pending_attachment_records(
+    store: &SessionStore,
+    session_id: &str,
+    attachment_ids: &[&str],
+) -> Vec<PromptAttachmentRecord> {
+    attachment_ids
+        .iter()
+        .filter_map(|attachment_id| {
+            store
+                .find_prompt_attachment(session_id, attachment_id)
+                .ok()
+                .flatten()
+                .filter(|record| record.state == PromptAttachmentState::Pending)
+        })
+        .collect()
+}
+
+fn delete_pending_attachment_files(
+    attachment_storage: &PromptAttachmentStorage,
+    records: &[PromptAttachmentRecord],
+) {
+    for record in records {
+        if let Err(error) = attachment_storage.delete_record(record) {
+            tracing::warn!(
+                session_id = %record.session_id,
+                attachment_id = %record.attachment_id,
+                error = %error,
+                "failed to delete pending prompt attachment file"
+            );
         }
     }
 }

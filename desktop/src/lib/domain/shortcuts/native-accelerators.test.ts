@@ -17,6 +17,7 @@ describe("getShortcutNativeAccelerator", () => {
 
   it("does not invent accelerators for shortcut ranges or platform-specific matches", () => {
     expect(getShortcutNativeAccelerator(SHORTCUTS.tabByIndex)).toBeNull();
+    expect(getShortcutNativeAccelerator(SHORTCUTS.goHome)).toBeNull();
     expect(getShortcutNativeAccelerator(SHORTCUTS.newCloud)).toBeNull();
   });
 });

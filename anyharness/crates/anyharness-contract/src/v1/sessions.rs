@@ -388,6 +388,8 @@ pub enum PromptInputBlock {
         name: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         uri: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<PromptAttachmentSource>,
     },
     #[serde(rename = "resource")]
     Resource {
@@ -404,6 +406,8 @@ pub enum PromptInputBlock {
         mime_type: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<PromptAttachmentSource>,
     },
     #[serde(rename = "resource_link")]
     ResourceLink {
@@ -426,6 +430,13 @@ pub enum PromptInputBlock {
         #[serde(rename = "snapshotHash")]
         snapshot_hash: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptAttachmentSource {
+    Upload,
+    Paste,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

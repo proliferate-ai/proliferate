@@ -23,7 +23,12 @@ interface CoworkThreadItemProps {
   expandedWorkspaceIds: Set<string>;
   onToggleWorkspaceExpanded: (ownershipId: string) => void;
   onOpenWorkspace: (workspaceId: string) => void;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }
 
 export function CoworkThreadItem({

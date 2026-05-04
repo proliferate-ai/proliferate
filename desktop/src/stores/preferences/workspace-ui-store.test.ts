@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   migrateWorkspaceUiState,
   WORKSPACE_UI_DEFAULTS,
   useWorkspaceUiStore,
 } from "./workspace-ui-store";
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("workspace ui tab persistence", () => {
   it("migrates archived workspaces from v7 preference blobs", () => {
@@ -35,6 +39,28 @@ describe("workspace ui tab persistence", () => {
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
     expect(state.manualChatGroupsByWorkspace).toEqual({});
+  });
+
+  it("defaults and sanitizes persisted archived visibility", () => {
+    const missingState = {
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 8,
+    } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
+    delete missingState.showArchived;
+
+    const missing = migrateWorkspaceUiState(
+      missingState as typeof WORKSPACE_UI_DEFAULTS,
+    );
+    const invalid = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 8,
+      showArchived: "yes" as never,
+    });
+
+    expect(missing.didMigrate).toBe(false);
+    expect(missing.state.showArchived).toBe(false);
+    expect(invalid.didMigrate).toBe(true);
+    expect(invalid.state.showArchived).toBe(false);
   });
 
   it("defaults missing session error views without bumping migration", () => {
@@ -219,6 +245,46 @@ describe("workspace ui tab persistence", () => {
 
     expect(useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace.w1).toEqual(["a", "b"]);
     expect(useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace.w1).toEqual(["b"]);
+  });
+
+  it("marks workspace viewed at exact monotonic timestamps", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-04T00:00:30.000Z"));
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+      lastViewedAt: {
+        w1: "2026-04-04T00:00:10.000Z",
+      },
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.markWorkspaceViewedAt("w1", "2026-04-04T00:00:09.000Z");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w1)
+      .toBe("2026-04-04T00:00:10.000Z");
+
+    store.markWorkspaceViewedAt("w1", "2026-04-04T00:00:10.000Z");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w1)
+      .toBe("2026-04-04T00:00:10.000Z");
+
+    store.markWorkspaceViewedAt("w1", "2026-04-04T00:00:11.000Z");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w1)
+      .toBe("2026-04-04T00:00:11.000Z");
+
+    store.markWorkspaceViewed("w2");
+    expect(useWorkspaceUiStore.getState().lastViewedAt.w2)
+      .toBe("2026-04-04T00:00:30.000Z");
+  });
+
+  it("stores archived workspace visibility", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    useWorkspaceUiStore.getState().setShowArchived(true);
+
+    expect(useWorkspaceUiStore.getState().showArchived).toBe(true);
   });
 
   it("stores right panel preferences per workspace", () => {

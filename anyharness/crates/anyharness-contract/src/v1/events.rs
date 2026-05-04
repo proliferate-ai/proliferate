@@ -297,6 +297,8 @@ pub enum ContentPart {
         uri: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<super::PromptAttachmentSource>,
     },
     Resource {
         #[serde(rename = "attachmentId")]
@@ -318,6 +320,8 @@ pub enum ContentPart {
         #[serde(rename = "previewOriginalBytes")]
         #[serde(skip_serializing_if = "Option::is_none")]
         preview_original_bytes: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<super::PromptAttachmentSource>,
     },
     ResourceLink {
         uri: String,

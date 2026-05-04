@@ -636,7 +636,15 @@ impl MobilityService {
             let prompt_attachments = self
                 .session_service
                 .store()
-                .list_prompt_attachments(&session.id)?;
+                .list_prompt_attachments(&session.id)?
+                .into_iter()
+                .map(|record| {
+                    let content = self
+                        .session_service
+                        .read_prompt_attachment_content(&record)?;
+                    Ok(crate::mobility::model::MobilityPromptAttachmentData { record, content })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
             let events = self.session_service.store().list_events(&session.id)?;
             let raw_notifications = self
                 .session_service
@@ -840,7 +848,7 @@ fn validate_archive_size(archive: &WorkspaceMobilityArchiveData) -> Result<(), M
         if attachment.content.len() > MAX_MOBILITY_FILE_BYTES {
             return Err(MobilityError::SizeLimitExceeded(format!(
                 "prompt attachment {} exceeded the {} byte limit",
-                attachment.attachment_id, MAX_MOBILITY_FILE_BYTES
+                attachment.record.attachment_id, MAX_MOBILITY_FILE_BYTES
             )));
         }
     }
@@ -907,15 +915,17 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
             bundle
                 .prompt_attachments
                 .iter()
-                .map(|record| {
+                .map(|attachment| {
+                    let record = &attachment.record;
                     string_size(&record.attachment_id)
                         + string_size(&record.session_id)
                         + str_size(record.state.as_str())
                         + str_size(record.kind.as_str())
+                        + str_size(record.source.as_str())
                         + option_string_size(&record.mime_type)
                         + option_string_size(&record.display_name)
                         + option_string_size(&record.source_uri)
-                        + base64_size(record.content.len())
+                        + base64_size(attachment.content.len())
                         + string_size(&record.sha256)
                         + string_size(&record.created_at)
                         + string_size(&record.updated_at)

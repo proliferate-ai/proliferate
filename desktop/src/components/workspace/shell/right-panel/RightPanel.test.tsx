@@ -319,10 +319,41 @@ describe("RightPanel tab shortcuts", () => {
   });
 });
 
+describe("RightPanel root focus requests", () => {
+  it("focuses the root when an open panel receives a root focus token", async () => {
+    const rendered = render(<RightPanelHarness isWorkspaceReady focusRequestToken={0} />);
+    const root = rendered.container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+
+    expect(document.activeElement).not.toBe(root);
+
+    rendered.rerender(<RightPanelHarness isWorkspaceReady focusRequestToken={1} />);
+
+    await waitFor(() => expect(document.activeElement).toBe(root));
+  });
+
+  it("does not focus the root while the panel is closed", async () => {
+    const rendered = render(
+      <RightPanelHarness isWorkspaceReady isOpen={false} focusRequestToken={1} />,
+    );
+    const root = rendered.container.querySelector("[data-right-panel-root='true']");
+    if (!(root instanceof HTMLElement)) {
+      throw new Error("Expected right panel root");
+    }
+
+    await Promise.resolve();
+
+    expect(document.activeElement).not.toBe(root);
+  });
+});
+
 function RightPanelHarness({
   initialState = DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   isOpen = true,
   isWorkspaceReady,
+  focusRequestToken = 0,
   nativeOverlaysHidden = false,
   terminalActivationRequestToken,
   terminalActivationRequestWorkspaceId,
@@ -331,6 +362,7 @@ function RightPanelHarness({
   initialState?: RightPanelWorkspaceState;
   isOpen?: boolean;
   isWorkspaceReady: boolean;
+  focusRequestToken?: number;
   nativeOverlaysHidden?: boolean;
   terminalActivationRequestToken?: number;
   terminalActivationRequestWorkspaceId?: string;
@@ -346,6 +378,7 @@ function RightPanelHarness({
       state={state}
       repoSettingsHref="/settings"
       onStateChange={setState as Dispatch<SetStateAction<RightPanelWorkspaceState>>}
+      focusRequestToken={focusRequestToken}
       nativeOverlaysHidden={nativeOverlaysHidden}
       terminalActivationRequest={terminalActivationRequestToken
         ? {

@@ -2,6 +2,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
 import {
   markWorkspaceViewed,
+  markWorkspaceViewedAt,
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
@@ -145,8 +146,10 @@ export async function runWorkspaceSelection(
       const latestSessionTimestamp = getLatestWorkspaceInteractionTimestamp(bootstrapResult.sessions);
       if (latestSessionTimestamp) {
         trackWorkspaceInteraction(context.logicalWorkspaceId, latestSessionTimestamp);
+        markWorkspaceViewedAt(context.logicalWorkspaceId, latestSessionTimestamp);
+      } else {
+        markWorkspaceViewed(context.logicalWorkspaceId);
       }
-      markWorkspaceViewed(context.logicalWorkspaceId);
       return;
     }
 
@@ -253,6 +256,8 @@ export async function runWorkspaceSelection(
   const latestSessionTimestamp = getLatestWorkspaceInteractionTimestamp(bootstrapResult.sessions);
   if (latestSessionTimestamp) {
     trackWorkspaceInteraction(context.logicalWorkspaceId, latestSessionTimestamp);
+    markWorkspaceViewedAt(context.logicalWorkspaceId, latestSessionTimestamp);
+  } else {
+    markWorkspaceViewed(context.logicalWorkspaceId);
   }
-  markWorkspaceViewed(context.logicalWorkspaceId);
 }

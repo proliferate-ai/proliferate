@@ -303,7 +303,7 @@ function attachmentKindLabel(part: PromptDisplayAttachmentPart): string {
     case "image":
       return "Image";
     case "file":
-      return "File";
+      return part.source === "paste" ? "Paste" : "File";
     case "link":
       return "Link";
     case "plan_reference":

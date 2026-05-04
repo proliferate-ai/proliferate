@@ -30,7 +30,6 @@ export interface RunAddRepoWorkflowArgs {
   resolveRepoRootFromPath: (path: string) => Promise<RepoRoot>;
   unhideRepoRoot: (repoRootId: string) => void;
   openRepoSetupModal: (state: {
-    repoRootId: string;
     sourceRoot: string;
     repoName: string;
   }) => void;
@@ -73,7 +72,6 @@ export async function runAddRepoWorkflow({
     elapsedMs: elapsedMs(invalidateStartedAt),
   });
   openRepoSetupModal({
-    repoRootId: repoRoot.id,
     sourceRoot: repoRoot.path,
     repoName: resolveRepoName(repoRoot),
   });

@@ -1,38 +1,32 @@
 import { useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
-import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "./use-workspace-activation-workflow";
 import { useAddRepo } from "./use-add-repo";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
-import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceRetireActions } from "./use-workspace-retire-actions";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceNavigationWorkflow } from "./use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
-  const deselectWorkspacePreservingSlots = useHarnessStore(
-    (state) => state.deselectWorkspacePreservingSlots,
-  );
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const mobility = useWorkspaceMobilityState();
-  const { selectWorkspace } = useWorkspaceSelection();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
+  const {
+    goToTopLevelRoute,
+    navigateToWorkspaceShell,
+    selectWorkspaceFromSurface,
+  } = useWorkspaceNavigationWorkflow();
   const {
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
@@ -51,36 +45,6 @@ export function useWorkspaceSidebarActions() {
     void addRepoFromPicker();
   }, [addRepoFromPicker]);
 
-  const navigateToWorkspaceShell = useCallback(() => {
-    if (location.pathname !== "/") {
-      navigate("/");
-    }
-  }, [location.pathname, navigate]);
-
-  const goToTopLevelRoute = useCallback((path: string) => {
-    if (mobility.selectionLocked) {
-      showToast("Finish the current workspace move before leaving this workspace.");
-      return;
-    }
-
-    if (selectedWorkspaceId) {
-      deselectWorkspacePreservingSlots();
-      resetWorkspaceEditorState();
-    } else if (pendingWorkspaceEntry) {
-      setPendingWorkspaceEntry(null);
-      resetWorkspaceEditorState();
-    }
-    navigate(path);
-  }, [
-    deselectWorkspacePreservingSlots,
-    mobility.selectionLocked,
-    navigate,
-    pendingWorkspaceEntry,
-    setPendingWorkspaceEntry,
-    selectedWorkspaceId,
-    showToast,
-  ]);
-
   const handleGoHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
@@ -94,32 +58,8 @@ export function useWorkspaceSidebarActions() {
   }, [goToTopLevelRoute]);
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
-    if (mobility.selectionLocked && workspaceId !== mobility.selectedLogicalWorkspaceId) {
-      showToast("Finish the current workspace move before switching workspaces.");
-      return;
-    }
-
-    navigateToWorkspaceShell();
-    if (workspaceId === mobility.selectedLogicalWorkspaceId) {
-      markWorkspaceViewed(workspaceId);
-    }
-    const latencyFlowId = startLatencyFlow({
-      flowKind: "workspace_switch",
-      source: "sidebar",
-      targetWorkspaceId: workspaceId,
-    });
-    void selectWorkspace(workspaceId, { latencyFlowId }).catch((error) => {
-      failLatencyFlow(latencyFlowId, "workspace_switch_failed");
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to select workspace: ${message}`);
-    });
-  }, [
-    mobility.selectedLogicalWorkspaceId,
-    mobility.selectionLocked,
-    navigateToWorkspaceShell,
-    selectWorkspace,
-    showToast,
-  ]);
+    selectWorkspaceFromSurface(workspaceId, "sidebar");
+  }, [selectWorkspaceFromSurface]);
 
   const handleSidebarIndicatorAction = useCallback((action: SidebarIndicatorAction) => {
     switch (action.kind) {
@@ -175,7 +115,6 @@ export function useWorkspaceSidebarActions() {
     mobility.selectionLocked,
     navigateToWorkspaceShell,
     openWorkspaceSession,
-    selectWorkspace,
     showToast,
   ]);
 

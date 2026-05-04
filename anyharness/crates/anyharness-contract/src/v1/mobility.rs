@@ -289,6 +289,8 @@ pub struct MobilityPromptAttachmentRecord {
     pub session_id: String,
     pub state: String,
     pub kind: String,
+    #[serde(default = "default_prompt_attachment_source")]
+    pub source: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -301,6 +303,10 @@ pub struct MobilityPromptAttachmentRecord {
     pub content_base64: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+fn default_prompt_attachment_source() -> String {
+    "upload".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

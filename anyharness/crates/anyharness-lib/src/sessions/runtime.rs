@@ -1128,6 +1128,7 @@ impl SessionRuntime {
         let prepared = prepare_prompt(
             PromptPrepareContext {
                 store: self.session_service.store(),
+                attachment_storage: self.session_service.attachment_storage(),
                 session_id,
                 workspace_id: &record.workspace_id,
                 capabilities: capabilities_from_live_config(live_config.as_ref()),
@@ -1138,7 +1139,10 @@ impl SessionRuntime {
         )
         .map_err(SendPromptError::InvalidPrompt)?;
         prepared
-            .persist_attachments(self.session_service.store())
+            .persist_attachments(
+                self.session_service.store(),
+                self.session_service.attachment_storage(),
+            )
             .map_err(SendPromptError::Internal)?;
         tracing::info!(
             session_id = %session_id,
@@ -1191,7 +1195,11 @@ impl SessionRuntime {
                     SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
                 }
                 PromptAcceptError::EnqueueFailed(detail) => {
-                    let _ = prepared.cleanup_attachments(self.session_service.store(), session_id);
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
             })?;
@@ -1360,6 +1368,7 @@ impl SessionRuntime {
         let prepared = prepare_prompt(
             PromptPrepareContext {
                 store: self.session_service.store(),
+                attachment_storage: self.session_service.attachment_storage(),
                 session_id,
                 workspace_id: &record.workspace_id,
                 capabilities: capabilities_from_live_config(live_config.as_ref()),
@@ -1370,7 +1379,10 @@ impl SessionRuntime {
         )
         .map_err(PendingPromptMutationError::InvalidPrompt)?;
         prepared
-            .persist_attachments(self.session_service.store())
+            .persist_attachments(
+                self.session_service.store(),
+                self.session_service.attachment_storage(),
+            )
             .map_err(PendingPromptMutationError::Internal)?;
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1384,7 +1396,11 @@ impl SessionRuntime {
             .await
             .is_err()
         {
-            let _ = prepared.cleanup_attachments(self.session_service.store(), session_id);
+            let _ = prepared.cleanup_attachments(
+                self.session_service.store(),
+                self.session_service.attachment_storage(),
+                session_id,
+            );
             return Err(PendingPromptMutationError::Internal(anyhow::anyhow!(
                 "session actor channel closed"
             )));
@@ -1397,7 +1413,11 @@ impl SessionRuntime {
             })?
             .map_err(|error| match error {
                 QueueMutationError::NotFound => {
-                    let _ = prepared.cleanup_attachments(self.session_service.store(), session_id);
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
                     PendingPromptMutationError::NotFound
                 }
                 QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
@@ -1971,6 +1991,7 @@ impl SessionRuntime {
         );
         let session_launch_env = build_session_launch_env(&resolved_agent);
         let session_store = self.session_service.store().clone();
+        let attachment_storage = self.session_service.attachment_storage().clone();
         let workspace_path = PathBuf::from(&workspace.path);
         let workspace_env = self
             .workspace_runtime
@@ -2006,6 +2027,7 @@ impl SessionRuntime {
                 workspace_env,
                 session_launch_env,
                 session_store,
+                attachment_storage,
                 mcp_servers,
                 startup_strategy,
                 system_prompt_append,

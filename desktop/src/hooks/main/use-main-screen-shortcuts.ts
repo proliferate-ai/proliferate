@@ -30,7 +30,7 @@ export function useMainScreenShortcuts({
 
   useShortcutHandler("workspace.toggle-left-sidebar", () => {
     onToggleLeftSidebar();
-  }, { enabled: canUseWorkspaceShortcuts });
+  });
 
   useShortcutHandler("workspace.toggle-right-panel", () => {
     onToggleRightPanel();

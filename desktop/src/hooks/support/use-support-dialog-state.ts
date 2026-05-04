@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useSendSupportMessage } from "@/hooks/cloud/use-send-support-message";
@@ -6,6 +6,7 @@ import { useSessionDebugActions } from "@/hooks/support/use-session-debug-action
 import {
   buildSupportEmailBody,
   formatSupportContextLabel,
+  normalizeSupportMessageForSend,
 } from "@/lib/domain/support/formatting";
 import type { SupportMessageContext } from "@/lib/integrations/cloud/client";
 import {
@@ -19,13 +20,11 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 interface UseSupportDialogStateOptions {
-  open: boolean;
   onClose: () => void;
   context: SupportMessageContext;
 }
 
 export function useSupportDialogState({
-  open,
   onClose,
   context,
 }: UseSupportDialogStateOptions) {
@@ -34,7 +33,6 @@ export function useSupportDialogState({
   const showToast = useToastStore((state) => state.show);
   const { sendSupportMessage, isSendingSupportMessage } = useSendSupportMessage();
   const sessionDebugActions = useSessionDebugActions();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [message, setMessage] = useState("");
   const [isExportingDebugBundle, setIsExportingDebugBundle] = useState(false);
   const inAppSupportEnabled = supportEnabled && authStatus === "authenticated";
@@ -42,31 +40,15 @@ export function useSupportDialogState({
   const contextLabel = useMemo(() => formatSupportContextLabel(context), [context]);
   const fallbackBody = useMemo(() => buildSupportEmailBody(context), [context]);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setMessage("");
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !inAppSupportEnabled) {
-      return;
-    }
-
-    textareaRef.current?.focus();
-  }, [inAppSupportEnabled, open]);
-
   async function handleSend() {
-    const trimmed = message.trim();
-    if (!trimmed) {
+    const normalizedMessage = normalizeSupportMessageForSend(message);
+    if (!normalizedMessage) {
       return;
     }
 
     try {
       await sendSupportMessage({
-        message: trimmed,
+        message: normalizedMessage,
         context,
       });
       showToast("Support note sent.", "info");
@@ -168,7 +150,6 @@ export function useSupportDialogState({
     isSendingSupportMessage,
     message,
     setMessage,
-    textareaRef,
     handleSend,
     handleCopyEmail,
     handleEmail,

@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { offTurnEnd, onTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
+import {
+  offUserFacingTurnEnd,
+  onUserFacingTurnEnd,
+} from "@/lib/integrations/anyharness/turn-end-events";
 import dingSrc from "@/assets/sounds/ding.mp3";
 import gongSrc from "@/assets/sounds/gong.mp3";
 
@@ -37,9 +40,9 @@ export function useTurnEndSound(): void {
       }
     };
 
-    onTurnEnd(handler);
+    onUserFacingTurnEnd(handler);
     return () => {
-      offTurnEnd(handler);
+      offUserFacingTurnEnd(handler);
     };
   }, []);
 }

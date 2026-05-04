@@ -16,7 +16,10 @@ import {
   useWorktreeSettingsTargets,
   type WorktreeSettingsTargetState,
 } from "@/hooks/workspaces/use-worktree-settings-targets";
-import { worktreeSettingsActionFailureMessage } from "@/lib/domain/workspaces/worktree-settings-actions";
+import {
+  worktreeRetentionRunMessage,
+  worktreeSettingsActionFailureMessage,
+} from "@/lib/domain/workspaces/worktree-settings-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_ROWS: WorktreeInventoryRow[] = [];
@@ -29,23 +32,18 @@ export function WorktreesPane() {
     workspaceId: string;
   } | null>(null);
 
-  const runAction = (operation: () => Promise<unknown>, success: string) => {
+  const runAction = <TResult,>(
+    operation: () => Promise<TResult>,
+    success: string | ((result: TResult) => string),
+  ) => {
     void operation().then((result) => {
-      if (
-        result
-        && typeof result === "object"
-        && "alreadyRunning" in result
-        && result.alreadyRunning === true
-      ) {
-        showToast("Cleanup is already running.");
-        return;
-      }
       const failureMessage = worktreeSettingsActionFailureMessage(result);
       if (failureMessage) {
         showToast(failureMessage);
         return;
       }
-      showToast(success);
+      const successMessage = typeof success === "function" ? success(result) : success;
+      showToast(successMessage);
     }).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       showToast(message);
@@ -79,7 +77,7 @@ export function WorktreesPane() {
           )}
           onRunCleanup={() => runAction(
             () => settings.runRetention(targetState.target),
-            "Worktree cleanup finished.",
+            worktreeRetentionRunMessage,
           )}
           onPruneOrphan={(path) => runAction(
             () => settings.pruneOrphan(targetState.target, { path }),

@@ -72,23 +72,28 @@ export function McpElicitationCard({
 
     return (
       <ComposerAttachedPanel header={header}>
-        <div className="flex flex-col gap-3 p-3">
-          <div className="space-y-1 text-sm">
-            <div className="text-muted-foreground">{payload.mode.message}</div>
-            <div className="text-xs text-muted-foreground">
-              Destination: {payload.mode.urlDisplay}
+        <div className="flex max-h-[min(40vh,360px)] flex-col">
+          <div className="min-h-0 overflow-y-auto p-3 pb-2">
+            <div className="flex flex-col gap-3">
+              <div className="space-y-1 text-sm">
+                <div className="text-muted-foreground">{payload.mode.message}</div>
+                <div className="text-xs text-muted-foreground">
+                  Destination: {payload.mode.urlDisplay}
+                </div>
+              </div>
+              {revealedUrl && (
+                <Input
+                  value={revealedUrl}
+                  readOnly
+                  data-telemetry-mask="true"
+                  className="font-mono text-xs"
+                />
+              )}
+              {error && <InlineError message={error} />}
             </div>
           </div>
-          {revealedUrl && (
-            <Input
-              value={revealedUrl}
-              readOnly
-              data-telemetry-mask="true"
-              className="font-mono text-xs"
-            />
-          )}
-          {error && <InlineError message={error} />}
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 pb-3 pt-2">
             <Button
               type="button"
               variant="secondary"
@@ -153,22 +158,27 @@ export function McpElicitationCard({
 
   return (
     <ComposerAttachedPanel header={header}>
-      <div className="flex flex-col gap-3 p-3">
-        <div className="text-sm text-muted-foreground">
-          {formMode.message}
+      <div className="flex max-h-[min(40vh,360px)] flex-col">
+        <div className="min-h-0 overflow-y-auto p-3 pb-2">
+          <div className="flex flex-col gap-3">
+            <div className="text-sm text-muted-foreground">
+              {formMode.message}
+            </div>
+            <div className="flex flex-col gap-3">
+              {formFields.map((field) => (
+                <McpFieldControl
+                  key={field.fieldId}
+                  field={field}
+                  value={drafts[field.fieldId]}
+                  onChange={(value) => updateDraft(field.fieldId, value)}
+                />
+              ))}
+            </div>
+            {error && <InlineError message={error} />}
+          </div>
         </div>
-        <div className="flex flex-col gap-3">
-          {formFields.map((field) => (
-            <McpFieldControl
-              key={field.fieldId}
-              field={field}
-              value={drafts[field.fieldId]}
-              onChange={(value) => updateDraft(field.fieldId, value)}
-            />
-          ))}
-        </div>
-        {error && <InlineError message={error} />}
-        <div className="flex flex-wrap items-center justify-end gap-2">
+
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-3 pb-3 pt-2">
           <Button
             type="button"
             variant="secondary"

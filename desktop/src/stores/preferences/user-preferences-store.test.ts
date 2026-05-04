@@ -56,6 +56,7 @@ describe("user preference migration", () => {
     expect(preferences.uiFontSizeId).toBe("default");
     expect(preferences.readableCodeFontSizeId).toBe("default");
     expect(preferences.transparentChromeEnabled).toBe(false);
+    expect(preferences.pasteAttachmentsEnabled).toBe(true);
   });
 
   it("backfills legacy per-key users with old appearance defaults", async () => {
@@ -360,6 +361,10 @@ describe("user preference migration", () => {
     expect(USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled).toBe(false);
   });
 
+  it("defaults long-paste attachments on", () => {
+    expect(USER_PREFERENCE_DEFAULTS.pasteAttachmentsEnabled).toBe(true);
+  });
+
   it("defaults appearance font preferences to default", () => {
     expect(USER_PREFERENCE_DEFAULTS.uiFontSizeId).toBe("default");
     expect(USER_PREFERENCE_DEFAULTS.readableCodeFontSizeId).toBe("default");
@@ -377,6 +382,18 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.cloudRuntimeInputSyncEnabled).toBe(false);
+  });
+
+  it("migrates missing long-paste attachment preference to on", () => {
+    const legacy = {
+      ...USER_PREFERENCE_DEFAULTS,
+      pasteAttachmentsEnabled: undefined,
+    } as unknown as UserPreferences;
+
+    const result = migrateUserPreferences(legacy);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.pasteAttachmentsEnabled).toBe(true);
   });
 
   it("migrates missing transparent chrome through existing-record backfill", () => {

@@ -498,7 +498,11 @@ pub async fn get_prompt_attachment(
             headers.insert("content-type", value);
         }
     }
-    Ok((headers, attachment.content))
+    let content = state
+        .session_service
+        .read_prompt_attachment_content(&attachment)
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+    Ok((headers, content))
 }
 
 // ---------------------------------------------------------------------------

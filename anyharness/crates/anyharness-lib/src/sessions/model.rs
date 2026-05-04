@@ -1,7 +1,7 @@
 use anyharness_contract::v1;
 
 use crate::origin::OriginContext;
-use crate::sessions::prompt::{PromptPayload, StoredPromptBlock};
+use crate::sessions::prompt::PromptPayload;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionMcpBindingPolicy {
@@ -198,66 +198,15 @@ pub struct PromptAttachmentRecord {
     pub session_id: String,
     pub state: PromptAttachmentState,
     pub kind: PromptAttachmentKind,
+    pub source: PromptAttachmentSource,
     pub mime_type: Option<String>,
     pub display_name: Option<String>,
     pub source_uri: Option<String>,
+    pub storage_path: String,
     pub size_bytes: i64,
     pub sha256: String,
-    pub content: Vec<u8>,
     pub created_at: String,
     pub updated_at: String,
-}
-
-impl PromptAttachmentRecord {
-    pub fn from_stored_block(
-        session_id: &str,
-        block: &StoredPromptBlock,
-    ) -> Option<PromptAttachmentRecord> {
-        match block {
-            StoredPromptBlock::Image {
-                attachment_id,
-                mime_type,
-                name,
-                uri,
-                size,
-            } => Some(PromptAttachmentRecord {
-                attachment_id: attachment_id.clone(),
-                session_id: session_id.to_string(),
-                state: PromptAttachmentState::Pending,
-                kind: PromptAttachmentKind::Image,
-                mime_type: Some(mime_type.clone()),
-                display_name: name.clone(),
-                source_uri: uri.clone(),
-                size_bytes: (*size).try_into().unwrap_or(i64::MAX),
-                sha256: String::new(),
-                content: Vec::new(),
-                created_at: String::new(),
-                updated_at: String::new(),
-            }),
-            StoredPromptBlock::Resource {
-                attachment_id: Some(attachment_id),
-                uri,
-                name,
-                mime_type,
-                size,
-                ..
-            } => Some(PromptAttachmentRecord {
-                attachment_id: attachment_id.clone(),
-                session_id: session_id.to_string(),
-                state: PromptAttachmentState::Pending,
-                kind: PromptAttachmentKind::TextResource,
-                mime_type: mime_type.clone(),
-                display_name: name.clone(),
-                source_uri: Some(uri.clone()),
-                size_bytes: (*size).try_into().unwrap_or(i64::MAX),
-                sha256: String::new(),
-                content: Vec::new(),
-                created_at: String::new(),
-                updated_at: String::new(),
-            }),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -290,6 +239,35 @@ impl PromptAttachmentState {
                     "unknown prompt attachment state; defaulting to orphaned"
                 );
                 Self::Orphaned
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptAttachmentSource {
+    Upload,
+    Paste,
+}
+
+impl PromptAttachmentSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Upload => "upload",
+            Self::Paste => "paste",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "upload" => Self::Upload,
+            "paste" => Self::Paste,
+            other => {
+                tracing::warn!(
+                    attachment_source = %other,
+                    "unknown prompt attachment source; defaulting to upload"
+                );
+                Self::Upload
             }
         }
     }

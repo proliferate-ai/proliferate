@@ -46,6 +46,7 @@ export function GeneralPane() {
     pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
+    pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
     set: state.set,
   })));
 
@@ -111,6 +112,16 @@ export function GeneralPane() {
                   onSelect: () => preferences.set("branchPrefixType", option.id),
                 })),
               }]}
+            />
+          </SettingsCardRow>
+
+          <SettingsCardRow
+            label="Turn long pastes into attachments"
+            description="Large text pastes in chat become text-resource attachments instead of inline draft text."
+          >
+            <Switch
+              checked={preferences.pasteAttachmentsEnabled}
+              onChange={(value) => preferences.set("pasteAttachmentsEnabled", value)}
             />
           </SettingsCardRow>
         </SettingsCard>

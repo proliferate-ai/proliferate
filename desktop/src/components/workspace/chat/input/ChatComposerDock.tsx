@@ -103,7 +103,7 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
             ))}
             {children}
             {footerSlot ? (
-              <div className="mt-2">{footerSlot}</div>
+              <div className="mt-2" data-chat-composer-footer="true">{footerSlot}</div>
             ) : null}
           </div>
         </div>

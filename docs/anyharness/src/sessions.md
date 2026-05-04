@@ -148,6 +148,23 @@ projection for product UI:
 Internal automation provenance is not exposed directly; it must be converted to
 generic display-safe system provenance or omitted.
 
+### Prompt Attachments
+
+Prompt attachments are durable session state split across SQLite metadata and
+runtime-home files. `session_prompt_attachments` owns lifecycle state, kind,
+source, MIME/display metadata, size/hash, and the relative storage path. The
+attachment bytes live under the AnyHarness runtime home at
+`attachments/sessions/<session-id>/<attachment-id>/content` and are read or
+deleted only through `PromptAttachmentStorage`.
+
+`kind` describes the content class (`image` or `text_resource`). `source`
+describes how the attachment entered the prompt (`upload` or `paste`) and is
+display metadata only. Pasted text is still a text resource; it is not a
+separate prompt block type. Runtime dispatch embeds image and text-resource
+bytes into ACP prompt content after reading them from storage. Managed
+`anyharness-attachment://sessions/<session-id>/attachments/<attachment-id>`
+URIs identify transcript resources but are not an agent dereference mechanism.
+
 ## Same-Workspace Subagents
 
 Same-workspace subagents are the first product use of `SessionLinkRecord`.

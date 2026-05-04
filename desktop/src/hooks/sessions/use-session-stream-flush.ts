@@ -15,6 +15,13 @@ import {
   type MeasurementSurface,
 } from "@/lib/infra/debug-measurement";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import type {
+  SessionChildRelationship,
+  SessionRelationship,
+} from "@/stores/sessions/harness-store";
+import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { isDocumentVisibleAndFocused } from "@/hooks/ui/use-document-focus-visibility";
 import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChange,
@@ -56,6 +63,8 @@ interface SessionStreamFlushFactoryDeps {
     childSessionId: string;
     label: string | null;
     workspaceId: string | null;
+    parentSessionId: string | null;
+    sessionLinkId?: string | null;
     requestHeaders?: HeadersInit;
   }) => Promise<void> | void;
   persistReconciledModePreferences: (
@@ -315,6 +324,26 @@ export function createSessionStreamFlushController(
       transcript: result.state.transcript,
       pendingConfigChanges: configReconcileResult.pendingConfigChanges,
       reconciledIntents: configReconcileResult.reconciledIntents,
+      recordSessionRelationshipHint: (
+        sessionId: string,
+        relationship: SessionChildRelationship,
+      ) => {
+        useHarnessStore.getState().recordSessionRelationshipHint(sessionId, relationship);
+      },
+      getSessionRelationship: (sessionId: string): SessionRelationship | null =>
+        useHarnessStore.getState().sessionSlots[sessionId]?.sessionRelationship ?? null,
+      acknowledgeWorkspaceActivity: (workspaceId: string, timestamp: string) => {
+        if (!isDocumentVisibleAndFocused()) {
+          return;
+        }
+        const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+        if (workspaceId !== selectedWorkspaceId) {
+          return;
+        }
+        const selectedLogicalWorkspaceId =
+          useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId;
+        markWorkspaceViewedAt(selectedLogicalWorkspaceId ?? workspaceId, timestamp);
+      },
     });
 
     finishOrCancelMeasurementOperation(streamEventBatchOperationId, "completed");

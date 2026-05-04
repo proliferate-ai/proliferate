@@ -15,6 +15,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
+import { recordLinkedChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
 
 interface ChatTabVisibilityContext {
   workspaceUiKey?: string | null;
@@ -63,6 +64,13 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     if (!materializedWorkspaceId) {
       return;
     }
+    const parentSessionId = childToParent.get(sessionId) ?? null;
+    recordLinkedChildRelationshipHint({
+      sessionId,
+      parentSessionId,
+      relation: "header_child",
+      workspaceId: materializedWorkspaceId,
+    });
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_switch",
       source,
@@ -80,7 +88,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       const message = error instanceof Error ? error.message : String(error);
       showToast(message);
     });
-  }, [activateChatTab, materializedWorkspaceId, showToast, workspaceUiKey]);
+  }, [activateChatTab, childToParent, materializedWorkspaceId, showToast, workspaceUiKey]);
 
   const markErroredSessionsViewedBeforeHide = useCallback((idsToHide: string[]) => {
     if (idsToHide.length === 0) {

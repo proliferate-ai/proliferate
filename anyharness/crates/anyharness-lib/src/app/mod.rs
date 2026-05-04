@@ -27,6 +27,7 @@ use crate::reviews::mcp_auth::ReviewMcpAuth;
 use crate::reviews::runtime::ReviewRuntime;
 use crate::reviews::service::ReviewService;
 use crate::reviews::store::ReviewStore;
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
@@ -255,6 +256,7 @@ impl AppState {
             workspace_runtime.clone(),
             WorkspaceStore::new(db.clone()),
             SessionStore::new(db.clone()),
+            PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),
             checkout_deletion_gate.clone(),
             retire_preflight_checker.clone(),

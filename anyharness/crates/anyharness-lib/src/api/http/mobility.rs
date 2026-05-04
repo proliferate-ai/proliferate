@@ -17,6 +17,7 @@ use axum::{
 };
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use sha2::{Digest, Sha256};
 use std::time::Instant;
 
 use super::access::assert_workspace_not_retired;
@@ -25,11 +26,12 @@ use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
 use crate::mobility::model::{
-    ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData, MobilitySessionCandidate,
-    WorkspaceMobilityArchiveData, WorkspaceMobilityPreflightResult,
-    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
+    ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData,
+    MobilityPromptAttachmentData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
+    WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::mobility::service::MobilityError;
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
@@ -191,7 +193,11 @@ pub async fn install_workspace_mobility_archive(
         .map_err(map_access_error)?;
     let mobility_service = state.mobility_service.clone();
     let operation_id = req.operation_id;
-    let archive = from_contract_archive(req.archive, &workspace_id)?;
+    let archive = from_contract_archive(
+        req.archive,
+        &workspace_id,
+        state.session_service.attachment_storage(),
+    )?;
     let summary = run_blocking("mobility_install", move || {
         mobility_service.install_workspace_archive(&workspace_id, &archive, operation_id.as_deref())
     })
@@ -558,18 +564,22 @@ fn to_contract_pending_prompt(record: PendingPromptRecord) -> MobilityPendingPro
     }
 }
 
-fn to_contract_prompt_attachment(record: PromptAttachmentRecord) -> MobilityPromptAttachmentRecord {
+fn to_contract_prompt_attachment(
+    data: MobilityPromptAttachmentData,
+) -> MobilityPromptAttachmentRecord {
+    let record = data.record;
     MobilityPromptAttachmentRecord {
         attachment_id: record.attachment_id,
         session_id: record.session_id,
         state: record.state.as_str().to_string(),
         kind: record.kind.as_str().to_string(),
+        source: record.source.as_str().to_string(),
         mime_type: record.mime_type,
         display_name: record.display_name,
         source_uri: record.source_uri,
         size_bytes: record.size_bytes.max(0) as u64,
         sha256: record.sha256,
-        content_base64: STANDARD.encode(record.content),
+        content_base64: STANDARD.encode(data.content),
         created_at: record.created_at,
         updated_at: record.updated_at,
     }
@@ -602,6 +612,7 @@ fn to_contract_raw_notification(
 fn from_contract_archive(
     archive: WorkspaceMobilityArchive,
     workspace_id: &str,
+    attachment_storage: &PromptAttachmentStorage,
 ) -> Result<WorkspaceMobilityArchiveData, ApiError> {
     Ok(WorkspaceMobilityArchiveData {
         source_workspace_path: archive.source_workspace_path,
@@ -617,7 +628,7 @@ fn from_contract_archive(
         sessions: archive
             .sessions
             .into_iter()
-            .map(|bundle| from_contract_session_bundle(bundle, workspace_id))
+            .map(|bundle| from_contract_session_bundle(bundle, workspace_id, attachment_storage))
             .collect::<Result<Vec<_>, _>>()?,
         session_links: archive
             .session_links
@@ -666,9 +677,12 @@ fn from_contract_file(file: WorkspaceMobilityFileEntry) -> Result<MobilityFileDa
 fn from_contract_session_bundle(
     bundle: WorkspaceMobilitySessionBundle,
     workspace_id: &str,
+    attachment_storage: &PromptAttachmentStorage,
 ) -> Result<WorkspaceMobilitySessionBundleData, ApiError> {
+    let session = from_contract_session_record(bundle.session, workspace_id);
+    let session_id = session.id.clone();
     Ok(WorkspaceMobilitySessionBundleData {
-        session: from_contract_session_record(bundle.session, workspace_id),
+        session,
         live_config_snapshot: bundle
             .live_config_snapshot
             .map(from_contract_live_config_snapshot),
@@ -685,7 +699,7 @@ fn from_contract_session_bundle(
         prompt_attachments: bundle
             .prompt_attachments
             .into_iter()
-            .map(from_contract_prompt_attachment)
+            .map(|record| from_contract_prompt_attachment(record, &session_id, attachment_storage))
             .collect::<Result<Vec<_>, _>>()?,
         events: bundle.events.into_iter().map(from_contract_event).collect(),
         raw_notifications: bundle
@@ -843,7 +857,15 @@ fn from_contract_pending_prompt(record: MobilityPendingPromptRecord) -> PendingP
 
 fn from_contract_prompt_attachment(
     record: MobilityPromptAttachmentRecord,
-) -> Result<PromptAttachmentRecord, ApiError> {
+    expected_session_id: &str,
+    attachment_storage: &PromptAttachmentStorage,
+) -> Result<MobilityPromptAttachmentData, ApiError> {
+    if record.session_id != expected_session_id {
+        return Err(ApiError::bad_request(
+            "Prompt attachment sessionId does not match containing session",
+            "INVALID_ARCHIVE",
+        ));
+    }
     let content = STANDARD.decode(record.content_base64).map_err(|_| {
         ApiError::bad_request("Invalid prompt attachment content", "INVALID_ARCHIVE")
     })?;
@@ -853,19 +875,33 @@ fn from_contract_prompt_attachment(
             "INVALID_ARCHIVE",
         ));
     }
-    Ok(PromptAttachmentRecord {
-        attachment_id: record.attachment_id,
-        session_id: record.session_id,
-        state: PromptAttachmentState::parse(&record.state),
-        kind: PromptAttachmentKind::parse(&record.kind),
-        mime_type: record.mime_type,
-        display_name: record.display_name,
-        source_uri: record.source_uri,
-        size_bytes: record.size_bytes.try_into().unwrap_or(i64::MAX),
-        sha256: record.sha256,
+    let mut hasher = Sha256::new();
+    hasher.update(&content);
+    let digest = format!("{:x}", hasher.finalize());
+    if digest != record.sha256 {
+        return Err(ApiError::bad_request(
+            "Prompt attachment sha256 does not match decoded content",
+            "INVALID_ARCHIVE",
+        ));
+    }
+    let storage_path = attachment_storage.storage_path(&record.session_id, &record.attachment_id);
+    Ok(MobilityPromptAttachmentData {
+        record: PromptAttachmentRecord {
+            attachment_id: record.attachment_id,
+            session_id: record.session_id,
+            state: PromptAttachmentState::parse(&record.state),
+            kind: PromptAttachmentKind::parse(&record.kind),
+            source: crate::sessions::model::PromptAttachmentSource::parse(&record.source),
+            mime_type: record.mime_type,
+            display_name: record.display_name,
+            source_uri: record.source_uri,
+            storage_path,
+            size_bytes: record.size_bytes.try_into().unwrap_or(i64::MAX),
+            sha256: record.sha256,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+        },
         content,
-        created_at: record.created_at,
-        updated_at: record.updated_at,
     })
 }
 

@@ -5,12 +5,13 @@ import {
   createSessionSlotFromSummary,
   getWorkspaceClientAndId,
 } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { type SessionRelationship, useHarnessStore } from "@/stores/sessions/harness-store";
 
 interface MountLinkedSessionInput {
   sessionId: string;
   label?: string | null;
   workspaceId: string | null;
+  sessionRelationship?: SessionRelationship;
   requestHeaders?: HeadersInit;
 }
 
@@ -18,6 +19,8 @@ interface MountSubagentChildInput {
   childSessionId: string;
   label?: string | null;
   workspaceId: string | null;
+  parentSessionId: string | null;
+  sessionLinkId?: string | null;
   requestHeaders?: HeadersInit;
 }
 
@@ -51,6 +54,7 @@ export function useLinkedSessionMounting() {
         createSessionSlotFromSummary(session, input.workspaceId, {
           titleFallback: input.label ?? null,
           transcriptHydrated: false,
+          sessionRelationship: input.sessionRelationship,
         }),
       );
     } catch {
@@ -65,6 +69,13 @@ export function useLinkedSessionMounting() {
     sessionId: input.childSessionId,
     label: input.label,
     workspaceId: input.workspaceId,
+    sessionRelationship: {
+      kind: "subagent_child",
+      parentSessionId: input.parentSessionId,
+      sessionLinkId: input.sessionLinkId,
+      relation: "subagent",
+      workspaceId: input.workspaceId,
+    },
     requestHeaders: input.requestHeaders,
   }), [mountLinkedSessionSlot]);
 
@@ -91,6 +102,8 @@ export function useLinkedSessionMounting() {
         childSessionId: event.childSessionId,
         label: event.label ?? null,
         workspaceId: parentWorkspaceId,
+        parentSessionId: event.parentSessionId,
+        sessionLinkId: event.sessionLinkId,
         requestHeaders,
       });
     }
