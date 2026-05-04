@@ -1,3 +1,4 @@
+import type { ReviewKind } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import {
@@ -8,7 +9,14 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
-import { ProviderIcon, RefreshCw, Sparkles } from "@/components/ui/icons";
+import {
+  Brain,
+  Plus,
+  ProviderIcon,
+  RefreshCw,
+  Sparkles,
+  X,
+} from "@/components/ui/icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   listConfiguredSessionControlValues,
@@ -18,15 +26,23 @@ import {
   clampRounds,
   DEFAULT_REVIEW_MAX_ROUNDS,
   MAX_REVIEW_ROUNDS,
+  MAX_REVIEWERS_PER_RUN,
+  findReviewPersonaTemplateForReviewer,
+  isBuiltInReviewPersonaId,
+  nextReviewReviewerId,
   resolveReviewExecutionModeIdForAgent,
+  type ReviewPersonaTemplate,
+  type ReviewSetupReviewerDraft,
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
 
 interface ReviewDefaultsSectionProps {
+  kind: ReviewKind;
   title: string;
   description: string;
   separated: boolean;
   defaults: StoredReviewKindDefaults | null;
+  personalityTemplates: ReviewPersonaTemplate[];
   modelGroups: AgentModelGroup[];
   modelsLoading: boolean;
   onChange: (
@@ -35,15 +51,18 @@ interface ReviewDefaultsSectionProps {
 }
 
 export function ReviewDefaultsSection({
+  kind,
   title,
   description,
   separated,
   defaults,
+  personalityTemplates,
   modelGroups,
   modelsLoading,
   onChange,
 }: ReviewDefaultsSectionProps) {
   const effective = defaults ?? createDefaultReviewDefaults();
+  const reviewerRows = resolveDefaultReviewerRows(kind, effective, personalityTemplates);
   const reviewersLabel = defaults === null
     ? "Unset, uses built-in reviewers"
     : effective.reviewers.mode === "inherit"
@@ -59,6 +78,43 @@ export function ReviewDefaultsSection({
       ...patch,
     }));
   };
+  const updateReviewerRows = (items: ReviewSetupReviewerDraft[]) => {
+    const firstReviewer = items[0] ?? null;
+    update({
+      agentKind: firstReviewer?.agentKind.trim() ?? "",
+      modelId: firstReviewer?.modelId.trim() ?? "",
+      modeId: firstReviewer?.modeId.trim() ?? "",
+      reviewers: { mode: "custom", items: items.slice(0, MAX_REVIEWERS_PER_RUN) },
+    });
+  };
+  const updateReviewer = (
+    index: number,
+    patch: Partial<ReviewSetupReviewerDraft>,
+  ) => {
+    updateReviewerRows(reviewerRows.map((reviewer, reviewerIndex) => (
+      reviewerIndex === index ? { ...reviewer, ...patch } : reviewer
+    )));
+  };
+  const addReviewer = () => {
+    const template = nextAvailablePersonaTemplate(personalityTemplates, reviewerRows);
+    if (!template || reviewerRows.length >= MAX_REVIEWERS_PER_RUN) {
+      return;
+    }
+    updateReviewerRows([
+      ...reviewerRows,
+      {
+        id: nextReviewReviewerId(template.id, reviewerRows),
+        label: template.label,
+        prompt: template.prompt,
+        agentKind: "",
+        modelId: "",
+        modeId: "",
+      },
+    ]);
+  };
+  const removeReviewer = (index: number) => {
+    updateReviewerRows(reviewerRows.filter((_, reviewerIndex) => reviewerIndex !== index));
+  };
 
   return (
     <EnvironmentSection
@@ -72,26 +128,106 @@ export function ReviewDefaultsSection({
         </Button>
       ) : null}
     >
-      <EnvironmentField label="Reviewers" description={reviewersLabel}>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={effective.reviewers.mode === "inherit" ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => update({ reviewers: { mode: "inherit" } })}
-          >
-            Use built-ins
-          </Button>
-          <Button
-            type="button"
-            variant={effective.reviewers.mode === "custom" && effective.reviewers.items.length === 0
-              ? "secondary"
-              : "outline"}
-            size="sm"
-            onClick={() => update({ reviewers: { mode: "custom", items: [] } })}
-          >
-            Require config
-          </Button>
+      <EnvironmentField
+        label="Reviewer defaults"
+        description="Each default reviewer combines a personality with a harness, model, and mode."
+      >
+        <div className="space-y-2" data-telemetry-mask>
+          {reviewerRows.length > 0 ? (
+            reviewerRows.map((reviewer, index) => (
+              <div
+                key={`${reviewer.id}-${index}`}
+                className="grid grid-cols-1 items-center gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_auto]"
+              >
+                <ReviewDefaultPersonalityMenu
+                  reviewer={reviewer}
+                  reviewerIndex={index}
+                  reviewers={reviewerRows}
+                  personalityTemplates={personalityTemplates}
+                  onSelect={(template) => updateReviewer(index, {
+                    id: nextReviewReviewerId(template.id, reviewerRows, index),
+                    label: template.label,
+                    prompt: template.prompt,
+                  })}
+                />
+                <ReviewDefaultModelMenu
+                  reviewer={reviewer}
+                  modelGroups={modelGroups}
+                  modelsLoading={modelsLoading}
+                  onSelect={(group, modelId) => updateReviewer(index, {
+                    agentKind: group.kind,
+                    modelId,
+                    modeId: resolveReviewExecutionModeIdForAgent(group.kind, reviewer.modeId),
+                  })}
+                  onInherit={() => updateReviewer(index, {
+                    agentKind: "",
+                    modelId: "",
+                    modeId: "",
+                  })}
+                />
+                <ReviewDefaultModeMenu
+                  reviewer={reviewer}
+                  onSelect={(modeId) => updateReviewer(index, { modeId })}
+                  onInherit={() => updateReviewer(index, { modeId: "" })}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${reviewer.label || `reviewer ${index + 1}`}`}
+                  className="h-9 w-9 px-0"
+                  onClick={() => removeReviewer(index)}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-sm text-muted-foreground">
+              One-click review will open configuration until reviewers are saved.
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={reviewerRows.length >= MAX_REVIEWERS_PER_RUN || personalityTemplates.length === 0}
+              onClick={addReviewer}
+            >
+              <Plus className="size-3.5" />
+              Add reviewer
+            </Button>
+            <Button
+              type="button"
+              variant={effective.reviewers.mode === "inherit" ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => update({
+                agentKind: "",
+                modelId: "",
+                modeId: "",
+                reviewers: { mode: "inherit" },
+              })}
+            >
+              Use built-ins
+            </Button>
+            <Button
+              type="button"
+              variant={effective.reviewers.mode === "custom" && effective.reviewers.items.length === 0
+                ? "secondary"
+                : "outline"}
+              size="sm"
+              onClick={() => update({
+                agentKind: "",
+                modelId: "",
+                modeId: "",
+                reviewers: { mode: "custom", items: [] },
+              })}
+            >
+              Require config
+            </Button>
+          </div>
+          <div className="text-xs text-muted-foreground">{reviewersLabel}</div>
         </div>
       </EnvironmentField>
 
@@ -128,66 +264,59 @@ export function ReviewDefaultsSection({
         </Label>
       </EnvironmentField>
 
-      <EnvironmentField
-        label="Agent defaults"
-        description="Optional selections used to seed new reviewer rows before falling back to the active session."
-      >
-        <div className="grid gap-2 md:grid-cols-2">
-          <ReviewDefaultModelMenu
-            defaults={effective}
-            modelGroups={modelGroups}
-            modelsLoading={modelsLoading}
-            onSelect={(group, modelId) => update({
-              agentKind: group.kind,
-              modelId,
-              modeId: resolveReviewExecutionModeIdForAgent(group.kind, effective.modeId),
-            })}
-            onInherit={() => update({ agentKind: "", modelId: "", modeId: "" })}
-          />
-          <ReviewDefaultModeMenu
-            defaults={effective}
-            onSelect={(modeId) => update({ modeId })}
-            onInherit={() => update({ modeId: "" })}
-          />
-        </div>
-      </EnvironmentField>
-
-      {effective.reviewers.mode === "custom" && effective.reviewers.items.length > 0 ? (
-        <EnvironmentField
-          label="Saved reviewer rows"
-          description="Per-reviewer agent, model, and mode overrides are preserved."
-        >
-          <div className="space-y-2" data-telemetry-mask>
-            {effective.reviewers.items.map((reviewer) => (
-              <div key={reviewer.id} className="rounded-md border border-border px-3 py-2">
-                <div className="text-sm font-medium text-foreground">{reviewer.label}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {reviewer.agentKind || "session agent"} · {reviewer.modelId || "session model"} · {reviewer.modeId || "session mode"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </EnvironmentField>
-      ) : null}
     </EnvironmentSection>
   );
 }
 
+function ReviewDefaultPersonalityMenu({
+  reviewer,
+  reviewerIndex,
+  reviewers,
+  personalityTemplates,
+  onSelect,
+}: {
+  reviewer: ReviewSetupReviewerDraft;
+  reviewerIndex: number;
+  reviewers: ReviewSetupReviewerDraft[];
+  personalityTemplates: ReviewPersonaTemplate[];
+  onSelect: (template: ReviewPersonaTemplate) => void;
+}) {
+  return (
+    <SettingsMenu
+      label={personalityLabel(personalityTemplates, reviewer) || `Reviewer ${reviewerIndex + 1}`}
+      leading={<Brain className="size-3.5 text-muted-foreground" />}
+      className="w-full min-w-0"
+      menuClassName="w-80"
+      groups={[{
+        id: "personalities",
+        options: personalityTemplates.map((template) => ({
+          id: template.id,
+          label: template.label,
+          detail: template.prompt,
+          icon: <Brain className="size-3.5" />,
+          selected: reviewerMatchesTemplate(reviewer, template, reviewers, reviewerIndex),
+          onSelect: () => onSelect(template),
+        })),
+      }]}
+    />
+  );
+}
+
 function ReviewDefaultModelMenu({
-  defaults,
+  reviewer,
   modelGroups,
   modelsLoading,
   onSelect,
   onInherit,
 }: {
-  defaults: StoredReviewKindDefaults;
+  reviewer: ReviewSetupReviewerDraft;
   modelGroups: AgentModelGroup[];
   modelsLoading: boolean;
   onSelect: (group: AgentModelGroup, modelId: string) => void;
   onInherit: () => void;
 }) {
-  const selected = selectedDefaultModel(modelGroups, defaults);
-  const hasStoredSelection = !!defaults.agentKind || !!defaults.modelId;
+  const selected = selectedDefaultModel(modelGroups, reviewer);
+  const hasStoredSelection = !!reviewer.agentKind || !!reviewer.modelId;
   const label = selected
     ? `${selected.group.providerDisplayName} · ${selected.model.displayName}`
     : modelsLoading
@@ -213,7 +342,7 @@ function ReviewDefaultModelMenu({
             label: "Active session model",
             detail: "Use the parent session agent and model",
             icon: <Sparkles className="size-3.5" />,
-            selected: !defaults.agentKind && !defaults.modelId,
+            selected: !reviewer.agentKind && !reviewer.modelId,
             onSelect: onInherit,
           }],
         },
@@ -225,7 +354,7 @@ function ReviewDefaultModelMenu({
             label: model.displayName,
             detail: model.description,
             icon: <ProviderIcon kind={group.kind} className="size-3.5" />,
-            selected: defaults.agentKind === group.kind && defaults.modelId === model.modelId,
+            selected: reviewer.agentKind === group.kind && reviewer.modelId === model.modelId,
             onSelect: () => onSelect(group, model.modelId),
           })),
         })),
@@ -235,21 +364,21 @@ function ReviewDefaultModelMenu({
 }
 
 function ReviewDefaultModeMenu({
-  defaults,
+  reviewer,
   onSelect,
   onInherit,
 }: {
-  defaults: StoredReviewKindDefaults;
+  reviewer: ReviewSetupReviewerDraft;
   onSelect: (modeId: string) => void;
   onInherit: () => void;
 }) {
-  const modeOptions = listConfiguredSessionControlValues(defaults.agentKind, "mode");
+  const modeOptions = listConfiguredSessionControlValues(reviewer.agentKind, "mode");
   const selectedMode = resolveConfiguredSessionControlValue(
-    defaults.agentKind,
+    reviewer.agentKind,
     "mode",
-    defaults.modeId,
+    reviewer.modeId,
   );
-  const label = !defaults.agentKind
+  const label = !reviewer.agentKind
     ? "Active session mode"
     : selectedMode
       ? selectedMode.shortLabel ?? selectedMode.label
@@ -259,12 +388,12 @@ function ReviewDefaultModeMenu({
       id: "inherit",
       options: [{
         id: "inherit-active-session-mode",
-        label: defaults.agentKind ? "Default mode" : "Active session mode",
-        detail: defaults.agentKind
+        label: reviewer.agentKind ? "Default mode" : "Active session mode",
+        detail: reviewer.agentKind
           ? "Use the active session mode when available"
           : "Choose a model default to customize this",
         icon: <Sparkles className="size-3.5" />,
-        selected: !defaults.modeId,
+        selected: !reviewer.modeId,
         onSelect: onInherit,
       }],
     },
@@ -276,7 +405,7 @@ function ReviewDefaultModeMenu({
         label: mode.label,
         detail: mode.description,
         icon: <SessionControlIcon icon={mode.icon} className="size-3.5" />,
-        selected: defaults.modeId === mode.value,
+        selected: reviewer.modeId === mode.value,
         onSelect: () => onSelect(mode.value),
       })),
     }] : []),
@@ -297,11 +426,72 @@ function ReviewDefaultModeMenu({
 
 function selectedDefaultModel(
   modelGroups: AgentModelGroup[],
-  defaults: StoredReviewKindDefaults,
+  reviewer: ReviewSetupReviewerDraft,
 ): { group: AgentModelGroup; model: AgentModelGroup["models"][number] } | null {
-  const group = modelGroups.find((candidate) => candidate.kind === defaults.agentKind) ?? null;
-  const model = group?.models.find((candidate) => candidate.modelId === defaults.modelId) ?? null;
+  const group = modelGroups.find((candidate) => candidate.kind === reviewer.agentKind) ?? null;
+  const model = group?.models.find((candidate) => candidate.modelId === reviewer.modelId) ?? null;
   return group && model ? { group, model } : null;
+}
+
+function resolveDefaultReviewerRows(
+  kind: ReviewKind,
+  defaults: StoredReviewKindDefaults,
+  personalityTemplates: ReviewPersonaTemplate[],
+): ReviewSetupReviewerDraft[] {
+  if (defaults.reviewers.mode === "custom") {
+    return defaults.reviewers.items;
+  }
+
+  const builtInTemplates = personalityTemplates.filter((template) =>
+    isBuiltInReviewPersonaId(kind, template.id)
+  );
+  const sourceTemplates = builtInTemplates.length > 0 ? builtInTemplates : personalityTemplates;
+  return sourceTemplates.slice(0, 2).map((template) => ({
+    id: template.id,
+    label: template.label,
+    prompt: template.prompt,
+    agentKind: defaults.agentKind,
+    modelId: defaults.modelId,
+    modeId: defaults.modeId,
+  }));
+}
+
+function nextAvailablePersonaTemplate(
+  personalityTemplates: ReviewPersonaTemplate[],
+  reviewers: ReviewSetupReviewerDraft[],
+): ReviewPersonaTemplate | null {
+  return personalityTemplates.find((template) => (
+    !reviewers.some((reviewer) => (
+      findReviewPersonaTemplateForReviewer([template], reviewer.id) !== null
+    ))
+  )) ?? personalityTemplates[0] ?? null;
+}
+
+function reviewerMatchesTemplate(
+  reviewer: ReviewSetupReviewerDraft,
+  template: ReviewPersonaTemplate,
+  reviewers: ReviewSetupReviewerDraft[],
+  reviewerIndex: number,
+): boolean {
+  return nextReviewReviewerId(template.id, reviewers, reviewerIndex) === reviewer.id
+    && reviewer.label === template.label
+    && reviewer.prompt === template.prompt;
+}
+
+function personalityLabel(
+  personalityTemplates: ReviewPersonaTemplate[],
+  reviewer: ReviewSetupReviewerDraft,
+): string {
+  const exact = personalityTemplates.find((template) =>
+    findReviewPersonaTemplateForReviewer([template], reviewer.id)
+    && reviewer.label === template.label
+    && reviewer.prompt === template.prompt
+  );
+  if (exact) {
+    return exact.label;
+  }
+  const base = findReviewPersonaTemplateForReviewer(personalityTemplates, reviewer.id);
+  return base ? `${base.label} edited` : reviewer.label || "Choose personality";
 }
 
 function createDefaultReviewDefaults(): StoredReviewKindDefaults {

@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import {
   isBuiltInReviewPersonaId,
   listBuiltInReviewPersonaTemplates,
+  listReviewPersonaTemplates,
   type ReviewPersonaTemplate,
   type ReviewPersonalityPreference,
   type StoredReviewKindDefaults,
@@ -81,6 +82,10 @@ export function ReviewSettingsPane() {
     modelRegistries,
     selected: null,
   }), [agents, modelRegistries]);
+  const reviewPersonalityTemplatesByKind = useMemo(() => ({
+    plan: listReviewPersonaTemplates("plan", reviewPersonalitiesByKind.plan ?? []),
+    code: listReviewPersonaTemplates("code", reviewPersonalitiesByKind.code ?? []),
+  }), [reviewPersonalitiesByKind]);
 
   const updatePersonalities = (
     kind: ReviewKind,
@@ -194,6 +199,8 @@ export function ReviewSettingsPane() {
           description={section.description}
           separated={index > 0}
           defaults={reviewDefaultsByKind[section.kind]}
+          kind={section.kind}
+          personalityTemplates={reviewPersonalityTemplatesByKind[section.kind]}
           modelGroups={modelGroups}
           modelsLoading={agentsLoading || modelRegistriesLoading}
           onChange={(updater) => updateReviewDefault(section.kind, updater)}
