@@ -1,10 +1,7 @@
 import { useMemo } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
+import { SettingsCard } from "@/components/settings/SettingsCard";
 import { Button } from "@/components/ui/Button";
-import {
-  EnvironmentField,
-  EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
 import { Textarea } from "@/components/ui/Textarea";
 import {
   Plus,
@@ -53,32 +50,61 @@ export function ReviewPersonalitySection({
   );
 
   return (
-    <EnvironmentSection
-      title={title}
-      description={description}
-      separated={separated}
-      action={(
+    <section className={`space-y-2 ${separated ? "border-t border-border/60 pt-5" : ""}`}>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-sm font-medium text-foreground">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
         <Button type="button" variant="outline" size="sm" onClick={onCreate}>
           <Plus className="size-3.5" />
           {createLabel}
         </Button>
-      )}
-    >
-      {resolvedPersonalities.map((personality) => {
-        const builtIn = isBuiltInReviewPersonaId(kind, personality.id);
-        const overridden = builtIn
-          && storedPersonalities.some((item) => item.id === personality.id);
-        const descriptionText = builtIn
-          ? overridden ? "Built-in personality with custom prompt" : "Built-in personality"
-          : "Custom personality";
+      </div>
 
-        return (
-          <EnvironmentField
-            key={personality.id}
-            label={personality.label}
-            description={descriptionText}
-          >
-            <div className="space-y-2">
+      <SettingsCard>
+        {resolvedPersonalities.map((personality) => {
+          const builtIn = isBuiltInReviewPersonaId(kind, personality.id);
+          const overridden = builtIn
+            && storedPersonalities.some((item) => item.id === personality.id);
+          const descriptionText = builtIn
+            ? overridden ? "Built-in personality with custom prompt" : "Built-in personality"
+            : "Custom personality";
+
+          return (
+            <div key={personality.id} className="space-y-3 p-3">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-sm font-medium">{personality.label}</div>
+                  <div className="text-sm text-muted-foreground">{descriptionText}</div>
+                </div>
+                {(overridden || !builtIn) ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    {overridden ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onReset(kind, personality)}
+                      >
+                        <RefreshCw className="size-3.5" />
+                        Reset
+                      </Button>
+                    ) : null}
+                    {!builtIn ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDelete(kind, personality)}
+                      >
+                        <Trash className="size-3.5" />
+                        Delete
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
               <Textarea
                 variant="code"
                 rows={6}
@@ -88,36 +114,10 @@ export function ReviewPersonalitySection({
                 className="min-h-36 px-2.5 py-2 text-sm"
                 onChange={(event) => onPromptChange(kind, personality, event.target.value)}
               />
-              {(overridden || !builtIn) ? (
-                <div className="flex justify-end gap-2">
-                  {overridden ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onReset(kind, personality)}
-                    >
-                      <RefreshCw className="size-3.5" />
-                      Reset
-                    </Button>
-                  ) : null}
-                  {!builtIn ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(kind, personality)}
-                    >
-                      <Trash className="size-3.5" />
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
-          </EnvironmentField>
-        );
-      })}
-    </EnvironmentSection>
+          );
+        })}
+      </SettingsCard>
+    </section>
   );
 }

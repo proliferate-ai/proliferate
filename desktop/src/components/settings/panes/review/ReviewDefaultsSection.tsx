@@ -1,10 +1,8 @@
 import type { ReviewKind } from "@anyharness/sdk";
+import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
-import {
-  EnvironmentField,
-  EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
@@ -117,76 +115,89 @@ export function ReviewDefaultsSection({
   };
 
   return (
-    <EnvironmentSection
-      title={title}
-      description={description}
-      separated={separated}
-      action={defaults ? (
-        <Button type="button" variant="ghost" size="sm" onClick={() => onChange(() => null)}>
-          <RefreshCw className="size-3.5" />
-          Reset
-        </Button>
-      ) : null}
-    >
-      <EnvironmentField
-        label="Reviewer defaults"
-        description="Each default reviewer combines a personality with a harness, model, and mode."
-      >
-        <div className="space-y-2" data-telemetry-mask>
-          {reviewerRows.length > 0 ? (
-            reviewerRows.map((reviewer, index) => (
-              <div
-                key={`${reviewer.id}-${index}`}
-                className="grid grid-cols-1 items-center gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_auto]"
-              >
-                <ReviewDefaultPersonalityMenu
-                  reviewer={reviewer}
-                  reviewerIndex={index}
-                  reviewers={reviewerRows}
-                  personalityTemplates={personalityTemplates}
-                  onSelect={(template) => updateReviewer(index, {
-                    id: nextReviewReviewerId(template.id, reviewerRows, index),
-                    label: template.label,
-                    prompt: template.prompt,
-                  })}
-                />
-                <ReviewDefaultModelMenu
-                  reviewer={reviewer}
-                  modelGroups={modelGroups}
-                  modelsLoading={modelsLoading}
-                  onSelect={(group, modelId) => updateReviewer(index, {
-                    agentKind: group.kind,
-                    modelId,
-                    modeId: resolveReviewExecutionModeIdForAgent(group.kind, reviewer.modeId),
-                  })}
-                  onInherit={() => updateReviewer(index, {
-                    agentKind: "",
-                    modelId: "",
-                    modeId: "",
-                  })}
-                />
-                <ReviewDefaultModeMenu
-                  reviewer={reviewer}
-                  onSelect={(modeId) => updateReviewer(index, { modeId })}
-                  onInherit={() => updateReviewer(index, { modeId: "" })}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Remove ${reviewer.label || `reviewer ${index + 1}`}`}
-                  className="h-9 w-9 px-0"
-                  onClick={() => removeReviewer(index)}
-                >
-                  <X className="size-3.5" />
-                </Button>
+    <section className={`space-y-2 ${separated ? "border-t border-border/60 pt-5" : ""}`}>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <h2 className="text-sm font-medium text-foreground">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+        {defaults ? (
+          <Button type="button" variant="ghost" size="sm" onClick={() => onChange(() => null)}>
+            <RefreshCw className="size-3.5" />
+            Reset
+          </Button>
+        ) : null}
+      </div>
+
+      <SettingsCard>
+        <div className="space-y-3 p-3">
+          <div className="flex min-w-0 items-start justify-between gap-6">
+            <div className="min-w-0 space-y-0.5">
+              <div className="text-sm font-medium">Reviewer defaults</div>
+              <div className="text-sm text-muted-foreground">
+                Personality, harness, model, and mode for one-click review.
               </div>
-            ))
-          ) : (
-            <div className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-sm text-muted-foreground">
-              One-click review will open configuration until reviewers are saved.
             </div>
-          )}
+            <div className="shrink-0 text-xs text-muted-foreground">{reviewersLabel}</div>
+          </div>
+
+          <div className="space-y-2" data-telemetry-mask>
+            {reviewerRows.length > 0 ? (
+              reviewerRows.map((reviewer, index) => (
+                <div
+                  key={`${reviewer.id}-${index}`}
+                  className="grid grid-cols-1 items-center gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.72fr)_auto]"
+                >
+                  <ReviewDefaultPersonalityMenu
+                    reviewer={reviewer}
+                    reviewerIndex={index}
+                    reviewers={reviewerRows}
+                    personalityTemplates={personalityTemplates}
+                    onSelect={(template) => updateReviewer(index, {
+                      id: nextReviewReviewerId(template.id, reviewerRows, index),
+                      label: template.label,
+                      prompt: template.prompt,
+                    })}
+                  />
+                  <ReviewDefaultModelMenu
+                    reviewer={reviewer}
+                    modelGroups={modelGroups}
+                    modelsLoading={modelsLoading}
+                    onSelect={(group, modelId) => updateReviewer(index, {
+                      agentKind: group.kind,
+                      modelId,
+                      modeId: resolveReviewExecutionModeIdForAgent(group.kind, reviewer.modeId),
+                    })}
+                    onInherit={() => updateReviewer(index, {
+                      agentKind: "",
+                      modelId: "",
+                      modeId: "",
+                    })}
+                  />
+                  <ReviewDefaultModeMenu
+                    reviewer={reviewer}
+                    onSelect={(modeId) => updateReviewer(index, { modeId })}
+                    onInherit={() => updateReviewer(index, { modeId: "" })}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove ${reviewer.label || `reviewer ${index + 1}`}`}
+                    className="h-9 w-9 px-0"
+                    onClick={() => removeReviewer(index)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-sm text-muted-foreground">
+                One-click review will open configuration until reviewers are saved.
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Button
               type="button"
@@ -227,44 +238,43 @@ export function ReviewDefaultsSection({
               Require config
             </Button>
           </div>
-          <div className="text-xs text-muted-foreground">{reviewersLabel}</div>
         </div>
-      </EnvironmentField>
 
-      <EnvironmentField
-        label="Max rounds"
-        description={`One-click launches use ${DEFAULT_REVIEW_MAX_ROUNDS} rounds unless overridden.`}
-      >
-        <Input
-          type="number"
-          min={1}
-          max={MAX_REVIEW_ROUNDS}
-          value={effective.maxRounds}
-          onChange={(event) => {
-            const nextValue = event.target.valueAsNumber;
-            update({
-              maxRounds: Number.isFinite(nextValue)
-                ? clampRounds(nextValue)
-                : DEFAULT_REVIEW_MAX_ROUNDS,
-            });
-          }}
-        />
-      </EnvironmentField>
-
-      <EnvironmentField
-        label="Auto iterate"
-        description="Automatically send feedback when a review round requests revisions."
-      >
-        <Label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox
-            checked={effective.autoIterate}
-            onChange={(event) => update({ autoIterate: event.target.checked })}
+        <SettingsCardRow
+          label="Max rounds"
+          description={`One-click launches use ${DEFAULT_REVIEW_MAX_ROUNDS} rounds unless overridden.`}
+        >
+          <Input
+            type="number"
+            min={1}
+            max={MAX_REVIEW_ROUNDS}
+            value={effective.maxRounds}
+            className="w-24"
+            onChange={(event) => {
+              const nextValue = event.target.valueAsNumber;
+              update({
+                maxRounds: Number.isFinite(nextValue)
+                  ? clampRounds(nextValue)
+                  : DEFAULT_REVIEW_MAX_ROUNDS,
+              });
+            }}
           />
-          Enabled
-        </Label>
-      </EnvironmentField>
+        </SettingsCardRow>
 
-    </EnvironmentSection>
+        <SettingsCardRow
+          label="Auto iterate"
+          description="Automatically send feedback when a review round requests revisions."
+        >
+          <Label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox
+              checked={effective.autoIterate}
+              onChange={(event) => update({ autoIterate: event.target.checked })}
+            />
+            Enabled
+          </Label>
+        </SettingsCardRow>
+      </SettingsCard>
+    </section>
   );
 }
 
