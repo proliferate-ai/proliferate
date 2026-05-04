@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
+import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { ReviewDefaultsSection } from "@/components/settings/panes/review/ReviewDefaultsSection";
 import { ReviewPersonalitySection } from "@/components/settings/panes/review/ReviewPersonalitySection";
@@ -15,7 +16,11 @@ import {
   type ReviewPersonalityPreference,
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
+import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+
+const EMPTY_MODEL_REGISTRIES: NonNullable<ReturnType<typeof useModelRegistriesQuery>["data"]> = [];
 
 const REVIEW_SECTIONS: {
   kind: ReviewKind;
@@ -66,6 +71,16 @@ export function ReviewSettingsPane() {
   const reviewDefaultsByKind = useUserPreferencesStore((state) => state.reviewDefaultsByKind);
   const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
   const setPreference = useUserPreferencesStore((state) => state.set);
+  const { agents, isLoading: agentsLoading } = useAgentCatalog();
+  const {
+    data: modelRegistries = EMPTY_MODEL_REGISTRIES,
+    isLoading: modelRegistriesLoading,
+  } = useModelRegistriesQuery();
+  const modelGroups = useMemo(() => buildAgentModelGroups({
+    agents,
+    modelRegistries,
+    selected: null,
+  }), [agents, modelRegistries]);
 
   const updatePersonalities = (
     kind: ReviewKind,
@@ -179,6 +194,8 @@ export function ReviewSettingsPane() {
           description={section.description}
           separated={index > 0}
           defaults={reviewDefaultsByKind[section.kind]}
+          modelGroups={modelGroups}
+          modelsLoading={agentsLoading || modelRegistriesLoading}
           onChange={(updater) => updateReviewDefault(section.kind, updater)}
         />
       ))}

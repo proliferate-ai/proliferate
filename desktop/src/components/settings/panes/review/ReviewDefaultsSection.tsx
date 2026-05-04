@@ -6,11 +6,19 @@ import {
 } from "@/components/ui/EnvironmentLayout";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import { RefreshCw } from "@/components/ui/icons";
+import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+import { ProviderIcon, RefreshCw, Sparkles } from "@/components/ui/icons";
+import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
+import {
+  listConfiguredSessionControlValues,
+  resolveConfiguredSessionControlValue,
+} from "@/lib/domain/chat/session-mode-control";
 import {
   clampRounds,
   DEFAULT_REVIEW_MAX_ROUNDS,
   MAX_REVIEW_ROUNDS,
+  resolveReviewExecutionModeIdForAgent,
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
 
@@ -19,6 +27,8 @@ interface ReviewDefaultsSectionProps {
   description: string;
   separated: boolean;
   defaults: StoredReviewKindDefaults | null;
+  modelGroups: AgentModelGroup[];
+  modelsLoading: boolean;
   onChange: (
     updater: (current: StoredReviewKindDefaults | null) => StoredReviewKindDefaults | null,
   ) => void;
@@ -29,6 +39,8 @@ export function ReviewDefaultsSection({
   description,
   separated,
   defaults,
+  modelGroups,
+  modelsLoading,
   onChange,
 }: ReviewDefaultsSectionProps) {
   const effective = defaults ?? createDefaultReviewDefaults();
@@ -118,23 +130,24 @@ export function ReviewDefaultsSection({
 
       <EnvironmentField
         label="Agent defaults"
-        description="Optional IDs used to seed new reviewer rows before falling back to the active session."
+        description="Optional selections used to seed new reviewer rows before falling back to the active session."
       >
-        <div className="grid gap-2 md:grid-cols-3">
-          <Input
-            value={effective.agentKind}
-            placeholder="agent kind"
-            onChange={(event) => update({ agentKind: event.target.value.trim() })}
+        <div className="grid gap-2 md:grid-cols-2">
+          <ReviewDefaultModelMenu
+            defaults={effective}
+            modelGroups={modelGroups}
+            modelsLoading={modelsLoading}
+            onSelect={(group, modelId) => update({
+              agentKind: group.kind,
+              modelId,
+              modeId: resolveReviewExecutionModeIdForAgent(group.kind, effective.modeId),
+            })}
+            onInherit={() => update({ agentKind: "", modelId: "", modeId: "" })}
           />
-          <Input
-            value={effective.modelId}
-            placeholder="model id"
-            onChange={(event) => update({ modelId: event.target.value.trim() })}
-          />
-          <Input
-            value={effective.modeId}
-            placeholder="mode id"
-            onChange={(event) => update({ modeId: event.target.value.trim() })}
+          <ReviewDefaultModeMenu
+            defaults={effective}
+            onSelect={(modeId) => update({ modeId })}
+            onInherit={() => update({ modeId: "" })}
           />
         </div>
       </EnvironmentField>
@@ -158,6 +171,137 @@ export function ReviewDefaultsSection({
       ) : null}
     </EnvironmentSection>
   );
+}
+
+function ReviewDefaultModelMenu({
+  defaults,
+  modelGroups,
+  modelsLoading,
+  onSelect,
+  onInherit,
+}: {
+  defaults: StoredReviewKindDefaults;
+  modelGroups: AgentModelGroup[];
+  modelsLoading: boolean;
+  onSelect: (group: AgentModelGroup, modelId: string) => void;
+  onInherit: () => void;
+}) {
+  const selected = selectedDefaultModel(modelGroups, defaults);
+  const hasStoredSelection = !!defaults.agentKind || !!defaults.modelId;
+  const label = selected
+    ? `${selected.group.providerDisplayName} · ${selected.model.displayName}`
+    : modelsLoading
+      ? "Loading models"
+      : hasStoredSelection
+        ? "Saved model unavailable"
+        : "Active session model";
+  const leading = selected
+    ? <ProviderIcon kind={selected.group.kind} className="size-3.5" />
+    : <Sparkles className="size-3.5 text-muted-foreground" />;
+
+  return (
+    <SettingsMenu
+      label={label}
+      leading={leading}
+      className="w-full min-w-0"
+      menuClassName="w-80"
+      groups={[
+        {
+          id: "inherit",
+          options: [{
+            id: "inherit-active-session-model",
+            label: "Active session model",
+            detail: "Use the parent session agent and model",
+            icon: <Sparkles className="size-3.5" />,
+            selected: !defaults.agentKind && !defaults.modelId,
+            onSelect: onInherit,
+          }],
+        },
+        ...modelGroups.map((group) => ({
+          id: group.kind,
+          label: group.providerDisplayName,
+          options: group.models.map((model) => ({
+            id: `${group.kind}:${model.modelId}`,
+            label: model.displayName,
+            detail: model.description,
+            icon: <ProviderIcon kind={group.kind} className="size-3.5" />,
+            selected: defaults.agentKind === group.kind && defaults.modelId === model.modelId,
+            onSelect: () => onSelect(group, model.modelId),
+          })),
+        })),
+      ]}
+    />
+  );
+}
+
+function ReviewDefaultModeMenu({
+  defaults,
+  onSelect,
+  onInherit,
+}: {
+  defaults: StoredReviewKindDefaults;
+  onSelect: (modeId: string) => void;
+  onInherit: () => void;
+}) {
+  const modeOptions = listConfiguredSessionControlValues(defaults.agentKind, "mode");
+  const selectedMode = resolveConfiguredSessionControlValue(
+    defaults.agentKind,
+    "mode",
+    defaults.modeId,
+  );
+  const label = !defaults.agentKind
+    ? "Active session mode"
+    : selectedMode
+      ? selectedMode.shortLabel ?? selectedMode.label
+      : "Default mode";
+  const groups = [
+    {
+      id: "inherit",
+      options: [{
+        id: "inherit-active-session-mode",
+        label: defaults.agentKind ? "Default mode" : "Active session mode",
+        detail: defaults.agentKind
+          ? "Use the active session mode when available"
+          : "Choose a model default to customize this",
+        icon: <Sparkles className="size-3.5" />,
+        selected: !defaults.modeId,
+        onSelect: onInherit,
+      }],
+    },
+    ...(modeOptions.length > 0 ? [{
+      id: "modes",
+      label: "Modes",
+      options: modeOptions.map((mode) => ({
+        id: mode.value,
+        label: mode.label,
+        detail: mode.description,
+        icon: <SessionControlIcon icon={mode.icon} className="size-3.5" />,
+        selected: defaults.modeId === mode.value,
+        onSelect: () => onSelect(mode.value),
+      })),
+    }] : []),
+  ];
+
+  return (
+    <SettingsMenu
+      label={label}
+      leading={selectedMode
+        ? <SessionControlIcon icon={selectedMode.icon} className="size-3.5" />
+        : <Sparkles className="size-3.5 text-muted-foreground" />}
+      className="w-full min-w-0"
+      menuClassName="w-72"
+      groups={groups}
+    />
+  );
+}
+
+function selectedDefaultModel(
+  modelGroups: AgentModelGroup[],
+  defaults: StoredReviewKindDefaults,
+): { group: AgentModelGroup; model: AgentModelGroup["models"][number] } | null {
+  const group = modelGroups.find((candidate) => candidate.kind === defaults.agentKind) ?? null;
+  const model = group?.models.find((candidate) => candidate.modelId === defaults.modelId) ?? null;
+  return group && model ? { group, model } : null;
 }
 
 function createDefaultReviewDefaults(): StoredReviewKindDefaults {
