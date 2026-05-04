@@ -11,7 +11,9 @@ type KeyboardShortcutEventLike = Pick<
   | "metaKey"
   | "shiftKey"
   | "target"
->;
+> & {
+  code?: string;
+};
 
 function isReloadBlockedRShortcut(
   shortcut: Pick<ShortcutDef, "id">,
@@ -47,11 +49,37 @@ function canBypassDefaultPrevented(
     return true;
   }
 
-  return shortcut.id === SHORTCUTS.openSettings.id
+  if (
+    shortcut.id === SHORTCUTS.openSettings.id
     && (event.metaKey || event.ctrlKey)
     && !event.altKey
     && !event.shiftKey
-    && event.key === ",";
+    && event.key === ","
+  ) {
+    return true;
+  }
+
+  if (
+    shortcut.id === SHORTCUTS.toggleLeftSidebar.id
+    && (event.metaKey || event.ctrlKey)
+    && !event.altKey
+    && !event.shiftKey
+    && (event.key.toLowerCase() === "b" || event.code === "KeyB")
+  ) {
+    return true;
+  }
+
+  if (
+    shortcut.id === SHORTCUTS.toggleRightPanel.id
+    && (event.metaKey || event.ctrlKey)
+    && event.altKey
+    && !event.shiftKey
+    && (event.key.toLowerCase() === "b" || event.code === "KeyB")
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function isTabCyclingShortcut(

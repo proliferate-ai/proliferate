@@ -8,8 +8,9 @@ describe("shortcut dispatch policy", () => {
   });
 
   it("respects defaultPrevented for non-rename shortcuts", () => {
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
-      key: "b",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.openTerminal, {
+      key: "j",
+      code: "KeyJ",
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
@@ -82,13 +83,132 @@ describe("shortcut dispatch policy", () => {
       },
     });
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
-      key: "b",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.addRepository, {
+      key: "i",
+      code: "KeyI",
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
       defaultPrevented: false,
+      target: null,
+    } as KeyboardEvent)).toBe(false);
+  });
+
+  it("allows left-sidebar toggle from text-entry and terminal focus targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: () => ({
+          getAttribute: () => "terminal",
+        }),
+      },
+    });
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: false,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows right-panel toggle from text-entry and terminal focus targets", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: false,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
+
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: () => ({
+          getAttribute: () => "terminal",
+        }),
+      },
+    });
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: false,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+  });
+
+  it("allows only the exact left-sidebar toggle through when defaultPrevented", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleLeftSidebar, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(false);
+  });
+
+  it("allows only the exact right-panel toggle through when defaultPrevented", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.toggleRightPanel, {
+      key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: true,
+      defaultPrevented: true,
       target: null,
     } as KeyboardEvent)).toBe(false);
   });

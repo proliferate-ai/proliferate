@@ -60,6 +60,7 @@ export function StandardWorkspaceShell() {
     rightPanelOpen,
     rightPanelState,
     rightPanelWidth,
+    rightPanelFocusRequestToken,
     terminalActivationRequest,
     publishDialog,
     commandPaletteOpen,
@@ -277,6 +278,7 @@ export function StandardWorkspaceShell() {
                       })}
                       onStateChange={layout.setRightPanelState}
                       terminalActivationRequest={terminalActivationRequest}
+                      focusRequestToken={rightPanelFocusRequestToken}
                       nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
                       onTerminalActivationRequestHandled={(request) => {
                         layout.setTerminalActivationRequest((current) =>

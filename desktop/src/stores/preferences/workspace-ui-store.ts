@@ -47,6 +47,7 @@ export interface WorkspaceUiState {
   archivedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
+  showArchived: boolean;
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -76,6 +77,7 @@ export interface WorkspaceUiState {
   toggleRepoGroupCollapsed: (repoKey: string) => void;
   ensureRepoGroupExpanded: (repoKey: string) => void;
   setCollapsedRepoGroups: (keys: string[]) => void;
+  setShowArchived: (value: boolean) => void;
   setThreadsCollapsed: (value: boolean) => void;
   setSidebarOpen: (value: SetStateAction<boolean>) => void;
   setSidebarWidth: (value: SetStateAction<number>) => void;
@@ -187,6 +189,7 @@ export interface PersistedWorkspaceUiState {
   archivedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
+  showArchived: boolean;
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
@@ -219,6 +222,7 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   archivedWorkspaceIds: [],
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
+  showArchived: false,
   threadsCollapsed: false,
   sidebarOpen: false,
   sidebarWidth: WORKSPACE_SIDEBAR_DEFAULT_WIDTH,
@@ -283,6 +287,7 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
         (await readPersistedValue<Record<string, string>>("workspaceLastInteracted"))
         ?? WORKSPACE_UI_DEFAULTS.workspaceLastInteracted,
       collapsedRepoGroups: WORKSPACE_UI_DEFAULTS.collapsedRepoGroups,
+      showArchived: WORKSPACE_UI_DEFAULTS.showArchived,
       threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,
       dismissedSetupFailures: WORKSPACE_UI_DEFAULTS.dismissedSetupFailures,
       finishSuggestionDismissalsByWorkspaceId:
@@ -350,6 +355,11 @@ export function migrateWorkspaceUiState(
 
   if (typeof state.sidebarOpen !== "boolean") {
     state.sidebarOpen = WORKSPACE_UI_DEFAULTS.sidebarOpen;
+    didMigrate = true;
+  }
+
+  if (typeof state.showArchived !== "boolean") {
+    state.showArchived = WORKSPACE_UI_DEFAULTS.showArchived;
     didMigrate = true;
   }
 
@@ -453,6 +463,7 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     archivedWorkspaceIds: state.archivedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
+    showArchived: state.showArchived,
     threadsCollapsed: state.threadsCollapsed,
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
@@ -689,6 +700,10 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
 
   setCollapsedRepoGroups: (keys) => {
     set({ collapsedRepoGroups: keys });
+  },
+
+  setShowArchived: (value) => {
+    set({ showArchived: value });
   },
 
   setThreadsCollapsed: (value) => {

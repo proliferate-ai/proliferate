@@ -94,6 +94,7 @@ interface RightPanelProps {
   repoSettingsHref: string;
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   terminalActivationRequest: TerminalActivationRequest | null;
+  focusRequestToken?: number;
   nativeOverlaysHidden?: boolean;
   onTerminalActivationRequestHandled: (request: TerminalActivationRequest) => void;
 }
@@ -108,6 +109,7 @@ export function RightPanel({
   repoSettingsHref,
   onStateChange,
   terminalActivationRequest,
+  focusRequestToken = 0,
   nativeOverlaysHidden = false,
   onTerminalActivationRequestHandled,
 }: RightPanelProps) {
@@ -125,6 +127,7 @@ export function RightPanel({
   }>({ token: 0, defaultKind: "terminal" });
   const rootRef = useRef<HTMLDivElement>(null);
   const handledActivationRequestRef = useRef<string | null>(null);
+  const handledFocusRequestRef = useRef(0);
   // One-shot per mounted shell: users who close the starter terminal should not
   // get a replacement every time they revisit the workspace in the same session.
   const autoTerminalWorkspaceIdsRef = useRef(new Set<string>());
@@ -437,6 +440,19 @@ export function RightPanel({
 
     rootRef.current?.focus({ preventScroll: true });
   }, []);
+
+  useEffect(() => {
+    if (
+      !isOpen
+      || focusRequestToken <= 0
+      || handledFocusRequestRef.current === focusRequestToken
+    ) {
+      return;
+    }
+
+    handledFocusRequestRef.current = focusRequestToken;
+    rootRef.current?.focus({ preventScroll: true });
+  }, [focusRequestToken, isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

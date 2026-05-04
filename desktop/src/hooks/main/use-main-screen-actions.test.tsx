@@ -78,6 +78,7 @@ describe("useMainScreenActions publish actions", () => {
 
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
     expect(spies.setRightPanelOpen).not.toHaveBeenCalled();
+    expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 
   it("opens PRs from the publish dialog without opening the right panel", () => {
@@ -88,6 +89,7 @@ describe("useMainScreenActions publish actions", () => {
     expect(openExternal).toHaveBeenCalledWith("https://github.test/pull/1");
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
     expect(spies.setRightPanelOpen).not.toHaveBeenCalled();
+    expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 
 });
@@ -104,6 +106,7 @@ describe("useMainScreenActions right panel actions", () => {
       lastCallArg(spies.setRightPanelState),
     );
     expect(nextState.activeEntryKey).toBe("tool:files");
+    expect(spies.requestRightPanelFocus).toHaveBeenCalledTimes(1);
   });
 
   it("opens a concrete terminal by adding and selecting its header entry", () => {
@@ -125,6 +128,7 @@ describe("useMainScreenActions right panel actions", () => {
         spies.setTerminalActivationRequest,
       ),
     )).toEqual({ token: 1, workspaceId: "workspace-1" });
+    expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 
   it("opens terminal panel without an id by preserving state and bumping activation", () => {
@@ -141,6 +145,7 @@ describe("useMainScreenActions right panel actions", () => {
       ),
     )).toEqual({ token: 1, workspaceId: "workspace-1" });
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
+    expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 
   it("toggles a closed right panel to files when a singleton tool is active", () => {
@@ -160,6 +165,7 @@ describe("useMainScreenActions right panel actions", () => {
     );
     expect(nextState.activeEntryKey).toBe("tool:files");
     expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+    expect(spies.requestRightPanelFocus).toHaveBeenCalledTimes(1);
   });
 
   it("toggles a closed right panel from a live entry without rewriting selection", () => {
@@ -179,6 +185,18 @@ describe("useMainScreenActions right panel actions", () => {
 
     expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
+    expect(spies.requestRightPanelFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes an open right panel without requesting root focus", () => {
+    const { result, spies } = renderActions({
+      rightPanelOpen: true,
+    });
+
+    act(() => result.current.toggleRightPanel());
+
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(false);
+    expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();
   });
 });
 
@@ -207,12 +225,14 @@ function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
   layout: MainScreenLayoutState;
   spies: {
     setPublishDialog: ReturnType<typeof vi.fn>;
+    requestRightPanelFocus: ReturnType<typeof vi.fn>;
     setRightPanelOpen: ReturnType<typeof vi.fn>;
     setRightPanelState: ReturnType<typeof vi.fn>;
     setTerminalActivationRequest: ReturnType<typeof vi.fn>;
   };
 } {
   const setPublishDialog = vi.fn();
+  const requestRightPanelFocus = vi.fn();
   const setRightPanelOpen = vi.fn();
   const setRightPanelState = vi.fn();
   const setTerminalActivationRequest = vi.fn();
@@ -227,6 +247,8 @@ function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
       setSidebarWidth: vi.fn(),
       rightPanelOpen: false,
       setRightPanelOpen,
+      rightPanelFocusRequestToken: 0,
+      requestRightPanelFocus,
       terminalActivationRequest: null,
       setTerminalActivationRequest,
       publishDialog: {
@@ -245,6 +267,7 @@ function mainScreenLayout(overrides: Partial<MainScreenLayoutState> = {}): {
     },
     spies: {
       setPublishDialog,
+      requestRightPanelFocus,
       setRightPanelOpen,
       setRightPanelState,
       setTerminalActivationRequest,

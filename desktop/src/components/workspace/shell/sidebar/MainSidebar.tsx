@@ -76,8 +76,18 @@ export function MainSidebar() {
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
+  const {
+    showArchived,
+    setShowArchived,
+    workspaceTypes,
+    toggleSidebarWorkspaceType,
+  } = useWorkspaceUiStore(useShallow((state) => ({
+    showArchived: state.showArchived,
+    setShowArchived: state.setShowArchived,
+    workspaceTypes: state.workspaceTypes,
+    toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
+  })));
   const {
     groups,
     selectedWorkspaceId,
@@ -96,13 +106,6 @@ export function MainSidebar() {
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
   const unarchiveWorkspaces = useWorkspaceUiStore((s) => s.unarchiveWorkspaces);
-  const {
-    workspaceTypes,
-    toggleSidebarWorkspaceType,
-  } = useWorkspaceUiStore(useShallow((state) => ({
-    workspaceTypes: state.workspaceTypes,
-    toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
-  })));
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
   const handleRenameWorkspace = useCallback(
     (workspaceId: string, displayName: string | null) =>
@@ -277,7 +280,7 @@ export function MainSidebar() {
                       <>
                         <PopoverMenuItem
                           onClick={() => {
-                            setShowArchived((value) => !value);
+                            setShowArchived(!showArchived);
                           }}
                           variant="sidebar"
                           icon={<Archive className="size-3.5 text-muted-foreground" />}

@@ -70,6 +70,39 @@ describe("resolveKeyboardShortcut", () => {
     } as KeyboardEvent)).toBeNull();
   });
 
+  it("keeps command-comma settings distinct from command-shift-comma home on mac", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: ",",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.open-settings",
+      shortcut: expect.objectContaining({ id: "app.open-settings" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "<",
+      code: "Comma",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.go-home",
+      shortcut: expect.objectContaining({ id: "app.go-home" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+  });
+
   it("resolves directional chat and terminal shortcuts on mac", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",
@@ -116,7 +149,33 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
+      key: "∫",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.toggle-left-sidebar",
+      shortcut: expect.objectContaining({ id: "workspace.toggle-left-sidebar" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
       key: "b",
+      code: "KeyB",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.toggle-right-panel",
+      shortcut: expect.objectContaining({ id: "workspace.toggle-right-panel" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "∫",
       code: "KeyB",
       metaKey: true,
       ctrlKey: false,

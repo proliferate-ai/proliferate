@@ -258,6 +258,16 @@ export function useWorkspaceCommandPalette({
       execute: () => appActions.openSettings.execute("palette"),
     },
     {
+      id: "app.go-home",
+      value: commandPaletteCommandValue("app.go-home"),
+      group: "app",
+      label: "Go Home",
+      icon: "arrow-left",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.goHome),
+      disabledReason: appActions.goHome.disabledReason,
+      execute: () => appActions.goHome.execute("palette"),
+    },
+    {
       id: "workspace.add-repository",
       value: commandPaletteCommandValue("workspace.add-repository"),
       group: "app",
