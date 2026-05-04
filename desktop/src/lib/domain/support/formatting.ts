@@ -1,4 +1,5 @@
 import type { SupportMessageContext } from "@/lib/integrations/cloud/client";
+import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
 
 export function formatSupportContextLabel(
   context: SupportMessageContext,
@@ -17,4 +18,12 @@ export function buildSupportEmailBody(_context: SupportMessageContext): string {
   // the product, and the user should start with a clean textarea rather
   // than the default robotic "Context: / Intent: general" template.
   return "";
+}
+
+export function clampSupportMessage(message: string): string {
+  return message.slice(0, SUPPORT_MESSAGE_MAX_LENGTH);
+}
+
+export function normalizeSupportMessageForSend(message: string): string {
+  return clampSupportMessage(message.trim());
 }

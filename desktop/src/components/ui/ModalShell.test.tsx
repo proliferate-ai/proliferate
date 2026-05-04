@@ -44,4 +44,14 @@ describe("ModalShell", () => {
       expect(screen.getByTestId("native-overlay-state").dataset.open).toBe("false");
     });
   });
+
+  it("can mark the portaled dialog panel as telemetry blocked", () => {
+    render(
+      <ModalShell open title="Support" onClose={vi.fn()} telemetryBlocked>
+        Content
+      </ModalShell>,
+    );
+
+    expect(screen.getByRole("dialog").getAttribute("data-telemetry-block")).toBe("true");
+  });
 });
