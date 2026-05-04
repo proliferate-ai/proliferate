@@ -259,7 +259,7 @@ fn wake_prompt_text(
 }
 
 fn subagent_system_prompt_append() -> Vec<String> {
-    vec![r#"You can use the subagents MCP tools to delegate bounded work to same-workspace child sessions. Call get_subagent_launch_options before choosing a non-default agentKind, modelId, or modeId. Child sessions are normal agent sessions linked back to you. Child completions are passive by default: use wakeOnCompletion when creating or messaging a child, or call schedule_subagent_wake for an already-running child, when you want AnyHarness to prompt you after that child's next completed turn. Use read_subagent_events before relying on a child result."#.to_string()]
+    vec![r#"You can use the subagents MCP tools to delegate bounded work to same-workspace child sessions. Call get_subagent_launch_options before choosing a non-default agentKind, modelId, or modeId. Child sessions are normal agent sessions linked back to you. Child completions are passive by default: after creating or messaging a child, call schedule_subagent_wake when you want AnyHarness to prompt you after that child's next completed turn. Use read_subagent_events before relying on a child result."#.to_string()]
 }
 
 fn subagent_binding_summary() -> SessionMcpBindingSummary {

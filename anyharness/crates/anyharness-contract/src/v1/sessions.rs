@@ -274,6 +274,20 @@ pub struct SessionSubagentsResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ScheduleSubagentWakeRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleSubagentWakeResponse {
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    pub session_link_id: String,
+    pub wake_scheduled: bool,
+    pub already_scheduled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ParentSubagentLinkSummary {
     pub session_link_id: String,
     pub parent_session_id: String,

@@ -1387,7 +1387,10 @@ function deriveToolCallSemanticKind(
   ) {
     return "cowork_coding";
   }
-  if (normalizedEffectiveToolName === "mcp__subagents__create_subagent") {
+  if (
+    normalizedEffectiveToolName === "mcp__subagents__create_subagent"
+    || normalizedEffectiveToolName === "mcp__subagents__schedule_subagent_wake"
+  ) {
     return "subagent";
   }
 

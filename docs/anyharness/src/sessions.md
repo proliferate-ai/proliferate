@@ -268,9 +268,11 @@ subagent extension inserts a durable completion row keyed by
 `subagent_turn_completed` metadata event into the parent session. SDK reducers
 and UI consumers use this for latest state; it is not transcript content.
 
-Parent wake prompts require an explicit one-shot schedule. Parent agents can set
-`wakeOnCompletion` on `create_subagent` or `send_subagent_message`, or call
-`schedule_subagent_wake` for an already-running child. The schedule is a latch in
+Parent wake prompts require an explicit one-shot schedule. Parent agents should
+call `schedule_subagent_wake` after `create_subagent` or
+`send_subagent_message` when they want to listen for the child's next
+completion. Legacy `wakeOnCompletion` fields on create/send are still parsed for
+backward compatibility but are no longer advertised. The schedule is a latch in
 `session_link_wake_schedules`; it applies only to the next newly recorded
 completion for that link and is consumed in the same transaction that queues the
 parent prompt. Duplicate/replayed completion processing must not consume a

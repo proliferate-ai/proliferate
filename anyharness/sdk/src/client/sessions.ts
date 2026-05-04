@@ -14,6 +14,8 @@ import type {
   PromptSessionResponse,
   ResolveInteractionRequest,
   ResumeSessionRequest,
+  ScheduleSubagentWakeRequest,
+  ScheduleSubagentWakeResponse,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
   Session,
@@ -70,6 +72,21 @@ export class SessionsClient {
   ): Promise<SessionSubagentsResponse> {
     return this.transport.get<SessionSubagentsResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/subagents`,
+      options,
+    );
+  }
+
+  async scheduleSubagentWake(
+    sessionId: string,
+    childSessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ScheduleSubagentWakeResponse> {
+    const request: ScheduleSubagentWakeRequest = {};
+    return this.transport.post<ScheduleSubagentWakeResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/subagents/${
+        encodeURIComponent(childSessionId)
+      }/wake`,
+      request,
       options,
     );
   }

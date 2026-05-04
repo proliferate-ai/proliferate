@@ -8,6 +8,7 @@ import {
   FilePlus,
   GitPullRequest,
   Plus,
+  Settings,
 } from "@/components/ui/icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
@@ -32,7 +33,8 @@ interface ComposerAddActionPopoverProps {
   workspaceUiKey: string | null;
   sdkWorkspaceId: string | null;
   onAttachFile: () => void;
-  onStartReview: (anchor: ReviewAnchor) => void;
+  onStartReview: () => void;
+  onConfigureReview: (anchor: ReviewAnchor) => void;
 }
 
 type AddActionView = "menu" | "plans";
@@ -48,6 +50,7 @@ export function ComposerAddActionPopover({
   sdkWorkspaceId,
   onAttachFile,
   onStartReview,
+  onConfigureReview,
 }: ComposerAddActionPopoverProps) {
   const [view, setView] = useState<AddActionView>("menu");
 
@@ -124,11 +127,28 @@ export function ComposerAddActionPopover({
               />
               <ComposerActionRow
                 icon={<GitPullRequest className="size-4 text-muted-foreground" />}
-                label="Spin up code review agents"
+                label="Code review agents"
                 detail={reviewDetail}
                 disabled={!canStartReview}
-                onClick={(event) => {
-                  onStartReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()));
+                trailing={(
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={!canStartReview}
+                    title="Configure code review agents"
+                    className="h-7 rounded-lg px-2"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onConfigureReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()));
+                      close();
+                    }}
+                  >
+                    <Settings className="size-3.5" />
+                  </Button>
+                )}
+                onClick={() => {
+                  onStartReview();
                   close();
                 }}
               />
@@ -145,26 +165,31 @@ function ComposerActionRow({
   label,
   detail,
   disabled,
+  trailing,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   detail: string;
   disabled: boolean;
+  trailing?: ReactNode;
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <PopoverMenuItem
-      icon={icon}
-      label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="items-start [&>span:first-child]:mt-0.5"
-    >
-      <span className="mt-0.5 block whitespace-normal text-xs leading-4 text-muted-foreground">
-        {detail}
-      </span>
-    </PopoverMenuItem>
+    <div className="flex items-start gap-1">
+      <PopoverMenuItem
+        icon={icon}
+        label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className="min-w-0 flex-1 items-start [&>span:first-child]:mt-0.5"
+      >
+        <span className="mt-0.5 block whitespace-normal text-xs leading-4 text-muted-foreground">
+          {detail}
+        </span>
+      </PopoverMenuItem>
+      {trailing}
+    </div>
   );
 }
 

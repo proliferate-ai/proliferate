@@ -1150,6 +1150,50 @@ describe("transcript reducer", () => {
     });
   });
 
+  it("classifies AnyHarness schedule_subagent_wake MCP calls as subagent activity", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-subagent-wake",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              title: "mcp__subagents__schedule_subagent_wake",
+              toolCallId: "tool-subagent-wake",
+              nativeToolName: "mcp__subagents__schedule_subagent_wake",
+              rawInput: {
+                childSessionId: "child-session-1",
+              },
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-subagent-wake",
+                  title: "mcp__subagents__schedule_subagent_wake",
+                  toolKind: "other",
+                  nativeToolName: "mcp__subagents__schedule_subagent_wake",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-subagent-wake"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("subagent");
+    expect(item.nativeToolName).toBe("mcp__subagents__schedule_subagent_wake");
+  });
+
   it("classifies Claude cowork artifact update tool calls from captured MCP names", () => {
     const state = reduceEvents(
       [

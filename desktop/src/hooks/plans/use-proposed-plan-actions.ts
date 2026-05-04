@@ -210,9 +210,11 @@ export function useProposedPlanActions() {
     rejectPlan,
     implementPlanHere,
     reviewPlan: reviewActions.startPlanReview,
+    configurePlanReview: reviewActions.configurePlanReview,
     isApprovingPlan: approveMutation.isPending,
     isRejectingPlan: rejectMutation.isPending,
     isImplementingPlan,
+    isStartingReview: reviewActions.isStartingReview,
   };
 }
 

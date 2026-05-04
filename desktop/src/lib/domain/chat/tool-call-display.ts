@@ -29,11 +29,19 @@ export function describeToolCallDisplay(
   const cleanedToolName = toolName.trim();
   const nativeName = item.nativeToolName?.trim() ?? "";
   const normalizedToolName = cleanedToolName.toLowerCase();
+  const normalizedNativeName = nativeName.toLowerCase();
   const raw = isRecord(item.rawInput);
   const parsedMcp = parseMcpToolName(nativeName || cleanedToolName);
 
   switch (item.semanticKind) {
     case "subagent": {
+      if (normalizedNativeName === "mcp__subagents__schedule_subagent_wake") {
+        return {
+          label: "Schedule wake",
+          hint: "Subagent",
+          iconKey: "clipboard-list",
+        };
+      }
       const subagentDisplay = resolveSubagentLaunchDisplay(item);
       const description = readString(raw?.description) ?? undefined;
       return {

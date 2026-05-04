@@ -1,15 +1,30 @@
 import { useCallback } from "react";
+import type {
+  ReviewKind,
+  StartCodeReviewRequest,
+  StartPlanReviewRequest,
+} from "@anyharness/sdk";
 import {
   useSendReviewFeedbackMutation,
+  useStartCodeReviewMutation,
+  useStartPlanReviewMutation,
   useStopReviewMutation,
   useMarkReviewRevisionReadyMutation,
   useRetryReviewAssignmentMutation,
 } from "@anyharness/sdk-react";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import {
+  buildReviewRequest,
+  createReviewSetupDraft,
+  DEFAULT_REVIEW_MAX_ROUNDS,
+  resolveReviewExecutionModeIdForAgent,
+  resolveReviewPersonaTemplates,
+} from "@/lib/domain/reviews/review-config";
+import {
   type ReviewSetupAnchorRect,
   useReviewUiStore,
 } from "@/stores/reviews/review-ui-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -19,8 +34,14 @@ export function useReviewActions() {
   const activeSlot = useHarnessStore((state) =>
     state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null
   );
+  const reviewDefaultsByKind = useUserPreferencesStore((state) => state.reviewDefaultsByKind);
+  const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
   const showToast = useToastStore((state) => state.show);
   const openReviewSetup = useReviewUiStore((state) => state.openSetup);
+  const beginStartingReview = useReviewUiStore((state) => state.beginStartingReview);
+  const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
+  const startPlanReviewMutation = useStartPlanReviewMutation({ workspaceId: selectedWorkspaceId });
+  const startCodeReviewMutation = useStartCodeReviewMutation({ workspaceId: selectedWorkspaceId });
   const stopReviewMutation = useStopReviewMutation({ workspaceId: selectedWorkspaceId });
   const sendReviewFeedbackMutation = useSendReviewFeedbackMutation({
     workspaceId: selectedWorkspaceId,
@@ -32,7 +53,7 @@ export function useReviewActions() {
     workspaceId: selectedWorkspaceId,
   });
 
-  const startPlanReview = useCallback((
+  const configurePlanReview = useCallback((
     plan: PromptPlanAttachmentDescriptor,
     anchorRect?: ReviewSetupAnchorRect | null,
   ) => {
@@ -49,13 +70,88 @@ export function useReviewActions() {
     openReviewSetup({ kind: "plan", plan }, anchorRect);
   }, [openReviewSetup, showToast]);
 
-  const startCodeReview = useCallback((anchorRect?: ReviewSetupAnchorRect | null) => {
+  const configureCodeReview = useCallback((anchorRect?: ReviewSetupAnchorRect | null) => {
     if (!activeSessionId || !activeSlot) {
       showToast("Start or select a session before requesting code review.");
       return;
     }
     openReviewSetup({ kind: "code", parentSessionId: activeSessionId }, anchorRect);
   }, [activeSessionId, activeSlot, openReviewSetup, showToast]);
+
+  const startPlanReview = useCallback((plan: PromptPlanAttachmentDescriptor) => {
+    const harness = useHarnessStore.getState();
+    const planSessionSlot = harness.sessionSlots[plan.sourceSessionId] ?? null;
+    if (!planSessionSlot) {
+      showToast("Plan session is not available.");
+      return;
+    }
+    if (harness.activeSessionId !== plan.sourceSessionId) {
+      showToast("Select the plan's session before starting plan review.");
+      return;
+    }
+    const request = resolveOneClickReviewRequest({
+      kind: "plan",
+      parentSessionId: plan.sourceSessionId,
+      parentSlot: planSessionSlot,
+      reviewDefaultsByKind,
+      reviewPersonalitiesByKind,
+    });
+    if (!request.request) {
+      showToast(request.error ?? "Review defaults need configuration.");
+      openReviewSetup({ kind: "plan", plan }, null);
+      return;
+    }
+    beginStartingReview(buildStartingReview(plan.sourceSessionId, "plan", request.request));
+    void startPlanReviewMutation.mutateAsync({
+      planId: plan.planId,
+      request: request.request,
+    }).catch((error) => {
+      clearStartingReview();
+      showToast(`Failed to start review: ${errorMessage(error)}`);
+    });
+  }, [
+    beginStartingReview,
+    clearStartingReview,
+    openReviewSetup,
+    reviewDefaultsByKind,
+    reviewPersonalitiesByKind,
+    showToast,
+    startPlanReviewMutation,
+  ]);
+
+  const startCodeReview = useCallback(() => {
+    if (!activeSessionId || !activeSlot) {
+      showToast("Start or select a session before requesting code review.");
+      return;
+    }
+    const request = resolveOneClickReviewRequest({
+      kind: "code",
+      parentSessionId: activeSessionId,
+      parentSlot: activeSlot,
+      reviewDefaultsByKind,
+      reviewPersonalitiesByKind,
+    });
+    if (!request.request) {
+      showToast(request.error ?? "Review defaults need configuration.");
+      openReviewSetup({ kind: "code", parentSessionId: activeSessionId }, null);
+      return;
+    }
+    beginStartingReview(buildStartingReview(activeSessionId, "code", request.request));
+    void startCodeReviewMutation.mutateAsync(request.request).catch((error) => {
+      clearStartingReview();
+      showToast(`Failed to start review: ${errorMessage(error)}`);
+    });
+  }, [
+    activeSessionId,
+    activeSlot,
+    beginStartingReview,
+    clearStartingReview,
+    openReviewSetup,
+    reviewDefaultsByKind,
+    reviewPersonalitiesByKind,
+    showToast,
+    startCodeReviewMutation,
+  ]);
 
   const stopReview = useCallback((reviewRunId: string) => {
     void stopReviewMutation.mutateAsync(reviewRunId).catch((error) => {
@@ -87,12 +183,15 @@ export function useReviewActions() {
 
   return {
     startPlanReview,
+    configurePlanReview,
     startCodeReview,
+    configureCodeReview,
     stopReview,
     sendReviewFeedback,
     markReviewRevisionReady,
     retryReviewAssignment,
     canStartCodeReview: !!activeSessionId && !!activeSlot,
+    isStartingReview: startPlanReviewMutation.isPending || startCodeReviewMutation.isPending,
     isStoppingReview: stopReviewMutation.isPending,
     isSendingReviewFeedback: sendReviewFeedbackMutation.isPending,
     isMarkingReviewRevisionReady: markReviewRevisionReadyMutation.isPending,
@@ -102,4 +201,63 @@ export function useReviewActions() {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+interface ReviewLaunchSessionSlot {
+  agentKind: string;
+  modelId: string | null;
+  modeId: string | null;
+}
+
+function resolveOneClickReviewRequest(args: {
+  kind: ReviewKind;
+  parentSessionId: string;
+  parentSlot: ReviewLaunchSessionSlot;
+  reviewDefaultsByKind: ReturnType<typeof useUserPreferencesStore.getState>["reviewDefaultsByKind"];
+  reviewPersonalitiesByKind: ReturnType<typeof useUserPreferencesStore.getState>["reviewPersonalitiesByKind"];
+}): {
+  request: StartPlanReviewRequest | StartCodeReviewRequest | null;
+  error: string | null;
+} {
+  const parentAgentKind = args.parentSlot.agentKind?.trim() ?? "";
+  const sessionDefaults = {
+    agentKind: parentAgentKind,
+    modelId: args.parentSlot.modelId,
+    modeId: resolveReviewExecutionModeIdForAgent(parentAgentKind, args.parentSlot.modeId),
+  };
+  const personalityTemplates = resolveReviewPersonaTemplates(
+    args.kind,
+    args.reviewPersonalitiesByKind[args.kind] ?? [],
+  );
+  const draft = createReviewSetupDraft({
+    kind: args.kind,
+    sessionDefaults,
+    storedDefaults: args.reviewDefaultsByKind[args.kind],
+    personalityTemplates,
+  });
+  const result = buildReviewRequest(draft, args.parentSessionId);
+  if (!result.request) {
+    return result;
+  }
+  return { request: result.request, error: null };
+}
+
+function buildStartingReview(
+  parentSessionId: string,
+  kind: ReviewKind,
+  request: StartPlanReviewRequest | StartCodeReviewRequest,
+) {
+  return {
+    parentSessionId,
+    kind,
+    maxRounds: request.maxRounds ?? DEFAULT_REVIEW_MAX_ROUNDS,
+    autoIterate: request.autoIterate ?? true,
+    reviewers: request.reviewers.map((reviewer) => ({
+      id: reviewer.personaId,
+      label: reviewer.label,
+      agentKind: reviewer.agentKind,
+      modelId: reviewer.modelId ?? "",
+    })),
+    startedAt: Date.now(),
+  };
 }

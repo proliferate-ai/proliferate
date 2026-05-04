@@ -6,6 +6,7 @@ import {
   FileText,
   ArrowRight,
   Shield,
+  Settings,
   X,
 } from "@/components/ui/icons";
 
@@ -34,7 +35,8 @@ interface ProposedPlanCardProps {
   onReject?: () => void;
   onImplementHere?: () => void;
   onHandOffToNewSession?: () => void;
-  onReview?: (anchorRect?: ReviewSetupAnchorRect | null) => void;
+  onReview?: () => void;
+  onConfigureReview?: (anchorRect?: ReviewSetupAnchorRect | null) => void;
   isApproving?: boolean;
   isRejecting?: boolean;
   isImplementingHere?: boolean;
@@ -54,6 +56,7 @@ export function ProposedPlanCard({
   onImplementHere,
   onHandOffToNewSession,
   onReview,
+  onConfigureReview,
   isApproving = false,
   isRejecting = false,
   isImplementingHere = false,
@@ -65,7 +68,7 @@ export function ProposedPlanCard({
     && onApprove
     && onReject;
   const canReview =
-    !!onReview
+    (!!onReview || !!onConfigureReview)
     && (decisionState === null || decisionState === "pending" || decisionState === "approved");
   const hasFooterActions = !!decisionState || !!onHandOffToNewSession || canReview;
 
@@ -129,18 +132,36 @@ export function ProposedPlanCard({
             </Button>
           )}
           {canReview && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={(event) => onReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()))}
-              loading={isStartingReview}
-              title="Starts review agents for this plan."
-              className="rounded-xl px-2.5 text-sm"
-            >
-              <Shield className="size-3.5" />
-              Review plan
-            </Button>
+            <span className="flex items-center gap-1">
+              {onReview && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={onReview}
+                  loading={isStartingReview}
+                  title="Starts review agents for this plan."
+                  className="rounded-xl px-2.5 text-sm"
+                >
+                  <Shield className="size-3.5" />
+                  Review plan
+                </Button>
+              )}
+              {onConfigureReview && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={(event) => onConfigureReview(
+                    rectToReviewAnchor(event.currentTarget.getBoundingClientRect()),
+                  )}
+                  title="Configure review agents."
+                  className="rounded-xl px-2 text-sm"
+                >
+                  <Settings className="size-3.5" />
+                </Button>
+              )}
+            </span>
           )}
           {onHandOffToNewSession && (
             <Button

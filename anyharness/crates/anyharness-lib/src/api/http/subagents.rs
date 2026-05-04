@@ -1,4 +1,7 @@
-use anyharness_contract::v1::{ProblemDetails, SessionSubagentsResponse};
+use anyharness_contract::v1::{
+    ProblemDetails, ScheduleSubagentWakeRequest, ScheduleSubagentWakeResponse,
+    SessionSubagentsResponse,
+};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -33,6 +36,52 @@ pub async fn get_session_subagents(
         .subagent_context(&session_id)
         .map_err(map_subagent_error)?;
     Ok(Json(context))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/subagents/{child_session_id}/wake",
+    params(
+        ("session_id" = String, Path, description = "Parent session ID"),
+        ("child_session_id" = String, Path, description = "Child subagent session ID"),
+    ),
+    request_body = ScheduleSubagentWakeRequest,
+    responses(
+        (status = 200, description = "Scheduled a one-shot parent wake for the child subagent", body = ScheduleSubagentWakeResponse),
+        (status = 400, description = "Invalid subagent wake request", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Workspace or subagent state blocks wake scheduling", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn schedule_subagent_wake(
+    State(state): State<AppState>,
+    Path((session_id, child_session_id)): Path<(String, String)>,
+    Json(_body): Json<ScheduleSubagentWakeRequest>,
+) -> Result<Json<ScheduleSubagentWakeResponse>, ApiError> {
+    let parent = state
+        .session_service
+        .get_session(&session_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| ApiError::not_found("Session not found", "SESSION_NOT_FOUND"))?;
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&parent.workspace_id, WorkspaceOperationKind::SubagentWrite)
+        .await;
+    assert_workspace_mutable(&state, &parent.workspace_id)?;
+
+    let (link, inserted) = state
+        .subagent_service
+        .schedule_wake_for_child(&session_id, &child_session_id)
+        .map_err(map_subagent_error)?;
+
+    Ok(Json(ScheduleSubagentWakeResponse {
+        parent_session_id: session_id,
+        child_session_id,
+        session_link_id: link.id,
+        wake_scheduled: true,
+        already_scheduled: !inserted,
+    }))
 }
 
 pub async fn get_subagents_mcp_endpoint(
@@ -101,6 +150,34 @@ fn map_subagent_error(error: SubagentError) -> ApiError {
                 "SESSION_NOT_FOUND",
             )
         }
+        SubagentError::WorkspaceNotFound(workspace_id) => ApiError::not_found(
+            format!("Workspace not found: {workspace_id}"),
+            "WORKSPACE_NOT_FOUND",
+        ),
+        SubagentError::NotOwned => ApiError::conflict(
+            "Child session is not owned by this parent session.",
+            "SUBAGENT_NOT_OWNED",
+        ),
+        SubagentError::IneligibleWorkspace => ApiError::conflict(
+            "Subagents are only available in standard workspaces.",
+            "SUBAGENT_INELIGIBLE_WORKSPACE",
+        ),
+        SubagentError::CrossWorkspace => ApiError::conflict(
+            "Subagent child must be in the same workspace.",
+            "SUBAGENT_CROSS_WORKSPACE",
+        ),
+        SubagentError::DepthLimit => ApiError::conflict(
+            "Subagent children cannot create subagents.",
+            "SUBAGENT_DEPTH_LIMIT",
+        ),
+        SubagentError::FanoutLimit => ApiError::conflict(
+            "Parent already has the maximum number of subagents.",
+            "SUBAGENT_FANOUT_LIMIT",
+        ),
+        SubagentError::MutationBlocked(_) => ApiError::conflict(
+            "Workspace is not writable right now.",
+            "WORKSPACE_MUTATION_BLOCKED",
+        ),
         other => ApiError::internal(other.to_string()),
     }
 }

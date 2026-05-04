@@ -1,28 +1,27 @@
 import { useMemo, useState } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
-import {
-  EnvironmentField,
-  EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
+import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { ReviewDefaultsSection } from "@/components/settings/panes/review/ReviewDefaultsSection";
+import { ReviewPersonalitySection } from "@/components/settings/panes/review/ReviewPersonalitySection";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import {
-  Plus,
-  RefreshCw,
-  Trash,
-} from "@/components/ui/icons";
-import {
   isBuiltInReviewPersonaId,
   listBuiltInReviewPersonaTemplates,
-  resolveReviewPersonaTemplates,
+  listReviewPersonaTemplates,
   type ReviewPersonaTemplate,
   type ReviewPersonalityPreference,
+  type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
+import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+
+const EMPTY_MODEL_REGISTRIES: NonNullable<ReturnType<typeof useModelRegistriesQuery>["data"]> = [];
 
 const REVIEW_SECTIONS: {
   kind: ReviewKind;
@@ -44,6 +43,23 @@ const REVIEW_SECTIONS: {
   },
 ];
 
+const REVIEW_DEFAULT_SECTIONS: {
+  kind: ReviewKind;
+  title: string;
+  description: string;
+}[] = [
+  {
+    kind: "plan",
+    title: "Planning review defaults",
+    description: "Defaults used by one-click plan review launches.",
+  },
+  {
+    kind: "code",
+    title: "Coding review defaults",
+    description: "Defaults used by one-click code review launches.",
+  },
+];
+
 const EMPTY_REVIEW_PERSONALITIES: ReviewPersonalityPreference[] = [];
 
 type PersonalityEditorState = { kind: ReviewKind };
@@ -53,8 +69,23 @@ export function ReviewSettingsPane() {
   const [labelDraft, setLabelDraft] = useState("");
   const [promptDraft, setPromptDraft] = useState("");
   const [editorError, setEditorError] = useState<string | null>(null);
+  const reviewDefaultsByKind = useUserPreferencesStore((state) => state.reviewDefaultsByKind);
   const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
   const setPreference = useUserPreferencesStore((state) => state.set);
+  const { agents, isLoading: agentsLoading } = useAgentCatalog();
+  const {
+    data: modelRegistries = EMPTY_MODEL_REGISTRIES,
+    isLoading: modelRegistriesLoading,
+  } = useModelRegistriesQuery();
+  const modelGroups = useMemo(() => buildAgentModelGroups({
+    agents,
+    modelRegistries,
+    selected: null,
+  }), [agents, modelRegistries]);
+  const reviewPersonalityTemplatesByKind = useMemo(() => ({
+    plan: listReviewPersonaTemplates("plan", reviewPersonalitiesByKind.plan ?? []),
+    code: listReviewPersonaTemplates("code", reviewPersonalitiesByKind.code ?? []),
+  }), [reviewPersonalitiesByKind]);
 
   const updatePersonalities = (
     kind: ReviewKind,
@@ -64,6 +95,16 @@ export function ReviewSettingsPane() {
     setPreference("reviewPersonalitiesByKind", {
       ...reviewPersonalitiesByKind,
       [kind]: updater(current),
+    });
+  };
+
+  const updateReviewDefault = (
+    kind: ReviewKind,
+    updater: (current: StoredReviewKindDefaults | null) => StoredReviewKindDefaults | null,
+  ) => {
+    setPreference("reviewDefaultsByKind", {
+      ...reviewDefaultsByKind,
+      [kind]: updater(reviewDefaultsByKind[kind]),
     });
   };
 
@@ -148,8 +189,23 @@ export function ReviewSettingsPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Review"
-        description="Reusable prompts for plan and code review loops."
+        description="Defaults and reusable prompts for plan and code review loops."
       />
+
+      {REVIEW_DEFAULT_SECTIONS.map((section, index) => (
+        <ReviewDefaultsSection
+          key={section.kind}
+          title={section.title}
+          description={section.description}
+          separated={index > 0}
+          defaults={reviewDefaultsByKind[section.kind]}
+          kind={section.kind}
+          personalityTemplates={reviewPersonalityTemplatesByKind[section.kind]}
+          modelGroups={modelGroups}
+          modelsLoading={agentsLoading || modelRegistriesLoading}
+          onChange={(updater) => updateReviewDefault(section.kind, updater)}
+        />
+      ))}
 
       {REVIEW_SECTIONS.map((section, index) => (
         <ReviewPersonalitySection
@@ -178,109 +234,6 @@ export function ReviewSettingsPane() {
         onClose={closeEditor}
       />
     </section>
-  );
-}
-
-interface ReviewPersonalitySectionProps {
-  kind: ReviewKind;
-  title: string;
-  description: string;
-  createLabel: string;
-  separated: boolean;
-  storedPersonalities: ReviewPersonalityPreference[];
-  onCreate: () => void;
-  onPromptChange: (
-    kind: ReviewKind,
-    personality: ReviewPersonaTemplate,
-    prompt: string,
-  ) => void;
-  onReset: (kind: ReviewKind, personality: ReviewPersonaTemplate) => void;
-  onDelete: (kind: ReviewKind, personality: ReviewPersonaTemplate) => void;
-}
-
-function ReviewPersonalitySection({
-  kind,
-  title,
-  description,
-  createLabel,
-  separated,
-  storedPersonalities,
-  onCreate,
-  onPromptChange,
-  onReset,
-  onDelete,
-}: ReviewPersonalitySectionProps) {
-  const resolvedPersonalities = useMemo(
-    () => resolveReviewPersonaTemplates(kind, storedPersonalities),
-    [kind, storedPersonalities],
-  );
-
-  return (
-    <EnvironmentSection
-      title={title}
-      description={description}
-      separated={separated}
-      action={(
-        <Button type="button" variant="outline" size="sm" onClick={onCreate}>
-          <Plus className="size-3.5" />
-          {createLabel}
-        </Button>
-      )}
-    >
-      {resolvedPersonalities.map((personality) => {
-        const builtIn = isBuiltInReviewPersonaId(kind, personality.id);
-        const overridden = builtIn && storedPersonalities.some((item) => item.id === personality.id);
-        const descriptionText = builtIn
-          ? overridden ? "Built-in personality with custom prompt" : "Built-in personality"
-          : "Custom personality";
-
-        return (
-          <EnvironmentField
-            key={personality.id}
-            label={personality.label}
-            description={descriptionText}
-          >
-            <div className="space-y-2">
-              <Textarea
-                variant="code"
-                rows={6}
-                value={personality.prompt}
-                data-telemetry-mask
-                placeholder="Tell this reviewer what to focus on."
-                className="min-h-36 px-2.5 py-2 text-sm"
-                onChange={(event) => onPromptChange(kind, personality, event.target.value)}
-              />
-              {(overridden || !builtIn) ? (
-                <div className="flex justify-end gap-2">
-                  {overridden ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onReset(kind, personality)}
-                    >
-                      <RefreshCw className="size-3.5" />
-                      Reset
-                    </Button>
-                  ) : null}
-                  {!builtIn ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDelete(kind, personality)}
-                    >
-                      <Trash className="size-3.5" />
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </EnvironmentField>
-        );
-      })}
-    </EnvironmentSection>
   );
 }
 
@@ -313,7 +266,7 @@ function PersonalityEditorDialog({
       open={!!editor}
       onClose={onClose}
       title={title}
-      description="Personality prompts are reused by the review setup dialog."
+      description="Personality prompts are reused by review configuration."
       sizeClassName="max-w-xl"
       footer={(
         <>

@@ -740,6 +740,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/subagents/{child_session_id}/wake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["schedule_subagent_wake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/title": {
         parameters: {
             query?: never;
@@ -3319,6 +3335,14 @@ export interface components {
         RuntimeCapabilities: {
             replay: boolean;
         };
+        ScheduleSubagentWakeRequest: Record<string, never>;
+        ScheduleSubagentWakeResponse: {
+            alreadyScheduled: boolean;
+            childSessionId: string;
+            parentSessionId: string;
+            sessionLinkId: string;
+            wakeScheduled: boolean;
+        };
         SearchWorkspaceFilesResponse: {
             results: components["schemas"]["WorkspaceFileSearchResult"][];
         };
@@ -5849,6 +5873,62 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    schedule_subagent_wake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID */
+                session_id: string;
+                /** @description Child subagent session ID */
+                child_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleSubagentWakeRequest"];
+            };
+        };
+        responses: {
+            /** @description Scheduled a one-shot parent wake for the child subagent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSubagentWakeResponse"];
+                };
+            };
+            /** @description Invalid subagent wake request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace or subagent state blocks wake scheduling */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -384,9 +384,8 @@ export function ChatInput({
                   workspaceUiKey={workspaceUiKey}
                   sdkWorkspaceId={materializedWorkspaceId}
                   onAttachFile={() => fileInputRef.current?.click()}
-                  onStartReview={(anchor) => {
-                    reviewActions.startCodeReview(anchor);
-                  }}
+                  onStartReview={reviewActions.startCodeReview}
+                  onConfigureReview={reviewActions.configureCodeReview}
                 />
               )}
               <ChatComposerActions

@@ -46,6 +46,7 @@ export function useReviewSetupDialogState() {
   const startCodeReviewMutation = useStartCodeReviewMutation({ workspaceId: selectedWorkspaceId });
   const [draft, setDraft] = useState<ReviewSetupDraft | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
 
   const setupTarget = setup?.target ?? null;
   const parentSessionId = setupTarget?.kind === "plan"
@@ -94,13 +95,14 @@ export function useReviewSetupDialogState() {
       personalityTemplates,
     }));
     setValidationError(null);
+    setSaveAsDefault(false);
   }, [personalityTemplates, reviewDefaultsByKind, sessionDefaults, setupTarget]);
 
   const title = useMemo(() => {
     if (!setupTarget) {
       return "Review setup";
     }
-    return setupTarget.kind === "plan" ? "Plan review" : "Code review";
+    return setupTarget.kind === "plan" ? "Plan review agents" : "Code review agents";
   }, [setupTarget]);
 
   const submit = useCallback(() => {
@@ -113,11 +115,13 @@ export function useReviewSetupDialogState() {
       return;
     }
     setValidationError(null);
-    const nextDefaults = {
-      ...reviewDefaultsByKind,
-      [draft.kind]: draftToStoredReviewDefaults(draft, personalityTemplates),
-    };
-    setPreference("reviewDefaultsByKind", nextDefaults);
+    if (saveAsDefault) {
+      const nextDefaults = {
+        ...reviewDefaultsByKind,
+        [draft.kind]: draftToStoredReviewDefaults(draft, personalityTemplates),
+      };
+      setPreference("reviewDefaultsByKind", nextDefaults);
+    }
     beginStartingReview({
       parentSessionId,
       kind: draft.kind,
@@ -151,6 +155,7 @@ export function useReviewSetupDialogState() {
     parentSessionId,
     personalityTemplates,
     reviewDefaultsByKind,
+    saveAsDefault,
     setPreference,
     setupTarget,
     showToast,
@@ -175,6 +180,8 @@ export function useReviewSetupDialogState() {
     parentSessionId,
     validationError,
     isSubmitting: startPlanReviewMutation.isPending || startCodeReviewMutation.isPending,
+    saveAsDefault,
+    setSaveAsDefault,
     setDraft,
     submit,
     close: closeSetup,

@@ -5,17 +5,15 @@ import {
 } from "@/config/chat";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
-import { CoworkComposerControl } from "@/components/workspace/chat/input/CoworkComposerStrip";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/ComposerFileMentionBadge";
 import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
 import { ComposerTextareaFrame } from "@/components/workspace/chat/input/ComposerTextareaFrame";
-import { ReviewComposerControl } from "@/components/workspace/chat/input/ReviewComposerControl";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
+import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
-import { SubagentComposerControl, SubagentComposerStrip } from "@/components/workspace/chat/input/SubagentComposerStrip";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
@@ -41,12 +39,13 @@ import {
   ChevronDown,
   CloudIcon,
   Copy,
-  FileText,
   Folder,
   FolderOpen,
   GitBranch,
 } from "@/components/ui/icons";
 import type { PlaygroundScenarioSelection, ScenarioKey } from "@/config/playground";
+import type { ReviewRunDetail } from "@anyharness/sdk";
+import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
 import type {
   CoworkComposerStripSummary,
   CoworkComposerWorkspaceRow,
@@ -523,20 +522,26 @@ export function renderDelegationSlot(scenario: ScenarioKey): ReactNode | null {
   if (reviewState) {
     return (
       <DelegatedWorkComposerPanel>
-        <PlaygroundReviewComposerControl state={reviewState} />
+        <DelegatedWorkComposerControl
+          viewModel={buildPlaygroundDelegatedWorkViewModel({ reviewState })}
+        />
       </DelegatedWorkComposerPanel>
     );
   }
 
   switch (scenario) {
+    case "agents-cowork-only":
+      return (
+        <DelegatedWorkComposerPanel>
+          <DelegatedWorkComposerControl
+            viewModel={buildPlaygroundDelegatedWorkViewModel({ cowork: true })}
+          />
+        </DelegatedWorkComposerPanel>
+      );
     case "subagents-composer-few":
       return (
-        <SubagentComposerStrip
-          rows={PLAYGROUND_SUBAGENT_STRIP_ROWS.slice(0, 3)}
-          parent={null}
-          summary={buildPlaygroundSubagentSummary(PLAYGROUND_SUBAGENT_STRIP_ROWS.slice(0, 3))}
-          onOpenSubagent={noop}
-          onOpenParent={noop}
+        <PlaygroundDelegatedWorkControl
+          subagentRows={PLAYGROUND_SUBAGENT_STRIP_ROWS.slice(0, 3)}
         />
       );
     case "subagents-coding-review-with-approval":
@@ -545,13 +550,7 @@ export function renderDelegationSlot(scenario: ScenarioKey): ReactNode | null {
     case "subagents-queued-wake":
     case "subagents-queued-wake-with-approval":
       return (
-        <SubagentComposerStrip
-          rows={PLAYGROUND_SUBAGENT_STRIP_ROWS}
-          parent={null}
-          summary={buildPlaygroundSubagentSummary(PLAYGROUND_SUBAGENT_STRIP_ROWS)}
-          onOpenSubagent={noop}
-          onOpenParent={noop}
-        />
+        <PlaygroundDelegatedWorkControl subagentRows={PLAYGROUND_SUBAGENT_STRIP_ROWS} />
       );
     default:
       return null;
@@ -561,21 +560,12 @@ export function renderDelegationSlot(scenario: ScenarioKey): ReactNode | null {
 function PlaygroundDelegationStack() {
   return (
     <DelegatedWorkComposerPanel>
-      <PlaygroundReviewComposerControl
-        state={PLAYGROUND_REVIEW_COMPOSER_STATES["subagents-reviewing-code"]}
-      />
-      <CoworkComposerControl
-        rows={PLAYGROUND_COWORK_ROWS}
-        summary={PLAYGROUND_COWORK_SUMMARY}
-        onOpenWorkspace={noop}
-        onOpenSession={noop}
-      />
-      <SubagentComposerControl
-        rows={PLAYGROUND_SUBAGENT_STRIP_ROWS}
-        parent={null}
-        summary={buildPlaygroundSubagentSummary(PLAYGROUND_SUBAGENT_STRIP_ROWS)}
-        onOpenSubagent={noop}
-        onOpenParent={noop}
+      <DelegatedWorkComposerControl
+        viewModel={buildPlaygroundDelegatedWorkViewModel({
+          reviewState: PLAYGROUND_REVIEW_COMPOSER_STATES["subagents-reviewing-code"],
+          cowork: true,
+          subagentRows: PLAYGROUND_SUBAGENT_STRIP_ROWS,
+        })}
       />
     </DelegatedWorkComposerPanel>
   );
@@ -587,94 +577,170 @@ function reviewComposerStateForScenario(
   return PLAYGROUND_REVIEW_COMPOSER_STATES[scenario] ?? null;
 }
 
-function PlaygroundReviewComposerControl({
-  state,
+function PlaygroundDelegatedWorkControl({
+  subagentRows,
 }: {
-  state: PlaygroundReviewComposerState;
+  subagentRows: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;
 }) {
   return (
-    <ReviewComposerControl
-      summary={{
-        label: state.summary.label,
-        detail: state.summary.detail,
-      }}
-      active={state.summary.active}
-    >
-      {() => (
-        <>
-          <div className="max-h-80 overflow-y-auto p-1">
-            {state.rows.map((row) => (
-              <PlaygroundReviewAgentRow key={row.id} row={row} />
-            ))}
-          </div>
-          {(state.deliveryLabel || state.actionLabel) && (
-            <div className="flex min-w-0 items-center justify-between gap-2 border-t border-border/50 px-3 py-2">
-              {state.deliveryLabel && (
-                <div className="min-w-0 truncate text-xs text-muted-foreground">
-                  {state.deliveryLabel}
-                </div>
-              )}
-              {state.actionLabel && (
-                <Button type="button" variant="secondary" size="sm" disabled className="shrink-0">
-                  {state.actionLabel}
-                </Button>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </ReviewComposerControl>
+    <DelegatedWorkComposerPanel>
+      <DelegatedWorkComposerControl
+        viewModel={buildPlaygroundDelegatedWorkViewModel({ subagentRows })}
+      />
+    </DelegatedWorkComposerPanel>
   );
 }
 
-function PlaygroundReviewAgentRow({
-  row,
-}: {
-  row: PlaygroundReviewComposerRow;
-}) {
-  return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left">
-      <span className="min-w-0">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate text-sm font-medium text-foreground">
-            {row.label}
-          </span>
-          <span className={`shrink-0 text-xs ${reviewStatusClassName(row.status)}`}>
-            {row.status}
-          </span>
-        </span>
-        {row.detail && (
-          <span className="block truncate text-xs text-muted-foreground">
-            {row.detail}
-          </span>
-        )}
-      </span>
-      {row.hasCritique && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled
-          aria-label={`Open ${row.label} critique`}
-          className="h-7 w-7 px-0"
-        >
-          <FileText className="size-3.5" />
-        </Button>
-      )}
-    </div>
-  );
+function buildPlaygroundDelegatedWorkViewModel(args: {
+  reviewState?: PlaygroundReviewComposerState | null;
+  cowork?: boolean;
+  subagentRows?: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;
+}): DelegatedWorkComposerViewModel {
+  const reviewRun = args.reviewState
+    ? buildPlaygroundReviewRun(args.reviewState)
+    : null;
+  const cowork = args.cowork
+    ? {
+      rows: PLAYGROUND_COWORK_ROWS,
+      summary: PLAYGROUND_COWORK_SUMMARY,
+      openWorkspace: noop,
+      openSession: noop,
+    }
+    : null;
+  const subagents = args.subagentRows
+    ? {
+      rows: args.subagentRows,
+      parent: null,
+      summary: buildPlaygroundSubagentSummary(args.subagentRows),
+      overflowCount: 0,
+      openSubagent: noop,
+      openParent: noop,
+      scheduleWake: noop,
+      isSchedulingWake: false,
+    }
+    : null;
+  const summary = args.reviewState
+    ? {
+      label: args.reviewState.actionLabel === "Send feedback"
+        ? "feedback ready"
+        : args.reviewState.summary.label,
+      active: args.reviewState.summary.active,
+    }
+    : cowork
+      ? { label: cowork.summary.detail ?? cowork.summary.label, active: cowork.summary.active }
+      : subagents
+        ? { label: subagents.summary.detail ?? subagents.summary.label, active: subagents.summary.active }
+        : { label: "No active work", active: false };
+
+  return {
+    summary,
+    review: reviewRun ? {
+      run: reviewRun,
+      startingReview: null,
+      openCritique: noop,
+      openReviewerSession: noop,
+      stop: noop,
+      sendFeedback: noop,
+      markRevisionReady: noop,
+      retryAssignment: noop,
+      dismiss: noop,
+    } : null,
+    cowork,
+    subagents,
+  };
 }
 
-function reviewStatusClassName(status: PlaygroundReviewComposerRow["status"]): string {
-  switch (status) {
-    case "Requests changes":
-    case "Failed":
-      return "text-destructive";
-    case "Approved":
-      return "text-foreground";
+function buildPlaygroundReviewRun(state: PlaygroundReviewComposerState): ReviewRunDetail {
+  const status = state.actionLabel === "Send feedback"
+    ? "feedback_ready"
+    : state.actionLabel === "Dismiss"
+      ? "passed"
+      : "reviewing";
+  const now = "2026-04-14T00:00:00Z";
+  const roundId = "playground-review-round";
+  const runId = "playground-review-run";
+  const assignments: ReviewRunDetail["rounds"][number]["assignments"] = state.rows.map((row, index) => ({
+    id: row.id,
+    reviewRunId: runId,
+    reviewRoundId: roundId,
+    personaId: row.id,
+    personaLabel: row.label,
+    agentKind: index % 2 === 0 ? "codex" : "claude",
+    modelId: index % 2 === 0 ? "gpt-5.4" : "claude-sonnet-4-5",
+    requestedModeId: "full-access",
+    actualModeId: "full-access",
+    modeVerificationStatus: "verified",
+    status: playgroundReviewAssignmentStatus(row),
+    pass: row.status === "Approved" ? true : row.status === "Requests changes" ? false : null,
+    summary: row.detail,
+    hasCritique: row.hasCritique,
+    critiqueArtifactPath: row.hasCritique ? `/tmp/${row.id}-critique.md` : null,
+    reviewerSessionId: `reviewer-session-${row.id}`,
+    sessionLinkId: `reviewer-link-${row.id}`,
+    deadlineAt: now,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  return {
+    id: runId,
+    workspaceId: "playground-workspace",
+    parentSessionId: "playground-parent-session",
+    title: state.summary.label,
+    kind: state.summary.detail?.toLowerCase().includes("code") ? "code" : "plan",
+    targetPlanId: null,
+    targetPlanSnapshotHash: null,
+    status,
+    maxRounds: 2,
+    autoIterate: true,
+    currentRoundNumber: 1,
+    activeRoundId: roundId,
+    parentCanSignalRevisionViaMcp: true,
+    childSessionIds: assignments
+      .map((assignment) => assignment.reviewerSessionId)
+      .filter((sessionId): sessionId is string => !!sessionId),
+    rounds: [
+      {
+        id: roundId,
+        reviewRunId: runId,
+        roundNumber: 1,
+        status: status === "feedback_ready" ? "feedback_pending" : status === "passed" ? "passed" : "reviewing",
+        targetPlanId: null,
+        targetPlanSnapshotHash: null,
+        feedbackJobId: null,
+        feedbackPromptSentAt: null,
+        feedbackDelivery: state.deliveryLabel ? {
+          state: status === "feedback_ready" ? "pending" : "sent",
+          attemptCount: 0,
+          failureReason: null,
+          failureDetail: null,
+          nextAttemptAt: null,
+        } : null,
+        failureReason: null,
+        failureDetail: null,
+        assignments,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    failureReason: null,
+    failureDetail: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function playgroundReviewAssignmentStatus(row: PlaygroundReviewComposerRow) {
+  switch (row.status) {
     case "Starting":
+      return "launching";
     case "Reviewing":
-      return "text-muted-foreground";
+      return "reviewing";
+    case "Requests changes":
+    case "Approved":
+      return "submitted";
+    case "Failed":
+      return "system_failed";
   }
 }
 

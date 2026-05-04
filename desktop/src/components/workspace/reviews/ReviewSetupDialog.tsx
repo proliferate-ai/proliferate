@@ -9,6 +9,7 @@ import {
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import { Plus } from "@/components/ui/icons";
 import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
@@ -27,7 +28,9 @@ interface ReviewSetupDialogProps {
   modelsLoading: boolean;
   validationError: string | null;
   isSubmitting: boolean;
+  saveAsDefault: boolean;
   onDraftChange: (draft: ReviewSetupDraft) => void;
+  onSaveAsDefaultChange: (value: boolean) => void;
   onSubmit: () => void;
   onClose: () => void;
   onManagePersonalities: () => void;
@@ -44,7 +47,9 @@ export function ReviewSetupDialog({
   modelsLoading,
   validationError,
   isSubmitting,
+  saveAsDefault,
   onDraftChange,
+  onSaveAsDefaultChange,
   onSubmit,
   onClose,
   onManagePersonalities,
@@ -165,7 +170,7 @@ export function ReviewSetupDialog({
               />
             </div>
 
-            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-3 py-3">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border/60 px-3 py-3">
               <Button
                 type="button"
                 variant="ghost"
@@ -177,6 +182,16 @@ export function ReviewSetupDialog({
                 <Plus className="size-3.5" />
                 Add
               </Button>
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={saveAsDefault}
+                  disabled={isSubmitting}
+                  aria-label="Save review configuration as default"
+                  className="size-3.5"
+                  onChange={(event) => onSaveAsDefaultChange(event.currentTarget.checked)}
+                />
+                Save as default
+              </span>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
                   Cancel

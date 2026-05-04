@@ -466,11 +466,23 @@ describe("user preference migration", () => {
         },
         code: null,
       },
-    });
+    } as unknown as UserPreferences);
 
     expect(result.changed).toBe(true);
     expect(result.preferences.reviewDefaultsByKind.plan?.maxRounds).toBe(10);
-    expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toHaveLength(1);
+    expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toMatchObject({
+      mode: "custom",
+      items: [
+        {
+          id: "skeptic",
+          label: "Skeptic",
+          prompt: "Find planning gaps.",
+          agentKind: "codex",
+          modelId: "gpt-5.4",
+          modeId: "read-only",
+        },
+      ],
+    });
     expect(result.preferences.reviewDefaultsByKind.code).toBeNull();
   });
 
@@ -489,6 +501,7 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.reviewDefaultsByKind.plan?.autoIterate).toBe(false);
+    expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toEqual({ mode: "inherit" });
   });
 
   it("sanitizes reusable review personalities by kind", () => {

@@ -61,6 +61,7 @@ export type ScenarioKey =
   | "tool-subagent-task"
   | "end-turn-multi-file-diff"
   | "git-diff-panel"
+  | "agents-cowork-only"
   | "subagents-composer-few"
   | "subagents-composer-many"
   | "subagents-review-starting-plan"
@@ -149,8 +150,9 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-subagent-task": { label: "Tool subagent task" },
   "end-turn-multi-file-diff": { label: "End-turn diff" },
   "git-diff-panel": { label: "Git diff panel" },
-  "subagents-composer-few": { label: "Subagents composer (3)" },
-  "subagents-composer-many": { label: "Subagents composer (10)" },
+  "agents-cowork-only": { label: "Agents cowork only" },
+  "subagents-composer-few": { label: "Agents subagents (3)" },
+  "subagents-composer-many": { label: "Agents subagents (10)" },
   "subagents-review-starting-plan": { label: "Review starting (plan)" },
   "subagents-review-starting-code": { label: "Review starting (code)" },
   "subagents-reviewing-plan": { label: "Reviewing plan" },
@@ -159,7 +161,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-review-complete": { label: "Review complete" },
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
-  "subagents-coding-review-with-approval": { label: "Subagents + coding + review + approval" },
+  "subagents-coding-review-with-approval": { label: "Agents mixed + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
   "mobility-local-actionable": { label: "Mobility (actionable)" },
   "mobility-local-blocked": { label: "Mobility (blocked)" },

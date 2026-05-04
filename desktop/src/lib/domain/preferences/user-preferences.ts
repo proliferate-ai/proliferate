@@ -8,6 +8,8 @@ import {
   clampRounds,
   MAX_REVIEWERS_PER_RUN,
   type ReviewPersonalityPreference,
+  type StoredReviewKindDefaults,
+  type StoredReviewKindReviewers,
   type StoredReviewPersonalitiesByKind,
 } from "@/lib/domain/reviews/review-config";
 
@@ -29,13 +31,9 @@ export interface ReviewPersonaPreference {
   modeId: string;
 }
 
-export interface ReviewKindPreference {
-  maxRounds: number;
-  autoIterate: boolean;
-  reviewers: ReviewPersonaPreference[];
-}
+export type ReviewKindPreference = StoredReviewKindDefaults;
 
-export type ReviewDefaultsByKind = Record<ReviewDefaultKind, ReviewKindPreference | null>;
+export type ReviewDefaultsByKind = Record<ReviewDefaultKind, StoredReviewKindDefaults | null>;
 export type ReviewPersonalitiesByKind = StoredReviewPersonalitiesByKind;
 
 export interface UserPreferences {
@@ -330,23 +328,53 @@ function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | nu
   }
   const raw = value as Partial<ReviewKindPreference> & {
     autoSendFeedback?: unknown;
+    reviewers?: unknown;
   };
   const maxRounds = typeof raw.maxRounds === "number"
     && Number.isFinite(raw.maxRounds)
     ? clampRounds(raw.maxRounds)
     : 2;
-  const reviewers = Array.isArray(raw.reviewers)
-    ? raw.reviewers.flatMap(sanitizeReviewPersonaPreference)
-    : [];
+  const reviewers = sanitizeReviewKindReviewers(raw.reviewers);
   return {
     maxRounds,
     autoIterate: typeof raw.autoIterate === "boolean"
       ? raw.autoIterate
       : typeof raw.autoSendFeedback === "boolean"
         ? raw.autoSendFeedback
-      : true,
-    reviewers: dedupeReviewPersonaPreferences(reviewers).slice(0, MAX_REVIEWERS_PER_RUN),
+        : true,
+    agentKind: typeof raw.agentKind === "string" ? raw.agentKind.trim() : "",
+    modelId: typeof raw.modelId === "string" ? raw.modelId.trim() : "",
+    modeId: typeof raw.modeId === "string" ? raw.modeId.trim() : "",
+    reviewers,
   };
+}
+
+function sanitizeReviewKindReviewers(value: unknown): StoredReviewKindReviewers {
+  if (Array.isArray(value)) {
+    const reviewers = dedupeReviewPersonaPreferences(
+      value.flatMap(sanitizeReviewPersonaPreference),
+    ).slice(0, MAX_REVIEWERS_PER_RUN);
+    return reviewers.length > 0
+      ? { mode: "custom", items: reviewers }
+      : { mode: "inherit" };
+  }
+
+  if (!value || typeof value !== "object") {
+    return { mode: "inherit" };
+  }
+
+  const raw = value as {
+    mode?: unknown;
+    items?: unknown;
+  };
+  if (raw.mode === "custom") {
+    const reviewers = Array.isArray(raw.items)
+      ? dedupeReviewPersonaPreferences(raw.items.flatMap(sanitizeReviewPersonaPreference))
+        .slice(0, MAX_REVIEWERS_PER_RUN)
+      : [];
+    return { mode: "custom", items: reviewers };
+  }
+  return { mode: "inherit" };
 }
 
 function sanitizeReviewPersonaPreference(value: unknown): ReviewPersonaPreference[] {
