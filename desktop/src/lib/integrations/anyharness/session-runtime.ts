@@ -31,7 +31,7 @@ import {
   type RuntimeTarget,
 } from "@/lib/integrations/anyharness/runtime-target";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
-import type { SessionSlot } from "@/stores/sessions/harness-store";
+import type { SessionRelationship, SessionSlot } from "@/stores/sessions/harness-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 interface SessionStreamCallbacks {
@@ -108,6 +108,7 @@ export function createEmptySessionSlot(
     mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
     lastPromptAt?: string | null;
     optimisticPrompt?: PendingPromptEntry | null;
+    sessionRelationship?: SessionRelationship;
   },
 ): SessionSlot {
   const resolvedModeId =
@@ -142,6 +143,7 @@ export function createEmptySessionSlot(
     sseHandle: null,
     streamConnectionState: "disconnected",
     transcriptHydrated: false,
+    sessionRelationship: config?.sessionRelationship ?? { kind: "pending" },
   };
 }
 
@@ -151,6 +153,7 @@ export function createSessionSlotFromSummary(
   options?: {
     titleFallback?: string | null;
     transcriptHydrated?: boolean;
+    sessionRelationship?: SessionRelationship;
   },
 ): SessionSlot {
   const modeId =
@@ -170,6 +173,7 @@ export function createSessionSlotFromSummary(
       executionSummary: session.executionSummary ?? null,
       mcpBindingSummaries: session.mcpBindingSummaries ?? null,
       lastPromptAt: session.lastPromptAt ?? null,
+      sessionRelationship: options?.sessionRelationship ?? { kind: "pending" },
     }),
     status: resolveStatusFromExecutionSummary(
       session.executionSummary,

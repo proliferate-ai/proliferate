@@ -111,6 +111,7 @@ const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
   {
     ownershipId: "workspace-frontend-polish",
     workspaceId: "workspace-frontend-polish",
+    parentSessionId: "playground-root-session",
     label: "frontend-polish",
     sessionCount: 2,
     active: true,
@@ -118,6 +119,7 @@ const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
       {
         sessionLinkId: "coding-link-composer-layout",
         codingSessionId: "coding-session-composer-layout",
+        parentSessionId: "playground-root-session",
         label: "composer layout cleanup",
         agentKind: "codex",
         statusLabel: "Working",
@@ -130,6 +132,7 @@ const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
       {
         sessionLinkId: "coding-link-visual-regression",
         codingSessionId: "coding-session-visual-regression",
+        parentSessionId: "playground-root-session",
         label: "visual regression pass",
         agentKind: "claude",
         statusLabel: "Idle",

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import {
   anyHarnessSessionReviewsKey,
@@ -19,6 +19,14 @@ import {
   reviewAssignmentHeaderStatusLabel,
   reviewKindLabel,
 } from "@/lib/domain/reviews/review-runs";
+import {
+  collectReviewSessionRelationshipHints,
+  type ReviewSessionRelationshipHint,
+} from "@/lib/domain/reviews/session-relationship-hints";
+import {
+  collectSubagentSessionRelationshipHints,
+  type SubagentSessionRelationshipHint,
+} from "@/lib/domain/chat/subagents/session-relationship-hints";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 export interface HeaderSubagentParentRow {
@@ -31,6 +39,7 @@ export interface HeaderSubagentParentRow {
 export interface HeaderSubagentChildRow {
   sessionLinkId: string;
   sessionId: string;
+  parentSessionId: string;
   title: string;
   agentKind: string;
   source: "subagent" | "review";
@@ -54,6 +63,9 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
 }): WorkspaceHeaderSubagentHierarchy {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const recordSessionRelationshipHint = useHarnessStore(
+    (state) => state.recordSessionRelationshipHint,
+  );
   const uniqueSessionIds = useMemo(
     () => [...new Set(args.sessionIds)].filter(Boolean),
     [args.sessionIds],
@@ -89,6 +101,59 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       staleTime: 2_500,
     })),
   });
+  const subagentRelationshipHintRows = subagentQueries.flatMap((query, index) => {
+    const sessionId = uniqueSessionIds[index];
+    return sessionId
+      ? collectSubagentSessionRelationshipHints(sessionId, query.data)
+      : [];
+  });
+  const subagentRelationshipHintSignature =
+    buildSubagentRelationshipHintSignature(subagentRelationshipHintRows);
+  const subagentRelationshipHints = useMemo(
+    () => subagentRelationshipHintRows,
+    // The query result array is intentionally not a dependency: useQueries returns
+    // a new array each render, while this signature only changes when the
+    // relationship hints we record into the store actually change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subagentRelationshipHintSignature],
+  );
+  const reviewRelationshipHintRows = reviewQueries.flatMap((query) =>
+    collectReviewSessionRelationshipHints(query.data?.reviews)
+  );
+  const reviewRelationshipHintSignature =
+    buildReviewRelationshipHintSignature(reviewRelationshipHintRows);
+  const reviewRelationshipHints = useMemo(
+    () => reviewRelationshipHintRows,
+    // The query result array is intentionally not a dependency: useQueries returns
+    // a new array each render, while this signature only changes when the
+    // relationship hints we record into the store actually change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reviewRelationshipHintSignature],
+  );
+
+  useEffect(() => {
+    for (const hint of subagentRelationshipHints) {
+      recordSessionRelationshipHint(hint.sessionId, {
+        kind: "subagent_child",
+        parentSessionId: hint.parentSessionId,
+        sessionLinkId: hint.sessionLinkId,
+        relation: "subagent",
+        workspaceId: args.workspaceId,
+      });
+    }
+  }, [args.workspaceId, recordSessionRelationshipHint, subagentRelationshipHints]);
+
+  useEffect(() => {
+    for (const hint of reviewRelationshipHints) {
+      recordSessionRelationshipHint(hint.sessionId, {
+        kind: "review_child",
+        parentSessionId: hint.parentSessionId,
+        sessionLinkId: hint.sessionLinkId,
+        relation: "review",
+        workspaceId: args.workspaceId,
+      });
+    }
+  }, [args.workspaceId, recordSessionRelationshipHint, reviewRelationshipHints]);
 
   return useMemo(() => {
     const childToParent = new Map<string, string>();
@@ -119,7 +184,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
         childrenByParentSessionId.set(
           sessionId,
           data.children.map((child, childIndex) =>
-            buildChildRow(child, childIndex + 1, args.activeSessionId)
+            buildChildRow(child, sessionId, childIndex + 1, args.activeSessionId)
           ),
         );
         for (const child of data.children) {
@@ -166,12 +231,14 @@ function buildParentRow(parent: ParentSubagentLinkSummary): HeaderSubagentParent
 
 function buildChildRow(
   child: ChildSubagentSummary,
+  parentSessionId: string,
   ordinal: number,
   activeSessionId: string | null,
 ): HeaderSubagentChildRow {
   return {
     sessionLinkId: child.sessionLinkId,
     sessionId: child.childSessionId,
+    parentSessionId,
     title: formatSubagentLabel(child.label ?? child.title, ordinal),
     agentKind: child.agentKind,
     source: "subagent",
@@ -195,6 +262,7 @@ function buildReviewChildRows(
         rowsBySessionId.set(sessionId, {
           sessionLinkId: assignment.sessionLinkId ?? assignment.id,
           sessionId,
+          parentSessionId: run.parentSessionId,
           title: assignment.personaLabel || reviewKindLabel(run.kind),
           agentKind: assignment.agentKind,
           source: "review",
@@ -207,6 +275,32 @@ function buildReviewChildRows(
     }
   }
   return [...rowsBySessionId.values()];
+}
+
+function buildReviewRelationshipHintSignature(
+  hints: readonly ReviewSessionRelationshipHint[],
+): string {
+  return hints
+    .map((hint) => [
+      hint.sessionId,
+      hint.parentSessionId,
+      hint.sessionLinkId ?? "",
+    ].join(":"))
+    .sort()
+    .join("|");
+}
+
+function buildSubagentRelationshipHintSignature(
+  hints: readonly SubagentSessionRelationshipHint[],
+): string {
+  return hints
+    .map((hint) => [
+      hint.sessionId,
+      hint.parentSessionId,
+      hint.sessionLinkId ?? "",
+    ].join(":"))
+    .sort()
+    .join("|");
 }
 
 function formatSessionStatus(status: ChildSubagentSummary["status"]): string {

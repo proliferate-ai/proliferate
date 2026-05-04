@@ -18,7 +18,12 @@ interface CoworkComposerStripProps {
   rows: CoworkComposerWorkspaceRow[];
   summary: CoworkComposerStripSummary;
   onOpenWorkspace: (workspaceId: string) => void;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }
 
 export function CoworkComposerStrip({
@@ -99,7 +104,12 @@ function CoworkWorkspaceGroup({
 }: {
   workspace: CoworkComposerWorkspaceRow;
   onOpenWorkspace: (workspaceId: string) => void;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }) {
   return (
     <div className="min-w-0">
@@ -149,7 +159,12 @@ function CoworkSessionRow({
 }: {
   session: CoworkComposerSessionRow;
   workspaceId: string;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }) {
   return (
     <Button
@@ -161,6 +176,8 @@ function CoworkSessionRow({
       onClick={() => onOpenSession({
         workspaceId,
         sessionId: session.codingSessionId,
+        parentSessionId: session.parentSessionId,
+        sessionLinkId: session.sessionLinkId,
       })}
     >
       <AgentGlyph

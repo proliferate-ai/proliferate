@@ -8,6 +8,7 @@ import {
 import { createPortal } from "react-dom";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ChevronRight } from "@/components/ui/icons";
+import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
 import type { HeaderChatMenuEntry } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 
@@ -25,12 +26,14 @@ interface FlyoutState {
 }
 
 export function ChatTabsMenu({
+  workspaceId,
   rows,
   childrenByParentSessionId,
   renderIcon,
   renderStatus,
   onOpenSession,
 }: {
+  workspaceId: string | null;
   rows: HeaderChatMenuEntry[];
   childrenByParentSessionId: Map<string, HeaderSubagentChildRow[]>;
   renderIcon: (row: Pick<HeaderChatMenuEntry, "agentKind" | "viewState">) => ReactNode;
@@ -159,6 +162,7 @@ export function ChatTabsMenu({
       </div>
       {flyout && createPortal(
         <SubagentFlyout
+          workspaceId={workspaceId}
           children={childrenByParentSessionId.get(flyout.parentId) ?? []}
           position={flyout.position}
           onMouseEnter={clearCloseTimer}
@@ -172,12 +176,14 @@ export function ChatTabsMenu({
 }
 
 function SubagentFlyout({
+  workspaceId,
   children,
   position,
   onMouseEnter,
   onMouseLeave,
   onOpenSession,
 }: {
+  workspaceId: string | null;
   children: HeaderSubagentChildRow[];
   position: FlyoutState["position"];
   onMouseEnter: () => void;
@@ -208,6 +214,12 @@ function SubagentFlyout({
             if (child.source === "review") {
               return;
             }
+            recordSubagentChildRelationshipHint({
+              sessionId: child.sessionId,
+              parentSessionId: child.parentSessionId,
+              sessionLinkId: child.sessionLinkId,
+              workspaceId,
+            });
             onOpenSession(child.sessionId);
           }}
         >

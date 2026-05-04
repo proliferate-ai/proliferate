@@ -21,7 +21,12 @@ import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-lay
 
 interface CoworkCodingToolActionRowProps {
   item: ToolCallItem;
-  onOpenCodingSession?: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenCodingSession?: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
   onOpenWorkspace?: (workspaceId: string) => void;
 }
 
@@ -48,6 +53,8 @@ export function CoworkCodingToolActionRow({
     ? () => onOpenCodingSession?.({
       workspaceId: presentation.workspaceId!,
       sessionId: presentation.codingSessionId!,
+      parentSessionId: presentation.parentSessionId,
+      sessionLinkId: presentation.sessionLinkId,
     })
     : undefined;
   const openWorkspace = presentation.action === "create_workspace"

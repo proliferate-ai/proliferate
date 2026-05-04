@@ -53,21 +53,33 @@ function completionOutcomeLabel(outcome: string): string {
 function CoworkCodingSessionRowSurface({
   session,
   workspaceId,
+  parentSessionId,
   index,
   active,
   onOpenSession,
 }: {
   session: CoworkCodingSessionSummary;
   workspaceId: string;
+  parentSessionId: string;
   index: number;
   active: boolean;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }) {
   const color = resolveSubagentColor(session.sessionLinkId);
   return (
     <SidebarRowSurface
       active={active}
-      onPress={() => onOpenSession({ workspaceId, sessionId: session.codingSessionId })}
+      onPress={() => onOpenSession({
+        workspaceId,
+        sessionId: session.codingSessionId,
+        parentSessionId,
+        sessionLinkId: session.sessionLinkId,
+      })}
       className="h-[30px] pl-2 pr-1 py-1 focus-visible:outline-offset-[-2px]"
       data-telemetry-mask="true"
     >
@@ -104,7 +116,12 @@ function CoworkCodingSessionRow({
   parentSessionId: string;
   index: number;
   active: boolean;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const { renameCodingSession, archiveCodingSession } = useCoworkSessionActions();
@@ -125,6 +142,7 @@ function CoworkCodingSessionRow({
     <CoworkCodingSessionRowSurface
       session={session}
       workspaceId={workspaceId}
+      parentSessionId={parentSessionId}
       index={index}
       active={active}
       onOpenSession={onOpenSession}
@@ -188,7 +206,12 @@ function CoworkManagedWorkspaceBlock({
   expanded: boolean;
   onToggleExpanded: () => void;
   onOpenWorkspace: (workspaceId: string) => void;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }) {
   const sessionCount = workspace.sessions.length;
   const hasSessions = sessionCount > 0;
@@ -265,7 +288,12 @@ interface CoworkManagedWorkspaceListProps {
   expandedWorkspaces: Set<string>;
   onToggleWorkspace: (ownershipId: string) => void;
   onOpenWorkspace: (workspaceId: string) => void;
-  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+  onOpenSession: (input: {
+    workspaceId: string;
+    sessionId: string;
+    parentSessionId?: string | null;
+    sessionLinkId?: string | null;
+  }) => void;
 }
 
 export function CoworkManagedWorkspaceList({

@@ -27,6 +27,41 @@ export type SessionStreamConnectionState =
   | "open"
   | "ended";
 
+export type SessionRelationship =
+  | { kind: "root" }
+  | { kind: "pending" }
+  | SessionChildRelationship;
+
+export type SessionChildRelationship =
+  | {
+    kind: "subagent_child";
+    parentSessionId: string | null;
+    sessionLinkId?: string | null;
+    relation?: string | null;
+    workspaceId?: string | null;
+  }
+  | {
+    kind: "cowork_child";
+    parentSessionId: string | null;
+    sessionLinkId?: string | null;
+    relation?: string | null;
+    workspaceId?: string | null;
+  }
+  | {
+    kind: "review_child";
+    parentSessionId: string | null;
+    sessionLinkId?: string | null;
+    relation?: string | null;
+    workspaceId?: string | null;
+  }
+  | {
+    kind: "linked_child";
+    parentSessionId: string | null;
+    sessionLinkId?: string | null;
+    relation?: string | null;
+    workspaceId?: string | null;
+  };
+
 export interface HotPaintGate {
   workspaceId: string;
   sessionId: string;
@@ -55,6 +90,7 @@ export interface SessionSlot {
   sseHandle: SessionStreamHandle | null;
   streamConnectionState: SessionStreamConnectionState;
   transcriptHydrated: boolean;
+  sessionRelationship: SessionRelationship;
 }
 
 interface HarnessState {
@@ -90,7 +126,17 @@ interface HarnessState {
   activeSessionVersion: number;
   sessionActivationIntentEpochByWorkspace: Record<string, number>;
   sessionSlots: Record<string, SessionSlot>;
+  sessionRelationshipHints: Record<string, SessionChildRelationship>;
   hotPaintGate: HotPaintGate | null;
+
+  recordSessionRelationshipHint: (
+    sessionId: string,
+    relationship: SessionChildRelationship,
+  ) => void;
+  setSessionRelationship: (
+    sessionId: string,
+    relationship: SessionRelationship,
+  ) => void;
 }
 
 export const useHarnessStore = create<HarnessState>((set, get) => ({
@@ -143,13 +189,27 @@ export const useHarnessStore = create<HarnessState>((set, get) => ({
   })),
 
   removeWorkspaceSlots: (workspaceId) => set((s) => {
+    const removedSessionIds = new Set<string>();
+    const sessionSlots = Object.fromEntries(
+      Object.entries(s.sessionSlots).filter(([sessionId, slot]) => {
+        const keep = slot.workspaceId !== workspaceId;
+        if (!keep) {
+          removedSessionIds.add(sessionId);
+        }
+        return keep;
+      }),
+    );
+    const sessionRelationshipHints = Object.fromEntries(
+      Object.entries(s.sessionRelationshipHints).filter(([sessionId, hint]) =>
+        !removedSessionIds.has(sessionId) && hint.workspaceId !== workspaceId
+      ),
+    );
     const nextActiveSessionId = s.activeSessionId && s.sessionSlots[s.activeSessionId]?.workspaceId !== workspaceId
       ? s.activeSessionId
       : null;
     return {
-      sessionSlots: Object.fromEntries(
-        Object.entries(s.sessionSlots).filter(([, slot]) => slot.workspaceId !== workspaceId),
-      ),
+      sessionSlots,
+      sessionRelationshipHints,
       activeSessionId: nextActiveSessionId,
       activeSessionVersion: bumpVersionIfChanged(
         s.activeSessionVersion,
@@ -168,15 +228,21 @@ export const useHarnessStore = create<HarnessState>((set, get) => ({
     activeSessionId: null,
     activeSessionVersion: bumpVersionIfChanged(s.activeSessionVersion, s.activeSessionId, null),
     sessionSlots: {},
+    sessionRelationshipHints: {},
     hotPaintGate: null,
   })),
 
-  putSessionSlot: (sessionId, slot) => set((state) => ({
-    sessionSlots: {
-      ...state.sessionSlots,
-      [sessionId]: slot,
-    },
-  })),
+  putSessionSlot: (sessionId, slot) => set((state) => {
+    const hint = state.sessionRelationshipHints[sessionId];
+    const { [sessionId]: _consumedHint, ...remainingHints } = state.sessionRelationshipHints;
+    return {
+      sessionSlots: {
+        ...state.sessionSlots,
+        [sessionId]: hint ? { ...slot, sessionRelationship: hint } : slot,
+      },
+      sessionRelationshipHints: hint ? remainingHints : state.sessionRelationshipHints,
+    };
+  }),
 
   patchSessionSlot: (sessionId, patch) => set((state) => {
     const slot = state.sessionSlots[sessionId];
@@ -197,9 +263,12 @@ export const useHarnessStore = create<HarnessState>((set, get) => ({
       return state;
     }
     const { [sessionId]: _removed, ...sessionSlots } = state.sessionSlots;
+    const { [sessionId]: _removedHint, ...sessionRelationshipHints } =
+      state.sessionRelationshipHints;
     const nextActiveSessionId = state.activeSessionId === sessionId ? null : state.activeSessionId;
     return {
       sessionSlots,
+      sessionRelationshipHints,
       activeSessionId: nextActiveSessionId,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -238,6 +307,62 @@ export const useHarnessStore = create<HarnessState>((set, get) => ({
       : state
   )),
 
+  recordSessionRelationshipHint: (sessionId, relationship) => set((state) => {
+    const slot = state.sessionSlots[sessionId];
+    if (slot) {
+      const sessionRelationshipHints = removeRecordKey(
+        state.sessionRelationshipHints,
+        sessionId,
+      );
+      if (sessionRelationshipEqual(slot.sessionRelationship, relationship)) {
+        return sessionRelationshipHints === state.sessionRelationshipHints
+          ? state
+          : { sessionRelationshipHints };
+      }
+      return {
+        sessionSlots: {
+          ...state.sessionSlots,
+          [sessionId]: {
+            ...slot,
+            sessionRelationship: relationship,
+          },
+        },
+        sessionRelationshipHints,
+      };
+    }
+
+    const existing = state.sessionRelationshipHints[sessionId];
+    if (sessionChildRelationshipEqual(existing, relationship)) {
+      return state;
+    }
+
+    return {
+      sessionRelationshipHints: {
+        ...state.sessionRelationshipHints,
+        [sessionId]: relationship,
+      },
+    };
+  }),
+
+  setSessionRelationship: (sessionId, relationship) => set((state) => {
+    const slot = state.sessionSlots[sessionId];
+    if (!slot) {
+      return state;
+    }
+    if (sessionRelationshipEqual(slot.sessionRelationship, relationship)) {
+      return state;
+    }
+    return {
+      sessionSlots: {
+        ...state.sessionSlots,
+        [sessionId]: {
+          ...slot,
+          sessionRelationship: relationship,
+        },
+      },
+    };
+  }),
+
   pendingWorkspaceEntry: null,
   selectedWorkspaceId: null,
   workspaceSelectionNonce: 0,
@@ -247,6 +372,7 @@ export const useHarnessStore = create<HarnessState>((set, get) => ({
   activeSessionVersion: 0,
   sessionActivationIntentEpochByWorkspace: {},
   sessionSlots: {},
+  sessionRelationshipHints: {},
   hotPaintGate: null,
 }));
 
@@ -256,6 +382,40 @@ function bumpVersionIfChanged(
   nextSessionId: string | null,
 ): number {
   return previousSessionId === nextSessionId ? version : version + 1;
+}
+
+function removeRecordKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in record)) {
+    return record;
+  }
+  const { [key]: _removed, ...rest } = record;
+  return rest;
+}
+
+function sessionRelationshipEqual(
+  a: SessionRelationship | undefined,
+  b: SessionRelationship | undefined,
+): boolean {
+  if (!a || !b || a.kind !== b.kind) {
+    return false;
+  }
+  if (a.kind === "root" || a.kind === "pending") {
+    return true;
+  }
+  return sessionChildRelationshipEqual(a, b as SessionChildRelationship);
+}
+
+function sessionChildRelationshipEqual(
+  a: SessionChildRelationship | undefined,
+  b: SessionChildRelationship | undefined,
+): boolean {
+  return !!a
+    && !!b
+    && a.kind === b.kind
+    && a.parentSessionId === b.parentSessionId
+    && (a.sessionLinkId ?? null) === (b.sessionLinkId ?? null)
+    && (a.relation ?? null) === (b.relation ?? null)
+    && (a.workspaceId ?? null) === (b.workspaceId ?? null);
 }
 
 const RETAINED_SESSION_SLOT_WARNING_THRESHOLD = 50;

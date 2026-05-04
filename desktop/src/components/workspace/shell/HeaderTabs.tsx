@@ -427,6 +427,7 @@ export function HeaderTabs() {
         >
           {(close) => (
             <ChatTabsMenu
+              workspaceId={viewModel.selectedWorkspaceId}
               rows={viewModel.menuChatTabs}
               childrenByParentSessionId={viewModel.childrenByParentSessionId}
               renderIcon={renderChatTabIcon}

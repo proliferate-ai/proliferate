@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ProliferateIcon } from "@/components/ui/icons";
-import { offTurnEnd, onTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
+import {
+  offUserFacingTurnEnd,
+  onUserFacingTurnEnd,
+} from "@/lib/integrations/anyharness/turn-end-events";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 export function TurnEndCelebration() {
@@ -15,9 +18,9 @@ export function TurnEndCelebration() {
   }, []);
 
   useEffect(() => {
-    onTurnEnd(handleTurnEnd);
+    onUserFacingTurnEnd(handleTurnEnd);
     return () => {
-      offTurnEnd(handleTurnEnd);
+      offUserFacingTurnEnd(handleTurnEnd);
     };
   }, [handleTurnEnd]);
 
