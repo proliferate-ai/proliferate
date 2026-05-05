@@ -30,6 +30,8 @@ use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
 use crate::{files::safety::resolve_safe_path, git::GitService};
 
+const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
+
 #[derive(Debug, thiserror::Error)]
 pub enum MobilityError {
     #[error("workspace not found: {0}")]
@@ -646,10 +648,13 @@ impl MobilityService {
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
             let events = self.session_service.store().list_events(&session.id)?;
-            let raw_notifications = self
-                .session_service
-                .store()
-                .list_raw_notifications(&session.id)?;
+            let raw_notifications = if include_raw_notifications_in_mobility_archive() {
+                self.session_service
+                    .store()
+                    .list_raw_notifications(&session.id)?
+            } else {
+                Vec::new()
+            };
             let agent_artifacts = collect_agent_artifacts(&session, &workspace_path)?;
 
             bundles.push(WorkspaceMobilitySessionBundleData {
@@ -776,6 +781,19 @@ fn write_workspace_file(repo_root: &Path, file: &MobilityFileData) -> Result<(),
 
 fn is_supported_agent_kind(agent_kind: &str) -> bool {
     matches!(agent_kind, "claude" | "codex")
+}
+
+fn include_raw_notifications_in_mobility_archive() -> bool {
+    env_flag_enabled(INCLUDE_RAW_NOTIFICATIONS_ENV)
+}
+
+fn env_flag_enabled(key: &str) -> bool {
+    let Some(value) = std::env::var_os(key) else {
+        return false;
+    };
+    let value = value.to_string_lossy();
+    let normalized = value.trim().to_ascii_lowercase();
+    !normalized.is_empty() && !matches!(normalized.as_str(), "0" | "false" | "no" | "off")
 }
 
 fn is_active_terminal(terminal: &TerminalRecord) -> bool {

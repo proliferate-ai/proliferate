@@ -98,6 +98,9 @@ AnyHarness code, read the relevant area doc too.
 
 - Read the relevant area doc as early as possible before editing code in that
   area.
+- PR titles and labels must follow the metadata rules in
+  `docs/ci-cd/README.md`. Use exactly one `release:*` label and at least one
+  `area:*` label before marking a PR ready for review.
 - Preserve current behavior unless an explicit behavior change is requested.
 - Prefer ownership-correct extractions over cosmetic churn.
 - Do not leave duplicate old and new code paths behind after a migration.
