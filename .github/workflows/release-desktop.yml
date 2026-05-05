@@ -70,12 +70,21 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Validate release ref
+        if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
+            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
       - name: Checkout
         if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Validate version consistency
-        if: steps.filter.outputs.skip != 'true' && github.event_name == 'push'
+        if: steps.filter.outputs.skip != 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run))
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
@@ -402,8 +411,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
-          if [[ "${GITHUB_REF_NAME}" != desktop-v* ]]; then
-            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_NAME}."
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
+            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}."
             exit 1
           fi
 
