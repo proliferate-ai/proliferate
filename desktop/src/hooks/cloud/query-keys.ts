@@ -35,6 +35,10 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function cloudWorktreeRetentionPolicyKey(userId: string | null) {
+  return [...cloudRootKey(), "worktree-retention-policy", userId] as const;
+}
+
 export function cloudMobilityRootKey() {
   return [...cloudRootKey(), "mobility"] as const;
 }

@@ -12,6 +12,7 @@ use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelem
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const HEALTH_POLL_TIMEOUT: Duration = Duration::from_secs(60);
+const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_STARTUP_RETENTION";
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -334,6 +335,10 @@ mod tests {
 fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, String>) -> Command {
     let mut cmd = Command::new(binary);
     let mut runtime_env = default_anyharness_launch_env();
+    runtime_env.insert(
+        ANYHARNESS_DEFER_STARTUP_RETENTION_ENV.to_string(),
+        "1".to_string(),
+    );
     runtime_env.extend(launch_env.clone());
 
     if let Some(shell_path) = resolve_shell_path() {

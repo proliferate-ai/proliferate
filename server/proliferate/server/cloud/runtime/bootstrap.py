@@ -26,6 +26,7 @@ _CLAUDE_MIN_NODE_MAJOR = 20
 _CLAUDE_MIN_NODE_MINOR = 10
 _RUST_INSTALL_TIMEOUT_SECONDS = 900
 _BUILD_DEPS_INSTALL_TIMEOUT_SECONDS = 300
+_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV = "ANYHARNESS_DEFER_STARTUP_RETENTION"
 
 
 def _sha256_file(path: Path) -> str:
@@ -59,7 +60,10 @@ def build_runtime_env(
     anyharness_data_key: str,
     repo_env_vars: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    env: dict[str, str] = {"ANYHARNESS_DEV_CORS": "1"}
+    env: dict[str, str] = {
+        "ANYHARNESS_DEV_CORS": "1",
+        _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: "1",
+    }
     if is_vendor_telemetry_enabled() and _runtime_sentry_dsn():
         env["ANYHARNESS_SENTRY_DSN"] = _runtime_sentry_dsn()
     if is_vendor_telemetry_enabled() and _runtime_sentry_environment():

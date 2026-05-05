@@ -22,6 +22,7 @@ async def assert_current_schema(
         "cloud_workspace_handoff_op",
         "cloud_workspace_mobility",
         "cloud_sandbox",
+        "cloud_worktree_retention_policy",
         "cloud_workspace",
         "desktop_auth_code",
         "oauth_account",
@@ -124,6 +125,16 @@ async def assert_current_schema(
         }
     )
     assert "uq_cloud_runtime_environment_org_repo_policy" in runtime_indexes
+
+    worktree_policy_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints(
+                "cloud_worktree_retention_policy"
+            )
+        }
+    )
+    assert "ck_cloud_worktree_retention_policy_limit" in worktree_policy_checks
 
     billing_grant_columns = await conn.run_sync(
         lambda sync_conn: {

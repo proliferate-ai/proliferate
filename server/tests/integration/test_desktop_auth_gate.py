@@ -13,6 +13,7 @@ from httpx import AsyncClient
 
 PROTECTED_ENDPOINTS = [
     ("GET", "/v1/cloud/workspaces"),
+    ("GET", "/v1/cloud/worktree-retention-policy"),
     ("GET", "/v1/billing/plan"),
     ("GET", "/v1/billing/cloud-plan"),
     ("GET", "/users/me"),

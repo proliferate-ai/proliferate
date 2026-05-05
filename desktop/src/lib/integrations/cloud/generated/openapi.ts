@@ -369,6 +369,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worktree-retention-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Worktree Retention Policy Endpoint */
+        get: operations["get_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_get"];
+        /** Put Cloud Worktree Retention Policy Endpoint */
+        put: operations["put_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces": {
         parameters: {
             query?: never;
@@ -2027,6 +2045,23 @@ export interface components {
             lastApplyFailedPath: string | null;
             /** Lastapplyerror */
             lastApplyError: string | null;
+        };
+        /** CloudWorktreeRetentionPolicyRequest */
+        CloudWorktreeRetentionPolicyRequest: {
+            /** Maxmaterializedworktreesperrepo */
+            maxMaterializedWorktreesPerRepo: number;
+        };
+        /** CloudWorktreeRetentionPolicyResponse */
+        CloudWorktreeRetentionPolicyResponse: {
+            /** Maxmaterializedworktreesperrepo */
+            maxMaterializedWorktreesPerRepo: number;
+            /** Updatedat */
+            updatedAt: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "persisted" | "default";
         };
         /** ConnectorArgTemplateModel */
         ConnectorArgTemplateModel: {
@@ -4474,6 +4509,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunCloudWorkspaceSetupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
+                };
+            };
+        };
+    };
+    put_cloud_worktree_retention_policy_endpoint_v1_cloud_worktree_retention_policy_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudWorktreeRetentionPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
                 };
             };
             /** @description Validation Error */

@@ -21,6 +21,7 @@ const RETENTION_MAX_REMOVALS_PER_PASS: usize = 20;
 const RETENTION_MAX_CONSIDERED_PER_PASS: usize = 200;
 const RETENTION_MAX_ATTEMPTS_PER_PASS: usize = 50;
 const RETENTION_OPERATION_GATE_TIMEOUT: Duration = Duration::from_millis(150);
+pub const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_STARTUP_RETENTION";
 
 #[derive(Clone)]
 pub struct WorkspaceRetentionService {
@@ -33,6 +34,7 @@ pub struct WorkspaceRetentionService {
     runtime_home: std::path::PathBuf,
     running: Arc<AtomicBool>,
     enabled: bool,
+    defer_startup_pass: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +71,8 @@ impl WorkspaceRetentionService {
         runtime_home: std::path::PathBuf,
     ) -> Self {
         let enabled = std::env::var_os("ANYHARNESS_DISABLE_WORKTREE_RETENTION").is_none();
+        let defer_startup_pass =
+            std::env::var_os(ANYHARNESS_DEFER_STARTUP_RETENTION_ENV).is_some();
         Self {
             workspace_runtime,
             workspace_store,
@@ -79,11 +83,12 @@ impl WorkspaceRetentionService {
             runtime_home,
             running: Arc::new(AtomicBool::new(false)),
             enabled,
+            defer_startup_pass,
         }
     }
 
     pub fn spawn_startup_pass(self: Arc<Self>) {
-        if !self.enabled {
+        if !should_spawn_startup_pass(self.enabled, self.defer_startup_pass) {
             return;
         }
         tokio::spawn(async move {
@@ -453,10 +458,27 @@ fn display_safe_error(message: &str, error: &anyhow::Error) -> String {
     message.to_string()
 }
 
+fn should_spawn_startup_pass(enabled: bool, defer_startup_pass: bool) -> bool {
+    enabled && !defer_startup_pass
+}
+
 struct RunningGuard<'a>(&'a AtomicBool);
 
 impl Drop for RunningGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_spawn_startup_pass;
+
+    #[test]
+    fn startup_deferral_is_startup_only_gate() {
+        assert!(should_spawn_startup_pass(true, false));
+        assert!(!should_spawn_startup_pass(true, true));
+        assert!(!should_spawn_startup_pass(false, false));
+        assert!(!should_spawn_startup_pass(false, true));
     }
 }

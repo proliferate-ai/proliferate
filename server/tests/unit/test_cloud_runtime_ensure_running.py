@@ -311,6 +311,14 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
     ) -> None:
         events.append("relaunch")
 
+    async def _ensure_launcher_defers_startup_retention(
+        _provider: object,
+        _sandbox: object,
+        _runtime_context: object,
+        _workspace: object,
+    ) -> None:
+        events.append("patch_launcher")
+
     monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
     monkeypatch.setattr(ensure_running, "verify_runtime_auth_enforced", _verify)
     monkeypatch.setattr(ensure_running, "load_active_sandbox_for_workspace", _load_active_sandbox)
@@ -321,6 +329,11 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
         _persist,
     )
     monkeypatch.setattr(ensure_running, "_relaunch_runtime", _relaunch)
+    monkeypatch.setattr(
+        ensure_running,
+        "_ensure_launcher_defers_startup_retention",
+        _ensure_launcher_defers_startup_retention,
+    )
 
     runtime_url = await ensure_running.ensure_workspace_runtime_ready(
         workspace,
@@ -329,7 +342,7 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
     )
 
     assert runtime_url == "https://fresh.invalid"
-    assert events == ["connect", "endpoint", "context", "relaunch", "verify"]
+    assert events == ["connect", "endpoint", "context", "patch_launcher", "relaunch", "verify"]
     assert persisted == [(True, "https://fresh.invalid")]
 
 

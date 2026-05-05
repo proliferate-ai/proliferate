@@ -153,6 +153,10 @@ export type PutCloudRepoFileRequest   = components["schemas"]["PutCloudRepoFileR
 export type CloudWorkspaceRepoConfigStatusResponse = components["schemas"]["CloudWorkspaceRepoConfigStatusResponse"];
 export type ResyncCloudWorkspaceFilesResponse = components["schemas"]["ResyncCloudWorkspaceFilesResponse"];
 export type RunCloudWorkspaceSetupResponse = components["schemas"]["RunCloudWorkspaceSetupResponse"];
+export type CloudWorktreeRetentionPolicyRequest =
+  components["schemas"]["CloudWorktreeRetentionPolicyRequest"];
+export type CloudWorktreeRetentionPolicyResponse =
+  components["schemas"]["CloudWorktreeRetentionPolicyResponse"];
 export type CreateCloudWorkspaceRequest = components["schemas"]["CreateCloudWorkspaceRequest"];
 export type GenerateSessionTitleRequest = components["schemas"]["GenerateSessionTitleRequest"];
 export type GenerateSessionTitleResponse = components["schemas"]["GenerateSessionTitleResponse"];

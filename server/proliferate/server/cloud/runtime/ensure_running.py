@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from uuid import UUID
 
 from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
@@ -29,6 +30,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     result_stderr,
     result_stdout,
     run_sandbox_command_logged,
+    runtime_launcher_path,
 )
 
 _DEFAULT_ENDPOINT_HEALTH_ATTEMPTS = 4
@@ -41,6 +43,62 @@ _DAYTONA_RESTART_HEALTH_ATTEMPTS = 45
 _DAYTONA_RESTART_HEALTH_DELAY_SECONDS = 1.0
 _RUNNING_SANDBOX_STATES = frozenset({"running", "started"})
 _RESUMABLE_SANDBOX_STATES = frozenset({"paused", "stopped"})
+_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV = "ANYHARNESS_DEFER_STARTUP_RETENTION"
+
+
+async def _ensure_launcher_defers_startup_retention(
+    provider: SandboxProvider,
+    sandbox: object,
+    runtime_context: SandboxRuntimeContext,
+    workspace_id: UUID,
+) -> None:
+    launcher = shlex.quote(runtime_launcher_path(runtime_context))
+    sentinel = "# Managed by Proliferate: defer startup worktree retention"
+    env_line = f"export {_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV}=1"
+    command = "sh -lc " + shlex.quote(
+        "\n".join(
+            [
+                f"launcher={launcher}",
+                'test -f "$launcher" || exit 1',
+                (
+                    f"if ! grep -q '^export {_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV}=' "
+                    '"$launcher"; then'
+                ),
+                '  tmp="${launcher}.tmp.$$"',
+                (
+                    f"  awk -v sentinel={shlex.quote(sentinel)} "
+                    f"-v line={shlex.quote(env_line)} "
+                    "'BEGIN { inserted=0 } "
+                    "/^exec / && !inserted { print sentinel; print line; inserted=1 } "
+                    "{ print } "
+                    "END { if (!inserted) { print sentinel; print line } }' "
+                    '"$launcher" > "$tmp"'
+                ),
+                '  chmod +x "$tmp"',
+                '  mv "$tmp" "$launcher"',
+                "fi",
+                f"grep -q '^export {_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV}=1$' "
+                '"$launcher"',
+            ]
+        )
+    )
+    patch_result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="ensure_runtime_launcher_startup_retention_deferral",
+        command=command,
+        runtime_context=runtime_context,
+        cwd=runtime_context.runtime_workdir,
+        timeout_seconds=15,
+        log_output_on_success=True,
+    )
+    if result_exit_code(patch_result) != 0:
+        stderr = result_stderr(patch_result) or result_stdout(patch_result)
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime launcher could not be patched for startup retention deferral: "
+            f"{stderr.strip()[:400]}"
+        )
 
 
 async def _relaunch_runtime(
@@ -201,6 +259,12 @@ async def ensure_workspace_runtime_ready(
     # sandbox. We do this after both the cached URL and the fresh provider URL
     # failed health checks.
     runtime_context = await provider.resolve_runtime_context(sandbox)
+    await _ensure_launcher_defers_startup_retention(
+        provider,
+        sandbox,
+        runtime_context,
+        workspace.id,
+    )
     await _relaunch_runtime(provider, sandbox, runtime_context, workspace.id)
     restart_probe_attempts, restart_probe_delay_seconds = _restart_health_wait_config(
         sandbox_record.provider,
@@ -300,6 +364,12 @@ async def ensure_environment_runtime_ready(
         raise CloudRuntimeReconnectError("Cloud runtime is unavailable in the existing sandbox.")
 
     runtime_context = await provider.resolve_runtime_context(sandbox)
+    await _ensure_launcher_defers_startup_retention(
+        provider,
+        sandbox,
+        runtime_context,
+        workspace_id,
+    )
     await _relaunch_runtime(provider, sandbox, runtime_context, workspace_id)
     restart_probe_attempts, restart_probe_delay_seconds = _restart_health_wait_config(
         sandbox_record.provider,

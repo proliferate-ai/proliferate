@@ -100,6 +100,9 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
     runtime_launcher_path,
 )
+from proliferate.server.cloud.runtime.worktree_policy_sync import (
+    sync_cloud_worktree_policy_to_runtime,
+)
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
@@ -618,6 +621,14 @@ async def _launch_and_connect_runtime(
         runtime_token,
         workspace_id=ctx.workspace_id,
     )
+    await sync_cloud_worktree_policy_to_runtime(
+        user_id=ctx.user_id,
+        runtime_url=connected.endpoint.runtime_url,
+        access_token=runtime_token,
+        workspace_id=ctx.workspace_id,
+        run_deferred_startup_cleanup=True,
+        await_deferred_startup_cleanup=False,
+    )
 
     handshake = await _prepare_workspace_in_runtime(
         tracker,
@@ -660,6 +671,14 @@ async def _attach_workspace_to_running_runtime(
         connected.endpoint.runtime_url,
         runtime_token,
         workspace_id=ctx.workspace_id,
+    )
+    await sync_cloud_worktree_policy_to_runtime(
+        user_id=ctx.user_id,
+        runtime_url=connected.endpoint.runtime_url,
+        access_token=runtime_token,
+        workspace_id=ctx.workspace_id,
+        run_deferred_startup_cleanup=True,
+        await_deferred_startup_cleanup=False,
     )
     return await _prepare_workspace_in_runtime(
         tracker,
