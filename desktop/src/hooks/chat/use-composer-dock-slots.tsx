@@ -12,6 +12,7 @@ import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
 } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDelegatedWorkComposer } from "@/hooks/chat/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/use-active-todo-tracker";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
@@ -33,6 +34,16 @@ export function useComposerDockSlots(options?: {
   const delegatedWorkComposer = useDelegatedWorkComposer();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
+
+  useDebugValueChange("composer_slots.inputs", "active_session_refs", {
+    suppressSessionSlots,
+    primaryPendingInteraction,
+    pendingPrompts,
+    activeTodoTracker,
+    delegatedWorkComposer,
+    workspaceStatusPanel,
+    selectedCloudRuntimeState: selectedCloudRuntime.state,
+  });
 
   const interactionPanel: ReactNode | null = primaryPendingInteraction?.kind === "permission"
     ? <ConnectedApprovalCard />

@@ -237,31 +237,78 @@ pub async fn create_worktree(
 )]
 pub async fn list_workspaces(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<Workspace>>, ApiError> {
+    let latency = LatencyRequestContext::from_headers(&headers);
+    let latency_fields = latency_trace_fields(latency.as_ref());
+    let started = Instant::now();
+    tracing::info!(
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] workspace.http.list.request_received"
+    );
     let workspace_runtime = state.workspace_runtime.clone();
+    let records_started = Instant::now();
     let records = run_blocking("list", move || workspace_runtime.list_workspaces())
         .await?
         .map_err(|e| ApiError::internal(e.to_string()))?;
+    tracing::info!(
+        workspace_count = records.len(),
+        elapsed_ms = records_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] workspace.http.list.records_loaded"
+    );
+    let summaries_started = Instant::now();
     let summaries = state
         .session_runtime
         .workspace_execution_summaries()
         .await
         .map_err(|error| ApiError::internal(error.to_string()))?;
-    Ok(Json(
-        records
-            .into_iter()
-            .map(|record| {
-                let workspace_id = record.id.clone();
-                workspace_to_contract_with_summary(
-                    record,
-                    summaries
-                        .get(&workspace_id)
-                        .cloned()
-                        .unwrap_or_else(idle_workspace_execution_summary),
-                )
-            })
-            .collect(),
-    ))
+    tracing::info!(
+        summary_count = summaries.len(),
+        elapsed_ms = summaries_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] workspace.http.list.execution_summaries_loaded"
+    );
+    let response_started = Instant::now();
+    let response = records
+        .into_iter()
+        .map(|record| {
+            let workspace_id = record.id.clone();
+            workspace_to_contract_with_summary(
+                record,
+                summaries
+                    .get(&workspace_id)
+                    .cloned()
+                    .unwrap_or_else(idle_workspace_execution_summary),
+            )
+        })
+        .collect::<Vec<_>>();
+    tracing::info!(
+        workspace_count = response.len(),
+        elapsed_ms = response_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] workspace.http.list.response_built"
+    );
+    Ok(Json(response))
 }
 
 #[utoipa::path(

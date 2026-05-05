@@ -217,6 +217,7 @@ export function useSessionSelectionActions() {
     const measurementOperationId = startMeasurementOperation({
       kind: "session_switch",
       surfaces: [
+        "workspace-shell",
         "chat-surface",
         "session-transcript-pane",
         "transcript-list",
@@ -264,6 +265,7 @@ export function useSessionSelectionActions() {
         const hotOperationId = startMeasurementOperation({
           kind: "session_hot_switch",
           surfaces: [
+            "workspace-shell",
             "chat-surface",
             "session-transcript-pane",
             "transcript-list",
@@ -277,8 +279,13 @@ export function useSessionSelectionActions() {
         if (commitOutcome?.result === "stale") {
           return commitOutcome;
         }
-        const nonce = useHarnessStore.getState().workspaceSelectionNonce;
-        useHarnessStore.getState().setHotPaintGate({
+        const gateState = useHarnessStore.getState();
+        const previousHotOperationId = gateState.hotPaintGate?.operationId ?? null;
+        if (previousHotOperationId && previousHotOperationId !== hotOperationId) {
+          finishOrCancelMeasurementOperation(previousHotOperationId, "aborted");
+        }
+        const nonce = gateState.workspaceSelectionNonce;
+        gateState.setHotPaintGate({
           workspaceId: existingSlot.workspaceId!,
           sessionId,
           nonce,
@@ -293,6 +300,7 @@ export function useSessionSelectionActions() {
         });
         if (hotOperationId) {
           markOperationForNextCommit(hotOperationId, [
+            "workspace-shell",
             "chat-surface",
             "session-transcript-pane",
             "transcript-list",
@@ -583,6 +591,7 @@ export function useSessionSelectionActions() {
     });
     if (measurementOperationId) {
       markOperationForNextCommit(measurementOperationId, [
+        "workspace-shell",
         "chat-surface",
         "session-transcript-pane",
         "transcript-list",

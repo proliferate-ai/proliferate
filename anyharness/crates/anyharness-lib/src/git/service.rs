@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::default_branch::detect_default_branch;
 use super::diff;
@@ -21,21 +21,61 @@ impl GitService {
     }
 
     pub fn status(workspace_id: &str, workspace_path: &Path) -> anyhow::Result<GitStatusSnapshot> {
+        let started = Instant::now();
+        let repo_root_started = Instant::now();
         let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
             .trim()
             .to_string();
         let repo_root_path = PathBuf::from(&repo_root);
+        tracing::info!(
+            workspace_id = %workspace_id,
+            elapsed_ms = repo_root_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.repo_root_resolved"
+        );
 
+        let porcelain_started = Instant::now();
         let raw = run_git_ok(
             &repo_root_path,
             &["status", "--porcelain=v2", "--branch", "-z"],
         )?;
+        tracing::info!(
+            workspace_id = %workspace_id,
+            output_bytes = raw.len(),
+            elapsed_ms = porcelain_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.porcelain_loaded"
+        );
 
+        let parse_started = Instant::now();
         let mut parsed = parse_porcelain_v2(&raw);
+        tracing::info!(
+            workspace_id = %workspace_id,
+            changed_files = parsed.files.len(),
+            elapsed_ms = parse_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.porcelain_parsed"
+        );
 
+        let operation_started = Instant::now();
         parsed.operation = detect_operation(&repo_root_path);
+        tracing::info!(
+            workspace_id = %workspace_id,
+            operation = ?parsed.operation,
+            elapsed_ms = operation_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.operation_detected"
+        );
 
-        enrich_file_stats(&repo_root_path, &mut parsed.files);
+        let enrich_started = Instant::now();
+        enrich_file_stats(workspace_id, &repo_root_path, &mut parsed.files);
+        tracing::info!(
+            workspace_id = %workspace_id,
+            changed_files = parsed.files.len(),
+            elapsed_ms = enrich_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.file_stats_enriched"
+        );
 
         let detached = parsed.branch_head.is_none();
 
@@ -67,9 +107,17 @@ impl GitService {
         .to_string();
         let can_create_pr = !detached && has_upstream && parsed.ahead == 0 && clean;
 
+        let default_branch_started = Instant::now();
         let suggested_base = detect_default_branch(&repo_root_path);
+        tracing::info!(
+            workspace_id = %workspace_id,
+            has_suggested_base = suggested_base.is_some(),
+            elapsed_ms = default_branch_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.default_branch_detected"
+        );
 
-        Ok(GitStatusSnapshot {
+        let snapshot = GitStatusSnapshot {
             workspace_id: workspace_id.to_string(),
             workspace_path: workspace_path.display().to_string(),
             repo_root_path: repo_root,
@@ -104,7 +152,16 @@ impl GitService {
                 },
             },
             files: parsed.files,
-        })
+        };
+        tracing::info!(
+            workspace_id = %workspace_id,
+            changed_files = snapshot.summary.changed_files,
+            additions = snapshot.summary.additions,
+            deletions = snapshot.summary.deletions,
+            elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.status.completed"
+        );
+        Ok(snapshot)
     }
 
     pub fn diff_for_path(workspace_path: &Path, file_path: &str) -> anyhow::Result<GitDiffResult> {
@@ -435,9 +492,22 @@ fn detect_operation(repo_root: &Path) -> GitOperation {
     }
 }
 
-fn enrich_file_stats(repo_root: &Path, files: &mut [GitChangedFile]) {
+fn enrich_file_stats(workspace_id: &str, repo_root: &Path, files: &mut [GitChangedFile]) {
+    let unstaged_started = Instant::now();
     let numstat = run_git(repo_root, &["diff", "--numstat", "-z"]);
+    let unstaged_elapsed_ms = unstaged_started.elapsed().as_millis();
+    let unstaged_success = numstat
+        .as_ref()
+        .map(|output| output.success)
+        .unwrap_or(false);
+
+    let staged_started = Instant::now();
     let staged_numstat = run_git(repo_root, &["diff", "--cached", "--numstat", "-z"]);
+    let staged_elapsed_ms = staged_started.elapsed().as_millis();
+    let staged_success = staged_numstat
+        .as_ref()
+        .map(|output| output.success)
+        .unwrap_or(false);
 
     fn apply_numstats(raw: &str, files: &mut [GitChangedFile]) {
         for chunk in raw.split('\0') {
@@ -472,6 +542,15 @@ fn enrich_file_stats(repo_root: &Path, files: &mut [GitChangedFile]) {
             apply_numstats(&o.stdout, files);
         }
     }
+    tracing::info!(
+        workspace_id = %workspace_id,
+        file_count = files.len(),
+        unstaged_elapsed_ms,
+        unstaged_success,
+        staged_elapsed_ms,
+        staged_success,
+        "[anyharness-latency] git.status.numstat_loaded"
+    );
 }
 
 fn git_command_message(stderr: &str, fallback: &str) -> String {

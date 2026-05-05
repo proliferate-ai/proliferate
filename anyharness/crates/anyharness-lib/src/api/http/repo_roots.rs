@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GitBranchRef, PrepareRepoRootMobilityDestinationRequest,
     PrepareRepoRootMobilityDestinationResponse, ReadWorkspaceFileResponse, RepoRoot, RepoRootKind,
@@ -5,6 +7,7 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     Json,
 };
 
@@ -12,6 +15,7 @@ use super::access::map_access_error;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::files::{map_service_error, read_response_to_contract, run_files_task, FilePathQuery};
+use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces::workspace_to_contract;
 use super::workspaces_contract::detection_result_to_contract;
 use crate::app::AppState;
@@ -28,16 +32,54 @@ use crate::workspaces::types::ResolveRepoRootError;
 )]
 pub async fn list_repo_roots(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<RepoRoot>>, ApiError> {
+    let latency = LatencyRequestContext::from_headers(&headers);
+    let latency_fields = latency_trace_fields(latency.as_ref());
+    let started = Instant::now();
+    tracing::info!(
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] repo_root.http.list.request_received"
+    );
     let repo_root_service = state.repo_root_service.clone();
+    let records_started = Instant::now();
     let repo_roots = run_blocking("list repo roots", move || {
         repo_root_service.list_repo_roots()
     })
     .await?
     .map_err(|error| ApiError::internal(error.to_string()))?;
-    Ok(Json(
-        repo_roots.into_iter().map(repo_root_to_contract).collect(),
-    ))
+    tracing::info!(
+        repo_root_count = repo_roots.len(),
+        elapsed_ms = records_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] repo_root.http.list.records_loaded"
+    );
+    let response_started = Instant::now();
+    let response = repo_roots
+        .into_iter()
+        .map(repo_root_to_contract)
+        .collect::<Vec<_>>();
+    tracing::info!(
+        repo_root_count = response.len(),
+        elapsed_ms = response_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] repo_root.http.list.response_built"
+    );
+    Ok(Json(response))
 }
 
 #[utoipa::path(

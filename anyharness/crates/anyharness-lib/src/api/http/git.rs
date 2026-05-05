@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyharness_contract::v1::{
     CommitRequest, CommitResponse, GitActionAvailability as ContractGitActionAvailability,
     GitBranchDiffFilesResponse, GitBranchRef, GitChangedFile as ContractGitChangedFile,
@@ -9,12 +11,14 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     Json,
 };
 use serde::Deserialize;
 
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
+use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
 use crate::git::types::{
     CommitError, GitActionAvailability as InternalGitActionAvailability,
@@ -40,7 +44,7 @@ fn resolve_workspace_path(
     Ok(std::path::PathBuf::from(workspace.path))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum GitTaskAccess {
     Read,
     Write,
@@ -57,24 +61,62 @@ where
     T: Send + 'static,
     F: FnOnce(String, std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
 {
+    let started = Instant::now();
     // Acquire exactly one operation lease per request. Nested read leases can
     // deadlock behind a queued exclusive retire lease.
     let operation_kind = match access {
         GitTaskAccess::Read => WorkspaceOperationKind::MaterializationRead,
         GitTaskAccess::Write => WorkspaceOperationKind::GitWrite,
     };
+    let lease_started = Instant::now();
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(&workspace_id, operation_kind)
         .await;
+    tracing::info!(
+        workspace_id = %workspace_id,
+        task_label = task_label,
+        access = ?access,
+        elapsed_ms = lease_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        "[anyharness-latency] git.http.task.lease_acquired"
+    );
+    let access_started = Instant::now();
     match access {
         GitTaskAccess::Read => assert_workspace_not_retired(state, &workspace_id)?,
         GitTaskAccess::Write => assert_workspace_mutable(state, &workspace_id)?,
     }
+    tracing::info!(
+        workspace_id = %workspace_id,
+        task_label = task_label,
+        access = ?access,
+        elapsed_ms = access_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        "[anyharness-latency] git.http.task.access_checked"
+    );
     let workspace_runtime = state.workspace_runtime.clone();
     tokio::task::spawn_blocking(move || {
+        let blocking_started = Instant::now();
+        let resolve_started = Instant::now();
         let workspace_path = resolve_workspace_path(&workspace_runtime, &workspace_id)?;
-        task(workspace_id, workspace_path)
+        tracing::info!(
+            workspace_id = %workspace_id,
+            task_label = task_label,
+            elapsed_ms = resolve_started.elapsed().as_millis(),
+            blocking_elapsed_ms = blocking_started.elapsed().as_millis(),
+            "[anyharness-latency] git.http.task.workspace_path_resolved"
+        );
+        let task_started = Instant::now();
+        let result = task(workspace_id.clone(), workspace_path);
+        tracing::info!(
+            workspace_id = %workspace_id,
+            task_label = task_label,
+            success = result.is_ok(),
+            elapsed_ms = task_started.elapsed().as_millis(),
+            blocking_elapsed_ms = blocking_started.elapsed().as_millis(),
+            "[anyharness-latency] git.http.task.completed"
+        );
+        result
     })
     .await
     .map_err(|e| ApiError::internal(format!("{task_label} task failed: {e}")))?
@@ -96,11 +138,24 @@ where
 )]
 pub async fn get_git_status(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GitStatusSnapshot>, ApiError> {
+    let latency = LatencyRequestContext::from_headers(&headers);
+    let latency_fields = latency_trace_fields(latency.as_ref());
+    let started = Instant::now();
+    tracing::info!(
+        workspace_id = %workspace_id,
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] git.http.status.request_received"
+    );
     let snapshot = run_git_task(
         &state,
-        workspace_id,
+        workspace_id.clone(),
         GitTaskAccess::Read,
         "git status",
         |workspace_id, ws_path| {
@@ -111,6 +166,18 @@ pub async fn get_git_status(
     )
     .await?;
 
+    tracing::info!(
+        workspace_id = %workspace_id,
+        changed_files = snapshot.summary.changed_files,
+        included_files = snapshot.summary.included_files,
+        elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] git.http.status.response_ready"
+    );
     Ok(Json(snapshot))
 }
 

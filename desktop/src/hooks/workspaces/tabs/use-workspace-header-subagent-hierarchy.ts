@@ -28,6 +28,8 @@ import {
   type SubagentSessionRelationshipHint,
 } from "@/lib/domain/chat/subagents/session-relationship-hints";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { measureDebugComputation } from "@/lib/infra/debug-measurement";
 
 export interface HeaderSubagentParentRow {
   sessionId: string;
@@ -155,7 +157,20 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     }
   }, [args.workspaceId, recordSessionRelationshipHint, reviewRelationshipHints]);
 
-  return useMemo(() => {
+  useDebugValueChange("header_subagent_hierarchy.inputs", "query_refs", {
+    workspaceId: args.workspaceId,
+    activeSessionId: args.activeSessionId,
+    uniqueSessionIds,
+    subagentQueries,
+    reviewQueries,
+  });
+
+  return useMemo(() => measureDebugComputation({
+    category: "header_subagent_hierarchy.derive",
+    label: "build_hierarchy",
+    keys: ["activeSessionId", "subagentQueries", "reviewQueries", "uniqueSessionIds"],
+    count: (hierarchy) => hierarchy.resolvedSessionIds.size,
+  }, () => {
     const childToParent = new Map<string, string>();
     const parentRowsBySessionId = new Map<string, HeaderSubagentParentRow>();
     const childrenByParentSessionId = new Map<string, HeaderSubagentChildRow[]>();
@@ -215,7 +230,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       childrenByParentSessionId,
       resolvedSessionIds,
     };
-  }, [args.activeSessionId, reviewQueries, subagentQueries, uniqueSessionIds]);
+  }), [args.activeSessionId, reviewQueries, subagentQueries, uniqueSessionIds]);
 }
 
 function buildParentRow(parent: ParentSubagentLinkSummary): HeaderSubagentParentRow {

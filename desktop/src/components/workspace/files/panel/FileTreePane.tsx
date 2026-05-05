@@ -1,4 +1,5 @@
 import {
+  memo,
   useState,
   useEffect,
   useCallback,
@@ -18,6 +19,7 @@ import { FilePlus, FolderPlus } from "@/components/ui/icons";
 import { listOpenTargets, type OpenTarget } from "@/platform/tauri/shell";
 import { FileTreeNode } from "./FileTreeNode";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useNativeContextMenu } from "@/hooks/ui/use-native-context-menu";
 import {
   finishOrCancelMeasurementOperation,
@@ -26,7 +28,7 @@ import {
   type MeasurementOperationId,
 } from "@/lib/infra/debug-measurement";
 
-export function FileTreePane() {
+function FileTreePaneInner() {
   useDebugRenderCount("file-tree");
   const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
   const workspaceUiKey = useWorkspaceViewerTabsStore((s) => s.workspaceUiKey);
@@ -134,6 +136,18 @@ export function FileTreePane() {
   );
 
   const rootEntries = rootQuery.data?.entries;
+  useDebugValueChange("file_tree.inputs", "pane_refs", {
+    anyharnessWorkspaceId,
+    authToken,
+    materializedWorkspaceId,
+    rootEntries,
+    rootQueryStatus: rootQuery.status,
+    runtimeUrl,
+    selectedDirectory,
+    targets,
+    treeStateKey,
+    workspaceUiKey,
+  });
 
   if (rootQuery.isLoading) {
     return withBackgroundContextMenu(
@@ -199,6 +213,9 @@ export function FileTreePane() {
     </DebugProfiler>
   );
 }
+
+export const FileTreePane = memo(FileTreePaneInner);
+FileTreePane.displayName = "FileTreePane";
 
 function FileTreeCreateMenu({
   onNewFile,

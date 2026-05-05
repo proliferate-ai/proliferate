@@ -16,6 +16,7 @@ import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entr
 import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
 import {
   isDebugMeasurementEnabled,
+  recordMeasurementDiagnostic,
   type MeasurementOperationId,
 } from "@/lib/infra/debug-measurement";
 
@@ -422,6 +423,30 @@ const RETAINED_SESSION_SLOT_WARNING_THRESHOLD = 50;
 const retainedSessionSlotWarningEnabled = isDebugMeasurementEnabled();
 let lastRetainedSlotWarningBucket = 0;
 
+if (isDebugMeasurementEnabled()) {
+  let previousHarnessState = useHarnessStore.getState();
+  const unsubscribeHarnessStoreDiagnostics = useHarnessStore.subscribe((state) => {
+    const changedKeys = getChangedHarnessStateKeys(previousHarnessState, state);
+    previousHarnessState = state;
+    if (changedKeys.length === 0) {
+      return;
+    }
+    recordMeasurementDiagnostic({
+      category: "harness_store.write",
+      label: "top_level_keys",
+      keys: changedKeys,
+      count: changedKeys.length,
+      detail: buildHarnessStateWriteDetail(state),
+    });
+  });
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      unsubscribeHarnessStoreDiagnostics();
+    });
+  }
+}
+
 if (retainedSessionSlotWarningEnabled) {
   const unsubscribeRetainedSlotWarning = useHarnessStore.subscribe((state) => {
     const retainedSlotCount = Object.keys(state.sessionSlots).length;
@@ -451,4 +476,39 @@ export function isHotPaintGatePendingForWorkspace(
   workspaceId: string | null | undefined,
 ): boolean {
   return !!workspaceId && gate?.workspaceId === workspaceId;
+}
+
+function getChangedHarnessStateKeys(
+  previous: HarnessState,
+  next: HarnessState,
+): string[] {
+  // Manual top-level allowlist for debug diagnostics. Keep this in sync when
+  // adding harness state that should show up in store-write traces.
+  return [
+    "runtimeUrl",
+    "connectionState",
+    "error",
+    "pendingWorkspaceEntry",
+    "selectedWorkspaceId",
+    "workspaceSelectionNonce",
+    "workspaceArrivalEvent",
+    "activeSessionId",
+    "activeSessionVersion",
+    "sessionActivationIntentEpochByWorkspace",
+    "sessionSlots",
+    "sessionRelationshipHints",
+    "hotPaintGate",
+  ].filter((key) => !Object.is(
+    previous[key as keyof HarnessState],
+    next[key as keyof HarnessState],
+  ));
+}
+
+function buildHarnessStateWriteDetail(state: HarnessState): string {
+  return [
+    `slots=${Object.keys(state.sessionSlots).length}`,
+    `workspace=${state.selectedWorkspaceId ?? "none"}`,
+    `active=${state.activeSessionId ?? "none"}`,
+    `hotGate=${state.hotPaintGate?.kind ?? "none"}`,
+  ].join(" ");
 }

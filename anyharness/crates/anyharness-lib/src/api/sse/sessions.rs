@@ -48,15 +48,30 @@ pub async fn stream_session(
         session_id = %session_id,
         after_seq,
         flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
         "[workspace-latency] session.sse.request_received"
     );
     let acp_manager = state.acp_manager.clone();
+    let live_handle_started = Instant::now();
     let live_handle = acp_manager.get_handle(&session_id).await;
     let live_rx = live_handle.as_ref().map(|handle| handle.subscribe());
+    tracing::info!(
+        session_id = %session_id,
+        has_live_handle = live_handle.is_some(),
+        elapsed_ms = live_handle_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] session.sse.live_handle_checked"
+    );
 
+    let backlog_query_started = Instant::now();
     let backlog_records = state
         .session_service
         .list_session_event_records(&session_id, Some(after_seq), None, None, None)
@@ -67,11 +82,38 @@ pub async fn stream_session(
                 "SESSION_NOT_FOUND",
             )
         })?;
+    tracing::info!(
+        session_id = %session_id,
+        after_seq,
+        backlog_record_count = backlog_records.len(),
+        elapsed_ms = backlog_query_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] session.sse.backlog_records_loaded"
+    );
 
+    let backlog_map_started = Instant::now();
     let backlog = backlog_records
         .into_iter()
         .filter_map(event_record_to_envelope)
         .collect::<Vec<_>>();
+    tracing::info!(
+        session_id = %session_id,
+        after_seq,
+        backlog_count = backlog.len(),
+        elapsed_ms = backlog_map_started.elapsed().as_millis(),
+        total_elapsed_ms = started.elapsed().as_millis(),
+        flow_id = latency_fields.flow_id,
+        flow_kind = latency_fields.flow_kind,
+        flow_source = latency_fields.flow_source,
+        prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
+        "[anyharness-latency] session.sse.backlog_mapped"
+    );
     tracing::info!(
         session_id = %session_id,
         after_seq,
@@ -82,6 +124,7 @@ pub async fn stream_session(
         flow_kind = latency_fields.flow_kind,
         flow_source = latency_fields.flow_source,
         prompt_id = latency_fields.prompt_id,
+        measurement_operation_id = latency_fields.measurement_operation_id,
         "[workspace-latency] session.sse.open"
     );
     let max_sent_seq = Arc::new(AtomicI64::new(
@@ -105,6 +148,7 @@ pub async fn stream_session(
                     return stream::empty().boxed();
                 };
                 let after_seq = max_sent_seq.load(Ordering::Acquire);
+                let replay_started = Instant::now();
                 let replay = match session_service.list_session_event_records(
                     &session_id,
                     Some(after_seq),
@@ -130,6 +174,7 @@ pub async fn stream_session(
                     session_id = %session_id,
                     after_seq,
                     replay_count = replay.len(),
+                    elapsed_ms = replay_started.elapsed().as_millis(),
                     "[workspace-latency] session.sse.await_live_handle.replay"
                 );
                 let replay_stream = stream::iter(replay.into_iter().filter_map({
