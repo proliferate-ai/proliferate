@@ -678,6 +678,12 @@ class TestLaunchAndConnectRuntime:
         async def _set_workspace_status(*_args, **_kwargs) -> None:
             return None
 
+        async def _sync_cloud_worktree_policy_to_runtime(*_args, **_kwargs) -> int:
+            calls.append("sync_cloud_worktree_policy_to_runtime")
+            assert _kwargs["run_deferred_startup_cleanup"] is True
+            assert _kwargs["await_deferred_startup_cleanup"] is False
+            return 20
+
         provider.write_file = _write_file
         provider.resolve_runtime_endpoint = _resolve_runtime_endpoint
 
@@ -708,6 +714,11 @@ class TestLaunchAndConnectRuntime:
             "prepare_remote_mobility_destination",
             _prepare_remote_mobility_destination,
         )
+        monkeypatch.setattr(
+            runtime_provision,
+            "sync_cloud_worktree_policy_to_runtime",
+            _sync_cloud_worktree_policy_to_runtime,
+        )
 
         await runtime_provision._launch_and_connect_runtime(
             tracker,
@@ -723,6 +734,7 @@ class TestLaunchAndConnectRuntime:
             "resolve_runtime_endpoint",
             "wait_for_runtime_health",
             "verify_runtime_auth_enforced",
+            "sync_cloud_worktree_policy_to_runtime",
             "reconcile_remote_agents",
             "resolve_remote_workspace",
             "resolve_runtime_root_head_sha",

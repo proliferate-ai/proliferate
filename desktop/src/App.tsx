@@ -20,6 +20,8 @@ import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
+import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/use-local-worktree-settings-target"
+import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/use-worktree-cleanup-policy"
 import {
   elapsedStartupMs,
   logStartupDebug,
@@ -243,6 +245,7 @@ function AppRuntime() {
         <UpdateRestartDialog />
         <SessionModelAvailabilityDialog />
         <RuntimeInputSyncGate />
+        <WorktreeCleanupPolicySyncGate />
         <InstrumentedRoutes>
           <Route path="/index.html" element={<Navigate to="/" replace />} />
           <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
@@ -310,6 +313,22 @@ function RuntimeInputSyncGate() {
 
 function RuntimeInputSyncRuntimeMount() {
   useRuntimeInputSyncRuntime()
+  return null
+}
+
+function WorktreeCleanupPolicySyncGate() {
+  const preferencesHydrated = useUserPreferencesStore((s) => s._hydrated)
+
+  if (!preferencesHydrated) {
+    return null
+  }
+
+  return <WorktreeCleanupPolicySyncMount />
+}
+
+function WorktreeCleanupPolicySyncMount() {
+  const settings = useLocalWorktreeSettingsTarget()
+  useWorktreeCleanupPolicy(settings.targets, settings.syncPolicyToTarget)
   return null
 }
 

@@ -11,7 +11,12 @@ const worktreeSettingsMocks = vi.hoisted(() => ({
   purgeWorkspace: vi.fn(),
   retryPurge: vi.fn(),
   runRetention: vi.fn(),
-  updatePolicy: vi.fn(),
+  syncPolicyToTarget: vi.fn(),
+}));
+
+const cleanupPolicyMocks = vi.hoisted(() => ({
+  apply: vi.fn(),
+  setDraftValue: vi.fn(),
 }));
 
 const toastStoreMocks = vi.hoisted(() => ({
@@ -25,10 +30,6 @@ vi.mock("@/hooks/workspaces/use-worktree-settings-targets", () => ({
       error: null,
       inventory: { rows: [] },
       isLoading: false,
-      policy: {
-        maxMaterializedWorktreesPerRepo: 20,
-        updatedAt: "2026-05-03T00:00:00Z",
-      },
       target: {
         key: "local:http://localhost:4444:generation:0",
         label: "Local runtime",
@@ -38,6 +39,20 @@ vi.mock("@/hooks/workspaces/use-worktree-settings-targets", () => ({
       },
     }],
     ...worktreeSettingsMocks,
+  }),
+}));
+
+vi.mock("@/hooks/workspaces/use-worktree-cleanup-policy", () => ({
+  useWorktreeCleanupPolicy: () => ({
+    apply: cleanupPolicyMocks.apply,
+    applyDisabledReason: null,
+    canApply: true,
+    draftValue: "20",
+    isApplying: false,
+    parsedDraft: 20,
+    setDraftValue: cleanupPolicyMocks.setDraftValue,
+    statusMessage: null,
+    value: 20,
   }),
 }));
 

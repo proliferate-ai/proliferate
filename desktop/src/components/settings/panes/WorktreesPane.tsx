@@ -12,6 +12,7 @@ import {
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/use-worktree-cleanup-policy";
 import {
   useWorktreeSettingsTargets,
   type WorktreeSettingsTargetState,
@@ -26,6 +27,10 @@ const EMPTY_ROWS: WorktreeInventoryRow[] = [];
 
 export function WorktreesPane() {
   const settings = useWorktreeSettingsTargets();
+  const cleanupPolicy = useWorktreeCleanupPolicy(
+    settings.targets,
+    settings.syncPolicyToTarget,
+  );
   const showToast = useToastStore((state) => state.show);
   const [confirmDelete, setConfirmDelete] = useState<{
     target: WorktreeSettingsTargetState["target"];
@@ -57,8 +62,20 @@ export function WorktreesPane() {
         description="Recommended for most users. Automatic cleanup only removes clean Proliferate-managed checkouts; it does not snapshot, push, or back up work before deleting a checkout."
       />
 
+      <AutomaticCleanupSection
+        draftValue={cleanupPolicy.draftValue}
+        onDraftValueChange={cleanupPolicy.setDraftValue}
+        canApply={cleanupPolicy.canApply && !cleanupPolicy.isApplying}
+        applyDisabledReason={cleanupPolicy.applyDisabledReason}
+        statusMessage={cleanupPolicy.statusMessage}
+        onApply={() => runAction(
+          cleanupPolicy.apply,
+          "Worktree cleanup policy updated.",
+        )}
+      />
+
       {settings.targets.length === 0 ? (
-        <EnvironmentSection title="Runtime roots">
+        <EnvironmentSection title="Current worktrees">
           <EnvironmentPanel>
             <EnvironmentPanelRow>
               <p className="text-sm text-muted-foreground">No runtime roots found.</p>
@@ -69,14 +86,8 @@ export function WorktreesPane() {
         <RuntimeWorktreesSection
           key={targetState.target.key}
           targetState={targetState}
-          onUpdatePolicy={(value) => runAction(
-            () => settings.updatePolicy(targetState.target, {
-              maxMaterializedWorktreesPerRepo: value,
-            }),
-            "Worktree cleanup policy updated.",
-          )}
           onRunCleanup={() => runAction(
-            () => settings.runRetention(targetState.target),
+            () => settings.runRetention(targetState.target, cleanupPolicy.value),
             worktreeRetentionRunMessage,
           )}
           onPruneOrphan={(path) => runAction(
@@ -120,58 +131,55 @@ export function WorktreesPane() {
   );
 }
 
-function RuntimeWorktreesSection({
-  targetState,
-  onUpdatePolicy,
-  onRunCleanup,
-  onPruneOrphan,
-  onPruneWorkspace,
-  onPurgeWorkspace,
-  onRetryPurge,
+function AutomaticCleanupSection({
+  draftValue,
+  onDraftValueChange,
+  canApply,
+  applyDisabledReason,
+  statusMessage,
+  onApply,
 }: {
-  targetState: WorktreeSettingsTargetState;
-  onUpdatePolicy: (value: number) => void;
-  onRunCleanup: () => void;
-  onPruneOrphan: (path: string) => void;
-  onPruneWorkspace: (workspaceId: string) => void;
-  onPurgeWorkspace: (workspaceId: string) => void;
-  onRetryPurge: (workspaceId: string) => void;
+  draftValue: string;
+  onDraftValueChange: (value: string) => void;
+  canApply: boolean;
+  applyDisabledReason: string | null;
+  statusMessage: string | null;
+  onApply: () => void;
 }) {
-  const policy = targetState.policy;
-  const rows = targetState.inventory?.rows ?? EMPTY_ROWS;
-  const [draftValue, setDraftValue] = useState<string | null>(null);
-  const currentValue = policy?.maxMaterializedWorktreesPerRepo ?? 20;
-  const effectiveValue = draftValue ?? String(currentValue);
-  const parsedDraft = Number.parseInt(effectiveValue, 10);
-  const canApply = Number.isInteger(parsedDraft) && parsedDraft >= 10 && parsedDraft <= 100;
-
   return (
     <EnvironmentSection
-      title={targetState.target.label}
-      description={targetState.target.location === "cloud" ? "Cloud runtime" : "Local runtime"}
+      title="Automatic cleanup"
+      description="This policy is global. Inventories and manual actions below remain runtime-specific."
     >
       <EnvironmentPanel>
         <EnvironmentPanelRow>
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <EnvironmentField
-              label="Automatic cleanup"
-              description="When a repo has more managed checkouts than the limit below, Proliferate retires the oldest clean checkouts first. Workspace and session history stay available unless you explicitly delete the workspace."
+              label="Keep up to N materialized managed checkouts per repo"
+              description="When a repo exceeds this limit, Proliferate retires the oldest clean managed checkouts first. Workspace and session history stay available unless you explicitly delete the workspace."
             >
               <div className="w-full max-w-64 space-y-1.5">
-                <Label htmlFor={`worktree-policy-${targetState.target.key}`}>Auto-delete limit</Label>
+                <Label htmlFor="worktree-policy-global">Auto-delete limit</Label>
                 <Input
-                  id={`worktree-policy-${targetState.target.key}`}
+                  id="worktree-policy-global"
                   type="number"
                   min={10}
                   max={100}
-                  value={effectiveValue}
-                  onChange={(event) => setDraftValue(event.target.value)}
+                  value={draftValue}
+                  onChange={(event) => onDraftValueChange(event.target.value)}
                 />
                 <p className="text-xs leading-4 text-muted-foreground">
-                  Default is 20 active checkouts per repo; minimum is 10. Commits, branches, and
-                  pull requests are preserved by Git; uncommitted work is not saved, so dirty
-                  worktrees are skipped.
+                  Default is 20; minimum is 10. Commits, branches, and pull requests are
+                  preserved by Git; dirty worktrees are skipped.
                 </p>
+                {statusMessage ? (
+                  <p className="text-xs leading-4 text-muted-foreground">{statusMessage}</p>
+                ) : null}
+                {applyDisabledReason ? (
+                  <p className="text-xs leading-4 text-muted-foreground">
+                    {applyDisabledReason}
+                  </p>
+                ) : null}
               </div>
             </EnvironmentField>
             <div className="flex shrink-0 gap-2">
@@ -180,32 +188,53 @@ function RuntimeWorktreesSection({
                 variant="outline"
                 size="sm"
                 disabled={!canApply}
-                onClick={() => {
-                  if (!canApply) {
-                    return;
-                  }
-                  onUpdatePolicy(parsedDraft);
-                  setDraftValue(null);
-                }}
+                onClick={onApply}
               >
                 Apply
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={onRunCleanup}>
-                <RefreshCw className="size-4" />
-                Run cleanup
               </Button>
             </div>
           </div>
         </EnvironmentPanelRow>
       </EnvironmentPanel>
+    </EnvironmentSection>
+  );
+}
 
+function RuntimeWorktreesSection({
+  targetState,
+  onRunCleanup,
+  onPruneOrphan,
+  onPruneWorkspace,
+  onPurgeWorkspace,
+  onRetryPurge,
+}: {
+  targetState: WorktreeSettingsTargetState;
+  onRunCleanup: () => void;
+  onPruneOrphan: (path: string) => void;
+  onPruneWorkspace: (workspaceId: string) => void;
+  onPurgeWorkspace: (workspaceId: string) => void;
+  onRetryPurge: (workspaceId: string) => void;
+}) {
+  const rows = targetState.inventory?.rows ?? EMPTY_ROWS;
+
+  return (
+    <EnvironmentSection
+      title={targetState.target.label}
+      description={targetState.target.location === "cloud" ? "Cloud runtime" : "Local runtime"}
+    >
       <EnvironmentPanel>
         <EnvironmentPanelRow>
-          <div className="space-y-1">
-            <h3 className="text-sm font-medium text-foreground">Current worktrees</h3>
-            <p className="text-sm text-muted-foreground">
-              Review managed checkouts, orphaned paths, and workspace history in this runtime.
-            </p>
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h3 className="text-sm font-medium text-foreground">Current worktrees</h3>
+              <p className="text-sm text-muted-foreground">
+                Review managed checkouts, orphaned paths, and workspace history in this runtime.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={onRunCleanup}>
+              <RefreshCw className="size-4" />
+              Run cleanup
+            </Button>
           </div>
         </EnvironmentPanelRow>
         {targetState.isLoading ? (

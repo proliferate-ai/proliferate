@@ -237,6 +237,75 @@ async def verify_runtime_auth_enforced(
     )
 
 
+async def update_runtime_worktree_retention_policy(
+    runtime_url: str,
+    access_token: str,
+    *,
+    max_materialized_worktrees_per_repo: int,
+    workspace_id: UUID | None = None,
+) -> None:
+    sync_started = time.perf_counter()
+    log_cloud_event(
+        "cloud runtime worktree policy sync started",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        max_materialized_worktrees_per_repo=max_materialized_worktrees_per_repo,
+    )
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.put(
+                f"{runtime_url}/v1/worktrees/retention-policy",
+                headers=_auth_headers(access_token),
+                json={
+                    "maxMaterializedWorktreesPerRepo": max_materialized_worktrees_per_repo,
+                },
+            )
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError(
+            "Failed to sync cloud worktree retention policy to the runtime."
+        ) from exc
+    log_cloud_event(
+        "cloud runtime worktree policy sync finished",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        max_materialized_worktrees_per_repo=max_materialized_worktrees_per_repo,
+        elapsed_ms=duration_ms(sync_started),
+    )
+
+
+async def run_runtime_worktree_retention(
+    runtime_url: str,
+    access_token: str,
+    *,
+    workspace_id: UUID | None = None,
+) -> None:
+    run_started = time.perf_counter()
+    log_cloud_event(
+        "cloud runtime deferred worktree retention run started",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+    )
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{runtime_url}/v1/worktrees/retention/run",
+                headers=_auth_headers(access_token),
+                json={},
+            )
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError(
+            "Failed to run deferred cloud worktree retention cleanup."
+        ) from exc
+    log_cloud_event(
+        "cloud runtime deferred worktree retention run finished",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        elapsed_ms=duration_ms(run_started),
+    )
+
+
 async def _list_remote_agents(
     runtime_url: str,
     access_token: str,

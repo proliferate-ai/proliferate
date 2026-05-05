@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   getForwardCompatibleUserPreferenceExtras,
   hasDeprecatedUserPreferenceKeys,
+  isValidWorktreeAutoDeleteLimit,
   migrateUserPreferences,
   NEW_USER_DEFAULTS,
   PERSISTED_RECORD_BACKFILL,
@@ -18,6 +19,9 @@ export {
   NEW_USER_DEFAULTS,
   PERSISTED_RECORD_BACKFILL,
   USER_PREFERENCE_DEFAULTS,
+  WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
+  WORKTREE_AUTO_DELETE_LIMIT_MAX,
+  WORKTREE_AUTO_DELETE_LIMIT_MIN,
 } from "@/lib/domain/preferences/user-preferences";
 export type {
   BranchPrefixType,
@@ -35,6 +39,7 @@ export type {
 const USER_PREFERENCES_KEY = "user_preferences";
 const LEGACY_THEME_KEY = "proliferate-theme";
 const LEGACY_MODE_KEY = "proliferate-mode";
+const WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY = "worktreeAutoDeleteLimitBackfilled";
 
 let persistedPreferenceExtras: Record<string, unknown> = {};
 
@@ -104,6 +109,7 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
+    worktreeAutoDeleteLimit: defaults.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: defaults.pasteAttachmentsEnabled,
     reviewDefaultsByKind: defaults.reviewDefaultsByKind,
     reviewPersonalitiesByKind: defaults.reviewPersonalitiesByKind,
@@ -114,13 +120,22 @@ async function readAll(): Promise<{
   preferences: LegacyUserPreferencesInput;
   shouldPersist: boolean;
   extras: Record<string, unknown>;
+  deferWorktreeAutoDeleteLimitPersist: boolean;
 }> {
   const persisted = await readPersistedValue<Record<string, unknown>>(USER_PREFERENCES_KEY);
   if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
+    const needsWorktreeAdoption = !isValidWorktreeAutoDeleteLimit(
+      persisted.worktreeAutoDeleteLimit,
+    );
+    const extras = getForwardCompatibleUserPreferenceExtras(persisted);
+    if (needsWorktreeAdoption) {
+      extras[WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY] = true;
+    }
     return {
       preferences: pickLegacyUserPreferencesInput(persisted),
       shouldPersist: hasDeprecatedUserPreferenceKeys(persisted),
-      extras: getForwardCompatibleUserPreferenceExtras(persisted),
+      extras,
+      deferWorktreeAutoDeleteLimitPersist: needsWorktreeAdoption,
     };
   }
 
@@ -128,6 +143,7 @@ async function readAll(): Promise<{
     preferences: await readLegacyUserPreferences(),
     shouldPersist: false,
     extras: {},
+    deferWorktreeAutoDeleteLimitPersist: false,
   };
 }
 
@@ -157,6 +173,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
+    worktreeAutoDeleteLimit: state.worktreeAutoDeleteLimit,
     pasteAttachmentsEnabled: state.pasteAttachmentsEnabled,
     reviewDefaultsByKind: state.reviewDefaultsByKind,
     reviewPersonalitiesByKind: state.reviewPersonalitiesByKind,
@@ -166,9 +183,15 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
 function buildPersistedPreferencesRecord(
   preferences: UserPreferences,
 ): Record<string, unknown> {
+  const {
+    worktreeAutoDeleteLimit,
+    ...preferencesWithoutWorktreeAutoDeleteLimit
+  } = preferences;
   return {
     ...persistedPreferenceExtras,
-    ...preferences,
+    ...(hasPendingWorktreeAutoDeleteLimitAdoption()
+      ? preferencesWithoutWorktreeAutoDeleteLimit
+      : { ...preferencesWithoutWorktreeAutoDeleteLimit, worktreeAutoDeleteLimit }),
   };
 }
 
@@ -200,7 +223,24 @@ export async function bootstrapUserPreferences(): Promise<void> {
     ...migrated.preferences,
     _hydrated: true,
   });
-  if (migrated.changed || persisted.shouldPersist) {
+  if (persisted.deferWorktreeAutoDeleteLimitPersist || migrated.changed || persisted.shouldPersist) {
     void persistValue(USER_PREFERENCES_KEY, buildPersistedPreferencesRecord(migrated.preferences));
   }
+}
+
+export function hasPendingWorktreeAutoDeleteLimitAdoption(): boolean {
+  return persistedPreferenceExtras[WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY] === true;
+}
+
+export async function markWorktreeAutoDeleteLimitAdopted(): Promise<void> {
+  if (!hasPendingWorktreeAutoDeleteLimitAdoption()) {
+    return;
+  }
+  const { [WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY]: _removed, ...nextExtras } =
+    persistedPreferenceExtras;
+  persistedPreferenceExtras = nextExtras;
+  await persistValue(
+    USER_PREFERENCES_KEY,
+    buildPersistedPreferencesRecord(selectPersistedSlice(useUserPreferencesStore.getState())),
+  );
 }

@@ -172,6 +172,14 @@ The durable workspace rows are loaded and stored through:
 - Workspace paths should be canonicalized before identity decisions.
 - Workspace env should be derived from durable workspace + repo-root records,
   not reconstructed ad hoc by callers.
+- Worktree retention policy is enforced only by AnyHarness. Desktop and cloud
+  control planes may store desired policy, but they must sync it through the
+  runtime retention policy API before triggering cleanup.
+- Managed launchers may set `ANYHARNESS_DEFER_STARTUP_RETENTION=1` to skip only
+  the automatic startup retention pass until the desired policy is applied.
+  This is distinct from `ANYHARNESS_DISABLE_WORKTREE_RETENTION`, which disables
+  retention more broadly. Post-create and manual retention runs stay enabled
+  when startup retention is deferred.
 
 ## Extension Points
 

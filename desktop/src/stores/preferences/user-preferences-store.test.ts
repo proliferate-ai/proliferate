@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { THEME_PRESETS } from "@/config/theme";
 import {
   bootstrapUserPreferences,
+  hasPendingWorktreeAutoDeleteLimitAdoption,
+  markWorktreeAutoDeleteLimitAdopted,
   migrateUserPreferences,
   PERSISTED_RECORD_BACKFILL,
   USER_PREFERENCE_DEFAULTS,
@@ -57,6 +59,7 @@ describe("user preference migration", () => {
     expect(preferences.readableCodeFontSizeId).toBe("default");
     expect(preferences.transparentChromeEnabled).toBe(false);
     expect(preferences.pasteAttachmentsEnabled).toBe(true);
+    expect(preferences.worktreeAutoDeleteLimit).toBe(20);
   });
 
   it("backfills legacy per-key users with old appearance defaults", async () => {
@@ -99,6 +102,47 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("ship");
     expect(preferences.transparentChromeEnabled).toBe(true);
+  });
+
+  it("marks missing worktree cleanup policy for adoption without persisting immediately", async () => {
+    const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
+    delete persisted.worktreeAutoDeleteLimit;
+    storeMocks.values.set("user_preferences", persisted);
+
+    await bootstrapUserPreferences();
+    await flushPersist();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.worktreeAutoDeleteLimit).toBe(20);
+    expect(hasPendingWorktreeAutoDeleteLimitAdoption()).toBe(true);
+    const nextPersisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(nextPersisted.worktreeAutoDeleteLimit).toBeUndefined();
+    expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBe(true);
+  });
+
+  it("consumes worktree cleanup adoption metadata after adoption", async () => {
+    const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
+    delete persisted.worktreeAutoDeleteLimit;
+    storeMocks.values.set("user_preferences", persisted);
+
+    await bootstrapUserPreferences();
+    useUserPreferencesStore.getState().set("worktreeAutoDeleteLimit", 50);
+    await markWorktreeAutoDeleteLimitAdopted();
+    await flushPersist();
+
+    const nextPersisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(nextPersisted.worktreeAutoDeleteLimit).toBe(50);
+    expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
+  });
+
+  it("sanitizes invalid worktree cleanup policy values to the default", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      worktreeAutoDeleteLimit: 101,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.worktreeAutoDeleteLimit).toBe(20);
   });
 
   it("preserves explicit persisted Ship preferences", async () => {

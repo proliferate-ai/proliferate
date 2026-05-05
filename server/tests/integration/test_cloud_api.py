@@ -21,6 +21,7 @@ from proliferate.db.models.cloud import (
     CloudRuntimeEnvironment,
     CloudSandbox,
     CloudWorkspace,
+    CloudWorktreeRetentionPolicy,
 )
 from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
@@ -210,6 +211,81 @@ def _patch_repo_branches_lookup(
     monkeypatch.setattr(repos_service, "get_github_repo_branches", resolver)
     monkeypatch.setattr(cloud_service, "get_github_repo_branches", resolver)
     monkeypatch.setattr(repo_config_service, "get_repo_branches_for_user", resolver)
+
+
+class TestCloudWorktreeRetentionPolicy:
+    @pytest.mark.asyncio
+    async def test_default_policy_does_not_create_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        tokens = await _register_and_login(client, f"policy-{uuid.uuid4().hex[:8]}@example.com")
+        headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+        first = await client.get("/v1/cloud/worktree-retention-policy", headers=headers)
+        second = await client.get("/v1/cloud/worktree-retention-policy", headers=headers)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json() == {
+            "maxMaterializedWorktreesPerRepo": 20,
+            "updatedAt": "1970-01-01T00:00:00+00:00",
+            "source": "default",
+        }
+        assert second.json() == first.json()
+        rows = (
+            await db_session.execute(
+                select(CloudWorktreeRetentionPolicy).where(
+                    CloudWorktreeRetentionPolicy.user_id == uuid.UUID(tokens["user_id"])
+                )
+            )
+        ).scalars().all()
+        assert rows == []
+
+    @pytest.mark.asyncio
+    async def test_put_persists_policy(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        tokens = await _register_and_login(client, f"policy-{uuid.uuid4().hex[:8]}@example.com")
+        headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+        response = await client.put(
+            "/v1/cloud/worktree-retention-policy",
+            headers=headers,
+            json={"maxMaterializedWorktreesPerRepo": 50},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["maxMaterializedWorktreesPerRepo"] == 50
+        assert payload["source"] == "persisted"
+        assert payload["updatedAt"] != "1970-01-01T00:00:00+00:00"
+        row = (
+            await db_session.execute(
+                select(CloudWorktreeRetentionPolicy).where(
+                    CloudWorktreeRetentionPolicy.user_id == uuid.UUID(tokens["user_id"])
+                )
+            )
+        ).scalar_one()
+        assert row.max_materialized_worktrees_per_repo == 50
+
+    @pytest.mark.asyncio
+    async def test_put_rejects_out_of_range_policy(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        tokens = await _register_and_login(client, f"policy-{uuid.uuid4().hex[:8]}@example.com")
+        response = await client.put(
+            "/v1/cloud/worktree-retention-policy",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            json={"maxMaterializedWorktreesPerRepo": 9},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_worktree_retention_policy"
 
 
 class TestCloudCredentials:

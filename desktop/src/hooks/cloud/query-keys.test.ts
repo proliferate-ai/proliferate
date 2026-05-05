@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cloudBillingKey,
+  cloudWorktreeRetentionPolicyKey,
   cloudWorkspaceConnectionKey,
   cloudWorkspaceRepoConfigStatusKey,
   isCloudWorkspaceConnectionQueryKey,
@@ -14,6 +15,19 @@ describe("cloud query keys", () => {
       ownerScope: "organization",
       organizationId: "org-1",
     })).toEqual(["cloud", "billing", "organization", "org-1"]);
+  });
+
+  it("scopes account policy keys by user", () => {
+    expect(cloudWorktreeRetentionPolicyKey("user-1")).toEqual([
+      "cloud",
+      "worktree-retention-policy",
+      "user-1",
+    ]);
+    expect(cloudWorktreeRetentionPolicyKey("user-2")).toEqual([
+      "cloud",
+      "worktree-retention-policy",
+      "user-2",
+    ]);
   });
 
   it("scopes workspace connection and repo config keys by owner", () => {

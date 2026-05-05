@@ -36,6 +36,10 @@ export type ReviewKindPreference = StoredReviewKindDefaults;
 export type ReviewDefaultsByKind = Record<ReviewDefaultKind, StoredReviewKindDefaults | null>;
 export type ReviewPersonalitiesByKind = StoredReviewPersonalitiesByKind;
 
+export const WORKTREE_AUTO_DELETE_LIMIT_DEFAULT = 20;
+export const WORKTREE_AUTO_DELETE_LIMIT_MIN = 10;
+export const WORKTREE_AUTO_DELETE_LIMIT_MAX = 100;
+
 export interface UserPreferences {
   themePreset: ThemePreset;
   colorMode: ColorMode;
@@ -54,6 +58,7 @@ export interface UserPreferences {
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
+  worktreeAutoDeleteLimit: number;
   pasteAttachmentsEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
   reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
@@ -77,6 +82,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
+  worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
@@ -102,6 +108,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
+  worktreeAutoDeleteLimit: WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
@@ -127,6 +134,7 @@ const USER_PREFERENCE_KEYS = [
   "subagentsEnabled",
   "coworkWorkspaceDelegationEnabled",
   "cloudRuntimeInputSyncEnabled",
+  "worktreeAutoDeleteLimit",
   "pasteAttachmentsEnabled",
   "reviewDefaultsByKind",
   "reviewPersonalitiesByKind",
@@ -168,6 +176,13 @@ export type LegacyUserPreferencesInput =
     defaultChatModelIdByAgentKind?: unknown;
     powersInCodingSessionsEnabled?: unknown;
   };
+
+export function isValidWorktreeAutoDeleteLimit(value: unknown): value is number {
+  return typeof value === "number"
+    && Number.isInteger(value)
+    && value >= WORKTREE_AUTO_DELETE_LIMIT_MIN
+    && value <= WORKTREE_AUTO_DELETE_LIMIT_MAX;
+}
 
 export function pickLegacyUserPreferencesInput(
   value: Record<string, unknown>,
@@ -530,6 +545,11 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
 
   if (typeof next.cloudRuntimeInputSyncEnabled !== "boolean") {
     next.cloudRuntimeInputSyncEnabled = PERSISTED_RECORD_BACKFILL.cloudRuntimeInputSyncEnabled;
+    changed = true;
+  }
+
+  if (!isValidWorktreeAutoDeleteLimit(next.worktreeAutoDeleteLimit)) {
+    next.worktreeAutoDeleteLimit = PERSISTED_RECORD_BACKFILL.worktreeAutoDeleteLimit;
     changed = true;
   }
 

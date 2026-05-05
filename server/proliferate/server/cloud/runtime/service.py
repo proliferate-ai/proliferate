@@ -19,6 +19,9 @@ from proliferate.server.cloud.runtime.ensure_running import (
 )
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.provision import provision_workspace as _provision_workspace
+from proliferate.server.cloud.runtime.worktree_policy_sync import (
+    sync_cloud_worktree_policy_to_runtime,
+)
 from proliferate.utils.crypto import decrypt_text
 
 provision_workspace = _provision_workspace
@@ -123,6 +126,14 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
             status_code=409,
         )
     access_token = decrypt_text(reloaded_environment.runtime_token_ciphertext)
+    await sync_cloud_worktree_policy_to_runtime(
+        user_id=reloaded_workspace.user_id,
+        runtime_url=runtime_url,
+        access_token=access_token,
+        workspace_id=workspace.id,
+        run_deferred_startup_cleanup=True,
+        await_deferred_startup_cleanup=False,
+    )
     ready_agent_kinds = await get_runtime_ready_agent_kinds(
         runtime_url,
         access_token,

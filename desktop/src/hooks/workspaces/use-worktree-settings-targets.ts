@@ -7,15 +7,13 @@ import {
 import type {
   PruneOrphanWorktreeRequest,
   RunWorktreeRetentionResponse,
-  UpdateWorktreeRetentionPolicyRequest,
   WorktreeInventoryResponse,
-  WorktreeRetentionPolicy,
   WorkspacePurgeResponse,
   WorkspaceRetireResponse,
 } from "@anyharness/sdk";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
-import { getCloudWorkspaceConnection } from "@/lib/integrations/cloud/workspaces";
+import { useCallback, useMemo } from "react";
+import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import type { CloudConnectionInfo } from "@/lib/integrations/cloud/client";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
@@ -29,18 +27,13 @@ export interface WorktreeSettingsTarget {
   location: "local" | "cloud";
   runtimeUrl: string;
   runtimeGeneration: number | null;
+  environmentId: string | null;
   authToken?: string | null;
-}
-
-interface WorktreeSettingsTargetData {
-  inventory: WorktreeInventoryResponse;
-  policy: WorktreeRetentionPolicy;
 }
 
 export interface WorktreeSettingsTargetState {
   target: WorktreeSettingsTarget;
   inventory: WorktreeInventoryResponse | null;
-  policy: WorktreeRetentionPolicy | null;
   isLoading: boolean;
   error: Error | null;
 }
@@ -59,10 +52,8 @@ export function useWorktreeSettingsTargets() {
 
   const cloudConnectionQueries = useQueries({
     queries: readyCloudWorkspaces.map((workspace) => ({
-      queryKey: ["worktree-settings", "cloud-connection", workspace.id] as const,
-      queryFn: () => getCloudWorkspaceConnection(workspace.id),
-      staleTime: Number.POSITIVE_INFINITY,
-      retry: 1,
+      ...cloudWorkspaceConnectionQueryOptions(workspace.id),
+      enabled: true,
     })),
   });
 
@@ -71,7 +62,7 @@ export function useWorktreeSettingsTargets() {
     const seen = new Set<string>();
     const trimmedRuntimeUrl = runtimeUrl.trim();
     if (trimmedRuntimeUrl.length > 0) {
-      const key = targetIdentity("local", trimmedRuntimeUrl, 0);
+      const key = targetIdentity("local", trimmedRuntimeUrl, 0, null);
       seen.add(key);
       next.push({
         key,
@@ -79,6 +70,7 @@ export function useWorktreeSettingsTargets() {
         location: "local",
         runtimeUrl: trimmedRuntimeUrl,
         runtimeGeneration: 0,
+        environmentId: null,
       });
     }
 
@@ -91,17 +83,21 @@ export function useWorktreeSettingsTargets() {
       const generation = typeof connection.runtimeGeneration === "number"
         ? connection.runtimeGeneration
         : null;
-      const key = targetIdentity("cloud", connection.runtimeUrl, generation);
+      const environmentId = workspace.runtime?.environmentId ?? null;
+      const key = targetIdentity("cloud", connection.runtimeUrl, generation, environmentId);
       if (seen.has(key)) {
         return;
       }
       seen.add(key);
       next.push({
         key,
-        label: workspace.displayName ?? `${workspace.repo.owner}/${workspace.repo.name}`,
+        label: environmentId
+          ? `Cloud runtime ${environmentId.slice(0, 8)}`
+          : workspace.displayName ?? `${workspace.repo.owner}/${workspace.repo.name}`,
         location: "cloud",
         runtimeUrl: connection.runtimeUrl,
         runtimeGeneration: generation,
+        environmentId,
         authToken: connection.accessToken,
       });
     });
@@ -112,16 +108,12 @@ export function useWorktreeSettingsTargets() {
   const targetDataQueries = useQueries({
     queries: targets.map((target) => ({
       queryKey: targetDataKey(target),
-      queryFn: async (): Promise<WorktreeSettingsTargetData> => {
+      queryFn: async (): Promise<WorktreeInventoryResponse> => {
         const client = getAnyHarnessClient({
           runtimeUrl: target.runtimeUrl,
           authToken: target.authToken,
         });
-        const [inventory, policy] = await Promise.all([
-          client.worktrees.inventory(),
-          client.worktrees.retentionPolicy(),
-        ]);
-        return { inventory, policy };
+        return client.worktrees.inventory();
       },
       enabled: target.runtimeUrl.trim().length > 0,
     })),
@@ -131,14 +123,13 @@ export function useWorktreeSettingsTargets() {
     const query = targetDataQueries[index];
     return {
       target,
-      inventory: query?.data?.inventory ?? null,
-      policy: query?.data?.policy ?? null,
+      inventory: query?.data ?? null,
       isLoading: query?.isLoading ?? false,
       error: query?.error instanceof Error ? query.error : null,
     };
   }), [targetDataQueries, targets]);
 
-  const refreshTarget = async (target: WorktreeSettingsTarget) => {
+  const refreshTarget = useCallback(async (target: WorktreeSettingsTarget) => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: targetDataKey(target) }),
       queryClient.invalidateQueries({
@@ -154,25 +145,37 @@ export function useWorktreeSettingsTargets() {
         queryKey: workspaceCollectionsScopeKey(runtimeUrl),
       }),
     ]);
-  };
+  }, [queryClient, runtimeUrl]);
 
-  const clientForTarget = (target: WorktreeSettingsTarget) => getAnyHarnessClient({
+  const clientForTarget = useCallback((target: WorktreeSettingsTarget) => getAnyHarnessClient({
     runtimeUrl: target.runtimeUrl,
     authToken: target.authToken,
-  });
+  }), []);
+
+  const syncPolicyToTarget = useCallback(async (
+    target: WorktreeSettingsTarget,
+    maxMaterializedWorktreesPerRepo: number,
+    options: { runDeferredCleanup?: boolean } = {},
+  ) => {
+    const client = clientForTarget(target);
+    await client.worktrees.updateRetentionPolicy({ maxMaterializedWorktreesPerRepo });
+    if (options.runDeferredCleanup) {
+      await client.worktrees.runRetention();
+    }
+    await refreshTarget(target);
+  }, [clientForTarget, refreshTarget]);
 
   return {
     targets: targetStates,
     isDiscovering: cloudConnectionQueries.some((query) => query.isLoading),
-    updatePolicy: async (
+    syncPolicyToTarget,
+    runRetention: async (
       target: WorktreeSettingsTarget,
-      input: UpdateWorktreeRetentionPolicyRequest,
-    ) => {
-      await clientForTarget(target).worktrees.updateRetentionPolicy(input);
-      await refreshTarget(target);
-    },
-    runRetention: async (target: WorktreeSettingsTarget): Promise<RunWorktreeRetentionResponse> => {
-      const result = await clientForTarget(target).worktrees.runRetention();
+      maxMaterializedWorktreesPerRepo: number,
+    ): Promise<RunWorktreeRetentionResponse> => {
+      const client = clientForTarget(target);
+      await client.worktrees.updateRetentionPolicy({ maxMaterializedWorktreesPerRepo });
+      const result = await client.worktrees.runRetention();
       await refreshTarget(target);
       return result;
     },
@@ -211,10 +214,12 @@ function targetIdentity(
   location: "local" | "cloud",
   runtimeUrl: string,
   runtimeGeneration: number | null,
+  environmentId: string | null,
 ) {
+  const runtimeIdentity = environmentId ?? runtimeUrl.trim();
   return runtimeGeneration === null
-    ? `${location}:${runtimeUrl.trim()}`
-    : `${location}:${runtimeUrl.trim()}:generation:${runtimeGeneration}`;
+    ? `${location}:${runtimeIdentity}`
+    : `${location}:${runtimeIdentity}:generation:${runtimeGeneration}`;
 }
 
 function targetDataKey(target: WorktreeSettingsTarget) {
@@ -222,7 +227,7 @@ function targetDataKey(target: WorktreeSettingsTarget) {
     "worktree-settings",
     "target",
     target.location,
-    target.runtimeUrl,
+    target.environmentId ?? target.runtimeUrl,
     target.runtimeGeneration,
   ] as const;
 }
