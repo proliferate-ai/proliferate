@@ -206,11 +206,20 @@ Flow:
    - `desktop/package.json`
    - `desktop/src-tauri/tauri.conf.json`
    - `desktop/src-tauri/Cargo.toml`
-2. Push a tag like `desktop-v0.1.0`. The workflow triggers automatically.
-   If you must trigger manually, use `--ref desktop-v<VERSION>` — **never
+2. Commit and merge the version bump to `main`.
+3. From updated `main`, create and push a tag like `desktop-v0.1.0`. The
+   workflow triggers automatically.
+4. Treat pushing the `desktop-v*` tag as the shipping action. The tag-push
+   workflow publishes updater/download assets after the build succeeds, even
+   though the GitHub Release remains a draft.
+5. After the workflow succeeds, manually review the draft GitHub Release:
+   - add a short highlights section at the top
+   - clean up generated release notes if needed
+   - publish the GitHub Release as the human-facing release page
+6. If you must trigger manually, use `--ref desktop-v<VERSION>` — **never
    trigger on `main`**, because the updater manifest version is derived from
    `GITHUB_REF_NAME` and will resolve to `"main"` instead of valid semver.
-3. The workflow:
+7. The workflow:
    - validates version consistency on tag pushes
    - builds the AnyHarness sidecar for each desktop target
    - builds exactly one bundled agent seed for that target from
@@ -224,7 +233,7 @@ Flow:
    - normalizes macOS DMG names to stable arch-specific filenames
    - normalizes macOS updater archive names to stable arch-specific filenames
    - creates a draft GitHub release with generated release notes
-4. The updater publish job then:
+8. The updater publish job then:
    - generates `latest.json`
    - generates `installers.json`
    - uploads signed updater artifacts and public DMG installers to
@@ -279,6 +288,9 @@ Note:
   to S3 or invalidating CloudFront.
 - Real `desktop-v*` tag pushes still publish updater and download assets
   automatically after the draft GitHub release is created.
+- Publishing the GitHub Release does not make the updater live. The updater is
+  made live by the tag-push workflow's S3/CloudFront publish step. The GitHub
+  Release is the public release-notes and artifact archive surface.
 - The release workflow is intentionally fail-closed now: manifest generation
   happens before S3 upload so a broken manifest does not leave a partial updater
   publish behind.
