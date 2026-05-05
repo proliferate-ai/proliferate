@@ -25,6 +25,7 @@ import {
 } from "@/lib/infra/debug-measurement";
 
 const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
+const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;
 
 export function useWorkspaces() {
   const queryClient = useQueryClient();
@@ -38,7 +39,7 @@ export function useWorkspaces() {
     queryFn: async () => {
       const startedAt = startLatencyTimer();
       const operationId = startMeasurementOperation({
-        kind: "workspace_open",
+        kind: "workspace_collections_refresh",
         surfaces: [
           "workspace-shell",
           "workspace-sidebar",
@@ -125,6 +126,10 @@ export function useWorkspaces() {
       }
     },
     enabled: canQuery,
+    staleTime: WORKSPACE_COLLECTIONS_STALE_MS,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
     refetchInterval: (query) =>
       workspaceCollectionsNeedActivityRefresh(query.state.data)
         ? WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS

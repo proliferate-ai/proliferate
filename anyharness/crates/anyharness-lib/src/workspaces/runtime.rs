@@ -419,11 +419,44 @@ impl WorkspaceRuntime {
     }
 
     pub fn list_workspaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
-        self.store
-            .list_execution_surfaces()?
-            .into_iter()
-            .map(reconcile_current_branch)
-            .collect()
+        let started = Instant::now();
+        let store_started = Instant::now();
+        let records = self.store.list_execution_surfaces()?;
+        tracing::info!(
+            workspace_count = records.len(),
+            elapsed_ms = store_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] workspace.runtime.list.store_loaded"
+        );
+
+        let reconcile_started = Instant::now();
+        let mut reconciled = Vec::with_capacity(records.len());
+        let mut slow_reconcile_count = 0_u32;
+        for record in records {
+            let workspace_id = record.id.clone();
+            let kind = record.kind.clone();
+            let item_started = Instant::now();
+            let reconciled_record = reconcile_current_branch(record)?;
+            let item_elapsed_ms = item_started.elapsed().as_millis();
+            if item_elapsed_ms >= 25 {
+                slow_reconcile_count = slow_reconcile_count.saturating_add(1);
+                tracing::info!(
+                    workspace_id = %workspace_id,
+                    kind = %kind,
+                    elapsed_ms = item_elapsed_ms,
+                    "[anyharness-latency] workspace.runtime.list.reconcile_slow"
+                );
+            }
+            reconciled.push(reconciled_record);
+        }
+        tracing::info!(
+            workspace_count = reconciled.len(),
+            slow_reconcile_count,
+            elapsed_ms = reconcile_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] workspace.runtime.list.reconciled"
+        );
+        Ok(reconciled)
     }
 
     pub fn set_lifecycle_cleanup_state(

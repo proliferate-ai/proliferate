@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { WorkspaceFileEntry } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
@@ -37,7 +38,7 @@ interface FileTreeNodeProps {
   targets: OpenTarget[];
 }
 
-export function FileTreeNode({ entry, level, targets }: FileTreeNodeProps) {
+function FileTreeNodeInner({ entry, level, targets }: FileTreeNodeProps) {
   const treeStateKey = useWorkspaceViewerTabsStore((s) => s.treeStateKey);
   const workspaceUiKey = useWorkspaceViewerTabsStore((s) => s.workspaceUiKey);
   const activeTargetKey = useWorkspaceViewerTabsStore((s) => s.activeTargetKey);
@@ -388,6 +389,9 @@ export function FileTreeNode({ entry, level, targets }: FileTreeNodeProps) {
     </div>
   );
 }
+
+export const FileTreeNode = memo(FileTreeNodeInner);
+FileTreeNode.displayName = "FileTreeNode";
 
 function parentDirectoryPath(path: string): string {
   return path.split("/").slice(0, -1).join("/");

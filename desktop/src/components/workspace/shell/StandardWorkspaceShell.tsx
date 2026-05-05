@@ -1,10 +1,13 @@
 import { HomeNextScreen } from "@/components/home/HomeNextScreen";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
 import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
 import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
+import {
+  WorkspaceHeaderTabsViewModelProvider,
+} from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
 import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/WorkspaceShellActionsContext";
 import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
@@ -124,6 +127,17 @@ export function StandardWorkspaceShell() {
   const nativeWorkspaceOverlaysHidden = commandPaletteOpen
     || publishDialog.open
     || nativePortalOverlayOpen;
+  const handleTerminalActivationRequestHandled = useCallback(
+    (request: NonNullable<typeof terminalActivationRequest>) => {
+      layout.setTerminalActivationRequest((current) =>
+        current?.workspaceId === request.workspaceId
+        && current.token === request.token
+          ? null
+          : current
+      );
+    },
+    [layout.setTerminalActivationRequest],
+  );
 
   useMainScreenShortcuts({
     canOpenCommandPalette: hasWorkspaceShell,
@@ -156,6 +170,7 @@ export function StandardWorkspaceShell() {
     <DebugProfiler id="workspace-shell">
       <WorkspaceShellActionsProvider value={shellActions}>
         <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
+          <WorkspaceHeaderTabsViewModelProvider>
           <div
         className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
         data-telemetry-block
@@ -280,14 +295,7 @@ export function StandardWorkspaceShell() {
                       terminalActivationRequest={terminalActivationRequest}
                       focusRequestToken={rightPanelFocusRequestToken}
                       nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                      onTerminalActivationRequestHandled={(request) => {
-                        layout.setTerminalActivationRequest((current) =>
-                          current?.workspaceId === request.workspaceId
-                          && current.token === request.token
-                            ? null
-                            : current
-                        );
-                      }}
+                      onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
                     />
                   </div>
                 </div>
@@ -330,6 +338,7 @@ export function StandardWorkspaceShell() {
           </div>
         </div>
           </div>
+          </WorkspaceHeaderTabsViewModelProvider>
         </WorkspacePathProvider>
       </WorkspaceShellActionsProvider>
     </DebugProfiler>

@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/use-plan-handoff-dialog-state";
@@ -35,13 +36,25 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   const { rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
   const { data: workspaceCollections } = useWorkspaces();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
-  const {
-    activeSessionId,
-    optimisticPrompt,
-    transcript,
-    sessionViewState,
-    oldestLoadedEventSeq,
-  } = useActiveTranscriptPaneState();
+  const immediatePaneState = useActiveTranscriptPaneState();
+  const deferredPaneState = useDeferredValue(immediatePaneState);
+  const transcriptDeferred =
+    deferredPaneState.activeSessionId !== immediatePaneState.activeSessionId;
+  const activeSessionId = transcriptDeferred
+    ? null
+    : deferredPaneState.activeSessionId;
+  const optimisticPrompt = transcriptDeferred
+    ? null
+    : deferredPaneState.optimisticPrompt;
+  const transcript = transcriptDeferred
+    ? null
+    : deferredPaneState.transcript;
+  const sessionViewState = transcriptDeferred
+    ? "idle"
+    : deferredPaneState.sessionViewState;
+  const oldestLoadedEventSeq = transcriptDeferred
+    ? null
+    : deferredPaneState.oldestLoadedEventSeq;
   const selectedWorkspace = useMemo(
     () => selectedWorkspaceId
       ? workspaceCollections?.allWorkspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null
@@ -72,6 +85,21 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     );
     return Object.fromEntries(entries);
   }, [coworkManagedWorkspaces]);
+  useDebugValueChange("transcript_pane.inputs", "active_transcript_refs", {
+    selectedWorkspaceId,
+    immediateActiveSessionId: immediatePaneState.activeSessionId,
+    deferredActiveSessionId: deferredPaneState.activeSessionId,
+    transcriptDeferred,
+    transcript,
+    optimisticPrompt,
+    sessionViewState,
+    oldestLoadedEventSeq,
+    workspaceCollections,
+    selectedWorkspace,
+    selectedCloudWorkspace,
+    coworkManagedWorkspaces,
+    linkedSessionWorkspaces,
+  });
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
   const loadOlderHistory = useCallback(() => {
@@ -171,6 +199,14 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     openWorkspaceSession,
     resolveOpenSessionWorkspaceId,
   ]);
+
+  if (transcriptDeferred) {
+    return (
+      <DebugProfiler id="session-transcript-pane">
+        <div className="h-full min-h-0" />
+      </DebugProfiler>
+    );
+  }
 
   if (!activeSessionId || !transcript) {
     return null;

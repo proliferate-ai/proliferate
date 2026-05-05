@@ -2,7 +2,9 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  memo,
   useRef,
+  type ReactNode,
 } from "react";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import {
@@ -24,6 +26,12 @@ import {
   type HistoryPrependScrollAnchor,
   type TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
+import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript-virtual-rows";
+
+type TranscriptRowRenderer = (
+  row: TranscriptVirtualRow,
+  rowIndex: number,
+) => ReactNode;
 
 interface FullTranscriptRowListProps extends TranscriptRowListBaseProps {
   fallbackReason: string | null;
@@ -236,14 +244,12 @@ export function FullTranscriptRowList({
           )}
           {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
           {rows.map((row, rowIndex) => (
-            <div
+            <MemoizedFullTranscriptRow
               key={row.key}
-              data-transcript-virtual-row="true"
-              data-index={rowIndex}
-              className="w-full"
-            >
-              {renderRow(row, rowIndex)}
-            </div>
+              row={row}
+              rowIndex={rowIndex}
+              renderRow={renderRow}
+            />
           ))}
           {bottomInsetPx > 0 && (
             <div aria-hidden="true" style={{ height: bottomInsetPx }} />
@@ -253,3 +259,27 @@ export function FullTranscriptRowList({
     </AutoHideScrollArea>
   );
 }
+
+const MemoizedFullTranscriptRow = memo(function MemoizedFullTranscriptRow({
+  row,
+  rowIndex,
+  renderRow,
+}: {
+  row: TranscriptVirtualRow;
+  rowIndex: number;
+  renderRow: TranscriptRowRenderer;
+}) {
+  return (
+    <div
+      data-transcript-virtual-row="true"
+      data-index={rowIndex}
+      className="w-full"
+    >
+      {renderRow(row, rowIndex)}
+    </div>
+  );
+}, (prev, next) =>
+  prev.row === next.row
+  && prev.rowIndex === next.rowIndex
+  && prev.renderRow === next.renderRow
+);

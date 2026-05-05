@@ -46,6 +46,35 @@ describe("session-stream-state", () => {
     );
   });
 
+  it("treats empty tail history as a no-op", () => {
+    const state = replaySessionHistory("session-1", [
+      turnStarted(1),
+      assistantStarted(2, "assistant-1", "Hello"),
+    ]);
+
+    const result = appendHistoryTail(state, []);
+
+    expect(result.applied).toBe(false);
+    expect(result.state).toBe(state);
+    expect(result.state.events).toBe(state.events);
+    expect(result.state.transcript).toBe(state.transcript);
+  });
+
+  it("treats duplicate tail history as a no-op", () => {
+    const events = [
+      turnStarted(1),
+      assistantStarted(2, "assistant-1", "Hello"),
+    ];
+    const state = replaySessionHistory("session-1", events);
+
+    const result = appendHistoryTail(state, events);
+
+    expect(result.applied).toBe(false);
+    expect(result.state).toBe(state);
+    expect(result.state.events).toBe(state.events);
+    expect(result.state.transcript).toBe(state.transcript);
+  });
+
   it("applies a contiguous stream batch with one events array copy", () => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
 

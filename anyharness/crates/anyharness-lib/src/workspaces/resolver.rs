@@ -4,14 +4,48 @@ use std::time::Instant;
 
 use super::model::{ParsedRemote, ResolvedGitContext};
 
+const GIT_CONTEXT_SLOW_STEP_MS: u128 = 25;
+
 pub fn resolve_git_context(path: &str) -> anyhow::Result<ResolvedGitContext> {
+    let started = Instant::now();
+    let canonicalize_started = Instant::now();
     let canon = std::fs::canonicalize(path)
         .map_err(|e| anyhow::anyhow!("cannot resolve path '{}': {}", path, e))?;
+    log_git_context_step_if_slow(
+        path,
+        "canonicalize",
+        canonicalize_started.elapsed().as_millis(),
+        true,
+    );
 
+    let repo_root_started = Instant::now();
     let repo_root = git_rev_parse(&canon, "--show-toplevel")?;
+    log_git_context_step_if_slow(
+        path,
+        "rev_parse_show_toplevel",
+        repo_root_started.elapsed().as_millis(),
+        true,
+    );
 
-    let common_dir = git_rev_parse(&canon, "--git-common-dir").ok();
-    let git_dir = git_rev_parse(&canon, "--git-dir").ok();
+    let common_dir_started = Instant::now();
+    let common_dir_result = git_rev_parse(&canon, "--git-common-dir");
+    log_git_context_step_if_slow(
+        path,
+        "rev_parse_git_common_dir",
+        common_dir_started.elapsed().as_millis(),
+        common_dir_result.is_ok(),
+    );
+    let common_dir = common_dir_result.ok();
+
+    let git_dir_started = Instant::now();
+    let git_dir_result = git_rev_parse(&canon, "--git-dir");
+    log_git_context_step_if_slow(
+        path,
+        "rev_parse_git_dir",
+        git_dir_started.elapsed().as_millis(),
+        git_dir_result.is_ok(),
+    );
+    let git_dir = git_dir_result.ok();
 
     let is_worktree = match (&common_dir, &git_dir) {
         (Some(common), Some(git)) => {
@@ -34,8 +68,35 @@ pub fn resolve_git_context(path: &str) -> anyhow::Result<ResolvedGitContext> {
         None
     };
 
-    let current_branch = git_rev_parse(&canon, "--abbrev-ref HEAD").ok();
-    let remote_url = git_config_get(&canon, "remote.origin.url").ok();
+    let branch_started = Instant::now();
+    let current_branch_result = git_rev_parse(&canon, "--abbrev-ref HEAD");
+    log_git_context_step_if_slow(
+        path,
+        "rev_parse_current_branch",
+        branch_started.elapsed().as_millis(),
+        current_branch_result.is_ok(),
+    );
+    let current_branch = current_branch_result.ok();
+
+    let remote_started = Instant::now();
+    let remote_url_result = git_config_get(&canon, "remote.origin.url");
+    log_git_context_step_if_slow(
+        path,
+        "config_remote_origin_url",
+        remote_started.elapsed().as_millis(),
+        remote_url_result.is_ok(),
+    );
+    let remote_url = remote_url_result.ok();
+
+    let total_elapsed_ms = started.elapsed().as_millis();
+    if total_elapsed_ms >= GIT_CONTEXT_SLOW_STEP_MS {
+        tracing::info!(
+            path = %path,
+            is_worktree,
+            elapsed_ms = total_elapsed_ms,
+            "[anyharness-latency] git_context.resolve_slow"
+        );
+    }
 
     Ok(ResolvedGitContext {
         repo_root,
@@ -44,6 +105,19 @@ pub fn resolve_git_context(path: &str) -> anyhow::Result<ResolvedGitContext> {
         current_branch,
         remote_url,
     })
+}
+
+fn log_git_context_step_if_slow(path: &str, step: &str, elapsed_ms: u128, success: bool) {
+    if elapsed_ms < GIT_CONTEXT_SLOW_STEP_MS {
+        return;
+    }
+    tracing::info!(
+        path = %path,
+        step = step,
+        success,
+        elapsed_ms,
+        "[anyharness-latency] git_context.step_slow"
+    );
 }
 
 pub fn parse_remote_url(url: &str) -> Option<ParsedRemote> {

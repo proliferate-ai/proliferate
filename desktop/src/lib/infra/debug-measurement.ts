@@ -14,6 +14,7 @@ export type MeasurementOperationId = AnyHarnessMeasurementOperationId;
 
 export type MeasurementOperationKind =
   | "workspace_open"
+  | "workspace_collections_refresh"
   | "workspace_hot_reopen"
   | "session_switch"
   | "session_hot_switch"
@@ -202,6 +203,16 @@ export type MeasurementMetricInput =
       metric: "react_commit" | "render_count" | "long_task" | "frame_gap";
       durationMs?: number;
       count?: number;
+    }
+  | {
+      type: "diagnostic";
+      category: string;
+      label: string;
+      operationId?: MeasurementOperationId;
+      durationMs?: number;
+      count?: number;
+      keys?: readonly string[];
+      detail?: string | null;
     };
 
 type MeasurementSummaryValue = string | number | boolean | null;
@@ -288,6 +299,15 @@ type MeasurementMetricSnapshot =
       metric: "react_commit" | "render_count" | "long_task" | "frame_gap";
       durationMs: number | null;
       count: number | null;
+    }
+  | {
+      type: "diagnostic";
+      category: string;
+      label: string;
+      durationMs: number | null;
+      count: number | null;
+      keys: string[];
+      detail: string | null;
     };
 
 interface MeasurementOperationSnapshot {
@@ -327,6 +347,9 @@ interface MeasurementAggregateSnapshot {
   maxLongTaskMs: number;
   frameGapCount: number;
   maxFrameGapMs: number;
+  diagnosticCount: number;
+  totalDiagnosticMs: number;
+  maxDiagnosticMs: number;
 }
 
 interface MeasurementMemorySnapshot {
@@ -448,6 +471,13 @@ interface MeasurementStateCountBreakdown {
   maxCount: number;
 }
 
+interface MeasurementDiagnosticBreakdown extends DurationAggregate {
+  category: string;
+  label: string;
+  latestKeys: string;
+  latestDetail: string | null;
+}
+
 export interface MeasurementCategoryBindingInput {
   operationId: MeasurementOperationId;
   categories: readonly MeasurementTimingCategory[];
@@ -485,6 +515,9 @@ interface MeasurementOperationAggregate {
   maxLongTaskMs: number;
   frameGapCount: number;
   maxFrameGapMs: number;
+  diagnosticCount: number;
+  totalDiagnosticMs: number;
+  maxDiagnosticMs: number;
   requestBreakdowns: Map<string, MeasurementRequestBreakdown>;
   streamBreakdowns: Map<string, MeasurementStreamBreakdown>;
   cacheBreakdowns: Map<string, MeasurementCacheBreakdown>;
@@ -493,6 +526,7 @@ interface MeasurementOperationAggregate {
   workflowBreakdowns: Map<string, MeasurementWorkflowBreakdown>;
   stateCountBreakdowns: Map<MeasurementStateCountTarget, MeasurementStateCountBreakdown>;
   surfaceBreakdowns: Map<MeasurementSurface, MeasurementSurfaceBreakdown>;
+  diagnosticBreakdowns: Map<string, MeasurementDiagnosticBreakdown>;
 }
 
 interface MeasurementOperationRecord {
@@ -523,7 +557,9 @@ interface MeasurementCategoryBinding {
 }
 
 const MEASUREMENT_HEADER = "x-proliferate-measurement-operation-id";
-const RECENT_METRIC_LIMIT = 5_000;
+// Diagnostic sessions can generate many short-lived events; this buffer is
+// still dev-only because recordMeasurementMetric exits when measurement is off.
+const RECENT_METRIC_LIMIT = 50_000;
 const RECENT_OPERATION_EVENT_LIMIT = 1_000;
 const RECENT_MEMORY_SAMPLE_LIMIT = 1_000;
 const RECENT_SUMMARY_LIMIT = 500;
@@ -799,6 +835,51 @@ export function recordMeasurementWorkflowStep(input: {
   });
 }
 
+export function recordMeasurementDiagnostic(input: {
+  category: string;
+  label: string;
+  operationId?: MeasurementOperationId | null;
+  startedAt?: number;
+  durationMs?: number;
+  count?: number;
+  keys?: readonly string[];
+  detail?: string | null;
+}): void {
+  recordMeasurementMetric({
+    type: "diagnostic",
+    category: input.category,
+    label: input.label,
+    operationId: input.operationId ?? undefined,
+    durationMs: input.startedAt === undefined
+      ? input.durationMs
+      : now() - input.startedAt,
+    count: input.count,
+    keys: input.keys,
+    detail: input.detail,
+  });
+}
+
+export function measureDebugComputation<T>(input: {
+  category: string;
+  label: string;
+  keys?: readonly string[];
+  count?: (value: T) => number | undefined;
+}, compute: () => T): T {
+  if (!isDebugMeasurementEnabled()) {
+    return compute();
+  }
+  const startedAt = now();
+  const value = compute();
+  recordMeasurementDiagnostic({
+    category: input.category,
+    label: input.label,
+    startedAt,
+    count: input.count?.(value),
+    keys: input.keys,
+  });
+  return value;
+}
+
 export function resetDebugMeasurementForTest(): void {
   for (const operation of operations.values()) {
     clearOperationTimers(operation);
@@ -1026,6 +1107,16 @@ function metricSnapshot(input: MeasurementMetricInput): MeasurementMetricSnapsho
         durationMs: input.durationMs === undefined ? null : round(input.durationMs),
         count: input.count ?? null,
       };
+    case "diagnostic":
+      return {
+        type: "diagnostic",
+        category: input.category,
+        label: input.label,
+        durationMs: input.durationMs === undefined ? null : round(input.durationMs),
+        count: input.count ?? null,
+        keys: [...(input.keys ?? [])],
+        detail: input.detail ?? null,
+      };
   }
 }
 
@@ -1069,6 +1160,9 @@ function aggregateSnapshot(a: MeasurementOperationAggregate): MeasurementAggrega
     maxLongTaskMs: round(a.maxLongTaskMs),
     frameGapCount: a.frameGapCount,
     maxFrameGapMs: round(a.maxFrameGapMs),
+    diagnosticCount: a.diagnosticCount,
+    totalDiagnosticMs: round(a.totalDiagnosticMs),
+    maxDiagnosticMs: round(a.maxDiagnosticMs),
   };
 }
 
@@ -1114,6 +1208,12 @@ function resolveMetricOperationIds(input: MeasurementMetricInput): MeasurementOp
 
   if (input.type === "main_thread") {
     return resolveMainThreadOperationIds(input);
+  }
+
+  if (input.type === "diagnostic") {
+    // Diagnostics describe ambient render/store work, so attach them to every
+    // active operation unless the caller provided a specific operation id.
+    return [...operations.keys()];
   }
 
   if ("category" in input) {
@@ -1275,6 +1375,12 @@ function applyMetric(
         aggregate.maxFrameGapMs = Math.max(aggregate.maxFrameGapMs, input.durationMs ?? 0);
       }
       break;
+    case "diagnostic":
+      aggregate.diagnosticCount += input.count ?? 1;
+      aggregate.totalDiagnosticMs += input.durationMs ?? 0;
+      aggregate.maxDiagnosticMs = Math.max(aggregate.maxDiagnosticMs, input.durationMs ?? 0);
+      applyDiagnosticBreakdown(aggregate, input);
+      break;
   }
 }
 
@@ -1425,6 +1531,25 @@ function applySurfaceBreakdown(
   }
 }
 
+function applyDiagnosticBreakdown(
+  aggregate: MeasurementOperationAggregate,
+  input: Extract<MeasurementMetricInput, { type: "diagnostic" }>,
+): void {
+  const key = `${input.category}:${input.label}`;
+  const breakdown = getOrCreate(aggregate.diagnosticBreakdowns, key, () => ({
+    category: input.category,
+    label: input.label,
+    count: 0,
+    totalMs: 0,
+    maxMs: 0,
+    latestKeys: "",
+    latestDetail: null,
+  }));
+  applyDurationAggregate(breakdown, input.durationMs ?? 0, input.count);
+  breakdown.latestKeys = (input.keys ?? []).join(",");
+  breakdown.latestDetail = input.detail ?? null;
+}
+
 function applyDurationBreakdown(
   map: Map<string, DurationAggregate>,
   key: string,
@@ -1504,6 +1629,9 @@ function printSummaryRow(
     maxLongTaskMs: round(a.maxLongTaskMs),
     frameGapCount: a.frameGapCount,
     maxFrameGapMs: round(a.maxFrameGapMs),
+    diagnosticCount: a.diagnosticCount,
+    totalDiagnosticMs: round(a.totalDiagnosticMs),
+    maxDiagnosticMs: round(a.maxDiagnosticMs),
   }];
 
   for (const breakdown of a.requestBreakdowns.values()) {
@@ -1620,6 +1748,20 @@ function printSummaryRow(
     });
   }
 
+  for (const breakdown of a.diagnosticBreakdowns.values()) {
+    rows.push({
+      ...base,
+      rowKind: "diagnostic",
+      target: `${breakdown.category}:${breakdown.label}`,
+      durationMs: null,
+      count: breakdown.count,
+      totalMs: round(breakdown.totalMs),
+      maxMs: round(breakdown.maxMs),
+      keys: breakdown.latestKeys,
+      detail: breakdown.latestDetail,
+    });
+  }
+
   const payload: MeasurementSummaryPayload = {
     tag: "measurement_summary_json",
     operationId: operation.id,
@@ -1717,6 +1859,9 @@ function createEmptyAggregate(): MeasurementOperationAggregate {
     maxLongTaskMs: 0,
     frameGapCount: 0,
     maxFrameGapMs: 0,
+    diagnosticCount: 0,
+    totalDiagnosticMs: 0,
+    maxDiagnosticMs: 0,
     requestBreakdowns: new Map(),
     streamBreakdowns: new Map(),
     cacheBreakdowns: new Map(),
@@ -1725,6 +1870,7 @@ function createEmptyAggregate(): MeasurementOperationAggregate {
     workflowBreakdowns: new Map(),
     stateCountBreakdowns: new Map(),
     surfaceBreakdowns: new Map(),
+    diagnosticBreakdowns: new Map(),
   };
 }
 

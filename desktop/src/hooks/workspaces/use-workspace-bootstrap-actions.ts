@@ -72,6 +72,45 @@ interface ReconcileHotWorkspaceInput {
 
 const EMPTY_WORKSPACES = [] as const;
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
+const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
+const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
+
+function requestOptionsWithSignal(
+  requestOptions: AnyHarnessRequestOptions | undefined,
+  signal: AbortSignal,
+): AnyHarnessRequestOptions {
+  return {
+    ...requestOptions,
+    signal: requestOptions?.signal ?? signal,
+  };
+}
+
+async function withAbortTimeout<T>(
+  timeoutMs: number | undefined,
+  run: (signal: AbortSignal | null) => Promise<T>,
+): Promise<T> {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return await run(null);
+  }
+
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = globalThis.setTimeout(() => {
+      reject(new Error(`Timed out after ${timeoutMs}ms`));
+      controller.abort();
+    }, timeoutMs);
+  });
+  const runPromise = run(controller.signal);
+  runPromise.catch(() => undefined);
+  try {
+    return await Promise.race([runPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId);
+    }
+  }
+}
 
 async function fetchWorkspaceSessionsWithConnection(
   workspaceConnection: AnyHarnessResolvedConnection,
@@ -79,14 +118,23 @@ async function fetchWorkspaceSessionsWithConnection(
   options?: {
     includeDismissed?: boolean;
     requestOptions?: AnyHarnessRequestOptions;
+    timeoutMs?: number;
   },
 ): Promise<WorkspaceSession[]> {
-  const requestOptions = options?.includeDismissed
-    ? { ...options?.requestOptions, includeDismissed: true }
-    : options?.requestOptions;
-  const sessions = await getAnyHarnessClient(workspaceConnection).sessions.list(
-    workspaceConnection.anyharnessWorkspaceId,
-    requestOptions,
+  const sessions = await withAbortTimeout(
+    options?.timeoutMs,
+    async (signal) => {
+      const timedRequestOptions = signal
+        ? requestOptionsWithSignal(options?.requestOptions, signal)
+        : options?.requestOptions;
+      const requestOptions = options?.includeDismissed
+        ? { ...timedRequestOptions, includeDismissed: true }
+        : timedRequestOptions;
+      return await getAnyHarnessClient(workspaceConnection).sessions.list(
+        workspaceConnection.anyharnessWorkspaceId,
+        requestOptions,
+      );
+    },
   );
   return sessions.map((session) => ({
     ...session,
@@ -113,6 +161,7 @@ async function loadWorkflowWorkspaceSessions(input: {
   workspaceId: string;
   requestOptions?: AnyHarnessRequestOptions;
   forceRefresh?: boolean;
+  timeoutMs?: number;
 }): Promise<WorkspaceSession[]> {
   const cacheState = input.queryClient.getQueryState(input.queryKey);
   const cachedSessions = input.queryClient.getQueryData<WorkspaceSession[]>(input.queryKey);
@@ -131,7 +180,10 @@ async function loadWorkflowWorkspaceSessions(input: {
   const sessions = await fetchWorkspaceSessionsWithConnection(
     input.workspaceConnection,
     input.workspaceId,
-    input.requestOptions ? { requestOptions: input.requestOptions } : undefined,
+    {
+      requestOptions: input.requestOptions,
+      timeoutMs: input.timeoutMs,
+    },
   );
   input.queryClient.setQueryData(input.queryKey, sessions);
   return sessions;
@@ -233,6 +285,7 @@ export function useWorkspaceBootstrapActions() {
         workspaceConnection,
         workspaceId,
         requestOptions: sessionRequestOptions ?? undefined,
+        timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
       }).then((result) => {
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
@@ -299,6 +352,7 @@ export function useWorkspaceBootstrapActions() {
         {
           includeDismissed: true,
           requestOptions: sessionRequestOptions,
+          timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
         },
       ).catch(() => sessions);
       const hasDismissedSessions = hasHiddenDismissedWorkspaceSessions(
@@ -424,6 +478,20 @@ export function useWorkspaceBootstrapActions() {
       }
 
       if (targetSession && isCurrent()) {
+        const currentActiveSessionId = useHarnessStore.getState().activeSessionId;
+        if (currentActiveSessionId && currentActiveSessionId !== targetSession.id) {
+          logLatency("workspace.select.session_select.skipped", {
+            workspaceId,
+            sessionId: targetSession.id,
+            currentActiveSessionId,
+            reason: "active_session_changed",
+            totalElapsedMs: elapsedMs(startedAt),
+          });
+          if (isCurrent()) {
+            markWorkspaceBootstrappedInSession(workspaceId);
+          }
+          return { sessions };
+        }
         logLatency("workspace.select.session_select.start", {
           workspaceId,
           sessionId: targetSession.id,
@@ -552,6 +620,7 @@ export function useWorkspaceBootstrapActions() {
           workspaceId,
           requestOptions: sessionRequestOptions ?? undefined,
           forceRefresh: true,
+          timeoutMs: WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS,
         });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,

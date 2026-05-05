@@ -21,11 +21,28 @@ import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
 import type {
   ReadyCloudReadinessResult,
+  WorkspaceSelectionOptions,
   WorkspaceConnectionResult,
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
   WorkspaceSelectionRequest,
 } from "./types";
+
+function resolveInitialActiveSessionId(
+  workspaceId: string,
+  options: WorkspaceSelectionOptions | undefined,
+  cachedSessionId: string | null,
+): string | null {
+  if (options && "initialActiveSessionId" in options) {
+    return options.initialActiveSessionId ?? null;
+  }
+  if (!cachedSessionId) {
+    return null;
+  }
+
+  const cachedSlot = useHarnessStore.getState().sessionSlots[cachedSessionId] ?? null;
+  return cachedSlot?.workspaceId === workspaceId ? cachedSessionId : null;
+}
 
 async function invalidateCloudWorkspaceStartState(
   deps: WorkspaceSelectionDeps,
@@ -104,7 +121,11 @@ export async function runWorkspaceSelection(
 
       const cachedSessionId =
         useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[directWorkspace.id] ?? null;
-      const initialActiveSessionId = request.options?.initialActiveSessionId ?? cachedSessionId;
+      const initialActiveSessionId = resolveInitialActiveSessionId(
+        directWorkspace.id,
+        request.options,
+        cachedSessionId,
+      );
       deps.setSelectedLogicalWorkspaceId(null);
       deps.setSelectedWorkspace(directWorkspace.id, {
         clearPending: !request.options?.preservePending,
@@ -181,7 +202,11 @@ export async function runWorkspaceSelection(
 
   const cachedSessionId =
     useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[logicalWorkspace.id] ?? null;
-  const initialActiveSessionId = request.options?.initialActiveSessionId ?? cachedSessionId;
+  const initialActiveSessionId = resolveInitialActiveSessionId(
+    resolvedWorkspaceId,
+    request.options,
+    cachedSessionId,
+  );
   deps.setSelectedLogicalWorkspaceId(logicalWorkspace.id);
   deps.setSelectedWorkspace(resolvedWorkspaceId, {
     clearPending: !request.options?.preservePending,

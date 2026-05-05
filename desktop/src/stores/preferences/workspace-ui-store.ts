@@ -41,6 +41,10 @@ import {
 } from "@/lib/domain/workspaces/tabs/shell-file-seed";
 import { sameStringArray } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+import {
+  isDebugMeasurementEnabled,
+  recordMeasurementDiagnostic,
+} from "@/lib/infra/debug-measurement";
 
 export interface WorkspaceUiState {
   _hydrated: boolean;
@@ -1005,11 +1009,16 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   },
 
   setLastViewedSessionForWorkspace: (workspaceId, sessionId) => {
-    set({
-      lastViewedSessionByWorkspace: {
-        ...get().lastViewedSessionByWorkspace,
-        [workspaceId]: sessionId,
-      },
+    set((state) => {
+      if (state.lastViewedSessionByWorkspace[workspaceId] === sessionId) {
+        return state;
+      }
+      return {
+        lastViewedSessionByWorkspace: {
+          ...state.lastViewedSessionByWorkspace,
+          [workspaceId]: sessionId,
+        },
+      };
     });
   },
 
@@ -1104,11 +1113,22 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   },
 
   setVisibleChatSessionIdsForWorkspace: (workspaceId, sessionIds) => {
-    set({
-      visibleChatSessionIdsByWorkspace: {
-        ...get().visibleChatSessionIdsByWorkspace,
-        [workspaceId]: uniqueIds(sessionIds),
-      },
+    const nextSessionIds = uniqueIds(sessionIds);
+    set((state) => {
+      const hasCurrent = Object.prototype.hasOwnProperty.call(
+        state.visibleChatSessionIdsByWorkspace,
+        workspaceId,
+      );
+      const current = state.visibleChatSessionIdsByWorkspace[workspaceId] ?? [];
+      if (hasCurrent && sameStringArray(current, nextSessionIds)) {
+        return state;
+      }
+      return {
+        visibleChatSessionIdsByWorkspace: {
+          ...state.visibleChatSessionIdsByWorkspace,
+          [workspaceId]: nextSessionIds,
+        },
+      };
     });
   },
 
@@ -1253,6 +1273,18 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
 }));
 
 useWorkspaceUiStore.subscribe((state, prev) => {
+  if (isDebugMeasurementEnabled()) {
+    const changedKeys = getChangedWorkspaceUiStateKeys(prev, state);
+    if (changedKeys.length > 0) {
+      recordMeasurementDiagnostic({
+        category: "workspace_ui_store.write",
+        label: "top_level_keys",
+        keys: changedKeys,
+        count: changedKeys.length,
+      });
+    }
+  }
+
   if (!state._hydrated) {
     return;
   }
@@ -1307,4 +1339,41 @@ export function clearViewedSessionErrors(sessionIds: string[]) {
 
 export function ensureRepoGroupExpanded(repoKey: string) {
   useWorkspaceUiStore.getState().ensureRepoGroupExpanded(repoKey);
+}
+
+function getChangedWorkspaceUiStateKeys(
+  previous: WorkspaceUiState,
+  next: WorkspaceUiState,
+): string[] {
+  // Manual top-level allowlist for debug diagnostics. Keep this in sync when
+  // adding workspace UI state that should show up in store-write traces.
+  return [
+    "archivedWorkspaceIds",
+    "hiddenRepoRootIds",
+    "collapsedRepoGroups",
+    "showArchived",
+    "threadsCollapsed",
+    "sidebarOpen",
+    "sidebarWidth",
+    "rightPanelDurableByWorkspace",
+    "rightPanelMaterializedByWorkspace",
+    "activeShellTabKeyByWorkspace",
+    "shellTabOrderByWorkspace",
+    "shellActivationEpochByWorkspace",
+    "pendingChatActivationByWorkspace",
+    "workspaceTypes",
+    "lastViewedAt",
+    "lastViewedSessionByWorkspace",
+    "lastViewedSessionErrorAtBySession",
+    "workspaceLastInteracted",
+    "dismissedSetupFailures",
+    "finishSuggestionDismissalsByWorkspaceId",
+    "visibleChatSessionIdsByWorkspace",
+    "recentlyHiddenChatSessionIdsByWorkspace",
+    "collapsedChatGroupsByWorkspace",
+    "manualChatGroupsByWorkspace",
+  ].filter((key) => !Object.is(
+    previous[key as keyof WorkspaceUiState],
+    next[key as keyof WorkspaceUiState],
+  ));
 }

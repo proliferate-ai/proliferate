@@ -1087,7 +1087,7 @@
   --color-faint: rgba(13, 13, 13, 0.5);
   --color-helper: rgba(13, 13, 13, 0.7);
 
-  --color-card: rgba(255, 255, 255, 0.96);
+  --color-card: rgba(13, 13, 13, 0.035);
   --color-card-foreground: #0d0d0d;
 
   --color-popover: #ffffff;
@@ -1584,6 +1584,52 @@ body {
 
 .animate-brand-mark-fade-out {
   animation: brand-mark-fade-out 0.22s ease-out forwards;
+}
+
+/* ---- Braille sweep loading text ----
+   This must stay CSS-driven. The previous React ticker updated every 60ms and
+   forced the chat shell to commit continuously while a loader was visible. */
+@keyframes braille-sweep-content {
+  0%,
+  6.249% { content: "⠁⠀"; }
+  6.25%,
+  12.499% { content: "⠋⠀"; }
+  12.5%,
+  18.749% { content: "⠟⠁"; }
+  18.75%,
+  24.999% { content: "⡿⠋"; }
+  25%,
+  31.249% { content: "⣿⠟"; }
+  31.25%,
+  37.499% { content: "⣿⡿"; }
+  37.5%,
+  49.999% { content: "⣿⣿"; }
+  50%,
+  56.249% { content: "⣾⣿"; }
+  56.25%,
+  62.499% { content: "⣴⣿"; }
+  62.5%,
+  68.749% { content: "⣠⣾"; }
+  68.75%,
+  74.999% { content: "⢀⣴"; }
+  75%,
+  81.249% { content: "⠀⣠"; }
+  81.25%,
+  87.499% { content: "⠀⢀"; }
+  87.5%,
+  100% { content: "⠀⠀"; }
+}
+
+.braille-sweep-frame::before {
+  content: "⠁⠀";
+  animation: braille-sweep-content 960ms step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .braille-sweep-frame::before {
+    animation: none;
+    content: "⣿⣿";
+  }
 }
 
 /* ---- Toast slide-in ---- */

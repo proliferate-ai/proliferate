@@ -89,6 +89,38 @@ describe("buildTranscriptRowModel", () => {
     ]);
   });
 
+  it("splits large turns into stable display-block rows", () => {
+    const transcript = createTranscriptState("session-1");
+    addTurn(transcript, "turn-large", false);
+    addAssistantItems(transcript, "turn-large", 30);
+
+    const rows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: "turn-large",
+      latestTurnHasAssistantRenderableContent: true,
+    });
+
+    expect(rows).toHaveLength(30);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      kind: "turn",
+      key: "turn:turn-large:block:item-0",
+      turnId: "turn-large",
+      blockKey: "item-0",
+      isFirstTurnRow: true,
+      isLastTurnRow: false,
+    }));
+    expect(rows[29]).toEqual(expect.objectContaining({
+      kind: "turn",
+      key: "turn:turn-large:block:item-29",
+      turnId: "turn-large",
+      blockKey: "item-29",
+      isFirstTurnRow: false,
+      isLastTurnRow: true,
+    }));
+  });
+
   it("reuses unchanged turn rows from the presentation cache", () => {
     const transcript = createTranscriptState("session-1");
     addTurn(transcript, "turn-1", true);
@@ -198,6 +230,29 @@ function addTurn(
     stopReason: completed ? "stop" : null,
     fileBadges: [],
   };
+}
+
+function addAssistantItems(
+  transcript: TranscriptState,
+  turnId: string,
+  count: number,
+) {
+  const turn = transcript.turnsById[turnId];
+  if (!turn) {
+    throw new Error(`missing test turn ${turnId}`);
+  }
+  for (let index = 0; index < count; index += 1) {
+    const itemId = `item-${index}`;
+    turn.itemOrder.push(itemId);
+    transcript.itemsById[itemId] = {
+      kind: "assistant_prose",
+      itemId,
+      turnId,
+      text: `message ${index}`,
+      isStreaming: false,
+      startedSeq: index + 1,
+    } as TranscriptState["itemsById"][string];
+  }
 }
 
 function pendingPrompt(): PendingPromptEntry {

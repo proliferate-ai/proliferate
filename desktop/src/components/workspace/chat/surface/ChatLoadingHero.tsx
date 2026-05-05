@@ -1,6 +1,6 @@
-import { useBrailleSweep } from "@/hooks/ui/use-braille-sweep";
 import { useChatLoadingSubstep } from "@/hooks/chat/use-chat-loading-substep";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { BrailleSweepBadge } from "@/components/ui/icons";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 /**
@@ -15,18 +15,12 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
  */
 export function ChatLoadingHero() {
   useDebugRenderCount("loading-braille");
-  const frame = useBrailleSweep();
   const { caption, workspaceName } = useChatLoadingSubstep();
 
   return (
     <DebugProfiler id="loading-braille">
       <div className="flex flex-col items-center text-center">
-      <span
-        aria-hidden
-        className="font-mono text-6xl leading-none tracking-[-0.18em] text-foreground"
-      >
-        {frame}
-      </span>
+      <BrailleSweepBadge className="text-6xl text-foreground" />
       <p className="mt-6 text-sm font-medium text-muted-foreground">{caption}</p>
       {workspaceName && (
         <p className="mt-1 text-xs text-muted-foreground/70">{workspaceName}</p>

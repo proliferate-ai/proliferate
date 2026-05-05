@@ -1,12 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { BrailleSweepBadge, CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
 import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "@/hooks/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
 import { useCoworkThreads } from "@/hooks/cowork/use-cowork-threads";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
-import { collectWorkspaceSidebarActivityStates } from "@/lib/domain/sessions/activity";
+import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/use-workspace-sidebar-activities";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
@@ -17,9 +16,7 @@ const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 export function CoworkThreadsSection() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const workspaceActivities = useHarnessStore(useShallow((state) =>
-    collectWorkspaceSidebarActivityStates(state.sessionSlots)
-  ));
+  const workspaceActivities = useWorkspaceSidebarActivityStates();
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);
   const { createThread, openThread, isCreatingThread } = useCoworkThreadWorkflow();

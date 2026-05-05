@@ -40,7 +40,7 @@ import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-ta
 import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-actions";
 import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
 import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
-import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 import {
@@ -58,7 +58,7 @@ import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
 export function HeaderTabs() {
   useDebugRenderCount("header-tabs");
-  const viewModel = useWorkspaceHeaderTabsViewModel();
+  const viewModel = useWorkspaceHeaderTabsViewModelContext();
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: viewModel.workspaceUiKey,
     materializedWorkspaceId: viewModel.materializedWorkspaceId,

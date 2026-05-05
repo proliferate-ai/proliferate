@@ -1,3 +1,4 @@
+use std::time::Instant;
 use uuid::Uuid;
 
 use super::model::{CreateRepoRootInput, RepoRootRecord};
@@ -22,7 +23,14 @@ impl RepoRootService {
     }
 
     pub fn list_repo_roots(&self) -> anyhow::Result<Vec<RepoRootRecord>> {
-        self.store.list_all()
+        let started = Instant::now();
+        let records = self.store.list_all()?;
+        tracing::info!(
+            repo_root_count = records.len(),
+            elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] repo_root.service.list.store_loaded"
+        );
+        Ok(records)
     }
 
     pub fn ensure_repo_root(&self, input: CreateRepoRootInput) -> anyhow::Result<RepoRootRecord> {
