@@ -283,6 +283,17 @@ Note:
   happens before S3 upload so a broken manifest does not leave a partial updater
   publish behind.
 
+Useful local wrappers:
+
+```bash
+# Safe build-only workflow dry run. Creates no GitHub release and publishes no updater assets.
+make release-desktop-dry-run DESKTOP_RELEASE_REF=feat/my-branch
+
+# Draft GitHub release preview from an already-pushed desktop tag.
+# Creates a draft release with generated notes, but does not publish updater assets.
+make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
+```
+
 ### Desktop In-App Update Flow
 
 Source of truth:
