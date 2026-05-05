@@ -1,0 +1,111 @@
+name: PR Metadata
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-pr-metadata:
+    name: Validate PR title and labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.setFailed("This workflow must run on a pull request event.");
+              return;
+            }
+
+            if (pr.draft) {
+              core.notice("Draft PR: metadata enforcement starts when the PR is ready for review.");
+              return;
+            }
+
+            const allowedTitleTypes = [
+              "feat",
+              "fix",
+              "perf",
+              "docs",
+              "refactor",
+              "chore",
+              "ci",
+              "test",
+              "build",
+              "release",
+            ];
+            const titlePattern = new RegExp(
+              `^(${allowedTitleTypes.join("|")})\\([a-z0-9][a-z0-9/-]*\\): .+`,
+            );
+
+            const allowedReleaseLabels = new Set([
+              "release:large-feature",
+              "release:minor-feature",
+              "release:performance",
+              "release:fix",
+              "release:docs",
+              "release:maintenance",
+              "release:skip",
+            ]);
+            const allowedAreaLabels = new Set([
+              "area:desktop",
+              "area:anyharness",
+              "area:sdk",
+              "area:server",
+              "area:cloud",
+              "area:docs",
+              "area:website",
+              "area:release",
+              "area:product",
+            ]);
+
+            const labels = pr.labels.map((label) => label.name);
+            const releaseLabels = labels.filter((label) => label.startsWith("release:"));
+            const areaLabels = labels.filter((label) => label.startsWith("area:"));
+            const invalidReleaseLabels = releaseLabels.filter(
+              (label) => !allowedReleaseLabels.has(label),
+            );
+            const invalidAreaLabels = areaLabels.filter(
+              (label) => !allowedAreaLabels.has(label),
+            );
+
+            const errors = [];
+            if (!titlePattern.test(pr.title)) {
+              errors.push(
+                `PR title must match <type>(<scope>): <change>. Allowed types: ${allowedTitleTypes.join(", ")}.`,
+              );
+            }
+            if (releaseLabels.length !== 1) {
+              errors.push(
+                `PR must have exactly one release:* label. Found ${releaseLabels.length}: ${releaseLabels.join(", ") || "none"}.`,
+              );
+            }
+            if (areaLabels.length < 1) {
+              errors.push("PR must have at least one area:* label.");
+            }
+            if (invalidReleaseLabels.length > 0) {
+              errors.push(`Unknown release label(s): ${invalidReleaseLabels.join(", ")}.`);
+            }
+            if (invalidAreaLabels.length > 0) {
+              errors.push(`Unknown area label(s): ${invalidAreaLabels.join(", ")}.`);
+            }
+
+            if (errors.length > 0) {
+              core.setFailed(errors.join("\n"));
+              return;
+            }
+
+            core.notice("PR metadata looks good.");

@@ -7,7 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run (skip GitHub release creation)"
+        description: "Dry run (skip GitHub release creation and updater publish)"
+        type: boolean
+        default: false
+      publish_updater:
+        description: "Publish updater/download assets to S3 and CloudFront on manual runs"
         type: boolean
         default: false
       target_os:
@@ -66,12 +70,21 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Validate release ref
+        if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
+            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
       - name: Checkout
         if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Validate version consistency
-        if: steps.filter.outputs.skip != 'true' && github.event_name == 'push'
+        if: steps.filter.outputs.skip != 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run))
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
@@ -394,6 +407,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
     steps:
+      - name: Validate release ref
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
+            echo "::error::Manual non-dry-run desktop releases must run from a desktop-v* tag ref, not ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -408,8 +430,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Proliferate ${{ github.ref_name }}
+          name: Proliferate Desktop ${{ github.ref_name }}
           draft: true
+          generate_release_notes: true
           files: all-artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -417,7 +440,7 @@ jobs:
   publish-updater:
     needs: [build-desktop, create-release]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run && inputs.publish_updater)
     permissions:
       id-token: write
       contents: read

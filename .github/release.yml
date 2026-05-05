@@ -1,0 +1,26 @@
+changelog:
+  exclude:
+    labels:
+      - release:skip
+  categories:
+    - title: Large Features
+      labels:
+        - release:large-feature
+    - title: Minor Features
+      labels:
+        - release:minor-feature
+    - title: Performance
+      labels:
+        - release:performance
+    - title: Fixes
+      labels:
+        - release:fix
+    - title: Docs
+      labels:
+        - release:docs
+    - title: Maintenance
+      labels:
+        - release:maintenance
+    - title: Other Changes
+      labels:
+        - "*"

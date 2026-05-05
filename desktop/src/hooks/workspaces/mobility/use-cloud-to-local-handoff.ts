@@ -23,6 +23,7 @@ import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobil
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility-preflight-error";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
 import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";
 
@@ -143,7 +144,11 @@ export function useCloudToLocalHandoff(args: {
       const sourcePreflightResult = await sourcePreflightQuery.refetch();
       const sourcePreflightData = sourcePreflightResult.data;
       if (!sourcePreflightData) {
-        throw new Error("Failed to load workspace mobility preflight.");
+        throw new Error(describeMobilityPreflightLoadFailure({
+          error: sourcePreflightResult.error,
+          status: sourcePreflightResult.status,
+          fetchStatus: sourcePreflightResult.fetchStatus,
+        }));
       }
       const sourcePreflight = withRequiredSourceMetadata(
         sourcePreflightData,

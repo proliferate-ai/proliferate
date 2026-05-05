@@ -24,6 +24,10 @@ PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
 LOCAL_CODEX_ACP ?= $(HOME)/codex-acp/target/debug/codex-acp
+DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
+DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
+DESKTOP_RELEASE_TARGET_OS ?= macos
+DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./desktop/package.json').version" 2>/dev/null)
 SERVER_ENV_SOURCE = set -a; \
 	[ ! -f server/.env ] || . server/.env; \
 	[ ! -f server/.env.local ] || . server/.env.local; \
@@ -51,6 +55,7 @@ endif
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build runtime-build desktop-build rebuild \
+        release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
         cloud-runtime-build publish-cloud-template-env-local \
@@ -242,6 +247,49 @@ db-local:
 
 db-ah:
 	@sqlite3 -cmd ".headers on" -cmd ".mode column" $(HOME)/.proliferate-local/anyharness/db.sqlite
+
+# --- Release helpers ---
+
+release-desktop-dry-run:
+	@set -e; \
+	command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required: brew install gh"; exit 1; }; \
+	ref="$(DESKTOP_RELEASE_REF)"; \
+	if [ -z "$$ref" ]; then \
+		echo "DESKTOP_RELEASE_REF is required. Example: make release-desktop-dry-run DESKTOP_RELEASE_REF=feat/my-branch"; \
+		exit 1; \
+	fi; \
+	echo "Triggering $(DESKTOP_RELEASE_WORKFLOW) build dry run on $$ref..."; \
+	gh workflow run "$(DESKTOP_RELEASE_WORKFLOW)" \
+		--ref "$$ref" \
+		-f dry_run=true \
+		-f target_os="$(DESKTOP_RELEASE_TARGET_OS)"; \
+	echo ""; \
+	echo "Next:"; \
+	echo "  gh run list --workflow \"$(DESKTOP_RELEASE_WORKFLOW)\" --limit 5"; \
+	echo "  gh run watch <RUN_ID>"
+
+release-desktop-draft:
+	@set -e; \
+	command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required: brew install gh"; exit 1; }; \
+	tag="$(DESKTOP_RELEASE_TAG)"; \
+	if [ -z "$$tag" ] || [ "$$tag" = "desktop-v" ]; then \
+		echo "DESKTOP_RELEASE_TAG is required. Example: make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28"; \
+		exit 1; \
+	fi; \
+	git ls-remote --exit-code --tags origin "$$tag" >/dev/null || { \
+		echo "Tag $$tag does not exist on origin. Create and push the tag before draft-release preview."; \
+		exit 1; \
+	}; \
+	echo "Triggering $(DESKTOP_RELEASE_WORKFLOW) draft release preview on $$tag with updater publish disabled..."; \
+	gh workflow run "$(DESKTOP_RELEASE_WORKFLOW)" \
+		--ref "$$tag" \
+		-f dry_run=false \
+		-f publish_updater=false \
+		-f target_os="$(DESKTOP_RELEASE_TARGET_OS)"; \
+	echo ""; \
+	echo "Next:"; \
+	echo "  gh run list --workflow \"$(DESKTOP_RELEASE_WORKFLOW)\" --limit 5"; \
+	echo "  gh run watch <RUN_ID>"
 
 # --- Production ops shortcuts ---
 

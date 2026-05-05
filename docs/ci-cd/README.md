@@ -12,9 +12,13 @@ publishing, or the desktop in-app update flow.
   cloud-live-webhook.yml     # manual/nightly live E2B webhook delivery smoke
   release-cloud-template.yml # public E2B cloud template build + publish + staging promote
   promote-cloud-template.yml # manual production promote for public E2B templates
+  pr-metadata.yml            # PR title and release/area label validation
   release-desktop.yml        # desktop packaging, draft release, updater publish
   release-runtime.yml        # AnyHarness binary release + npm publish for @anyharness/sdk
   server-ci.yml              # server lint/test/build-and-push image pipeline
+.github/
+  release.yml                # generated GitHub release-note grouping
+  pull_request_template.md   # PR title, label, and verification checklist
 desktop/
   infra/main.tf              # updater bucket, CloudFront, GitHub OIDC release role
   src-tauri/tauri.conf.json  # updater endpoint, public key, bundle config
@@ -66,8 +70,91 @@ scripts/
   from those files.
 - Preserve public artifact names, release channels, and updater URLs unless an
   explicit product change is requested.
+- PRs must use the repository release metadata standard before they are marked
+  ready for review. Draft PRs are exempt until ready.
 
-## 3. Delivery Flows
+## 3. PR Metadata and Release Notes
+
+Generated GitHub release notes are driven by PR titles and labels. Keep PR
+titles readable for humans and labels precise for automation.
+
+PR titles must use:
+
+```text
+<type>(<scope>): <plain-English change>
+```
+
+Allowed types:
+
+```text
+feat, fix, perf, docs, refactor, chore, ci, test, build, release
+```
+
+Examples:
+
+```text
+feat(desktop): open new chat tabs optimistically
+fix(anyharness): use materialized session IDs for runtime calls
+perf(desktop): avoid header tab rerenders during stream updates
+docs(cloud): clarify local and cloud workspace flows
+ci(release): generate desktop release notes
+```
+
+Every non-draft PR must have exactly one release label:
+
+```text
+release:large-feature
+release:minor-feature
+release:performance
+release:fix
+release:docs
+release:maintenance
+release:skip
+```
+
+Every non-draft PR must have at least one area label:
+
+```text
+area:desktop
+area:anyharness
+area:sdk
+area:server
+area:cloud
+area:docs
+area:website
+area:release
+area:product
+```
+
+Use `release:maintenance` for non-user-facing work such as refactors, tests,
+CI, release infra, dependency bumps, codegen, logging, dev tooling, and cleanup.
+Use `release:skip` only when the PR should not appear in generated release
+notes.
+
+Before making `.github/workflows/pr-metadata.yml` required in branch
+protection, create the full `release:*` and `area:*` label set in GitHub.
+Example:
+
+```bash
+gh label create "release:large-feature" --color "5319e7" --description "Major user-visible product surface"
+gh label create "release:minor-feature" --color "1d76db" --description "Small user-visible improvement"
+gh label create "release:performance" --color "fbca04" --description "Speed, latency, memory, render, or request improvement"
+gh label create "release:fix" --color "d73a4a" --description "Bug fix, crash fix, or correctness fix"
+gh label create "release:docs" --color "0075ca" --description "Documentation, changelog, install guide, or troubleshooting"
+gh label create "release:maintenance" --color "cfd3d7" --description "Refactor, test, CI, dependency, codegen, or tooling work"
+gh label create "release:skip" --color "eeeeee" --description "Exclude from generated release notes"
+gh label create "area:desktop" --color "bfd4f2" --description "Desktop app, Tauri shell, updater, or local app behavior"
+gh label create "area:anyharness" --color "bfdadc" --description "AnyHarness runtime, sessions, workspaces, agents, or contract"
+gh label create "area:sdk" --color "bfdadc" --description "AnyHarness SDK or SDK React package"
+gh label create "area:server" --color "c2e0c6" --description "API server, auth, billing, orgs, or control plane"
+gh label create "area:cloud" --color "c2e0c6" --description "Cloud workspaces, providers, or cloud runtime flows"
+gh label create "area:docs" --color "d4c5f9" --description "Docs site or documentation content"
+gh label create "area:website" --color "d4c5f9" --description "Marketing site or public changelog pages"
+gh label create "area:release" --color "fef2c0" --description "Release workflows, packaging, updater manifests, or publishing"
+gh label create "area:product" --color "fef2c0" --description "Cross-cutting product behavior spanning multiple areas"
+```
+
+## 4. Delivery Flows
 
 ### Continuous Integration
 
@@ -119,11 +206,20 @@ Flow:
    - `desktop/package.json`
    - `desktop/src-tauri/tauri.conf.json`
    - `desktop/src-tauri/Cargo.toml`
-2. Push a tag like `desktop-v0.1.0`. The workflow triggers automatically.
-   If you must trigger manually, use `--ref desktop-v<VERSION>` — **never
+2. Commit and merge the version bump to `main`.
+3. From updated `main`, create and push a tag like `desktop-v0.1.0`. The
+   workflow triggers automatically.
+4. Treat pushing the `desktop-v*` tag as the shipping action. The tag-push
+   workflow publishes updater/download assets after the build succeeds, even
+   though the GitHub Release remains a draft.
+5. After the workflow succeeds, manually review the draft GitHub Release:
+   - add a short highlights section at the top
+   - clean up generated release notes if needed
+   - publish the GitHub Release as the human-facing release page
+6. If you must trigger manually, use `--ref desktop-v<VERSION>` — **never
    trigger on `main`**, because the updater manifest version is derived from
    `GITHUB_REF_NAME` and will resolve to `"main"` instead of valid semver.
-3. The workflow:
+7. The workflow:
    - validates version consistency on tag pushes
    - builds the AnyHarness sidecar for each desktop target
    - builds exactly one bundled agent seed for that target from
@@ -136,8 +232,8 @@ Flow:
    - verifies updater artifacts before release creation
    - normalizes macOS DMG names to stable arch-specific filenames
    - normalizes macOS updater archive names to stable arch-specific filenames
-   - creates a draft GitHub release
-4. The updater publish job then:
+   - creates a draft GitHub release with generated release notes
+8. The updater publish job then:
    - generates `latest.json`
    - generates `installers.json`
    - uploads signed updater artifacts and public DMG installers to
@@ -186,9 +282,29 @@ Note:
   release pipeline has a self-hosted clean macOS runner or VM lane.
 - `dry_run: true` exercises the build matrix but skips `create-release` and
   `publish-updater`.
+- Manual non-dry-run desktop releases must run from a `desktop-v*` tag ref.
+- Manual runs default `publish_updater` to false. Use this to test draft
+  GitHub release creation and generated notes without uploading updater assets
+  to S3 or invalidating CloudFront.
+- Real `desktop-v*` tag pushes still publish updater and download assets
+  automatically after the draft GitHub release is created.
+- Publishing the GitHub Release does not make the updater live. The updater is
+  made live by the tag-push workflow's S3/CloudFront publish step. The GitHub
+  Release is the public release-notes and artifact archive surface.
 - The release workflow is intentionally fail-closed now: manifest generation
   happens before S3 upload so a broken manifest does not leave a partial updater
   publish behind.
+
+Useful local wrappers:
+
+```bash
+# Safe build-only workflow dry run. Creates no GitHub release and publishes no updater assets.
+make release-desktop-dry-run DESKTOP_RELEASE_REF=feat/my-branch
+
+# Draft GitHub release preview from an already-pushed desktop tag.
+# Creates a draft release with generated notes, but does not publish updater assets.
+make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
+```
 
 ### Desktop In-App Update Flow
 
@@ -312,11 +428,14 @@ Current boundary:
 - If you add that rollout later, update this doc, `server/infra/**`, and the
   GitHub workflow together.
 
-## 4. Source of Truth
+## 5. Source of Truth
 
 | Concern | Canonical files |
 | --- | --- |
 | Shared CI for Rust, SDK, and desktop frontend | `.github/workflows/ci.yml` |
+| PR title and release/area label validation | `.github/workflows/pr-metadata.yml` |
+| Generated GitHub release-note grouping | `.github/release.yml` |
+| PR metadata checklist | `.github/pull_request_template.md` |
 | Real-provider cloud lifecycle and cloud-backed runtime CI | `.github/workflows/cloud-tests.yml` |
 | Live ngrok-backed E2B webhook smoke | `.github/workflows/cloud-live-webhook.yml` |
 | Public E2B cloud template build + publish + staging | `.github/workflows/release-cloud-template.yml` |

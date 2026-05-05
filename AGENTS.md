@@ -98,6 +98,9 @@ AnyHarness code, read the relevant area doc too.
 
 - Read the relevant area doc as early as possible before editing code in that
   area.
+- PR titles and labels must follow the metadata rules in
+  `docs/ci-cd/README.md`. Use exactly one `release:*` label and at least one
+  `area:*` label before marking a PR ready for review.
 - Preserve current behavior unless an explicit behavior change is requested.
 - Prefer ownership-correct extractions over cosmetic churn.
 - Do not leave duplicate old and new code paths behind after a migration.
@@ -106,21 +109,10 @@ AnyHarness code, read the relevant area doc too.
 
 ## Desktop Release Procedure
 
-**NEVER trigger `Release Desktop` via `workflow_dispatch` on `main`.** The
-updater manifest version is derived from `${GITHUB_REF_NAME#desktop-v}`. When
-triggered on `main`, the manifest gets `version: "main"` instead of valid
-semver, and the Tauri updater silently ignores it — users never see the update.
-
-Correct procedure:
-
-1. Bump the version in all three files (must match):
-   - `desktop/package.json`
-   - `desktop/src-tauri/tauri.conf.json`
-   - `desktop/src-tauri/Cargo.toml`
-2. Commit and push to `main`.
-3. Create and push a tag: `git tag desktop-v<VERSION> && git push origin desktop-v<VERSION>`
-4. The workflow triggers automatically on the tag push, or run manually
-   **from the tag ref**: `gh workflow run "Release Desktop" --ref desktop-v<VERSION>`
+If you are releasing a new version of the product, read
+`docs/ci-cd/README.md` first. That document is the source of truth for desktop
+version bumps, `desktop-v*` tags, draft GitHub releases, updater publishing,
+release dry runs, and PR release-note metadata.
 
 
 
