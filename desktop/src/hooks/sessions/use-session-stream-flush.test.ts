@@ -1,9 +1,16 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
 import { replaySessionHistory } from "@/lib/integrations/anyharness/session-stream-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  patchSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/session-runtime-pending-config";
 import {
   animationFrameSessionStreamFlushScheduler,
@@ -11,39 +18,38 @@ import {
   type SessionStreamFlushScheduler,
 } from "@/hooks/sessions/use-session-stream-flush";
 
-const originalPatchSessionSlot = useHarnessStore.getState().patchSessionSlot;
+const originalPatchTranscriptEntry = useSessionTranscriptStore.getState().patchEntry;
 
 describe("session stream flush controller", () => {
   afterEach(() => {
     clearPendingConfigRollbackCheck("session-1");
-    useHarnessStore.setState({ patchSessionSlot: originalPatchSessionSlot });
+    useSessionTranscriptStore.setState({ patchEntry: originalPatchTranscriptEntry });
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
   beforeEach(() => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
-    useHarnessStore.setState({
-      runtimeUrl: "http://runtime.test",
+    useSessionSelectionStore.setState({
       selectedWorkspaceId: "workspace-1",
       activeSessionId: "session-1",
-      sessionSlots: {
-        "session-1": {
-          ...createEmptySessionSlot("session-1", "codex", {
-            workspaceId: "workspace-1",
-          }),
-          events: state.events,
-          transcript: state.transcript,
-          transcriptHydrated: true,
-          streamConnectionState: "open",
-        },
-      },
+    });
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
+    putSessionRecord({
+      ...createEmptySessionRecord("session-1", "codex", {
+        workspaceId: "workspace-1",
+      }),
+      events: state.events,
+      transcript: state.transcript,
+      transcriptHydrated: true,
+      streamConnectionState: "open",
     });
   });
 
   it("applies queued stream events with one store patch per scheduled flush", () => {
     const scheduled = createManualScheduler();
-    const patchSpy = spyOnPatchSessionSlot();
+    const patchSpy = spyOnTranscriptPatch();
     const controller = createTestController({ scheduler: scheduled.scheduler });
 
     controller.enqueue(assistantStarted(2, "assistant-1", "Hel"));
@@ -54,14 +60,54 @@ describe("session stream flush controller", () => {
     scheduled.flush();
 
     expect(patchSpy).toHaveBeenCalledTimes(1);
-    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    const slot = getSessionRecord("session-1")!;
     expect(slot.events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
     expect(slot.transcript.lastSeq).toBe(4);
   });
 
+  it("clears optimistic prompt when the stream echoes the user message", () => {
+    const scheduled = createManualScheduler();
+    const controller = createTestController({ scheduler: scheduled.scheduler });
+    patchSessionRecord("session-1", {
+      optimisticPrompt: {
+        seq: -1,
+        promptId: "prompt-1",
+        text: "Ship it",
+        contentParts: [{ type: "text", text: "Ship it" }],
+        queuedAt: "2026-04-04T00:00:01Z",
+        promptProvenance: null,
+      },
+    });
+
+    controller.enqueue(userStarted(2, "user-1", "Ship it"));
+    scheduled.flush();
+
+    expect(getSessionRecord("session-1")?.optimisticPrompt).toBeNull();
+  });
+
+  it("keeps optimistic prompt during status-only stream events", () => {
+    const scheduled = createManualScheduler();
+    const controller = createTestController({ scheduler: scheduled.scheduler });
+    patchSessionRecord("session-1", {
+      optimisticPrompt: {
+        seq: -1,
+        promptId: "prompt-1",
+        text: "Ship it",
+        contentParts: [{ type: "text", text: "Ship it" }],
+        queuedAt: "2026-04-04T00:00:01Z",
+        promptProvenance: null,
+      },
+    });
+
+    controller.enqueue(sessionStateUpdate(2));
+    scheduled.flush();
+
+    expect(getSessionRecord("session-1")?.optimisticPrompt?.text).toBe("Ship it");
+  });
+
   it("applies a contiguous prefix before a gap and reconnects from the new sequence", () => {
     const scheduled = createManualScheduler();
-    const patchSpy = spyOnPatchSessionSlot();
+    const patchSpy = spyOnTranscriptPatch();
     const closeCurrentHandle = vi.fn();
     const scheduleReconnect = vi.fn();
     const controller = createTestController({
@@ -75,7 +121,7 @@ describe("session stream flush controller", () => {
     scheduled.flush();
 
     expect(patchSpy).toHaveBeenCalledTimes(1);
-    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    const slot = getSessionRecord("session-1")!;
     expect(slot.events.map((event) => event.seq)).toEqual([1, 2]);
     expect(slot.transcript.lastSeq).toBe(2);
     expect(slot.streamConnectionState).toBe("disconnected");
@@ -117,7 +163,7 @@ describe("session stream flush controller", () => {
       scheduler: scheduled.scheduler,
       refreshSessionSlotMeta,
     });
-    useHarnessStore.getState().patchSessionSlot("session-1", {
+    patchSessionRecord("session-1", {
       pendingConfigChanges: {
         effort: {
           rawConfigId: "effort",
@@ -140,7 +186,7 @@ describe("session stream flush controller", () => {
     vi.useFakeTimers();
     vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
-    const patchSpy = spyOnPatchSessionSlot();
+    const patchSpy = spyOnTranscriptPatch();
     const controller = createTestController();
 
     controller.enqueue(assistantStarted(2, "assistant-1", "Hello"));
@@ -148,7 +194,7 @@ describe("session stream flush controller", () => {
     vi.advanceTimersByTime(100);
 
     expect(patchSpy).toHaveBeenCalledTimes(1);
-    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    const slot = getSessionRecord("session-1")!;
     expect(slot.events.map((event) => event.seq)).toEqual([1, 2]);
   });
 
@@ -234,10 +280,10 @@ function createManualScheduler() {
   };
 }
 
-function spyOnPatchSessionSlot() {
-  const patchSpy = vi.fn(originalPatchSessionSlot);
-  useHarnessStore.setState({
-    patchSessionSlot: patchSpy,
+function spyOnTranscriptPatch() {
+  const patchSpy = vi.fn(originalPatchTranscriptEntry);
+  useSessionTranscriptStore.setState({
+    patchEntry: patchSpy,
   });
   return patchSpy;
 }
@@ -281,6 +327,42 @@ function assistantStarted(
         sourceAgentKind: "claude",
         contentParts: [{ type: "text", text }],
       },
+    },
+  };
+}
+
+function userStarted(
+  seq: number,
+  itemId: string,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_started",
+      item: {
+        kind: "user_message",
+        status: "completed",
+        sourceAgentKind: "codex",
+        contentParts: [{ type: "text", text }],
+      },
+    },
+  };
+}
+
+function sessionStateUpdate(seq: number): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    event: {
+      type: "session_state_update",
+      modelId: "codex-model",
     },
   };
 }

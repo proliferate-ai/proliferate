@@ -46,10 +46,11 @@ export function UserMessage({
   return (
     <div
       className={showCopyButton ? "group/msg flex justify-end" : "flex justify-end"}
+      data-chat-user-message
     >
       <div className="flex w-full flex-col items-end justify-end gap-1">
         {hasAttachments && (
-          <div className="w-full max-w-xl self-end lg:max-w-3xl">
+          <div className="w-full max-w-xl self-end lg:max-w-3xl" data-telemetry-mask>
             <PromptContentRenderer
               sessionId={sessionId}
               parts={contentParts}
@@ -61,7 +62,10 @@ export function UserMessage({
           </div>
         )}
         {shouldRenderTextBubble && (
-          <div className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground">
+          <div
+            className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground"
+            data-telemetry-mask
+          >
             <div
               ref={textRef}
               className={`break-words select-text${

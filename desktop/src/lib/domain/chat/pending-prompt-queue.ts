@@ -28,6 +28,7 @@ export interface PendingPromptQueueRow {
 export function derivePendingPromptQueueRow(
   entry: PendingPromptQueueEntry,
 ): PendingPromptQueueRow {
+  const isRuntimeConfirmed = entry.seq > 0;
   const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
     ? entry.promptProvenance
     : null;
@@ -38,7 +39,7 @@ export function derivePendingPromptQueueRow(
       kind: "wake",
       isBeingEdited: entry.isBeingEdited,
       canEdit: false,
-      canDelete: true,
+      canDelete: isRuntimeConfirmed,
     };
   }
 
@@ -53,7 +54,7 @@ export function derivePendingPromptQueueRow(
       kind: "review_feedback",
       isBeingEdited: entry.isBeingEdited,
       canEdit: false,
-      canDelete: true,
+      canDelete: isRuntimeConfirmed,
     };
   }
 
@@ -63,8 +64,8 @@ export function derivePendingPromptQueueRow(
     label: collapseQueueLabel(summarizeContentParts(entry.contentParts, entry.text)) || "Queued message",
     kind: "plain",
     isBeingEdited: entry.isBeingEdited,
-    canEdit: !hasStructuredAttachments,
-    canDelete: true,
+    canEdit: isRuntimeConfirmed && !hasStructuredAttachments,
+    canDelete: isRuntimeConfirmed,
   };
 }
 

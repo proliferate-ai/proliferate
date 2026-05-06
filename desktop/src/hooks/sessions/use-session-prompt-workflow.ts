@@ -1,19 +1,27 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
-import {
-  createOptimisticPendingPrompt,
-  shouldClearOptimisticPromptAfterPromptResponse,
-} from "@/lib/domain/chat/pending-prompts";
-import { getSessionClientAndWorkspace, isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import { flushSync } from "react-dom";
 import {
   finishLatencyFlow,
-  getLatencyFlowRequestHeaders,
 } from "@/lib/infra/latency-flow";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import {
+  finishOrCancelMeasurementOperation,
+  markOperationForNextCommit,
+  recordMeasurementWorkflowStep,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
+import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/infra/prompt-submit-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+import {
+  getSessionRecord,
+} from "@/stores/sessions/session-records";
+import { createPromptId } from "@/lib/domain/chat/prompt-id";
+import {
+  outboxEntriesForSession,
+  resolvePromptOutboxPlacement,
+} from "@/lib/domain/chat/prompt-outbox";
+import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
+import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 interface PromptSessionInput {
   sessionId: string;
@@ -22,17 +30,12 @@ interface PromptSessionInput {
   optimisticContentParts?: ContentPart[];
   workspaceId?: string | null;
   latencyFlowId?: string | null;
+  measurementOperationId?: MeasurementOperationId | null;
   promptId?: string | null;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
-  onBeforePromptRequest?: (workspaceId: string) => Promise<void> | void;
 }
 
 export function useSessionPromptWorkflow() {
-  const { maybeGenerateSessionTitle } = useSessionTitleActions();
-  const { applySessionSummary, ensureSessionStreamConnected } =
-    useSessionRuntimeActions();
-  const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
-
   const promptSession = useCallback(async ({
     sessionId,
     text,
@@ -40,83 +43,67 @@ export function useSessionPromptWorkflow() {
     optimisticContentParts,
     workspaceId,
     latencyFlowId,
+    measurementOperationId,
     promptId,
     onBeforeOptimisticPrompt,
-    onBeforePromptRequest,
   }: PromptSessionInput) => {
-    const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+    const slot = getSessionRecord(sessionId);
     const resolvedWorkspaceId = workspaceId ?? slot?.workspaceId ?? null;
-    const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId);
-    const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
 
-    if (isPendingSessionId(sessionId)) {
-      return;
+    if (resolvedWorkspaceId && onBeforeOptimisticPrompt) {
+      await onBeforeOptimisticPrompt(resolvedWorkspaceId);
     }
 
-    try {
-      if (resolvedWorkspaceId && onBeforeOptimisticPrompt) {
-        await onBeforeOptimisticPrompt(resolvedWorkspaceId);
-      }
-
-      useHarnessStore.getState().patchSessionSlot(sessionId, {
-        optimisticPrompt:
-          slot?.optimisticPrompt
-          ?? createOptimisticPendingPrompt(
-            text,
-            promptId ?? null,
-            undefined,
-            optimisticContentParts,
-          ),
-      });
-      finishLatencyFlow(latencyFlowId, "optimistic_visible");
-
-      const shouldGenerateTitle = !slot?.lastPromptAt;
-
-      const { connection, workspaceId: promptWorkspaceId } = await getSessionClientAndWorkspace(
-        sessionId,
+    const clientPromptId = promptId ?? createPromptId();
+    const outboxStore = usePromptOutboxStore.getState();
+    const existingOutboxEntries = outboxEntriesForSession(outboxStore, sessionId);
+    const enqueueStartedAt = performance.now();
+    if (measurementOperationId) {
+      markOperationForNextCommit(
+        measurementOperationId,
+        PROMPT_SUBMIT_MEASUREMENT_SURFACES,
       );
-      if (onBeforePromptRequest) {
-        await onBeforePromptRequest(promptWorkspaceId);
-      }
-      const response = await getAnyHarnessClient(connection).sessions.prompt(
-        sessionId,
-        { blocks: blocks ?? [{ type: "text", text }] },
-        requestOptions,
-      );
-
-      applySessionSummary(sessionId, response.session, promptWorkspaceId);
-      upsertWorkspaceSessionRecord(promptWorkspaceId, response.session);
-      if (shouldClearOptimisticPromptAfterPromptResponse(response.status)) {
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
-          optimisticPrompt: null,
-        });
-      }
-
-      if (shouldGenerateTitle) {
-        void maybeGenerateSessionTitle({
-          sessionId,
-          firstUserMessage: text,
-        });
-      }
-
-      void ensureSessionStreamConnected(sessionId, {
-        resumeIfActive: false,
-        forceReconnect: response.status === "running",
-        requestHeaders,
-      });
-    } catch (error) {
-      useHarnessStore.getState().patchSessionSlot(sessionId, {
-        optimisticPrompt: null,
-        status: "idle",
-      });
-      throw error;
     }
-  }, [
-    applySessionSummary,
-    ensureSessionStreamConnected,
-    maybeGenerateSessionTitle,
-    upsertWorkspaceSessionRecord,
-  ]);
+    flushSync(() => {
+      outboxStore.enqueue({
+        clientPromptId,
+        clientSessionId: sessionId,
+        materializedSessionId: slot?.materializedSessionId ?? null,
+        workspaceId: resolvedWorkspaceId,
+        text,
+        blocks: blocks ?? [{ type: "text", text }],
+        contentParts: optimisticContentParts,
+        placement: resolvePromptOutboxPlacement({
+          isSessionBusy: isSessionSlotBusy(slot),
+          isSessionMaterialized: Boolean(slot?.materializedSessionId),
+          existingEntries: existingOutboxEntries,
+        }),
+        latencyFlowId,
+      });
+    });
+    recordMeasurementWorkflowStep({
+      operationId: measurementOperationId,
+      step: "prompt.submit.enqueue",
+      startedAt: enqueueStartedAt,
+      outcome: "completed",
+      count: existingOutboxEntries.length + 1,
+    });
+    if (measurementOperationId) {
+      const afterPaintStartedAt = performance.now();
+      scheduleAfterNextPaint(() => {
+        recordMeasurementWorkflowStep({
+          operationId: measurementOperationId,
+          step: "prompt.submit.after_paint",
+          startedAt: afterPaintStartedAt,
+          outcome: "completed",
+        });
+        finishOrCancelMeasurementOperation(measurementOperationId, "completed");
+      });
+    }
+    finishLatencyFlow(latencyFlowId, "optimistic_visible", {
+      keepActive: true,
+    });
+  }, []);
 
   return {
     promptSession,

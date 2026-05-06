@@ -9,6 +9,8 @@ import {
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "@/lib/domain/chat/transcript-presentation";
+import { turnHasRenderableTranscriptContent } from "@/lib/domain/chat/pending-prompts";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/prompt-outbox";
 
 export const TURN_CONTENT_BLOCK_KEY = "content";
 export const TURN_COMPLETED_HISTORY_BLOCK_KEY = "completed-history";
@@ -29,12 +31,18 @@ export type TranscriptRow =
   | {
     kind: "pending_prompt";
     key: `pending-prompt:${string}`;
+  }
+  | {
+    kind: "outbox_prompt";
+    key: `prompt:${string}`;
+    clientPromptId: string;
   };
 
 export interface BuildTranscriptRowModelInput {
   activeSessionId: string;
   transcript: TranscriptState;
   visibleOptimisticPrompt: PendingPromptEntry | null;
+  visibleOutboxEntries?: readonly PromptOutboxEntry[];
   latestTurnId: string | null;
   latestTurnHasAssistantRenderableContent: boolean;
 }
@@ -59,6 +67,7 @@ export function buildTranscriptRowModel({
   activeSessionId,
   transcript,
   visibleOptimisticPrompt,
+  visibleOutboxEntries = [],
   latestTurnId,
   latestTurnHasAssistantRenderableContent,
 }: BuildTranscriptRowModelInput, cache?: TranscriptRowModelCache): TranscriptRow[] {
@@ -77,6 +86,7 @@ export function buildTranscriptRowModel({
       visibleOptimisticPrompt !== null
       && isLatestTurnInProgress
       && !latestTurnHasAssistantRenderableContent
+      && !turnHasRenderableTranscriptContent(turn, transcript)
     ) {
       continue;
     }
@@ -89,6 +99,14 @@ export function buildTranscriptRowModel({
     rows.push({
       kind: "pending_prompt",
       key: buildPendingPromptRowKey(activeSessionId),
+    });
+  }
+
+  for (const entry of visibleOutboxEntries) {
+    rows.push({
+      kind: "outbox_prompt",
+      key: buildOutboxPromptRowKey(entry.clientPromptId),
+      clientPromptId: entry.clientPromptId,
     });
   }
 
@@ -120,6 +138,12 @@ export function buildPendingPromptRowKey(
   activeSessionId: string,
 ): `pending-prompt:${string}` {
   return `pending-prompt:${activeSessionId}`;
+}
+
+export function buildOutboxPromptRowKey(
+  clientPromptId: string,
+): `prompt:${string}` {
+  return `prompt:${clientPromptId}`;
 }
 
 function buildTurnRows(

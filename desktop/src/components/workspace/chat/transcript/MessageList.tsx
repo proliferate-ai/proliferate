@@ -103,9 +103,15 @@ import {
   shouldShowPendingPromptActivity,
 } from "@/lib/domain/chat/pending-prompts";
 import {
+  outboxEntryToPendingPromptEntry,
+  renderableOutboxEntriesForTranscript,
+  type PromptOutboxEntry,
+} from "@/lib/domain/chat/prompt-outbox";
+import {
   type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript-virtual-rows";
 import { useTranscriptRowModel } from "@/hooks/chat/use-transcript-row-model";
+import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
 import {
   lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
@@ -129,7 +135,7 @@ import type {
   TurnRecord,
   TerminalOutputContentPart,
 } from "@anyharness/sdk";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import { VirtualTranscriptRowList } from "@/components/workspace/chat/transcript/VirtualTranscriptRowList";
 import {
@@ -154,14 +160,21 @@ const TranscriptCanOpenSessionContext = createContext<
   ((sessionId: string, role?: TranscriptOpenSessionRole) => boolean) | null
 >(null);
 const noop = () => {};
+const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
+interface OutboxActionHandlers {
+  retryPrompt: (clientPromptId: string) => void;
+  dismissPrompt: (clientPromptId: string) => void;
+}
 
 const LIVE_STATUS_GRACE_MS = 700;
+const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
 
 interface MessageListProps {
   activeSessionId: string;
   selectedWorkspaceId: string | null;
   optimisticPrompt: PendingPromptEntry | null;
+  outboxEntries?: readonly PromptOutboxEntry[];
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
   hasOlderHistory?: boolean;
@@ -178,6 +191,7 @@ export function MessageList({
   activeSessionId,
   selectedWorkspaceId,
   optimisticPrompt,
+  outboxEntries = EMPTY_OUTBOX_ENTRIES,
   transcript,
   sessionViewState,
   hasOlderHistory = false,
@@ -191,6 +205,14 @@ export function MessageList({
 }: MessageListProps) {
   useDebugRenderCount("transcript-list");
   const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
+  const {
+    retryPrompt,
+    dismissPrompt,
+  } = usePromptOutboxActions();
+  const outboxActions = useMemo(() => ({
+    retryPrompt,
+    dismissPrompt,
+  }), [retryPrompt, dismissPrompt]);
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
   const { openFileDiff } = useWorkspaceFileActions();
@@ -215,10 +237,19 @@ export function MessageList({
       true,
     )
     : null;
+  const visibleOutboxEntries = useMemo(
+    () => renderableOutboxEntriesForTranscript(outboxEntries, transcript),
+    [outboxEntries, transcript],
+  );
+  const outboxStartedAtByPromptId = useMemo(
+    () => buildOutboxStartedAtByPromptId(outboxEntries),
+    [outboxEntries],
+  );
   const virtualRows = useTranscriptRowModel({
     activeSessionId,
     transcript,
     visibleOptimisticPrompt,
+    visibleOutboxEntries,
     latestTurnId,
     latestTurnHasAssistantRenderableContent,
   });
@@ -273,6 +304,9 @@ export function MessageList({
   const latestTransientText = latestTurn
     ? latestTransientStatusText(latestTurn, transcript)
     : null;
+  const latestTurnTiming = latestTurn
+    ? resolveTurnPromptTiming(latestTurn, transcript, outboxStartedAtByPromptId)
+    : null;
   const shouldShowDelayedLatestLiveStatus = !!latestTurn
     && latestTurnInProgress
     && !latestLiveWorkBlock
@@ -282,6 +316,9 @@ export function MessageList({
       transcript,
       isLatestTurnInProgress: true,
     });
+  const shouldShowImmediateOutboxLiveStatus =
+    shouldShowDelayedLatestLiveStatus
+    && latestTurnTiming?.isOutboxStartedAt === true;
   const [showDelayedLatestLiveStatus, setShowDelayedLatestLiveStatus] = useState(false);
 
   useEffect(() => {
@@ -298,15 +335,15 @@ export function MessageList({
   }, [
     latestTransientText,
     latestTurn?.itemOrder.length,
-    latestTurn?.startedAt,
+    latestTurnTiming?.startedAt,
     latestTurnId,
     shouldShowDelayedLatestLiveStatus,
   ]);
 
   const latestLiveStatus = latestTurn
-    && showDelayedLatestLiveStatus
+    && (showDelayedLatestLiveStatus || shouldShowImmediateOutboxLiveStatus)
       ? resolveTurnTrailingStatus(
-          latestTurn.startedAt,
+          latestTurnTiming?.startedAt ?? latestTurn.startedAt,
           sessionViewState,
           latestTransientText,
         )
@@ -352,23 +389,42 @@ export function MessageList({
   }, []);
 
   const renderVirtualRow = useCallback((row: TranscriptVirtualRow, rowIndex: number) => {
-    if (row.kind === "pending_prompt") {
+    if (row.kind === "pending_prompt" || row.kind === "outbox_prompt") {
+      const outboxEntry = row.kind === "outbox_prompt"
+        ? visibleOutboxEntries.find((entry) => entry.clientPromptId === row.clientPromptId) ?? null
+        : null;
+      const prompt = row.kind === "pending_prompt"
+        ? visibleOptimisticPrompt
+        : outboxEntry
+          ? outboxEntryToPendingPromptEntry(outboxEntry)
+          : null;
       if (!visibleOptimisticPrompt) {
+        if (!outboxEntry) {
+          return null;
+        }
+      }
+      if (!prompt) {
         return null;
       }
+      const trailingStatus = row.kind === "pending_prompt"
+        ? optimisticPromptTrailingStatus
+        : <OutboxPromptTrailingStatus entry={outboxEntry} />;
+      const outboxControls = outboxEntry
+        ? renderOutboxPromptControls(outboxEntry, outboxActions)
+        : null;
       return (
         <TurnShell isFirst={rowIndex === 0}>
           <div className="flex flex-col gap-2">
             {(() => {
               const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
-                visibleOptimisticPrompt.promptProvenance,
-                visibleOptimisticPrompt.text,
+                prompt.promptProvenance,
+                prompt.text,
               );
-              if (isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance)) {
+              if (isSubagentWakeProvenance(prompt.promptProvenance)) {
                 return (
                   <div className="flex justify-end">
                     <SubagentWakeBadge
-                      label={visibleOptimisticPrompt.promptProvenance.label ?? null}
+                      label={prompt.promptProvenance.label ?? null}
                     />
                   </div>
                 );
@@ -385,16 +441,17 @@ export function MessageList({
               return (
                 <UserMessage
                   sessionId={activeSessionId}
-                  content={visibleOptimisticPrompt.text}
-                  contentParts={visibleOptimisticPrompt.contentParts}
+                  content={prompt.text}
+                  contentParts={prompt.contentParts}
                   showCopyButton
-                  timestampLabel={resolveOptimisticPromptActionTime(visibleOptimisticPrompt)}
+                  timestampLabel={resolveOptimisticPromptActionTime(prompt)}
                 />
               );
             })()}
-            {optimisticPromptTrailingStatus && (
-              <div className={TRAILING_STATUS_MIN_HEIGHT}>{optimisticPromptTrailingStatus}</div>
+            {trailingStatus && (
+              <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
             )}
+            {outboxControls}
           </div>
         </TurnShell>
       );
@@ -429,6 +486,11 @@ export function MessageList({
     // Hide the trailing indicator only while the assistant prose item
     // itself is actively streaming. If Codex closes the prose item but
     // keeps working internally, the trailing indicator should return.
+    const turnTiming = resolveTurnPromptTiming(
+      turn,
+      transcript,
+      outboxStartedAtByPromptId,
+    );
     const trailingStatus = !row.isLastTurnRow
       ? null
       : isLatestTurn
@@ -439,7 +501,7 @@ export function MessageList({
           isLatestTurnInProgress,
         })
           ? resolveTurnTrailingStatus(
-              turn.startedAt,
+              turnTiming.startedAt,
               sessionViewState,
               latestTransientStatusText(turn, transcript),
             )
@@ -497,9 +559,12 @@ export function MessageList({
     openArtifact,
     openFileDiff,
     optimisticPromptTrailingStatus,
+    outboxStartedAtByPromptId,
+    outboxActions,
     selectedWorkspaceId,
     sessionViewState,
     transcript,
+    visibleOutboxEntries,
     visibleOptimisticPrompt,
   ]);
 
@@ -531,6 +596,45 @@ export function MessageList({
       </div>
     </DebugProfiler>
   );
+}
+
+function buildOutboxStartedAtByPromptId(
+  entries: readonly PromptOutboxEntry[],
+): ReadonlyMap<string, string> {
+  if (entries.length === 0) {
+    return EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID;
+  }
+  const startedAtByPromptId = new Map<string, string>();
+  for (const entry of entries) {
+    startedAtByPromptId.set(entry.clientPromptId, entry.createdAt);
+  }
+  return startedAtByPromptId;
+}
+
+const EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID = new Map<string, string>();
+
+function resolveTurnPromptTiming(
+  turn: TurnRecord,
+  transcript: TranscriptState,
+  outboxStartedAtByPromptId: ReadonlyMap<string, string>,
+): { startedAt: string; isOutboxStartedAt: boolean } {
+  for (const itemId of turn.itemOrder) {
+    const item = transcript.itemsById[itemId];
+    if (item?.kind !== "user_message" || !item.promptId) {
+      continue;
+    }
+    const outboxStartedAt = outboxStartedAtByPromptId.get(item.promptId);
+    if (outboxStartedAt) {
+      return {
+        startedAt: outboxStartedAt,
+        isOutboxStartedAt: true,
+      };
+    }
+  }
+  return {
+    startedAt: turn.startedAt,
+    isOutboxStartedAt: false,
+  };
 }
 
 function findTailAssistantProseRootId(
@@ -935,7 +1039,7 @@ function TranscriptItemBlock({
               }
               onOpenChild={canOpenChild
                 ? (targetSessionId) => {
-                  useHarnessStore.getState().recordSessionRelationshipHint(targetSessionId, {
+                  useSessionDirectoryStore.getState().recordRelationshipHint(targetSessionId, {
                     kind: wakeProvenance.type === "subagentWake"
                       ? "subagent_child"
                       : childRole === "cowork-coding-child"
@@ -1776,6 +1880,121 @@ function mapStatus(
   if (status === "completed") return "completed";
   if (status === "failed") return "failed";
   return "running";
+}
+
+function OutboxPromptTrailingStatus({ entry }: { entry: PromptOutboxEntry | null }) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (entry?.deliveryState !== "accepted_running") {
+      return;
+    }
+    const acceptedAtMs = resolveOutboxAcceptedRunningReferenceMs(entry);
+    const remainingMs = OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS - (Date.now() - acceptedAtMs);
+    if (remainingMs <= 0) {
+      setNowMs(Date.now());
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setNowMs(Date.now());
+    }, remainingMs + 50);
+    return () => window.clearTimeout(timeout);
+  }, [
+    entry?.acceptedAt,
+    entry?.clientPromptId,
+    entry?.createdAt,
+    entry?.deliveryState,
+    entry?.dispatchedAt,
+  ]);
+
+  return <>{resolveOutboxPromptTrailingStatus(entry, nowMs)}</>;
+}
+
+function resolveOutboxPromptTrailingStatus(
+  entry: PromptOutboxEntry | null,
+  nowMs = Date.now(),
+): ReactNode {
+  if (!entry) {
+    return null;
+  }
+  switch (entry.deliveryState) {
+    case "failed_before_dispatch":
+      return entry.errorMessage ? `Not sent: ${entry.errorMessage}` : "Not sent";
+    case "unknown_after_dispatch":
+      return "Waiting for confirmation…";
+    case "preparing":
+    case "dispatching":
+    case "waiting_for_session":
+      return resolvePendingPromptTrailingStatus(entry.createdAt, "working", true);
+    case "accepted_running":
+      if (hasAcceptedRunningOutboxEntryExceededEchoGrace(entry, nowMs)) {
+        return "Waiting for transcript…";
+      }
+      return resolvePendingPromptTrailingStatus(entry.createdAt, "working", true);
+    default:
+      return null;
+  }
+}
+
+function hasAcceptedRunningOutboxEntryExceededEchoGrace(
+  entry: PromptOutboxEntry,
+  nowMs: number,
+): boolean {
+  return nowMs - resolveOutboxAcceptedRunningReferenceMs(entry)
+    >= OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS;
+}
+
+function resolveOutboxAcceptedRunningReferenceMs(entry: PromptOutboxEntry): number {
+  const parsed = Date.parse(entry.acceptedAt ?? entry.dispatchedAt ?? entry.createdAt);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function renderOutboxPromptControls(
+  entry: PromptOutboxEntry,
+  actions: OutboxActionHandlers,
+): ReactNode {
+  if (entry.deliveryState === "failed_before_dispatch") {
+    return (
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-chat-transcript-ignore
+          onClick={() => actions.retryPrompt(entry.clientPromptId)}
+        >
+          Retry
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          data-chat-transcript-ignore
+          onClick={() => actions.dismissPrompt(entry.clientPromptId)}
+        >
+          Dismiss
+        </Button>
+      </div>
+    );
+  }
+
+  if (entry.deliveryState === "unknown_after_dispatch") {
+    return (
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-chat-transcript-ignore
+          onClick={() => actions.retryPrompt(entry.clientPromptId)}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function formatToolDuration(item: ToolCallItem): string | undefined {

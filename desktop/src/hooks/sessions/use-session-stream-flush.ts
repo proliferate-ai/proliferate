@@ -14,25 +14,38 @@ import {
   type MeasurementOperationId,
   type MeasurementSurface,
 } from "@/lib/infra/debug-measurement";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/stores/sessions/harness-store";
+} from "@/stores/sessions/session-types";
 import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { isDocumentVisibleAndFocused } from "@/hooks/ui/use-document-focus-visibility";
 import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChange,
   type PendingSessionConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
-import { shouldClearOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch";
+import {
+  pruneEchoedOutboxTombstonesForTranscript,
+  reconcileOutboxFromEnvelopes,
+} from "@/lib/domain/chat/prompt-outbox";
+import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,
 } from "@/hooks/sessions/session-stream-side-effects";
+import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  activityFromTranscript,
+  useSessionDirectoryStore,
+} from "@/stores/sessions/session-directory-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
 const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
@@ -207,8 +220,7 @@ export function createSessionStreamFlushController(
       return;
     }
 
-    const currentState = useHarnessStore.getState();
-    const slotState = currentState.sessionSlots[input.sessionId];
+    const slotState = getSessionRecord(input.sessionId);
     if (!slotState) {
       return;
     }
@@ -261,7 +273,13 @@ export function createSessionStreamFlushController(
       logDevSSEEvent(input.sessionId, result.gapEnvelope, "gap");
     }
 
+    const lastObservedSeq = maxEnvelopeSeq(envelopes, slotState.transcript.lastSeq);
     if (result.appliedEnvelopes.length === 0 && !result.gapEnvelope) {
+      useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
+        lastAppliedSeq: slotState.transcript.lastSeq,
+        lastObservedSeq,
+        gapAfterSeq: null,
+      });
       finishOrCancelMeasurementOperation(streamEventBatchOperationId, "completed");
       return;
     }
@@ -279,25 +297,69 @@ export function createSessionStreamFlushController(
       : {
         transcript: slotState.transcript,
       };
-    const shouldClearOptimisticPrompt = result.appliedEnvelopes.some((envelope) =>
-      shouldClearOptimisticPendingPrompt(envelope.event.type)
-    );
     const shouldDisconnectForGap = !!result.gapEnvelope;
+    const shouldClearOptimisticPrompt = result.appliedEnvelopes.some((envelope) =>
+      shouldClearOptimisticPendingPromptForEnvelope(envelope, slotState.optimisticPrompt)
+    );
 
     const storeStartedAt = performance.now();
-    useHarnessStore.getState().patchSessionSlot(input.sessionId, {
-      events: result.state.events,
-      ...streamPatch,
-      optimisticPrompt: shouldClearOptimisticPrompt
-        ? null
-        : slotState.optimisticPrompt,
-      pendingConfigChanges: configReconcileResult.pendingConfigChanges,
-      ...(shouldDisconnectForGap
-        ? {
-          sseHandle: null,
-          streamConnectionState: "disconnected" as const,
+    batchSessionStoreWrites(() => {
+      useSessionTranscriptStore.getState().patchEntry(input.sessionId, {
+        events: result.state.events,
+        transcript: streamPatch.transcript,
+        optimisticPrompt: shouldClearOptimisticPrompt ? null : slotState.optimisticPrompt,
+      });
+      usePromptOutboxStore.setState((state) => {
+        const reconciled = reconcileOutboxFromEnvelopes(
+          state,
+          input.sessionId,
+          result.appliedEnvelopes,
+        );
+        const next = pruneEchoedOutboxTombstonesForTranscript(
+          reconciled,
+          result.state.transcript,
+        );
+        if (next === state) {
+          return state;
         }
-        : {}),
+        return {
+          ...state,
+          ...next,
+          dispatchVersion: state.dispatchVersion + 1,
+        };
+      });
+      useSessionDirectoryStore.getState().patchEntry(input.sessionId, {
+        liveConfig: streamPatch.liveConfig !== undefined
+          ? streamPatch.liveConfig
+          : slotState.liveConfig,
+        executionSummary: streamPatch.executionSummary !== undefined
+          ? streamPatch.executionSummary
+          : slotState.executionSummary,
+        modelId: streamPatch.modelId !== undefined
+          ? streamPatch.modelId
+          : slotState.modelId,
+        modeId: streamPatch.modeId !== undefined
+          ? streamPatch.modeId
+          : slotState.modeId,
+        title: streamPatch.title !== undefined
+          ? streamPatch.title
+          : slotState.title,
+        status: streamPatch.status !== undefined
+          ? streamPatch.status
+          : slotState.status,
+        pendingConfigChanges: configReconcileResult.pendingConfigChanges,
+        activity: activityFromTranscript(streamPatch.transcript, {
+          status: streamPatch.status !== undefined
+            ? streamPatch.status
+            : slotState.status,
+          executionSummary: streamPatch.executionSummary !== undefined
+            ? streamPatch.executionSummary
+            : slotState.executionSummary,
+        }),
+        ...(shouldDisconnectForGap
+          ? { streamConnectionState: "disconnected" as const }
+          : {}),
+      });
     });
     for (const operationId of streamApplyOperationIds) {
       recordMeasurementMetric({
@@ -314,10 +376,15 @@ export function createSessionStreamFlushController(
       );
       markSessionApplyForNextCommit(operationId);
     }
+    useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
+      lastAppliedSeq: result.state.transcript.lastSeq,
+      lastObservedSeq,
+      gapAfterSeq: result.gapEnvelope ? result.state.transcript.lastSeq : null,
+    });
 
     applyBatchedStreamSideEffects({
       ...input,
-      runtimeUrl: currentState.runtimeUrl,
+      runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
       workspaceId: slotState.workspaceId,
       agentKind: slotState.agentKind,
       envelopes: result.appliedEnvelopes,
@@ -328,21 +395,19 @@ export function createSessionStreamFlushController(
         sessionId: string,
         relationship: SessionChildRelationship,
       ) => {
-        useHarnessStore.getState().recordSessionRelationshipHint(sessionId, relationship);
+        useSessionDirectoryStore.getState().recordRelationshipHint(sessionId, relationship);
       },
       getSessionRelationship: (sessionId: string): SessionRelationship | null =>
-        useHarnessStore.getState().sessionSlots[sessionId]?.sessionRelationship ?? null,
+        useSessionDirectoryStore.getState().entriesById[sessionId]?.sessionRelationship ?? null,
       acknowledgeWorkspaceActivity: (workspaceId: string, timestamp: string) => {
         if (!isDocumentVisibleAndFocused()) {
           return;
         }
-        const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
-        if (workspaceId !== selectedWorkspaceId) {
+        const selection = useSessionSelectionStore.getState();
+        if (workspaceId !== selection.selectedWorkspaceId) {
           return;
         }
-        const selectedLogicalWorkspaceId =
-          useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId;
-        markWorkspaceViewedAt(selectedLogicalWorkspaceId ?? workspaceId, timestamp);
+        markWorkspaceViewedAt(selection.selectedLogicalWorkspaceId ?? workspaceId, timestamp);
       },
     });
 
@@ -450,4 +515,15 @@ function markSessionApplyForNextCommit(operationId: MeasurementOperationId | nul
     return;
   }
   markOperationForNextCommit(operationId, SESSION_APPLY_MEASUREMENT_SURFACES);
+}
+
+function maxEnvelopeSeq(
+  envelopes: readonly SessionEventEnvelope[],
+  fallbackSeq: number,
+): number {
+  let maxSeq = fallbackSeq;
+  for (const envelope of envelopes) {
+    maxSeq = Math.max(maxSeq, envelope.seq);
+  }
+  return maxSeq;
 }

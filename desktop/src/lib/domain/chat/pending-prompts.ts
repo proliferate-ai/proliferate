@@ -2,6 +2,8 @@ import type {
   ContentPart,
   PendingPromptEntry,
   PromptSessionStatus,
+  SessionEventEnvelope,
+  SessionStatus,
   SessionEvent,
   TranscriptItem,
   TranscriptState,
@@ -60,6 +62,15 @@ export function shouldClearOptimisticPromptAfterPromptResponse(
   return status === "queued";
 }
 
+export function shouldClearOptimisticPromptAfterSessionSummary(
+  status: SessionStatus | null | undefined,
+): boolean {
+  return status === "idle"
+    || status === "completed"
+    || status === "errored"
+    || status === "closed";
+}
+
 export function shouldShowPendingPromptActivity(args: {
   optimisticPrompt: PendingPromptEntry | null;
   sessionViewState: SessionViewState;
@@ -80,6 +91,29 @@ export function shouldClearOptimisticPendingPrompt(
     default:
       return false;
   }
+}
+
+export function shouldClearOptimisticPendingPromptForEnvelope(
+  envelope: SessionEventEnvelope,
+  optimisticPrompt: PendingPromptEntry | null,
+): boolean {
+  if (!optimisticPrompt) {
+    return false;
+  }
+
+  const event = envelope.event;
+  if (shouldClearOptimisticPendingPrompt(event.type)) {
+    return true;
+  }
+
+  if (
+    (event.type === "item_started" || event.type === "item_completed")
+    && event.item.kind === "user_message"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export function turnHasRenderableTranscriptContent(
