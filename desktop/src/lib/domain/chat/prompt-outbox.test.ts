@@ -389,6 +389,25 @@ describe("prompt outbox", () => {
     expect(renderableOutboxEntriesForTranscript([], transcript)).toEqual([]);
   });
 
+  it("does not scan transcript items for queue-only outbox entries", () => {
+    const queued = createPromptOutboxEntry({
+      clientPromptId: "prompt-queued",
+      clientSessionId: "session-1",
+      text: "queued",
+      blocks: [{ type: "text", text: "queued" }],
+      placement: "queue",
+      now: NOW,
+    });
+    const transcript = createTranscriptState("session-1");
+    Object.defineProperty(transcript, "itemsById", {
+      get() {
+        throw new Error("itemsById should not be read for queue-only outbox entries");
+      },
+    });
+
+    expect(renderableOutboxEntriesForTranscript([queued], transcript)).toEqual([]);
+  });
+
   it("does not render later local transcript rows behind an unresolved prompt", () => {
     const first = createPromptOutboxEntry({
       clientPromptId: "prompt-first",

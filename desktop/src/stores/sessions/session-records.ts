@@ -28,6 +28,9 @@ import {
 } from "@/stores/sessions/session-types";
 import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
 
+// Imperative facade over the split session stores. The underlying stores stay
+// single-purpose; workflow hooks use this module when a logical session record
+// needs coordinated directory + transcript updates in one React batch.
 export function createEmptySessionRecord(
   sessionId: string,
   agentKind: string,

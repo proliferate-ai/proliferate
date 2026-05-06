@@ -89,9 +89,6 @@ async function measureSessionWorkflowStep<T>(
   }
 }
 
-export { logDevSSEEvent } from "./session-runtime-dev-sse";
-
-
 export function createPendingSessionId(agentKind: string): string {
   return `client-session:${agentKind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 }

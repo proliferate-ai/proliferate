@@ -219,7 +219,11 @@ export function renderableOutboxEntriesForTranscript(
   if (entries.length === 0) {
     return [];
   }
-  const promptIdsToFind = new Set(entries.map((entry) => entry.clientPromptId));
+  const transcriptCandidates = entries.filter(isOutboxTranscriptCandidate);
+  if (transcriptCandidates.length === 0) {
+    return [];
+  }
+  const promptIdsToFind = new Set(transcriptCandidates.map((entry) => entry.clientPromptId));
   const echoedPromptIds = collectTranscriptPromptIds(transcript, promptIdsToFind);
   const renderableEntries: PromptOutboxEntry[] = [];
   let hasEarlierBlockingPrompt = false;
@@ -420,6 +424,11 @@ function isOutboxEntryBlockingNewTranscriptPrompt(entry: PromptOutboxEntry): boo
     case "echoed_tombstone":
       return false;
   }
+}
+
+function isOutboxTranscriptCandidate(entry: PromptOutboxEntry): boolean {
+  return entry.deliveryState === "failed_before_dispatch"
+    || (entry.placement === "transcript" && !isOutboxEntryTerminal(entry));
 }
 
 function collectTranscriptPromptIds(
