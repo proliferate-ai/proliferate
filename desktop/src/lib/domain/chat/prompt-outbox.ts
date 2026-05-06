@@ -195,10 +195,7 @@ export function selectNextDispatchableOutboxEntry(
     if (!entry) {
       continue;
     }
-    if (
-      entry.deliveryState === "waiting_for_session"
-      || entry.deliveryState === "failed_before_dispatch"
-    ) {
+    if (entry.deliveryState === "waiting_for_session") {
       return entry;
     }
     if (entry.deliveryState === "preparing" || entry.deliveryState === "dispatching") {
@@ -212,12 +209,21 @@ export function renderableOutboxEntriesForTranscript(
   entries: readonly PromptOutboxEntry[],
   transcript: TranscriptState,
 ): PromptOutboxEntry[] {
-  const echoedPromptIds = collectTranscriptPromptIds(transcript);
+  if (entries.length === 0) {
+    return [];
+  }
+  const promptIdsToFind = new Set(entries.map((entry) => entry.clientPromptId));
+  const echoedPromptIds = collectTranscriptPromptIds(transcript, promptIdsToFind);
   const renderableEntries: PromptOutboxEntry[] = [];
   let hasEarlierBlockingPrompt = false;
   for (const entry of entries) {
     const isEchoed = echoedPromptIds.has(entry.clientPromptId);
+    const isFailedBeforeDispatch = entry.deliveryState === "failed_before_dispatch";
     const isTerminal = isOutboxEntryTerminal(entry);
+    if (isFailedBeforeDispatch && !isEchoed) {
+      renderableEntries.push(entry);
+      continue;
+    }
     if (
       !hasEarlierBlockingPrompt
       && entry.placement === "transcript"
@@ -244,7 +250,6 @@ export function queuedOutboxEntriesForSession(
       || entry.deliveryState === "dispatching"
       || entry.deliveryState === "accepted_queued"
       || entry.deliveryState === "unknown_after_dispatch"
-      || entry.deliveryState === "failed_before_dispatch"
     )
   );
 }
@@ -410,11 +415,24 @@ function isOutboxEntryBlockingNewTranscriptPrompt(entry: PromptOutboxEntry): boo
   }
 }
 
-function collectTranscriptPromptIds(transcript: TranscriptState): Set<string> {
+function collectTranscriptPromptIds(
+  transcript: TranscriptState,
+  promptIdsToFind?: ReadonlySet<string>,
+): Set<string> {
   const promptIds = new Set<string>();
+  if (promptIdsToFind?.size === 0) {
+    return promptIds;
+  }
   for (const item of Object.values(transcript.itemsById)) {
-    if (item.kind === "user_message" && item.promptId) {
+    if (
+      item.kind === "user_message"
+      && item.promptId
+      && (!promptIdsToFind || promptIdsToFind.has(item.promptId))
+    ) {
       promptIds.add(item.promptId);
+      if (promptIdsToFind && promptIds.size >= promptIdsToFind.size) {
+        break;
+      }
     }
   }
   return promptIds;

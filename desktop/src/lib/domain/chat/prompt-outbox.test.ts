@@ -10,6 +10,7 @@ import {
   createPromptOutboxEntry,
   pruneEchoedOutboxTombstones,
   pruneEchoedOutboxTombstonesForTranscript,
+  queuedOutboxEntriesForSession,
   reconcileOutboxFromEnvelopes,
   renderableOutboxEntriesForTranscript,
   resolvePromptOutboxPlacement,
@@ -91,6 +92,31 @@ describe("prompt outbox", () => {
     };
 
     expect(selectNextDispatchableOutboxEntry(blocked, "session-1")).toBeNull();
+  });
+
+  it("skips failed local prompts when selecting later dispatchable prompts", () => {
+    let state = emptyState();
+    state = withEntry(state, {
+      ...createPromptOutboxEntry({
+        clientPromptId: "prompt-failed",
+        clientSessionId: "session-1",
+        text: "failed",
+        blocks: [{ type: "text", text: "failed" }],
+        now: NOW,
+      }),
+      deliveryState: "failed_before_dispatch",
+      errorMessage: "Local dispatch failed.",
+    });
+    state = withEntry(state, createPromptOutboxEntry({
+      clientPromptId: "prompt-next",
+      clientSessionId: "session-1",
+      text: "next",
+      blocks: [{ type: "text", text: "next" }],
+      now: NOW,
+    }));
+
+    expect(selectNextDispatchableOutboxEntry(state, "session-1")?.clientPromptId)
+      .toBe("prompt-next");
   });
 
   it("places a new prompt in the composer queue when the session is busy", () => {
@@ -296,6 +322,53 @@ describe("prompt outbox", () => {
     expect(renderableOutboxEntriesForTranscript([
       entry,
     ], createTranscriptState("session-1"))).toEqual([]);
+  });
+
+  it("keeps failed local queued prompts out of the composer queue", () => {
+    const failed = {
+      ...createPromptOutboxEntry({
+        clientPromptId: "prompt-failed",
+        clientSessionId: "session-1",
+        text: "failed",
+        blocks: [{ type: "text", text: "failed" }],
+        placement: "queue" as const,
+        now: NOW,
+      }),
+      deliveryState: "failed_before_dispatch" as const,
+      errorMessage: "Local dispatch failed.",
+    };
+
+    expect(queuedOutboxEntriesForSession([failed])).toEqual([]);
+  });
+
+  it("renders failed local queued prompts in the transcript for recovery actions", () => {
+    const failed = {
+      ...createPromptOutboxEntry({
+        clientPromptId: "prompt-failed",
+        clientSessionId: "session-1",
+        text: "failed",
+        blocks: [{ type: "text", text: "failed" }],
+        placement: "queue" as const,
+        now: NOW,
+      }),
+      deliveryState: "failed_before_dispatch" as const,
+      errorMessage: "Local dispatch failed.",
+    };
+
+    expect(renderableOutboxEntriesForTranscript([
+      failed,
+    ], createTranscriptState("session-1"))).toEqual([failed]);
+  });
+
+  it("does not scan transcript items when there are no outbox entries", () => {
+    const transcript = createTranscriptState("session-1");
+    Object.defineProperty(transcript, "itemsById", {
+      get() {
+        throw new Error("itemsById should not be read without outbox entries");
+      },
+    });
+
+    expect(renderableOutboxEntriesForTranscript([], transcript)).toEqual([]);
   });
 
   it("does not render later local transcript rows behind an unresolved prompt", () => {

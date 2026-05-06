@@ -25,7 +25,7 @@ const CONFIG_READY_TIMEOUT_MS = 5_000;
 const ACCEPTED_RUNNING_RECONCILE_DELAYS_MS = [250, 1_000, 2_500, 5_000, 10_000] as const;
 const ACCEPTED_RUNNING_RECONCILE_TIMEOUT_MS = 3_000;
 
-let dispatcherMounted = false;
+let activeDispatcherOwner: symbol | null = null;
 
 export function usePromptOutboxDispatcher(): void {
   const dispatchVersion = usePromptOutboxStore((state) => state.dispatchVersion);
@@ -33,14 +33,20 @@ export function usePromptOutboxDispatcher(): void {
   const { maybeGenerateSessionTitle } = useSessionTitleActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const inFlightSessionIdsRef = useRef(new Set<string>());
+  const dispatcherOwnerRef = useRef<symbol | null>(null);
 
   useEffect(() => {
-    if (dispatcherMounted) {
+    if (activeDispatcherOwner) {
       return;
     }
-    dispatcherMounted = true;
+    const owner = Symbol("prompt-outbox-dispatcher");
+    activeDispatcherOwner = owner;
+    dispatcherOwnerRef.current = owner;
     return () => {
-      dispatcherMounted = false;
+      if (activeDispatcherOwner === owner) {
+        activeDispatcherOwner = null;
+      }
+      dispatcherOwnerRef.current = null;
     };
   }, []);
 
@@ -51,7 +57,6 @@ export function usePromptOutboxDispatcher(): void {
       !current
       || (
         current.deliveryState !== "waiting_for_session"
-        && current.deliveryState !== "failed_before_dispatch"
       )
     ) {
       return;
@@ -152,7 +157,7 @@ export function usePromptOutboxDispatcher(): void {
   ]);
 
   useEffect(() => {
-    if (!dispatcherMounted) {
+    if (!isActiveDispatcherOwner(dispatcherOwnerRef.current)) {
       return;
     }
 
@@ -162,7 +167,7 @@ export function usePromptOutboxDispatcher(): void {
         continue;
       }
       const entry = selectNextDispatchableOutboxEntry(state, clientSessionId);
-      if (!entry || entry.deliveryState === "failed_before_dispatch") {
+      if (!entry) {
         continue;
       }
       const record = getSessionRecord(clientSessionId);
@@ -175,6 +180,10 @@ export function usePromptOutboxDispatcher(): void {
       });
     }
   }, [dispatchEntry, dispatchVersion]);
+}
+
+function isActiveDispatcherOwner(owner: symbol | null): boolean {
+  return owner !== null && activeDispatcherOwner === owner;
 }
 
 function scheduleAcceptedRunningHistoryReconcile({
