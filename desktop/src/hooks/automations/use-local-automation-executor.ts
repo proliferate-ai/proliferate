@@ -1,10 +1,10 @@
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useLocalAutomationClaimPoller } from "./use-local-automation-claim-poller";
 
 export function useLocalAutomationExecutor(): void {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const { cloudActive } = useCloudAvailabilityState();
   const enabled =
     cloudActive

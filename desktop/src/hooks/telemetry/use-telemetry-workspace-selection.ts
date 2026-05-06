@@ -5,7 +5,7 @@ import {
   setTelemetryTag,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 function workspaceKind(workspaceId: string | null): DesktopWorkspaceKind | "none" {
   if (!workspaceId) return "none";
@@ -13,7 +13,7 @@ function workspaceKind(workspaceId: string | null): DesktopWorkspaceKind | "none
 }
 
 export function useTelemetryWorkspaceSelection() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const previousWorkspaceIdRef = useRef<string | null>(null);
 
   useEffect(() => {

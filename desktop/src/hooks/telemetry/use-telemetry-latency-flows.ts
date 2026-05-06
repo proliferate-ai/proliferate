@@ -7,7 +7,7 @@ import {
   type LatencyFlowStage,
   listActiveLatencyFlows,
 } from "@/lib/infra/latency-flow";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 function isSurfaceReady(modeKind: string): boolean {
   return modeKind !== "no-workspace" && modeKind !== "session-loading";
@@ -91,7 +91,7 @@ export function collectTelemetryLatencyFlowCompletions(
 }
 
 export function useTelemetryLatencyFlows() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { mode } = useChatSurfaceState();
   const {
     activeSessionId,

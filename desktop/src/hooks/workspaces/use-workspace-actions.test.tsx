@@ -52,15 +52,15 @@ vi.mock("./use-workspaces", () => ({
   }),
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => {
-  const useHarnessStore = Object.assign(
+vi.mock("@/stores/sessions/harness-connection-store", () => {
+  const useHarnessConnectionStore = Object.assign(
     vi.fn((selector: (state: { runtimeUrl: string }) => unknown) =>
       selector({ runtimeUrl: "http://localhost:7007" })),
     {
       getState: vi.fn(() => ({ runtimeUrl: "http://localhost:7007" })),
     },
   );
-  return { useHarnessStore };
+  return { useHarnessConnectionStore };
 });
 
 vi.mock("@/lib/integrations/telemetry/client", () => ({

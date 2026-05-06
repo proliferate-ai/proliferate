@@ -5,7 +5,7 @@ import {
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@anyharness/sdk";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export type WorkspaceSession = Session & { workspaceId: string };
 
@@ -27,7 +27,7 @@ function removeWorkspaceSession(
 
 export function useWorkspaceSessionCache() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
 
   const setWorkspaceSessions = useCallback((
     workspaceId: string,

@@ -96,6 +96,43 @@ export function buildLiveSessionControlDescriptors(
   return controls;
 }
 
+export function mergeSessionConfigControlDescriptors(
+  launchControls: LiveSessionControlDescriptor[],
+  liveControls: LiveSessionControlDescriptor[],
+): LiveSessionControlDescriptor[] {
+  if (launchControls.length === 0) {
+    return liveControls;
+  }
+  if (liveControls.length === 0) {
+    return launchControls;
+  }
+
+  const liveControlsByKey = new Map(liveControls.map((control) => [control.key, control]));
+  const launchKeys = new Set<SupportedLiveControlKey>();
+  const merged = launchControls.map((launchControl) => {
+    launchKeys.add(launchControl.key);
+    const liveControl = liveControlsByKey.get(launchControl.key);
+    if (!liveControl) {
+      return launchControl;
+    }
+
+    return {
+      ...launchControl,
+      ...liveControl,
+      key: launchControl.key,
+      label: launchControl.label,
+    };
+  });
+
+  for (const liveControl of liveControls) {
+    if (!launchKeys.has(liveControl.key)) {
+      merged.push(liveControl);
+    }
+  }
+
+  return merged;
+}
+
 export function currentValueLabel(
   control: NormalizedSessionControl,
   currentValueOverride?: string | null,

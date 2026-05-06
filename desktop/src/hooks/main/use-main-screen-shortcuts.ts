@@ -1,6 +1,6 @@
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import { focusChatInput } from "@/lib/domain/focus-zone";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 interface UseMainScreenShortcutsArgs {
   canOpenCommandPalette: boolean;
@@ -17,7 +17,7 @@ export function useMainScreenShortcuts({
   onToggleLeftSidebar,
   onToggleRightPanel,
 }: UseMainScreenShortcutsArgs): void {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const canUseWorkspaceShortcuts = selectedWorkspaceId !== null;
 
   useShortcutHandler("workspace.focus-chat", () => {

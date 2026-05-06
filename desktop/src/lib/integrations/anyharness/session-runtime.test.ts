@@ -1,16 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import {
   collectInactiveSessionStreamIds,
-  createEmptySessionSlot,
-  createSessionSlotFromSummary,
-  detachAndCloseSessionSlotStreams,
+  createEmptySessionRuntimeRecord,
+  createSessionRuntimeRecordFromSummary,
+  detachAndCloseSessionStreams,
   fetchSessionHistory,
   pruneInactiveSessionStreams,
   resumeSession,
 } from "./session-runtime";
 import type { Session, SessionStreamHandle } from "@anyharness/sdk";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  patchSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import {
+  getSessionStreamHandle,
+  setSessionStreamHandle,
+  resetSessionStreamHandlesForTest,
+} from "@/lib/integrations/anyharness/session-stream-handles";
 
 const mocks = vi.hoisted(() => ({
   listEvents: vi.fn(),
@@ -46,16 +60,21 @@ beforeEach(() => {
   mocks.resolveRuntimeTargetForWorkspace.mockReset();
   mocks.resolveSessionMcpServersForLaunch.mockReset();
   mocks.workspacesGet.mockReset();
-  useHarnessStore.setState({
+  resetSessionStreamHandlesForTest();
+  useHarnessConnectionStore.setState({
     runtimeUrl: "http://localhost:5173",
-    selectedWorkspaceId: "workspace-1",
-    sessionRelationshipHints: {},
-    sessionSlots: {
-      "session-1": createEmptySessionSlot("session-1", "codex", {
-        workspaceId: "workspace-1",
-      }),
-    },
+    connectionState: "healthy",
+    error: null,
   });
+  useSessionSelectionStore.setState({
+    selectedWorkspaceId: "workspace-1",
+    activeSessionId: null,
+  });
+  useSessionDirectoryStore.getState().clearEntries();
+  useSessionTranscriptStore.getState().clearEntries();
+  putSessionRecord(createEmptySessionRecord("session-1", "codex", {
+    workspaceId: "workspace-1",
+  }));
 });
 
 describe("fetchSessionHistory", () => {
@@ -112,16 +131,16 @@ describe("fetchSessionHistory", () => {
 
 describe("collectInactiveSessionStreamIds", () => {
   it("initializes empty pending config changes on new slots", () => {
-    expect(createEmptySessionSlot("session-1", "codex").pendingConfigChanges).toEqual({});
+    expect(createEmptySessionRuntimeRecord("session-1", "codex").pendingConfigChanges).toEqual({});
   });
 
   it("defaults generic slots to pending relationships", () => {
-    expect(createEmptySessionSlot("session-1", "codex").sessionRelationship)
+    expect(createEmptySessionRuntimeRecord("session-1", "codex").sessionRelationship)
       .toEqual({ kind: "pending" });
   });
 
   it("applies and prunes relationship hints when slots mount later", () => {
-    useHarnessStore.getState().recordSessionRelationshipHint("child-session", {
+    useSessionDirectoryStore.getState().recordRelationshipHint("child-session", {
       kind: "subagent_child",
       parentSessionId: "parent-session",
       sessionLinkId: "link-1",
@@ -129,14 +148,13 @@ describe("collectInactiveSessionStreamIds", () => {
       workspaceId: "workspace-1",
     });
 
-    useHarnessStore.getState().putSessionSlot(
-      "child-session",
-      createEmptySessionSlot("child-session", "codex", {
+    putSessionRecord(
+      createEmptySessionRecord("child-session", "codex", {
         workspaceId: "workspace-1",
       }),
     );
 
-    expect(useHarnessStore.getState().sessionSlots["child-session"].sessionRelationship)
+    expect(useSessionDirectoryStore.getState().entriesById["child-session"]?.sessionRelationship)
       .toEqual({
         kind: "subagent_child",
         parentSessionId: "parent-session",
@@ -144,32 +162,41 @@ describe("collectInactiveSessionStreamIds", () => {
         relation: "subagent",
         workspaceId: "workspace-1",
       });
-    expect(useHarnessStore.getState().sessionRelationshipHints["child-session"])
+    expect(useSessionDirectoryStore.getState().relationshipHintsBySessionId["child-session"])
       .toBeUndefined();
   });
 
   it("prunes only idle, non-pending sessions with open stream handles", () => {
     const idleSlot = {
-      ...createEmptySessionSlot("session-idle", "codex"),
+      ...createEmptySessionRuntimeRecord("session-idle", "codex"),
       streamConnectionState: "open" as const,
-      sseHandle: { close() {} },
       transcriptHydrated: true,
       status: "idle" as const,
     };
     const workingSlot = {
-      ...createEmptySessionSlot("session-working", "codex"),
+      ...createEmptySessionRuntimeRecord("session-working", "codex"),
       streamConnectionState: "open" as const,
-      sseHandle: { close() {} },
       transcriptHydrated: true,
       status: "running" as const,
     };
     const pendingSlot = {
-      ...createEmptySessionSlot("pending-session:codex:1:abc123", "codex"),
+      ...createEmptySessionRuntimeRecord("pending-session:codex:1:abc123", "codex"),
       streamConnectionState: "open" as const,
-      sseHandle: { close() {} },
       transcriptHydrated: true,
       status: "idle" as const,
     };
+    for (const sessionId of [
+      "session-idle",
+      "session-working",
+      "pending-session:codex:1:abc123",
+    ]) {
+      setSessionStreamHandle({
+        sessionId,
+        workspaceId: "workspace-1",
+        runtimeUrl: "http://localhost:5173",
+        handle: { close() {} },
+      });
+    }
 
     const prunableSessionIds = collectInactiveSessionStreamIds({
       "session-idle": idleSlot,
@@ -183,27 +210,32 @@ describe("collectInactiveSessionStreamIds", () => {
   });
 });
 
-describe("detachAndCloseSessionSlotStreams", () => {
+describe("detachAndCloseSessionStreams", () => {
   it("closes the current handle before detaching it from the store", () => {
     let handle: SessionStreamHandle;
     const close = vi.fn(() => {
-      expect(useHarnessStore.getState().sessionSlots["session-1"].sseHandle).toBe(handle);
-      useHarnessStore.getState().patchSessionSlot("session-1", {
+      expect(getSessionStreamHandle("session-1")).toBe(handle);
+      patchSessionRecord("session-1", {
         title: "flushed title",
       });
     });
     handle = { close };
-    useHarnessStore.getState().patchSessionSlot("session-1", {
+    setSessionStreamHandle({
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      runtimeUrl: "http://localhost:5173",
+      handle,
+    });
+    patchSessionRecord("session-1", {
       streamConnectionState: "open",
-      sseHandle: handle,
       title: "initial title",
     });
 
-    expect(detachAndCloseSessionSlotStreams(["session-1"])).toBe(1);
+    expect(detachAndCloseSessionStreams(["session-1"])).toBe(1);
 
-    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    const slot = getSessionRecord("session-1")!;
     expect(close).toHaveBeenCalledTimes(1);
-    expect(slot.sseHandle).toBeNull();
+    expect(getSessionStreamHandle("session-1")).toBeNull();
     expect(slot.streamConnectionState).toBe("disconnected");
     expect(slot.title).toBe("flushed title");
   });
@@ -213,7 +245,7 @@ describe("pruneInactiveSessionStreams", () => {
   it("flushes pending stream events before deciding whether an idle stream is prunable", () => {
     const close = vi.fn();
     const flushPendingEvents = vi.fn(() => {
-      useHarnessStore.getState().patchSessionSlot("session-1", {
+      patchSessionRecord("session-1", {
         status: "running",
       });
     });
@@ -221,24 +253,29 @@ describe("pruneInactiveSessionStreams", () => {
       close,
       flushPendingEvents,
     } as SessionStreamHandle & { flushPendingEvents: () => void };
-    useHarnessStore.getState().patchSessionSlot("session-1", {
+    setSessionStreamHandle({
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      runtimeUrl: "http://localhost:5173",
+      handle,
+    });
+    patchSessionRecord("session-1", {
       streamConnectionState: "open",
-      sseHandle: handle,
       transcriptHydrated: true,
       status: "idle",
     });
 
     expect(pruneInactiveSessionStreams()).toEqual([]);
 
-    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    const slot = getSessionRecord("session-1")!;
     expect(flushPendingEvents).toHaveBeenCalledTimes(1);
     expect(close).not.toHaveBeenCalled();
-    expect(slot.sseHandle).toBe(handle);
+    expect(getSessionStreamHandle("session-1")).toBe(handle);
     expect(slot.status).toBe("running");
   });
 });
 
-describe("createSessionSlotFromSummary", () => {
+describe("createSessionRuntimeRecordFromSummary", () => {
   it("uses the subagent label as a fallback title for untitled runtime-created sessions", () => {
     const session = {
       id: "child-session",
@@ -253,7 +290,7 @@ describe("createSessionSlotFromSummary", () => {
       lastPromptAt: null,
     } as Session;
 
-    const slot = createSessionSlotFromSummary(session, "workspace-1", {
+    const slot = createSessionRuntimeRecordFromSummary(session, "workspace-1", {
       titleFallback: "haiku-test",
     });
 
@@ -273,11 +310,11 @@ describe("createSessionSlotFromSummary", () => {
       relation: "review",
       workspaceId: "workspace-1",
     };
-    const slot = createEmptySessionSlot("review-session", "codex", {
+    const slot = createEmptySessionRuntimeRecord("review-session", "codex", {
       workspaceId: "workspace-1",
       sessionRelationship: relationship,
     });
-    useHarnessStore.getState().putSessionSlot("review-session", slot);
+    putSessionRecord(slot);
 
     const patch = buildSessionSlotPatchFromSummary(
       {
@@ -295,9 +332,9 @@ describe("createSessionSlotFromSummary", () => {
       "workspace-1",
       slot.transcript,
     );
-    useHarnessStore.getState().patchSessionSlot("review-session", patch);
+    patchSessionRecord("review-session", patch);
 
-    expect(useHarnessStore.getState().sessionSlots["review-session"].sessionRelationship)
+    expect(useSessionDirectoryStore.getState().entriesById["review-session"]?.sessionRelationship)
       .toEqual(relationship);
   });
 });
@@ -326,14 +363,18 @@ describe("resumeSession", () => {
     });
 
     expect(mocks.resolveSessionMcpServersForLaunch).not.toHaveBeenCalled();
-    expect(mocks.resume).toHaveBeenCalledWith(
-      "session-1",
-      {
-        mcpBindingSummaries: undefined,
-        mcpServers: [],
-      },
-      undefined,
-    );
+    expect(mocks.resume).toHaveBeenCalledTimes(1);
+    const [sessionId, resumeOptions, requestOptions] = mocks.resume.mock.calls[0]!;
+    expect(sessionId).toBe("session-1");
+    expect(resumeOptions).toEqual({
+      mcpBindingSummaries: undefined,
+      mcpServers: [],
+    });
+    if (requestOptions !== undefined) {
+      expect(requestOptions).toMatchObject({
+        timingCategory: "session.resume",
+      });
+    }
   });
 
   it("does not force user Plugins on when resuming cowork sessions", async () => {

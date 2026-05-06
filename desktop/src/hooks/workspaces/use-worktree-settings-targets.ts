@@ -15,9 +15,9 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import type { CloudConnectionInfo } from "@/lib/integrations/cloud/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 const EMPTY_CLOUD_WORKSPACES: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["cloudWorkspaces"] = [];
 
@@ -41,7 +41,7 @@ export interface WorktreeSettingsTargetState {
 const EMPTY_TARGETS: WorktreeSettingsTarget[] = [];
 
 export function useWorktreeSettingsTargets() {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const queryClient = useQueryClient();
   const { data: workspaceCollections } = useWorkspaces();
   const cloudWorkspaces = workspaceCollections?.cloudWorkspaces ?? EMPTY_CLOUD_WORKSPACES;
@@ -108,12 +108,12 @@ export function useWorktreeSettingsTargets() {
   const targetDataQueries = useQueries({
     queries: targets.map((target) => ({
       queryKey: targetDataKey(target),
-      queryFn: async (): Promise<WorktreeInventoryResponse> => {
+      queryFn: async ({ signal }): Promise<WorktreeInventoryResponse> => {
         const client = getAnyHarnessClient({
           runtimeUrl: target.runtimeUrl,
           authToken: target.authToken,
         });
-        return client.worktrees.inventory();
+        return client.worktrees.inventory({ signal });
       },
       enabled: target.runtimeUrl.trim().length > 0,
     })),

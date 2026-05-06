@@ -10,8 +10,12 @@ import {
   resolveWithWorkspaceFallback,
 } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/workspace-ui-key";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import {
+  getSessionRecord,
+  getWorkspaceSessionRecords,
+  removeSessionRecord,
+} from "@/stores/sessions/session-records";
 import { invalidateSessionActivationIntent } from "@/hooks/sessions/session-activation-guard";
 import {
   writeChatShellIntentForEmptySurface,
@@ -23,19 +27,18 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 export function useDismissedSessionCleanup() {
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
-  const removeSessionSlot = useHarnessStore((state) => state.removeSessionSlot);
 
   return useCallback((sessionId: string, workspaceIdHint?: string | null) => {
-    const initialState = useHarnessStore.getState();
-    const closingSlot = initialState.sessionSlots[sessionId] ?? null;
+    const selection = useSessionSelectionStore.getState();
+    const closingSlot = getSessionRecord(sessionId);
     const workspaceId = closingSlot?.workspaceId
       ?? workspaceIdHint
-      ?? initialState.selectedWorkspaceId;
+      ?? selection.selectedWorkspaceId;
     const shellWorkspaceId = workspaceId
       ? resolveWorkspaceShellStateKey({
         workspaceId,
-        selectedWorkspaceId: initialState.selectedWorkspaceId,
-        selectedLogicalWorkspaceId: useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId,
+        selectedWorkspaceId: selection.selectedWorkspaceId,
+        selectedLogicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
       })
       : null;
     const shellState = useWorkspaceUiStore.getState();
@@ -50,11 +53,11 @@ export function useDismissedSessionCleanup() {
       || previousShellIntent === chatWorkspaceShellTabKey(sessionId);
 
     closeSessionSlotStream(sessionId);
-    removeSessionSlot(sessionId);
+    removeSessionRecord(sessionId);
     clearViewedSessionErrors([sessionId]);
 
-    if (initialState.activeSessionId === sessionId) {
-      const nextActiveId = Object.values(useHarnessStore.getState().sessionSlots)
+    if (selection.activeSessionId === sessionId) {
+      const nextActiveId = Object.values(getWorkspaceSessionRecords(workspaceId))
         .filter((slot) => sessionSlotBelongsToWorkspace(slot, workspaceId ?? null))
         .map((slot) => slot.sessionId)[0] ?? null;
 
@@ -70,7 +73,7 @@ export function useDismissedSessionCleanup() {
           invalidateSessionActivationIntent(workspaceId);
         }
       } else {
-        useHarnessStore.getState().setActiveSessionId(null);
+        useSessionSelectionStore.getState().setActiveSessionId(null);
         if (shouldUpdateShellIntent) {
           writeChatShellIntentForEmptySurface({
             workspaceId,
@@ -89,5 +92,5 @@ export function useDismissedSessionCleanup() {
       }
       removeWorkspaceSessionRecord(workspaceId, sessionId);
     }
-  }, [activateSession, closeSessionSlotStream, removeSessionSlot, removeWorkspaceSessionRecord]);
+  }, [activateSession, closeSessionSlotStream, removeWorkspaceSessionRecord]);
 }

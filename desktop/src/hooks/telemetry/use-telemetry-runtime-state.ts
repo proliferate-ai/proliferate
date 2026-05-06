@@ -4,11 +4,11 @@ import {
   setTelemetryTag,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export function useTelemetryRuntimeState() {
-  const connectionState = useHarnessStore((state) => state.connectionState);
-  const runtimeError = useHarnessStore((state) => state.error);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
+  const runtimeError = useHarnessConnectionStore((state) => state.error);
   const previousConnectionStateRef = useRef<RuntimeConnectionTelemetryState | null>(null);
 
   useEffect(() => {

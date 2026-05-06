@@ -21,7 +21,7 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import { resetWorkspaceOwnerFlipState } from "@/hooks/workspaces/mobility/reset-workspace-owner-flip-state";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility-preflight-error";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
@@ -62,7 +62,7 @@ export function useCloudToLocalHandoff(args: {
   mobilityWorkspaceId: string | null;
 }) {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setConfirmSnapshot = useWorkspaceMobilityUiStore((state) => state.setConfirmSnapshot);
   const clearConfirmSnapshot = useWorkspaceMobilityUiStore((state) => state.clearConfirmSnapshot);
   const showMcpNotice = useWorkspaceMobilityUiStore((state) => state.showMcpNotice);

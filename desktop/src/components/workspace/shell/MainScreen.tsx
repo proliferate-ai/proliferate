@@ -5,16 +5,16 @@ import { StandardWorkspaceShell } from "@/components/workspace/shell/StandardWor
 import { resolveWorkspaceShellSurface } from "@/lib/domain/workspaces/shell-surface";
 import { usePersistedLogicalWorkspaceSelection } from "@/hooks/workspaces/use-persisted-logical-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useHotSessionIngest } from "@/hooks/sessions/use-hot-session-ingest";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
 export function MainScreen() {
   usePersistedLogicalWorkspaceSelection();
-  const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  useHotSessionIngest();
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedWorkspace = useMemo(
@@ -24,7 +24,6 @@ export function MainScreen() {
   const shellSurface = resolveWorkspaceShellSurface(
     selectedWorkspace,
     pendingWorkspaceEntry,
-    { pendingCoworkLaunch: activeLaunchIntent?.targetKind === "cowork" },
   );
 
   if (shellSurface === "cowork") {

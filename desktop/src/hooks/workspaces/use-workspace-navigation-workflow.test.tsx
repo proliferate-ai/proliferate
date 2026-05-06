@@ -14,7 +14,7 @@ const harnessMocks = vi.hoisted(() => ({
     pendingWorkspaceEntry: null as unknown,
     selectedWorkspaceId: null as string | null,
     setPendingWorkspaceEntry: vi.fn(),
-    deselectWorkspacePreservingSlots: vi.fn(),
+    deselectWorkspacePreservingSessions: vi.fn(),
   },
 }));
 
@@ -51,8 +51,8 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => routerMocks.navigate,
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => ({
-  useHarnessStore: (selector: (state: typeof harnessMocks.state) => unknown) =>
+vi.mock("@/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (selector: (state: typeof harnessMocks.state) => unknown) =>
     selector(harnessMocks.state),
 }));
 
@@ -101,7 +101,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
 
     act(() => result.current.goToTopLevelRoute("/"));
 
-    expect(harnessMocks.state.deselectWorkspacePreservingSlots).toHaveBeenCalledTimes(1);
+    expect(harnessMocks.state.deselectWorkspacePreservingSessions).toHaveBeenCalledTimes(1);
     expect(harnessMocks.state.setPendingWorkspaceEntry).not.toHaveBeenCalled();
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
     expect(routerMocks.navigate).toHaveBeenCalledWith("/");
@@ -114,7 +114,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
     act(() => result.current.goToTopLevelRoute("/"));
 
     expect(harnessMocks.state.setPendingWorkspaceEntry).toHaveBeenCalledWith(null);
-    expect(harnessMocks.state.deselectWorkspacePreservingSlots).not.toHaveBeenCalled();
+    expect(harnessMocks.state.deselectWorkspacePreservingSessions).not.toHaveBeenCalled();
     expect(editorMocks.resetWorkspaceEditorState).toHaveBeenCalledTimes(1);
     expect(routerMocks.navigate).toHaveBeenCalledWith("/");
   });
@@ -129,7 +129,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
     expect(toastMocks.show).toHaveBeenCalledWith(
       "Finish the current workspace move before leaving this workspace.",
     );
-    expect(harnessMocks.state.deselectWorkspacePreservingSlots).not.toHaveBeenCalled();
+    expect(harnessMocks.state.deselectWorkspacePreservingSessions).not.toHaveBeenCalled();
     expect(routerMocks.navigate).not.toHaveBeenCalled();
   });
 

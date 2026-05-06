@@ -56,12 +56,11 @@ describe("resolveWorkspaceShellSurface", () => {
     )).toBe("cowork");
   });
 
-  it("uses the cowork shell while a cowork launch intent is pending", () => {
+  it("keeps launch intent projection on the mounted standard shell", () => {
     expect(resolveWorkspaceShellSurface(
       null,
       null,
-      { pendingCoworkLaunch: true },
-    )).toBe("cowork");
+    )).toBe("standard");
   });
 
   it("keeps standard workspaces on the standard shell", () => {

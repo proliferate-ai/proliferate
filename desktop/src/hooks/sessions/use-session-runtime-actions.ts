@@ -44,6 +44,7 @@ import {
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
 } from "@/lib/domain/sessions/pending-config";
+import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/pending-prompts";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import {
   clearSessionReconnectTimer,
@@ -53,8 +54,6 @@ import {
   rememberLastViewedSession,
   trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -72,6 +71,26 @@ import {
   useSessionStreamFlushControllerFactory,
   type SessionStreamFlushController,
 } from "@/hooks/sessions/use-session-stream-flush";
+import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  activityFromTranscript,
+  activitySnapshotFromDirectoryEntry,
+  useSessionDirectoryStore,
+} from "@/stores/sessions/session-directory-store";
+import {
+  getMaterializedSessionId,
+  getSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import {
+  clearSessionStreamHandle,
+  closeSessionStreamHandle,
+  setSessionStreamHandle,
+} from "@/lib/integrations/anyharness/session-stream-handles";
+import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 
 const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;
 const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
@@ -117,22 +136,24 @@ export function useSessionRuntimeActions() {
   }, [getWorkspaceSurface]);
 
   const activateSession = useCallback((sessionId: string | null) => {
-    const state = useHarnessStore.getState();
-    state.setActiveSessionId(sessionId);
+    useSessionSelectionStore.getState().setActiveSessionId(sessionId);
     if (!sessionId) {
       return;
     }
 
-    const slot = useHarnessStore.getState().sessionSlots[sessionId];
-    if (slot?.workspaceId) {
-      const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
-      const selectedLogicalWorkspaceId =
-        useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId;
-      const workspaceUiKey = slot.workspaceId === selectedWorkspaceId
-        ? resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId)
-        : slot.workspaceId;
+    const entry = useSessionDirectoryStore.getState().entriesById[sessionId];
+    if (entry?.workspaceId) {
+      const selection = useSessionSelectionStore.getState();
+      const workspaceUiKey = entry.workspaceId === selection.selectedWorkspaceId
+        ? resolveWorkspaceUiKey(
+          selection.selectedLogicalWorkspaceId,
+          selection.selectedWorkspaceId,
+        )
+        : entry.workspaceId;
       if (workspaceUiKey) {
-        rememberLastViewedSession(workspaceUiKey, sessionId);
+        if (entry.materializedSessionId) {
+          rememberLastViewedSession(workspaceUiKey, entry.materializedSessionId);
+        }
       }
     }
   }, []);
@@ -142,8 +163,7 @@ export function useSessionRuntimeActions() {
     session: Session,
     workspaceId: string,
   ) => {
-    const state = useHarnessStore.getState();
-    const existing = state.sessionSlots[sessionId];
+    const existing = getSessionRecord(sessionId);
     if (!existing) {
       return;
     }
@@ -173,22 +193,38 @@ export function useSessionRuntimeActions() {
     );
 
     const resolvedWorkspaceId = existing.workspaceId ?? workspaceId;
-    state.patchSessionSlot(sessionId, {
-      ...patch,
-      liveConfig: effectiveLiveConfig,
-      modelId: shouldApplyConfigFields ? patch.modelId : existing.modelId,
-      modeId: shouldApplyConfigFields ? patch.modeId : existing.modeId,
-      optimisticPrompt:
-        patch.status === "closed" || patch.status === "errored"
-          ? null
-          : existing.optimisticPrompt,
+    const nextStatus = resolveSessionStatus(patch.status, {
+      executionSummary: patch.executionSummary,
+      streamConnectionState: existing.streamConnectionState,
       transcript: nextTranscript,
-      pendingConfigChanges: reconcileResult.pendingConfigChanges,
-      status: resolveSessionStatus(patch.status, {
+    });
+    batchSessionStoreWrites(() => {
+      useSessionDirectoryStore.getState().patchEntry(sessionId, {
+        materializedSessionId: session.id,
+        agentKind: patch.agentKind,
+        workspaceId: patch.workspaceId,
+        modelId: shouldApplyConfigFields ? patch.modelId : existing.modelId,
+        modeId: shouldApplyConfigFields ? patch.modeId : existing.modeId,
+        title: patch.title,
+        actionCapabilities: patch.actionCapabilities,
+        liveConfig: effectiveLiveConfig,
         executionSummary: patch.executionSummary,
-        streamConnectionState: existing.streamConnectionState,
+        mcpBindingSummaries: patch.mcpBindingSummaries,
+        pendingConfigChanges: reconcileResult.pendingConfigChanges,
+        status: nextStatus,
+        lastPromptAt: patch.lastPromptAt,
+        activity: activityFromTranscript(nextTranscript, {
+          status: nextStatus,
+          executionSummary: patch.executionSummary,
+        }),
+      });
+      useSessionTranscriptStore.getState().patchEntry(sessionId, {
         transcript: nextTranscript,
-      }),
+        optimisticPrompt:
+          shouldClearOptimisticPromptAfterSessionSummary(patch.status)
+            ? null
+            : existing.optimisticPrompt,
+      });
     });
 
     const interactionTimestamp =
@@ -233,7 +269,7 @@ export function useSessionRuntimeActions() {
       if (options?.isCurrent && !options.isCurrent()) {
         return false;
       }
-      const slot = useHarnessStore.getState().sessionSlots[sessionId];
+      const slot = getSessionRecord(sessionId);
       if (!slot) {
         return false;
       }
@@ -298,7 +334,7 @@ export function useSessionRuntimeActions() {
           count: events.length,
         });
       }
-      const currentSlot = useHarnessStore.getState().sessionSlots[sessionId];
+      const currentSlot = getSessionRecord(sessionId);
       if (!currentSlot || (options?.isCurrent && !options.isCurrent())) {
         finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
         return false;
@@ -341,14 +377,9 @@ export function useSessionRuntimeActions() {
         }
 
         const storeStartedAt = performance.now();
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        applyHistoryStateToStores(sessionId, currentSlot, {
           events: nextState.state.events,
           transcript: nextState.state.transcript,
-          status: resolveSessionStatus(currentSlot.status, {
-            executionSummary: currentSlot.executionSummary,
-            streamConnectionState: currentSlot.streamConnectionState,
-            transcript: nextState.state.transcript,
-          }),
         });
         for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
@@ -419,14 +450,9 @@ export function useSessionRuntimeActions() {
         }
 
         const storeStartedAt = performance.now();
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        applyHistoryStateToStores(sessionId, currentSlot, {
           events: replacementEvents,
           transcript: nextState.transcript,
-          status: resolveSessionStatus(currentSlot.status, {
-            executionSummary: currentSlot.executionSummary,
-            streamConnectionState: currentSlot.streamConnectionState,
-            transcript: nextState.transcript,
-          }),
         });
         for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
@@ -495,14 +521,9 @@ export function useSessionRuntimeActions() {
         });
       }
       const storeStartedAt = performance.now();
-      useHarnessStore.getState().patchSessionSlot(sessionId, {
+      applyHistoryStateToStores(sessionId, currentSlot, {
         events: nextState.events,
         transcript: nextState.transcript,
-        status: resolveSessionStatus(currentSlot.status, {
-          executionSummary: currentSlot.executionSummary,
-          streamConnectionState: currentSlot.streamConnectionState,
-          transcript: nextState.transcript,
-        }),
       });
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementMetric({
@@ -548,7 +569,7 @@ export function useSessionRuntimeActions() {
       });
       return true;
     } catch (error) {
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && !isSessionHistoryTimeoutAbort(error)) {
         console.debug("[session-runtime] session history rehydrate failed", error);
       }
       logLatency("session.history.rehydrate.failed", {
@@ -623,21 +644,14 @@ export function useSessionRuntimeActions() {
 
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     clearSessionReconnectTimer(sessionId);
-    const slot = useHarnessStore.getState().sessionSlots[sessionId];
-    if (slot) {
-      const handle = slot.sseHandle;
-      handle?.close();
-      clearSessionReconnectTimer(sessionId);
-      const latestSlot = useHarnessStore.getState().sessionSlots[sessionId];
-      if (!latestSlot) {
-        return;
-      }
-      if (!handle || latestSlot.sseHandle === handle) {
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
-          sseHandle: null,
-          streamConnectionState: "disconnected",
-        });
-      }
+    const materializedSessionId = getMaterializedSessionId(sessionId);
+    const closed = materializedSessionId
+      ? closeSessionStreamHandle(materializedSessionId)
+      : false;
+    if (closed || getSessionRecord(sessionId)) {
+      useSessionDirectoryStore.getState().patchEntry(sessionId, {
+        streamConnectionState: "disconnected",
+      });
     }
   }, []);
 
@@ -648,9 +662,12 @@ export function useSessionRuntimeActions() {
       openTimeoutMs?: number;
       resumeIfActive?: boolean;
       allowColdIdleNoStream?: boolean;
+      hydrateBeforeStream?: boolean;
       skipInitialRefresh?: boolean;
       refreshOnStartupReady?: boolean;
       forceReconnect?: boolean;
+      reconnectOwner?: "internal" | "external";
+      onReconnectNeeded?: () => void;
       requestHeaders?: HeadersInit;
       measurementOperationId?: MeasurementOperationId | null;
       isCurrent?: () => boolean;
@@ -659,7 +676,7 @@ export function useSessionRuntimeActions() {
     if (options?.isCurrent && !options.isCurrent()) {
       return;
     }
-    const initialSlot = useHarnessStore.getState().sessionSlots[sessionId];
+    const initialSlot = getSessionRecord(sessionId);
     if (!initialSlot) {
       return;
     }
@@ -673,7 +690,7 @@ export function useSessionRuntimeActions() {
     // session-loading + substep "loading-history" forever. We always patch
     // transcriptHydrated:true even on rehydrate failure, mirroring
     // selectSession's behavior so the gate clears either way.
-    if (!initialSlot.transcriptHydrated) {
+    if (!initialSlot.transcriptHydrated && options?.hydrateBeforeStream !== false) {
       const hydrateStartedAt = performance.now();
       await rehydrateSessionSlotFromHistory(sessionId, {
         requestHeaders: options?.requestHeaders,
@@ -683,7 +700,7 @@ export function useSessionRuntimeActions() {
       if (options?.isCurrent && !options.isCurrent()) {
         return;
       }
-      useHarnessStore.getState().patchSessionSlot(sessionId, {
+      useSessionDirectoryStore.getState().patchEntry(sessionId, {
         transcriptHydrated: true,
       });
       recordMeasurementWorkflowStep({
@@ -691,9 +708,16 @@ export function useSessionRuntimeActions() {
         step: "session.stream.initial_history_hydrate",
         startedAt: hydrateStartedAt,
       });
+    } else if (!initialSlot.transcriptHydrated) {
+      recordMeasurementWorkflowStep({
+        operationId: options?.measurementOperationId,
+        step: "session.stream.initial_history_hydrate",
+        startedAt: performance.now(),
+        outcome: "skipped",
+      });
     }
 
-    const slot = useHarnessStore.getState().sessionSlots[sessionId];
+    const slot = getSessionRecord(sessionId);
     if (!slot) {
       return;
     }
@@ -726,7 +750,7 @@ export function useSessionRuntimeActions() {
       });
     }
 
-    const refreshedSlot = useHarnessStore.getState().sessionSlots[sessionId];
+    const refreshedSlot = getSessionRecord(sessionId);
     if (options?.isCurrent && !options.isCurrent()) {
       return;
     }
@@ -746,7 +770,7 @@ export function useSessionRuntimeActions() {
       return;
     }
 
-    const currentSlot = useHarnessStore.getState().sessionSlots[sessionId];
+    const currentSlot = getSessionRecord(sessionId);
     const afterSeq = currentSlot?.transcript.lastSeq ?? 0;
     const connectStartedAt = performance.now();
     const standaloneStreamMeasurementOperationId = startMeasurementOperation({
@@ -847,8 +871,8 @@ export function useSessionRuntimeActions() {
       if (!isStillCurrent()) {
         return false;
       }
-      const latestSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
-      return resolveSessionViewState(latestSlot) === "working";
+      const latestEntry = useSessionDirectoryStore.getState().entriesById[sessionId] ?? null;
+      return resolveSessionViewState(activitySnapshotFromDirectoryEntry(latestEntry)) === "working";
     };
     const scheduleActiveSummaryRefresh = () => {
       clearActiveSummaryRefreshTimer();
@@ -858,7 +882,8 @@ export function useSessionRuntimeActions() {
 
       activeSummaryRefreshTimer = setTimeout(() => {
         activeSummaryRefreshTimer = null;
-        if (!handle || !isCurrentStreamHandle(sessionId, handle)) {
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        if (!handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
           return;
         }
         if (!shouldRefreshActiveSummary()) {
@@ -882,7 +907,13 @@ export function useSessionRuntimeActions() {
             elapsedMs: Math.round(performance.now() - refreshStartedAt),
           });
         }).finally(() => {
-          if (handle && isCurrentStreamHandle(sessionId, handle) && shouldRefreshActiveSummary()) {
+          const materializedSessionId = getMaterializedSessionId(sessionId);
+          if (
+            handle
+            && materializedSessionId
+            && isCurrentStreamHandle(materializedSessionId, handle)
+            && shouldRefreshActiveSummary()
+          ) {
             scheduleActiveSummaryRefresh();
           }
         });
@@ -892,6 +923,10 @@ export function useSessionRuntimeActions() {
     const scheduleReconnect = (delayMs = 350) => {
       clearSessionReconnectTimer(sessionId);
       if (!isStillCurrent() || !shouldReconnectStream(sessionId)) {
+        return;
+      }
+      if (options?.reconnectOwner === "external") {
+        options.onReconnectNeeded?.();
         return;
       }
 
@@ -918,7 +953,12 @@ export function useSessionRuntimeActions() {
       streamMeasurementOperationId,
       requestHeaders: options?.requestHeaders,
       isStillCurrent,
-      isCurrentStream: () => !!handle && isCurrentStreamHandle(sessionId, handle),
+      isCurrentStream: () => {
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        return !!handle
+          && !!materializedSessionId
+          && isCurrentStreamHandle(materializedSessionId, handle);
+      },
       closeCurrentHandle: () => {
         handle?.close();
       },
@@ -942,18 +982,33 @@ export function useSessionRuntimeActions() {
           streamFlushController,
         );
         handle = flushAwareHandle;
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
-          sseHandle: flushAwareHandle,
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        if (!materializedSessionId) {
+          nextHandle.close();
+          return;
+        }
+        setSessionStreamHandle({
+          sessionId: materializedSessionId,
+          workspaceId: currentSlot?.workspaceId ?? null,
+          runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
+          handle: flushAwareHandle,
+        });
+        useSessionDirectoryStore.getState().patchEntry(sessionId, {
           streamConnectionState: "connecting",
         });
       },
       onOpen: () => {
-        if (!isStillCurrent() || !handle || !isCurrentStreamHandle(sessionId, handle)) {
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        if (!isStillCurrent() || !handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
           return;
         }
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        useSessionDirectoryStore.getState().patchEntry(sessionId, {
           streamConnectionState: "open",
         });
+        useSessionIngestStore.getState().markCurrentIfContiguous(
+          sessionId,
+          getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
+        );
         markLatencyFlowLiveAttached(sessionId);
         logLatency("session.stream.open", {
           sessionId,
@@ -969,7 +1024,8 @@ export function useSessionRuntimeActions() {
         finishStreamConnectMeasurement("completed");
       },
       onEvent: (envelope) => {
-        if (!isStillCurrent() || !handle || !isCurrentStreamHandle(sessionId, handle)) {
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        if (!isStillCurrent() || !handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
           return;
         }
         streamFlushController.enqueue(envelope);
@@ -981,12 +1037,19 @@ export function useSessionRuntimeActions() {
         resolveOpen?.();
         clearStartupReadyRefreshTimer();
         clearActiveSummaryRefreshTimer();
-        if (!isStillCurrent() || !handle || !isCurrentStreamHandle(sessionId, handle)) {
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        if (!isStillCurrent() || !handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
           return;
         }
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
-          sseHandle: null,
+        clearSessionStreamHandle(materializedSessionId, handle);
+        useSessionDirectoryStore.getState().patchEntry(sessionId, {
           streamConnectionState: "disconnected",
+        });
+        useSessionIngestStore.getState().markStale(sessionId, {
+          lastAppliedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
+          lastObservedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
+          gapAfterSeq: null,
+          lastErrorAt: new Date().toISOString(),
         });
         scheduleReconnect();
       },
@@ -997,15 +1060,22 @@ export function useSessionRuntimeActions() {
         resolveOpen?.();
         clearStartupReadyRefreshTimer();
         clearActiveSummaryRefreshTimer();
-        if (!isStillCurrent() || !handle || !isCurrentStreamHandle(sessionId, handle)) {
+        const materializedSessionId = getMaterializedSessionId(sessionId);
+        if (!isStillCurrent() || !handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
           return;
         }
 
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
-          sseHandle: null,
+        clearSessionStreamHandle(materializedSessionId, handle);
+        useSessionDirectoryStore.getState().patchEntry(sessionId, {
           streamConnectionState: "ended",
         });
         if (shouldReconnectStream(sessionId)) {
+          useSessionIngestStore.getState().markStale(sessionId, {
+            lastAppliedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
+            lastObservedSeq: getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,
+            gapAfterSeq: null,
+            lastErrorAt: new Date().toISOString(),
+          });
           scheduleReconnect();
         }
       },
@@ -1049,6 +1119,12 @@ export function useSessionRuntimeActions() {
     rehydrateSessionSlotFromHistory,
     refreshSessionSlotMeta,
   };
+}
+
+function isSessionHistoryTimeoutAbort(error: unknown): boolean {
+  return error instanceof Error
+    && error.name === "AbortError"
+    && error.message === "Session history request timed out";
 }
 
 function mergeFetchedHistoryWithNewerEvents(
@@ -1104,6 +1180,35 @@ function markSessionApplyForNextCommit(operationId: MeasurementOperationId | nul
     return;
   }
   markOperationForNextCommit(operationId, SESSION_APPLY_MEASUREMENT_SURFACES);
+}
+
+function applyHistoryStateToStores(
+  sessionId: string,
+  currentRecord: SessionRuntimeRecord,
+  nextState: {
+    events: SessionEventEnvelope[];
+    transcript: TranscriptState;
+  },
+): void {
+  const status = resolveSessionStatus(currentRecord.status, {
+    executionSummary: currentRecord.executionSummary,
+    streamConnectionState: currentRecord.streamConnectionState,
+    transcript: nextState.transcript,
+  });
+  batchSessionStoreWrites(() => {
+    useSessionTranscriptStore.getState().patchEntry(sessionId, {
+      events: nextState.events,
+      transcript: nextState.transcript,
+    });
+    useSessionDirectoryStore.getState().patchEntry(sessionId, {
+      status,
+      modeId: nextState.transcript.currentModeId ?? currentRecord.modeId,
+      activity: activityFromTranscript(nextState.transcript, {
+        status,
+        executionSummary: currentRecord.executionSummary,
+      }),
+    });
+  });
 }
 
 function uniqueMeasurementOperationIds(

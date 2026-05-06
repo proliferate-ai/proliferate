@@ -79,9 +79,10 @@ function makeState(overrides: Partial<SessionDebugActionState> = {}): SessionDeb
     selectedWorkspaceId: "workspace-ui",
     selectedLogicalWorkspaceId: "logical-workspace",
     activeSessionId: "11111111-2222-3333-4444-555555555555",
-    sessionSlots: {
+    sessionRecords: {
       "11111111-2222-3333-4444-555555555555": {
         sessionId: "11111111-2222-3333-4444-555555555555",
+        materializedSessionId: "11111111-2222-3333-4444-555555555555",
         workspaceId: "workspace-ui",
         agentKind: "codex",
         modelId: "gpt-5.4",
@@ -199,6 +200,35 @@ describe("session debug actions", () => {
     expect(payload.sessions[0].liveConfig).toEqual({ liveConfig: null });
   });
 
+  it("active session export uses the materialized session id for projected records", async () => {
+    const { client, sessions } = makeClient();
+    const { dependencies, saveDiagnosticJson } = makeDependencies(client);
+
+    await exportActiveSessionDebugJsonAction(makeState({
+      activeSessionId: "client-session:codex:1:abc123",
+      sessionRecords: {
+        "client-session:codex:1:abc123": {
+          sessionId: "client-session:codex:1:abc123",
+          materializedSessionId: "real-session-id",
+          workspaceId: "workspace-ui",
+          agentKind: "codex",
+          modelId: "gpt-5.4",
+          modeId: "default",
+          title: "Debug session",
+          status: "idle",
+          actionCapabilities: { fork: false, targetedFork: false },
+        },
+      },
+    }), dependencies);
+
+    expect(sessions.get).toHaveBeenCalledWith("real-session-id");
+    expect(sessions.listEvents).toHaveBeenCalledWith("real-session-id");
+    expect(sessions.listRawNotifications).toHaveBeenCalledWith("real-session-id");
+    expect(sessions.getLiveConfig).toHaveBeenCalledWith("real-session-id");
+    const payload = JSON.parse(saveDiagnosticJson.mock.calls[0][1]);
+    expect(payload.scope).toEqual({ kind: "session", id: "real-session-id" });
+  });
+
   it("workspace export lists sessions with includeDismissed true and exports each returned session", async () => {
     const returnedSessions = [
       makeSession("22222222-2222-3333-4444-555555555555"),
@@ -211,7 +241,7 @@ describe("session debug actions", () => {
 
     await exportWorkspaceDebugJsonAction(makeState({
       activeSessionId: null,
-      sessionSlots: {},
+      sessionRecords: {},
     }), dependencies);
 
     expect(sessions.list).toHaveBeenCalledWith("workspace-ah", { includeDismissed: true });
@@ -232,7 +262,7 @@ describe("session debug actions", () => {
 
     await exportWorkspaceDebugJsonAction(makeState({
       activeSessionId: null,
-      sessionSlots: {},
+      sessionRecords: {},
     }), dependencies);
 
     expect(sessions.listRawNotifications).toHaveBeenCalled();

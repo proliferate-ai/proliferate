@@ -1778,6 +1778,7 @@ async fn run_actor(
                                     let content_parts = current_payload.content_parts();
                                     turn_id = sink.begin_turn(
                                         current_payload.text_summary.clone(),
+                                        current_prompt_id.clone(),
                                         content_parts,
                                         current_payload.public_provenance(),
                                     );
@@ -1807,6 +1808,7 @@ async fn run_actor(
                                     }
                                     sink.pending_prompt_removed(PendingPromptRemovedPayload {
                                         seq,
+                                        prompt_id: current_prompt_id.clone(),
                                         reason: PendingPromptRemovalReason::Executed,
                                     });
                                 }
@@ -4527,6 +4529,7 @@ async fn handle_edit_pending_prompt(
     };
     match store.update_pending_prompt_payload(session_id, seq, &payload) {
         Ok(true) => {
+            let updated_record = store.find_pending_prompt(session_id, seq).ok().flatten();
             let new_attachment_ids = payload.attachment_ids();
             let removed = old_attachment_ids
                 .iter()
@@ -4547,12 +4550,12 @@ async fn handle_edit_pending_prompt(
             let content_parts = payload.content_parts();
             sink.pending_prompt_updated(PendingPromptUpdatedPayload {
                 seq,
+                prompt_id: updated_record
+                    .as_ref()
+                    .and_then(|record| record.prompt_id.clone()),
                 text: payload.text_summary,
                 content_parts,
-                prompt_provenance: store
-                    .find_pending_prompt(session_id, seq)
-                    .ok()
-                    .flatten()
+                prompt_provenance: updated_record
                     .and_then(|record| record.prompt_payload().public_provenance()),
             });
             Ok(())
@@ -4597,6 +4600,7 @@ async fn handle_delete_pending_prompt(
             let mut sink = event_sink.lock().await;
             sink.pending_prompt_removed(PendingPromptRemovedPayload {
                 seq,
+                prompt_id: record.prompt_id.clone(),
                 reason: PendingPromptRemovalReason::Deleted,
             });
             Ok(())

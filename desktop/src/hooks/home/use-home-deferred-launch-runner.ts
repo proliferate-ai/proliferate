@@ -9,7 +9,7 @@ import {
   type ChatLaunchRetryMode,
 } from "@/lib/domain/chat/launch-intent";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const DEFERRED_HOME_LAUNCH_STALE_MS = 60 * 60 * 1000;
@@ -29,7 +29,7 @@ function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
 }
 
 export function useHomeDeferredLaunchRunner() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const launchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const markConsuming = useDeferredHomeLaunchStore((state) => state.markConsuming);
   const markPending = useDeferredHomeLaunchStore((state) => state.markPending);

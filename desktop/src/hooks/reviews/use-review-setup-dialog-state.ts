@@ -20,7 +20,8 @@ import {
 } from "@/lib/domain/reviews/review-config";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -29,12 +30,11 @@ const EMPTY_PERSONALITY_TEMPLATES: ReviewPersonaTemplate[] = [];
 
 export function useReviewSetupDialogState() {
   const navigate = useNavigate();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const setup = useReviewUiStore((state) => state.setup);
   const closeSetup = useReviewUiStore((state) => state.closeSetup);
   const beginStartingReview = useReviewUiStore((state) => state.beginStartingReview);
   const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
-  const sessionSlots = useHarnessStore((state) => state.sessionSlots);
   const reviewDefaultsByKind = useUserPreferencesStore((state) => state.reviewDefaultsByKind);
   const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
   const setPreference = useUserPreferencesStore((state) => state.set);
@@ -52,7 +52,9 @@ export function useReviewSetupDialogState() {
   const parentSessionId = setupTarget?.kind === "plan"
     ? setupTarget.plan.sourceSessionId
     : setupTarget?.parentSessionId ?? null;
-  const parentSlot = parentSessionId ? sessionSlots[parentSessionId] ?? null : null;
+  const parentSlot = useSessionDirectoryStore((state) =>
+    parentSessionId ? state.entriesById[parentSessionId] ?? null : null
+  );
   const sessionDefaults = useMemo<ReviewSessionDefaults | null>(() => {
     if (!parentSlot) {
       return null;

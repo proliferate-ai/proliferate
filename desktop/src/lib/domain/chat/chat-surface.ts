@@ -29,7 +29,7 @@ export function resolveLaunchIntentSurfaceOverride(args: {
 
   if (
     args.activeSessionId
-    && args.activeSessionId === args.launchIntentSessionId
+    && (!args.launchIntentSessionId || args.activeSessionId === args.launchIntentSessionId)
     && args.hasVisibleSessionContent
   ) {
     return {

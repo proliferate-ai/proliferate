@@ -768,7 +768,11 @@ mod tests {
         reason: v1::PendingPromptRemovalReason,
     ) -> String {
         serde_json::to_string(&v1::SessionEvent::PendingPromptRemoved(
-            v1::PendingPromptRemovedPayload { seq, reason },
+            v1::PendingPromptRemovedPayload {
+                seq,
+                prompt_id: None,
+                reason,
+            },
         ))
         .expect("serialize pending prompt removed event")
     }

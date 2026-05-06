@@ -4,12 +4,12 @@ import { humanizeBranchName } from "@/lib/domain/workspaces/branch-naming";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud-ids";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useSidebarSupportContext() {
   const location = useLocation();
   const { data: workspaceCollections } = useWorkspaces();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
 
   return useMemo(() => {
     const pathname = `${location.pathname}${location.search}`;

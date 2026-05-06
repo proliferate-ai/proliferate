@@ -3,7 +3,7 @@ import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
 import { saveCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
 import { readRepoTrackedTextFile } from "@/lib/integrations/anyharness/files";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -52,7 +52,7 @@ export async function buildTrackedFilesPayload(
 }
 
 export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | null) {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const queryClient = useQueryClient();
 
   return useMutation<CloudRepoConfigResponse, Error, SaveCloudRepoConfigInput>({

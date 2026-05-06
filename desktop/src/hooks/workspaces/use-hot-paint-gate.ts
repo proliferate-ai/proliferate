@@ -1,12 +1,12 @@
 import {
   isHotPaintGatePendingForWorkspace,
-  useHarnessStore,
-} from "@/stores/sessions/harness-store";
+  useSessionSelectionStore,
+} from "@/stores/sessions/session-selection-store";
 
 export function useIsHotPaintGatePendingForWorkspace(
   workspaceId: string | null | undefined,
 ): boolean {
-  return useHarnessStore((state) =>
+  return useSessionSelectionStore((state) =>
     isHotPaintGatePendingForWorkspace(state.hotPaintGate, workspaceId)
   );
 }

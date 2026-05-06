@@ -4,7 +4,8 @@ import type {
   CloudWorkspaceStatus,
 } from "@/lib/integrations/cloud/client";
 import { useMemo } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
@@ -30,9 +31,9 @@ export interface SelectedCloudRuntimeState {
 
 export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const queryClient = useQueryClient();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { data: workspaceCollections } = useWorkspaces();
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);

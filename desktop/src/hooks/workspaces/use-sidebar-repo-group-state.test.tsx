@@ -7,7 +7,7 @@ import {
   buildGroups,
   makeLocalLogicalWorkspace,
 } from "@/lib/domain/workspaces/sidebar-test-fixtures";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import {
   WORKSPACE_SIDEBAR_SHOW_MORE_DEFAULTS,
@@ -34,7 +34,7 @@ describe("useSidebarRepoGroupState", () => {
     useWorkspaceSidebarShowMoreStore.setState({
       ...WORKSPACE_SIDEBAR_SHOW_MORE_DEFAULTS,
     });
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       pendingWorkspaceEntry: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
@@ -53,7 +53,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });
@@ -93,7 +93,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });
@@ -110,7 +110,7 @@ describe("useSidebarRepoGroupState", () => {
     });
     act(() => {
       rendered.result.current.handleToggleRepoShowMore("/tmp/repo-a");
-      useHarnessStore.setState({
+      useSessionSelectionStore.setState({
         selectedWorkspaceId,
         workspaceSelectionNonce: 2,
       });
@@ -136,7 +136,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });
@@ -153,7 +153,7 @@ describe("useSidebarRepoGroupState", () => {
     });
     act(() => {
       rendered.result.current.handleToggleRepoShowMore("/tmp/repo-a");
-      useHarnessStore.setState({
+      useSessionSelectionStore.setState({
         selectedWorkspaceId: null,
         workspaceSelectionNonce: 2,
       });
@@ -176,7 +176,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });
@@ -210,7 +210,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });
@@ -256,7 +256,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });
@@ -302,7 +302,7 @@ describe("useSidebarRepoGroupState", () => {
     const selectedLogicalWorkspaceId = "worktree-6";
     const selectedWorkspaceId = logicalWorkspaces[6]!.localWorkspace!.id;
     mocks.logicalWorkspaces = logicalWorkspaces;
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId,
       workspaceSelectionNonce: 1,
     });

@@ -1,8 +1,9 @@
 import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { HotPaintGate } from "@/stores/sessions/session-types";
 
 export type SessionActivationStaleReason =
   | "workspace-changed"
@@ -38,7 +39,7 @@ export type ClearActiveSessionOutcome =
   | { result: "stale"; activeSessionVersion: number };
 
 export function beginSessionActivationIntent(workspaceId: string): SessionActivationGuard {
-  const state = useHarnessStore.getState();
+  const state = useSessionSelectionStore.getState();
   return {
     workspaceId,
     workspaceSelectionNonce: state.workspaceSelectionNonce,
@@ -52,12 +53,12 @@ export function invalidateSessionActivationIntent(workspaceId: string): {
 } {
   return {
     workspaceId,
-    epoch: useHarnessStore.getState().bumpSessionActivationIntentEpoch(workspaceId),
+    epoch: useSessionSelectionStore.getState().bumpSessionActivationIntentEpoch(workspaceId),
   };
 }
 
 export function isSessionActivationCurrent(guard: SessionActivationGuard): boolean {
-  const state = useHarnessStore.getState();
+  const state = useSessionSelectionStore.getState();
   return state.selectedWorkspaceId === guard.workspaceId
     && state.workspaceSelectionNonce === guard.workspaceSelectionNonce
     && (state.sessionActivationIntentEpochByWorkspace[guard.workspaceId] ?? 0) === guard.token;
@@ -67,7 +68,7 @@ export function commitActiveSession(
   sessionId: string,
   guard: SessionActivationGuard,
 ): SessionActivationOutcome {
-  const state = useHarnessStore.getState();
+  const state = useSessionSelectionStore.getState();
   if (state.selectedWorkspaceId !== guard.workspaceId) {
     return { result: "stale", sessionId, guard, reason: "workspace-changed" };
   }
@@ -77,26 +78,72 @@ export function commitActiveSession(
   if ((state.sessionActivationIntentEpochByWorkspace[guard.workspaceId] ?? 0) !== guard.token) {
     return { result: "stale", sessionId, guard, reason: "intent-replaced" };
   }
-  const slot = state.sessionSlots[sessionId] ?? null;
-  if (!slot) {
+  const entry = useSessionDirectoryStore.getState().entriesById[sessionId] ?? null;
+  if (!entry) {
     return { result: "stale", sessionId, guard, reason: "slot-missing" };
   }
-  if (!sessionSlotBelongsToWorkspace(slot, guard.workspaceId)) {
+  if (!sessionSlotBelongsToWorkspace(entry, guard.workspaceId)) {
     return { result: "stale", sessionId, guard, reason: "slot-workspace-mismatch" };
   }
   state.setActiveSessionId(sessionId);
-  rememberLastViewedSession(
-    resolveWorkspaceUiKey(
-      useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId,
-      guard.workspaceId,
-    ) ?? guard.workspaceId,
-    sessionId,
-  );
+  if (entry.materializedSessionId) {
+    rememberLastViewedSession(
+      resolveWorkspaceUiKey(
+        useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+        guard.workspaceId,
+      ) ?? guard.workspaceId,
+      entry.materializedSessionId,
+    );
+  }
   return {
     result: "completed",
     sessionId,
     guard,
-    activeSessionVersion: useHarnessStore.getState().activeSessionVersion,
+    activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
+  };
+}
+
+export function commitHotActiveSession(
+  sessionId: string,
+  guard: SessionActivationGuard,
+  hotPaintGate: HotPaintGate,
+): SessionActivationOutcome {
+  const state = useSessionSelectionStore.getState();
+  if (state.selectedWorkspaceId !== guard.workspaceId) {
+    return { result: "stale", sessionId, guard, reason: "workspace-changed" };
+  }
+  if (state.workspaceSelectionNonce !== guard.workspaceSelectionNonce) {
+    return { result: "stale", sessionId, guard, reason: "selection-replaced" };
+  }
+  if ((state.sessionActivationIntentEpochByWorkspace[guard.workspaceId] ?? 0) !== guard.token) {
+    return { result: "stale", sessionId, guard, reason: "intent-replaced" };
+  }
+  const entry = useSessionDirectoryStore.getState().entriesById[sessionId] ?? null;
+  if (!entry) {
+    return { result: "stale", sessionId, guard, reason: "slot-missing" };
+  }
+  if (!sessionSlotBelongsToWorkspace(entry, guard.workspaceId)) {
+    return { result: "stale", sessionId, guard, reason: "slot-workspace-mismatch" };
+  }
+  state.activateHotSession({
+    sessionId,
+    workspaceId: guard.workspaceId,
+    hotPaintGate,
+  });
+  if (entry.materializedSessionId) {
+    rememberLastViewedSession(
+      resolveWorkspaceUiKey(
+        useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+        guard.workspaceId,
+      ) ?? guard.workspaceId,
+      entry.materializedSessionId,
+    );
+  }
+  return {
+    result: "completed",
+    sessionId,
+    guard,
+    activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
   };
 }
 
@@ -107,18 +154,20 @@ export function clearActiveSession(
   if (guard && !isSessionActivationCurrent(guard)) {
     return {
       result: "stale",
-      activeSessionVersion: useHarnessStore.getState().activeSessionVersion,
+      activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
     };
   }
-  const state = useHarnessStore.getState();
+  const state = useSessionSelectionStore.getState();
   const activeSessionId = state.activeSessionId;
-  const slot = activeSessionId ? state.sessionSlots[activeSessionId] ?? null : null;
-  if (!activeSessionId || !sessionSlotBelongsToWorkspace(slot, workspaceId)) {
+  const entry = activeSessionId
+    ? useSessionDirectoryStore.getState().entriesById[activeSessionId] ?? null
+    : null;
+  if (!activeSessionId || !sessionSlotBelongsToWorkspace(entry, workspaceId)) {
     return { result: "noop", activeSessionVersion: state.activeSessionVersion };
   }
   state.setActiveSessionId(null);
   return {
     result: "cleared",
-    activeSessionVersion: useHarnessStore.getState().activeSessionVersion,
+    activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
   };
 }

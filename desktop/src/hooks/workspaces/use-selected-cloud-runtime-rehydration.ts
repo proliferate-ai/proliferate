@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { startLatencyTimer } from "@/lib/infra/debug-latency";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceBootstrapActions } from "./use-workspace-bootstrap-actions";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import type { SelectedCloudRuntimeState } from "./use-selected-cloud-runtime-state";
@@ -10,10 +10,10 @@ import type { SelectedCloudRuntimeState } from "./use-selected-cloud-runtime-sta
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
 ): void {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
-  const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
-  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const { bootstrapWorkspace } = useWorkspaceBootstrapActions();
   const lastWorkspaceIdRef = useRef<string | null>(null);
   const shouldRehydrateOnReadyRef = useRef(false);
@@ -46,7 +46,7 @@ export function useSelectedCloudRuntimeRehydration(
       return;
     }
 
-    const pendingWorkspaceEntry = useHarnessStore.getState().pendingWorkspaceEntry;
+    const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
     if (
       pendingWorkspaceEntry
       && pendingWorkspaceEntry.workspaceId === workspaceId
@@ -76,7 +76,7 @@ export function useSelectedCloudRuntimeRehydration(
         anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
       },
       startedAt: startLatencyTimer(),
-      isCurrent: () => useHarnessStore.getState().selectedWorkspaceId === workspaceId,
+      isCurrent: () => useSessionSelectionStore.getState().selectedWorkspaceId === workspaceId,
     });
   }, [
     bootstrapWorkspace,

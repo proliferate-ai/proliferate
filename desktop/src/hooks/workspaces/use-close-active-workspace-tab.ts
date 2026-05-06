@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
-import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import {
   resolveFallbackWorkspaceShellTab,
@@ -11,6 +10,7 @@ import {
   viewerTargetEditablePath,
   viewerTargetKey,
 } from "@/lib/domain/workspaces/viewer-target";
+import type { WorkspaceTabActionsContext } from "@/hooks/workspaces/use-workspace-tab-actions";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";
 
@@ -22,12 +22,11 @@ function discardDirtyFileTab(isDirty: boolean): boolean {
   return window.confirm("Discard unsaved changes?");
 }
 
-export function useCloseActiveWorkspaceTab() {
+export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContext) {
   const buffersByPath = useWorkspaceFileBuffersStore((state) => state.buffersByPath);
   const clearBuffer = useWorkspaceFileBuffersStore((state) => state.clearBuffer);
   const closeTarget = useWorkspaceViewerTabsStore((state) => state.closeTarget);
   const { activateChatShell, activateViewerTarget } = useWorkspaceShellActivation();
-  const headerTabs = useWorkspaceHeaderTabsViewModel();
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: headerTabs.workspaceUiKey,
     materializedWorkspaceId: headerTabs.materializedWorkspaceId,

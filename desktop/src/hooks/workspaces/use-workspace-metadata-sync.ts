@@ -29,8 +29,12 @@ import {
 import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
 import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  activitySnapshotFromDirectoryEntry,
+  useSessionDirectoryStore,
+} from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
@@ -50,16 +54,17 @@ export function useWorkspaceMetadataSync() {
   const syncingCloudBranchRef = useRef<string | null>(null);
   const syncingCloudDisplayNameRef = useRef<string | null>(null);
   const cloudDisplayNameSyncStateRef = useRef<CloudDisplayNameSyncState | null>(null);
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
     (workspace) => workspace.id === selectedCloudRuntime.cloudWorkspaceId,
   ) ?? null;
-  const activeSession = useHarnessStore((state) => (
-    state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const activeSession = useSessionDirectoryStore((state) => (
+    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
   ));
   const isRuntimeReadyForWorkspace =
     !selectedCloudRuntime.cloudWorkspaceId
@@ -69,7 +74,7 @@ export function useWorkspaceMetadataSync() {
   const shouldPoll = !!selectedWorkspaceId
     && activeSession?.workspaceId === selectedWorkspaceId
     && isRuntimeReadyForWorkspace
-    && resolveSessionViewState(activeSession) === "working"
+    && resolveSessionViewState(activitySnapshotFromDirectoryEntry(activeSession)) === "working"
     && !!selectedCloudWorkspace;
 
   const gitStatusQuery = useGitStatusQuery({
@@ -134,9 +139,9 @@ export function useWorkspaceMetadataSync() {
               : workspace
           )),
         );
-        const currentSelectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+        const currentSelectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
         if (currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(cloudWorkspace.id)) {
-          useLogicalWorkspaceStore.getState().setSelectedLogicalWorkspaceId(
+          useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(
             buildLogicalIdForCloudWorkspace(cloudWorkspace),
           );
         }

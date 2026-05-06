@@ -5,11 +5,12 @@ import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   useActiveSessionLaunchState,
   useActiveSessionSurfaceSnapshot,
@@ -20,9 +21,20 @@ import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
 } from "@/lib/domain/chat/file-mentions";
+import {
+  createEmptySessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/pending-entry";
+import { createPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
+import {
+  finishOrCancelMeasurementOperation,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -33,16 +45,18 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
   const queryClient = useQueryClient();
   const showToast = useToastStore((store) => store.show);
-  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const {
     cancelActiveSession,
     createSessionWithResolvedConfig,
     findOrCreateSession,
     promptActiveSession,
   } = useSessionActions();
+  const { promptSession } = useSessionPromptWorkflow();
   const clearDraft = useChatInputStore((state) => state.clearDraft);
   const {
     activeSessionId,
@@ -59,19 +73,26 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     text: string;
     blocks: PromptInputBlock[];
     optimisticContentParts?: ContentPart[];
-  }) => {
-    if (!selectedWorkspaceId) {
-      return;
+    measurementOperationId?: MeasurementOperationId | null;
+  }): Promise<boolean> => {
+    const pendingWorkspaceUiKey = pendingWorkspaceEntry
+      ? buildPendingWorkspaceUiKey(pendingWorkspaceEntry)
+      : null;
+    const effectiveWorkspaceId = selectedWorkspaceId ?? pendingWorkspaceUiKey;
+    if (!effectiveWorkspaceId) {
+      return false;
     }
 
-    const draftKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
+    const draftKey =
+      resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId)
+      ?? pendingWorkspaceUiKey;
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;
     const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
     if (!hasPromptContent(text, blocks) || isDisabled) {
-      return;
+      return false;
     }
 
     const launchSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
@@ -81,7 +102,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       ? startLatencyFlow({
         flowKind: "prompt_submit",
         source: "composer_submit",
-        targetWorkspaceId: selectedWorkspaceId,
+        targetWorkspaceId: effectiveWorkspaceId,
         targetSessionId,
         promptId,
       })
@@ -104,9 +125,38 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       if (targetSessionId) {
         await promptActiveSession(text, {
           latencyFlowId: latencyFlowId ?? undefined,
+          measurementOperationId: input?.measurementOperationId,
           promptId,
           blocks,
           optimisticContentParts: input?.optimisticContentParts,
+        });
+      } else if (!selectedWorkspaceId && pendingWorkspaceEntry && pendingWorkspaceUiKey && launchSelection) {
+        const clientSessionId = createPendingSessionId(launchSelection.kind);
+        putSessionRecord({
+          ...createEmptySessionRecord(clientSessionId, launchSelection.kind, {
+            workspaceId: pendingWorkspaceUiKey,
+            materializedSessionId: null,
+            modelId: launchSelection.modelId,
+            optimisticPrompt: null,
+            sessionRelationship: { kind: "root" },
+          }),
+          status: "starting",
+          transcriptHydrated: true,
+        });
+        useSessionSelectionStore.getState().setActiveSessionId(clientSessionId);
+        writeChatShellIntentForSession({
+          workspaceId: pendingWorkspaceUiKey,
+          sessionId: clientSessionId,
+        });
+        clearDraftIfNeeded();
+        await promptSession({
+          sessionId: clientSessionId,
+          text,
+          blocks,
+          optimisticContentParts: input?.optimisticContentParts,
+          workspaceId: pendingWorkspaceUiKey,
+          measurementOperationId: input?.measurementOperationId,
+          promptId,
         });
       } else if (launchSelection) {
         if (forceNewSession) {
@@ -116,6 +166,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
             optimisticContentParts: input?.optimisticContentParts,
             agentKind: launchSelection.kind,
             modelId: launchSelection.modelId,
+            measurementOperationId: input?.measurementOperationId,
             onBeforeOptimisticPrompt: clearDraftIfNeeded,
           });
         } else {
@@ -126,11 +177,16 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
             blocks,
             input?.optimisticContentParts,
             clearDraftIfNeeded,
+            input?.measurementOperationId,
+            promptId,
           );
         }
       } else {
         showToast("Choose a ready model before sending a message.");
-        return;
+        return false;
+      }
+      if (!selectedWorkspaceId) {
+        return true;
       }
       completeChatPromptSubmitSideEffects({
         queryClient,
@@ -140,14 +196,17 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         reuseSession: targetSessionId !== null,
         setWorkspaceArrivalEvent,
       });
+      return true;
     } catch (error) {
       if (isSessionModelAvailabilityInterruption(error)) {
-        return;
+        finishOrCancelMeasurementOperation(input?.measurementOperationId, "aborted");
+        return false;
       }
 
       if (latencyFlowId) {
         failLatencyFlow(latencyFlowId, "prompt_submit_failed");
       }
+      finishOrCancelMeasurementOperation(input?.measurementOperationId, "error_sanitized");
       captureTelemetryException(error, {
         tags: {
           action: "prompt_active_session",
@@ -157,6 +216,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
 
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to send message: ${message}`);
+      return false;
     }
   }, [
     activeSessionId,
@@ -167,7 +227,9 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     hasSlot,
     forceNewSession,
     isDisabled,
+    pendingWorkspaceEntry,
     promptActiveSession,
+    promptSession,
     queryClient,
     runtimeUrl,
     selectedLogicalWorkspaceId,

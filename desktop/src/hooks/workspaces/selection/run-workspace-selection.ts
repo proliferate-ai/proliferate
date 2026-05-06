@@ -1,4 +1,6 @@
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
 import {
   markWorkspaceViewed,
@@ -16,6 +18,7 @@ import { cloudBillingKey } from "@/hooks/cloud/query-keys";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { startCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
@@ -40,7 +43,7 @@ function resolveInitialActiveSessionId(
     return null;
   }
 
-  const cachedSlot = useHarnessStore.getState().sessionSlots[cachedSessionId] ?? null;
+  const cachedSlot = getSessionRecord(cachedSessionId);
   return cachedSlot?.workspaceId === workspaceId ? cachedSessionId : null;
 }
 
@@ -77,7 +80,7 @@ async function resolveCloudSelectionConnection(
     const startedWorkspace = await startCloudWorkspace(cloudReadiness.cloudWorkspaceId);
     await invalidateCloudWorkspaceStartState(
       deps,
-      useHarnessStore.getState().runtimeUrl,
+      useHarnessConnectionStore.getState().runtimeUrl,
     );
     if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
       cancelLatencyFlow(latencyFlowId, "workspace_selection_stale");
@@ -106,7 +109,8 @@ export async function runWorkspaceSelection(
     ) ?? null;
     if (directWorkspace?.surface === "cowork") {
       const selectionStartedAt = startLatencyTimer();
-      const currentId = useHarnessStore.getState().selectedWorkspaceId;
+      const previousSelection = useSessionSelectionStore.getState();
+      const currentId = previousSelection.selectedWorkspaceId;
       if (currentId === directWorkspace.id && !request.options?.force) {
         cancelLatencyFlow(request.options?.latencyFlowId, "workspace_already_selected");
         return;
@@ -126,6 +130,15 @@ export async function runWorkspaceSelection(
         request.options,
         cachedSessionId,
       );
+      cancelPreviousWorkspaceDisplayQueries({
+        queryClient: deps.queryClient,
+        runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
+        previousWorkspaceIds: [
+          previousSelection.selectedLogicalWorkspaceId,
+          previousSelection.selectedWorkspaceId,
+        ],
+        nextWorkspaceIds: [directWorkspace.id],
+      });
       deps.setSelectedLogicalWorkspaceId(null);
       deps.setSelectedWorkspace(directWorkspace.id, {
         clearPending: !request.options?.preservePending,
@@ -135,7 +148,7 @@ export async function runWorkspaceSelection(
       const context: WorkspaceSelectionContext = {
         workspaceId: directWorkspace.id,
         logicalWorkspaceId: directWorkspace.id,
-        selectionNonce: useHarnessStore.getState().workspaceSelectionNonce,
+        selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
         selectionStartedAt,
         cloudWorkspaceId: null,
       };
@@ -187,7 +200,8 @@ export async function runWorkspaceSelection(
     throw new Error("Workspace is not materialized yet.");
   }
   const selectionStartedAt = startLatencyTimer();
-  const currentId = useHarnessStore.getState().selectedWorkspaceId;
+  const previousSelection = useSessionSelectionStore.getState();
+  const currentId = previousSelection.selectedWorkspaceId;
   if (currentId === resolvedWorkspaceId && !request.options?.force) {
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_already_selected");
     return;
@@ -207,6 +221,15 @@ export async function runWorkspaceSelection(
     request.options,
     cachedSessionId,
   );
+  cancelPreviousWorkspaceDisplayQueries({
+    queryClient: deps.queryClient,
+    runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
+    previousWorkspaceIds: [
+      previousSelection.selectedLogicalWorkspaceId,
+      previousSelection.selectedWorkspaceId,
+    ],
+    nextWorkspaceIds: [logicalWorkspace.id, resolvedWorkspaceId],
+  });
   deps.setSelectedLogicalWorkspaceId(logicalWorkspace.id);
   deps.setSelectedWorkspace(resolvedWorkspaceId, {
     clearPending: !request.options?.preservePending,
@@ -216,7 +239,7 @@ export async function runWorkspaceSelection(
   const baseContext: WorkspaceSelectionContext = {
     workspaceId: resolvedWorkspaceId,
     logicalWorkspaceId: logicalWorkspace.id,
-    selectionNonce: useHarnessStore.getState().workspaceSelectionNonce,
+    selectionNonce: useSessionSelectionStore.getState().workspaceSelectionNonce,
     selectionStartedAt,
     cloudWorkspaceId: null,
   };

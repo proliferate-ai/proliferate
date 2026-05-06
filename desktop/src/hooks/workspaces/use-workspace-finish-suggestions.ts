@@ -5,7 +5,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueries } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export interface WorkspaceFinishSuggestion {
@@ -17,7 +17,7 @@ export interface WorkspaceFinishSuggestion {
 export function useWorkspaceFinishSuggestions(
   collections: WorkspaceCollections | undefined,
 ): Record<string, WorkspaceFinishSuggestion> {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const dismissals = useWorkspaceUiStore((state) => state.finishSuggestionDismissalsByWorkspaceId);
   const workspaces = collections?.localWorkspaces.filter((workspace) =>
     workspace.kind === "worktree"
@@ -30,9 +30,9 @@ export function useWorkspaceFinishSuggestions(
       queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspace.id),
       enabled: runtimeUrl.trim().length > 0,
       staleTime: 60_000,
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const client = getAnyHarnessClient({ runtimeUrl });
-        return client.workspaces.retirePreflight(workspace.id);
+        return client.workspaces.retirePreflight(workspace.id, { signal });
       },
     })),
   });

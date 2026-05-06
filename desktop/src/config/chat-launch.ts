@@ -6,7 +6,6 @@ const CHAT_LAUNCH_PROVIDER_ORDER = [
   "cursor",
   "gemini",
   "opencode",
-  "amp",
 ] as const;
 
 const PROVIDER_ORDER_INDEX = new Map<string, number>(

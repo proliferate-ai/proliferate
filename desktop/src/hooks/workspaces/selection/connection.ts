@@ -5,7 +5,7 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
 import { ensureRuntimeReady } from "@/hooks/workspaces/runtime-ready";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { cloudWorkspaceConnectionKey } from "@/hooks/cloud/query-keys";
 import { getCloudWorkspaceConnection } from "@/lib/integrations/cloud/workspaces";
 import type {
@@ -23,7 +23,7 @@ export async function resolveSelectionConnection(
   const runtimeReadyStartedAt = startLatencyTimer();
   const desktopRuntimeUrl = cloudReadiness.kind === "local"
     ? await ensureRuntimeReady()
-    : useHarnessStore.getState().runtimeUrl;
+    : useHarnessConnectionStore.getState().runtimeUrl;
   logLatency("workspace.select.runtime_ready", {
     workspaceId: context.workspaceId,
     cloudWorkspaceId: context.cloudWorkspaceId,

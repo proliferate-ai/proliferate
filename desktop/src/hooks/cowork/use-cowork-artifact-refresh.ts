@@ -9,14 +9,15 @@ import {
   onTurnEnd,
   type TurnEndCallback,
 } from "@/lib/integrations/anyharness/turn-end-events";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 
 export function useCoworkArtifactRefresh(
   workspaceId: string | null | undefined,
   artifactId: string | null | undefined,
 ) {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const artifactIdRef = useRef<string | null | undefined>(artifactId);
   artifactIdRef.current = artifactId;
 
@@ -43,7 +44,7 @@ export function useCoworkArtifactRefresh(
     }
 
     const handleTurnEnd: TurnEndCallback = (sessionId) => {
-      const slot = useHarnessStore.getState().sessionSlots[sessionId];
+      const slot = getSessionRecord(sessionId);
       if (slot?.workspaceId !== workspaceId) {
         return;
       }

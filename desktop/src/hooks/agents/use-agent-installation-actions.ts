@@ -12,7 +12,7 @@ import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
 } from "@anyharness/sdk";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 function assertHealthyRuntime(runtimeUrl: string, isHealthy: boolean): void {
   if (!isHealthy || runtimeUrl.trim().length === 0) {
@@ -28,8 +28,8 @@ function assertAgentSeedReady(isAgentSeedHydrating: boolean): void {
 
 export function useAgentInstallationActions() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const installMutation = useInstallAgentMutation();
   const reconcileMutation = useReconcileAgentsMutation();
 

@@ -480,11 +480,7 @@ impl WorkspaceService {
     }
 
     pub fn list_workspaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
-        self.store
-            .list_execution_surfaces()?
-            .into_iter()
-            .map(|record| self.reconcile_current_branch(record))
-            .collect()
+        self.store.list_execution_surfaces()
     }
 
     pub fn workspace_env(&self, workspace: &WorkspaceRecord) -> BTreeMap<String, String> {
@@ -1025,6 +1021,29 @@ mod tests {
             .expect("resolve again");
         assert_eq!(reconciled.display_name.as_deref(), Some("Stable Name"));
         assert_eq!(reconciled.current_branch.as_deref(), Some("renamed"));
+    }
+
+    #[test]
+    fn list_workspaces_returns_stored_branch_without_reconcile() {
+        let repo_root = TempDirGuard::new("service-list-stored-branch-root");
+        let runtime_home = TempDirGuard::new("service-list-stored-branch-runtime");
+        init_repo(repo_root.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let service = make_service(&db, runtime_home.path());
+
+        let workspace = service
+            .resolve_from_path(&repo_root.path().display().to_string())
+            .expect("resolve workspace");
+
+        run_git(repo_root.path(), ["branch", "-m", "renamed"]);
+        let listed = service.list_workspaces().expect("list workspaces");
+        let listed_workspace = listed
+            .iter()
+            .find(|record| record.id == workspace.id)
+            .expect("listed workspace");
+
+        assert_eq!(listed_workspace.current_branch.as_deref(), Some("main"));
     }
 
     #[test]

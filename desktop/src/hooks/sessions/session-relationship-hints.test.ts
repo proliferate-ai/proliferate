@@ -1,19 +1,24 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
 import {
   recordLinkedChildRelationshipHint,
   recordSubagentChildRelationshipHint,
 } from "@/hooks/sessions/session-relationship-hints";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  createEmptySessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
 describe("session relationship hint helpers", () => {
   beforeEach(() => {
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId: "workspace-1",
       activeSessionId: null,
-      sessionSlots: {},
-      sessionRelationshipHints: {},
     });
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
   });
 
   it("records subagent child hints before a slot exists", () => {
@@ -24,7 +29,7 @@ describe("session relationship hint helpers", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(useHarnessStore.getState().sessionRelationshipHints["child-session"])
+    expect(useSessionDirectoryStore.getState().relationshipHintsBySessionId["child-session"])
       .toEqual({
         kind: "subagent_child",
         parentSessionId: "parent-session",
@@ -35,9 +40,8 @@ describe("session relationship hint helpers", () => {
   });
 
   it("applies linked child hints to existing pending slots", () => {
-    useHarnessStore.getState().putSessionSlot(
-      "child-session",
-      createEmptySessionSlot("child-session", "codex", {
+    putSessionRecord(
+      createEmptySessionRecord("child-session", "codex", {
         workspaceId: "workspace-1",
       }),
     );
@@ -49,7 +53,7 @@ describe("session relationship hint helpers", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(useHarnessStore.getState().sessionSlots["child-session"].sessionRelationship)
+    expect(useSessionDirectoryStore.getState().entriesById["child-session"]?.sessionRelationship)
       .toEqual({
         kind: "linked_child",
         parentSessionId: "parent-session",

@@ -40,7 +40,7 @@ import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarSupportContext } from "@/hooks/support/use-sidebar-support-context";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
@@ -76,7 +76,7 @@ export function MainSidebar() {
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
   const [supportOpen, setSupportOpen] = useState(false);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
     showArchived,
     setShowArchived,

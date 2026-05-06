@@ -1,4 +1,4 @@
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export interface RecordChildRelationshipHintInput {
   sessionId: string;
@@ -10,7 +10,7 @@ export interface RecordChildRelationshipHintInput {
 export function recordSubagentChildRelationshipHint(
   input: RecordChildRelationshipHintInput,
 ) {
-  useHarnessStore.getState().recordSessionRelationshipHint(input.sessionId, {
+  useSessionDirectoryStore.getState().recordRelationshipHint(input.sessionId, {
     kind: "subagent_child",
     parentSessionId: input.parentSessionId,
     sessionLinkId: input.sessionLinkId ?? null,
@@ -25,7 +25,7 @@ export function recordLinkedChildRelationshipHint(
   if (!input.parentSessionId) {
     return;
   }
-  useHarnessStore.getState().recordSessionRelationshipHint(input.sessionId, {
+  useSessionDirectoryStore.getState().recordRelationshipHint(input.sessionId, {
     kind: "linked_child",
     parentSessionId: input.parentSessionId,
     sessionLinkId: input.sessionLinkId ?? null,

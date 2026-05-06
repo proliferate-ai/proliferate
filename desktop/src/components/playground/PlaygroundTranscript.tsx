@@ -28,7 +28,10 @@ import {
 import type { PlaygroundScenarioSelection } from "@/config/playground";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { combineSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
 interface PlaygroundTranscriptProps {
   stickyBottomInsetPx: number;
@@ -41,10 +44,14 @@ export function PlaygroundTranscript({
   selection,
   replay,
 }: PlaygroundTranscriptProps) {
-  const replaySlot = useHarnessStore((state) =>
-    replay.sessionId ? state.sessionSlots[replay.sessionId] ?? null : null
+  const replayDirectory = useSessionDirectoryStore((state) =>
+    replay.sessionId ? state.entriesById[replay.sessionId] ?? null : null
   );
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const replayTranscript = useSessionTranscriptStore((state) =>
+    replay.sessionId ? state.entriesById[replay.sessionId] ?? null : null
+  );
+  const replaySlot = combineSessionRecord(replayDirectory, replayTranscript);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
 
   if (selection.kind === "recording") {
     if (replay.error) {

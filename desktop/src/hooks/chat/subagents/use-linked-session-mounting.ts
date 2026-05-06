@@ -2,10 +2,15 @@ import { useCallback } from "react";
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import {
-  createSessionSlotFromSummary,
   getWorkspaceClientAndId,
 } from "@/lib/integrations/anyharness/session-runtime";
-import { type SessionRelationship, useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  createSessionRecordFromSummary,
+  getSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import type { SessionRelationship } from "@/stores/sessions/session-types";
 
 interface MountLinkedSessionInput {
   sessionId: string;
@@ -32,26 +37,25 @@ export function useLinkedSessionMounting() {
       return;
     }
 
-    const existing = useHarnessStore.getState().sessionSlots[input.sessionId] ?? null;
+    const existing = getSessionRecord(input.sessionId);
     if (existing?.workspaceId === input.workspaceId) {
       return;
     }
 
     try {
-      const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const { connection } = await getWorkspaceClientAndId(runtimeUrl, input.workspaceId);
       const session = await getAnyHarnessClient(connection).sessions.get(
         input.sessionId,
         input.requestHeaders ? { headers: input.requestHeaders } : undefined,
       );
 
-      if (useHarnessStore.getState().sessionSlots[input.sessionId]) {
+      if (getSessionRecord(input.sessionId)) {
         return;
       }
 
-      useHarnessStore.getState().putSessionSlot(
-        input.sessionId,
-        createSessionSlotFromSummary(session, input.workspaceId, {
+      putSessionRecord(
+        createSessionRecordFromSummary(session, input.workspaceId, {
           titleFallback: input.label ?? null,
           transcriptHydrated: false,
           sessionRelationship: input.sessionRelationship,

@@ -7,6 +7,7 @@ import {
 
 export interface CloudMeasurementOptions {
   measurementOperationId?: MeasurementOperationId | null;
+  signal?: AbortSignal;
 }
 
 export async function measureCloudRequest<T>(input: {

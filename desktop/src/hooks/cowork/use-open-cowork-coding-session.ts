@@ -1,14 +1,14 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export function useOpenCoworkCodingSession() {
   const location = useLocation();
   const navigate = useNavigate();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
-  const recordSessionRelationshipHint = useHarnessStore(
-    (state) => state.recordSessionRelationshipHint,
+  const recordSessionRelationshipHint = useSessionDirectoryStore(
+    (state) => state.recordRelationshipHint,
   );
 
   return useCallback(async (input: {

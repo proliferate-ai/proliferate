@@ -19,8 +19,8 @@ import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-pr
 import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -34,9 +34,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
 }
 
 function WorkspaceProviders({ children }: { children: ReactNode }) {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const resolveConnection = useCallback(
     (workspaceId: string) => {
       const workspaceCollections = getWorkspaceCollectionsFromCache(appQueryClient, runtimeUrl);

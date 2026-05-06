@@ -1,5 +1,4 @@
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
@@ -12,12 +11,18 @@ import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspa
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useCoworkManagedWorkspaces } from "@/hooks/cowork/use-cowork-managed-workspaces";
+import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import {
   resolveTranscriptOpenSessionWorkspaceId,
   type TranscriptOpenSessionRole,
 } from "@/lib/domain/chat/transcript-open-target";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { logLatency } from "@/lib/infra/debug-latency";
+import {
+  getSessionRecord,
+  getSessionRecords,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 interface SessionTranscriptPaneProps {
   bottomInsetPx: number;
@@ -29,7 +34,7 @@ const OLDER_SESSION_HISTORY_TIMEOUT_MS = 60_000;
 
 export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
   useDebugRenderCount("session-transcript-pane");
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
   const { activateChatTab } = useWorkspaceShellActivation();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
@@ -45,13 +50,16 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     : deferredPaneState.activeSessionId;
   const optimisticPrompt = transcriptDeferred
     ? null
-    : deferredPaneState.optimisticPrompt;
+    : immediatePaneState.optimisticPrompt;
+  const outboxEntries = transcriptDeferred
+    ? []
+    : immediatePaneState.outboxEntries;
   const transcript = transcriptDeferred
     ? null
     : deferredPaneState.transcript;
   const sessionViewState = transcriptDeferred
     ? "idle"
-    : deferredPaneState.sessionViewState;
+    : immediatePaneState.sessionViewState;
   const oldestLoadedEventSeq = transcriptDeferred
     ? null
     : deferredPaneState.oldestLoadedEventSeq;
@@ -92,6 +100,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     transcriptDeferred,
     transcript,
     optimisticPrompt,
+    outboxEntries,
     sessionViewState,
     oldestLoadedEventSeq,
     workspaceCollections,
@@ -100,6 +109,13 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     coworkManagedWorkspaces,
     linkedSessionWorkspaces,
   });
+  useDebugValueChange("transcript_pane.defer", "switching_state", {
+    transcriptDeferred,
+    immediateActiveSessionId: immediatePaneState.activeSessionId,
+    deferredActiveSessionId: deferredPaneState.activeSessionId,
+    hasImmediateTranscript: immediatePaneState.transcript !== null,
+    hasDeferredTranscript: deferredPaneState.transcript !== null,
+  });
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
   const loadOlderHistory = useCallback(() => {
@@ -107,7 +123,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
       return;
     }
 
-    const selectionNonce = useHarnessStore.getState().workspaceSelectionNonce;
+    const selectionNonce = useSessionSelectionStore.getState().workspaceSelectionNonce;
     setOlderHistoryLoadingSessionId(activeSessionId);
     logLatency("session.history.older_chunk.requested", {
       sessionId: activeSessionId,
@@ -120,7 +136,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
       turnLimit: OLDER_SESSION_HISTORY_TURN_LIMIT,
       timeoutMs: OLDER_SESSION_HISTORY_TIMEOUT_MS,
       isCurrent: () => {
-        const state = useHarnessStore.getState();
+        const state = useSessionSelectionStore.getState();
         return state.workspaceSelectionNonce === selectionNonce
           && state.activeSessionId === activeSessionId
           && state.selectedWorkspaceId === selectedWorkspaceId;
@@ -149,13 +165,13 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     sessionId: string,
     role: TranscriptOpenSessionRole = "generic",
   ) => {
-    const state = useHarnessStore.getState();
+    const activeRecord = activeSessionId ? getSessionRecord(activeSessionId) : null;
     return resolveTranscriptOpenSessionWorkspaceId({
       sessionId,
       role,
-      sessionSlots: state.sessionSlots,
+      sessionSlots: getSessionRecords(),
       fallbackWorkspaceId: activeSessionId
-        ? state.sessionSlots[activeSessionId]?.workspaceId ?? selectedWorkspaceId
+        ? activeRecord?.workspaceId ?? selectedWorkspaceId
         : selectedWorkspaceId,
       linkedSessionWorkspaces,
       contextWorkspaces: [selectedWorkspace, selectedCloudWorkspace],
@@ -180,7 +196,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     const workspaceId = resolveOpenSessionWorkspaceId(sessionId, role);
     if (!workspaceId) return;
 
-    const currentWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+    const currentWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
     if (workspaceId === currentWorkspaceId) {
       void activateChatTab({
         workspaceId,
@@ -201,11 +217,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   ]);
 
   if (transcriptDeferred) {
-    return (
-      <DebugProfiler id="session-transcript-pane">
-        <div className="h-full min-h-0" />
-      </DebugProfiler>
-    );
+    return <TranscriptSwitchingPlaceholder />;
   }
 
   if (!activeSessionId || !transcript) {
@@ -218,6 +230,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
         activeSessionId={activeSessionId}
         selectedWorkspaceId={selectedWorkspaceId}
         optimisticPrompt={optimisticPrompt}
+        outboxEntries={outboxEntries}
         transcript={transcript}
         sessionViewState={sessionViewState}
         hasOlderHistory={hasOlderHistory}

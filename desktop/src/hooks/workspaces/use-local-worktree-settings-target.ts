@@ -6,7 +6,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import type {
   WorktreeSettingsTarget,
@@ -16,8 +16,8 @@ import type {
 const EMPTY_TARGETS: WorktreeSettingsTargetState[] = [];
 
 export function useLocalWorktreeSettingsTarget() {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const queryClient = useQueryClient();
 
   const targets = useMemo<WorktreeSettingsTargetState[]>(() => {

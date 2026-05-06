@@ -114,6 +114,12 @@ vi.mock("@/components/workspace/chat/input/ChatComposerActions", () => ({
   ),
 }));
 
+vi.mock("@/components/workspace/chat/transcript/UserMessage", () => ({
+  UserMessage: ({ content }: { content: string }) => (
+    <div data-chat-user-message>{content}</div>
+  ),
+}));
+
 function resetHomeNext() {
   screenMocks.homeNext.targetDisabledReason = null;
   screenMocks.homeNext.modelAvailabilityState = "launchable";

@@ -1,22 +1,26 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  createEmptySessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { classifyTrustedSessionSelection } from "@/hooks/sessions/use-session-selection-actions";
 
 describe("classifyTrustedSessionSelection", () => {
   beforeEach(() => {
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId: "workspace-1",
       activeSessionId: null,
-      sessionSlots: {},
-      sessionRelationshipHints: {},
     });
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
   });
 
   it("promotes a pending mounted session to root when no child hint exists", () => {
-    useHarnessStore.getState().putSessionSlot(
-      "root-session",
-      createEmptySessionSlot("root-session", "codex", {
+    putSessionRecord(
+      createEmptySessionRecord("root-session", "codex", {
         workspaceId: "workspace-1",
       }),
     );
@@ -24,26 +28,20 @@ describe("classifyTrustedSessionSelection", () => {
     const relationship = classifyTrustedSessionSelection("root-session");
 
     expect(relationship).toEqual({ kind: "root" });
-    expect(useHarnessStore.getState().sessionSlots["root-session"].sessionRelationship)
+    expect(useSessionDirectoryStore.getState().entriesById["root-session"]?.sessionRelationship)
       .toEqual({ kind: "root" });
   });
 
   it("applies and prunes a known child hint instead of promoting to root", () => {
-    useHarnessStore.setState({
-      sessionSlots: {
-        "child-session": createEmptySessionSlot("child-session", "codex", {
-          workspaceId: "workspace-1",
-        }),
-      },
-      sessionRelationshipHints: {
-        "child-session": {
-          kind: "subagent_child",
-          parentSessionId: "parent-session",
-          sessionLinkId: "link-1",
-          relation: "subagent",
-          workspaceId: "workspace-1",
-        },
-      },
+    putSessionRecord(createEmptySessionRecord("child-session", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    useSessionDirectoryStore.getState().recordRelationshipHint("child-session", {
+      kind: "subagent_child",
+      parentSessionId: "parent-session",
+      sessionLinkId: "link-1",
+      relation: "subagent",
+      workspaceId: "workspace-1",
     });
 
     const relationship = classifyTrustedSessionSelection("child-session");
@@ -55,9 +53,9 @@ describe("classifyTrustedSessionSelection", () => {
       relation: "subagent",
       workspaceId: "workspace-1",
     });
-    expect(useHarnessStore.getState().sessionSlots["child-session"].sessionRelationship)
+    expect(useSessionDirectoryStore.getState().entriesById["child-session"]?.sessionRelationship)
       .toEqual(relationship);
-    expect(useHarnessStore.getState().sessionRelationshipHints["child-session"])
+    expect(useSessionDirectoryStore.getState().relationshipHintsBySessionId["child-session"])
       .toBeUndefined();
   });
 });

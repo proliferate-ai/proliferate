@@ -18,7 +18,7 @@ import { getCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
 import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import {
@@ -89,7 +89,7 @@ function classifyRuntimeInputSyncFailure(error: unknown): RuntimeInputSyncFailur
 
 export function useRuntimeInputSyncRuntime() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
   const cloudRuntimeInputSyncEnabled = useUserPreferencesStore(
     (state) => state.cloudRuntimeInputSyncEnabled,

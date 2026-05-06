@@ -3,6 +3,7 @@ import type { ContentPart, PromptInputBlock, WorkspaceSessionLaunchCatalog } fro
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
+import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
@@ -13,7 +14,14 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { useAgentInstallationActions } from "@/hooks/agents/use-agent-installation-actions";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { type SessionSlot, useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
@@ -24,9 +32,9 @@ import {
   SessionModelAvailabilityCancelledError,
   SessionModelAvailabilityRoutedToSettingsError,
 } from "@/hooks/sessions/use-session-model-availability-workflow";
+import { reconcilePendingConfigChanges } from "@/lib/domain/sessions/pending-config";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import {
-  createEmptySessionSlot,
   createPendingSessionId,
   pruneInactiveSessionStreams,
 } from "@/lib/integrations/anyharness/session-runtime";
@@ -37,23 +45,28 @@ import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
-import { chatWorkspaceShellTabKey, type WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import {
+  rememberLastViewedSession,
+  useWorkspaceUiStore,
+} from "@/stores/preferences/workspace-ui-store";
 import {
   buildLatencyRequestOptions,
+  buildModelAvailabilityRetryOptions,
   buildPausedModelAvailability,
   hasImmediateLaunchModelMismatch,
-  removeSessionSlot,
-  replacePendingSessionSlot,
+  materializeSessionRecord,
+  removeSessionRecordAndClearSelection,
   reportConnectorLaunchWarnings,
   resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
 import {
   inFlightSessionCreatesByWorkspace,
-  updateInFlightSessionCreateId,
 } from "@/hooks/sessions/session-creation-in-flight";
+import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -62,12 +75,16 @@ interface CreateSessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
   modeId?: string;
+  launchControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;
+  measurementOperationId?: MeasurementOperationId | null;
   promptId?: string | null;
   launchIntentId?: string | null;
+  clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   modelAvailabilityRetryCount?: number;
+  skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
 
@@ -75,18 +92,20 @@ interface CreateEmptySessionWithResolvedConfigOptions {
   agentKind: string;
   modelId: string;
   modeId?: string;
+  launchControlValues?: Record<string, string>;
   workspaceId?: string;
   latencyFlowId?: string | null;
+  clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
 }
 
 async function ensureRuntimeReadyForSessions(): Promise<string> {
-  const state = useHarnessStore.getState();
+  const state = useHarnessConnectionStore.getState();
   if (state.connectionState !== "healthy" || state.runtimeUrl.trim().length === 0) {
     await bootstrapHarnessRuntime();
   }
 
-  const readyState = useHarnessStore.getState();
+  const readyState = useHarnessConnectionStore.getState();
   if (readyState.connectionState !== "healthy" || readyState.runtimeUrl.trim().length === 0) {
     throw new Error(readyState.error || "AnyHarness runtime is still starting. Try again.");
   }
@@ -99,7 +118,7 @@ export function useSessionCreationActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
-  const { activateSession, ensureSessionStreamConnected } = useSessionRuntimeActions();
+  const { activateSession } = useSessionRuntimeActions();
   const cleanupClosedSession = useDismissedSessionCleanup();
   const {
     installAgent,
@@ -130,7 +149,7 @@ export function useSessionCreationActions() {
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
   ): Promise<string> {
-    const current = useHarnessStore.getState();
+    const current = useSessionSelectionStore.getState();
     const workspaceId = options.workspaceId ?? current.selectedWorkspaceId;
     if (!workspaceId) {
       throw new Error("No workspace selected");
@@ -142,6 +161,8 @@ export function useSessionCreationActions() {
     }
 
     const hasPrompt = hasPromptContent(options.text, options.blocks);
+    const promptId = hasPrompt ? options.promptId ?? createPromptId() : options.promptId ?? null;
+    const shouldEnqueueInitialPrompt = hasPrompt && options.skipInitialPromptEnqueue !== true;
     const previousActiveSessionId = current.activeSessionId;
     const shouldReuseInFlightEmptySession = options.reuseInFlightEmptySession === true;
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
@@ -159,26 +180,18 @@ export function useSessionCreationActions() {
           workspaceId,
           sessionId: inFlightCreate.sessionId,
         });
-        if (useHarnessStore.getState().sessionSlots[inFlightCreate.sessionId]) {
+        if (getSessionRecord(inFlightCreate.sessionId)) {
           activateSession(inFlightCreate.sessionId);
         }
         cancelLatencyFlow(options.latencyFlowId, "session_create_reused_inflight", {
           reusedSessionId: inFlightCreate.sessionId,
-        });
+          });
         try {
-          const resolvedSessionId = await inFlightCreate.promise;
-          const replaced = pendingShellWrite
-            ? useWorkspaceUiStore.getState().replaceShellIntent({
-              workspaceId: pendingShellWrite.shellWorkspaceId,
-              expectedIntent: pendingShellWrite.currentIntent,
-              expectedEpoch: pendingShellWrite.epoch,
-              nextIntent: chatWorkspaceShellTabKey(resolvedSessionId),
-            }).replaced
-            : false;
-          if (replaced) {
-            activateSession(resolvedSessionId);
+          const resolvedClientSessionId = await inFlightCreate.promise;
+          if (pendingShellWrite) {
+            activateSession(resolvedClientSessionId);
           }
-          return resolvedSessionId;
+          return resolvedClientSessionId;
         } catch (error) {
           let rolledBackShellIntent = false;
           if (pendingShellWrite) {
@@ -191,12 +204,12 @@ export function useSessionCreationActions() {
           }
           if (
             rolledBackShellIntent
-            && useHarnessStore.getState().activeSessionId === inFlightCreate.sessionId
+            && useSessionSelectionStore.getState().activeSessionId === inFlightCreate.sessionId
           ) {
             if (previousActiveSessionId) {
               activateSession(previousActiveSessionId);
             } else {
-              useHarnessStore.getState().setActiveSessionId(null);
+              useSessionSelectionStore.getState().setActiveSessionId(null);
             }
           }
           throw error;
@@ -207,32 +220,50 @@ export function useSessionCreationActions() {
     const preferredModeId = useUserPreferencesStore.getState()
       .defaultSessionModeByAgentKind[options.agentKind]
       ?.trim() || undefined;
+    const frozenDefaultLiveSessionControlValuesByAgentKind = {
+      ...useUserPreferencesStore.getState().defaultLiveSessionControlValuesByAgentKind,
+    };
+    const explicitLiveLaunchControls = pickLiveDefaultLaunchControls(
+      options.launchControlValues,
+    );
+    if (Object.keys(explicitLiveLaunchControls).length > 0) {
+      frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] = {
+        ...(frozenDefaultLiveSessionControlValuesByAgentKind[options.agentKind] ?? {}),
+        ...explicitLiveLaunchControls,
+      };
+    }
     const workspaceSurface = getWorkspaceSurface(workspaceId);
     const resolvedModeId = resolveSessionCreationModeId({
-      explicitModeId: options.modeId,
+      explicitModeId:
+        options.modeId
+        ?? options.launchControlValues?.mode
+        ?? options.launchControlValues?.access_mode,
       workspaceSurface,
       agentKind: options.agentKind,
       preferredModeId,
     });
-    const pendingSessionId = createPendingSessionId(options.agentKind);
+    const pendingSessionId = options.clientSessionId ?? createPendingSessionId(options.agentKind);
+    const existingProjectedRecord = getSessionRecord(pendingSessionId);
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
       targetSessionId: pendingSessionId,
     });
 
-    const optimisticSlot: SessionSlot = {
-      ...createEmptySessionSlot(pendingSessionId, options.agentKind, {
+    const optimisticRecord: SessionRuntimeRecord = {
+      ...createEmptySessionRecord(pendingSessionId, options.agentKind, {
         workspaceId,
+        materializedSessionId: null,
         modelId: options.modelId,
         modeId: resolvedModeId ?? null,
         optimisticPrompt: null,
+        pendingConfigChanges: existingProjectedRecord?.pendingConfigChanges ?? {},
         sessionRelationship: { kind: "root" },
       }),
       status: "starting",
       transcriptHydrated: true,
     };
 
-    useHarnessStore.getState().putSessionSlot(pendingSessionId, optimisticSlot);
+    putSessionRecord(optimisticRecord);
     activateSession(pendingSessionId);
     let initialShellIntent: WorkspaceShellIntentKey | null | undefined;
     let currentOwnedShellIntent: WorkspaceShellIntentKey | null = null;
@@ -252,24 +283,6 @@ export function useSessionCreationActions() {
       currentOwnedShellWorkspaceId = write.shellWorkspaceId;
       currentOwnedSessionId = sessionId;
     };
-    const replaceOwnedShellIntent = (sessionId: string): boolean => {
-      if (currentOwnedShellIntent === null || currentOwnedShellEpoch === null || currentOwnedShellWorkspaceId === null) {
-        return false;
-      }
-      const replace = useWorkspaceUiStore.getState().replaceShellIntent({
-        workspaceId: currentOwnedShellWorkspaceId,
-        expectedIntent: currentOwnedShellIntent,
-        expectedEpoch: currentOwnedShellEpoch,
-        nextIntent: chatWorkspaceShellTabKey(sessionId),
-      });
-      if (!replace.replaced) {
-        return false;
-      }
-      currentOwnedShellIntent = replace.currentIntent;
-      currentOwnedShellEpoch = replace.epoch;
-      currentOwnedSessionId = sessionId;
-      return true;
-    };
     const rollbackOwnedShellIntent = (): boolean => {
       if (initialShellIntent === undefined || currentOwnedShellIntent === null || currentOwnedShellEpoch === null || currentOwnedShellWorkspaceId === null) {
         return false;
@@ -283,6 +296,23 @@ export function useSessionCreationActions() {
     };
     writeOwnedShellIntent(pendingSessionId);
     pruneInactiveSessionStreams();
+    if (shouldEnqueueInitialPrompt) {
+      await promptSession({
+        sessionId: pendingSessionId,
+        text: options.text,
+        blocks: options.blocks,
+        optimisticContentParts: options.optimisticContentParts,
+        workspaceId,
+        latencyFlowId: options.latencyFlowId,
+        measurementOperationId: options.measurementOperationId,
+        promptId,
+        onBeforeOptimisticPrompt: options.onBeforeOptimisticPrompt,
+      });
+      if (options.launchIntentId) {
+        useChatLaunchIntentStore.getState()
+          .markSendAttemptedIfActive(options.launchIntentId);
+      }
+    }
 
     const createPromise = (async () => {
       const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
@@ -405,11 +435,14 @@ export function useSessionCreationActions() {
             "session_model_availability_reinstall_retry",
           );
           return createWithResolvedConfig({
-            ...options,
-            latencyFlowId: null,
+            ...buildModelAvailabilityRetryOptions({
+              options,
+              pendingSessionId,
+              promptId,
+              hasPrompt,
+            }),
             modelAvailabilityRetryCount:
               (options.modelAvailabilityRetryCount ?? 0) + 1,
-            reuseInFlightEmptySession: false,
           });
         }
 
@@ -427,11 +460,14 @@ export function useSessionCreationActions() {
             "session_model_availability_restart_retry",
           );
           return createWithResolvedConfig({
-            ...options,
-            latencyFlowId: null,
+            ...buildModelAvailabilityRetryOptions({
+              options,
+              pendingSessionId,
+              promptId,
+              hasPrompt,
+            }),
             modelAvailabilityRetryCount:
               (options.modelAvailabilityRetryCount ?? 0) + 1,
-            reuseInFlightEmptySession: false,
           });
         }
 
@@ -441,23 +477,34 @@ export function useSessionCreationActions() {
         }
       }
 
+      const queuedConfigValuesBeforeDefaults = pendingConfigValuesForSession(pendingSessionId);
+      const liveDefaultsForLaunch = mergeLiveDefaultLaunchControls({
+        defaults: frozenDefaultLiveSessionControlValuesByAgentKind,
+        agentKind: options.agentKind,
+        values: queuedConfigValuesBeforeDefaults,
+      });
       const launchDefaults = await applySessionLaunchDefaults({
         client,
         session,
         agentKind: options.agentKind,
         modelRegistries,
-        defaultLiveSessionControlValuesByAgentKind:
-          useUserPreferencesStore.getState()
-            .defaultLiveSessionControlValuesByAgentKind,
+        defaultLiveSessionControlValuesByAgentKind: liveDefaultsForLaunch,
       });
       const launchedSession = launchDefaults.session;
       const launchedLiveConfig = launchDefaults.liveConfig
         ?? launchedSession.liveConfig
         ?? null;
+      const latestPendingConfigChanges =
+        getSessionRecord(pendingSessionId)?.pendingConfigChanges ?? {};
+      const pendingConfigReconcile = reconcilePendingConfigChanges(
+        launchedLiveConfig,
+        latestPendingConfigChanges,
+      );
 
-      const realSlot: SessionSlot = {
-        ...createEmptySessionSlot(launchedSession.id, options.agentKind, {
+      const realRecord: SessionRuntimeRecord = {
+        ...createEmptySessionRecord(pendingSessionId, options.agentKind, {
           workspaceId,
+          materializedSessionId: launchedSession.id,
           modelId: launchedSession.modelId ?? options.modelId,
           modeId: launchedSession.modeId ?? resolvedModeId ?? null,
           title: launchedSession.title ?? null,
@@ -467,6 +514,7 @@ export function useSessionCreationActions() {
           mcpBindingSummaries: launchedSession.mcpBindingSummaries ?? null,
           lastPromptAt: launchedSession.lastPromptAt ?? null,
           optimisticPrompt: null,
+          pendingConfigChanges: pendingConfigReconcile.pendingConfigChanges,
           sessionRelationship: { kind: "root" },
         }),
         status: resolveStatusFromExecutionSummary(
@@ -476,13 +524,13 @@ export function useSessionCreationActions() {
         transcriptHydrated: true,
       };
 
-      const ownsShellIntent = replaceOwnedShellIntent(launchedSession.id);
-      replacePendingSessionSlot(pendingSessionId, launchedSession.id, realSlot, {
-        remapActiveSession: ownsShellIntent,
-      });
-      updateInFlightSessionCreateId(workspaceId, pendingSessionId, launchedSession.id);
-      if (ownsShellIntent) {
-        activateSession(launchedSession.id);
+      materializeSessionRecord(pendingSessionId, launchedSession.id, realRecord);
+      usePromptOutboxStore.getState().bindMaterializedSession(
+        pendingSessionId,
+        launchedSession.id,
+      );
+      if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
+        rememberLastViewedSession(workspaceId, launchedSession.id);
       }
       upsertWorkspaceSessionRecord(workspaceId, launchedSession);
       trackProductEvent("chat_session_created", {
@@ -495,37 +543,14 @@ export function useSessionCreationActions() {
         useChatLaunchIntentStore.getState().markMaterializedIfActive(
           options.launchIntentId,
           {
+            clientSessionId: pendingSessionId,
             workspaceId,
             sessionId: launchedSession.id,
           },
         );
       }
 
-      if (hasPrompt) {
-        await promptSession({
-          sessionId: launchedSession.id,
-          text: options.text,
-          blocks: options.blocks,
-          optimisticContentParts: options.optimisticContentParts,
-          workspaceId,
-          latencyFlowId: options.latencyFlowId,
-          promptId: options.promptId,
-          onBeforeOptimisticPrompt: options.onBeforeOptimisticPrompt,
-          onBeforePromptRequest: () => {
-            if (options.launchIntentId) {
-              useChatLaunchIntentStore.getState()
-                .markSendAttemptedIfActive(options.launchIntentId);
-            }
-          },
-        });
-      } else {
-        void ensureSessionStreamConnected(launchedSession.id, {
-          resumeIfActive: false,
-          requestHeaders: requestOptions?.headers,
-        });
-      }
-
-      return launchedSession.id;
+      return pendingSessionId;
     })();
 
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
@@ -537,30 +562,56 @@ export function useSessionCreationActions() {
       });
     }
 
-    try {
-      return await createPromise;
-    } catch (error) {
-      const activeSessionIdBeforeRemoval = useHarnessStore.getState().activeSessionId;
-      removeSessionSlot(pendingSessionId);
+    const cleanupCreateFailure = (error: unknown): void => {
+      const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
+      usePromptOutboxStore.getState().clearSession(pendingSessionId);
+      removeSessionRecordAndClearSelection(pendingSessionId);
       const rolledBackShellIntent = rollbackOwnedShellIntent();
       if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
         if (previousActiveSessionId) {
           activateSession(previousActiveSessionId);
         } else {
-          useHarnessStore.getState().setActiveSessionId(null);
+          useSessionSelectionStore.getState().setActiveSessionId(null);
         }
       }
-      throw error;
-    } finally {
+      if (options.launchIntentId) {
+        useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
+      }
+      captureTelemetryException(error, {
+        tags: {
+          action: "create_session_with_resolved_config",
+          domain: "sessions",
+        },
+      });
+    };
+
+    const cleanupInFlight = (): void => {
       const currentInFlight = inFlightSessionCreatesByWorkspace.get(workspaceId);
       if (currentInFlight?.promise === createPromise) {
         inFlightSessionCreatesByWorkspace.delete(workspaceId);
       }
+    };
+
+    if (hasPrompt) {
+      void createPromise.catch((error) => {
+        cleanupCreateFailure(error);
+        const message = error instanceof Error ? error.message : String(error);
+        showToast(`Failed to start chat session: ${message}`, "error");
+      }).finally(cleanupInFlight);
+      return pendingSessionId;
+    }
+
+    try {
+      return await createPromise;
+    } catch (error) {
+      cleanupCreateFailure(error);
+      throw error;
+    } finally {
+      cleanupInFlight();
     }
   }, [
     activateSession,
     closeCreatedMismatchSession,
-    ensureSessionStreamConnected,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
     installAgent,
@@ -579,8 +630,10 @@ export function useSessionCreationActions() {
       agentKind: options.agentKind,
       modelId: options.modelId,
       modeId: options.modeId,
+      launchControlValues: options.launchControlValues,
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,
+      clientSessionId: options.clientSessionId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
     });
   }, [createSessionWithResolvedConfig]);
@@ -588,5 +641,55 @@ export function useSessionCreationActions() {
   return {
     createEmptySessionWithResolvedConfig,
     createSessionWithResolvedConfig,
+  };
+}
+
+function pickLiveDefaultLaunchControls(
+  values: Record<string, string> | undefined,
+): Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>> {
+  if (!values) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(values).filter(([key, value]) =>
+      (
+        key === "collaboration_mode"
+        || key === "reasoning"
+        || key === "effort"
+        || key === "fast_mode"
+      )
+      && value.trim().length > 0
+    ),
+  ) as Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>>;
+}
+
+function pendingConfigValuesForSession(sessionId: string): Record<string, string> {
+  const pendingConfigChanges = getSessionRecord(sessionId)?.pendingConfigChanges ?? {};
+  return Object.fromEntries(
+    Object.values(pendingConfigChanges)
+      .map((change) => [change.rawConfigId, change.value] as const),
+  );
+}
+
+function mergeLiveDefaultLaunchControls({
+  defaults,
+  agentKind,
+  values,
+}: {
+  defaults: Record<string, Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>>>;
+  agentKind: string;
+  values: Record<string, string>;
+}): Record<string, Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>>> {
+  const liveControls = pickLiveDefaultLaunchControls(values);
+  if (Object.keys(liveControls).length === 0) {
+    return defaults;
+  }
+
+  return {
+    ...defaults,
+    [agentKind]: {
+      ...(defaults[agentKind] ?? {}),
+      ...liveControls,
+    },
   };
 }

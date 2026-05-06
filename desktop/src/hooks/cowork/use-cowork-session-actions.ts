@@ -10,10 +10,10 @@ import { getWorkspaceClientAndId } from "@/lib/integrations/anyharness/session-r
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export function useCoworkSessionActions() {
-  const runtimeUrl = useHarnessStore((s) => s.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((s) => s.runtimeUrl);
   const queryClient = useQueryClient();
   const { applySessionSummary } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();

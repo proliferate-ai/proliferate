@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/Button";
 import { FileText } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { ReviewFeedbackPromptReference } from "@/lib/domain/chat/subagents/provenance";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 interface ReviewFeedbackSummaryProps {
   reference: ReviewFeedbackPromptReference;
@@ -18,7 +18,7 @@ export function ReviewFeedbackSummary({
   sessionId,
   state = "completed",
 }: ReviewFeedbackSummaryProps) {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const openCritique = useReviewUiStore((state) => state.openCritique);
   const reviewsQuery = useSessionReviewsQuery(sessionId, {
     workspaceId: selectedWorkspaceId,

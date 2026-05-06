@@ -2,16 +2,12 @@ import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import {
   resolveLaunchIntentSurfaceOverride,
-  shouldKeepBootstrappedWorkspaceLoading,
   shouldShowStructuralRepoWorkspaceStatus,
 } from "@/lib/domain/chat/chat-surface";
 import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 
@@ -20,6 +16,7 @@ export type ChatSurfaceState =
   | { kind: "launch-intent"; intentId: string }
   | { kind: "workspace-status" }
   | { kind: "session-loading"; sessionId: string | null }
+  | { kind: "session-switching"; sessionId: string }
   | { kind: "session-empty"; sessionId: string | null }
   | { kind: "session-transcript"; sessionId: string };
 
@@ -27,15 +24,10 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   mode: ChatSurfaceState;
   selectedWorkspaceId: string | null;
 } {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
-  const rememberedSessionId = useWorkspaceUiStore((state) => {
-    const workspaceKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
-    return workspaceKey ? state.lastViewedSessionByWorkspace[workspaceKey] ?? null : null;
-  });
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const {
@@ -87,7 +79,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   }
 
   if (pendingWorkspaceEntry) {
-    return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
+    return { mode: { kind: "session-empty", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }
 
   // Structural repo rows default to the status screen, but once a session is
@@ -96,7 +88,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     ? workspaceCollections?.localWorkspaces?.find((w) => w.id === selectedWorkspaceId)
     : null;
   if (shouldShowStructuralRepoWorkspaceStatus(selectedLocalWorkspace ?? null, scopedActiveSessionId)) {
-    return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
+    return { mode: { kind: "session-empty", sessionId: null }, selectedWorkspaceId };
   }
 
   const isArrivalWorkspace = workspaceArrivalEvent?.workspaceId === selectedWorkspaceId;
@@ -110,29 +102,20 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     // `session-empty` so the ready hero renders instead of a stale loader.
     && (!hasSlot || !transcriptHydrated || isRunning);
   if (shouldShowCloudStatus || shouldShowArrivalStatus) {
-    return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
+    return { mode: { kind: "session-empty", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }
 
   const shouldPreserveTranscript = selectedCloudRuntime.state?.preserveVisibleContent && scopedHasContent;
-  const hasBootstrappedWorkspace =
-    !!selectedWorkspaceId && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
 
   if (shellRenderSurface?.kind === "chat-session-pending") {
-    return { mode: { kind: "session-loading", sessionId: shellRenderSurface.sessionId }, selectedWorkspaceId };
+    return {
+      mode: { kind: "session-switching", sessionId: shellRenderSurface.sessionId },
+      selectedWorkspaceId,
+    };
   }
 
   if (!scopedActiveSessionId) {
-    if (shouldKeepBootstrappedWorkspaceLoading({
-      activeSessionId: scopedActiveSessionId,
-      hasBootstrappedWorkspace,
-      rememberedSessionId,
-    })) {
-      return { mode: { kind: "session-loading", sessionId: null }, selectedWorkspaceId };
-    }
-    if (hasBootstrappedWorkspace) {
-      return { mode: { kind: "session-empty", sessionId: null }, selectedWorkspaceId };
-    }
-    return { mode: { kind: "session-loading", sessionId: null }, selectedWorkspaceId };
+    return { mode: { kind: "session-empty", sessionId: null }, selectedWorkspaceId };
   }
 
   // Gate the session-loading state on hasSlot, hydration, and the
@@ -145,7 +128,10 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   // didn't flip.
   const awaitingHydration = !transcriptHydrated && scopedStreamConnectionState !== "open";
   if (!hasSlot || awaitingHydration || (isEmpty && isRunning)) {
-    return { mode: { kind: "session-loading", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
+    if (scopedHasContent) {
+      return { mode: { kind: "session-transcript", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
+    }
+    return { mode: { kind: "session-empty", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }
 
   if (shouldPreserveTranscript) {

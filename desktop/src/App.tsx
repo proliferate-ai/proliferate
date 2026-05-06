@@ -18,6 +18,7 @@ import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useLocalAutomationExecutor } from "@/hooks/automations/use-local-automation-executor"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
+import { usePromptOutboxDispatcher } from "@/hooks/chat/use-prompt-outbox-dispatcher"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/use-local-worktree-settings-target"
@@ -45,7 +46,7 @@ import {
 } from "@/stores/preferences/user-preferences-store"
 import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-store"
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
-import { bootstrapLogicalWorkspaceSelection } from "@/stores/workspaces/logical-workspace-store"
+import { bootstrapSessionSelection } from "@/stores/sessions/session-selection-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
@@ -157,6 +158,7 @@ function AppRuntime() {
   useAgentAutoReconcile()
   useLocalAutomationExecutor()
   useHomeDeferredLaunchRunner()
+  usePromptOutboxDispatcher()
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")
@@ -199,7 +201,7 @@ function AppRuntime() {
     void bootstrapUserPreferences().then(applyStoredAppearance)
     void bootstrapRepoPreferences()
     void bootstrapWorkspaceUi()
-    void bootstrapLogicalWorkspaceSelection()
+    void bootstrapSessionSelection()
 
     const authBootstrapStartedAt = startStartupTimer()
     recordAppRendererEvent("app.auth_bootstrap.start")

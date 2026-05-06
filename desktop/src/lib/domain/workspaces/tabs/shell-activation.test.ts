@@ -49,7 +49,7 @@ describe("resolveWorkspaceShellActivation", () => {
   it("renders pending chat only while every pending currentness field matches", () => {
     expect(resolveWorkspaceShellActivation({
       ...BASE_INPUT,
-      storedIntent: "chat:b",
+      storedIntent: "chat:a",
       currentShellActivationEpoch: 3,
       currentSessionActivationEpoch: 9,
       currentWorkspaceSelectionNonce: 4,
@@ -66,6 +66,105 @@ describe("resolveWorkspaceShellActivation", () => {
       renderSurface: { kind: "chat-session-pending", sessionId: "b" },
       highlightedTabKey: "chat:b",
     });
+  });
+
+  it("renders pending chat over null and viewer durable intent", () => {
+    const pendingChat = {
+      attemptId: "attempt-1",
+      sessionId: "b",
+      intent: "chat:b" as const,
+      guardToken: 9,
+      workspaceSelectionNonce: 4,
+      shellEpochAtWrite: 3,
+      sessionActivationEpochAtWrite: 9,
+    };
+
+    expect(resolveWorkspaceShellActivation({
+      ...BASE_INPUT,
+      storedIntent: null,
+      currentShellActivationEpoch: 3,
+      currentSessionActivationEpoch: 9,
+      currentWorkspaceSelectionNonce: 4,
+      pendingChatActivation: pendingChat,
+    })).toEqual({
+      renderSurface: { kind: "chat-session-pending", sessionId: "b" },
+      highlightedTabKey: "chat:b",
+    });
+
+    expect(resolveWorkspaceShellActivation({
+      ...BASE_INPUT,
+      storedIntent: APP_KEY,
+      activeViewerTargetKey: APP_KEY,
+      currentShellActivationEpoch: 3,
+      currentSessionActivationEpoch: 9,
+      currentWorkspaceSelectionNonce: 4,
+      pendingChatActivation: pendingChat,
+    })).toEqual({
+      renderSurface: { kind: "chat-session-pending", sessionId: "b" },
+      highlightedTabKey: "chat:b",
+    });
+  });
+
+  it("does not render pending chat when the pending tab is not ordered", () => {
+    expect(resolveWorkspaceShellActivation({
+      ...BASE_INPUT,
+      orderedTabs: ["chat:a", APP_KEY],
+      storedIntent: "chat:a",
+      activeSessionId: "a",
+      currentShellActivationEpoch: 3,
+      currentSessionActivationEpoch: 9,
+      currentWorkspaceSelectionNonce: 4,
+      pendingChatActivation: {
+        attemptId: "attempt-1",
+        sessionId: "b",
+        intent: "chat:b",
+        guardToken: 9,
+        workspaceSelectionNonce: 4,
+        shellEpochAtWrite: 3,
+        sessionActivationEpochAtWrite: 9,
+      },
+    })).toEqual({
+      renderSurface: { kind: "chat-session", sessionId: "a" },
+      highlightedTabKey: "chat:a",
+    });
+  });
+
+  it("ignores stale pending chat on shell epoch, guard token, or workspace nonce mismatch", () => {
+    const pendingChat = {
+      attemptId: "attempt-1",
+      sessionId: "b",
+      intent: "chat:b" as const,
+      guardToken: 9,
+      workspaceSelectionNonce: 4,
+      shellEpochAtWrite: 3,
+      sessionActivationEpochAtWrite: 9,
+    };
+    const currentInput = {
+      ...BASE_INPUT,
+      storedIntent: "chat:a" as const,
+      activeSessionId: "a",
+      currentShellActivationEpoch: 3,
+      currentSessionActivationEpoch: 9,
+      currentWorkspaceSelectionNonce: 4,
+      pendingChatActivation: pendingChat,
+    };
+    const durableChat = {
+      renderSurface: { kind: "chat-session" as const, sessionId: "a" },
+      highlightedTabKey: "chat:a" as const,
+    };
+
+    expect(resolveWorkspaceShellActivation({
+      ...currentInput,
+      currentShellActivationEpoch: 4,
+    })).toEqual(durableChat);
+    expect(resolveWorkspaceShellActivation({
+      ...currentInput,
+      currentSessionActivationEpoch: 10,
+    })).toEqual(durableChat);
+    expect(resolveWorkspaceShellActivation({
+      ...currentInput,
+      currentWorkspaceSelectionNonce: 5,
+    })).toEqual(durableChat);
   });
 
   it("renders chat-shell for ambiguous null intent", () => {

@@ -9,12 +9,6 @@ import {
   resolveStatusFromExecutionSummary,
 } from "@/lib/domain/sessions/activity";
 import {
-  useHarnessStore,
-  type SessionChildRelationship,
-  type SessionRelationship,
-} from "@/stores/sessions/harness-store";
-import {
-  createEmptySessionSlot,
   getSessionClientAndWorkspace,
   getWorkspaceClientAndId,
   isPendingSessionId,
@@ -49,20 +43,35 @@ import {
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/hot-reopen";
 import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 import {
+  commitHotActiveSession,
   commitActiveSession,
   isSessionActivationCurrent,
   type SessionActivationGuard,
   type SessionActivationOutcome,
 } from "@/hooks/sessions/session-activation-guard";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  patchSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type {
+  SessionChildRelationship,
+  SessionRelationship,
+} from "@/stores/sessions/session-types";
+import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 
 export type WorkspaceSession = Session & { workspaceId: string };
-
-const INITIAL_SESSION_HISTORY_EVENT_BUDGET = 3_000;
 
 export interface SelectSessionOptionsWithoutGuard {
   latencyFlowId?: string | null;
   allowColdIdleNoStream?: boolean;
   measurementOperationId?: MeasurementOperationId | null;
+  reuseMeasurementOperation?: boolean;
   forceCold?: boolean;
 }
 
@@ -71,18 +80,18 @@ type SessionLatencyFlowOptions = SelectSessionOptionsWithoutGuard & {
 };
 
 export function classifyTrustedSessionSelection(sessionId: string): SessionRelationship {
-  const state = useHarnessStore.getState();
-  const slot = state.sessionSlots[sessionId] ?? null;
+  const state = useSessionDirectoryStore.getState();
+  const slot = state.entriesById[sessionId] ?? null;
   if (slot && slot.sessionRelationship.kind !== "pending") {
     return slot.sessionRelationship;
   }
   const relationshipHint =
-    state.sessionRelationshipHints[sessionId] as SessionChildRelationship | undefined;
+    state.relationshipHintsBySessionId[sessionId] as SessionChildRelationship | undefined;
   const relationship = relationshipHint ?? { kind: "root" as const };
   if (relationship.kind === "root") {
     state.setSessionRelationship(sessionId, relationship);
   } else {
-    state.recordSessionRelationshipHint(sessionId, relationship);
+    state.recordRelationshipHint(sessionId, relationship);
   }
   return relationship;
 }
@@ -116,12 +125,12 @@ function buildLatencyRequestOptions(latencyFlowId?: string | null) {
 }
 
 async function ensureRuntimeReadyForSessions(): Promise<string> {
-  const state = useHarnessStore.getState();
+  const state = useHarnessConnectionStore.getState();
   if (state.connectionState !== "healthy" || state.runtimeUrl.trim().length === 0) {
     await bootstrapHarnessRuntime();
   }
 
-  const readyState = useHarnessStore.getState();
+  const readyState = useHarnessConnectionStore.getState();
   if (readyState.connectionState !== "healthy" || readyState.runtimeUrl.trim().length === 0) {
     throw new Error(readyState.error || "AnyHarness runtime is still starting. Try again.");
   }
@@ -136,8 +145,6 @@ export function useSessionSelectionActions() {
   const cleanupDismissedSession = useDismissedSessionCleanup();
   const {
     activateSession,
-    ensureSessionStreamConnected,
-    rehydrateSessionSlotFromHistory,
   } = useSessionRuntimeActions();
   const {
     upsertWorkspaceSessionRecord,
@@ -214,22 +221,23 @@ export function useSessionSelectionActions() {
         : undefined;
     };
     const startedAt = startLatencyTimer();
-    const measurementOperationId = startMeasurementOperation({
-      kind: "session_switch",
-      surfaces: [
-        "workspace-shell",
-        "chat-surface",
-        "session-transcript-pane",
-        "transcript-list",
-        "header-tabs",
-        "workspace-sidebar",
-      ],
-      linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
-      maxDurationMs: 30_000,
-    });
-    const current = useHarnessStore.getState();
-    let existingSlot = current.sessionSlots[sessionId] ?? null;
-    const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
+    const measurementOperationId = options?.reuseMeasurementOperation
+      ? options.measurementOperationId ?? null
+      : startMeasurementOperation({
+        kind: "session_switch",
+        surfaces: [
+          "workspace-shell",
+          "chat-surface",
+          "session-transcript-pane",
+          "transcript-list",
+          "header-tabs",
+          "workspace-sidebar",
+        ],
+        linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
+        maxDurationMs: 30_000,
+      });
+    const current = useSessionSelectionStore.getState();
+    let existingSlot = getSessionRecord(sessionId);
     logLatency("session.select.start", {
       sessionId,
       flowId: options?.latencyFlowId ?? null,
@@ -262,36 +270,45 @@ export function useSessionSelectionActions() {
         );
       if (canHotSwitch) {
         const hotStartedAt = performance.now();
-        const hotOperationId = startMeasurementOperation({
-          kind: "session_hot_switch",
-          surfaces: [
-            "workspace-shell",
-            "chat-surface",
-            "session-transcript-pane",
-            "transcript-list",
-            "header-tabs",
-            "workspace-sidebar",
-          ],
-          linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
-          maxDurationMs: 2500,
-        });
-        const commitOutcome = commitSelection();
-        if (commitOutcome?.result === "stale") {
-          return commitOutcome;
-        }
-        const gateState = useHarnessStore.getState();
+        const hotOperationId = options?.reuseMeasurementOperation
+          ? measurementOperationId
+          : startMeasurementOperation({
+            kind: "session_hot_switch",
+            surfaces: [
+              "workspace-shell",
+              "chat-surface",
+              "session-transcript-pane",
+              "transcript-list",
+              "header-tabs",
+              "workspace-sidebar",
+            ],
+            linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
+            maxDurationMs: 2500,
+          });
+        const gateState = useSessionSelectionStore.getState();
         const previousHotOperationId = gateState.hotPaintGate?.operationId ?? null;
         if (previousHotOperationId && previousHotOperationId !== hotOperationId) {
           finishOrCancelMeasurementOperation(previousHotOperationId, "aborted");
         }
         const nonce = gateState.workspaceSelectionNonce;
-        gateState.setHotPaintGate({
+        const hotPaintGate = {
           workspaceId: existingSlot.workspaceId!,
           sessionId,
           nonce,
           operationId: hotOperationId,
           kind: "session_hot_switch",
-        });
+        } as const;
+        const commitOutcome = guard
+          ? commitHotActiveSession(sessionId, guard, hotPaintGate)
+          : (useSessionSelectionStore.getState().activateHotSession({
+            sessionId,
+            workspaceId: existingSlot.workspaceId!,
+            hotPaintGate,
+          }), null);
+        if (commitOutcome?.result === "stale") {
+          finishOrCancelMeasurementOperation(hotOperationId, "aborted");
+          return commitOutcome;
+        }
         recordMeasurementWorkflowStep({
           operationId: hotOperationId,
           step: "session.select.hot_slot_activate",
@@ -309,7 +326,7 @@ export function useSessionSelectionActions() {
           ]);
         }
         scheduleAfterNextPaint(() => {
-          const currentState = useHarnessStore.getState();
+          const currentState = useSessionSelectionStore.getState();
           if (
             currentState.hotPaintGate?.nonce !== nonce
             || currentState.activeSessionId !== sessionId
@@ -321,21 +338,17 @@ export function useSessionSelectionActions() {
           if (hotOperationId) {
             finishMeasurementOperation(hotOperationId, "completed");
           }
-          void ensureSessionStreamConnected(sessionId, {
-            allowColdIdleNoStream: options?.allowColdIdleNoStream,
-            resumeIfActive: true,
-            requestHeaders,
-            isCurrent: () => {
-              if (guard && !isSessionActivationCurrent(guard)) {
-                return false;
-              }
-              const state = useHarnessStore.getState();
-              return state.workspaceSelectionNonce === nonce
-                && state.activeSessionId === sessionId;
-            },
-          });
+          const selection = useSessionSelectionStore.getState();
+          const viewedSessionId = existingSlot.materializedSessionId ?? sessionId;
+          rememberLastViewedSession(
+            resolveWorkspaceUiKey(
+              selection.selectedLogicalWorkspaceId,
+              existingSlot.workspaceId!,
+            ) ?? existingSlot.workspaceId!,
+            viewedSessionId,
+          );
         });
-        if (measurementOperationId) {
+        if (measurementOperationId && measurementOperationId !== hotOperationId) {
           finishMeasurementOperation(measurementOperationId, "completed");
         }
         return commitOutcome ?? undefined;
@@ -417,8 +430,8 @@ export function useSessionSelectionActions() {
 
     if (!existingSlot) {
       const storeStartedAt = performance.now();
-      useHarnessStore.getState().putSessionSlot(sessionId, {
-        ...createEmptySessionSlot(sessionId, agentKind, {
+      putSessionRecord({
+        ...createEmptySessionRecord(sessionId, agentKind, {
           workspaceId,
           modelId: sessionMeta?.modelId ?? null,
           modeId: sessionMeta?.modeId ?? null,
@@ -454,7 +467,7 @@ export function useSessionSelectionActions() {
       }
     } else {
       const storeStartedAt = performance.now();
-      useHarnessStore.getState().patchSessionSlot(sessionId, {
+      patchSessionRecord(sessionId, {
         workspaceId,
         agentKind,
         modelId: sessionMeta?.modelId ?? existingSlot.modelId ?? null,
@@ -485,104 +498,6 @@ export function useSessionSelectionActions() {
       });
     }
 
-    const currentSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
-    let streamConnectDeferredUntilHydrate = false;
-    const scheduleStreamConnect = () => {
-      const streamStartedAt = performance.now();
-      recordMeasurementWorkflowStep({
-        operationId: measurementOperationId,
-        step: "session.select.stream_connect_scheduled",
-        startedAt: streamStartedAt,
-        outcome: "completed",
-      });
-      void ensureSessionStreamConnected(sessionId, {
-        allowColdIdleNoStream: options?.allowColdIdleNoStream,
-        resumeIfActive: true,
-        requestHeaders,
-        skipInitialRefresh: true,
-        refreshOnStartupReady: true,
-        isCurrent: () => {
-          if (guard && !isSessionActivationCurrent(guard)) {
-            return false;
-          }
-          const state = useHarnessStore.getState();
-          return state.activeSessionId === sessionId
-            && state.selectedWorkspaceId === workspaceId;
-        },
-      });
-      logLatency("session.select.stream_connected", {
-        sessionId,
-        workspaceId,
-        flowId: options?.latencyFlowId ?? null,
-        scheduled: true,
-        elapsedMs: Math.round(performance.now() - streamStartedAt),
-        totalElapsedMs: elapsedMs(startedAt),
-      });
-    };
-    if (!currentSlot?.transcriptHydrated) {
-      const hydrateStartedAt = startLatencyTimer();
-      const selectionNonce = useHarnessStore.getState().workspaceSelectionNonce;
-      const afterSeq = currentSlot?.transcript.lastSeq ?? 0;
-      const isStillSelected = () => {
-        if (guard && !isSessionActivationCurrent(guard)) {
-          return false;
-        }
-        const state = useHarnessStore.getState();
-        return state.workspaceSelectionNonce === selectionNonce
-          && state.activeSessionId === sessionId
-          && state.selectedWorkspaceId === workspaceId;
-      };
-      streamConnectDeferredUntilHydrate = true;
-      useHarnessStore.getState().patchSessionSlot(sessionId, { transcriptHydrated: true });
-      recordMeasurementWorkflowStep({
-        operationId: measurementOperationId,
-        step: "session.select.history_hydrate",
-        startedAt: hydrateStartedAt,
-        outcome: "completed",
-      });
-      logLatency("session.select.history_hydrate_deferred", {
-        sessionId,
-        workspaceId,
-        afterSeq,
-        flowId: options?.latencyFlowId ?? null,
-        totalElapsedMs: elapsedMs(startedAt),
-      });
-      scheduleAfterNextPaint(() => {
-        if (!isStillSelected()) {
-          return;
-        }
-        void rehydrateSessionSlotFromHistory(sessionId, {
-          afterSeq,
-          limit: INITIAL_SESSION_HISTORY_EVENT_BUDGET,
-          requestHeaders,
-          isCurrent: isStillSelected,
-        }).then((hydrated) => {
-          logLatency("session.select.history_hydrated", {
-            sessionId,
-            workspaceId,
-            hydrated,
-            flowId: options?.latencyFlowId ?? null,
-            elapsedMs: elapsedMs(hydrateStartedAt),
-            totalElapsedMs: elapsedMs(startedAt),
-          });
-        }).finally(() => {
-          if (isStillSelected()) {
-            scheduleStreamConnect();
-          }
-        });
-      });
-      logLatency("session.select.full_history_backfill_skipped", {
-        sessionId,
-        workspaceId,
-        hydrated: true,
-        reason: "protect_interactivity",
-        flowId: options?.latencyFlowId ?? null,
-      });
-    }
-
-    if (!streamConnectDeferredUntilHydrate) {
-      scheduleStreamConnect();
-    }
     logLatency("session.select.completed", {
       sessionId,
       workspaceId,
@@ -605,20 +520,18 @@ export function useSessionSelectionActions() {
         result: "completed",
         sessionId,
         guard,
-        activeSessionVersion: useHarnessStore.getState().activeSessionVersion,
+        activeSessionVersion: useSessionSelectionStore.getState().activeSessionVersion,
       };
     }
   }, [
     activateSession,
-    ensureSessionStreamConnected,
     ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
-    rehydrateSessionSlotFromHistory,
   ]);
 
   const dismissSession = useCallback(async (sessionId: string) => {
-    const state = useHarnessStore.getState();
-    const closingSlot = state.sessionSlots[sessionId] ?? null;
+    const state = useSessionSelectionStore.getState();
+    const closingSlot = getSessionRecord(sessionId);
     const workspaceId = closingSlot?.workspaceId ?? state.selectedWorkspaceId;
 
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
@@ -628,8 +541,9 @@ export function useSessionSelectionActions() {
     }
 
     try {
-      const { connection } = await getSessionClientAndWorkspace(sessionId);
-      await getAnyHarnessClient(connection).sessions.dismiss(sessionId);
+      const { connection, materializedSessionId } =
+        await getSessionClientAndWorkspace(sessionId);
+      await getAnyHarnessClient(connection).sessions.dismiss(materializedSessionId);
     } catch {
       // Dismiss failed.
     }
@@ -645,7 +559,7 @@ export function useSessionSelectionActions() {
     options?: SessionLatencyFlowOptions,
   ): Promise<string | null> => {
     const startedAt = startLatencyTimer();
-    const workspaceId = useHarnessStore.getState().selectedWorkspaceId;
+    const workspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
     logLatency("session.restore.start", {
       workspaceId,
       flowId: options?.latencyFlowId ?? null,

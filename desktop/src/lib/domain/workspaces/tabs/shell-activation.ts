@@ -45,6 +45,11 @@ export interface WorkspaceShellActivation {
 export function resolveWorkspaceShellActivation(
   input: WorkspaceShellActivationInput,
 ): WorkspaceShellActivation {
+  const pendingOverride = resolveCurrentPendingChatActivation(input);
+  if (pendingOverride) {
+    return pendingOverride;
+  }
+
   if (input.storedIntent === "chat-shell") {
     return chatShellActivation();
   }
@@ -53,12 +58,6 @@ export function resolveWorkspaceShellActivation(
     const parsed = parseWorkspaceShellTabKey(input.storedIntent);
     if (parsed?.kind === "chat") {
       const key = chatWorkspaceShellTabKey(parsed.sessionId);
-      if (isCurrentPendingChatActivation(input, key)) {
-        return {
-          renderSurface: { kind: "chat-session-pending", sessionId: parsed.sessionId },
-          highlightedTabKey: key,
-        };
-      }
       if (
         input.activeSessionId === parsed.sessionId
         && input.liveChatSessionIds.has(parsed.sessionId)
@@ -137,6 +136,22 @@ export function resolveNextShellTabAfterClose({
   }
 
   return null;
+}
+
+function resolveCurrentPendingChatActivation(
+  input: WorkspaceShellActivationInput,
+): WorkspaceShellActivation | null {
+  const pending = input.pendingChatActivation;
+  if (!pending || !isCurrentPendingChatActivation(input, pending.intent)) {
+    return null;
+  }
+  if (!input.orderedTabs.includes(pending.intent)) {
+    return null;
+  }
+  return {
+    renderSurface: { kind: "chat-session-pending", sessionId: pending.sessionId },
+    highlightedTabKey: pending.intent,
+  };
 }
 
 function isCurrentPendingChatActivation(

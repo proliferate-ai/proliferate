@@ -5,12 +5,12 @@ import {
   type MobilityFooterContext,
 } from "@/lib/domain/workspaces/mobility-footer-context";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceMobilityState } from "./use-workspace-mobility-state";
 
 export function useMobilityFooterContext(): MobilityFooterContext | null {
   const mobility = useWorkspaceMobilityState();
-  const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((s) => s.selectedWorkspaceId);
   const selectedMaterializationKind: WorkspaceMobilitySelectedMaterializationKind | null =
     selectedWorkspaceId
       ? parseCloudWorkspaceSyntheticId(selectedWorkspaceId) ? "cloud" : "local"

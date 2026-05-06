@@ -87,16 +87,26 @@ vi.mock("@/lib/integrations/anyharness/resolve-workspace-connection", () => ({
   })),
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => {
+vi.mock("@/stores/sessions/harness-connection-store", () => {
   const state = {
     runtimeUrl: "http://desktop-runtime.test",
-    selectedWorkspaceId: "workspace-1",
   };
-  const useHarnessStore = Object.assign(
+  const useHarnessConnectionStore = Object.assign(
     (selector: (value: typeof state) => unknown) => selector(state),
     { getState: () => state },
   );
-  return { useHarnessStore };
+  return { useHarnessConnectionStore };
+});
+
+vi.mock("@/stores/sessions/session-selection-store", () => {
+  const state = {
+    selectedWorkspaceId: "workspace-1",
+  };
+  const useSessionSelectionStore = Object.assign(
+    (selector: (value: typeof state) => unknown) => selector(state),
+    { getState: () => state },
+  );
+  return { useSessionSelectionStore };
 });
 
 vi.mock("@/stores/toast/toast-store", () => ({

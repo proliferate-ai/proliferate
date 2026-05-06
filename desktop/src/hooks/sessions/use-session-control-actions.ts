@@ -25,7 +25,12 @@ import {
   resolveStatusFromExecutionSummary,
   sessionSlotBelongsToWorkspace,
 } from "@/lib/domain/sessions/activity";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  getSessionRecord,
+  getSessionRecords,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   getSessionClientAndWorkspace,
   isPendingSessionId,
@@ -35,12 +40,16 @@ import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session
 import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
 
 interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;
 }
 
-interface PromptLatencyFlowOptions extends SessionLatencyFlowOptions { promptId?: string | null; }
+interface PromptLatencyFlowOptions extends SessionLatencyFlowOptions {
+  measurementOperationId?: MeasurementOperationId | null;
+  promptId?: string | null;
+}
 
 interface LaunchPromptInput extends SessionLatencyFlowOptions {
   workspaceId: string;
@@ -49,6 +58,7 @@ interface LaunchPromptInput extends SessionLatencyFlowOptions {
   text: string;
   blocks?: PromptInputBlock[];
   optimisticContentParts?: ContentPart[];
+  promptId?: string | null;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
 
@@ -66,6 +76,8 @@ interface SessionControlDeps {
     modeId?: string;
     workspaceId?: string;
     latencyFlowId?: string | null;
+    measurementOperationId?: MeasurementOperationId | null;
+    promptId?: string | null;
     onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   }) => Promise<string>;
   ensureWorkspaceSessions: (workspaceId: string) => Promise<Array<{
@@ -120,16 +132,33 @@ export function useSessionControlActions({
     value: string,
     options?: SessionConfigOptionUpdateOptions,
   ) => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
     if (!sessionId) {
       throw new Error("No active session");
     }
-    if (isPendingSessionId(sessionId)) {
-      throw new Error("Wait for the session to finish starting before changing its configuration");
+    const currentSlot = getSessionRecord(sessionId);
+    if (isPendingSessionId(sessionId) || currentSlot?.materializedSessionId === null) {
+      if (!currentSlot) {
+        throw new Error("No active session");
+      }
+      const mutationId = ++nextPendingConfigMutationId;
+      patchSessionRecord(sessionId, {
+        ...(configId === "model" ? { modelId: value } : {}),
+        ...(configId === "mode" ? { modeId: value } : {}),
+        pendingConfigChanges: withPendingConfigChange(
+          currentSlot?.pendingConfigChanges ?? {},
+          {
+            rawConfigId: configId,
+            value,
+            status: "queued",
+            mutationId,
+          },
+        ),
+      });
+      return;
     }
 
-    const currentSlot = state.sessionSlots[sessionId] ?? null;
     const workspaceId = currentSlot?.workspaceId ?? state.selectedWorkspaceId;
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
@@ -137,7 +166,7 @@ export function useSessionControlActions({
     }
 
     const mutationId = ++nextPendingConfigMutationId;
-    useHarnessStore.getState().patchSessionSlot(sessionId, {
+    patchSessionRecord(sessionId, {
       pendingConfigChanges: withPendingConfigChange(
         currentSlot?.pendingConfigChanges ?? {},
         {
@@ -150,8 +179,8 @@ export function useSessionControlActions({
     });
 
     try {
-      const { connection } = await getSessionClientAndWorkspace(sessionId);
-      const response = await getAnyHarnessClient(connection).sessions.setConfigOption(sessionId, {
+      const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+      const response = await getAnyHarnessClient(connection).sessions.setConfigOption(materializedSessionId, {
         configId,
         value,
       });
@@ -160,7 +189,7 @@ export function useSessionControlActions({
         upsertWorkspaceSessionRecord(workspaceId, response.session);
       }
 
-      const latestSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+      const latestSlot = getSessionRecord(sessionId);
       if (!latestSlot) {
         return response;
       }
@@ -201,7 +230,7 @@ export function useSessionControlActions({
       } as const;
 
       if (shouldApplyConfigFields) {
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        patchSessionRecord(sessionId, {
           ...nextPatch,
           liveConfig: effectiveLiveConfig,
           modelId:
@@ -223,7 +252,7 @@ export function useSessionControlActions({
           },
         });
       } else {
-        useHarnessStore.getState().patchSessionSlot(sessionId, nextPatch);
+        patchSessionRecord(sessionId, nextPatch);
       }
 
       if (isLatestMutation && response.applyState === "queued") {
@@ -246,9 +275,9 @@ export function useSessionControlActions({
 
       return response;
     } catch (error) {
-      const latestSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+      const latestSlot = getSessionRecord(sessionId);
       if (latestSlot?.pendingConfigChanges[configId]?.mutationId === mutationId) {
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        patchSessionRecord(sessionId, {
           pendingConfigChanges: withoutPendingConfigChange(
             latestSlot.pendingConfigChanges,
             configId,
@@ -266,13 +295,13 @@ export function useSessionControlActions({
       optimisticContentParts?: ContentPart[];
     },
   ) => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
     if (!sessionId) {
       throw new Error("No active session");
     }
 
-    const slot = state.sessionSlots[sessionId] ?? null;
+    const slot = getSessionRecord(sessionId);
     if (!isPendingSessionId(sessionId) && !slot) {
       throw new Error("No active session");
     }
@@ -293,18 +322,19 @@ export function useSessionControlActions({
       optimisticContentParts: options?.optimisticContentParts,
       workspaceId,
       latencyFlowId: options?.latencyFlowId,
+      measurementOperationId: options?.measurementOperationId,
       promptId: options?.promptId,
     });
   }, [getWorkspaceRuntimeBlockReason, promptSession]);
 
   const cancelActiveSession = useCallback(async () => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
     if (!sessionId) {
       return;
     }
 
-    const workspaceId = state.sessionSlots[sessionId]?.workspaceId ?? state.selectedWorkspaceId;
+    const workspaceId = getSessionRecord(sessionId)?.workspaceId ?? state.selectedWorkspaceId;
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
       showToast(blockedReason);
@@ -312,9 +342,9 @@ export function useSessionControlActions({
     }
 
     try {
-      const { connection } = await getSessionClientAndWorkspace(sessionId);
-      await getAnyHarnessClient(connection).sessions.cancel(sessionId);
-      useHarnessStore.getState().patchSessionSlot(sessionId, { status: "idle" });
+      const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+      await getAnyHarnessClient(connection).sessions.cancel(materializedSessionId);
+      patchSessionRecord(sessionId, { status: "idle" });
     } catch {
       // Cancel failed.
     }
@@ -323,9 +353,9 @@ export function useSessionControlActions({
   const resolvePermission = useCallback(async (
     input: { decision?: "allow" | "deny"; optionId?: string },
   ) => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
-    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const slot = sessionId ? getSessionRecord(sessionId) : null;
     const permission = slot?.transcript
       ? selectPendingApprovalInteraction(slot.transcript)
       : null;
@@ -338,12 +368,12 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
     const request: ResolveInteractionRequest = input.optionId
       ? { outcome: "selected", optionId: input.optionId }
       : { outcome: "decision", decision: input.decision ?? "deny" };
     await getAnyHarnessClient(connection).sessions.resolveInteraction(
-      sessionId,
+      materializedSessionId,
       permission.requestId,
       request,
     );
@@ -354,9 +384,9 @@ export function useSessionControlActions({
       | { outcome: "submitted"; answers: UserInputSubmittedAnswer[] }
       | { outcome: "cancelled" },
   ) => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
-    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const slot = sessionId ? getSessionRecord(sessionId) : null;
     const userInput = slot?.transcript
       ? selectPendingUserInputInteraction(slot.transcript)
       : null;
@@ -369,12 +399,12 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
     const request: ResolveInteractionRequest = input.outcome === "submitted"
       ? { outcome: "submitted", answers: input.answers }
       : { outcome: "cancelled" };
     await getAnyHarnessClient(connection).sessions.resolveInteraction(
-      sessionId,
+      materializedSessionId,
       userInput.requestId,
       request,
     );
@@ -386,9 +416,9 @@ export function useSessionControlActions({
       | { outcome: "declined" }
       | { outcome: "cancelled" },
   ) => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
-    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const slot = sessionId ? getSessionRecord(sessionId) : null;
     const mcpElicitation = slot?.transcript
       ? selectPendingMcpElicitationInteraction(slot.transcript)
       : null;
@@ -401,21 +431,21 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
     const request: ResolveInteractionRequest = input.outcome === "accepted"
       ? { outcome: "accepted", fields: input.fields }
       : { outcome: input.outcome };
     await getAnyHarnessClient(connection).sessions.resolveInteraction(
-      sessionId,
+      materializedSessionId,
       mcpElicitation.requestId,
       request,
     );
   }, [getWorkspaceRuntimeBlockReason]);
 
   const revealMcpElicitationUrl = useCallback(async (): Promise<McpElicitationUrlRevealResponse | null> => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const sessionId = state.activeSessionId;
-    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const slot = sessionId ? getSessionRecord(sessionId) : null;
     const mcpElicitation = slot?.transcript
       ? selectPendingMcpElicitationInteraction(slot.transcript)
       : null;
@@ -428,9 +458,9 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
     return getAnyHarnessClient(connection).sessions.revealMcpElicitationUrl(
-      sessionId,
+      materializedSessionId,
       mcpElicitation.requestId,
     );
   }, [getWorkspaceRuntimeBlockReason]);
@@ -442,15 +472,17 @@ export function useSessionControlActions({
     blocks?: PromptInputBlock[],
     optimisticContentParts?: ContentPart[],
     onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void,
+    measurementOperationId?: MeasurementOperationId | null,
+    promptId?: string | null,
   ) => {
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     const workspaceId = state.selectedWorkspaceId;
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
       throw new Error(blockedReason);
     }
 
-    for (const slot of Object.values(state.sessionSlots)) {
+    for (const slot of Object.values(getSessionRecords())) {
       if (
         slot.agentKind === agentKind
         && sessionSlotBelongsToWorkspace(slot, workspaceId)
@@ -464,6 +496,8 @@ export function useSessionControlActions({
           optimisticContentParts,
           workspaceId,
           onBeforeOptimisticPrompt,
+          measurementOperationId,
+          promptId,
         });
         return;
       }
@@ -485,6 +519,8 @@ export function useSessionControlActions({
           optimisticContentParts,
           workspaceId,
           onBeforeOptimisticPrompt,
+          measurementOperationId,
+          promptId,
         });
         return;
       }
@@ -497,6 +533,8 @@ export function useSessionControlActions({
       agentKind,
       modelId: modelId ?? agentKind,
       onBeforeOptimisticPrompt,
+      measurementOperationId,
+      promptId,
     });
   }, [
     activateSession,
@@ -515,6 +553,7 @@ export function useSessionControlActions({
     blocks,
     optimisticContentParts,
     latencyFlowId,
+    promptId,
     onBeforeOptimisticPrompt,
   }: LaunchPromptInput) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
@@ -522,8 +561,7 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const state = useHarnessStore.getState();
-    for (const slot of Object.values(state.sessionSlots)) {
+    for (const slot of Object.values(getSessionRecords())) {
       if (
         slot.agentKind === agentKind
         && slot.modelId === modelId
@@ -538,6 +576,7 @@ export function useSessionControlActions({
           optimisticContentParts,
           workspaceId,
           latencyFlowId,
+          promptId,
           onBeforeOptimisticPrompt,
         });
         return;
@@ -562,6 +601,7 @@ export function useSessionControlActions({
         optimisticContentParts,
         workspaceId,
         latencyFlowId,
+        promptId,
         onBeforeOptimisticPrompt,
       });
       return;
@@ -575,6 +615,7 @@ export function useSessionControlActions({
       modelId,
       workspaceId,
       latencyFlowId,
+      promptId,
       onBeforeOptimisticPrompt,
     });
   }, [

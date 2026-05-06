@@ -7,14 +7,13 @@ import {
   type ChatComposerDraft,
 } from "@/lib/domain/chat/file-mentions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useChatDraftState() {
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const workspaceUiKey = resolveChatDraftWorkspaceId(
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,

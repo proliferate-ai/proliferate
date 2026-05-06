@@ -15,7 +15,7 @@ import {
 } from "@/lib/domain/agents/status";
 import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useAgentInstallationActions } from "./use-agent-installation-actions";
 import { useLocalAgentCredentials } from "./use-local-agent-credentials";
 import {
@@ -49,8 +49,8 @@ export function useAgentSetupWorkflow({
   reconcileState = "idle",
   reconcileResult,
 }: UseAgentSetupWorkflowArgs) {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const restartRequired = useAgentCredentialsStore((state) => state.restartRequired);
   const clearRestartRequired = useAgentCredentialsStore((state) => state.clearRestartRequired);
   const loginMutation = useStartAgentLoginMutation();

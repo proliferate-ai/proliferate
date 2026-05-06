@@ -15,7 +15,9 @@ import {
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { cloudBillingKey } from "./query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
@@ -41,8 +43,8 @@ function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
 
 export function useCloudWorkspaceActions() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const { syncCloudCredential } = useCloudCredentialActions();
   const clearDeferredLaunchesForWorkspace = useDeferredHomeLaunchStore((state) =>
@@ -110,7 +112,7 @@ export function useCloudWorkspaceActions() {
       primeCloudWorkspace(workspace);
       await invalidateCloudResources();
       const syntheticWorkspaceId = cloudWorkspaceSyntheticId(workspace.id);
-      const pendingWorkspaceEntry = useHarnessStore.getState().pendingWorkspaceEntry;
+      const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       const shouldPreservePending = pendingWorkspaceEntry?.workspaceId === syntheticWorkspaceId
         && pendingWorkspaceEntry.stage === "awaiting-cloud-ready";
       if (selectedWorkspaceId === syntheticWorkspaceId) {
@@ -143,8 +145,7 @@ export function useCloudWorkspaceActions() {
     onMutate: (workspaceId) => {
       const runtimeWorkspaceId = resolveCloudWorkspaceRuntimeId(workspaceId);
       return {
-        viewedSessionErrorIdsToClear: Object.values(useHarnessStore.getState().sessionSlots)
-          .filter((slot) => slot.workspaceId === runtimeWorkspaceId)
+        viewedSessionErrorIdsToClear: Object.values(getWorkspaceSessionRecords(runtimeWorkspaceId))
           .map((slot) => slot.sessionId),
       };
     },

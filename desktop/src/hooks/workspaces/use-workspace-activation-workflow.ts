@@ -5,7 +5,7 @@ import {
   useWorkspaceShellActivation,
 } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export type OpenWorkspaceSessionResult =
   | SessionActivationOutcome
@@ -50,7 +50,7 @@ export function useWorkspaceActivationWorkflow() {
       latencyFlowId: selection?.latencyFlowId,
     });
 
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     if (state.selectedWorkspaceId !== workspaceId) {
       return {
         result: "stale",

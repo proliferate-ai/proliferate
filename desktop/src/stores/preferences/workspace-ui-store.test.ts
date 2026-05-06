@@ -5,6 +5,7 @@ import {
   useWorkspaceUiStore,
 } from "./workspace-ui-store";
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
+import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -19,11 +20,11 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(8);
+    expect(state.migrationVersion).toBe(9);
     expect(state.archivedWorkspaceIds).toEqual(["workspace-a"]);
   });
 
-  it("defaults missing visible tab fields without bumping migration", () => {
+  it("defaults missing visible tab fields during migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 7,
@@ -34,7 +35,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(8);
+    expect(state.migrationVersion).toBe(9);
     expect(state.visibleChatSessionIdsByWorkspace).toEqual({});
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
@@ -57,13 +58,13 @@ describe("workspace ui tab persistence", () => {
       showArchived: "yes" as never,
     });
 
-    expect(missing.didMigrate).toBe(false);
+    expect(missing.didMigrate).toBe(true);
     expect(missing.state.showArchived).toBe(false);
     expect(invalid.didMigrate).toBe(true);
     expect(invalid.state.showArchived).toBe(false);
   });
 
-  it("defaults missing session error views without bumping migration", () => {
+  it("defaults missing session error views during migration", () => {
     const legacyState = {
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 7,
@@ -75,11 +76,11 @@ describe("workspace ui tab persistence", () => {
     );
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(8);
+    expect(state.migrationVersion).toBe(9);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
-  it("sanitizes malformed manual chat groups without bumping migration", () => {
+  it("sanitizes malformed manual chat groups during migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 7,
@@ -102,7 +103,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(8);
+    expect(state.migrationVersion).toBe(9);
     expect(state.manualChatGroupsByWorkspace).toEqual({
       w1: [
         {
@@ -115,6 +116,83 @@ describe("workspace ui tab persistence", () => {
     });
   });
 
+  it("drops transient projected chat session ids from persisted workspace UI state", () => {
+    const transientSessionId = "client-session:codex:1000:abc123";
+    const legacyPendingSessionId = "pending-session:codex:1:abc123";
+    const materializedSessionId = "session-real";
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 8,
+      activeShellTabKeyByWorkspace: {
+        w1: `chat:${transientSessionId}`,
+        w2: `chat:${materializedSessionId}`,
+        w3: "chat-shell",
+      },
+      lastViewedSessionByWorkspace: {
+        w1: transientSessionId,
+        w2: materializedSessionId,
+        w3: legacyPendingSessionId,
+      },
+      shellTabOrderByWorkspace: {
+        w1: [
+          `chat:${transientSessionId}`,
+          `chat:${materializedSessionId}`,
+          fileWorkspaceShellTabKey("src/App.tsx"),
+        ],
+      },
+      visibleChatSessionIdsByWorkspace: {
+        w1: [transientSessionId, materializedSessionId, materializedSessionId],
+      },
+      recentlyHiddenChatSessionIdsByWorkspace: {
+        w1: [legacyPendingSessionId, materializedSessionId],
+      },
+      collapsedChatGroupsByWorkspace: {
+        w1: [transientSessionId, materializedSessionId],
+      },
+      manualChatGroupsByWorkspace: {
+        w1: [
+          {
+            id: createManualChatGroupId("group-a"),
+            label: "Group A",
+            colorId: "magenta",
+            sessionIds: [transientSessionId, materializedSessionId],
+          },
+          {
+            id: createManualChatGroupId("group-b"),
+            label: "Group B",
+            colorId: "blue",
+            sessionIds: [legacyPendingSessionId],
+          },
+        ],
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.migrationVersion).toBe(9);
+    expect(state.activeShellTabKeyByWorkspace).toEqual({
+      w2: `chat:${materializedSessionId}`,
+      w3: "chat-shell",
+    });
+    expect(state.lastViewedSessionByWorkspace).toEqual({
+      w2: materializedSessionId,
+    });
+    expect(state.shellTabOrderByWorkspace.w1).toEqual([
+      `chat:${materializedSessionId}`,
+      fileWorkspaceShellTabKey("src/App.tsx"),
+    ]);
+    expect(state.visibleChatSessionIdsByWorkspace.w1).toEqual([materializedSessionId]);
+    expect(state.recentlyHiddenChatSessionIdsByWorkspace.w1).toEqual([materializedSessionId]);
+    expect(state.collapsedChatGroupsByWorkspace.w1).toEqual([materializedSessionId]);
+    expect(state.manualChatGroupsByWorkspace.w1).toEqual([
+      {
+        id: createManualChatGroupId("group-a"),
+        label: "Group A",
+        colorId: "magenta",
+        sessionIds: [materializedSessionId],
+      },
+    ]);
+  });
+
   it("migrates missing right panel preferences from v3 state", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
@@ -124,7 +202,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(8);
+    expect(state.migrationVersion).toBe(9);
     expect(state.rightPanelDurableByWorkspace).toEqual({});
     expect(state.rightPanelMaterializedByWorkspace).toEqual({});
   });
@@ -183,7 +261,7 @@ describe("workspace ui tab persistence", () => {
     } as never);
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(8);
+    expect(state.migrationVersion).toBe(9);
     expect(state.rightPanelDurableByWorkspace.w1).toEqual({
       open: false,
       width: 512,

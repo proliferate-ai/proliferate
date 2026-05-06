@@ -204,6 +204,7 @@ impl PlanRuntime {
                 &target_session_id,
                 vec![PromptInputBlock::Text { text: prompt }],
                 None,
+                None,
             )
             .await
         {

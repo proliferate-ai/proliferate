@@ -3,28 +3,35 @@ import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { resolveFallbackSessionModelId } from "@/lib/domain/sessions/model-fallback";
 import { getSessionClientAndWorkspace } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  getSessionRecord,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 
 export function useSessionModelFallbackAction() {
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
 
   return useCallback(async (sessionId: string, fallbackModelId: string) => {
-    const { connection, workspaceId } = await getSessionClientAndWorkspace(sessionId);
-    const response = await getAnyHarnessClient(connection).sessions.setConfigOption(sessionId, {
-      configId: "model",
-      value: fallbackModelId,
-    });
+    const { connection, workspaceId, materializedSessionId } =
+      await getSessionClientAndWorkspace(sessionId);
+    const response = await getAnyHarnessClient(connection).sessions.setConfigOption(
+      materializedSessionId,
+      {
+        configId: "model",
+        value: fallbackModelId,
+      },
+    );
 
     upsertWorkspaceSessionRecord(workspaceId, response.session);
 
-    const latestSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+    const latestSlot = getSessionRecord(sessionId);
     if (!latestSlot) {
       return response;
     }
 
     const liveConfig = response.liveConfig ?? response.session.liveConfig ?? latestSlot.liveConfig;
-    useHarnessStore.getState().patchSessionSlot(sessionId, {
+    patchSessionRecord(sessionId, {
       agentKind: response.session.agentKind,
       executionSummary: response.session.executionSummary ?? latestSlot.executionSummary ?? null,
       liveConfig,

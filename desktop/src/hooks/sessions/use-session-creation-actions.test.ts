@@ -5,16 +5,25 @@ import type {
   WorkspaceSessionLaunchCatalog,
 } from "@anyharness/sdk";
 import {
+  buildModelAvailabilityRetryOptions,
   hasImmediateLaunchModelMismatch,
-  removeSessionSlot,
-  replacePendingSessionSlot,
+  materializeSessionRecord,
+  removeSessionRecordAndClearSelection,
   resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
 beforeEach(() => {
-  useHarnessStore.getState().clearSelection();
+  useSessionSelectionStore.getState().clearSelection();
+  useSessionDirectoryStore.getState().clearEntries();
+  useSessionTranscriptStore.getState().clearEntries();
 });
 
 describe("resolveSessionCreationModeId", () => {
@@ -101,6 +110,7 @@ function sessionModelPair(
 function launchCatalog(modelIds: string[]): WorkspaceSessionLaunchCatalog {
   return {
     workspaceId: "workspace-1",
+    catalogVersion: "test",
     agents: [
       {
         kind: "codex",
@@ -145,48 +155,102 @@ describe("hasImmediateLaunchModelMismatch", () => {
   });
 });
 
-describe("pending session slot replacement", () => {
-  it("clears a dangling active pending id when shell ownership was lost", () => {
-    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
-    useHarnessStore.getState().putSessionSlot(
-      "pending-codex",
-      createEmptySessionSlot("pending-codex", "codex", {
+describe("projected session materialization", () => {
+  it("keeps the client id active and patches the materialized id into the same record", () => {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "workspace-1",
+      workspaceId: "workspace-1",
+    });
+    putSessionRecord(
+      createEmptySessionRecord("pending-codex", "codex", {
         workspaceId: "workspace-1",
+        materializedSessionId: null,
       }),
     );
-    useHarnessStore.getState().setActiveSessionId("pending-codex");
-    const versionBefore = useHarnessStore.getState().activeSessionVersion;
+    useSessionSelectionStore.getState().setActiveSessionId("pending-codex");
+    const versionBefore = useSessionSelectionStore.getState().activeSessionVersion;
 
-    replacePendingSessionSlot(
+    materializeSessionRecord(
       "pending-codex",
       "session-1",
-      createEmptySessionSlot("session-1", "codex", {
+      createEmptySessionRecord("pending-codex", "codex", {
         workspaceId: "workspace-1",
+        materializedSessionId: "session-1",
       }),
-      { remapActiveSession: false },
     );
 
-    expect(useHarnessStore.getState().activeSessionId).toBeNull();
-    expect(useHarnessStore.getState().sessionSlots["pending-codex"]).toBeUndefined();
-    expect(useHarnessStore.getState().sessionSlots["session-1"]).toBeDefined();
-    expect(useHarnessStore.getState().activeSessionVersion).toBe(versionBefore + 1);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("pending-codex");
+    expect(getSessionRecord("pending-codex")?.materializedSessionId).toBe("session-1");
+    expect(useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId["session-1"])
+      .toBe("pending-codex");
+    expect(getSessionRecord("session-1")).toBeNull();
+    expect(useSessionSelectionStore.getState().activeSessionVersion).toBe(versionBefore);
   });
 
   it("clears active session when removing an active pending slot", () => {
-    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
-    useHarnessStore.getState().putSessionSlot(
-      "pending-codex",
-      createEmptySessionSlot("pending-codex", "codex", {
+    useSessionSelectionStore.getState().activateWorkspace({
+      logicalWorkspaceId: "workspace-1",
+      workspaceId: "workspace-1",
+    });
+    putSessionRecord(
+      createEmptySessionRecord("pending-codex", "codex", {
         workspaceId: "workspace-1",
       }),
     );
-    useHarnessStore.getState().setActiveSessionId("pending-codex");
-    const versionBefore = useHarnessStore.getState().activeSessionVersion;
+    useSessionSelectionStore.getState().setActiveSessionId("pending-codex");
+    const versionBefore = useSessionSelectionStore.getState().activeSessionVersion;
 
-    removeSessionSlot("pending-codex");
+    removeSessionRecordAndClearSelection("pending-codex");
 
-    expect(useHarnessStore.getState().activeSessionId).toBeNull();
-    expect(useHarnessStore.getState().sessionSlots["pending-codex"]).toBeUndefined();
-    expect(useHarnessStore.getState().activeSessionVersion).toBe(versionBefore + 1);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBeNull();
+    expect(getSessionRecord("pending-codex")).toBeNull();
+    expect(useSessionSelectionStore.getState().activeSessionVersion).toBe(versionBefore + 1);
+  });
+});
+
+describe("buildModelAvailabilityRetryOptions", () => {
+  it("retries prompt creates against the same projected session without re-enqueueing", () => {
+    const retry = buildModelAvailabilityRetryOptions({
+      pendingSessionId: "client-session:codex:1",
+      promptId: "prompt-1",
+      hasPrompt: true,
+      options: {
+        text: "hello",
+        blocks: [{ type: "text", text: "hello" }],
+        optimisticContentParts: [{ type: "text", text: "hello" }],
+        agentKind: "codex",
+        modelId: "gpt-5.5",
+        workspaceId: "workspace-1",
+        latencyFlowId: "flow-1",
+        measurementOperationId: "mop_1",
+        promptId: "prompt-1",
+      },
+    });
+
+    expect(retry.clientSessionId).toBe("client-session:codex:1");
+    expect(retry.promptId).toBe("prompt-1");
+    expect(retry.skipInitialPromptEnqueue).toBe(true);
+    expect(retry.reuseInFlightEmptySession).toBe(false);
+    expect(retry.latencyFlowId).toBeNull();
+    expect(retry.measurementOperationId).toBeNull();
+  });
+
+  it("does not suppress enqueue semantics for empty-session retries", () => {
+    const retry = buildModelAvailabilityRetryOptions({
+      pendingSessionId: "client-session:codex:1",
+      promptId: null,
+      hasPrompt: false,
+      options: {
+        text: "",
+        agentKind: "codex",
+        modelId: "gpt-5.5",
+        workspaceId: "workspace-1",
+      },
+    });
+
+    expect(retry.clientSessionId).toBe("client-session:codex:1");
+    expect(retry.promptId).toBeNull();
+    expect(retry.skipInitialPromptEnqueue).toBe(false);
+    expect(retry.reuseInFlightEmptySession).toBe(false);
   });
 });

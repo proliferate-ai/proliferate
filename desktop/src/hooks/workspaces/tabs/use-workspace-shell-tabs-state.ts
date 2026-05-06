@@ -24,7 +24,7 @@ import {
 } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
 
@@ -101,8 +101,8 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   );
   const activeTargetKey = useWorkspaceViewerTabsStore((state) => state.activeTargetKey);
   const viewerRestoreMarker = useWorkspaceViewerTabsStore((state) => state.viewerRestoreMarker);
-  const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
-  const sessionActivationEpoch = useHarnessStore((state) =>
+  const workspaceSelectionNonce = useSessionSelectionStore((state) => state.workspaceSelectionNonce);
+  const sessionActivationEpoch = useSessionSelectionStore((state) =>
     materializedWorkspaceId
       ? state.sessionActivationIntentEpochByWorkspace[materializedWorkspaceId] ?? 0
       : 0

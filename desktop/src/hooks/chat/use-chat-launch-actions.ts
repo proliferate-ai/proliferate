@@ -5,10 +5,9 @@ import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useActiveSessionLaunchState } from "./use-active-chat-session-selectors";
 import {
   EMPTY_CHAT_DRAFT,
@@ -25,9 +24,9 @@ const EMPTY_WORKSPACES: Workspace[] = [];
 export function useChatLaunchActions(options?: { suppressActiveSessionState?: boolean }) {
   const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
   const showToast = useToastStore((store) => store.show);
-  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const workspaceUiKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
   const currentDraft = useChatInputStore((state) =>
     serializeChatDraftToPrompt(

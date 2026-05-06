@@ -4,11 +4,11 @@ import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposer
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
-import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { ChatReadyHero } from "@/components/workspace/chat/surface/ChatReadyHero";
 import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspaceState";
 import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
+import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
 import {
@@ -51,23 +51,15 @@ function ChatContent({
       return <NoWorkspaceState bottomInsetPx={dockSafeAreaPx} />;
     case "launch-intent":
       return <ChatLaunchIntentPane bottomInsetPx={scrollBottomInsetPx} />;
-    // workspace-status and session-loading share the same canvas — both
-    // render ChatLoadingHero so the loading → resolve handoff plays even
-    // when the user enters via the workspace-status path (cloud runtime
-    // provisioning, local arrival, structural repo). React preserves the
-    // hero instance across the workspace-status → session-loading →
-    // session-empty transitions because both arms return the same JSX tree,
-    // so the braille sweep keeps animating until the resolve fires. The
-    // attached panels above the composer (WorkspaceArrivalAttachedPanel,
-    // CloudRuntimeAttachedPanel) layer on top to carry the actionable
-    // status detail.
     case "workspace-status":
     case "session-loading":
       return (
         <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
-          <ChatLoadingHero />
+          <ChatReadyHero />
         </ChatPreMessageCanvas>
       );
+    case "session-switching":
+      return <TranscriptSwitchingPlaceholder />;
     case "session-empty":
       return (
         <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
@@ -84,6 +76,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
     case "workspace-status":
     case "session-loading":
     case "session-empty":
+    case "session-switching":
     case "session-transcript":
       return true;
     case "no-workspace":
@@ -100,8 +93,9 @@ export function ChatView({
 }) {
   useDebugRenderCount("chat-surface");
   const { mode } = useChatSurfaceState(shellRenderSurface);
-  const suppressSessionChrome = shellRenderSurface?.kind === "chat-shell"
+  const suppressSessionSlots = shellRenderSurface?.kind === "chat-shell"
     || shellRenderSurface?.kind === "chat-session-pending";
+  const suppressComposerActiveSessionState = shellRenderSurface?.kind === "chat-session-pending";
   const activeSessionId = useActiveSessionId();
   const activePromptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
@@ -109,9 +103,9 @@ export function ChatView({
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const isSessionMode = shouldShowSessionInputChrome(mode);
   const composerDockSlots = useComposerDockSlots({
-    suppressSessionSlots: suppressSessionChrome,
+    suppressSessionSlots,
   });
-  const promptCapabilities = suppressSessionChrome
+  const promptCapabilities = suppressComposerActiveSessionState
     ? null
     : activePromptCapabilities;
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
@@ -119,7 +113,7 @@ export function ChatView({
     isEditingQueuedPrompt: queuedPromptEditStatus.isEditing,
     isDisabled: availability.isDisabled,
     areRuntimeControlsDisabled: availability.areRuntimeControlsDisabled,
-    hasActiveSession: !suppressSessionChrome && !!activeSessionId,
+    hasActiveSession: !suppressComposerActiveSessionState && !!activeSessionId,
     supportsAttachments,
   });
   const promptAttachments = useChatPromptAttachments({
@@ -238,7 +232,7 @@ export function ChatView({
       >
         <ChatInput
           attachments={promptAttachments}
-          suppressActiveSessionState={suppressSessionChrome}
+          suppressActiveSessionState={suppressComposerActiveSessionState}
         />
       </ChatComposerDock>
       </div>

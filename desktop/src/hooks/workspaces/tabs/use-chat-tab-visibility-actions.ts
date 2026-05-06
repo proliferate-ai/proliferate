@@ -12,7 +12,8 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { recordLinkedChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
@@ -34,8 +35,8 @@ interface HideOptions {
 }
 
 export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const {
     childToParent,
     liveIds,
@@ -95,10 +96,9 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       return;
     }
 
-    const { sessionSlots } = useHarnessStore.getState();
     for (const sessionId of idsToHide) {
       const errorAttentionKey = resolveSessionErrorAttentionKey(
-        sessionSlots[sessionId] ?? null,
+        getSessionRecord(sessionId),
       );
       if (errorAttentionKey) {
         markSessionErrorViewed(sessionId, errorAttentionKey);

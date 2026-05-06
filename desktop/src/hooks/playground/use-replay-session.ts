@@ -2,10 +2,19 @@ import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ReplayRecordingSummary } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
 import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
+import { closeSessionStreamHandle } from "@/lib/integrations/anyharness/session-stream-handles";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  combineSessionRecord,
+  createEmptySessionRecord,
+  putSessionRecord,
+  removeSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
 const PLAYGROUND_REPLAY_WORKSPACE_PATH =
   import.meta.env.VITE_PLAYGROUND_REPLAY_WORKSPACE_PATH ?? ".";
@@ -26,7 +35,7 @@ export interface PlaygroundReplayState {
 }
 
 export function useReplaySession(recordingId: string | null): PlaygroundReplayState {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const client = useMemo(() => getAnyHarnessClient({ runtimeUrl }), [runtimeUrl]);
   const { ensureSessionStreamConnected } = useSessionRuntimeActions();
   const ensureSessionStreamConnectedRef = useRef(ensureSessionStreamConnected);
@@ -38,8 +47,15 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const slot = useHarnessStore((state) =>
-    sessionId ? state.sessionSlots[sessionId] ?? null : null
+  const directory = useSessionDirectoryStore((state) =>
+    sessionId ? state.entriesById[sessionId] ?? null : null
+  );
+  const transcriptEntry = useSessionTranscriptStore((state) =>
+    sessionId ? state.entriesById[sessionId] ?? null : null
+  );
+  const slot = useMemo(
+    () => combineSessionRecord(directory, transcriptEntry),
+    [directory, transcriptEntry],
   );
 
   useEffect(() => {
@@ -105,7 +121,7 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
       try {
         const resolvedWorkspaceId = await resolveReplayWorkspaceId(
           client,
-          useHarnessStore.getState().selectedWorkspaceId,
+          useSessionSelectionStore.getState().selectedWorkspaceId,
         );
         if (cancelled) {
           return;
@@ -120,8 +136,8 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
           cleanupReplaySession(client, session.id);
           return;
         }
-        useHarnessStore.getState().putSessionSlot(session.id, {
-          ...createEmptySessionSlot(session.id, session.agentKind, {
+        putSessionRecord({
+          ...createEmptySessionRecord(session.id, session.agentKind, {
             workspaceId: session.workspaceId,
             modelId: session.modelId ?? null,
             modeId: session.modeId ?? null,
@@ -132,7 +148,9 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
           }),
           status: session.status,
         });
-        useHarnessStore.getState().setSelectedWorkspace(session.workspaceId, {
+        useSessionSelectionStore.getState().activateWorkspace({
+          logicalWorkspaceId: null,
+          workspaceId: session.workspaceId,
           initialActiveSessionId: session.id,
           clearPending: false,
         });
@@ -246,14 +264,12 @@ function cleanupReplaySession(
   client: ReturnType<typeof getAnyHarnessClient>,
   sessionId: string,
 ): void {
-  const state = useHarnessStore.getState();
-  state.sessionSlots[sessionId]?.sseHandle?.close();
-  const nextSlots = { ...state.sessionSlots };
-  delete nextSlots[sessionId];
-  useHarnessStore.setState({
-    sessionSlots: nextSlots,
-    activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
-  });
+  closeSessionStreamHandle(sessionId);
+  removeSessionRecord(sessionId);
+  const state = useSessionSelectionStore.getState();
+  if (state.activeSessionId === sessionId) {
+    state.setActiveSessionId(null);
+  }
   void client.sessions.close(sessionId).catch(() => {});
 }
 

@@ -74,6 +74,7 @@ export async function listCloudWorkspaces(
             organizationId: owner?.organizationId ?? undefined,
           },
         },
+        signal: options?.signal,
       })
     ).data!,
   });

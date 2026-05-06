@@ -173,6 +173,7 @@ export function SidebarWorkspaceContent({
             {visibleItems.map((item) => (
               <WorkspaceItem
                 key={item.id}
+                workspaceId={item.id}
                 name={item.name}
                 defaultName={item.defaultName}
                 hasDisplayNameOverride={item.hasDisplayNameOverride}

@@ -19,7 +19,7 @@ describe("resolveChatDraftWorkspaceId", () => {
 });
 
 describe("resolveChatInputAvailability", () => {
-  it("disables the composer while the active session transcript is still loading", () => {
+  it("keeps the composer enabled while an active session transcript is still loading", () => {
     expect(resolveChatInputAvailability({
       selectedWorkspaceId: "workspace-1",
       isCloudWorkspaceSelected: false,
@@ -29,13 +29,12 @@ describe("resolveChatInputAvailability", () => {
       selectedCloudRuntimePhase: null,
       selectedCloudRuntimeActionBlockReason: null,
       activeSessionId: "session-1",
-      activeSessionHydrated: false,
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
     })).toEqual({
-      isDisabled: true,
-      disabledReason: "Session is still loading. Try again in a moment.",
+      isDisabled: false,
+      disabledReason: null,
       areRuntimeControlsDisabled: false,
     });
   });
@@ -50,7 +49,6 @@ describe("resolveChatInputAvailability", () => {
       selectedCloudRuntimePhase: null,
       selectedCloudRuntimeActionBlockReason: null,
       activeSessionId: "session-1",
-      activeSessionHydrated: true,
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,

@@ -143,8 +143,8 @@ vi.mock("@/hooks/support/use-sidebar-support-context", () => ({
   }),
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => ({
-  useHarnessStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
+vi.mock("@/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
     selector({ pendingWorkspaceEntry: null }),
 }));
 

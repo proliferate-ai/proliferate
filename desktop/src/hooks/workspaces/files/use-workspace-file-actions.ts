@@ -90,14 +90,14 @@ export function useWorkspaceFileActions() {
   }) => {
     await queryClient.prefetchQuery({
       queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, materializedWorkspaceId, dirPath),
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const client = getAnyHarnessClient(buildConnection(runtimeUrl, authToken));
-        return client.files.list(anyharnessWorkspaceId, dirPath);
+        return client.files.list(anyharnessWorkspaceId, dirPath, { signal });
       },
     });
   }, [queryClient]);
 
-  const initForWorkspace = useCallback(async ({
+  const prepareFileWorkspace = useCallback(({
     workspaceUiKey,
     materializedWorkspaceId,
     anyharnessWorkspaceId,
@@ -145,11 +145,33 @@ export function useWorkspaceFileActions() {
       initialOpenTargets: fileTabSeed.initialOpenTargets,
       initialActiveTargetKey: fileTabSeed.initialActiveTargetKey,
     });
+  }, [prepareWorkspace, resetFileBuffers]);
 
+  const prefetchWorkspaceDirectories = useCallback(async ({
+    materializedWorkspaceId,
+    anyharnessWorkspaceId,
+    runtimeUrl,
+    treeStateKey,
+    authToken,
+    isCurrent,
+  }: {
+    materializedWorkspaceId: string;
+    anyharnessWorkspaceId: string;
+    runtimeUrl: string;
+    treeStateKey: string;
+    authToken?: string | null;
+    isCurrent?: () => boolean;
+  }) => {
+    if (isCurrent && !isCurrent()) {
+      return;
+    }
     if (!assertWorkspaceRuntimeReady(materializedWorkspaceId)) {
       return;
     }
 
+    if (isCurrent && !isCurrent()) {
+      return;
+    }
     await prefetchDirectory({
       materializedWorkspaceId,
       anyharnessWorkspaceId,
@@ -158,6 +180,9 @@ export function useWorkspaceFileActions() {
       dirPath: "",
     });
     for (const dirPath of getExpandedDirectoryPaths(treeStateKey)) {
+      if (isCurrent && !isCurrent()) {
+        return;
+      }
       try {
         await prefetchDirectory({
           materializedWorkspaceId,
@@ -167,16 +192,48 @@ export function useWorkspaceFileActions() {
           dirPath,
         });
       } catch {
-        removeExpandedDirectory(treeStateKey, dirPath);
+        if (!isCurrent || isCurrent()) {
+          removeExpandedDirectory(treeStateKey, dirPath);
+        }
       }
     }
   }, [
     assertWorkspaceRuntimeReady,
-    prepareWorkspace,
     prefetchDirectory,
     removeExpandedDirectory,
-    resetFileBuffers,
   ]);
+
+  const initForWorkspace = useCallback(async ({
+    workspaceUiKey,
+    materializedWorkspaceId,
+    anyharnessWorkspaceId,
+    runtimeUrl,
+    treeStateKey,
+    authToken,
+  }: {
+    workspaceUiKey: string;
+    materializedWorkspaceId: string;
+    anyharnessWorkspaceId: string;
+    runtimeUrl: string;
+    treeStateKey: string;
+    authToken?: string | null;
+  }) => {
+    prepareFileWorkspace({
+      workspaceUiKey,
+      materializedWorkspaceId,
+      anyharnessWorkspaceId,
+      runtimeUrl,
+      treeStateKey,
+      authToken,
+    });
+    await prefetchWorkspaceDirectories({
+      materializedWorkspaceId,
+      anyharnessWorkspaceId,
+      runtimeUrl,
+      treeStateKey,
+      authToken,
+    });
+  }, [prepareFileWorkspace, prefetchWorkspaceDirectories]);
 
   const toggleDirectory = useCallback(async (dirPath: string) => {
     const {
@@ -285,9 +342,9 @@ export function useWorkspaceFileActions() {
     await queryClient.invalidateQueries({ queryKey, exact: true });
     const read = await queryClient.fetchQuery({
       queryKey,
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const client = getAnyHarnessClient(buildConnection(runtimeUrl, authToken));
-        return client.files.read(anyharnessWorkspaceId, filePath);
+        return client.files.read(anyharnessWorkspaceId, filePath, { signal });
       },
       staleTime: 0,
     });
@@ -296,6 +353,8 @@ export function useWorkspaceFileActions() {
 
   return {
     initForWorkspace,
+    prepareFileWorkspace,
+    prefetchWorkspaceDirectories,
     toggleDirectory,
     openFile,
     openFileDiff,

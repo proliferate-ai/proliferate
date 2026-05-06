@@ -1,4 +1,5 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
 import {
@@ -7,7 +8,7 @@ import {
 } from "@/lib/domain/workspaces/collections";
 import { listCloudWorkspaces } from "@/lib/integrations/cloud/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { workspaceCollectionsKey } from "./query-keys";
 import {
   elapsedMs,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/infra/debug-latency";
 import {
   bindMeasurementCategories,
+  finishOrCancelMeasurementOperation,
   finishMeasurementOperation,
   getMeasurementRequestOptions,
   hashMeasurementScope,
@@ -27,16 +29,58 @@ import {
 const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;
 
+function requestOptionsWithSignal(
+  requestOptions: AnyHarnessRequestOptions | undefined,
+  signal: AbortSignal,
+): AnyHarnessRequestOptions {
+  return {
+    ...requestOptions,
+    signal: requestOptions?.signal ?? signal,
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  if (
+    typeof DOMException !== "undefined"
+    && error instanceof DOMException
+    && error.name === "AbortError"
+  ) {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    return error.name === "AbortError"
+      || error.name === "CanceledError"
+      || error.name === "CancelledError";
+  }
+
+  return false;
+}
+
+async function fallbackOnNonAbort<T>(
+  promise: Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await promise;
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    return fallback;
+  }
+}
+
 export function useWorkspaces() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { cloudActive } = useCloudAvailabilityState();
   const canQuery = runtimeUrl.trim().length > 0 || cloudActive;
   const queryKey = workspaceCollectionsKey(runtimeUrl, cloudActive);
 
   return useQuery<WorkspaceCollections>({
     queryKey,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const startedAt = startLatencyTimer();
       const operationId = startMeasurementOperation({
         kind: "workspace_collections_refresh",
@@ -80,16 +124,31 @@ export function useWorkspaces() {
       try {
         const fetchStartedAt = performance.now();
         const [localWorkspaces, repoRoots, cloudWorkspaces] = await Promise.all([
-          client.workspaces.list(
-            getMeasurementRequestOptions({ operationId, category: "workspace.list" }),
-          ).catch(() => []),
-          client.repoRoots.list(
-            getMeasurementRequestOptions({ operationId, category: "repo_root.list" }),
-          ).catch(() => []),
+          fallbackOnNonAbort(
+            client.workspaces.list(
+              requestOptionsWithSignal(
+                getMeasurementRequestOptions({ operationId, category: "workspace.list" })
+                  ?? undefined,
+                signal,
+              ),
+            ),
+            [],
+          ),
+          fallbackOnNonAbort(
+            client.repoRoots.list(
+              requestOptionsWithSignal(
+                getMeasurementRequestOptions({ operationId, category: "repo_root.list" })
+                  ?? undefined,
+                signal,
+              ),
+            ),
+            [],
+          ),
           cloudActive
-            ? listCloudWorkspaces(
-              operationId ? { measurementOperationId: operationId } : undefined,
-            ).catch(() => null)
+            ? fallbackOnNonAbort(
+              listCloudWorkspaces({ measurementOperationId: operationId, signal }),
+              null,
+            )
           : Promise.resolve([]),
         ]);
         recordMeasurementWorkflowStep({
@@ -121,6 +180,12 @@ export function useWorkspaces() {
           finishMeasurementOperation(operationId, "completed");
         }
         return collections;
+      } catch (error) {
+        finishOrCancelMeasurementOperation(
+          operationId,
+          isAbortError(error) ? "aborted" : "error_sanitized",
+        );
+        throw error;
       } finally {
         unbind();
       }

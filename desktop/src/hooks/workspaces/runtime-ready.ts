@@ -1,13 +1,13 @@
 import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export async function ensureRuntimeReady(): Promise<string> {
-  const state = useHarnessStore.getState();
+  const state = useHarnessConnectionStore.getState();
   if (state.connectionState !== "healthy" || state.runtimeUrl.trim().length === 0) {
     await bootstrapHarnessRuntime();
   }
 
-  const readyState = useHarnessStore.getState();
+  const readyState = useHarnessConnectionStore.getState();
   if (readyState.connectionState !== "healthy" || readyState.runtimeUrl.trim().length === 0) {
     throw new Error(readyState.error || "AnyHarness runtime is still starting. Try again.");
   }

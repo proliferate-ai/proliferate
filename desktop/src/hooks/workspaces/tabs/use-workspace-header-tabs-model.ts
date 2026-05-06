@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { Session } from "@anyharness/sdk";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
 import { getProviderDisplayName } from "@/config/providers";
@@ -21,16 +22,19 @@ import {
 import {
   resolveSessionViewState,
   type SessionViewState,
-  sessionSlotBelongsToWorkspace,
 } from "@/lib/domain/sessions/activity";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useWorkspaceActiveChatTabId } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
 import type { ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import {
+  activitySnapshotFromDirectoryEntry,
+  useSessionDirectoryStore,
+} from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 
@@ -59,27 +63,40 @@ export interface HeaderChatMenuEntry {
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
+const EMPTY_LIVE_SLOTS: SessionDirectoryEntry[] = [];
 
 export function useWorkspaceHeaderTabsModel() {
   const rawOpenTargets = useWorkspaceViewerTabsStore((s) => s.openTargets);
   const viewerStoreMaterializedWorkspaceId = useWorkspaceViewerTabsStore(
     (s) => s.materializedWorkspaceId,
   );
-  const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const selectedWorkspaceId = useSessionSelectionStore((s) => s.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (s) => s.selectedLogicalWorkspaceId,
   );
   const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
     selectedLogicalWorkspaceId,
     materializedWorkspaceId: selectedWorkspaceId,
   });
+  const sessionWorkspaceId = materializedWorkspaceId ?? workspaceUiKey;
   const openTargets = materializedWorkspaceId
     && viewerStoreMaterializedWorkspaceId === materializedWorkspaceId
     ? rawOpenTargets
     : EMPTY_OPEN_TARGETS;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((s) => s.activeSessionId);
-  const sessionSlots = useHarnessStore((s) => s.sessionSlots);
+  const activeSessionId = useSessionSelectionStore((s) => s.activeSessionId);
+  const liveSlots = useSessionDirectoryStore(useShallow((state) => {
+    if (!sessionWorkspaceId) {
+      return EMPTY_LIVE_SLOTS;
+    }
+    const sessionIds = state.sessionIdsByWorkspaceId[sessionWorkspaceId] ?? [];
+    return sessionIds
+      .map((sessionId) => state.entriesById[sessionId])
+      .filter((entry): entry is SessionDirectoryEntry => !!entry);
+  }));
+  const clientSessionIdByMaterializedSessionId = useSessionDirectoryStore(
+    (state) => state.clientSessionIdByMaterializedSessionId,
+  );
 
   const visibleByWorkspace = useWorkspaceUiStore((s) => s.visibleChatSessionIdsByWorkspace);
   const hiddenByWorkspace = useWorkspaceUiStore((s) => s.recentlyHiddenChatSessionIdsByWorkspace);
@@ -91,23 +108,24 @@ export function useWorkspaceHeaderTabsModel() {
     enabled: !!selectedWorkspaceId && !hotPaintPending,
   });
 
-  const liveSlots = useMemo(
-    () => Object.values(sessionSlots)
-      .filter((slot) => sessionSlotBelongsToWorkspace(slot, selectedWorkspaceId)),
-    [selectedWorkspaceId, sessionSlots],
-  );
   const knownSessions = useMemo<Map<string, KnownSession>>(() => {
     const map = new Map<string, KnownSession>();
     for (const session of workspaceSessionsQuery.data ?? []) {
       if (session.dismissedAt) continue;
       if (!selectedWorkspaceId || session.workspaceId !== selectedWorkspaceId) continue;
-      map.set(session.id, { kind: "session", session });
+      const clientSessionId = clientSessionIdByMaterializedSessionId[session.id] ?? session.id;
+      map.set(clientSessionId, { kind: "session", session, clientSessionId });
     }
     for (const slot of liveSlots) {
       map.set(slot.sessionId, { kind: "slot", slot });
     }
     return map;
-  }, [liveSlots, selectedWorkspaceId, workspaceSessionsQuery.data]);
+  }, [
+    clientSessionIdByMaterializedSessionId,
+    liveSlots,
+    selectedWorkspaceId,
+    workspaceSessionsQuery.data,
+  ]);
   const knownSessionIds = useMemo(() => Array.from(knownSessions.keys()), [knownSessions]);
   const hierarchy = useWorkspaceHeaderSubagentHierarchy({
     workspaceId: selectedWorkspaceId,
@@ -345,8 +363,8 @@ export function useWorkspaceHeaderTabsModel() {
 }
 
 type KnownSession =
-  | { kind: "slot"; slot: SessionSlot }
-  | { kind: "session"; session: Session };
+  | { kind: "slot"; slot: SessionDirectoryEntry }
+  | { kind: "session"; session: Session; clientSessionId: string };
 
 function collectHierarchyChildren(
   childrenByParentSessionId: ReadonlyMap<string, readonly HeaderSubagentChildRow[]>,
@@ -374,7 +392,7 @@ function collectHierarchyChildren(
 }
 
 function getKnownSessionId(known: KnownSession): string {
-  return known.kind === "slot" ? known.slot.sessionId : known.session.id;
+  return known.kind === "slot" ? known.slot.sessionId : known.clientSessionId;
 }
 
 function getKnownSessionAgentKind(known: KnownSession): string {
@@ -392,7 +410,7 @@ function getKnownSessionTitle(known: KnownSession): string {
 
 function getKnownSessionViewState(known: KnownSession): SessionViewState {
   if (known.kind === "slot") {
-    return resolveSessionViewState(known.slot);
+    return resolveSessionViewState(activitySnapshotFromDirectoryEntry(known.slot));
   }
   return resolveSessionViewState({
     status: known.session.status,

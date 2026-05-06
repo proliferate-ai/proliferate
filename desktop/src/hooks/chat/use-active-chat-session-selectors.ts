@@ -17,10 +17,22 @@ import {
 } from "@/lib/domain/chat/pending-prompts";
 import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@/lib/domain/sessions/activity";
 import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
-import { useHarnessStore, type SessionStreamConnectionState } from "@/stores/sessions/harness-store";
+import {
+  outboxEntriesForSession,
+  outboxEntryToPendingPromptEntry,
+  queuedOutboxEntriesForSession,
+  renderableOutboxEntriesForTranscript,
+  type PromptOutboxEntry,
+} from "@/lib/domain/chat/prompt-outbox";
+import { activitySnapshotFromDirectoryEntry, useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import type { SessionStreamConnectionState } from "@/stores/sessions/session-types";
+import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];
 const EMPTY_PENDING_INTERACTIONS: readonly PendingInteraction[] = [];
+const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 
 export interface ActiveLaunchIdentity {
   kind: string;
@@ -28,63 +40,83 @@ export interface ActiveLaunchIdentity {
 }
 
 export function useActiveSessionId(): string | null {
-  return useHarnessStore((state) => state.activeSessionId);
+  return useSessionSelectionStore((state) => state.activeSessionId);
 }
 
 export function useActiveSessionWorkspaceId(): string | null {
-  return useHarnessStore((state) => {
-    const activeSessionId = state.activeSessionId;
-    return activeSessionId
-      ? state.sessionSlots[activeSessionId]?.workspaceId ?? null
-      : null;
-  });
+  const activeSessionId = useActiveSessionId();
+  return useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null
+  );
 }
 
 export function useActiveSessionPromptCapabilities(): PromptCapabilities | null {
-  return useHarnessStore((state) => {
-    const activeSessionId = state.activeSessionId;
-    return activeSessionId
-      ? state.sessionSlots[activeSessionId]?.liveConfig?.promptCapabilities ?? null
-      : null;
-  });
+  const activeSessionId = useActiveSessionId();
+  return useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.liveConfig?.promptCapabilities ?? null
+      : null
+  );
 }
 
 export function useActiveSessionRunningState(): boolean {
-  return useHarnessStore((state) => {
-    const activeSessionId = state.activeSessionId;
-    return activeSessionId
-      ? isSessionSlotBusy(state.sessionSlots[activeSessionId] ?? null)
-      : false;
-  });
+  const activeSessionId = useActiveSessionId();
+  return useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? isSessionSlotBusy(activitySnapshotFromDirectoryEntry(state.entriesById[activeSessionId]))
+      : false
+  );
+}
+
+export function useActiveSessionCanCancelState(): boolean {
+  const activeSessionId = useActiveSessionId();
+  return useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? Boolean(state.entriesById[activeSessionId]?.materializedSessionId)
+      : false
+  );
 }
 
 export function useActiveSessionTranscript(): TranscriptState | null {
-  return useHarnessStore((state) => {
-    const activeSessionId = state.activeSessionId;
-    return activeSessionId
-      ? state.sessionSlots[activeSessionId]?.transcript ?? null
-      : null;
-  });
+  const activeSessionId = useActiveSessionId();
+  return useSessionTranscriptStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.transcript ?? null : null
+  );
 }
 
 export function useActiveTranscriptPaneState(): {
   activeSessionId: string | null;
   transcript: TranscriptState | null;
   optimisticPrompt: PendingPromptEntry | null;
+  outboxEntries: readonly PromptOutboxEntry[];
   sessionViewState: SessionViewState;
   oldestLoadedEventSeq: number | null;
 } {
-  return useHarnessStore(useShallow((state) => {
-    const activeSessionId = state.activeSessionId;
-    const slot = activeSessionId ? state.sessionSlots[activeSessionId] ?? null : null;
+  const activeSessionId = useActiveSessionId();
+  const sessionViewState = useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? resolveSessionViewState(
+          activitySnapshotFromDirectoryEntry(state.entriesById[activeSessionId]),
+        )
+      : "idle"
+  );
+  const transcriptState = useSessionTranscriptStore(useShallow((state) => {
+    const transcriptEntry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
     return {
       activeSessionId,
-      transcript: slot?.transcript ?? null,
-      optimisticPrompt: slot?.optimisticPrompt ?? null,
-      sessionViewState: resolveSessionViewState(slot),
-      oldestLoadedEventSeq: slot?.events[0]?.seq ?? null,
+      transcript: transcriptEntry?.transcript ?? null,
+      optimisticPrompt: transcriptEntry?.optimisticPrompt ?? null,
+      oldestLoadedEventSeq: transcriptEntry?.events?.[0]?.seq ?? null,
     };
   }));
+  const outboxEntries = usePromptOutboxStore(useShallow((state) =>
+    activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
+  ));
+  return useMemo(() => ({
+    ...transcriptState,
+    outboxEntries,
+    sessionViewState,
+  }), [outboxEntries, sessionViewState, transcriptState]);
 }
 
 export function useActiveSessionSurfaceSnapshot(): {
@@ -97,35 +129,83 @@ export function useActiveSessionSurfaceSnapshot(): {
   sessionViewState: SessionViewState;
   streamConnectionState: SessionStreamConnectionState | null;
 } {
-  return useHarnessStore(useShallow((state) => {
-    const activeSessionId = state.activeSessionId;
-    const slot = activeSessionId ? state.sessionSlots[activeSessionId] ?? null : null;
-    const transcript = slot?.transcript ?? null;
-    const optimisticPrompt = slot?.optimisticPrompt ?? null;
+  const activeSessionId = useActiveSessionId();
+  const directoryState = useSessionDirectoryStore(useShallow((state) => {
+    const directory = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
+    return {
+      hasSlot: directory !== null,
+      transcriptHydrated: directory?.transcriptHydrated ?? false,
+      isRunning: isSessionSlotBusy(activitySnapshotFromDirectoryEntry(directory)),
+      sessionViewState: resolveSessionViewState(activitySnapshotFromDirectoryEntry(directory)),
+      streamConnectionState: directory?.streamConnectionState ?? null,
+    };
+  }));
+  const transcriptState = useSessionTranscriptStore(useShallow((state) => {
+    const transcriptEntry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
+    const transcript = transcriptEntry?.transcript ?? null;
+    const optimisticPrompt = transcriptEntry?.optimisticPrompt ?? null;
     const hasContent = transcript
       ? hasVisibleTranscriptContent({ transcript, optimisticPrompt })
       : optimisticPrompt !== null;
-    const hasSlot = slot !== null;
     return {
       activeSessionId,
       hasContent,
-      hasSlot,
-      transcriptHydrated: slot?.transcriptHydrated ?? false,
-      isEmpty: activeSessionId !== null && hasSlot && !hasContent,
-      isRunning: isSessionSlotBusy(slot),
-      sessionViewState: resolveSessionViewState(slot),
-      streamConnectionState: slot?.streamConnectionState ?? null,
+      transcript,
     };
   }));
+  const hasRenderableOutbox = usePromptOutboxStore((state) => {
+    const entries = outboxEntriesForSession(state, activeSessionId);
+    if (entries.length === 0) {
+      return false;
+    }
+    return transcriptState.transcript
+      ? renderableOutboxEntriesForTranscript(entries, transcriptState.transcript).length > 0
+      : true;
+  });
+  const hasContent = transcriptState.hasContent || hasRenderableOutbox;
+  return {
+    activeSessionId: transcriptState.activeSessionId,
+    hasContent,
+    ...directoryState,
+    isEmpty: transcriptState.activeSessionId !== null
+      && directoryState.hasSlot
+      && !hasContent,
+  };
 }
 
 export function useActivePendingPrompts(): readonly PendingPromptEntry[] {
-  return useHarnessStore((state) => {
-    const activeSessionId = state.activeSessionId;
-    return activeSessionId
-      ? state.sessionSlots[activeSessionId]?.transcript.pendingPrompts ?? EMPTY_PENDING_PROMPTS
+  const activeSessionId = useActiveSessionId();
+  const runtimePendingPrompts = useSessionTranscriptStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.transcript?.pendingPrompts ?? EMPTY_PENDING_PROMPTS
+      : EMPTY_PENDING_PROMPTS
+  );
+  const outboxEntries = usePromptOutboxStore(useShallow((state) =>
+    activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
+  ));
+  const outboxQueuedPrompts = useMemo(() => {
+    const entries = outboxEntries;
+    return entries.length > 0
+      ? queuedOutboxEntriesForSession(entries).map(outboxEntryToPendingPromptEntry)
       : EMPTY_PENDING_PROMPTS;
-  });
+  }, [outboxEntries]);
+  return useMemo(() => {
+    if (runtimePendingPrompts.length === 0) {
+      return outboxQueuedPrompts;
+    }
+    if (outboxQueuedPrompts.length === 0) {
+      return runtimePendingPrompts;
+    }
+    const runtimePromptIds = new Set(
+      runtimePendingPrompts.map((entry) => entry.promptId).filter(Boolean),
+    );
+    return [
+      ...runtimePendingPrompts,
+      ...outboxQueuedPrompts.filter((entry) =>
+        !entry.promptId || !runtimePromptIds.has(entry.promptId)
+      ),
+    ];
+  }, [outboxQueuedPrompts, runtimePendingPrompts]);
 }
 
 export function useActivePendingInteractionState(): {
@@ -135,10 +215,10 @@ export function useActivePendingInteractionState(): {
   pendingMcpElicitation: ReturnType<typeof selectPendingMcpElicitationInteraction>;
   primaryPendingInteraction: ReturnType<typeof selectPrimaryPendingInteraction>;
 } {
-  return useHarnessStore(useShallow((state) => {
-    const activeSessionId = state.activeSessionId;
+  const activeSessionId = useActiveSessionId();
+  return useSessionTranscriptStore(useShallow((state) => {
     const transcript = activeSessionId
-      ? state.sessionSlots[activeSessionId]?.transcript ?? null
+      ? state.entriesById[activeSessionId]?.transcript ?? null
       : null;
     return {
       pendingInteractions: transcript?.pendingInteractions ?? EMPTY_PENDING_INTERACTIONS,
@@ -171,15 +251,15 @@ export function useActiveSessionLaunchState(): {
   agentKind: string | null;
   modelControl: NonNullable<TranscriptState["liveConfig"]>["normalizedControls"]["model"] | null;
 } {
-  const slice = useHarnessStore(useShallow((state) => {
-    const activeSessionId = state.activeSessionId;
-    const slot = activeSessionId ? state.sessionSlots[activeSessionId] ?? null : null;
-    const modelControl = slot?.liveConfig?.normalizedControls.model ?? null;
+  const activeSessionId = useActiveSessionId();
+  const slice = useSessionDirectoryStore(useShallow((state) => {
+    const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
+    const modelControl = entry?.liveConfig?.normalizedControls.model ?? null;
     return {
       activeSessionId,
-      agentKind: slot?.agentKind ?? null,
-      modelId: slot?.modelId ?? null,
-      pendingConfigChanges: slot?.pendingConfigChanges ?? null,
+      agentKind: entry?.agentKind ?? null,
+      modelId: entry?.modelId ?? null,
+      pendingConfigChanges: entry?.pendingConfigChanges ?? null,
       currentModelConfigId: modelControl?.rawConfigId ?? null,
       modelControl,
     };
@@ -210,14 +290,16 @@ export function useActiveSessionLaunchState(): {
 }
 
 export function useActiveSessionConfigState() {
-  return useHarnessStore(useShallow((state) => {
-    const activeSessionId = state.activeSessionId;
-    const slot = activeSessionId ? state.sessionSlots[activeSessionId] ?? null : null;
+  const activeSessionId = useActiveSessionId();
+  return useSessionDirectoryStore(useShallow((state) => {
+    const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
     return {
-      agentKind: slot?.agentKind ?? null,
-      workspaceId: slot?.workspaceId ?? null,
-      normalizedControls: slot?.liveConfig?.normalizedControls ?? null,
-      pendingConfigChanges: slot?.pendingConfigChanges ?? null,
+      agentKind: entry?.agentKind ?? null,
+      materializedSessionId: entry?.materializedSessionId ?? null,
+      modeId: entry?.modeId ?? null,
+      workspaceId: entry?.workspaceId ?? null,
+      normalizedControls: entry?.liveConfig?.normalizedControls ?? null,
+      pendingConfigChanges: entry?.pendingConfigChanges ?? null,
     };
   }));
 }
@@ -226,12 +308,21 @@ export function useActiveSessionModeState(): {
   currentModeId: string | null;
   currentModeLabel: string | null;
 } {
-  return useHarnessStore(useShallow((state) => {
-    const activeSessionId = state.activeSessionId;
-    const slot = activeSessionId ? state.sessionSlots[activeSessionId] ?? null : null;
+  const activeSessionId = useActiveSessionId();
+  const directory = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
+  );
+  return useSessionTranscriptStore(useShallow((state) => {
+    const transcript = activeSessionId ? state.entriesById[activeSessionId]?.transcript ?? null : null;
     return {
-      currentModeId: slot?.transcript.currentModeId ?? slot?.modeId ?? null,
-      currentModeLabel: resolveCurrentModeLabel(slot ?? null),
+      currentModeId: transcript?.currentModeId ?? directory?.modeId ?? null,
+      currentModeLabel: resolveCurrentModeLabel(directory
+        ? {
+          modeId: directory.modeId,
+          transcript,
+          liveConfig: directory.liveConfig,
+        }
+        : null),
     };
   }));
 }

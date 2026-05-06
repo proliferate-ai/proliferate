@@ -27,6 +27,7 @@ import { SidebarRowSurface } from "./SidebarRowSurface";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 
 interface WorkspaceItemProps {
+  workspaceId?: string;
   name: string;
   /**
    * The label we would show if no rename override were set. Used as the
@@ -58,6 +59,7 @@ interface WorkspaceItemProps {
 }
 
 export function WorkspaceItem({
+  workspaceId,
   name,
   defaultName,
   hasDisplayNameOverride = false,
@@ -110,6 +112,8 @@ export function WorkspaceItem({
       onPress={onSelect}
       onContextMenuCapture={onContextMenuCapture}
       onPointerEnter={onHover}
+      data-sidebar-workspace-item={workspaceId ?? ""}
+      data-sidebar-workspace-variant={variant}
       className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
     >
       {/* Archive button — absolutely positioned right edge, visible on hover */}

@@ -17,17 +17,23 @@ const QUEUED_APPLY_ATTEMPTS = 10;
 const POLL_DELAY_MS = 200;
 
 const CONTROL_APPLY_ORDER: DefaultLiveSessionControlKey[] = [
+  "collaboration_mode",
   "reasoning",
   "effort",
   "fast_mode",
 ];
 
-type NormalizedControlSlot = "reasoning" | "effort" | "fastMode";
+type NormalizedControlSlot =
+  | "collaborationMode"
+  | "reasoning"
+  | "effort"
+  | "fastMode";
 
 const NORMALIZED_CONTROL_SLOT_BY_KEY: Record<
   DefaultLiveSessionControlKey,
   NormalizedControlSlot
 > = {
+  collaboration_mode: "collaborationMode",
   reasoning: "reasoning",
   effort: "effort",
   fast_mode: "fastMode",
@@ -80,15 +86,14 @@ export async function applySessionLaunchDefaults({
   const metadataByKey = buildDefaultControlMetadataByKey(
     model?.sessionDefaultControls ?? [],
   );
-  if (metadataByKey.size === 0) {
+  const defaults =
+    defaultLiveSessionControlValuesByAgentKind[agentKind] ?? {};
+  if (metadataByKey.size === 0 && !defaults.collaboration_mode?.trim()) {
     return {
       session: attachLiveConfig(workingSession, workingLiveConfig),
       liveConfig: workingLiveConfig,
     };
   }
-
-  const defaults =
-    defaultLiveSessionControlValuesByAgentKind[agentKind] ?? {};
 
   for (const controlKey of CONTROL_APPLY_ORDER) {
     const defaultValue = defaults[controlKey]?.trim();
@@ -97,7 +102,10 @@ export async function applySessionLaunchDefaults({
     }
 
     const metadata = metadataByKey.get(controlKey);
-    if (!metadata || !metadata.values.some((value) => value.value === defaultValue)) {
+    if (
+      controlKey !== "collaboration_mode"
+      && (!metadata || !metadata.values.some((value) => value.value === defaultValue))
+    ) {
       continue;
     }
 
@@ -168,7 +176,10 @@ function buildDefaultControlMetadataByKey(
 function isDefaultLiveSessionControlKey(
   value: string,
 ): value is DefaultLiveSessionControlKey {
-  return value === "reasoning" || value === "effort" || value === "fast_mode";
+  return value === "collaboration_mode"
+    || value === "reasoning"
+    || value === "effort"
+    || value === "fast_mode";
 }
 
 function getLiveControl(

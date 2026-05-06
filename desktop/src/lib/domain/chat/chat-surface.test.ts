@@ -111,12 +111,12 @@ describe("chat surface", () => {
     })).toEqual({ kind: "session-transcript", sessionId: "session-1" });
   });
 
-  it("keeps launch intent visible over unrelated transcript content", () => {
+  it("lets projected active transcript content take over before materialization", () => {
     expect(resolveLaunchIntentSurfaceOverride({
       activeLaunchIntentId: "launch-1",
       launchIntentSessionId: null,
       activeSessionId: "previous-session",
       hasVisibleSessionContent: true,
-    })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+    })).toEqual({ kind: "session-transcript", sessionId: "previous-session" });
   });
 });

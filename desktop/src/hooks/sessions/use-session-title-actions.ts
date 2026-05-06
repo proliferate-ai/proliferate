@@ -42,15 +42,18 @@ export function useSessionTitleActions() {
       throw new Error("Chat title cannot be empty.");
     }
 
-    const { connection, workspaceId } = await getSessionClientAndWorkspace(sessionId);
+    const { connection, workspaceId, materializedSessionId } =
+      await getSessionClientAndWorkspace(sessionId);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
       surfaces: ["header-tabs", "workspace-sidebar", "chat-surface"],
       maxDurationMs: 10_000,
     });
-    const session = await getAnyHarnessClient(connection).sessions.updateTitle(sessionId, {
-      title: trimmedTitle,
-    }, getMeasurementRequestOptions({ operationId, category: "session.title.update" }));
+    const session = await getAnyHarnessClient(connection).sessions.updateTitle(
+      materializedSessionId,
+      { title: trimmedTitle },
+      getMeasurementRequestOptions({ operationId, category: "session.title.update" }),
+    );
 
     const storeStartedAt = performance.now();
     applySessionSummary(sessionId, session, workspaceId);

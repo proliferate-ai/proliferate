@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import {
   buildWorkspaceArrivalEvent,
@@ -11,6 +11,7 @@ import {
 import { useWorkspaces } from "./use-workspaces";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import {
+  buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
 } from "@/lib/domain/workspaces/pending-entry";
@@ -35,6 +36,11 @@ import {
   annotateLatencyFlow,
   failLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import {
+  getWorkspaceSessionRecords,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 
 function resolveDisplayNameFromPath(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? "workspace";
@@ -66,7 +72,7 @@ function normalizeWorktreeInput(
 }
 
 function isAttemptCurrent(attemptId: string): boolean {
-  return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
+  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
 function requestChatInputFocus(): void {
@@ -112,13 +118,14 @@ export function useWorkspaceEntryActions() {
   } = useWorkspaceActions();
   const { selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
   const { selectWorkspace } = useWorkspaceSelection();
-  const enterPendingWorkspaceShell = useHarnessStore(
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
   );
-  const setPendingWorkspaceEntry = useHarnessStore(
+  const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
-  const setWorkspaceArrivalEvent = useHarnessStore(
+  const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
 
@@ -180,6 +187,13 @@ export function useWorkspaceEntryActions() {
       return false;
     }
 
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+    const projectedSessions = Object.values(getWorkspaceSessionRecords(pendingWorkspaceUiKey))
+      .filter((session) => !session.materializedSessionId);
+    for (const session of projectedSessions) {
+      patchSessionRecord(session.sessionId, { workspaceId });
+    }
+
     setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
       workspaceId,
       source: entry.source,
@@ -187,6 +201,24 @@ export function useWorkspaceEntryActions() {
       baseBranchName: entry.baseBranchName,
     }));
     setPendingWorkspaceEntry(null);
+    for (const session of projectedSessions) {
+      void createEmptySessionWithResolvedConfig({
+        clientSessionId: session.sessionId,
+        workspaceId,
+        agentKind: session.agentKind,
+        modelId: session.modelId ?? session.agentKind,
+        modeId: session.modeId ?? undefined,
+        reuseInFlightEmptySession: false,
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to start projected chat session.";
+        logLatency("workspace.entry.projected_session_create_failed", {
+          attemptId: entry.attemptId,
+          workspaceId,
+          sessionId: session.sessionId,
+          errorMessage: message,
+        });
+      });
+    }
     logLatency("workspace.entry.selection.success", {
       attemptId: entry.attemptId,
       source: entry.source,
@@ -195,7 +227,12 @@ export function useWorkspaceEntryActions() {
       totalElapsedMs: elapsedSince(entry.createdAt),
     });
     return true;
-  }, [selectWorkspace, setPendingWorkspaceEntry, setWorkspaceArrivalEvent]);
+  }, [
+    createEmptySessionWithResolvedConfig,
+    selectWorkspace,
+    setPendingWorkspaceEntry,
+    setWorkspaceArrivalEvent,
+  ]);
 
   const failPendingEntry = useCallback((
     entry: PendingWorkspaceEntry,
@@ -254,7 +291,7 @@ export function useWorkspaceEntryActions() {
 
     const entry = buildSubmittingPendingEntry({
       attemptId: createAttemptId(),
-      selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
+      selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
       source: "local-created",
       displayName: resolveDisplayNameFromPath(sourceRoot),
       request: { kind: "local", sourceRoot },
@@ -286,7 +323,7 @@ export function useWorkspaceEntryActions() {
       });
       return selectionFinalized ? { workspaceId: workspace.id } : null;
     } catch (error) {
-      const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
+      const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       const workspaceId = currentPending?.attemptId === entry.attemptId
         ? currentPending.workspaceId
         : null;
@@ -386,7 +423,7 @@ export function useWorkspaceEntryActions() {
 
     const entry = buildSubmittingPendingEntry({
       attemptId: createAttemptId(),
-      selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
+      selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
       source: "worktree-created",
       displayName: normalizedInput.workspaceName?.trim() || "worktree",
       request: { kind: "worktree", input: normalizedInput },
@@ -473,7 +510,7 @@ export function useWorkspaceEntryActions() {
       }
       return { workspaceId: result.workspace.id };
     } catch (error) {
-      const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
+      const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
       failPendingEntry(
         currentPending?.attemptId === entry.attemptId

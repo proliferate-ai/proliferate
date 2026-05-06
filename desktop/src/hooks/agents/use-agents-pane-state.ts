@@ -19,7 +19,7 @@ import {
   type AgentReconcileState,
   type AgentStatusDisplay,
 } from "@/lib/domain/agents/status";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useAgentCatalog } from "./use-agent-catalog";
 import { useAgentInstallationActions } from "./use-agent-installation-actions";
 
@@ -62,7 +62,7 @@ interface AgentsPaneState {
 }
 
 export function useAgentsPaneState(): AgentsPaneState {
-  const { connectionState, runtimeError } = useHarnessStore(useShallow((state) => ({
+  const { connectionState, runtimeError } = useHarnessConnectionStore(useShallow((state) => ({
     connectionState: state.connectionState,
     runtimeError: state.error,
   })));

@@ -7,9 +7,8 @@ import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
 } from "@/lib/domain/workspaces/sidebar";
 import { visibleSidebarShortcutTargetIds } from "@/lib/domain/workspaces/sidebar-shortcut-targets";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-sidebar-show-more-store";
 
 const EMPTY_WORKSPACE_ACTIVITIES = {};
@@ -18,8 +17,8 @@ const EMPTY_LAST_VIEWED_AT = {};
 const EMPTY_FINISH_SUGGESTIONS = {};
 
 export function useSidebarShortcutTargets(): string[] {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { logicalWorkspaces } = useLogicalWorkspaces();

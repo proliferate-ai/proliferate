@@ -11,7 +11,7 @@ import {
 } from "@/lib/integrations/cloud/workspaces";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { workspaceCollectionsScopeKey } from "./query-keys";
 import {
@@ -89,7 +89,7 @@ export function useWorkspaceDisplayNameActions() {
 
       // Local AnyHarness workspaces: PATCH the runtime, then prime the
       // local-workspace cache so the sidebar updates without a roundtrip.
-      const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const workspace = await getAnyHarnessClient({ runtimeUrl }).workspaces.updateDisplayName(
         logicalWorkspace.localWorkspace.id,
         { displayName },
@@ -114,7 +114,7 @@ export function useWorkspaceDisplayNameActions() {
       }
     },
     onSuccess: () => {
-      const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       void queryClient.invalidateQueries({
         queryKey: workspaceCollectionsScopeKey(runtimeUrl),
       });

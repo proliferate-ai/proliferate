@@ -1092,6 +1092,7 @@ impl SessionRuntime {
         &self,
         session_id: &str,
         blocks: Vec<PromptInputBlock>,
+        prompt_id: Option<String>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
@@ -1102,13 +1103,14 @@ impl SessionRuntime {
         }
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
-        let prompt_id = latency_fields.prompt_id.map(|s| s.to_string());
+        let prompt_id = prompt_id.or_else(|| latency_fields.prompt_id.map(|s| s.to_string()));
+        let prompt_id_for_trace = prompt_id.clone();
         tracing::info!(
             session_id = %session_id,
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.request_received"
         );
 
@@ -1151,7 +1153,7 @@ impl SessionRuntime {
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.live_handle_ready"
         );
 
@@ -1181,7 +1183,7 @@ impl SessionRuntime {
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.command_sent"
         );
 
@@ -1209,7 +1211,7 @@ impl SessionRuntime {
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.actor_accepted"
         );
 

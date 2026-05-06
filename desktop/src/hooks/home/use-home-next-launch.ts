@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
@@ -24,12 +25,13 @@ import {
   useDeferredHomeLaunchStore,
 } from "@/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 
 interface HomeNextLaunchInput {
   text: string;
@@ -50,6 +52,12 @@ function newLaunchId(): string {
   return crypto.randomUUID();
 }
 
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    scheduleAfterNextPaint(resolve);
+  });
+}
+
 function markLaunchIntentMaterializedFromPendingWorkspace(intentId: string): void {
   const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
   if (!activeIntent || activeIntent.id !== intentId) {
@@ -58,7 +66,7 @@ function markLaunchIntentMaterializedFromPendingWorkspace(intentId: string): voi
 
   const workspaceId = resolveLaunchIntentPendingWorkspaceId(
     activeIntent,
-    useHarnessStore.getState().pendingWorkspaceEntry,
+    useSessionSelectionStore.getState().pendingWorkspaceEntry,
   );
   if (!workspaceId) {
     return;
@@ -82,7 +90,7 @@ function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
 
   return resolveLaunchIntentPendingWorkspaceId(
     activeIntent,
-    useHarnessStore.getState().pendingWorkspaceEntry,
+    useSessionSelectionStore.getState().pendingWorkspaceEntry,
   )
     ? "manual_after_workspace"
     : "safe";
@@ -145,24 +153,35 @@ export function useHomeNextLaunch() {
     setIsLaunching(true);
     const launchIntentId = newLaunchId();
     const promptId = newLaunchId();
-    beginLaunchIntent({
-      id: launchIntentId,
-      promptId,
-      text: prompt,
-      contentParts: [{ type: "text", text: prompt }],
-      targetKind: target.kind,
-      retryInput: {
-        text: prompt,
-        modelSelection,
+    flushSync(() => {
+      beginLaunchIntent({
+        id: launchIntentId,
+        catalogSnapshotId: null,
+        agentKind: modelSelection.kind,
+        modelId: modelSelection.modelId,
         modeId,
-        target,
-      },
-      materializedWorkspaceId: null,
-      materializedSessionId: null,
-      createdAt: Date.now(),
-      sendAttemptedAt: null,
-      failure: null,
+        launchControlValues: modeId ? { mode: modeId } : {},
+        promptId,
+        queuedPromptBlocks: [{ type: "text", text: prompt }],
+        optimisticContentParts: [{ type: "text", text: prompt }],
+        text: prompt,
+        contentParts: [{ type: "text", text: prompt }],
+        targetKind: target.kind,
+        retryInput: {
+          text: prompt,
+          modelSelection,
+          modeId,
+          target,
+        },
+        materializedWorkspaceId: null,
+        materializedSessionId: null,
+        createdAt: Date.now(),
+        sendAttemptedAt: null,
+        failure: null,
+      });
+      navigate("/");
     });
+    await waitForNextPaint();
 
     try {
       if (target.kind === "cowork") {
@@ -186,15 +205,13 @@ export function useHomeNextLaunch() {
           text: prompt,
           workspaceId: result.workspace.id,
           promptId,
-          onBeforePromptRequest: () => {
+          onBeforeOptimisticPrompt: () => {
             markLaunchIntentSendAttempted(launchIntentId);
           },
         });
         clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
-
-      navigate("/");
 
       if (target.kind === "local") {
         const workspaceId = target.existingWorkspaceId
