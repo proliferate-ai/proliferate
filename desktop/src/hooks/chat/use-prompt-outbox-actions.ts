@@ -1,9 +1,12 @@
 import { useCallback } from "react";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import type { PromptOutboxEntry } from "@/lib/domain/chat/prompt-outbox";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 export function usePromptOutboxActions() {
+  const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const retryPrompt = useCallback((clientPromptId: string) => {
     const store = usePromptOutboxStore.getState();
     const entry = store.entriesByPromptId[clientPromptId];
@@ -12,7 +15,7 @@ export function usePromptOutboxActions() {
     }
     const retryPromptId = createPromptId();
     store.removeEntry(clientPromptId);
-    store.enqueue({
+    const retryEntry = store.enqueue({
       clientPromptId: retryPromptId,
       retryOfPromptId: entry.clientPromptId,
       clientSessionId: entry.clientSessionId,
@@ -26,7 +29,35 @@ export function usePromptOutboxActions() {
       placement: entry.placement,
       latencyFlowId: null,
     });
-  }, []);
+    const slot = getSessionRecord(entry.clientSessionId);
+    const workspaceId = slot?.workspaceId ?? entry.workspaceId ?? null;
+    if (!slot || slot.materializedSessionId || !workspaceId) {
+      return;
+    }
+    void createSessionWithResolvedConfig({
+      text: retryEntry.text,
+      blocks: retryEntry.blocks,
+      attachmentSnapshots: retryEntry.attachmentSnapshots,
+      optimisticContentParts: retryEntry.contentParts,
+      agentKind: slot.agentKind,
+      modelId: slot.modelId ?? slot.agentKind,
+      ...(slot.modeId ? { modeId: slot.modeId } : {}),
+      workspaceId,
+      promptId: retryPromptId,
+      clientSessionId: entry.clientSessionId,
+      skipInitialPromptEnqueue: true,
+      preferExistingCompatibleSession: true,
+    }).catch((error) => {
+      const latest = usePromptOutboxStore.getState().entriesByPromptId[retryPromptId];
+      if (!latest || latest.deliveryState !== "waiting_for_session") {
+        return;
+      }
+      usePromptOutboxStore.getState().patchEntry(retryPromptId, {
+        deliveryState: "failed_before_dispatch",
+        errorMessage: error instanceof Error ? error.message : "Session creation failed.",
+      });
+    });
+  }, [createSessionWithResolvedConfig]);
 
   const dismissPrompt = useCallback((clientPromptId: string) => {
     const store = usePromptOutboxStore.getState();
@@ -58,7 +89,8 @@ function canRetryEntry(entry: PromptOutboxEntry): boolean {
 }
 
 function canDismissEntry(entry: PromptOutboxEntry): boolean {
-  return entry.deliveryState === "failed_before_dispatch";
+  return entry.deliveryState === "failed_before_dispatch"
+    || entry.deliveryState === "unknown_after_dispatch";
 }
 
 function canCancelLocally(entry: PromptOutboxEntry): boolean {

@@ -46,6 +46,29 @@ describe("derivePendingPromptQueueRow", () => {
     expect(afterAck.key).toBe(beforeAck.key);
     expect(beforeAck.canDelete).toBe(false);
     expect(afterAck.canDelete).toBe(true);
+    expect(afterAck.deleteAction).toBe("runtime");
+  });
+
+  it("allows local queued prompts to be cancelled before dispatch", () => {
+    expect(derivePendingPromptQueueRow(entry({
+      seq: -20,
+      promptId: "prompt-local",
+      localOutboxDeliveryState: "waiting_for_session",
+    }))).toMatchObject({
+      canDelete: true,
+      deleteAction: "cancel_local",
+    });
+  });
+
+  it("allows ambiguous local queued prompts to be dismissed", () => {
+    expect(derivePendingPromptQueueRow(entry({
+      seq: -21,
+      promptId: "prompt-unknown",
+      localOutboxDeliveryState: "unknown_after_dispatch",
+    }))).toMatchObject({
+      canDelete: true,
+      deleteAction: "dismiss_local",
+    });
   });
 
   it("summarizes structured content and prevents editing", () => {

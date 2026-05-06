@@ -11,7 +11,7 @@ describe("classifyPromptDispatchFailure", () => {
   });
 
   it("treats definitive post-request rejections as not sent", () => {
-    expect(classifyPromptDispatchFailure({ response: { status: 409 } }, true))
+    expect(classifyPromptDispatchFailure({ problem: { status: 409 } }, true))
       .toMatchObject({
         deliveryState: "failed_before_dispatch",
       });

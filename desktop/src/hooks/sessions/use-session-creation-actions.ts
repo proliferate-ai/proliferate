@@ -19,6 +19,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import {
   createEmptySessionRecord,
   getSessionRecord,
+  patchSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -613,6 +614,19 @@ export function useSessionCreationActions() {
     }
 
     const cleanupCreateFailure = (error: unknown): void => {
+      if (hasPrompt) {
+        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
+        if (options.launchIntentId) {
+          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
+        }
+        captureTelemetryException(error, {
+          tags: {
+            action: "create_session_with_resolved_config",
+            domain: "sessions",
+          },
+        });
+        return;
+      }
       const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
       usePromptOutboxStore.getState().clearSession(pendingSessionId);
       removeSessionRecordAndClearSelection(pendingSessionId);
@@ -796,4 +810,30 @@ function materializedRecordFromExistingSession({
     ),
     transcriptHydrated: true,
   };
+}
+
+function markProjectedSessionPromptCreateFailed(
+  clientSessionId: string,
+  error: unknown,
+): void {
+  patchSessionRecord(clientSessionId, {
+    status: "errored",
+  });
+  const message = error instanceof Error && error.message.trim()
+    ? error.message
+    : "Session creation failed.";
+  const store = usePromptOutboxStore.getState();
+  for (const entry of Object.values(store.entriesByPromptId)) {
+    if (
+      entry.clientSessionId !== clientSessionId
+      || entry.deliveryState === "cancelled"
+      || entry.deliveryState === "echoed_tombstone"
+    ) {
+      continue;
+    }
+    store.patchEntry(entry.clientPromptId, {
+      deliveryState: "failed_before_dispatch",
+      errorMessage: message,
+    });
+  }
 }

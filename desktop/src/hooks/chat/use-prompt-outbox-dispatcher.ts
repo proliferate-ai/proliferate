@@ -66,6 +66,7 @@ export function usePromptOutboxDispatcher(): void {
     }
 
     let requestStarted = false;
+    let requestHeaders: HeadersInit | null = null;
     try {
       store.patchEntry(entry.clientPromptId, {
         deliveryState: "preparing",
@@ -101,7 +102,7 @@ export function usePromptOutboxDispatcher(): void {
         workspaceId,
         materializedSessionId: resolvedSessionId,
       } = await getSessionClientAndWorkspace(entry.clientSessionId);
-      const requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
+      requestHeaders = getLatencyFlowRequestHeaders(entry.latencyFlowId) ?? null;
       const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
 
       usePromptOutboxStore.getState().patchEntry(entry.clientPromptId, {
@@ -160,6 +161,13 @@ export function usePromptOutboxDispatcher(): void {
           entry.latencyFlowId,
           requestStarted ? "prompt_dispatch_rejected" : "prompt_dispatch_failed_before_request",
         );
+      } else {
+        scheduleAcceptedRunningHistoryReconcile({
+          clientSessionId: entry.clientSessionId,
+          clientPromptId: entry.clientPromptId,
+          requestHeaders,
+          rehydrateSessionSlotFromHistory,
+        });
       }
     }
   }, [
@@ -250,6 +258,7 @@ function readErrorStatus(error: unknown, depth = 0): number | null {
   const candidate = error as {
     status?: unknown;
     statusCode?: unknown;
+    problem?: { status?: unknown };
     response?: { status?: unknown };
     cause?: unknown;
   };
@@ -258,6 +267,9 @@ function readErrorStatus(error: unknown, depth = 0): number | null {
   }
   if (typeof candidate.statusCode === "number") {
     return candidate.statusCode;
+  }
+  if (typeof candidate.problem?.status === "number") {
+    return candidate.problem.status;
   }
   if (typeof candidate.response?.status === "number") {
     return candidate.response.status;

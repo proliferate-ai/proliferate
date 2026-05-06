@@ -137,6 +137,29 @@ describe("prompt outbox", () => {
       .toBe("prompt-next");
   });
 
+  it("blocks later dispatch while an earlier prompt is awaiting confirmation", () => {
+    let state = emptyState();
+    state = withEntry(state, {
+      ...createPromptOutboxEntry({
+        clientPromptId: "prompt-unknown",
+        clientSessionId: "session-1",
+        text: "unknown",
+        blocks: [{ type: "text", text: "unknown" }],
+        now: NOW,
+      }),
+      deliveryState: "unknown_after_dispatch",
+    });
+    state = withEntry(state, createPromptOutboxEntry({
+      clientPromptId: "prompt-next",
+      clientSessionId: "session-1",
+      text: "next",
+      blocks: [{ type: "text", text: "next" }],
+      now: NOW,
+    }));
+
+    expect(selectNextDispatchableOutboxEntry(state, "session-1")).toBeNull();
+  });
+
   it("places a new prompt in the composer queue when the session is busy", () => {
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: true,

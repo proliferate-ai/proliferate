@@ -205,7 +205,11 @@ export function selectNextDispatchableOutboxEntry(
     if (entry.deliveryState === "waiting_for_session") {
       return entry;
     }
-    if (entry.deliveryState === "preparing" || entry.deliveryState === "dispatching") {
+    if (
+      entry.deliveryState === "preparing"
+      || entry.deliveryState === "dispatching"
+      || entry.deliveryState === "unknown_after_dispatch"
+    ) {
       return null;
     }
   }
@@ -286,7 +290,8 @@ export function outboxEntryToPendingPromptEntry(entry: PromptOutboxEntry): Pendi
     contentParts: entry.contentParts,
     queuedAt: entry.createdAt,
     promptProvenance: entry.promptProvenance,
-  };
+    localOutboxDeliveryState: entry.deliveryState,
+  } as PendingPromptEntry & { localOutboxDeliveryState: PromptOutboxDeliveryState };
 }
 
 export function reconcileOutboxFromEnvelopes(
