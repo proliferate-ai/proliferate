@@ -1,11 +1,13 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+  type AnyHarnessQueryTimingOptions,
   useGitBranchDiffFilesQuery,
   useGitDiffQuery,
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { Button } from "@/components/ui/Button";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import {
   ArrowUpRight,
@@ -31,7 +33,12 @@ import {
   useWorkspaceChangeReviewStore,
 } from "@/stores/editor/workspace-change-review-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import {
+  recordMeasurementDiagnostic,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
+import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 
 type AllChangesTarget = Extract<ViewerTarget, { kind: "allChanges" }>;
@@ -41,20 +48,54 @@ type AllChangesRow =
   | { kind: "section"; key: string; sectionScope: SectionScope; label: string; count: number; collapsed: boolean }
   | { kind: "file"; key: string; sectionScope: SectionScope; file: GitPanelFile; collapsed: boolean };
 
+type DiffReviewMeasurementState = ReturnType<typeof useDiffReviewMeasurement>;
+
 export function AllChangesFrame({ target }: { target: AllChangesTarget }) {
+  const diffReviewMeasurement = useDiffReviewMeasurement();
+  if (diffReviewMeasurement.deferQueryMount) {
+    return (
+      <DebugProfiler id="all-changes-frame">
+        <div className="flex h-full min-w-0 flex-col overflow-hidden">
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            Loading changes
+          </p>
+        </div>
+      </DebugProfiler>
+    );
+  }
+
+  return (
+    <AllChangesFrameContent
+      target={target}
+      diffReviewMeasurement={diffReviewMeasurement}
+    />
+  );
+}
+
+function AllChangesFrameContent({
+  target,
+  diffReviewMeasurement,
+}: {
+  target: AllChangesTarget;
+  diffReviewMeasurement: DiffReviewMeasurementState;
+}) {
   const targetKey = viewerTargetKey(target);
-  const workspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const workspaceId = useSessionSelectionStore((s) => s.selectedWorkspaceId);
   const layout = useWorkspaceViewerTabsStore((s) => s.layoutByTargetKey[targetKey] ?? "unified");
   const setTargetLayout = useWorkspaceViewerTabsStore((s) => s.setTargetLayout);
   const [wrapLongLines, setWrapLongLines] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<SectionScope>>(new Set());
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
   const { openFile, openFileDiff } = useWorkspaceFileActions();
-  const statusQuery = useGitStatusQuery({ workspaceId });
+  const statusQuery = useGitStatusQuery({
+    workspaceId,
+    ...diffReviewMeasurement.statusTimingOptions,
+  });
   const branchFilesQuery = useGitBranchDiffFilesQuery({
     workspaceId,
     baseRef: target.baseRef,
     enabled: target.scope === "branch",
+    ...diffReviewMeasurement.branchDiffFilesTimingOptions,
   });
 
   const rows = useMemo<AllChangesRow[]>(() => {
@@ -129,6 +170,35 @@ export function AllChangesFrame({ target }: { target: AllChangesTarget }) {
     },
     overscan: 4,
   });
+  const virtualItems = virtualizer.getVirtualItems();
+  const visibleFileRowCount = virtualItems.reduce((count, item) => {
+    const row = rows[item.index];
+    return row?.kind === "file" ? count + 1 : count;
+  }, 0);
+
+  useEffect(() => {
+    if (!diffReviewMeasurement.operationId) {
+      return;
+    }
+    recordMeasurementDiagnostic({
+      category: "diff_review",
+      label: "visible_rows",
+      operationId: diffReviewMeasurement.operationId,
+      durationMs: 0,
+      count: virtualItems.length,
+    });
+    recordMeasurementDiagnostic({
+      category: "diff_review",
+      label: "visible_file_rows",
+      operationId: diffReviewMeasurement.operationId,
+      durationMs: 0,
+      count: visibleFileRowCount,
+    });
+  }, [
+    diffReviewMeasurement.operationId,
+    virtualItems.length,
+    visibleFileRowCount,
+  ]);
 
   const changedFileCount = rows.reduce(
     (count, row) => row.kind === "section" ? count + row.count : count,
@@ -151,7 +221,8 @@ export function AllChangesFrame({ target }: { target: AllChangesTarget }) {
   }, []);
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden">
+    <DebugProfiler id="all-changes-frame">
+      <div className="flex h-full min-w-0 flex-col overflow-hidden">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium leading-4 text-foreground">
@@ -207,7 +278,7 @@ export function AllChangesFrame({ target }: { target: AllChangesTarget }) {
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">No changes</p>
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-            {virtualizer.getVirtualItems().map((item) => {
+            {virtualItems.map((item) => {
               const row = rows[item.index];
               if (!row) return null;
               return (
@@ -238,6 +309,8 @@ export function AllChangesFrame({ target }: { target: AllChangesTarget }) {
                       onToggleCollapsed={() => toggleFileCollapsed(row.key)}
                       openFile={openFile}
                       openFileDiff={openFileDiff}
+                      diffTimingOptions={diffReviewMeasurement.diffTimingOptions}
+                      measurementOperationId={diffReviewMeasurement.operationId}
                     />
                   )}
                 </div>
@@ -246,7 +319,8 @@ export function AllChangesFrame({ target }: { target: AllChangesTarget }) {
           </div>
         )}
       </AutoHideScrollArea>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }
 
@@ -292,6 +366,8 @@ function AllChangesFileRow({
   onToggleCollapsed,
   openFile,
   openFileDiff,
+  diffTimingOptions,
+  measurementOperationId,
 }: {
   allChangesTargetKey: string;
   workspaceId: string | null;
@@ -311,6 +387,8 @@ function AllChangesFileRow({
       oldPath?: string | null;
     },
   ) => Promise<void>;
+  diffTimingOptions: AnyHarnessQueryTimingOptions;
+  measurementOperationId: MeasurementOperationId | null;
 }) {
   const viewedKey = serializeViewedKey({
     allChangesTargetKey,
@@ -327,6 +405,7 @@ function AllChangesFileRow({
     baseRef: sectionScope === "branch" ? baseRef : null,
     oldPath: sectionScope === "branch" ? file.oldPath : null,
     enabled: !collapsed,
+    ...diffTimingOptions,
   });
 
   return (
@@ -432,6 +511,7 @@ function AllChangesFileRow({
           filePath={file.displayPath}
           wrapLongLines={wrapLongLines}
           layout={layout}
+          operationId={measurementOperationId}
         />
       ) : (
         <p className="px-4 py-8 text-center text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { SplitDiffViewer } from "@/components/ui/content/diff/SplitDiffViewer";
 import { useResolvedMode } from "@/hooks/theme/use-theme";
@@ -9,6 +10,7 @@ import type {
   DiffHunk,
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
+import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
 import type { HighlightedToken } from "@/lib/infra/highlighting";
 
 interface DiffViewerProps {
@@ -19,6 +21,7 @@ interface DiffViewerProps {
   wrapLongLines?: boolean;
   variant?: "default" | "chat";
   layout?: "unified" | "split";
+  operationId?: MeasurementOperationId | null;
 }
 
 const LINE_BG: Record<DiffLine["type"], string> = {
@@ -443,16 +446,19 @@ export function DiffViewer({
   wrapLongLines = false,
   variant = "default",
   layout = "unified",
+  operationId,
 }: DiffViewerProps) {
-  const { parsed, tokens } = useDiffHighlight(patch, filePath);
+  const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
   if (variant === "chat") {
     return (
-      <ChatDiffViewer
-        parsed={parsed}
-        tokens={tokens}
-        className={className}
-        viewportClassName={viewportClassName}
-      />
+      <DebugProfiler id="diff-viewer">
+        <ChatDiffViewer
+          parsed={parsed}
+          tokens={tokens}
+          className={className}
+          viewportClassName={viewportClassName}
+        />
+      </DebugProfiler>
     );
   }
 
@@ -461,31 +467,35 @@ export function DiffViewer({
 
   if (layout === "split") {
     return (
-      <SplitDiffViewer
-        parsed={parsed}
-        tokens={tokens}
-        className={`${rootClass} ${className ?? ""}`}
-        viewportClassName={viewportClassName}
-      />
+      <DebugProfiler id="diff-viewer">
+        <SplitDiffViewer
+          parsed={parsed}
+          tokens={tokens}
+          className={`${rootClass} ${className ?? ""}`}
+          viewportClassName={viewportClassName}
+        />
+      </DebugProfiler>
     );
   }
 
   return (
-    <AutoHideScrollArea
-      className={`${rootClass} ${className ?? ""}`}
-      viewportClassName={viewportClassName}
-      contentClassName={wrapLongLines ? "" : "min-w-max"}
-      allowHorizontal={!wrapLongLines}
-    >
-      {parsed.hunks.map((hunk, i) => (
-        <HunkView
-          key={i}
-          hunk={hunk}
-          tokens={tokens}
-          wrapLongLines={wrapLongLines}
-          variant={variant}
-        />
-      ))}
-    </AutoHideScrollArea>
+    <DebugProfiler id="diff-viewer">
+      <AutoHideScrollArea
+        className={`${rootClass} ${className ?? ""}`}
+        viewportClassName={viewportClassName}
+        contentClassName={wrapLongLines ? "" : "min-w-max"}
+        allowHorizontal={!wrapLongLines}
+      >
+        {parsed.hunks.map((hunk, i) => (
+          <HunkView
+            key={i}
+            hunk={hunk}
+            tokens={tokens}
+            wrapLongLines={wrapLongLines}
+            variant={variant}
+          />
+        ))}
+      </AutoHideScrollArea>
+    </DebugProfiler>
   );
 }
