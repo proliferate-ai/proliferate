@@ -1,6 +1,5 @@
 import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import {
-  createTranscriptState,
   type PendingPromptEntry,
   streamSession,
 } from "@anyharness/sdk";
@@ -15,7 +14,6 @@ import type {
 } from "@anyharness/sdk";
 import {
   resolveSessionViewState,
-  resolveStatusFromExecutionSummary,
 } from "@/lib/domain/sessions/activity";
 import { logLatency } from "@/lib/infra/debug-latency";
 import {
@@ -24,15 +22,30 @@ import {
   type MeasurementOperationId,
   type MeasurementWorkflowStep,
 } from "@/lib/infra/debug-measurement";
-import { clearSessionReconnectTimer } from "@/lib/integrations/anyharness/session-reconnect-state";
 import { waitForSessionHistoryTimeout } from "@/lib/integrations/anyharness/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/integrations/anyharness/runtime-target";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
-import type { SessionRelationship, SessionSlot } from "@/stores/sessions/harness-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import {
+  createEmptySessionRecord,
+  createSessionRecordFromSummary,
+  getMaterializedSessionId,
+  getSessionRecords,
+  isSessionMaterialized,
+  requireMaterializedSessionId,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { SessionRelationship, SessionRuntimeRecord } from "@/stores/sessions/session-types";
+import {
+  closeSessionStreamHandle,
+  flushAllSessionStreamHandles,
+  getSessionStreamHandle,
+  type ManagedSessionStreamHandle,
+} from "@/lib/integrations/anyharness/session-stream-handles";
 
 interface SessionStreamCallbacks {
   onHandle?: (handle: SessionStreamHandle) => void;
@@ -43,16 +56,9 @@ interface SessionStreamCallbacks {
   measurementOperationId?: MeasurementOperationId | null;
 }
 
-export interface FlushAwareSessionStreamHandle extends SessionStreamHandle {
-  flushPendingEvents?: () => void;
-}
+export type FlushAwareSessionStreamHandle = ManagedSessionStreamHandle;
 
 const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
-const DEFAULT_SESSION_ACTION_CAPABILITIES: SessionActionCapabilities = {
-  fork: false,
-  targetedFork: false,
-};
-
 function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
   return { runtimeUrl: baseUrl, authToken };
 }
@@ -83,18 +89,19 @@ async function measureSessionWorkflowStep<T>(
   }
 }
 
-export { logDevSSEEvent } from "./session-runtime-dev-sse";
-
-
 export function createPendingSessionId(agentKind: string): string {
-  return `pending-session:${agentKind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  return `client-session:${agentKind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function isPendingSessionId(sessionId: string): boolean {
-  return sessionId.startsWith("pending-session:");
+  if (sessionId.startsWith("pending-session:") || sessionId.startsWith("client-session:")) {
+    return !isSessionMaterialized(sessionId);
+  }
+  const entry = useSessionDirectoryStore.getState().entriesById[sessionId];
+  return !!entry && !entry.materializedSessionId;
 }
 
-export function createEmptySessionSlot(
+export function createEmptySessionRuntimeRecord(
   sessionId: string,
   agentKind: string,
   config?: {
@@ -110,44 +117,11 @@ export function createEmptySessionSlot(
     optimisticPrompt?: PendingPromptEntry | null;
     sessionRelationship?: SessionRelationship;
   },
-): SessionSlot {
-  const resolvedModeId =
-    config?.liveConfig?.normalizedControls.mode?.currentValue ?? config?.modeId ?? null;
-  const title = config?.title?.trim() || null;
-  const transcript = createTranscriptState(sessionId);
-
-  return {
-    sessionId,
-    workspaceId: config?.workspaceId ?? null,
-    agentKind,
-    modelId: config?.modelId ?? null,
-    modeId: resolvedModeId,
-    title,
-    actionCapabilities: config?.actionCapabilities ?? DEFAULT_SESSION_ACTION_CAPABILITIES,
-    liveConfig: config?.liveConfig ?? null,
-    executionSummary: config?.executionSummary ?? null,
-    mcpBindingSummaries: config?.mcpBindingSummaries ?? null,
-    events: [],
-    transcript: {
-      ...transcript,
-      currentModeId: resolvedModeId,
-      sessionMeta: {
-        ...transcript.sessionMeta,
-        title,
-      },
-    },
-    pendingConfigChanges: {},
-    optimisticPrompt: config?.optimisticPrompt ?? null,
-    status: null,
-    lastPromptAt: config?.lastPromptAt ?? null,
-    sseHandle: null,
-    streamConnectionState: "disconnected",
-    transcriptHydrated: false,
-    sessionRelationship: config?.sessionRelationship ?? { kind: "pending" },
-  };
+): SessionRuntimeRecord {
+  return createEmptySessionRecord(sessionId, agentKind, config);
 }
 
-export function createSessionSlotFromSummary(
+export function createSessionRuntimeRecordFromSummary(
   session: Session,
   workspaceId: string,
   options?: {
@@ -155,32 +129,8 @@ export function createSessionSlotFromSummary(
     transcriptHydrated?: boolean;
     sessionRelationship?: SessionRelationship;
   },
-): SessionSlot {
-  const modeId =
-    session.liveConfig?.normalizedControls.mode?.currentValue
-    ?? session.modeId
-    ?? null;
-  const title = session.title?.trim() || options?.titleFallback?.trim() || null;
-
-  return {
-    ...createEmptySessionSlot(session.id, session.agentKind, {
-      workspaceId,
-      modelId: session.modelId ?? null,
-      modeId,
-      title,
-      actionCapabilities: session.actionCapabilities,
-      liveConfig: session.liveConfig ?? null,
-      executionSummary: session.executionSummary ?? null,
-      mcpBindingSummaries: session.mcpBindingSummaries ?? null,
-      lastPromptAt: session.lastPromptAt ?? null,
-      sessionRelationship: options?.sessionRelationship ?? { kind: "pending" },
-    }),
-    status: resolveStatusFromExecutionSummary(
-      session.executionSummary,
-      session.status ?? "idle",
-    ),
-    transcriptHydrated: options?.transcriptHydrated ?? false,
-  };
+): SessionRuntimeRecord {
+  return createSessionRecordFromSummary(session, workspaceId, options);
 }
 
 export function getWorkspaceClientAndId(
@@ -195,15 +145,29 @@ export function getWorkspaceClientAndId(
 
 export async function getSessionClientAndWorkspace(
   sessionId: string,
-): Promise<{ connection: AnyHarnessClientConnection; target: RuntimeTarget; workspaceId: string }> {
-  const state = useHarnessStore.getState();
-  const workspaceId = state.sessionSlots[sessionId]?.workspaceId ?? state.selectedWorkspaceId;
+): Promise<{
+  connection: AnyHarnessClientConnection;
+  target: RuntimeTarget;
+  workspaceId: string;
+  materializedSessionId: string;
+}> {
+  const workspaceId =
+    useSessionDirectoryStore.getState().entriesById[sessionId]?.workspaceId
+    ?? useSessionSelectionStore.getState().selectedWorkspaceId;
   if (!workspaceId) {
     throw new Error("No workspace selected");
   }
 
-  const { connection, target } = await getWorkspaceClientAndId(state.runtimeUrl, workspaceId);
-  return { connection, target, workspaceId };
+  const { connection, target } = await getWorkspaceClientAndId(
+    useHarnessConnectionStore.getState().runtimeUrl,
+    workspaceId,
+  );
+  return {
+    connection,
+    target,
+    workspaceId,
+    materializedSessionId: requireMaterializedSessionId(sessionId),
+  };
 }
 
 export async function fetchSessionHistory(
@@ -229,7 +193,7 @@ export async function fetchSessionHistory(
   const signal = abortController?.signal ?? null;
 
   try {
-    const { connection } = await measureSessionWorkflowStep(
+    const { connection, materializedSessionId } = await measureSessionWorkflowStep(
       options?.measurementOperationId,
       "session.history.resolve_target",
       () => waitForSessionHistoryTimeout(
@@ -253,7 +217,7 @@ export async function fetchSessionHistory(
       || !!requestWithTimeout;
 
     const eventsPromise = client.sessions.listEvents(
-      sessionId,
+      materializedSessionId,
       hasHistoryOptions
         ? {
           ...(options?.afterSeq != null ? { afterSeq: options.afterSeq } : {}),
@@ -279,13 +243,13 @@ export async function fetchSessionSummary(
     measurementOperationId?: MeasurementOperationId | null;
   },
 ) {
-  const { connection } = await measureSessionWorkflowStep(
+  const { connection, materializedSessionId } = await measureSessionWorkflowStep(
     options?.measurementOperationId,
     "session.summary.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
   );
   return getAnyHarnessClient(connection).sessions.get(
-    sessionId,
+    materializedSessionId,
     getMeasurementRequestOptions({
       operationId: options?.measurementOperationId,
       category: "session.get",
@@ -303,7 +267,7 @@ export async function resumeSession(
   },
 ) {
   const measurementOperationId = options?.measurementOperationId;
-  const { connection, target } = await measureSessionWorkflowStep(
+  const { connection, target, materializedSessionId } = await measureSessionWorkflowStep(
     measurementOperationId,
     "session.resume.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
@@ -355,7 +319,7 @@ export async function resumeSession(
   }
   try {
     return await client.sessions.resume(
-      sessionId,
+      materializedSessionId,
       {
         mcpServers,
         mcpBindingSummaries: mcpBindingSummaries.length > 0
@@ -374,7 +338,7 @@ export async function resumeSession(
 }
 
 export function collectInactiveSessionStreamIds(
-  sessionSlots: Record<string, SessionSlot>,
+  sessions: Record<string, SessionRuntimeRecord>,
   options?: {
     preserveSessionIds?: Iterable<string>;
   },
@@ -382,16 +346,17 @@ export function collectInactiveSessionStreamIds(
   const preservedSessionIds = new Set(options?.preserveSessionIds ?? []);
   const prunableSessionIds: string[] = [];
 
-  for (const [sessionId, slot] of Object.entries(sessionSlots)) {
+  for (const [sessionId, record] of Object.entries(sessions)) {
     if (
-      !slot.sseHandle
+      !record.materializedSessionId
+      || !getSessionStreamHandle(record.materializedSessionId)
       || isPendingSessionId(sessionId)
       || preservedSessionIds.has(sessionId)
     ) {
       continue;
     }
 
-    const viewState = resolveSessionViewState(slot);
+    const viewState = resolveSessionViewState(record);
     if (viewState === "working" || viewState === "needs_input") {
       continue;
     }
@@ -402,7 +367,7 @@ export function collectInactiveSessionStreamIds(
   return prunableSessionIds;
 }
 
-export function detachAndCloseSessionSlotStreams(
+export function detachAndCloseSessionStreams(
   sessionIds: Iterable<string>,
 ): number {
   const uniqueSessionIds = Array.from(new Set(sessionIds));
@@ -410,14 +375,16 @@ export function detachAndCloseSessionSlotStreams(
     return 0;
   }
 
-  const state = useHarnessStore.getState();
   const streams: { sessionId: string; handle: FlushAwareSessionStreamHandle }[] = [];
   for (const sessionId of uniqueSessionIds) {
-    const slot = state.sessionSlots[sessionId];
-    if (!slot?.sseHandle) {
+    const materializedSessionId = getMaterializedSessionId(sessionId);
+    const handle = materializedSessionId
+      ? getSessionStreamHandle(materializedSessionId)
+      : null;
+    if (!materializedSessionId || !handle) {
       continue;
     }
-    streams.push({ sessionId, handle: slot.sseHandle as FlushAwareSessionStreamHandle });
+    streams.push({ sessionId: materializedSessionId, handle });
   }
 
   if (streams.length === 0) {
@@ -425,36 +392,13 @@ export function detachAndCloseSessionSlotStreams(
   }
 
   for (const { sessionId, handle } of streams) {
-    try {
-      handle.flushPendingEvents?.();
-    } catch (error) {
-      console.error("Failed to flush session stream before detach", { sessionId, error });
-    }
-    try {
-      handle.close();
-    } catch (error) {
-      console.error("Failed to close session stream during detach", { sessionId, error });
-    }
-    clearSessionReconnectTimer(sessionId);
-  }
-
-  const latestState = useHarnessStore.getState();
-  const nextSlots = { ...latestState.sessionSlots };
-  let didDetachStream = false;
-  for (const { sessionId, handle } of streams) {
-    const slot = nextSlots[sessionId];
-    if (slot?.sseHandle !== handle) {
-      continue;
-    }
-    nextSlots[sessionId] = {
-      ...slot,
-      sseHandle: null,
+    closeSessionStreamHandle(sessionId, handle);
+    const clientSessionId =
+      useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId[sessionId]
+      ?? sessionId;
+    useSessionDirectoryStore.getState().patchEntry(clientSessionId, {
       streamConnectionState: "disconnected",
-    };
-    didDetachStream = true;
-  }
-  if (didDetachStream) {
-    useHarnessStore.setState({ sessionSlots: nextSlots });
+    });
   }
   return streams.length;
 }
@@ -464,30 +408,20 @@ export function pruneInactiveSessionStreams(
     preserveSessionIds?: Iterable<string>;
   },
 ): string[] {
-  flushPendingSessionSlotStreamEvents(useHarnessStore.getState().sessionSlots);
-  const state = useHarnessStore.getState();
+  flushAllSessionStreamHandles();
   const prunableSessionIds = collectInactiveSessionStreamIds(
-    state.sessionSlots,
+    getSessionRecords(),
     options,
   );
   if (prunableSessionIds.length === 0) {
     return [];
   }
 
-  detachAndCloseSessionSlotStreams(prunableSessionIds);
+  detachAndCloseSessionStreams(prunableSessionIds);
   logLatency("session.stream.pruned", {
     closedSessionCount: prunableSessionIds.length,
   });
   return prunableSessionIds;
-}
-
-function flushPendingSessionSlotStreamEvents(
-  sessionSlots: Record<string, SessionSlot>,
-): void {
-  for (const slot of Object.values(sessionSlots)) {
-    const handle = slot.sseHandle as FlushAwareSessionStreamHandle | null;
-    handle?.flushPendingEvents?.();
-  }
 }
 
 export async function openSessionStream(
@@ -497,7 +431,7 @@ export async function openSessionStream(
     requestHeaders?: HeadersInit;
   } & SessionStreamCallbacks,
 ): Promise<SessionStreamHandle> {
-  const { connection } = await measureSessionWorkflowStep(
+  const { connection, materializedSessionId } = await measureSessionWorkflowStep(
     options.measurementOperationId,
     "session.stream.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
@@ -507,7 +441,7 @@ export async function openSessionStream(
     baseUrl: connection.runtimeUrl,
     authToken: connection.authToken ?? undefined,
     headers: options.requestHeaders,
-    sessionId,
+    sessionId: materializedSessionId,
     afterSeq: options.afterSeq ?? 0,
     timing: options.measurementOperationId
       ? {

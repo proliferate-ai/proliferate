@@ -31,6 +31,8 @@ use crate::sessions::runtime::{
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 use crate::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
 
+const PROMPT_ID_MAX_BYTES: usize = 256;
+
 #[derive(Debug, Deserialize)]
 pub struct ListSessionsQuery {
     pub workspace_id: Option<String>,
@@ -90,7 +92,7 @@ pub async fn create_session(
         mode_id = ?mode_id,
         system_prompt_append_count,
         mcp_server_count,
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
             prompt_id = latency_fields.prompt_id,
@@ -121,7 +123,7 @@ pub async fn create_session(
         workspace_id = %workspace_id,
         session_id = %record.id,
         elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
             prompt_id = latency_fields.prompt_id,
@@ -250,14 +252,16 @@ pub async fn prompt_session(
 ) -> Result<Json<PromptSessionResponse>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
+    let prompt_id = request_prompt_id(req.prompt_id.as_deref(), latency_fields.prompt_id)?;
+    let prompt_id_for_trace = prompt_id.clone();
     let started = Instant::now();
     tracing::info!(
         session_id = %session_id,
         block_count = req.blocks.len(),
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
         "[workspace-latency] session.http.prompt.request_received"
     );
 
@@ -266,17 +270,17 @@ pub async fn prompt_session(
             .await?;
     let outcome = state
         .session_runtime
-        .send_prompt(&session_id, req.blocks, latency.as_ref())
+        .send_prompt(&session_id, req.blocks, prompt_id, latency.as_ref())
         .await
         .map_err(map_send_prompt_error)?;
 
     tracing::info!(
         session_id = %session_id,
         elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
         "[workspace-latency] session.http.prompt.completed"
     );
 
@@ -302,6 +306,39 @@ pub async fn prompt_session(
         status,
         queued_seq,
     }))
+}
+
+fn request_prompt_id(
+    body_prompt_id: Option<&str>,
+    header_prompt_id: Option<&str>,
+) -> Result<Option<String>, ApiError> {
+    match normalize_prompt_id(body_prompt_id)? {
+        Some(prompt_id) => Ok(Some(prompt_id)),
+        None => normalize_prompt_id(header_prompt_id),
+    }
+}
+
+fn normalize_prompt_id(prompt_id: Option<&str>) -> Result<Option<String>, ApiError> {
+    let Some(prompt_id) = prompt_id else {
+        return Ok(None);
+    };
+    let prompt_id = prompt_id.trim();
+    if prompt_id.is_empty() {
+        return Ok(None);
+    }
+    if prompt_id.len() > PROMPT_ID_MAX_BYTES {
+        return Err(ApiError::bad_request(
+            format!("promptId must be {PROMPT_ID_MAX_BYTES} bytes or fewer"),
+            "INVALID_PROMPT_ID",
+        ));
+    }
+    if prompt_id.chars().any(char::is_control) {
+        return Err(ApiError::bad_request(
+            "promptId cannot contain control characters",
+            "INVALID_PROMPT_ID",
+        ));
+    }
+    Ok(Some(prompt_id.to_string()))
 }
 
 #[utoipa::path(
@@ -1356,6 +1393,45 @@ mod tests {
     }
 
     #[test]
+    fn prompt_request_accepts_body_prompt_id() {
+        let request: PromptSessionRequest = serde_json::from_str(
+            r#"{
+                "promptId": "prompt-body",
+                "blocks": [{"type": "text", "text": "hello"}]
+            }"#,
+        )
+        .expect("deserialize prompt request");
+
+        assert_eq!(request.prompt_id.as_deref(), Some("prompt-body"));
+        assert_eq!(request.blocks.len(), 1);
+    }
+
+    #[test]
+    fn request_prompt_id_prefers_body_over_header() {
+        let prompt_id = unwrap_prompt_id(request_prompt_id(
+            Some(" body-prompt "),
+            Some("header-prompt"),
+        ));
+
+        assert_eq!(prompt_id.as_deref(), Some("body-prompt"));
+    }
+
+    #[test]
+    fn request_prompt_id_uses_header_fallback() {
+        let prompt_id = unwrap_prompt_id(request_prompt_id(Some(" "), Some(" header-prompt ")));
+
+        assert_eq!(prompt_id.as_deref(), Some("header-prompt"));
+    }
+
+    #[test]
+    fn request_prompt_id_rejects_oversized_or_control_values() {
+        let oversized = "a".repeat(PROMPT_ID_MAX_BYTES + 1);
+
+        assert!(normalize_prompt_id(Some(&oversized)).is_err());
+        assert!(normalize_prompt_id(Some("bad\nid")).is_err());
+    }
+
+    #[test]
     fn event_history_query_rejects_unsupported_after_seq_windows() {
         assert!(is_unsupported_event_history_window(
             Some(10),
@@ -1369,5 +1445,12 @@ mod tests {
             Some(20),
             Some(2)
         ));
+    }
+
+    fn unwrap_prompt_id(result: Result<Option<String>, ApiError>) -> Option<String> {
+        match result {
+            Ok(prompt_id) => prompt_id,
+            Err(_) => panic!("expected valid prompt id"),
+        }
     }
 }

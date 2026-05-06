@@ -16,7 +16,11 @@ import {
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding" | "gong";
 export type ReviewDefaultKind = "plan" | "code";
-export type DefaultLiveSessionControlKey = "reasoning" | "effort" | "fast_mode";
+export type DefaultLiveSessionControlKey =
+  | "collaboration_mode"
+  | "reasoning"
+  | "effort"
+  | "fast_mode";
 export type DefaultLiveSessionControlValuesByAgentKind = Record<
   string,
   Partial<Record<DefaultLiveSessionControlKey, string>>
@@ -228,6 +232,7 @@ function sanitizeDefaultSessionModeByAgentKind(
 }
 
 const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>([
+  "collaboration_mode",
   "reasoning",
   "effort",
   "fast_mode",

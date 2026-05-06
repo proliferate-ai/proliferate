@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
+import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/prompt-outbox";
 import {
   useActivePendingPrompts,
   useActiveSessionId,
@@ -9,6 +10,7 @@ import { useChatInputStore } from "@/stores/chat/chat-input-store";
 
 export interface VisiblePendingPromptEntry extends PendingPromptEntry {
   isBeingEdited: boolean;
+  localOutboxDeliveryState?: PromptOutboxDeliveryState | null;
 }
 
 interface DerivedEditingState {

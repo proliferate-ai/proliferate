@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 const EMPTY_SEARCH_RESULTS: SearchWorkspaceFilesResponse = { results: [] };
 
@@ -21,7 +21,7 @@ export function useChatFileMentionSearch({
   query,
   onSelect,
 }: UseChatFileMentionSearchArgs) {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);

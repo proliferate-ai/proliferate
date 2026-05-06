@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  createEmptySessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { runHotWorkspaceReopen } from "./run-hot-workspace-reopen";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
@@ -26,21 +31,21 @@ describe("runHotWorkspaceReopen", () => {
         anyharnessWorkspaceId: "workspace-1",
       },
     });
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
       activeSessionId: null,
-      sessionSlots: {
-        "session-1": {
-          ...createEmptySessionSlot("session-1", "codex", {
-            workspaceId: "workspace-1",
-          }),
-          transcriptHydrated: true,
-        },
-      },
       hotPaintGate: null,
       pendingWorkspaceEntry: null,
       workspaceArrivalEvent: null,
+    });
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
+    putSessionRecord({
+      ...createEmptySessionRecord("session-1", "codex", {
+        workspaceId: "workspace-1",
+      }),
+      transcriptHydrated: true,
     });
     useWorkspaceUiStore.setState({
       lastViewedSessionByWorkspace: {
@@ -61,7 +66,7 @@ describe("runHotWorkspaceReopen", () => {
       workspaceId: "workspace-1",
     });
 
-    const state = useHarnessStore.getState();
+    const state = useSessionSelectionStore.getState();
     expect(didHotReopen).toBe(true);
     expect(state.selectedWorkspaceId).toBe("workspace-1");
     expect(state.activeSessionId).toBe("session-1");
@@ -81,10 +86,10 @@ describe("runHotWorkspaceReopen", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(useHarnessStore.getState().hotPaintGate).not.toBeNull();
+    expect(useSessionSelectionStore.getState().hotPaintGate).not.toBeNull();
     await vi.runOnlyPendingTimersAsync();
 
-    expect(useHarnessStore.getState().hotPaintGate).toBeNull();
+    expect(useSessionSelectionStore.getState().hotPaintGate).toBeNull();
     expect(deps.reconcileHotWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "workspace-1",
@@ -102,11 +107,11 @@ describe("runHotWorkspaceReopen", () => {
     runHotWorkspaceReopen(deps, {
       workspaceId: "workspace-1",
     });
-    useHarnessStore.getState().setSelectedWorkspace("workspace-2");
+    setSelectedWorkspace("workspace-2");
     await vi.runOnlyPendingTimersAsync();
 
     expect(deps.reconcileHotWorkspace).not.toHaveBeenCalled();
-    expect(useHarnessStore.getState().selectedWorkspaceId).toBe("workspace-2");
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-2");
   });
 });
 
@@ -116,10 +121,22 @@ function depsForHotReopen(): WorkspaceSelectionDeps {
     logicalWorkspaces: [],
     rawWorkspaces: [{ id: "workspace-1" } as never, { id: "workspace-2" } as never],
     setSelectedLogicalWorkspaceId: vi.fn(),
-    setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+    setSelectedWorkspace,
     removeWorkspaceSlots: vi.fn(),
     clearSelection: vi.fn(),
     bootstrapWorkspace: vi.fn(),
     reconcileHotWorkspace: vi.fn().mockResolvedValue("completed"),
   };
+}
+
+function setSelectedWorkspace(
+  workspaceId: string,
+  options?: { initialActiveSessionId?: string | null; clearPending?: boolean },
+): void {
+  useSessionSelectionStore.getState().activateWorkspace({
+    logicalWorkspaceId: null,
+    workspaceId,
+    initialActiveSessionId: options?.initialActiveSessionId,
+    clearPending: options?.clearPending,
+  });
 }

@@ -5,10 +5,11 @@ ENV PYTHONPATH=/app
 
 RUN pip install --no-cache-dir uv
 
-COPY pyproject.toml ./
-COPY proliferate/ proliferate/
-COPY alembic/ alembic/
-COPY alembic.ini .
+COPY server/pyproject.toml ./
+COPY server/proliferate/ proliferate/
+COPY server/alembic/ alembic/
+COPY server/alembic.ini .
+COPY catalogs/ catalogs/
 RUN uv pip install --system --no-cache .
 
 EXPOSE 8000

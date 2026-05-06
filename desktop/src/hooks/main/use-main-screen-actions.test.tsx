@@ -25,12 +25,14 @@ vi.mock("@/hooks/workspaces/use-workspace-runtime-block", () => ({
   }),
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => ({
-  useHarnessStore: (selector: (state: { runtimeUrl: string; selectedWorkspaceId: string }) => unknown) =>
-    selector({
-      runtimeUrl: "http://localhost:3000",
-      selectedWorkspaceId: "workspace-1",
-    }),
+vi.mock("@/stores/sessions/harness-connection-store", () => ({
+  useHarnessConnectionStore: (selector: (state: { runtimeUrl: string }) => unknown) =>
+    selector({ runtimeUrl: "http://localhost:3000" }),
+}));
+
+vi.mock("@/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string }) => unknown) =>
+    selector({ selectedWorkspaceId: "workspace-1" }),
 }));
 
 vi.mock("@/stores/toast/toast-store", () => ({

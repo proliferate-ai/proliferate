@@ -20,7 +20,7 @@ import {
   sidebarRepoGroupKeyForCloudTarget,
   sidebarRepoGroupKeyForWorkspace,
 } from "@/lib/domain/workspaces/sidebar-group-key";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -47,7 +47,7 @@ export interface AppCommandActions {
 
 export function useAppCommandActions(): AppCommandActions {
   const navigate = useNavigate();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
   const { cloudActive } = useCloudAvailabilityState();
@@ -139,7 +139,6 @@ export function useAppCommandActions(): AppCommandActions {
     }
 
     void createLocalWorkspaceAndEnter(sourceRoot, {
-      lightweight: true,
       repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(selectedRepoContext.repoWs, repoRoots),
     }).catch((error) => {
       showToast(error instanceof Error ? error.message : "Failed to create workspace.");
@@ -173,7 +172,6 @@ export function useAppCommandActions(): AppCommandActions {
       repoRootId,
       sourceWorkspaceId: selectedRepoContext.repoWs.id,
     }, {
-      lightweight: true,
       latencyFlowId,
       repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(selectedRepoContext.repoWs, repoRoots),
     }).catch((error) => {

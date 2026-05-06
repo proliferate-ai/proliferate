@@ -5,7 +5,7 @@ import {
   listOpenTargets,
   openTarget as execOpenTarget,
 } from "@/platform/tauri/shell";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
@@ -20,7 +20,7 @@ export function useWorkspaceArrivalActions({
 }: UseWorkspaceArrivalActionsArgs) {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
-  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const [isLoadingTargets, setIsLoadingTargets] = useState(false);
 

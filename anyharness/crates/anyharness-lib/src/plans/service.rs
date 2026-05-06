@@ -452,6 +452,7 @@ pub fn plan_item_payload(plan: &PlanRecord, source_agent_kind: &str) -> Transcri
         source_agent_kind: source_agent_kind.to_string(),
         is_transient: false,
         message_id: None,
+        prompt_id: None,
         title: Some(plan.title.clone()),
         tool_call_id: None,
         native_tool_name: None,

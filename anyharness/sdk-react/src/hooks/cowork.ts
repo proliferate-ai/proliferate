@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateCoworkThreadRequest } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessCoworkArtifactKey,
   anyHarnessCoworkManifestKey,
@@ -23,9 +24,9 @@ export function useCoworkStatusQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessCoworkStatusKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.cowork.getStatus();
+      return client.cowork.getStatus(requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -37,9 +38,9 @@ export function useCoworkThreadsQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessCoworkThreadsKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.cowork.listThreads();
+      return client.cowork.listThreads(requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -54,9 +55,12 @@ export function useCoworkManagedWorkspacesQuery(
   return useQuery({
     queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, sessionId),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && !!sessionId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.cowork.getManagedWorkspaces(sessionId!);
+      return client.cowork.getManagedWorkspaces(
+        sessionId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }
@@ -71,9 +75,9 @@ export function useCoworkArtifactManifestQuery(
   return useQuery({
     queryKey: anyHarnessCoworkManifestKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && !!workspaceId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.cowork.getManifest(workspaceId!);
+      return client.cowork.getManifest(workspaceId!, requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -93,9 +97,13 @@ export function useCoworkArtifactQuery(
       runtimeUrl.length > 0 &&
       !!workspaceId &&
       !!artifactId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.cowork.getArtifact(workspaceId!, artifactId!);
+      return client.cowork.getArtifact(
+        workspaceId!,
+        artifactId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }

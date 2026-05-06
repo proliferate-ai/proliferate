@@ -20,6 +20,7 @@ import {
   type AnyHarnessQueryTimingOptions,
   useReportAnyHarnessCacheDecision,
 } from "../lib/timing-options.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessSessionEventsKey,
   anyHarnessSessionKey,
@@ -56,12 +57,12 @@ export function useWorkspaceSessionsQuery(options?: TimedWorkspaceQueryOptions) 
   return useQuery({
     queryKey,
     enabled,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.list(
         resolved.connection.anyharnessWorkspaceId,
-        options?.requestOptions,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });
@@ -78,10 +79,10 @@ export function useSessionQuery(
   return useQuery({
     queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.get(sessionId!);
+      return client.sessions.get(sessionId!, requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -97,10 +98,13 @@ export function useSessionLiveConfigQuery(
   return useQuery({
     queryKey: anyHarnessSessionLiveConfigKey(runtimeUrl, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.getLiveConfig(sessionId!);
+      return client.sessions.getLiveConfig(
+        sessionId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }
@@ -136,7 +140,7 @@ export function useSessionEventsQuery(
   return useQuery({
     queryKey,
     enabled,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.listEvents(
@@ -144,9 +148,11 @@ export function useSessionEventsQuery(
         options?.request || options?.requestOptions
           ? {
             ...options?.request,
-            request: options?.requestOptions,
+            request: requestOptionsWithSignal(options?.requestOptions, signal),
           }
-          : undefined,
+          : {
+            request: requestOptionsWithSignal(undefined, signal),
+          },
       );
     },
   });
@@ -163,10 +169,13 @@ export function useSessionSubagentsQuery(
   return useQuery({
     queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.getSubagents(sessionId!);
+      return client.sessions.getSubagents(
+        sessionId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }

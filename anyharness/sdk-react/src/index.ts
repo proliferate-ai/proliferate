@@ -23,6 +23,7 @@ export type {
 export {
   anyHarnessRuntimeKey,
   anyHarnessRuntimeHealthKey,
+  anyHarnessEffectiveAgentCatalogKey,
   anyHarnessAgentsKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessModelRegistriesKey,
@@ -75,7 +76,10 @@ export {
   anyHarnessWorkspaceQueryKeyRoots,
 } from "./lib/query-keys.js";
 
-export { useRuntimeHealthQuery } from "./hooks/runtime.js";
+export {
+  useEffectiveAgentCatalogQuery,
+  useRuntimeHealthQuery,
+} from "./hooks/runtime.js";
 export {
   useAgentsQuery,
   useAgentReconcileStatusQuery,

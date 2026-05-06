@@ -10,10 +10,12 @@ import {
   type StoredPendingAuthSession,
 } from "@/platform/tauri/auth";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
-import { detachAndCloseSessionSlotStreams } from "@/lib/integrations/anyharness/session-runtime";
+import { closeAllSessionStreamHandles } from "@/lib/integrations/anyharness/session-stream-handles";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -167,8 +169,7 @@ async function applyAnonymousState(options?: {
   if (options?.clearPendingAuth) {
     await clearStoredPendingAuthSession();
   }
-  detachAndCloseSessionSlotStreams(Object.keys(useHarnessStore.getState().sessionSlots));
-  useHarnessStore.getState().clearSelection();
+  clearSessionRuntimeStateForAuth();
   useRepoSetupModalStore.getState().close();
   useAuthStore.setState({
     status: "anonymous",
@@ -258,8 +259,7 @@ export async function bootstrapAuth(): Promise<void> {
   const controlPlaneReachable = await checkControlPlaneReachable();
   if (!controlPlaneReachable) {
     await clearStoredPendingAuthSession();
-    detachAndCloseSessionSlotStreams(Object.keys(useHarnessStore.getState().sessionSlots));
-    useHarnessStore.getState().clearSelection();
+    clearSessionRuntimeStateForAuth();
 
     if (storedSession) {
       useAuthStore.setState({
@@ -346,6 +346,13 @@ export async function bootstrapAuth(): Promise<void> {
     });
     throw toError(error, "Auth bootstrap failed");
   }
+}
+
+function clearSessionRuntimeStateForAuth(): void {
+  closeAllSessionStreamHandles();
+  useSessionDirectoryStore.getState().clearEntries();
+  useSessionTranscriptStore.getState().clearEntries();
+  useSessionSelectionStore.getState().clearSelection();
 }
 
 export async function signInWithGitHub(options?: GitHubDesktopSignInOptions): Promise<{

@@ -19,14 +19,55 @@ function entry(overrides: Partial<PendingPromptQueueEntry> = {}): PendingPromptQ
 describe("derivePendingPromptQueueRow", () => {
   it("derives editable plain text rows with collapsed whitespace", () => {
     expect(derivePendingPromptQueueRow(entry({
+      promptId: "prompt-1",
       text: "first line\n\nsecond line",
     }))).toMatchObject({
+      key: "prompt:prompt-1",
       seq: 1,
       kind: "plain",
       label: "first line second line",
       isBeingEdited: false,
       canEdit: true,
       canDelete: true,
+    });
+  });
+
+  it("keeps queued row identity stable when runtime seq arrives", () => {
+    const beforeAck = derivePendingPromptQueueRow(entry({
+      seq: -10,
+      promptId: "prompt-stable",
+    }));
+    const afterAck = derivePendingPromptQueueRow(entry({
+      seq: 42,
+      promptId: "prompt-stable",
+    }));
+
+    expect(beforeAck.key).toBe("prompt:prompt-stable");
+    expect(afterAck.key).toBe(beforeAck.key);
+    expect(beforeAck.canDelete).toBe(false);
+    expect(afterAck.canDelete).toBe(true);
+    expect(afterAck.deleteAction).toBe("runtime");
+  });
+
+  it("allows local queued prompts to be cancelled before dispatch", () => {
+    expect(derivePendingPromptQueueRow(entry({
+      seq: -20,
+      promptId: "prompt-local",
+      localOutboxDeliveryState: "waiting_for_session",
+    }))).toMatchObject({
+      canDelete: true,
+      deleteAction: "cancel_local",
+    });
+  });
+
+  it("allows ambiguous local queued prompts to be dismissed", () => {
+    expect(derivePendingPromptQueueRow(entry({
+      seq: -21,
+      promptId: "prompt-unknown",
+      localOutboxDeliveryState: "unknown_after_dispatch",
+    }))).toMatchObject({
+      canDelete: true,
+      deleteAction: "dismiss_local",
     });
   });
 

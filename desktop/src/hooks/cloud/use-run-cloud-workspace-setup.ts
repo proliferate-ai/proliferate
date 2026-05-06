@@ -7,13 +7,14 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { cloudWorkspaceRepoConfigStatusKey } from "./query-keys";
 
 export function useRunCloudWorkspaceSetup(workspaceId: string | null) {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
 
   return useMutation<RunCloudWorkspaceSetupResponse, Error, void>({
     meta: {

@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function isWorkspaceSetupActive(
   queryClient: QueryClient,
@@ -10,7 +10,7 @@ export function isWorkspaceSetupActive(
   workspaceId: string | null,
 ): boolean {
   if (!workspaceId) return false;
-  const arrival = useHarnessStore.getState().workspaceArrivalEvent;
+  const arrival = useSessionSelectionStore.getState().workspaceArrivalEvent;
   if (!arrival || arrival.workspaceId !== workspaceId) return false;
 
   const cachedStatus = queryClient.getQueryData<{ status?: string }>(

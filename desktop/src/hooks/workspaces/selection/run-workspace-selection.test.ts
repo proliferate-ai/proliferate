@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import {
   listActiveLatencyFlows,
   resetLatencyFlowsForTest,
@@ -54,14 +56,15 @@ describe("runWorkspaceSelection", () => {
     vi.mocked(resolveSelectionConnection).mockReset();
     vi.mocked(startCloudWorkspace).mockReset();
     resetLatencyFlowsForTest();
-    useHarnessStore.setState({
+    useSessionSelectionStore.setState({
       selectedWorkspaceId: null,
       workspaceSelectionNonce: 0,
       activeSessionId: null,
-      sessionSlots: {},
       pendingWorkspaceEntry: null,
       workspaceArrivalEvent: null,
     });
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
     useWorkspaceUiStore.setState({
       lastViewedSessionByWorkspace: {},
     });
@@ -88,7 +91,7 @@ describe("runWorkspaceSelection", () => {
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
-      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace,
@@ -132,7 +135,7 @@ describe("runWorkspaceSelection", () => {
       ],
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
-      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace: vi.fn(),
@@ -170,7 +173,7 @@ describe("runWorkspaceSelection", () => {
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
-      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace,
@@ -206,7 +209,7 @@ describe("runWorkspaceSelection", () => {
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
-      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace: vi.fn().mockResolvedValue({ sessions: [] }),
@@ -215,8 +218,8 @@ describe("runWorkspaceSelection", () => {
       workspaceId: "workspace-1",
     });
 
-    expect(useHarnessStore.getState().selectedWorkspaceId).toBe("workspace-1");
-    expect(useHarnessStore.getState().activeSessionId).toBeNull();
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-1");
+    expect(useSessionSelectionStore.getState().activeSessionId).toBeNull();
   });
 
   it("preserves an explicit initial active session even when the slot is not retained", async () => {
@@ -234,7 +237,7 @@ describe("runWorkspaceSelection", () => {
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
-      setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
+      setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),
       clearSelection: vi.fn(),
       bootstrapWorkspace: vi.fn().mockResolvedValue({ sessions: [] }),
@@ -244,7 +247,19 @@ describe("runWorkspaceSelection", () => {
       options: { initialActiveSessionId: "session-explicit" },
     });
 
-    expect(useHarnessStore.getState().selectedWorkspaceId).toBe("workspace-1");
-    expect(useHarnessStore.getState().activeSessionId).toBe("session-explicit");
+    expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-1");
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-explicit");
   });
 });
+
+function setSelectedWorkspace(
+  workspaceId: string,
+  options?: { initialActiveSessionId?: string | null; clearPending?: boolean },
+): void {
+  useSessionSelectionStore.getState().activateWorkspace({
+    logicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+    workspaceId,
+    initialActiveSessionId: options?.initialActiveSessionId,
+    clearPending: options?.clearPending,
+  });
+}

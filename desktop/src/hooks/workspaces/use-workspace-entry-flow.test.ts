@@ -39,15 +39,15 @@ vi.mock("@/stores/chat/chat-input-store", () => ({
   },
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => {
-  const useHarnessStore = Object.assign(
+vi.mock("@/stores/sessions/session-selection-store", () => {
+  const useSessionSelectionStore = Object.assign(
     (selector: (state: typeof mocks.harnessState) => unknown) =>
       selector(mocks.harnessState),
     {
       getState: () => mocks.harnessState,
     },
   );
-  return { useHarnessStore };
+  return { useSessionSelectionStore };
 });
 
 vi.mock("@/lib/infra/debug-latency", () => ({

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
@@ -19,10 +19,10 @@ import {
 export function usePendingWorkspaceEntryActions() {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
-  const setPendingWorkspaceEntry = useHarnessStore(
+  const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
-  const setWorkspaceArrivalEvent = useHarnessStore(
+  const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
   const clearDeferredLaunchesForWorkspace = useDeferredHomeLaunchStore((state) =>
@@ -84,7 +84,7 @@ export function usePendingWorkspaceEntryActions() {
             const cloudWorkspace = cloudWorkspaceId
               ? workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId)
               : null;
-            const current = useHarnessStore.getState().pendingWorkspaceEntry;
+            const current = useSessionSelectionStore.getState().pendingWorkspaceEntry;
             if (!current || current.attemptId !== entry.attemptId) {
               return;
             }
@@ -128,7 +128,7 @@ export function usePendingWorkspaceEntryActions() {
       clearDeferredLaunchesForWorkspace(entry.workspaceId);
     }
     if (entry.originTarget.kind === "home") {
-      const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+      const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId) {
         clearWorkspaceRuntimeState(selectedWorkspaceId, { clearSelection: true });
       } else {

@@ -11,13 +11,14 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { isCloudWorkspaceConnectionQueryKey } from "./query-keys";
 
 export function useResyncCloudWorkspaceCredentials(workspaceId: string | null) {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
 
   return useMutation<CloudWorkspaceDetail, Error, void>({
     meta: {

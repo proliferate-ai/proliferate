@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AnyHarnessRequestOptions,
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
   StartWorkspaceSetupRequest,
@@ -22,14 +23,17 @@ import {
   anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessWorkspaceSetupStatusKey,
 } from "../lib/query-keys.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 
 interface RuntimeQueryOptions {
   enabled?: boolean;
+  requestOptions?: AnyHarnessRequestOptions;
 }
 
 interface WorkspaceQueryOptions {
   workspaceId?: string | null;
   enabled?: boolean;
+  requestOptions?: AnyHarnessRequestOptions;
 }
 
 function useWorkspaceRuntimeUrl() {
@@ -44,9 +48,9 @@ export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.workspaces.list();
+      return client.workspaces.list(requestOptionsWithSignal(options?.requestOptions, signal));
     },
   });
 }
@@ -120,11 +124,12 @@ export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions
     queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.workspaces.retirePreflight(
         resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });
@@ -139,11 +144,12 @@ export function usePurgeWorkspacePreflightQuery(options?: WorkspaceQueryOptions)
     queryKey: anyHarnessWorkspacePurgePreflightKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     staleTime: 60_000,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.workspaces.purgePreflight(
         resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });
@@ -260,11 +266,12 @@ export function useDetectProjectSetupQuery(options?: WorkspaceQueryOptions) {
     queryKey: anyHarnessWorkspaceDetectSetupKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     staleTime: Infinity,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.workspaces.detectSetup(
         resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });
@@ -284,11 +291,12 @@ export function useSetupStatusQuery(options?: WorkspaceQueryOptions & { refetchW
       if (error instanceof Error && error.message.includes("404")) return false;
       return failureCount < 2;
     },
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.workspaces.getSetupStatus(
         resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
     // Poll every 2s while setup is running, stop on terminal state
@@ -360,11 +368,12 @@ export function useWorkspaceSessionLaunchQuery(options?: WorkspaceQueryOptions) 
   return useQuery({
     queryKey: anyHarnessWorkspaceSessionLaunchKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.workspaces.getSessionLaunchCatalog(
         resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options?.requestOptions, signal),
       );
     },
   });

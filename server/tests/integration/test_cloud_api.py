@@ -235,12 +235,16 @@ class TestCloudWorktreeRetentionPolicy:
         }
         assert second.json() == first.json()
         rows = (
-            await db_session.execute(
-                select(CloudWorktreeRetentionPolicy).where(
-                    CloudWorktreeRetentionPolicy.user_id == uuid.UUID(tokens["user_id"])
+            (
+                await db_session.execute(
+                    select(CloudWorktreeRetentionPolicy).where(
+                        CloudWorktreeRetentionPolicy.user_id == uuid.UUID(tokens["user_id"])
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert rows == []
 
     @pytest.mark.asyncio

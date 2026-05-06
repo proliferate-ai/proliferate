@@ -32,7 +32,6 @@ import {
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import {
@@ -40,8 +39,9 @@ import {
   resolveSessionMcpServersForLaunch,
 } from "@/lib/integrations/anyharness/mcp_launch";
 import {
-  createSessionSlotFromSummary,
-} from "@/lib/integrations/anyharness/session-runtime";
+  createSessionRecordFromSummary,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
 import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
 import {
   markWorkspaceViewed,
@@ -50,15 +50,15 @@ import {
 } from "@/stores/preferences/workspace-ui-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
 function isAttemptCurrent(attemptId: string): boolean {
-  return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
+  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
 function resolveErrorMessage(error: unknown, fallback: string): string {
@@ -70,18 +70,14 @@ export function useCoworkThreadWorkflow() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const anyHarnessRuntime = useAnyHarnessRuntimeContext();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const enterPendingWorkspaceShell = useHarnessStore(
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
   );
-  const setPendingWorkspaceEntry = useHarnessStore(
+  const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
-  const setSelectedWorkspace = useHarnessStore((state) => state.setSelectedWorkspace);
-  const putSessionSlot = useHarnessStore((state) => state.putSessionSlot);
-  const setSelectedLogicalWorkspaceId = useLogicalWorkspaceStore(
-    (state) => state.setSelectedLogicalWorkspaceId,
-  );
+  const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const { agents } = useAgentCatalog();
   const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useModelRegistriesQuery();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
@@ -94,7 +90,6 @@ export function useCoworkThreadWorkflow() {
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
   const { initForWorkspace } = useWorkspaceFileActions();
-  const { ensureSessionStreamConnected } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setDraftText = useChatInputStore((state) => state.setDraftText);
   const clearDraft = useChatInputStore((state) => state.clearDraft);
@@ -126,7 +121,7 @@ export function useCoworkThreadWorkflow() {
 
     const entry: PendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
       attemptId: createPendingWorkspaceAttemptId(),
-      selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
+      selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
       source: "cowork-created",
       displayName: "Cowork thread",
       request: { kind: "cowork", input: pendingRequest },
@@ -225,9 +220,8 @@ export function useCoworkThreadWorkflow() {
         (collections) => upsertLocalWorkspaceCollections(collections, result.workspace),
       );
       upsertWorkspaceSessionRecord(result.workspace.id, launchedSession);
-      putSessionSlot(
-        launchedSession.id,
-        createSessionSlotFromSummary(launchedSession, result.workspace.id, {
+      putSessionRecord(
+        createSessionRecordFromSummary(launchedSession, result.workspace.id, {
           transcriptHydrated: true,
           sessionRelationship: { kind: "root" },
         }),
@@ -245,8 +239,9 @@ export function useCoworkThreadWorkflow() {
         workspaceId: result.workspace.id,
         request: { kind: "select-existing", workspaceId: result.workspace.id },
       });
-      setSelectedLogicalWorkspaceId(null);
-      setSelectedWorkspace(result.workspace.id, {
+      activateWorkspace({
+        logicalWorkspaceId: null,
+        workspaceId: result.workspace.id,
         clearPending: false,
         initialActiveSessionId: launchedSession.id,
       });
@@ -254,27 +249,6 @@ export function useCoworkThreadWorkflow() {
       trackWorkspaceInteraction(result.workspace.id, new Date().toISOString());
       markWorkspaceViewed(result.workspace.id);
       markWorkspaceBootstrappedInSession(result.workspace.id);
-
-      const streamStartedAt = startLatencyTimer();
-      void ensureSessionStreamConnected(launchedSession.id, {
-        resumeIfActive: false,
-        skipInitialRefresh: true,
-        refreshOnStartupReady: true,
-      }).then(() => {
-        logLatency("workspace.cowork.create.stream_dispatched", {
-          attemptId: entry.attemptId,
-          workspaceId: result.workspace.id,
-          sessionId: launchedSession.id,
-          elapsedMs: elapsedMs(streamStartedAt),
-        });
-      }).catch(() => {
-        logLatency("workspace.cowork.create.stream_dispatch_failed", {
-          attemptId: entry.attemptId,
-          workspaceId: result.workspace.id,
-          sessionId: launchedSession.id,
-          elapsedMs: elapsedMs(streamStartedAt),
-        });
-      });
 
       const workspaceInitStartedAt = startLatencyTimer();
       void initForWorkspace({
@@ -314,7 +288,7 @@ export function useCoworkThreadWorkflow() {
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
       if (isAttemptCurrent(entry.attemptId)) {
-        const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
+        const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
         const failedEntry = currentPending?.attemptId === entry.attemptId
           ? currentPending
           : entry;
@@ -332,19 +306,16 @@ export function useCoworkThreadWorkflow() {
     clearDraft,
     createCoworkThreadMutation,
     enterPendingWorkspaceShell,
-    ensureSessionStreamConnected,
     initForWorkspace,
     modelRegistries,
     navigateToWorkspaceShell,
-    putSessionSlot,
     preferences.coworkWorkspaceDelegationEnabled,
     preferences.defaultLiveSessionControlValuesByAgentKind,
     queryClient,
     requestComposerFocus,
     runtimeUrl,
     setDraftText,
-    setSelectedLogicalWorkspaceId,
-    setSelectedWorkspace,
+    activateWorkspace,
     setPendingWorkspaceEntry,
     showToast,
     upsertWorkspaceSessionRecord,

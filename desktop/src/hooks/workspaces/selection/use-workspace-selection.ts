@@ -8,18 +8,25 @@ import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/logical-workspac
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { clearWorkspaceRuntimeState } from "./clear-runtime-state";
 import { runHotWorkspaceReopen } from "./run-hot-workspace-reopen";
 import { runWorkspaceSelection } from "./run-workspace-selection";
 
+function removeWorkspaceSessionRecordsForWorkspace(workspaceId: string): void {
+  const removedSessionIds =
+    useSessionDirectoryStore.getState().removeWorkspaceEntries(workspaceId);
+  useSessionTranscriptStore.getState().removeEntries(removedSessionIds);
+}
+
 export function useWorkspaceSelection() {
   const queryClient = useQueryClient();
-  const setSelectedWorkspace = useHarnessStore((state) => state.setSelectedWorkspace);
-  const removeWorkspaceSlots = useHarnessStore((state) => state.removeWorkspaceSlots);
-  const clearSelection = useHarnessStore((state) => state.clearSelection);
-  const setSelectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const setSelectedWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
+  const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
+  const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.setSelectedLogicalWorkspaceId,
   );
   const { bootstrapWorkspace, reconcileHotWorkspace } = useWorkspaceBootstrapActions();
@@ -35,7 +42,7 @@ export function useWorkspaceSelection() {
         latencyFlowId?: string | null;
       },
     ) => {
-      const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const workspaceCollections = getWorkspaceCollectionsFromCache(queryClient, runtimeUrl);
       const cloudMobilityWorkspaces = queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
         cloudMobilityWorkspacesKey(),
@@ -57,17 +64,24 @@ export function useWorkspaceSelection() {
           repoRoots: standardProjection?.repoRoots ?? [],
           cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
           cloudMobilityWorkspaces,
-          currentSelectionId: useHarnessStore.getState().selectedWorkspaceId,
+          currentSelectionId: useSessionSelectionStore.getState().selectedWorkspaceId,
         })
         : [];
-
       const deps = {
         queryClient,
         logicalWorkspaces,
         rawWorkspaces: workspaceCollections?.localWorkspaces ?? [],
         setSelectedLogicalWorkspaceId,
-        setSelectedWorkspace,
-        removeWorkspaceSlots,
+        setSelectedWorkspace: (
+          id: string,
+          opts?: { initialActiveSessionId?: string | null; clearPending?: boolean },
+        ) => setSelectedWorkspace({
+          logicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+          workspaceId: id,
+          initialActiveSessionId: opts?.initialActiveSessionId,
+          clearPending: opts?.clearPending,
+        }),
+        removeWorkspaceSlots: removeWorkspaceSessionRecordsForWorkspace,
         clearSelection,
         bootstrapWorkspace,
         reconcileHotWorkspace,
@@ -87,7 +101,6 @@ export function useWorkspaceSelection() {
       clearSelection,
       queryClient,
       reconcileHotWorkspace,
-      removeWorkspaceSlots,
       setSelectedLogicalWorkspaceId,
       setSelectedWorkspace,
     ]),
@@ -95,10 +108,10 @@ export function useWorkspaceSelection() {
       workspaceId: string,
       options?: { clearSelection?: boolean; clearDraftUiKey?: string | null },
     ) => {
-      const currentSelectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+      const currentSelectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
       clearWorkspaceRuntimeState(
         {
-          removeWorkspaceSlots,
+          removeWorkspaceSlots: removeWorkspaceSessionRecordsForWorkspace,
           clearSelection,
         },
         workspaceId,
@@ -107,6 +120,6 @@ export function useWorkspaceSelection() {
       if (options?.clearSelection && currentSelectedWorkspaceId === workspaceId) {
         setSelectedLogicalWorkspaceId(null);
       }
-    }, [clearSelection, removeWorkspaceSlots, setSelectedLogicalWorkspaceId]),
+    }, [clearSelection, setSelectedLogicalWorkspaceId]),
   };
 }

@@ -32,9 +32,10 @@ import {
 } from "@/lib/domain/workspaces/right-panel";
 import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/right-panel-migration";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
-import type {
-  WorkspaceShellIntentKey,
-  WorkspaceShellTabKey,
+import {
+  parseWorkspaceShellTabKey,
+  type WorkspaceShellIntentKey,
+  type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   sanitizeWorkspaceShellTabKeys,
@@ -61,6 +62,7 @@ export interface WorkspaceUiState {
   shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
   shellActivationEpochByWorkspace: Record<string, number>;
   pendingChatActivationByWorkspace: Record<string, PendingChatActivation | null>;
+  urgentHighlightedChatSessionByWorkspace: Record<string, string | null>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
@@ -136,6 +138,14 @@ export interface WorkspaceUiState {
     attemptId: string;
     bumpIfCurrent: boolean;
   }) => { cleared: boolean; bumped: boolean; epoch: number };
+  setUrgentHighlightedChatSessionForWorkspace: (
+    workspaceId: string,
+    sessionId: string,
+  ) => void;
+  clearUrgentHighlightedChatSessionForWorkspace: (
+    workspaceId: string,
+    sessionId?: string,
+  ) => void;
   resetWorkspaceShellTabs: (workspaceId: string) => void;
   toggleSidebarWorkspaceType: (type: SidebarWorkspaceVariant) => void;
   markWorkspaceViewed: (workspaceId: string) => void;
@@ -182,8 +192,10 @@ export interface WorkspaceUiState {
  * v7: split right-panel durable/materialized state and persist shell tab maps.
  * v8: make activeEntryKey/headerOrder the only right-panel selection/order
  *     model, removing durable toolOrder and terminal active/order fields.
+ * v9: drop transient projected chat session ids from persisted workspace UI
+ *     state; materialized last-viewed session ids own restart restore.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 8;
+const WORKSPACE_UI_MIGRATION_VERSION = 9;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -407,6 +419,16 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  const sanitizedVisibleChatSessions = sanitizeSessionIdArrayRecord(
+    state.visibleChatSessionIdsByWorkspace,
+  );
+  if (
+    JSON.stringify(sanitizedVisibleChatSessions)
+    !== JSON.stringify(state.visibleChatSessionIdsByWorkspace)
+  ) {
+    state.visibleChatSessionIdsByWorkspace = sanitizedVisibleChatSessions;
+    didMigrate = true;
+  }
   if (!isStringArrayRecord(state.visibleChatSessionIdsByWorkspace)) {
     state.visibleChatSessionIdsByWorkspace = WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace;
     didMigrate = true;
@@ -424,22 +446,53 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  const sanitizedRecentlyHiddenChatSessions = sanitizeSessionIdArrayRecord(
+    state.recentlyHiddenChatSessionIdsByWorkspace,
+  );
+  if (
+    JSON.stringify(sanitizedRecentlyHiddenChatSessions)
+    !== JSON.stringify(state.recentlyHiddenChatSessionIdsByWorkspace)
+  ) {
+    state.recentlyHiddenChatSessionIdsByWorkspace = sanitizedRecentlyHiddenChatSessions;
+    didMigrate = true;
+  }
   if (!isStringArrayRecord(state.recentlyHiddenChatSessionIdsByWorkspace)) {
     state.recentlyHiddenChatSessionIdsByWorkspace =
       WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace;
     didMigrate = true;
   }
 
+  const sanitizedCollapsedChatGroups = sanitizeSessionIdArrayRecord(
+    state.collapsedChatGroupsByWorkspace,
+  );
+  if (
+    JSON.stringify(sanitizedCollapsedChatGroups)
+    !== JSON.stringify(state.collapsedChatGroupsByWorkspace)
+  ) {
+    state.collapsedChatGroupsByWorkspace = sanitizedCollapsedChatGroups;
+    didMigrate = true;
+  }
   if (!isStringArrayRecord(state.collapsedChatGroupsByWorkspace)) {
     state.collapsedChatGroupsByWorkspace = WORKSPACE_UI_DEFAULTS.collapsedChatGroupsByWorkspace;
     didMigrate = true;
   }
 
-  const sanitizedManualGroups = sanitizeManualChatGroupsByWorkspace(
-    state.manualChatGroupsByWorkspace,
+  const sanitizedManualGroups = sanitizeManualChatGroupsWithoutTransientSessions(
+    sanitizeManualChatGroupsByWorkspace(state.manualChatGroupsByWorkspace),
   );
   if (JSON.stringify(sanitizedManualGroups) !== JSON.stringify(state.manualChatGroupsByWorkspace)) {
     state.manualChatGroupsByWorkspace = sanitizedManualGroups;
+    didMigrate = true;
+  }
+
+  const sanitizedLastViewedSessions = sanitizeLastViewedSessionByWorkspace(
+    state.lastViewedSessionByWorkspace,
+  );
+  if (
+    JSON.stringify(sanitizedLastViewedSessions)
+    !== JSON.stringify(state.lastViewedSessionByWorkspace)
+  ) {
+    state.lastViewedSessionByWorkspace = sanitizedLastViewedSessions;
     didMigrate = true;
   }
 
@@ -473,19 +526,33 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     sidebarWidth: state.sidebarWidth,
     rightPanelDurableByWorkspace: state.rightPanelDurableByWorkspace,
     rightPanelMaterializedByWorkspace: state.rightPanelMaterializedByWorkspace,
-    activeShellTabKeyByWorkspace: state.activeShellTabKeyByWorkspace,
-    shellTabOrderByWorkspace: state.shellTabOrderByWorkspace,
+    activeShellTabKeyByWorkspace: sanitizeActiveShellTabKeysByWorkspace(
+      state.activeShellTabKeyByWorkspace,
+    ),
+    shellTabOrderByWorkspace: sanitizeShellTabOrderByWorkspace(
+      state.shellTabOrderByWorkspace,
+    ),
     workspaceTypes: state.workspaceTypes,
     lastViewedAt: state.lastViewedAt,
-    lastViewedSessionByWorkspace: state.lastViewedSessionByWorkspace,
+    lastViewedSessionByWorkspace: sanitizeLastViewedSessionByWorkspace(
+      state.lastViewedSessionByWorkspace,
+    ),
     lastViewedSessionErrorAtBySession: state.lastViewedSessionErrorAtBySession,
     workspaceLastInteracted: state.workspaceLastInteracted,
     dismissedSetupFailures: state.dismissedSetupFailures,
     finishSuggestionDismissalsByWorkspaceId: state.finishSuggestionDismissalsByWorkspaceId,
-    visibleChatSessionIdsByWorkspace: state.visibleChatSessionIdsByWorkspace,
-    recentlyHiddenChatSessionIdsByWorkspace: state.recentlyHiddenChatSessionIdsByWorkspace,
-    collapsedChatGroupsByWorkspace: state.collapsedChatGroupsByWorkspace,
-    manualChatGroupsByWorkspace: state.manualChatGroupsByWorkspace,
+    visibleChatSessionIdsByWorkspace: sanitizeSessionIdArrayRecord(
+      state.visibleChatSessionIdsByWorkspace,
+    ),
+    recentlyHiddenChatSessionIdsByWorkspace: sanitizeSessionIdArrayRecord(
+      state.recentlyHiddenChatSessionIdsByWorkspace,
+    ),
+    collapsedChatGroupsByWorkspace: sanitizeSessionIdArrayRecord(
+      state.collapsedChatGroupsByWorkspace,
+    ),
+    manualChatGroupsByWorkspace: sanitizeManualChatGroupsWithoutTransientSessions(
+      sanitizeManualChatGroupsByWorkspace(state.manualChatGroupsByWorkspace),
+    ),
   };
 }
 
@@ -595,7 +662,11 @@ function sanitizeActiveShellTabKeysByWorkspace(
       next[workspaceId] = key;
       continue;
     }
-    if (typeof key === "string" && sanitizeWorkspaceShellTabKeys([key]).length === 1) {
+    if (
+      typeof key === "string"
+      && sanitizeWorkspaceShellTabKeys([key]).length === 1
+      && !isTransientChatTabKey(key)
+    ) {
       next[workspaceId] = key;
     }
   }
@@ -613,12 +684,62 @@ function sanitizeShellTabOrderByWorkspace(
     if (!Array.isArray(order)) {
       continue;
     }
-    const sanitized = sanitizeWorkspaceShellTabKeys(order);
+    const sanitized = sanitizeWorkspaceShellTabKeys(order)
+      .filter((key) => !isTransientChatTabKey(key));
     if (sanitized.length > 0) {
       next[workspaceId] = sanitized;
     }
   }
   return next;
+}
+
+function sanitizeSessionIdArrayRecord(value: unknown): Record<string, string[]> {
+  if (!isStringArrayRecord(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([workspaceId, sessionIds]) => {
+      const sanitized = uniqueIds(sessionIds.filter((sessionId) =>
+        !isTransientClientSessionId(sessionId)
+      ));
+      return sanitized.length > 0 ? [[workspaceId, sanitized]] : [];
+    }),
+  );
+}
+
+function sanitizeLastViewedSessionByWorkspace(value: unknown): Record<string, string> {
+  if (!isStringRecord(value)) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(value).filter(([, sessionId]) => !isTransientClientSessionId(sessionId)),
+  );
+}
+
+function sanitizeManualChatGroupsWithoutTransientSessions(
+  value: Record<string, ManualChatGroup[]>,
+): Record<string, ManualChatGroup[]> {
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([workspaceId, groups]) => {
+      const nextGroups = groups.flatMap((group) => {
+        const sessionIds = uniqueIds(group.sessionIds.filter((sessionId) =>
+          !isTransientClientSessionId(sessionId)
+        ));
+        return sessionIds.length > 0 ? [{ ...group, sessionIds }] : [];
+      });
+      return nextGroups.length > 0 ? [[workspaceId, nextGroups]] : [];
+    }),
+  );
+}
+
+function isTransientChatTabKey(key: string): boolean {
+  const parsed = parseWorkspaceShellTabKey(key);
+  return parsed?.kind === "chat" && isTransientClientSessionId(parsed.sessionId);
+}
+
+function isTransientClientSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("client-session:")
+    || sessionId.startsWith("pending-session:");
 }
 
 function sanitizeRightPanelWidths(value: unknown): Record<string, number> {
@@ -660,6 +781,7 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   _hydrated: false,
   shellActivationEpochByWorkspace: {},
   pendingChatActivationByWorkspace: {},
+  urgentHighlightedChatSessionByWorkspace: {},
 
   archiveWorkspace: (id) => {
     const current = get().archivedWorkspaceIds;
@@ -911,6 +1033,28 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
         : get().shellActivationEpochByWorkspace,
     });
     return { cleared: true, bumped: bumpIfCurrent, epoch: nextEpoch };
+  },
+
+  setUrgentHighlightedChatSessionForWorkspace: (workspaceId, sessionId) => {
+    set({
+      urgentHighlightedChatSessionByWorkspace: {
+        ...get().urgentHighlightedChatSessionByWorkspace,
+        [workspaceId]: sessionId,
+      },
+    });
+  },
+
+  clearUrgentHighlightedChatSessionForWorkspace: (workspaceId, sessionId) => {
+    const current = get().urgentHighlightedChatSessionByWorkspace[workspaceId] ?? null;
+    if (!current || (sessionId !== undefined && current !== sessionId)) {
+      return;
+    }
+    set({
+      urgentHighlightedChatSessionByWorkspace: {
+        ...get().urgentHighlightedChatSessionByWorkspace,
+        [workspaceId]: null,
+      },
+    });
   },
 
   setShellTabOrderForWorkspace: (workspaceId, order) => {
@@ -1273,8 +1417,8 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
 }));
 
 useWorkspaceUiStore.subscribe((state, prev) => {
+  const changedKeys = getChangedWorkspaceUiStateKeys(prev, state);
   if (isDebugMeasurementEnabled()) {
-    const changedKeys = getChangedWorkspaceUiStateKeys(prev, state);
     if (changedKeys.length > 0) {
       recordMeasurementDiagnostic({
         category: "workspace_ui_store.write",
@@ -1286,6 +1430,13 @@ useWorkspaceUiStore.subscribe((state, prev) => {
   }
 
   if (!state._hydrated) {
+    return;
+  }
+
+  if (
+    changedKeys.length > 0
+    && changedKeys.every(isNonPersistedWorkspaceUiStateKey)
+  ) {
     return;
   }
 
@@ -1361,6 +1512,7 @@ function getChangedWorkspaceUiStateKeys(
     "shellTabOrderByWorkspace",
     "shellActivationEpochByWorkspace",
     "pendingChatActivationByWorkspace",
+    "urgentHighlightedChatSessionByWorkspace",
     "workspaceTypes",
     "lastViewedAt",
     "lastViewedSessionByWorkspace",
@@ -1376,4 +1528,10 @@ function getChangedWorkspaceUiStateKeys(
     previous[key as keyof WorkspaceUiState],
     next[key as keyof WorkspaceUiState],
   ));
+}
+
+function isNonPersistedWorkspaceUiStateKey(key: string): boolean {
+  return key === "pendingChatActivationByWorkspace"
+    || key === "shellActivationEpochByWorkspace"
+    || key === "urgentHighlightedChatSessionByWorkspace";
 }

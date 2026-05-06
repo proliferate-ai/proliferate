@@ -937,6 +937,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/catalogs/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Catalog */
+        get: operations["get_agent_catalog_v1_catalogs_agents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ai_magic/session-titles/generate": {
         parameters: {
             query?: never;
@@ -1524,6 +1541,221 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentCatalogAgent */
+        AgentCatalogAgent: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "claude" | "codex" | "gemini" | "cursor" | "opencode";
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description?: string | null;
+            /** Process */
+            process: {
+                [key: string]: unknown;
+            };
+            session: components["schemas"]["AgentCatalogSession"];
+        };
+        /** AgentCatalogControl */
+        AgentCatalogControl: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Type
+             * @constant
+             */
+            type: "select";
+            /** Category */
+            category?: string | null;
+            /** Defaultvalue */
+            defaultValue: string | null;
+            surfaces: components["schemas"]["AgentCatalogControlSurfaces"];
+            apply: components["schemas"]["AgentCatalogControlApply"];
+            /**
+             * Missingliveconfigpolicy
+             * @enum {string}
+             */
+            missingLiveConfigPolicy: "ignore_default" | "queue_then_conflict" | "block_prompt" | "remediate";
+            /**
+             * Valuesource
+             * @enum {string}
+             */
+            valueSource: "inline" | "agentModels" | "discoveredModels";
+            /** Values */
+            values: components["schemas"]["AgentCatalogControlValue"][];
+            /**
+             * Queuewhilematerializing
+             * @default false
+             */
+            queueWhileMaterializing: boolean;
+            /**
+             * Mutableaftermaterialized
+             * @default true
+             */
+            mutableAfterMaterialized: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AgentCatalogControlApply */
+        AgentCatalogControlApply: {
+            /** Createfield */
+            createField?: ("modelId" | "modeId") | null;
+            /** Liveconfigid */
+            liveConfigId?: string | null;
+            /** Livesetter */
+            liveSetter?: "runtime_control" | null;
+            /**
+             * Queuebeforematerialized
+             * @default false
+             */
+            queueBeforeMaterialized: boolean;
+        };
+        /** AgentCatalogControlSurfaces */
+        AgentCatalogControlSurfaces: {
+            /** Start */
+            start: boolean;
+            /** Session */
+            session: boolean;
+            /** Automation */
+            automation: boolean;
+            /** Settings */
+            settings: boolean;
+        };
+        /** AgentCatalogControlValue */
+        AgentCatalogControlValue: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Isdefault
+             * @default false
+             */
+            isDefault: boolean;
+            /** Status */
+            status?: ("active" | "candidate" | "deprecated" | "hidden") | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AgentCatalogLaunchRemediation */
+        AgentCatalogLaunchRemediation: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "managed_reinstall" | "external_update" | "restart";
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AgentCatalogModel */
+        AgentCatalogModel: {
+            /** Id */
+            id: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Aliases
+             * @default []
+             */
+            aliases: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "candidate" | "deprecated" | "hidden";
+            /** Isdefault */
+            isDefault: boolean;
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            } | null;
+            /** Compatibility */
+            compatibility?: {
+                [key: string]: unknown;
+            } | null;
+            launchRemediation?: components["schemas"]["AgentCatalogLaunchRemediation"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** AgentCatalogModelDisplayPolicy */
+        AgentCatalogModelDisplayPolicy: {
+            /** Defaultvisiblemodelids */
+            defaultVisibleModelIds: string[];
+            /** Allowuservisiblemodelselection */
+            allowUserVisibleModelSelection: boolean;
+            /** Moremodelssource */
+            moreModelsSource?: ("none" | "lastKnownLiveSnapshot" | "liveSnapshotOnly") | null;
+        };
+        /** AgentCatalogPromptCapabilities */
+        AgentCatalogPromptCapabilities: {
+            /** Image */
+            image: boolean;
+            /** Audio */
+            audio: boolean;
+            /** Embeddedcontext */
+            embeddedContext: boolean;
+        };
+        /** AgentCatalogResponse */
+        AgentCatalogResponse: {
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /** Catalogversion */
+            catalogVersion: string;
+            /** Generatedat */
+            generatedAt: string;
+            /** Compatibility */
+            compatibility?: {
+                [key: string]: unknown;
+            } | null;
+            /** Agents */
+            agents: components["schemas"]["AgentCatalogAgent"][];
+        };
+        /** AgentCatalogSession */
+        AgentCatalogSession: {
+            /** Defaultmodelid */
+            defaultModelId: string;
+            /** Defaultmodeid */
+            defaultModeId?: string | null;
+            /**
+             * Dynamicmodels
+             * @default false
+             */
+            dynamicModels: boolean;
+            modelDisplayPolicy?: components["schemas"]["AgentCatalogModelDisplayPolicy"] | null;
+            promptCapabilities?: components["schemas"]["AgentCatalogPromptCapabilities"] | null;
+            /** Compatibility */
+            compatibility?: {
+                [key: string]: unknown;
+            } | null;
+            /** Models */
+            models: components["schemas"]["AgentCatalogModel"][];
+            /** Controls */
+            controls: components["schemas"]["AgentCatalogControl"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** AnonymousTelemetryAcceptedResponse */
         AnonymousTelemetryAcceptedResponse: {
             /**
@@ -5748,6 +5980,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["E2BWebhookReceipt"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_catalog_v1_catalogs_agents_get: {
+        parameters: {
+            query?: {
+                schemaVersion?: number | null;
+            };
+            header?: {
+                "if-none-match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCatalogResponse"];
+                };
+            };
+            /** @description Agent catalog unchanged for the supplied ETag. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported catalog schema version. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

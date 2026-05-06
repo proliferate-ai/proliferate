@@ -1,7 +1,8 @@
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, LoaderCircle, RefreshCw } from "@/components/ui/icons";
+import { ArrowLeft, RefreshCw } from "@/components/ui/icons";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
+import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 import { useChatLaunchIntentActions } from "@/hooks/chat/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "@/lib/domain/chat/launch-intent";
@@ -42,13 +43,18 @@ export function ChatLaunchIntentPane({ bottomInsetPx }: ChatLaunchIntentPaneProp
                 contentParts={activeIntent.contentParts}
                 footer={(
                   <div className="flex flex-col items-end gap-2 text-right">
-                    <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
-                      {isPending && <LoaderCircle className="size-3.5 shrink-0 animate-spin" />}
-                      <span>{view.title}</span>
-                    </div>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      {view.detail}
-                    </p>
+                    {isPending ? (
+                      <StreamingIndicator startedAt={new Date(activeIntent.createdAt).toISOString()} />
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                          <span>{view.title}</span>
+                        </div>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          {view.detail}
+                        </p>
+                      </>
+                    )}
                     {(view.canReturnHome || view.canRetry || view.canDismiss) && (
                       <div className="flex flex-wrap justify-end gap-2">
                         {view.canReturnHome && (

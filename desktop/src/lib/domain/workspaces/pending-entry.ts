@@ -51,6 +51,14 @@ export function createPendingWorkspaceAttemptId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function buildPendingWorkspaceUiKey(entry: Pick<PendingWorkspaceEntry, "attemptId">): string {
+  return `pending-workspace:${entry.attemptId}`;
+}
+
+export function isPendingWorkspaceUiKey(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.startsWith("pending-workspace:");
+}
+
 export function buildPendingWorkspaceOriginTarget(
   selectedWorkspaceId: string | null,
 ): PendingWorkspaceOriginTarget {

@@ -108,9 +108,7 @@ class PlanInfo(BillingBaseModel):
 
 
 class CloudPlanInfo(BillingBaseModel):
-    plan: str = Field(
-        description="Public billing plan. Values are `free` or `pro`."
-    )
+    plan: str = Field(description="Public billing plan. Values are `free` or `pro`.")
     billing_mode: str = Field(alias="billingMode")
     pro_billing_enabled: bool = Field(alias="proBillingEnabled")
     is_unlimited: bool = Field(alias="isUnlimited")
@@ -154,9 +152,7 @@ class CloudPlanInfo(BillingBaseModel):
 
 
 class BillingOverview(BillingBaseModel):
-    plan: str = Field(
-        description="Public billing plan. Values are `free` or `pro`."
-    )
+    plan: str = Field(description="Public billing plan. Values are `free` or `pro`.")
     billing_mode: str = Field(alias="billingMode")
     pro_billing_enabled: bool = Field(alias="proBillingEnabled")
     is_unlimited: bool = Field(alias="isUnlimited")

@@ -19,6 +19,7 @@ import {
   type AnyHarnessQueryTimingOptions,
   useReportAnyHarnessCacheDecision,
 } from "../lib/timing-options.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessGitDiffScopeKey,
   anyHarnessGitStatusKey,
@@ -56,13 +57,14 @@ export function useWorkspaceFilesQuery(options: {
   return useQuery({
     queryKey,
     enabled,
-    queryFn: async () => {
+    notifyOnChangeProps: ["data", "error", "status"],
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.files.list(
         resolved.connection.anyharnessWorkspaceId,
         path,
-        options.requestOptions,
+        requestOptionsWithSignal(options.requestOptions, signal),
       );
     },
   });
@@ -88,13 +90,13 @@ export function useReadWorkspaceFileQuery(options: {
   return useQuery({
     queryKey,
     enabled,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.files.read(
         resolved.connection.anyharnessWorkspaceId,
         options.path!,
-        options.requestOptions,
+        requestOptionsWithSignal(options.requestOptions, signal),
       );
     },
   });
@@ -125,14 +127,14 @@ export function useSearchWorkspaceFilesQuery(options: {
     placeholderData: keepPreviousData,
     staleTime: 30_000,
     enabled,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.files.search(
         resolved.connection.anyharnessWorkspaceId,
         query,
         limit,
-        options.requestOptions,
+        requestOptionsWithSignal(options.requestOptions, signal),
       );
     },
   });
@@ -158,13 +160,13 @@ export function useStatWorkspaceFileQuery(options: {
   return useQuery({
     queryKey,
     enabled,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.files.stat(
         resolved.connection.anyharnessWorkspaceId,
         options.path!,
-        options.requestOptions,
+        requestOptionsWithSignal(options.requestOptions, signal),
       );
     },
   });

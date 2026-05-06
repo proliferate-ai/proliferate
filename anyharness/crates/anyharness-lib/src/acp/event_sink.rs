@@ -306,6 +306,7 @@ impl SessionEventSink {
     pub fn begin_turn(
         &mut self,
         prompt_text: String,
+        prompt_id: Option<String>,
         content_parts: Vec<ContentPart>,
         prompt_provenance: Option<PromptProvenance>,
     ) -> String {
@@ -328,6 +329,7 @@ impl SessionEventSink {
             source_agent_kind: self.source_agent_kind.clone(),
             is_transient: false,
             message_id: None,
+            prompt_id,
             title: None,
             tool_call_id: None,
             native_tool_name: None,
@@ -389,6 +391,7 @@ impl SessionEventSink {
                 source_agent_kind: self.source_agent_kind.clone(),
                 is_transient: false,
                 message_id: message_id.clone(),
+                prompt_id: None,
                 title: None,
                 tool_call_id: None,
                 native_tool_name: None,
@@ -470,6 +473,7 @@ impl SessionEventSink {
                 source_agent_kind: self.source_agent_kind.clone(),
                 is_transient,
                 message_id: message_id.clone(),
+                prompt_id: None,
                 title: None,
                 tool_call_id: None,
                 native_tool_name: None,
@@ -657,6 +661,7 @@ impl SessionEventSink {
             source_agent_kind: self.source_agent_kind.clone(),
             is_transient: false,
             message_id: None,
+            prompt_id: None,
             title: Some("Plan".to_string()),
             tool_call_id: None,
             native_tool_name: None,
@@ -827,6 +832,7 @@ impl SessionEventSink {
                     source_agent_kind: self.source_agent_kind.clone(),
                     is_transient: false,
                     message_id: None,
+                    prompt_id: None,
                     title: None,
                     tool_call_id: Some(tool_call_id.clone()),
                     native_tool_name: None,
@@ -963,6 +969,7 @@ impl SessionEventSink {
             source_agent_kind: self.source_agent_kind.clone(),
             is_transient: false,
             message_id: None,
+            prompt_id: None,
             title: Some(title),
             tool_call_id: Some(payload.tool_call_id.clone()),
             native_tool_name,
@@ -1004,6 +1011,7 @@ impl SessionEventSink {
                 source_agent_kind: self.source_agent_kind.clone(),
                 is_transient: false,
                 message_id,
+                prompt_id: None,
                 title: None,
                 tool_call_id: None,
                 native_tool_name: None,
@@ -1057,6 +1065,7 @@ impl SessionEventSink {
                 source_agent_kind: self.source_agent_kind.clone(),
                 is_transient,
                 message_id,
+                prompt_id: None,
                 title: None,
                 tool_call_id: None,
                 native_tool_name: None,
@@ -1085,6 +1094,7 @@ impl SessionEventSink {
                 source_agent_kind: self.source_agent_kind.clone(),
                 is_transient: false,
                 message_id: None,
+                prompt_id: None,
                 title: Some("Plan".to_string()),
                 tool_call_id: None,
                 native_tool_name: None,
@@ -2443,7 +2453,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new(), None);
+        sink.begin_turn("hello".to_string(), None, Vec::new(), None);
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hel"),
             ..Default::default()
@@ -2553,7 +2563,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new(), None);
+        sink.begin_turn("hello".to_string(), None, Vec::new(), None);
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hel"),
             message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -2623,7 +2633,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new(), None);
+        sink.begin_turn("hello".to_string(), None, Vec::new(), None);
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hello"),
             message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -2662,7 +2672,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new(), None);
+        sink.begin_turn("hello".to_string(), None, Vec::new(), None);
         sink.agent_thought_chunk(transient_status_chunk("Authenticating MCP server"));
         sink.agent_thought_chunk(transient_status_chunk("Waiting for browser auth"));
         sink.turn_ended(StopReason::EndTurn);
@@ -2718,7 +2728,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new(), None);
+        sink.begin_turn("hello".to_string(), None, Vec::new(), None);
         sink.agent_thought_chunk(AcpChunkPayload {
             content: json!("Thinking"),
             message_id: Some("reasoning-1".to_string()),
@@ -2756,7 +2766,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("plan this".to_string(), Vec::new(), None);
+        sink.begin_turn("plan this".to_string(), None, Vec::new(), None);
         sink.plan(vec![json!({ "content": "Step 1", "status": "pending" })]);
         sink.plan(vec![json!({ "content": "Step 1", "status": "completed" })]);
         sink.turn_ended(StopReason::EndTurn);
@@ -2802,7 +2812,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("delegate".to_string(), Vec::new(), None);
+        sink.begin_turn("delegate".to_string(), None, Vec::new(), None);
         sink.tool_call(super::AcpToolPayload {
             tool_call_id: "tool-1".to_string(),
             title: Some("Launch investigator".to_string()),
@@ -2898,7 +2908,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("delegate".to_string(), Vec::new(), None);
+        sink.begin_turn("delegate".to_string(), None, Vec::new(), None);
         sink.tool_call(super::AcpToolPayload {
             tool_call_id: "tool-1".to_string(),
             title: Some("Task".to_string()),

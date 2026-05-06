@@ -36,7 +36,13 @@
     "react": "^19"
   },
   "devDependencies": {
+    "@tanstack/react-query": "^5.95.2",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.1.11",
+    "@types/react-dom": "^19",
+    "jsdom": "^29.1.0",
+    "react": "^19",
+    "react-dom": "^19",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"
   }

@@ -27,6 +27,7 @@ import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/stores/preferences/workspace-ui-store";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
@@ -42,8 +43,7 @@ import {
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
@@ -84,6 +84,7 @@ export interface MainScreenDataState {
   hasRuntimeReadyWorkspace: boolean;
   shouldKeepRuntimePanelsVisible: boolean;
   hasWorkspaceShell: boolean;
+  hasLaunchIntentOnlyShell: boolean;
   isCloudWorkspaceSelected: boolean;
   selectedWorkspaceId: string | null;
   selectedWorkspace: Workspace | undefined;
@@ -112,9 +113,9 @@ export function useMainScreenState(): MainScreenState {
     CLOSED_PUBLISH_DIALOG_STATE,
   );
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
@@ -278,6 +279,11 @@ export function useMainScreenState(): MainScreenState {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+  const hasLaunchIntentOnlyShell = Boolean(
+    activeLaunchIntent
+    && !selectedWorkspaceId
+    && pendingWorkspaceEntry === null,
+  );
   const hasWorkspaceShell = shouldMountWorkspaceShell({
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
@@ -324,6 +330,39 @@ export function useMainScreenState(): MainScreenState {
   const rightPanelOpen = rightPanelDurableState.open
     && (!rightPanelSuppressed || userOpenOverrideActive);
 
+  useDebugValueChange("main_screen.inputs", "state_refs", {
+    pendingWorkspaceEntry,
+    selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
+    hotPaintPending,
+    sidebarOpen,
+    sidebarWidth,
+    rightPanelDurableByWorkspace,
+    rightPanelMaterializedByWorkspace,
+    rightPanelDurableState,
+    rightPanelMaterializedState,
+    rightPanelState,
+    rightPanelOpen,
+    rightPanelWidth,
+    rightPanelUserOpenOverride,
+    terminalActivationRequest,
+    publishDialog,
+    commandPaletteOpen,
+    activeLaunchIntent,
+    selectedCloudRuntimeState: selectedCloudRuntime.state,
+    workspaceCollections,
+    selectedWorkspace,
+    selectedCloudWorkspace,
+    gitStatus,
+    currentPullRequest,
+    hasWorkspaceShell,
+    hasLaunchIntentOnlyShell,
+    hasRuntimeReadyWorkspace,
+    shouldKeepRuntimePanelsVisible,
+  });
+
   useEffect(() => {
     if (
       !rightPanelUserOpenOverride
@@ -365,6 +404,7 @@ export function useMainScreenState(): MainScreenState {
       hasRuntimeReadyWorkspace,
       shouldKeepRuntimePanelsVisible,
       hasWorkspaceShell,
+      hasLaunchIntentOnlyShell,
       isCloudWorkspaceSelected: selectedCloudWorkspaceId !== null,
       selectedWorkspaceId,
       selectedWorkspace,

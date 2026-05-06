@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { getProviderDisplayName } from "@/config/providers";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import {
   resolveMatchingModelControlLabel,
@@ -21,23 +22,20 @@ export interface ChatReadyContext {
  * field can be null and the renderer drops nulls from the joined line.
  */
 export function useChatReadyContext(): ChatReadyContext {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const agentKind = useHarnessStore((state) =>
-    state.activeSessionId
-      ? state.sessionSlots[state.activeSessionId]?.agentKind ?? null
-      : null,
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const agentKind = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.agentKind ?? null : null
   );
-  const modelId = useHarnessStore((state) =>
-    state.activeSessionId
-      ? state.sessionSlots[state.activeSessionId]?.modelId ?? null
-      : null,
+  const modelId = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.modelId ?? null : null
   );
-  const liveConfigModelLabel = useHarnessStore((state) => {
-    if (!state.activeSessionId) return null;
-    const slot = state.sessionSlots[state.activeSessionId];
-    const control = slot?.liveConfig?.normalizedControls.model;
+  const liveConfigModelLabel = useSessionDirectoryStore((state) => {
+    if (!activeSessionId) return null;
+    const entry = state.entriesById[activeSessionId];
+    const control = entry?.liveConfig?.normalizedControls.model;
     return resolveMatchingModelControlLabel({
-      modelId: slot?.modelId,
+      modelId: entry?.modelId,
       control,
     });
   });
@@ -60,6 +58,7 @@ export function useChatReadyContext(): ChatReadyContext {
         agentKind,
         modelId,
         sourceLabels: [liveConfigModelLabel],
+        preferKnownAlias: true,
       })
       : null;
 

@@ -12,11 +12,29 @@ const WorkspaceHeaderTabsViewModelContext =
 
 interface WorkspaceHeaderTabsViewModelProviderProps {
   children: ReactNode;
+  enabled?: boolean;
 }
 
 export function WorkspaceHeaderTabsViewModelProvider({
   children,
+  enabled = true,
 }: WorkspaceHeaderTabsViewModelProviderProps) {
+  if (!enabled) {
+    return <>{children}</>;
+  }
+
+  return (
+    <EnabledWorkspaceHeaderTabsViewModelProvider>
+      {children}
+    </EnabledWorkspaceHeaderTabsViewModelProvider>
+  );
+}
+
+function EnabledWorkspaceHeaderTabsViewModelProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const viewModel = useWorkspaceHeaderTabsViewModel();
 
   return (

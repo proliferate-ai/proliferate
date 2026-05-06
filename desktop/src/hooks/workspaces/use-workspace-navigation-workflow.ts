@@ -8,18 +8,18 @@ import {
 } from "@/lib/infra/latency-flow";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useWorkspaceNavigationWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
-  const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
-  const deselectWorkspacePreservingSlots = useHarnessStore(
-    (state) => state.deselectWorkspacePreservingSlots,
+  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
+  const deselectWorkspacePreservingSessions = useSessionSelectionStore(
+    (state) => state.deselectWorkspacePreservingSessions,
   );
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const mobility = useWorkspaceMobilityState();
   const { selectWorkspace } = useWorkspaceSelection();
   const showToast = useToastStore((state) => state.show);
@@ -37,7 +37,7 @@ export function useWorkspaceNavigationWorkflow() {
     }
 
     if (selectedWorkspaceId) {
-      deselectWorkspacePreservingSlots();
+      deselectWorkspacePreservingSessions();
       resetWorkspaceEditorState();
     } else if (pendingWorkspaceEntry) {
       setPendingWorkspaceEntry(null);
@@ -45,7 +45,7 @@ export function useWorkspaceNavigationWorkflow() {
     }
     navigate(path);
   }, [
-    deselectWorkspacePreservingSlots,
+    deselectWorkspacePreservingSessions,
     mobility.selectionLocked,
     navigate,
     pendingWorkspaceEntry,

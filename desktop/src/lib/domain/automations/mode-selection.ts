@@ -1,8 +1,5 @@
 import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
-import {
-  listConfiguredSessionControlValues,
-  resolveConfiguredSessionControlValue,
-} from "@/lib/domain/chat/session-mode-control";
+import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-mode-control";
 
 export interface AutomationModePreferences {
   defaultSessionModeByAgentKind: Record<string, string>;
@@ -41,17 +38,19 @@ export function resolveAutomationModeSelection({
   override,
   useSavedMode,
   preferences,
+  optionsOverride,
 }: {
   agentKind: string | null;
   savedModeId: string | null;
   override: AutomationModeOverride | null;
   useSavedMode: boolean;
   preferences: AutomationModePreferences;
+  optionsOverride?: ConfiguredSessionControlValue[] | null;
 }): {
   options: ConfiguredSessionControlValue[];
   resolution: AutomationModeResolution;
 } {
-  const options = listConfiguredSessionControlValues(agentKind, "mode");
+  const options = optionsOverride ?? listConfiguredSessionControlValues(agentKind, "mode");
 
   if (!agentKind) {
     return {
@@ -73,7 +72,7 @@ export function resolveAutomationModeSelection({
       };
     }
 
-    const overrideValue = resolveConfiguredSessionControlValue(agentKind, "mode", override.modeId);
+    const overrideValue = resolveOptionValue(options, override.modeId);
     return overrideValue
       ? {
         options,
@@ -107,7 +106,7 @@ export function resolveAutomationModeSelection({
       };
     }
 
-    const savedValue = resolveConfiguredSessionControlValue(agentKind, "mode", savedModeId);
+    const savedValue = resolveOptionValue(options, savedModeId);
     return savedValue
       ? {
         options,
@@ -143,6 +142,16 @@ export function resolveAutomationModeSelection({
       options,
       resolution: { state: "none", submission: { modeId: null, canSubmit: true } },
     };
+}
+
+function resolveOptionValue(
+  options: ConfiguredSessionControlValue[],
+  value: string | null | undefined,
+): ConfiguredSessionControlValue | null {
+  if (!value) {
+    return null;
+  }
+  return options.find((candidate) => candidate.value === value) ?? null;
 }
 
 function defaultModeValue(

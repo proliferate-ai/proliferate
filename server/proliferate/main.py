@@ -36,6 +36,7 @@ from proliferate.server.billing.reconciler import (
     start_billing_reconciler,
     stop_billing_reconciler,
 )
+from proliferate.server.catalogs.api import router as catalogs_router
 from proliferate.server.cloud.api import router as cloud_router
 from proliferate.server.cloud.runtime.setup_monitor import (
     start_cloud_setup_monitor,
@@ -172,6 +173,7 @@ def create_app() -> FastAPI:
         tags=["anonymous_telemetry"],
     )
     app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
+    app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])

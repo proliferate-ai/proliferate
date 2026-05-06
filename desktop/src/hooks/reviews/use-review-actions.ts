@@ -25,14 +25,16 @@ import {
   useReviewUiStore,
 } from "@/stores/reviews/review-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useReviewActions() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const activeSlot = useHarnessStore((state) =>
-    state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const activeSlot = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
   );
   const reviewDefaultsByKind = useUserPreferencesStore((state) => state.reviewDefaultsByKind);
   const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
@@ -57,13 +59,13 @@ export function useReviewActions() {
     plan: PromptPlanAttachmentDescriptor,
     anchorRect?: ReviewSetupAnchorRect | null,
   ) => {
-    const harness = useHarnessStore.getState();
-    const planSessionSlot = harness.sessionSlots[plan.sourceSessionId] ?? null;
+    const activeId = useSessionSelectionStore.getState().activeSessionId;
+    const planSessionSlot = getSessionRecord(plan.sourceSessionId);
     if (!planSessionSlot) {
       showToast("Plan session is not available.");
       return;
     }
-    if (harness.activeSessionId !== plan.sourceSessionId) {
+    if (activeId !== plan.sourceSessionId) {
       showToast("Select the plan's session before starting plan review.");
       return;
     }
@@ -79,13 +81,13 @@ export function useReviewActions() {
   }, [activeSessionId, activeSlot, openReviewSetup, showToast]);
 
   const startPlanReview = useCallback((plan: PromptPlanAttachmentDescriptor) => {
-    const harness = useHarnessStore.getState();
-    const planSessionSlot = harness.sessionSlots[plan.sourceSessionId] ?? null;
+    const activeId = useSessionSelectionStore.getState().activeSessionId;
+    const planSessionSlot = getSessionRecord(plan.sourceSessionId);
     if (!planSessionSlot) {
       showToast("Plan session is not available.");
       return;
     }
-    if (harness.activeSessionId !== plan.sourceSessionId) {
+    if (activeId !== plan.sourceSessionId) {
       showToast("Select the plan's session before starting plan review.");
       return;
     }

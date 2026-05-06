@@ -12,6 +12,7 @@ import {
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { anyHarnessTerminalsKey } from "../lib/query-keys.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 
 interface WorkspaceQueryOptions {
   workspaceId?: string | null;
@@ -31,10 +32,13 @@ export function useTerminalsQuery(options?: WorkspaceQueryOptions) {
   return useQuery({
     queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.terminals.list(resolved.connection.anyharnessWorkspaceId);
+      return client.terminals.list(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }

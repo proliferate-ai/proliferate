@@ -32,7 +32,8 @@ import {
   sendResize,
   type TerminalStreamIdentity,
 } from "@/lib/integrations/anyharness/terminal-handles";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 
@@ -41,7 +42,7 @@ type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
 export function useTerminalActions() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { selectedCloudRuntime, getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const markUnread = useTerminalStore((state) => state.markUnread);
@@ -142,7 +143,7 @@ export function useTerminalActions() {
       onOpen: () => {},
       onData: () => {
         const state = useTerminalStore.getState();
-        const activeWsId = useHarnessStore.getState().selectedWorkspaceId;
+        const activeWsId = useSessionSelectionStore.getState().selectedWorkspaceId;
         const activeTerminalId = activeWsId
           ? state.activeTerminalByWorkspace[activeWsId]
           : null;

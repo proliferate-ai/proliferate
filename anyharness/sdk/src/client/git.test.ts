@@ -61,6 +61,35 @@ describe("GitClient diff URLs", () => {
     ]);
   });
 
+  it("does not encode request metadata into diff URLs", async () => {
+    const calls: string[] = [];
+    const transport = {
+      get: async (path: string) => {
+        calls.push(path);
+        return diffResponse;
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new GitClient(transport);
+
+    await client.getDiff("workspace/1", "new file.ts", {
+      scope: "branch",
+      baseRef: "origin/main",
+      oldPath: "old file.ts",
+      request: {
+        measurementOperationId: "mop_test",
+        headers: { "x-trace": "trace-1" },
+      },
+    });
+
+    expect(calls).toEqual([
+      "/v1/workspaces/workspace%2F1/git/diff?path=new%20file.ts&scope=branch&baseRef=origin%2Fmain&oldPath=old%20file.ts",
+    ]);
+    expect(calls[0]).not.toContain("request");
+    expect(calls[0]).not.toContain("measurementOperationId");
+    expect(calls[0]).not.toContain("mop_test");
+    expect(calls[0]).not.toContain("x-trace");
+  });
+
   it("does not encode baseRef for non-branch scopes", async () => {
     const calls: string[] = [];
     const transport = {
@@ -96,5 +125,32 @@ describe("GitClient diff URLs", () => {
     expect(calls).toEqual([
       "/v1/workspaces/workspace%2F1/git/diff/branch-files?baseRef=origin%2Fmain",
     ]);
+  });
+
+  it("does not encode request metadata into branch file list URLs", async () => {
+    const calls: string[] = [];
+    const transport = {
+      get: async (path: string) => {
+        calls.push(path);
+        return branchFilesResponse;
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new GitClient(transport);
+
+    await client.listBranchDiffFiles("workspace/1", {
+      baseRef: "origin/main",
+      request: {
+        measurementOperationId: "mop_test",
+        headers: { "x-trace": "trace-1" },
+      },
+    });
+
+    expect(calls).toEqual([
+      "/v1/workspaces/workspace%2F1/git/diff/branch-files?baseRef=origin%2Fmain",
+    ]);
+    expect(calls[0]).not.toContain("request");
+    expect(calls[0]).not.toContain("measurementOperationId");
+    expect(calls[0]).not.toContain("mop_test");
+    expect(calls[0]).not.toContain("x-trace");
   });
 });

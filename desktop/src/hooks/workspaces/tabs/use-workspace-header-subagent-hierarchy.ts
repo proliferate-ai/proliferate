@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
+import { useShallow } from "zustand/react/shallow";
 import {
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
@@ -27,7 +28,8 @@ import {
   collectSubagentSessionRelationshipHints,
   type SubagentSessionRelationshipHint,
 } from "@/lib/domain/chat/subagents/session-relationship-hints";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/debug-measurement";
 
@@ -64,49 +66,80 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   activeSessionId: string | null;
 }): WorkspaceHeaderSubagentHierarchy {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const recordSessionRelationshipHint = useHarnessStore(
-    (state) => state.recordSessionRelationshipHint,
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const recordSessionRelationshipHint = useSessionDirectoryStore(
+    (state) => state.recordRelationshipHint,
   );
   const uniqueSessionIds = useMemo(
     () => [...new Set(args.sessionIds)].filter(Boolean),
     [args.sessionIds],
   );
+  const materializedSessionIds = useSessionDirectoryStore(useShallow((state) =>
+    uniqueSessionIds.map((sessionId) => resolveHierarchyMaterializedSessionId({
+      sessionId,
+      materializedSessionId: state.entriesById[sessionId]?.materializedSessionId ?? null,
+    }))
+  ));
+  const clientSessionIdByMaterializedSessionId = useSessionDirectoryStore(
+    (state) => state.clientSessionIdByMaterializedSessionId,
+  );
+  const resolveClientSessionId = useMemo(
+    () => (sessionId: string) =>
+      clientSessionIdByMaterializedSessionId[sessionId] ?? sessionId,
+    [clientSessionIdByMaterializedSessionId],
+  );
 
   const subagentQueries = useQueries({
-    queries: uniqueSessionIds.map((sessionId) => ({
-      queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, args.workspaceId, sessionId),
-      enabled: !!args.workspaceId && !!sessionId,
-      queryFn: async (): Promise<SessionSubagentsResponse> => {
-        const resolved = await resolveWorkspaceConnectionFromContext(
-          workspace,
-          args.workspaceId,
-        );
-        const client = getAnyHarnessClient(resolved.connection);
-        return client.sessions.getSubagents(sessionId);
-      },
-      staleTime: 5_000,
-    })),
+    queries: uniqueSessionIds.map((sessionId, index) => {
+      const materializedSessionId = materializedSessionIds[index];
+      return {
+        queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, args.workspaceId, sessionId),
+        enabled: !!args.workspaceId && !!sessionId && !!materializedSessionId,
+        queryFn: async ({ signal }): Promise<SessionSubagentsResponse> => {
+          if (!materializedSessionId) {
+            throw new Error("Session is still starting. Try again in a moment.");
+          }
+          const resolved = await resolveWorkspaceConnectionFromContext(
+            workspace,
+            args.workspaceId,
+          );
+          const client = getAnyHarnessClient(resolved.connection);
+          return client.sessions.getSubagents(materializedSessionId, { signal });
+        },
+        staleTime: 5_000,
+      };
+    }),
   });
   const reviewQueries = useQueries({
-    queries: uniqueSessionIds.map((sessionId) => ({
-      queryKey: anyHarnessSessionReviewsKey(runtimeUrl, args.workspaceId, sessionId),
-      enabled: !!args.workspaceId && !!sessionId,
-      queryFn: async (): Promise<SessionReviewsResponse> => {
-        const resolved = await resolveWorkspaceConnectionFromContext(
-          workspace,
-          args.workspaceId,
-        );
-        const client = getAnyHarnessClient(resolved.connection);
-        return client.reviews.listForSession(sessionId);
-      },
-      staleTime: 2_500,
-    })),
+    queries: uniqueSessionIds.map((sessionId, index) => {
+      const materializedSessionId = materializedSessionIds[index];
+      return {
+        queryKey: anyHarnessSessionReviewsKey(runtimeUrl, args.workspaceId, sessionId),
+        enabled: !!args.workspaceId && !!sessionId && !!materializedSessionId,
+        queryFn: async ({ signal }): Promise<SessionReviewsResponse> => {
+          if (!materializedSessionId) {
+            throw new Error("Session is still starting. Try again in a moment.");
+          }
+          const resolved = await resolveWorkspaceConnectionFromContext(
+            workspace,
+            args.workspaceId,
+          );
+          const client = getAnyHarnessClient(resolved.connection);
+          return client.reviews.listForSession(materializedSessionId, { signal });
+        },
+        staleTime: 2_500,
+      };
+    }),
   });
   const subagentRelationshipHintRows = subagentQueries.flatMap((query, index) => {
     const sessionId = uniqueSessionIds[index];
     return sessionId
       ? collectSubagentSessionRelationshipHints(sessionId, query.data)
+        .map((hint) => ({
+          ...hint,
+          sessionId: resolveClientSessionId(hint.sessionId),
+          parentSessionId: resolveClientSessionId(hint.parentSessionId),
+        }))
       : [];
   });
   const subagentRelationshipHintSignature =
@@ -121,6 +154,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   );
   const reviewRelationshipHintRows = reviewQueries.flatMap((query) =>
     collectReviewSessionRelationshipHints(query.data?.reviews)
+      .map((hint) => ({
+        ...hint,
+        sessionId: resolveClientSessionId(hint.sessionId),
+        parentSessionId: resolveClientSessionId(hint.parentSessionId),
+      }))
   );
   const reviewRelationshipHintSignature =
     buildReviewRelationshipHintSignature(reviewRelationshipHintRows);
@@ -188,10 +226,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       }
 
       if (data.parent) {
-        childToParent.set(sessionId, data.parent.parentSessionId);
+        const parentSessionId = resolveClientSessionId(data.parent.parentSessionId);
+        childToParent.set(sessionId, parentSessionId);
         parentRowsBySessionId.set(
-          data.parent.parentSessionId,
-          buildParentRow(data.parent),
+          parentSessionId,
+          buildParentRow(data.parent, parentSessionId),
         );
       }
 
@@ -199,11 +238,17 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
         childrenByParentSessionId.set(
           sessionId,
           data.children.map((child, childIndex) =>
-            buildChildRow(child, sessionId, childIndex + 1, args.activeSessionId)
+            buildChildRow({
+              child,
+              parentSessionId: sessionId,
+              childSessionId: resolveClientSessionId(child.childSessionId),
+              ordinal: childIndex + 1,
+              activeSessionId: args.activeSessionId,
+            })
           ),
         );
         for (const child of data.children) {
-          childToParent.set(child.childSessionId, sessionId);
+          childToParent.set(resolveClientSessionId(child.childSessionId), sessionId);
         }
       }
 
@@ -213,7 +258,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
         resolvedSessionIds.add(sessionId);
       }
       const reviewChildren = reviewData
-        ? buildReviewChildRows(reviewData.reviews, args.activeSessionId)
+        ? buildReviewChildRows(reviewData.reviews, args.activeSessionId, resolveClientSessionId)
         : [];
       if (reviewChildren.length > 0) {
         const existing = childrenByParentSessionId.get(sessionId) ?? [];
@@ -230,12 +275,21 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       childrenByParentSessionId,
       resolvedSessionIds,
     };
-  }), [args.activeSessionId, reviewQueries, subagentQueries, uniqueSessionIds]);
+  }), [
+    args.activeSessionId,
+    resolveClientSessionId,
+    reviewQueries,
+    subagentQueries,
+    uniqueSessionIds,
+  ]);
 }
 
-function buildParentRow(parent: ParentSubagentLinkSummary): HeaderSubagentParentRow {
+function buildParentRow(
+  parent: ParentSubagentLinkSummary,
+  sessionId: string,
+): HeaderSubagentParentRow {
   return {
-    sessionId: parent.parentSessionId,
+    sessionId,
     title: parent.parentTitle?.trim()
       || parent.label?.trim()
       || "Parent agent",
@@ -244,15 +298,22 @@ function buildParentRow(parent: ParentSubagentLinkSummary): HeaderSubagentParent
   };
 }
 
-function buildChildRow(
-  child: ChildSubagentSummary,
-  parentSessionId: string,
-  ordinal: number,
-  activeSessionId: string | null,
-): HeaderSubagentChildRow {
+function buildChildRow({
+  child,
+  parentSessionId,
+  childSessionId,
+  ordinal,
+  activeSessionId,
+}: {
+  child: ChildSubagentSummary;
+  parentSessionId: string;
+  childSessionId: string;
+  ordinal: number;
+  activeSessionId: string | null;
+}): HeaderSubagentChildRow {
   return {
     sessionLinkId: child.sessionLinkId,
-    sessionId: child.childSessionId,
+    sessionId: childSessionId,
     parentSessionId,
     title: formatSubagentLabel(child.label ?? child.title, ordinal),
     agentKind: child.agentKind,
@@ -260,13 +321,14 @@ function buildChildRow(
     meta: null,
     statusLabel: formatSessionStatus(child.status),
     wakeScheduled: child.wakeScheduled,
-    isActive: child.childSessionId === activeSessionId,
+    isActive: childSessionId === activeSessionId,
   };
 }
 
 function buildReviewChildRows(
   reviews: readonly ReviewRunDetail[],
   activeSessionId: string | null,
+  resolveClientSessionId: (sessionId: string) => string,
 ): HeaderSubagentChildRow[] {
   const rowsBySessionId = new Map<string, HeaderSubagentChildRow>();
   for (const run of reviews) {
@@ -274,17 +336,18 @@ function buildReviewChildRows(
       for (const assignment of round.assignments) {
         const sessionId = assignment.reviewerSessionId;
         if (!sessionId) continue;
-        rowsBySessionId.set(sessionId, {
+        const clientSessionId = resolveClientSessionId(sessionId);
+        rowsBySessionId.set(clientSessionId, {
           sessionLinkId: assignment.sessionLinkId ?? assignment.id,
-          sessionId,
-          parentSessionId: run.parentSessionId,
+          sessionId: clientSessionId,
+          parentSessionId: resolveClientSessionId(run.parentSessionId),
           title: assignment.personaLabel || reviewKindLabel(run.kind),
           agentKind: assignment.agentKind,
           source: "review",
           meta: reviewKindLabel(run.kind),
           statusLabel: reviewAssignmentHeaderStatusLabel(assignment),
           wakeScheduled: false,
-          isActive: sessionId === activeSessionId,
+          isActive: clientSessionId === activeSessionId,
         });
       }
     }
@@ -316,6 +379,21 @@ function buildSubagentRelationshipHintSignature(
     ].join(":"))
     .sort()
     .join("|");
+}
+
+export function resolveHierarchyMaterializedSessionId(input: {
+  sessionId: string;
+  materializedSessionId: string | null;
+}): string | null {
+  if (input.materializedSessionId) {
+    return input.materializedSessionId;
+  }
+  return isTransientClientSessionId(input.sessionId) ? null : input.sessionId;
+}
+
+function isTransientClientSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("client-session:")
+    || sessionId.startsWith("pending-session:");
 }
 
 function formatSessionStatus(status: ChildSubagentSummary["status"]): string {

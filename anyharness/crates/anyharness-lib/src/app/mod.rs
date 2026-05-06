@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::acp::manager::AcpManager;
-use crate::agents::catalog::ModelCatalogService;
+use crate::agents::catalog::{LaunchCatalogService, ModelCatalogService};
 use crate::agents::reconcile_execution::AgentReconcileService;
 use crate::agents::seed::AgentSeedStore;
 use crate::cowork::artifacts::CoworkArtifactRuntime;
@@ -76,6 +76,7 @@ pub struct AppState {
     pub agent_seed_store: AgentSeedStore,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub model_catalog_service: Arc<ModelCatalogService>,
+    pub launch_catalog_service: Arc<LaunchCatalogService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
@@ -131,8 +132,11 @@ impl AppState {
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
         let model_catalog_service = Arc::new(ModelCatalogService::new(runtime_home.clone()));
+        let launch_catalog_service = Arc::new(LaunchCatalogService::new(runtime_home.clone()));
         #[cfg(not(test))]
         model_catalog_service.spawn_refresh();
+        #[cfg(not(test))]
+        launch_catalog_service.spawn_refresh();
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -150,6 +154,7 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
             model_catalog_service.clone(),
+            launch_catalog_service.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
         let acp_manager = AcpManager::new(plan_service.clone());
@@ -314,6 +319,7 @@ impl AppState {
             agent_seed_store,
             agent_reconcile_service,
             model_catalog_service,
+            launch_catalog_service,
             repo_root_service,
             workspace_runtime,
             files_runtime,

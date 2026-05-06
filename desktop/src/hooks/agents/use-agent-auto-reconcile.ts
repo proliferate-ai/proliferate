@@ -5,7 +5,7 @@ import {
   useRuntimeHealthQuery,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useAgentCatalog } from "./use-agent-catalog";
 import { useAgentInstallationActions } from "./use-agent-installation-actions";
 
@@ -15,8 +15,8 @@ import { useAgentInstallationActions } from "./use-agent-installation-actions";
  * as each agent installs sequentially.
  */
 export function useAgentAutoReconcile() {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const queryClient = useQueryClient();
   const {
     agentsNeedingSetup,

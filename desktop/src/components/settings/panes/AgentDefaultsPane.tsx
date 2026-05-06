@@ -17,7 +17,7 @@ import {
 } from "@/lib/domain/settings/agent-defaults";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const AGENT_DEFAULT_SECTION_ORDER: readonly string[] = [
@@ -26,11 +26,10 @@ const AGENT_DEFAULT_SECTION_ORDER: readonly string[] = [
   "gemini",
   "cursor",
   "opencode",
-  "amp",
 ];
 
 export function AgentDefaultsPane() {
-  const { connectionState, runtimeError } = useHarnessStore(useShallow((state) => ({
+  const { connectionState, runtimeError } = useHarnessConnectionStore(useShallow((state) => ({
     connectionState: state.connectionState,
     runtimeError: state.error,
   })));

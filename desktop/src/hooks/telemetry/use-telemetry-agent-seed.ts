@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export function useTelemetryAgentSeed() {
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
   const { data: runtimeHealth } = useRuntimeHealthQuery({ enabled: isHealthy });
   const reportedStatusRef = useRef<string | null>(null);

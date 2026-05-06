@@ -6,17 +6,20 @@ import type {
   ReconcileAgentsResponse,
   StartAgentLoginResponse,
 } from "../types/agents.js";
-import type { AnyHarnessTransport } from "./core.js";
+import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class AgentsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async list(): Promise<AgentSummary[]> {
-    return this.transport.get<AgentSummary[]>("/v1/agents");
+  async list(options?: AnyHarnessRequestOptions): Promise<AgentSummary[]> {
+    return this.transport.get<AgentSummary[]>("/v1/agents", options);
   }
 
-  async get(kind: string): Promise<AgentSummary> {
-    return this.transport.get<AgentSummary>(`/v1/agents/${encodeURIComponent(kind)}`);
+  async get(kind: string, options?: AnyHarnessRequestOptions): Promise<AgentSummary> {
+    return this.transport.get<AgentSummary>(
+      `/v1/agents/${encodeURIComponent(kind)}`,
+      options,
+    );
   }
 
   async install(
@@ -36,8 +39,8 @@ export class AgentsClient {
     );
   }
 
-  async getReconcileStatus(): Promise<ReconcileAgentsResponse> {
-    return this.transport.get<ReconcileAgentsResponse>("/v1/agents/reconcile");
+  async getReconcileStatus(options?: AnyHarnessRequestOptions): Promise<ReconcileAgentsResponse> {
+    return this.transport.get<ReconcileAgentsResponse>("/v1/agents/reconcile", options);
   }
 
   async reconcile(

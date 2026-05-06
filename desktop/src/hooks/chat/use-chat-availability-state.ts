@@ -7,7 +7,8 @@ import {
   resolveChatInputAvailability,
   type ChatInputAvailability,
 } from "@/lib/domain/chat/chat-input";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 
@@ -18,18 +19,13 @@ export interface ChatAvailabilityState extends ChatInputAvailability {
 export function useChatAvailabilityState(options?: {
   activeSessionId?: string | null;
 }): ChatAvailabilityState {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const connectionState = useHarnessStore((state) => state.connectionState);
-  const storedActiveSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
+  const storedActiveSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const activeSessionId = options && "activeSessionId" in options
     ? options.activeSessionId ?? null
     : storedActiveSessionId;
-  const activeSessionHydrated = useHarnessStore((state) =>
-    activeSessionId
-      ? (state.sessionSlots[activeSessionId]?.transcriptHydrated ?? false)
-      : true
-  );
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const mobility = useWorkspaceMobilityState();
@@ -50,13 +46,11 @@ export function useChatAvailabilityState(options?: {
     selectedCloudRuntimePhase: selectedCloudRuntime.state?.phase ?? null,
     selectedCloudRuntimeActionBlockReason: selectedCloudRuntime.state?.actionBlockReason ?? null,
     activeSessionId,
-    activeSessionHydrated,
     isConfiguredLaunchLoading: configuredLaunch.isLoading,
     hasReadyConfiguredLaunch: configuredLaunch.isReady,
     configuredLaunchDisabledReason: configuredLaunch.disabledReason,
   }), [
     activeSessionId,
-    activeSessionHydrated,
     connectionState,
     configuredLaunch.disabledReason,
     configuredLaunch.isLoading,
@@ -70,6 +64,15 @@ export function useChatAvailabilityState(options?: {
   ]);
 
   if (pendingWorkspaceEntry) {
+    if (pendingWorkspaceEntry.stage !== "failed") {
+      return {
+        isDisabled: false,
+        disabledReason: null,
+        areRuntimeControlsDisabled: false,
+        selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
+      };
+    }
+
     const disabledReason = pendingWorkspaceEntry.stage === "failed"
       ? "Resolve workspace setup before starting chat."
       : pendingWorkspaceEntry.stage === "awaiting-cloud-ready"

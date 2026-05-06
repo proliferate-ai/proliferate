@@ -6,6 +6,9 @@ use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
+#[cfg(test)]
+use super::branch_refresh::BranchRefreshBatchOutcome;
+use super::branch_refresh::WorkspaceBranchRefreshCoordinator;
 use super::detector;
 use super::model::{ResolvedGitContext, WorkspaceRecord};
 use super::resolver;
@@ -28,6 +31,7 @@ pub struct WorkspaceRuntime {
     store: WorkspaceStore,
     repo_root_service: RepoRootService,
     runtime_home: PathBuf,
+    branch_refresh: WorkspaceBranchRefreshCoordinator,
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +52,7 @@ impl WorkspaceRuntime {
             store,
             repo_root_service,
             runtime_home,
+            branch_refresh: WorkspaceBranchRefreshCoordinator::new(),
         }
     }
 
@@ -396,10 +401,12 @@ impl WorkspaceRuntime {
     }
 
     pub fn get_workspace(&self, workspace_id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
-        self.store
-            .find_by_id(workspace_id)?
-            .map(reconcile_current_branch)
-            .transpose()
+        let record = self.store.find_by_id(workspace_id)?;
+        if let Some(record) = record.as_ref() {
+            self.branch_refresh
+                .schedule_refresh(self.store.clone(), std::slice::from_ref(record));
+        }
+        Ok(record)
     }
 
     pub fn delete_workspace_record(&self, workspace_id: &str) -> anyhow::Result<()> {
@@ -429,34 +436,31 @@ impl WorkspaceRuntime {
             "[anyharness-latency] workspace.runtime.list.store_loaded"
         );
 
-        let reconcile_started = Instant::now();
-        let mut reconciled = Vec::with_capacity(records.len());
-        let mut slow_reconcile_count = 0_u32;
-        for record in records {
-            let workspace_id = record.id.clone();
-            let kind = record.kind.clone();
-            let item_started = Instant::now();
-            let reconciled_record = reconcile_current_branch(record)?;
-            let item_elapsed_ms = item_started.elapsed().as_millis();
-            if item_elapsed_ms >= 25 {
-                slow_reconcile_count = slow_reconcile_count.saturating_add(1);
-                tracing::info!(
-                    workspace_id = %workspace_id,
-                    kind = %kind,
-                    elapsed_ms = item_elapsed_ms,
-                    "[anyharness-latency] workspace.runtime.list.reconcile_slow"
-                );
-            }
-            reconciled.push(reconciled_record);
-        }
+        let schedule_started = Instant::now();
+        let branch_refresh = self
+            .branch_refresh
+            .schedule_refresh(self.store.clone(), &records);
         tracing::info!(
-            workspace_count = reconciled.len(),
-            slow_reconcile_count,
-            elapsed_ms = reconcile_started.elapsed().as_millis(),
+            workspace_count = records.len(),
+            branch_refresh_scheduled_count = branch_refresh.scheduled_count,
+            elapsed_ms = schedule_started.elapsed().as_millis(),
             total_elapsed_ms = started.elapsed().as_millis(),
-            "[anyharness-latency] workspace.runtime.list.reconciled"
+            "[anyharness-latency] workspace.runtime.list.ready"
         );
-        Ok(reconciled)
+        Ok(records)
+    }
+
+    #[cfg(test)]
+    fn refresh_workspace_branches_for_test(&self) -> anyhow::Result<BranchRefreshBatchOutcome> {
+        let records = self.store.list_execution_surfaces()?;
+        Ok(self
+            .branch_refresh
+            .run_refresh_for_test(self.store.clone(), &records))
+    }
+
+    #[cfg(test)]
+    fn scheduled_branch_refresh_batches_for_test(&self) -> u64 {
+        self.branch_refresh.scheduled_batch_count_for_test()
     }
 
     pub fn set_lifecycle_cleanup_state(
@@ -1136,6 +1140,86 @@ mod tests {
             .contains("a workspace record already exists for path"));
         let resolved = runtime.resolve_from_path(&path).expect("resolve existing");
         assert_eq!(resolved.workspace.id, first.workspace.id);
+    }
+
+    #[test]
+    fn list_workspaces_returns_stored_branch_without_inline_git_refresh() {
+        let source = TempDirGuard::new("runtime-list-stored-branch-source");
+        let runtime_home = TempDirGuard::new("runtime-list-stored-branch-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create workspace")
+            .workspace;
+
+        run_git(source.path(), ["branch", "-m", "renamed"]);
+        let listed = runtime.list_workspaces().expect("list workspaces");
+        let listed_workspace = listed
+            .iter()
+            .find(|record| record.id == workspace.id)
+            .expect("listed workspace");
+
+        assert_eq!(listed_workspace.current_branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn get_workspace_returns_stored_branch_without_inline_git_refresh() {
+        let source = TempDirGuard::new("runtime-get-stored-branch-source");
+        let runtime_home = TempDirGuard::new("runtime-get-stored-branch-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create workspace")
+            .workspace;
+
+        run_git(source.path(), ["branch", "-m", "renamed"]);
+        let fetched = runtime
+            .get_workspace(&workspace.id)
+            .expect("get workspace")
+            .expect("workspace exists");
+
+        assert_eq!(fetched.current_branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn background_branch_refresh_persists_changed_branch_and_throttles() {
+        let source = TempDirGuard::new("runtime-branch-refresh-source");
+        let runtime_home = TempDirGuard::new("runtime-branch-refresh-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create workspace")
+            .workspace;
+
+        run_git(source.path(), ["branch", "-m", "renamed"]);
+        let outcome = runtime
+            .refresh_workspace_branches_for_test()
+            .expect("refresh branches");
+        assert_eq!(outcome.schedule.scheduled_count, 1);
+        assert_eq!(outcome.updated_count, 1);
+        assert_eq!(runtime.scheduled_branch_refresh_batches_for_test(), 1);
+
+        let refreshed = WorkspaceStore::new(db.clone())
+            .find_by_id(&workspace.id)
+            .expect("load stored workspace")
+            .expect("workspace exists");
+        assert_eq!(refreshed.current_branch.as_deref(), Some("renamed"));
+
+        let throttled = runtime
+            .refresh_workspace_branches_for_test()
+            .expect("refresh branches again");
+        assert_eq!(throttled.schedule.scheduled_count, 0);
+        assert_eq!(throttled.schedule.skipped_throttled_count, 1);
+        assert_eq!(runtime.scheduled_branch_refresh_batches_for_test(), 1);
     }
 
     #[test]

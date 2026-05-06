@@ -16,7 +16,8 @@ import {
   reviewRunReplacesStartingReview,
 } from "@/lib/domain/reviews/review-runs";
 import { useReviewUiStore, type StartingReviewState } from "@/stores/reviews/review-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export interface DelegatedWorkComposerViewModel {
@@ -44,10 +45,10 @@ export function useDelegatedWorkComposer(): DelegatedWorkComposerViewModel | nul
   const reviewActions = useReviewActions();
   const cowork = useCoworkComposerStrip();
   const subagents = useSubagentComposerStrip();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const activeWorkspaceId = useHarnessStore((state) => (
-    state.activeSessionId ? state.sessionSlots[state.activeSessionId]?.workspaceId ?? null : null
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const activeWorkspaceId = useSessionDirectoryStore((state) => (
+    activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null
   ));
   const { activateChatTab } = useWorkspaceShellActivation();
   const openCritique = useReviewUiStore((state) => state.openCritique);

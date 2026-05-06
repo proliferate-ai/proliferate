@@ -9,7 +9,8 @@ import {
 import { collectReviewSessionRelationshipHints } from "@/lib/domain/reviews/session-relationship-hints";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import type { StartingReviewState } from "@/stores/reviews/review-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useActiveReviewRun(): {
   run: ReviewRunDetail | null;
@@ -18,14 +19,14 @@ export function useActiveReviewRun(): {
   hasBlockingReview: boolean;
   hasBusyReview: boolean;
 } {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const dismissedTerminalNoticeRunIds = useReviewUiStore(
     (state) => state.dismissedTerminalNoticeRunIds,
   );
   const startingReview = useReviewUiStore((state) => state.startingReview);
-  const recordSessionRelationshipHint = useHarnessStore(
-    (state) => state.recordSessionRelationshipHint,
+  const recordSessionRelationshipHint = useSessionDirectoryStore(
+    (state) => state.recordRelationshipHint,
   );
   const activeStartingReview = startingReview?.parentSessionId === activeSessionId
     ? startingReview

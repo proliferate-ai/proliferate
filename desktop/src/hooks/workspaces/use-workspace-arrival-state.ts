@@ -4,7 +4,7 @@ import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import { buildWorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
@@ -15,9 +15,9 @@ export function useWorkspaceArrivalState(): {
   setupTerminalId: string | null;
   viewModel: ReturnType<typeof buildWorkspaceArrivalViewModel> | null;
 } {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
+  const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
 

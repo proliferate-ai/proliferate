@@ -6,7 +6,7 @@ import {
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
 import type { AnyHarnessRequestOptions, ModelRegistry } from "@anyharness/sdk";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
@@ -40,13 +40,19 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
   type MeasurementFinishReason,
+  type MeasurementOperationId,
 } from "@/lib/infra/debug-measurement";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  getSessionRecord,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 import { markWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 
 interface BootstrapWorkspaceInput {
@@ -145,12 +151,14 @@ async function fetchWorkspaceSessionsWithConnection(
 async function fetchWorkspaceLaunchCatalog(
   workspaceConnection: AnyHarnessResolvedConnection,
   latencyFlowId?: string | null,
+  signal?: AbortSignal,
 ) {
+  const requestOptions = latencyFlowId
+    ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
+    : undefined;
   return getAnyHarnessClient(workspaceConnection).workspaces.getSessionLaunchCatalog(
     workspaceConnection.anyharnessWorkspaceId,
-    latencyFlowId
-      ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
-      : undefined,
+    signal ? requestOptionsWithSignal(requestOptions, signal) : requestOptions,
   );
 }
 
@@ -199,12 +207,71 @@ export function useWorkspaceBootstrapActions() {
   const lastViewedSessionByWorkspace = useWorkspaceUiStore(
     (state) => state.lastViewedSessionByWorkspace,
   );
-  const { initForWorkspace } = useWorkspaceFileActions();
-  const { selectSession, createEmptySessionWithResolvedConfig } = useSessionActions();
   const {
-    ensureSessionStreamConnected,
-    rehydrateSessionSlotFromHistory,
-  } = useSessionRuntimeActions();
+    prepareFileWorkspace,
+    prefetchWorkspaceDirectories,
+  } = useWorkspaceFileActions();
+  const { selectSession, createEmptySessionWithResolvedConfig } = useSessionActions();
+  const { rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
+  const cancelDeferredFileTreePrefetchRef = useRef<(() => void) | null>(null);
+
+  const cancelDeferredFileTreePrefetch = useCallback(() => {
+    cancelDeferredFileTreePrefetchRef.current?.();
+    cancelDeferredFileTreePrefetchRef.current = null;
+  }, []);
+
+  const scheduleDeferredFileTreePrefetch = useCallback((input: {
+    workspaceId: string;
+    materializedWorkspaceId: string;
+    anyharnessWorkspaceId: string;
+    runtimeUrl: string;
+    treeStateKey: string;
+    authToken?: string | null;
+    measurementOperationId: MeasurementOperationId | null;
+    startedAt: number;
+    isCurrent: () => boolean;
+  }) => {
+    cancelDeferredFileTreePrefetch();
+    let cancel: (() => void) | null = null;
+    cancel = scheduleAfterNextPaint(() => {
+      if (cancelDeferredFileTreePrefetchRef.current !== cancel) {
+        return;
+      }
+      cancelDeferredFileTreePrefetchRef.current = null;
+      if (!input.isCurrent()) {
+        return;
+      }
+      void prefetchWorkspaceDirectories({
+        materializedWorkspaceId: input.materializedWorkspaceId,
+        anyharnessWorkspaceId: input.anyharnessWorkspaceId,
+        runtimeUrl: input.runtimeUrl,
+        treeStateKey: input.treeStateKey,
+        authToken: input.authToken,
+        isCurrent: input.isCurrent,
+      }).then(() => {
+        recordMeasurementWorkflowStep({
+          operationId: input.measurementOperationId,
+          step: "workspace.bootstrap.file_tree_init",
+          startedAt: input.startedAt,
+        });
+        logLatency("workspace.select.file_tree_prefetched", {
+          workspaceId: input.workspaceId,
+          elapsedMs: elapsedMs(input.startedAt),
+        });
+      }).catch(() => {
+        recordMeasurementWorkflowStep({
+          operationId: input.measurementOperationId,
+          step: "workspace.bootstrap.file_tree_init",
+          startedAt: input.startedAt,
+          outcome: "error_sanitized",
+        });
+      });
+    });
+    cancelDeferredFileTreePrefetchRef.current = cancel;
+  }, [
+    cancelDeferredFileTreePrefetch,
+    prefetchWorkspaceDirectories,
+  ]);
 
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
@@ -231,6 +298,7 @@ export function useWorkspaceBootstrapActions() {
       maxDurationMs: 30_000,
     });
     let measurementFinishReason: MeasurementFinishReason = "completed";
+    cancelDeferredFileTreePrefetch();
     const unbindMeasurementCategories = measurementOperationId
       ? bindMeasurementCategories({
         operationId: measurementOperationId,
@@ -259,6 +327,31 @@ export function useWorkspaceBootstrapActions() {
       : workspaceId;
     const sessionsStartedAt = startLatencyTimer();
     const initWorkspaceStartedAt = startLatencyTimer();
+    const fileWorkspaceArgs = {
+      workspaceUiKey: logicalWorkspaceId ?? workspaceId,
+      materializedWorkspaceId: workspaceId,
+      anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+      runtimeUrl: workspaceConnection.runtimeUrl,
+      treeStateKey,
+      authToken: workspaceConnection.authToken ?? undefined,
+    };
+    prepareFileWorkspace(fileWorkspaceArgs);
+    recordMeasurementWorkflowStep({
+      operationId: measurementOperationId,
+      step: "workspace.bootstrap.file_tree_init",
+      startedAt: initWorkspaceStartedAt,
+    });
+    scheduleDeferredFileTreePrefetch({
+      workspaceId,
+      materializedWorkspaceId: workspaceId,
+      anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+      runtimeUrl: workspaceConnection.runtimeUrl,
+      treeStateKey,
+      authToken: workspaceConnection.authToken ?? undefined,
+      measurementOperationId,
+      startedAt: initWorkspaceStartedAt,
+      isCurrent,
+    });
     let sessionsLoadFailed = false;
     const sessionsQueryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
     if (measurementOperationId) {
@@ -278,8 +371,7 @@ export function useWorkspaceBootstrapActions() {
       category: "session.list",
       headers: getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined,
     });
-    const [sessions] = await Promise.all([
-      loadWorkflowWorkspaceSessions({
+    const sessions = await loadWorkflowWorkspaceSessions({
         queryClient,
         queryKey: sessionsQueryKey,
         workspaceConnection,
@@ -313,29 +405,7 @@ export function useWorkspaceBootstrapActions() {
           fallback: "load_failed",
         });
         return [] as WorkspaceSession[];
-      }),
-      initForWorkspace({
-        workspaceUiKey: logicalWorkspaceId ?? workspaceId,
-        materializedWorkspaceId: workspaceId,
-        anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
-        runtimeUrl: workspaceConnection.runtimeUrl,
-        treeStateKey,
-        authToken: workspaceConnection.authToken ?? undefined,
-      }).then(() => {
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "workspace.bootstrap.file_tree_init",
-          startedAt: initWorkspaceStartedAt,
-        });
-        if (!isCurrent()) {
-          return;
-        }
-        logLatency("workspace.select.workspace_initialized", {
-          workspaceId,
-          elapsedMs: elapsedMs(initWorkspaceStartedAt),
-        });
-      }),
-    ]);
+      });
 
     if (!isCurrent()) {
       return { sessions };
@@ -375,7 +445,7 @@ export function useWorkspaceBootstrapActions() {
       });
 
       if (hasDismissedSessions) {
-        useHarnessStore.getState().setActiveSessionId(null);
+        useSessionSelectionStore.getState().setActiveSessionId(null);
         if (isCurrent()) {
           markWorkspaceBootstrappedInSession(workspaceId);
         }
@@ -385,11 +455,17 @@ export function useWorkspaceBootstrapActions() {
       const launchCatalogStartedAt = startLatencyTimer();
       const launchCatalog = await queryClient.ensureQueryData({
         queryKey: anyHarnessWorkspaceSessionLaunchKey(workspaceConnection.runtimeUrl, workspaceId),
-        queryFn: () => fetchWorkspaceLaunchCatalog(workspaceConnection, latencyFlowId),
+        queryFn: ({ signal }) => fetchWorkspaceLaunchCatalog(
+          workspaceConnection,
+          latencyFlowId,
+          signal,
+        ),
       }).catch(() => null);
       const modelRegistries = await queryClient.ensureQueryData({
         queryKey: anyHarnessModelRegistriesKey(runtimeUrl),
-        queryFn: () => getAnyHarnessClient(workspaceConnection).modelRegistries.list(),
+        queryFn: ({ signal }) => getAnyHarnessClient(workspaceConnection)
+          .modelRegistries
+          .list({ signal }),
       }).catch(() => EMPTY_MODEL_REGISTRIES);
 
       logLatency("workspace.select.launch_catalog_loaded", {
@@ -478,7 +554,7 @@ export function useWorkspaceBootstrapActions() {
       }
 
       if (targetSession && isCurrent()) {
-        const currentActiveSessionId = useHarnessStore.getState().activeSessionId;
+        const currentActiveSessionId = useSessionSelectionStore.getState().activeSessionId;
         if (currentActiveSessionId && currentActiveSessionId !== targetSession.id) {
           logLatency("workspace.select.session_select.skipped", {
             workspaceId,
@@ -538,11 +614,13 @@ export function useWorkspaceBootstrapActions() {
       }
     }
   }, [
-    initForWorkspace,
+    cancelDeferredFileTreePrefetch,
     lastViewedSessionByWorkspace,
     createEmptySessionWithResolvedConfig,
+    prepareFileWorkspace,
     preferences,
     queryClient,
+    scheduleDeferredFileTreePrefetch,
     selectSession,
     workspaceCollections,
   ]);
@@ -598,6 +676,7 @@ export function useWorkspaceBootstrapActions() {
         })
         : () => undefined;
       let finishReason: MeasurementFinishReason = "completed";
+      cancelDeferredFileTreePrefetch();
 
       try {
         const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
@@ -639,12 +718,12 @@ export function useWorkspaceBootstrapActions() {
           return "session_missing";
         }
 
-        const currentSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+        const currentSlot = getSessionRecord(sessionId);
         if (!currentSlot) {
           return "session_missing";
         }
         const storeStartedAt = performance.now();
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        patchSessionRecord(sessionId, {
           workspaceId,
           agentKind: sessionMeta.agentKind ?? currentSlot.agentKind,
           modelId: sessionMeta.modelId ?? currentSlot.modelId ?? null,
@@ -667,14 +746,15 @@ export function useWorkspaceBootstrapActions() {
         });
 
         const initStartedAt = startLatencyTimer();
-        await initForWorkspace({
+        const fileWorkspaceArgs = {
           workspaceUiKey: logicalWorkspaceId ?? workspaceId,
           materializedWorkspaceId: workspaceId,
           anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
           runtimeUrl: workspaceConnection.runtimeUrl,
           treeStateKey,
           authToken: workspaceConnection.authToken ?? undefined,
-        });
+        };
+        prepareFileWorkspace(fileWorkspaceArgs);
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.file_tree_init",
@@ -683,8 +763,19 @@ export function useWorkspaceBootstrapActions() {
         if (!isCurrent()) {
           return "stale";
         }
+        scheduleDeferredFileTreePrefetch({
+          workspaceId,
+          materializedWorkspaceId: workspaceId,
+          anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+          runtimeUrl: workspaceConnection.runtimeUrl,
+          treeStateKey,
+          authToken: workspaceConnection.authToken ?? undefined,
+          measurementOperationId,
+          startedAt: initStartedAt,
+          isCurrent,
+        });
 
-        const slotBeforeHydrate = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+        const slotBeforeHydrate = getSessionRecord(sessionId);
         const lastSeq = slotBeforeHydrate?.transcript.lastSeq ?? 0;
         const hydrateStartedAt = startLatencyTimer();
         const tailHydrated = await rehydrateSessionSlotFromHistory(sessionId, {
@@ -707,29 +798,12 @@ export function useWorkspaceBootstrapActions() {
         if (!isCurrent()) {
           return "stale";
         }
-        useHarnessStore.getState().patchSessionSlot(sessionId, { transcriptHydrated: true });
+        patchSessionRecord(sessionId, { transcriptHydrated: true });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "session.select.history_hydrate",
           startedAt: hydrateStartedAt,
         });
-
-        const streamStartedAt = startLatencyTimer();
-        await ensureSessionStreamConnected(sessionId, {
-          allowColdIdleNoStream: true,
-          resumeIfActive: true,
-          requestHeaders,
-          measurementOperationId,
-          isCurrent,
-        });
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "session.select.stream_connect",
-          startedAt: streamStartedAt,
-        });
-        if (!isCurrent()) {
-          return "stale";
-        }
 
         markWorkspaceBootstrappedInSession(workspaceId);
         markWorkspaceBootstrappedInSession(logicalWorkspaceId);
@@ -745,10 +819,11 @@ export function useWorkspaceBootstrapActions() {
         finishOrCancelMeasurementOperation(measurementOperationId, finishReason);
       }
     }, [
-      ensureSessionStreamConnected,
-      initForWorkspace,
+      cancelDeferredFileTreePrefetch,
+      prepareFileWorkspace,
       queryClient,
       rehydrateSessionSlotFromHistory,
+      scheduleDeferredFileTreePrefetch,
       workspaceCollections,
     ]),
   };

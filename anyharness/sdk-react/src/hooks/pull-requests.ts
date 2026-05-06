@@ -7,6 +7,7 @@ import {
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { anyHarnessPullRequestKey } from "../lib/query-keys.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 
 interface WorkspaceQueryOptions {
   workspaceId?: string | null;
@@ -27,10 +28,13 @@ export function useCurrentPullRequestQuery(options?: WorkspaceQueryOptions) {
     queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     retry: false,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.pullRequests.getCurrent(resolved.connection.anyharnessWorkspaceId);
+      return client.pullRequests.getCurrent(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }

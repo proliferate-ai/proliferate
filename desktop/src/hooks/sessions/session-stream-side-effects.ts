@@ -30,7 +30,7 @@ import {
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/stores/sessions/harness-store";
+} from "@/stores/sessions/session-types";
 import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,

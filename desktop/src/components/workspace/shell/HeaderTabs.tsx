@@ -1,7 +1,10 @@
 import {
   useCallback,
+  useEffect,
+  useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ListFilter, Plus } from "@/components/ui/icons";
@@ -43,6 +46,7 @@ import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
+import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
@@ -53,6 +57,7 @@ import {
   viewerTargetEditablePath,
 } from "@/lib/domain/workspaces/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
@@ -67,7 +72,7 @@ export function HeaderTabs() {
     childToParent: viewModel.childToParent,
   });
   const tabGroupActions = useTabGroupActions();
-  const tabActions = useWorkspaceTabActions();
+  const tabActions = useWorkspaceTabActions(viewModel);
   const { dismissSession } = useSessionActions();
   const { updateSessionTitle } = useSessionTitleActions();
   const showToast = useToastStore((state) => state.show);
@@ -80,6 +85,20 @@ export function HeaderTabs() {
   const { activateViewerTarget } = useWorkspaceShellActivation();
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const urgentHighlightedChatSessionId = useWorkspaceUiStore((state) =>
+    viewModel.workspaceUiKey
+      ? state.urgentHighlightedChatSessionByWorkspace[viewModel.workspaceUiKey] ?? null
+      : null
+  );
+  const setUrgentHighlightedChatSessionForWorkspace = useWorkspaceUiStore(
+    (state) => state.setUrgentHighlightedChatSessionForWorkspace,
+  );
+  const clearUrgentHighlightedChatSessionForWorkspace = useWorkspaceUiStore(
+    (state) => state.clearUrgentHighlightedChatSessionForWorkspace,
+  );
+  const urgentChatActivationAttemptRef = useRef(0);
+  const cancelUrgentChatActivationRef = useRef<(() => void) | null>(null);
+  const urgentHighlightTimeoutRef = useRef<number | null>(null);
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
   const shellTabOrderActions = useShellTabOrderActions({
     workspaceId: viewModel.workspaceUiKey,
@@ -170,6 +189,118 @@ export function HeaderTabs() {
       cooldownMs: 2000,
     });
   }, []);
+  const clearUrgentChatHighlight = useCallback(() => {
+    urgentChatActivationAttemptRef.current += 1;
+    cancelUrgentChatActivationRef.current?.();
+    cancelUrgentChatActivationRef.current = null;
+    if (urgentHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(urgentHighlightTimeoutRef.current);
+      urgentHighlightTimeoutRef.current = null;
+    }
+    if (viewModel.workspaceUiKey) {
+      clearUrgentHighlightedChatSessionForWorkspace(viewModel.workspaceUiKey);
+    }
+  }, [clearUrgentHighlightedChatSessionForWorkspace, viewModel.workspaceUiKey]);
+  const previewHeaderChatTab = useCallback((sessionId: string) => {
+    const workspaceUiKey = viewModel.workspaceUiKey;
+    if (!workspaceUiKey) {
+      return;
+    }
+    const attempt = urgentChatActivationAttemptRef.current + 1;
+    urgentChatActivationAttemptRef.current = attempt;
+    cancelUrgentChatActivationRef.current?.();
+    cancelUrgentChatActivationRef.current = null;
+    if (urgentHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(urgentHighlightTimeoutRef.current);
+      urgentHighlightTimeoutRef.current = null;
+    }
+
+    flushSync(() => {
+      setUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
+    });
+    urgentHighlightTimeoutRef.current = window.setTimeout(() => {
+      if (urgentChatActivationAttemptRef.current !== attempt) {
+        return;
+      }
+      urgentHighlightTimeoutRef.current = null;
+      clearUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
+    }, 700);
+  }, [
+    clearUrgentHighlightedChatSessionForWorkspace,
+    setUrgentHighlightedChatSessionForWorkspace,
+    viewModel.workspaceUiKey,
+  ]);
+  const activateHeaderChatTab = useCallback((sessionId: string) => {
+    const workspaceUiKey = viewModel.workspaceUiKey;
+    if (!workspaceUiKey) {
+      return;
+    }
+    const attempt = urgentChatActivationAttemptRef.current + 1;
+    urgentChatActivationAttemptRef.current = attempt;
+    cancelUrgentChatActivationRef.current?.();
+    cancelUrgentChatActivationRef.current = null;
+    if (urgentHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(urgentHighlightTimeoutRef.current);
+      urgentHighlightTimeoutRef.current = null;
+    }
+
+    flushSync(() => {
+      setUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
+    });
+    urgentHighlightTimeoutRef.current = window.setTimeout(() => {
+      if (urgentChatActivationAttemptRef.current !== attempt) {
+        return;
+      }
+      urgentHighlightTimeoutRef.current = null;
+      clearUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
+    }, 1500);
+
+    cancelUrgentChatActivationRef.current = scheduleAfterNextPaint(() => {
+      if (urgentChatActivationAttemptRef.current !== attempt) {
+        return;
+      }
+      cancelUrgentChatActivationRef.current = null;
+      chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
+    });
+  }, [
+    chatVisibilityActions,
+    clearUrgentHighlightedChatSessionForWorkspace,
+    setUrgentHighlightedChatSessionForWorkspace,
+    viewModel.workspaceUiKey,
+  ]);
+
+  useEffect(() => () => {
+    cancelUrgentChatActivationRef.current?.();
+    if (urgentHighlightTimeoutRef.current !== null) {
+      window.clearTimeout(urgentHighlightTimeoutRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!urgentHighlightedChatSessionId) {
+      return;
+    }
+    if (
+      viewModel.activeShellTab?.kind === "chat"
+      && viewModel.activeShellTab.sessionId === urgentHighlightedChatSessionId
+    ) {
+      if (urgentHighlightTimeoutRef.current !== null) {
+        window.clearTimeout(urgentHighlightTimeoutRef.current);
+        urgentHighlightTimeoutRef.current = null;
+      }
+      if (viewModel.workspaceUiKey) {
+        clearUrgentHighlightedChatSessionForWorkspace(
+          viewModel.workspaceUiKey,
+          urgentHighlightedChatSessionId,
+        );
+      }
+    }
+  }, [
+    clearUrgentHighlightedChatSessionForWorkspace,
+    urgentHighlightedChatSessionId,
+    viewModel.activeShellTab,
+    viewModel.workspaceUiKey,
+  ]);
 
   return (
     <DebugProfiler id="header-tabs">
@@ -203,7 +334,8 @@ export function HeaderTabs() {
             const target = shellRow.target;
             const targetKey = viewerTargetKey(target);
             const displayPath = viewerTargetDisplayPath(target);
-            const isActive = viewModel.activeShellTab?.kind === "viewer"
+            const isActive = !urgentHighlightedChatSessionId
+              && viewModel.activeShellTab?.kind === "viewer"
               && viewerTargetKey(viewModel.activeShellTab.target) === targetKey;
             const bufferPath = viewerTargetEditablePath(target);
             const buf = bufferPath ? viewModel.buffersByPath[bufferPath] : null;
@@ -240,6 +372,7 @@ export function HeaderTabs() {
                       return;
                     }
                     if (viewModel.selectedWorkspaceId) {
+                      clearUrgentChatHighlight();
                       activateViewerTarget({
                         workspaceId: viewModel.selectedWorkspaceId,
                         shellWorkspaceId: viewModel.workspaceUiKey,
@@ -316,7 +449,12 @@ export function HeaderTabs() {
             );
           }
 
-          const tab = row.tab;
+          const tab = urgentHighlightedChatSessionId
+            ? {
+              ...row.tab,
+              isActive: row.tab.id === urgentHighlightedChatSessionId,
+            }
+            : row.tab;
           const canMultiSelect = !tab.isChild;
           const canCreateGroup = canMultiSelect
             && multiSelect.multiSelectedSessionIds.has(tab.id)
@@ -367,6 +505,9 @@ export function HeaderTabs() {
                 }}
                 onSelectPointerDownCapture={(event) => {
                   if (!canMultiSelect || !isPrimaryMultiSelectPointer(event)) {
+                    if (event.isPrimary && event.button === 0) {
+                      previewHeaderChatTab(tab.id);
+                    }
                     return;
                   }
                   event.preventDefault();
@@ -382,6 +523,7 @@ export function HeaderTabs() {
                 }}
                 onSelect={(event) => {
                   if (shellDrag.shouldSuppressClick(rowId)) {
+                    clearUrgentChatHighlight();
                     return;
                   }
                   if (multiSelect.consumeSuppressedSelectClick(tab.id)) {
@@ -394,7 +536,7 @@ export function HeaderTabs() {
                     return;
                   }
                   multiSelect.clearSelection();
-                  chatVisibilityActions.showChatSessionTab(tab.id, { select: true });
+                  activateHeaderChatTab(tab.id);
                 }}
                 onClose={() => {
                   multiSelect.clearSelection();
@@ -448,6 +590,7 @@ export function HeaderTabs() {
         disabled={!tabActions.canOpenNewSessionTab}
         onClick={() => tabActions.openNewSessionTab()}
         title={tabActions.newSessionDisabledReason ?? "New chat"}
+        data-chat-new-tab-button
         className="mb-1.5 ml-0.5 size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
       >
         <Plus className="size-3" />

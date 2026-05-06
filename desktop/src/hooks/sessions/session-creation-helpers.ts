@@ -1,16 +1,25 @@
 import type {
+  ContentPart,
   ModelRegistry,
   ModelRegistryModel,
+  PromptInputBlock,
   Session,
   WorkspaceSessionLaunchCatalog,
 } from "@anyharness/sdk";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
-import type { SessionSlot } from "@/stores/sessions/harness-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import type { PausedSessionModelAvailability } from "@/hooks/sessions/use-session-model-availability-workflow";
+import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
+import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
+import {
+  patchSessionRecord,
+  removeSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 
 export function resolveSessionCreationModeId(input: {
   explicitModeId?: string | null;
@@ -35,55 +44,71 @@ export function buildLatencyRequestOptions(latencyFlowId?: string | null) {
   return headers ? { headers } : undefined;
 }
 
-export function replacePendingSessionSlot(
-  pendingSessionId: string,
-  nextSessionId: string,
-  slot: SessionSlot,
-  options?: { remapActiveSession?: boolean },
-): void {
-  useHarnessStore.setState((state) => {
-    const nextSlots = { ...state.sessionSlots };
-    delete nextSlots[pendingSessionId];
-    nextSlots[nextSessionId] = slot;
-    const shouldRemapActiveSession =
-      options?.remapActiveSession !== false
-      && state.activeSessionId === pendingSessionId;
-    const shouldClearDanglingActiveSession =
-      !shouldRemapActiveSession && state.activeSessionId === pendingSessionId;
-    const nextActiveSessionId = shouldRemapActiveSession
-      ? nextSessionId
-      : shouldClearDanglingActiveSession
-        ? null
-      : state.activeSessionId;
-    const activeSessionChanged = nextActiveSessionId !== state.activeSessionId;
+export interface SessionCreateWithResolvedConfigRetryOptions {
+  text: string;
+  blocks?: PromptInputBlock[];
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
+  optimisticContentParts?: ContentPart[];
+  agentKind: string;
+  modelId: string;
+  modeId?: string;
+  launchControlValues?: Record<string, string>;
+  workspaceId?: string;
+  latencyFlowId?: string | null;
+  measurementOperationId?: MeasurementOperationId | null;
+  promptId?: string | null;
+  launchIntentId?: string | null;
+  clientSessionId?: string | null;
+  reuseInFlightEmptySession?: boolean;
+  preferExistingCompatibleSession?: boolean;
+  modelAvailabilityRetryCount?: number;
+  skipInitialPromptEnqueue?: boolean;
+  onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
+}
 
-    return {
-      activeSessionId: nextActiveSessionId,
-      activeSessionVersion: activeSessionChanged
-        ? state.activeSessionVersion + 1
-        : state.activeSessionVersion,
-      sessionSlots: nextSlots,
-    };
+export function buildModelAvailabilityRetryOptions({
+  options,
+  pendingSessionId,
+  promptId,
+  hasPrompt,
+}: {
+  options: SessionCreateWithResolvedConfigRetryOptions;
+  pendingSessionId: string;
+  promptId: string | null;
+  hasPrompt: boolean;
+}): SessionCreateWithResolvedConfigRetryOptions {
+  return {
+    ...options,
+    clientSessionId: pendingSessionId,
+    promptId,
+    latencyFlowId: null,
+    measurementOperationId: null,
+    reuseInFlightEmptySession: false,
+    skipInitialPromptEnqueue: hasPrompt,
+  };
+}
+
+export function materializeSessionRecord(
+  clientSessionId: string,
+  materializedSessionId: string,
+  record: SessionRuntimeRecord,
+): void {
+  batchSessionStoreWrites(() => {
+    patchSessionRecord(clientSessionId, {
+      ...record,
+      sessionId: clientSessionId,
+      materializedSessionId,
+    });
   });
 }
 
-export function removeSessionSlot(sessionId: string): void {
-  useHarnessStore.setState((state) => {
-    if (!state.sessionSlots[sessionId]) {
-      return state;
+export function removeSessionRecordAndClearSelection(sessionId: string): void {
+  batchSessionStoreWrites(() => {
+    removeSessionRecord(sessionId);
+    const selection = useSessionSelectionStore.getState();
+    if (selection.activeSessionId === sessionId) {
+      selection.setActiveSessionId(null);
     }
-
-    const nextSlots = { ...state.sessionSlots };
-    delete nextSlots[sessionId];
-    const shouldClearActiveSession = state.activeSessionId === sessionId;
-
-    return {
-      activeSessionId: shouldClearActiveSession ? null : state.activeSessionId,
-      activeSessionVersion: shouldClearActiveSession
-        ? state.activeSessionVersion + 1
-        : state.activeSessionVersion,
-      sessionSlots: nextSlots,
-    };
   });
 }
 

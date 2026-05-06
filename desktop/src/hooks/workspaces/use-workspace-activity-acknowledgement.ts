@@ -10,11 +10,11 @@ import {
 } from "@/hooks/ui/use-document-focus-visibility";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useWorkspaceActivityAcknowledgement(): void {
   const focusVisibilityNonce = useDocumentFocusVisibilityNonce();
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { logicalWorkspaces } = useLogicalWorkspaces();

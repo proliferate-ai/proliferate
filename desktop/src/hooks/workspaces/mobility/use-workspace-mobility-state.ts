@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/use-selected-logical-workspace";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
@@ -11,7 +11,7 @@ import { useCloudMobilityWorkspaceDetail } from "@/hooks/cloud/use-cloud-mobilit
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 
 export function useWorkspaceMobilityState() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { selectedLogicalWorkspace, selectedLogicalWorkspaceId, isLoading } = useSelectedLogicalWorkspace();
   const confirmSnapshot = useWorkspaceMobilityUiStore((state) => (
     selectedLogicalWorkspaceId

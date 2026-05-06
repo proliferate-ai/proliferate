@@ -7,7 +7,7 @@ import { ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
   deleteCloudCredential,
 } from "@/lib/integrations/cloud/credentials";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { getProviderDisplayName } from "@/config/providers";
 import {
@@ -38,7 +38,7 @@ function describeCloudCredentialActionFailure(
 
 export function useCloudCredentialActions() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const showToast = useToastStore((state) => state.show);
 
   const syncMutation = useMutation<

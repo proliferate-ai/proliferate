@@ -6,6 +6,10 @@ export function anyHarnessRuntimeHealthKey(runtimeUrl: string | null | undefined
   return [...anyHarnessRuntimeKey(runtimeUrl), "health"] as const;
 }
 
+export function anyHarnessEffectiveAgentCatalogKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "catalogs", "agents", "effective"] as const;
+}
+
 export function anyHarnessAgentsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "agents"] as const;
 }
@@ -412,6 +416,8 @@ export function anyHarnessWorkspaceQueryKeyRoots(
     anyHarnessWorkspaceMobilityKey(runtimeUrl, workspaceId),
     anyHarnessCoworkManifestKey(runtimeUrl, workspaceId),
     anyHarnessCoworkArtifactScopeKey(runtimeUrl, workspaceId),
+    anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+    anyHarnessWorkspacePurgePreflightKey(runtimeUrl, workspaceId),
     anyHarnessWorkspaceSessionLaunchKey(runtimeUrl, workspaceId),
     anyHarnessSessionsKey(runtimeUrl, workspaceId),
     anyHarnessSessionScopeKey(runtimeUrl, workspaceId),

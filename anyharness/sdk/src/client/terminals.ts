@@ -7,14 +7,18 @@ import type {
   TerminalRecord,
   UpdateTerminalTitleRequest,
 } from "../types/terminals.js";
-import type { AnyHarnessTransport } from "./core.js";
+import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class TerminalsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async list(workspaceId: string): Promise<TerminalRecord[]> {
+  async list(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<TerminalRecord[]> {
     return this.transport.get<TerminalRecord[]>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/terminals`,
+      options,
     );
   }
 

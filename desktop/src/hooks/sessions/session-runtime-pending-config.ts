@@ -4,7 +4,10 @@ import {
   snapshotQueuedPendingConfigMutationIds,
   type PendingSessionConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  getSessionRecord,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
 
 const pendingConfigRollbackTimers = new Map<string, number>();
 
@@ -42,7 +45,7 @@ export function schedulePendingConfigRollbackCheck(
   ) => Promise<void>,
   showToast: (message: string, type?: "error" | "info") => void,
 ): void {
-  const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+  const slot = getSessionRecord(sessionId);
   if (!slot || !hasQueuedPendingConfigChanges(slot.pendingConfigChanges)) {
     clearPendingConfigRollbackCheck(sessionId);
     return;
@@ -55,7 +58,7 @@ export function schedulePendingConfigRollbackCheck(
 
     void refreshSessionSlotMeta(sessionId, { resumeIfActive: false })
       .finally(() => {
-        const latestSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+        const latestSlot = getSessionRecord(sessionId);
         if (!latestSlot) {
           return;
         }
@@ -69,7 +72,7 @@ export function schedulePendingConfigRollbackCheck(
           return;
         }
 
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
+        patchSessionRecord(sessionId, {
           pendingConfigChanges: withoutPendingConfigChanges(
             latestSlot.pendingConfigChanges,
             failedQueuedChanges.map((change) => change.rawConfigId),

@@ -115,6 +115,7 @@ export interface UserMessageItem extends TranscriptBaseItem {
   kind: "user_message";
   text: string;
   isStreaming: boolean;
+  promptId?: string | null;
   promptProvenance?: PromptProvenance | null;
 }
 

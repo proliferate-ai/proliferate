@@ -4,18 +4,17 @@ import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useChatLaunchIntentActions() {
   const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const clearIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
   const setHomeDraftText = useHomeDraftHandoffStore((state) => state.setDraftText);
-  const deselectWorkspacePreservingSlots = useHarnessStore(
-    (state) => state.deselectWorkspacePreservingSlots,
+  const deselectWorkspacePreservingSlots = useSessionSelectionStore(
+    (state) => state.deselectWorkspacePreservingSessions,
   );
   const setSelectedLogicalWorkspaceId =
-    useLogicalWorkspaceStore((state) => state.setSelectedLogicalWorkspaceId);
+    useSessionSelectionStore((state) => state.setSelectedLogicalWorkspaceId);
   const { isLaunching, launch } = useHomeNextLaunch();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const { selectWorkspace } = useWorkspaceSelection();
@@ -55,7 +54,7 @@ export function useChatLaunchIntentActions() {
     if (intent.materializedWorkspaceId && intent.materializedSessionId) {
       void openWorkspaceSession({
         workspaceId: intent.materializedWorkspaceId,
-        sessionId: intent.materializedSessionId,
+        sessionId: intent.clientSessionId ?? intent.materializedSessionId,
         forceWorkspaceSelection: true,
       }).catch(() => undefined);
       return;

@@ -3,14 +3,24 @@ import { ChatView } from "@/components/workspace/chat/ChatView";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/use-workspace-content-shortcuts";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
 import { viewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
 
 export const WorkspaceContentView = memo(function WorkspaceContentView() {
-  const tabActions = useWorkspaceTabActions();
   const headerTabs = useWorkspaceHeaderTabsViewModelContext();
+  const tabActions = useWorkspaceTabActions(headerTabs);
   useWorkspaceContentShortcuts(tabActions);
+  const renderSurface = headerTabs.activation.renderSurface;
+  useDebugValueChange("workspace_content.inputs", "active_surface_refs", {
+    activeShellTab: headerTabs.activeShellTab,
+    activeShellTabKey: headerTabs.activeShellTabKey,
+    activation: headerTabs.activation,
+    renderSurfaceKind: renderSurface.kind,
+    renderSurfaceSessionId: "sessionId" in renderSurface ? renderSurface.sessionId : null,
+    renderSurfaceTargetKey: "targetKey" in renderSurface ? renderSurface.targetKey : null,
+  });
 
   return (
     <div className="h-full flex flex-col">

@@ -274,6 +274,26 @@
         }
       }
     },
+    "/v1/catalogs/agents/effective": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_effective_agent_launch_catalog",
+        "responses": {
+          "200": {
+            "description": "Effective runtime agent launch catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSessionLaunchCatalog"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cowork": {
       "get": {
         "tags": [
@@ -10363,6 +10383,12 @@
           "reason"
         ],
         "properties": {
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "reason": {
             "$ref": "#/components/schemas/PendingPromptRemovalReason"
           },
@@ -10426,6 +10452,12 @@
             "items": {
               "$ref": "#/components/schemas/ContentPart"
             }
+          },
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "promptProvenance": {
             "oneOf": [
@@ -11034,6 +11066,12 @@
             "items": {
               "$ref": "#/components/schemas/PromptInputBlock"
             }
+          },
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -14635,6 +14673,12 @@
               "null"
             ]
           },
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "promptProvenance": {
             "oneOf": [
               {
@@ -15856,6 +15900,12 @@
           "kind": {
             "type": "string"
           },
+          "launchControls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSessionLaunchControl"
+            }
+          },
           "models": {
             "type": "array",
             "items": {
@@ -15868,6 +15918,7 @@
         "type": "object",
         "required": [
           "workspaceId",
+          "catalogVersion",
           "agents"
         ],
         "properties": {
@@ -15877,7 +15928,95 @@
               "$ref": "#/components/schemas/WorkspaceSessionLaunchAgent"
             }
           },
+          "catalogVersion": {
+            "type": "string"
+          },
           "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceSessionLaunchControl": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "type",
+          "values",
+          "phase"
+        ],
+        "properties": {
+          "createField": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "defaultValue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "key": {
+            "$ref": "#/components/schemas/WorkspaceSessionLaunchControlKey"
+          },
+          "label": {
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/WorkspaceSessionLaunchControlPhase"
+          },
+          "type": {
+            "type": "string"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSessionLaunchControlValue"
+            }
+          }
+        }
+      },
+      "WorkspaceSessionLaunchControlKey": {
+        "type": "string",
+        "enum": [
+          "mode",
+          "collaboration_mode",
+          "access_mode",
+          "reasoning",
+          "effort",
+          "fast_mode"
+        ]
+      },
+      "WorkspaceSessionLaunchControlPhase": {
+        "type": "string",
+        "enum": [
+          "create_session",
+          "live_default"
+        ]
+      },
+      "WorkspaceSessionLaunchControlValue": {
+        "type": "object",
+        "required": [
+          "value",
+          "label",
+          "isDefault"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
             "type": "string"
           }
         }
@@ -15898,6 +16037,12 @@
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "launchControls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSessionLaunchControl"
+            }
           }
         }
       },

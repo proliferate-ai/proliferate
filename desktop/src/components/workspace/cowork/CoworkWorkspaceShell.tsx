@@ -18,7 +18,8 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/stores/preferences/workspace-ui-store";
 import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 
 interface CoworkWorkspaceShellProps {
@@ -58,11 +59,12 @@ export function CoworkWorkspaceShell({
   });
   const {
     activeSessionId,
-    activeSlot,
-  } = useHarnessStore(useShallow((state) => ({
+  } = useSessionSelectionStore(useShallow((state) => ({
     activeSessionId: state.activeSessionId,
-    activeSlot: state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null,
   })));
+  const activeSlot = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
+  );
   const {
     phase: updaterPhase,
     downloadProgress,

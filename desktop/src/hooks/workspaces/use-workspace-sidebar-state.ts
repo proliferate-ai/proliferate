@@ -11,7 +11,6 @@ import {
   type SidebarEmptyState,
   type SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar";
-import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/use-workspace-metadata-sync";
@@ -19,8 +18,8 @@ import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/use-workspace-
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 
 interface UseWorkspaceSidebarStateArgs {
@@ -47,8 +46,9 @@ const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {}
 export function useWorkspaceSidebarState({
   showArchived,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const lastViewedSessionErrorAtBySession = useWorkspaceUiStore((state) =>
     state.lastViewedSessionErrorAtBySession
     ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION
@@ -57,10 +57,11 @@ export function useWorkspaceSidebarState({
     lastViewedSessionErrorAtBySession,
   );
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
-  const activeSessionTitle = useHarnessStore((state) => {
-    const sessionId = state.activeSessionId;
-    const slot = sessionId ? state.sessionSlots[sessionId] : null;
-    return slot ? getEffectiveSessionTitle(slot) : null;
+  const activeSessionTitle = useSessionDirectoryStore((state) => {
+    const entry = activeSessionId ? state.entriesById[activeSessionId] : null;
+    return entry
+      ? entry.title?.trim() || entry.activity.transcriptTitle?.trim() || null
+      : null;
   });
 
   const {

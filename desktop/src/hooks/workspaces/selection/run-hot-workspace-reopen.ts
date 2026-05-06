@@ -7,7 +7,13 @@ import {
   rememberLastViewedSession,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  getMaterializedSessionId,
+  getSessionRecords,
+  removeSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
 import {
   finishMeasurementOperation,
@@ -18,6 +24,7 @@ import {
 } from "@/lib/infra/debug-measurement";
 import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
+import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
 import { runWorkspaceSelection } from "./run-workspace-selection";
@@ -50,7 +57,7 @@ export function runHotWorkspaceReopen(
     return false;
   }
 
-  const state = useHarnessStore.getState();
+  const state = useSessionSelectionStore.getState();
   if (state.selectedWorkspaceId === resolvedWorkspaceId && !request.options?.force) {
     return false;
   }
@@ -60,7 +67,7 @@ export function runHotWorkspaceReopen(
     logicalWorkspace,
     initialActiveSessionId: request.options?.initialActiveSessionId ?? null,
     lastViewedSessionByWorkspace: useWorkspaceUiStore.getState().lastViewedSessionByWorkspace,
-    sessionSlots: state.sessionSlots,
+    sessionSlots: getSessionRecords(),
     isPendingSessionId,
   });
   if (!candidate) {
@@ -87,24 +94,25 @@ export function runHotWorkspaceReopen(
     maxDurationMs: 2500,
   });
 
-  deps.setSelectedLogicalWorkspaceId(logicalWorkspace ? logicalWorkspace.id : null);
-  deps.setSelectedWorkspace(resolvedWorkspaceId, {
+  const nonce = useSessionSelectionStore.getState().workspaceSelectionNonce + 1;
+  cancelPreviousWorkspaceDisplayQueries({
+    queryClient: deps.queryClient,
+    runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
+    previousWorkspaceIds: [state.selectedLogicalWorkspaceId, state.selectedWorkspaceId],
+    nextWorkspaceIds: [logicalWorkspace?.id ?? null, resolvedWorkspaceId],
+  });
+  useSessionSelectionStore.getState().activateHotWorkspace({
+    logicalWorkspaceId: logicalWorkspace ? logicalWorkspace.id : null,
+    workspaceId: resolvedWorkspaceId,
     clearPending: !request.options?.preservePending,
     initialActiveSessionId: candidate.sessionId,
-  });
-  rememberLastViewedSession(resolvedWorkspaceId, candidate.sessionId);
-  if (logicalWorkspace) {
-    rememberLastViewedSession(logicalWorkspace.id, candidate.sessionId);
-  }
-  markWorkspaceViewed(logicalWorkspaceId);
-
-  const nonce = useHarnessStore.getState().workspaceSelectionNonce;
-  useHarnessStore.getState().setHotPaintGate({
-    workspaceId: resolvedWorkspaceId,
-    sessionId: candidate.sessionId,
-    nonce,
-    operationId,
-    kind: "workspace_hot_reopen",
+    hotPaintGate: {
+      workspaceId: resolvedWorkspaceId,
+      sessionId: candidate.sessionId,
+      nonce,
+      operationId,
+      kind: "workspace_hot_reopen",
+    },
   });
   recordMeasurementWorkflowStep({
     operationId,
@@ -125,7 +133,7 @@ export function runHotWorkspaceReopen(
   }
 
   scheduleAfterNextPaint(() => {
-    const current = useHarnessStore.getState();
+    const current = useSessionSelectionStore.getState();
     if (current.hotPaintGate?.nonce !== nonce) {
       finishOrCancelMeasurementOperation(operationId, "aborted");
       return;
@@ -139,6 +147,14 @@ export function runHotWorkspaceReopen(
     if (operationId) {
       finishMeasurementOperation(operationId, "completed");
     }
+    const lastViewedSessionId = resolvePersistableLastViewedSessionId(candidate.sessionId);
+    if (lastViewedSessionId) {
+      rememberLastViewedSession(resolvedWorkspaceId, lastViewedSessionId);
+    }
+    if (logicalWorkspace && lastViewedSessionId) {
+      rememberLastViewedSession(logicalWorkspace.id, lastViewedSessionId);
+    }
+    markWorkspaceViewed(logicalWorkspaceId);
     void reconcileAfterHotPaint({
       deps,
       request,
@@ -150,6 +166,16 @@ export function runHotWorkspaceReopen(
   });
 
   return true;
+}
+
+function resolvePersistableLastViewedSessionId(sessionId: string): string | null {
+  const materializedSessionId = getMaterializedSessionId(sessionId);
+  if (materializedSessionId) {
+    return materializedSessionId;
+  }
+  return sessionId.startsWith("client-session:") || sessionId.startsWith("pending-session:")
+    ? null
+    : sessionId;
 }
 
 async function reconcileAfterHotPaint(input: {
@@ -170,7 +196,7 @@ async function reconcileAfterHotPaint(input: {
   };
   const isCurrent = () =>
     isWorkspaceSelectionCurrent(resolvedWorkspaceId, nonce)
-    && useHarnessStore.getState().activeSessionId === sessionId;
+    && useSessionSelectionStore.getState().activeSessionId === sessionId;
 
   if (!isCurrent()) {
     return;
@@ -214,10 +240,10 @@ async function reconcileAfterHotPaint(input: {
   }
 
   suppressHotReopenRecovery(resolvedWorkspaceId, sessionId);
-  const state = useHarnessStore.getState();
-  state.removeSessionSlot(sessionId);
-  if (state.activeSessionId === sessionId) {
-    state.setActiveSessionId(null);
+  removeSessionRecord(sessionId);
+  const selectionState = useSessionSelectionStore.getState();
+  if (selectionState.activeSessionId === sessionId) {
+    selectionState.setActiveSessionId(null);
   }
   await runWorkspaceSelection(deps, {
     workspaceId: request.workspaceId,

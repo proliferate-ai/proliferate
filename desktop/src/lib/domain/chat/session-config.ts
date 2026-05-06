@@ -105,6 +105,7 @@ export function mergeLaunchAgentsWithRegistries(
     const decoratedModels = agent.models.map((model) => {
       const registryModel = resolveRegistryModelForRow(registry, model.id);
       return {
+        ...model,
         id: model.id,
         displayName: registryModel?.displayName ?? model.displayName,
         isDefault: model.isDefault,

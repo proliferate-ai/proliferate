@@ -12,6 +12,7 @@ import type {
 import type {
   AssistantProseItem,
   ErrorItem,
+  PendingPromptEntry,
   PendingMcpElicitationInteraction,
   PendingInteraction,
   PendingApproval,
@@ -222,24 +223,23 @@ export function reduceEvent(
       break;
 
     case "pending_prompt_added":
-      s.pendingPrompts = [
-        ...s.pendingPrompts,
-        {
-          seq: evt.seq,
-          promptId: evt.promptId ?? null,
-          text: evt.text,
-          contentParts: normalizeContentParts(evt.contentParts ?? []),
-          queuedAt: evt.queuedAt,
-          promptProvenance: evt.promptProvenance ?? null,
-        },
-      ];
+      s.pendingPrompts = upsertPendingPrompt(s.pendingPrompts, {
+        seq: evt.seq,
+        promptId: evt.promptId ?? null,
+        text: evt.text,
+        contentParts: normalizeContentParts(evt.contentParts ?? []),
+        queuedAt: evt.queuedAt,
+        promptProvenance: evt.promptProvenance ?? null,
+      });
       break;
 
     case "pending_prompt_updated":
       s.pendingPrompts = s.pendingPrompts.map((entry) =>
-        entry.seq === evt.seq
+        pendingPromptMatches(entry, evt.seq)
           ? {
             ...entry,
+            seq: evt.seq,
+            promptId: evt.promptId ?? entry.promptId,
             text: evt.text,
             contentParts: normalizeContentParts(evt.contentParts ?? []),
             promptProvenance: evt.promptProvenance ?? entry.promptProvenance,
@@ -250,7 +250,7 @@ export function reduceEvent(
 
     case "pending_prompt_removed":
       s.pendingPrompts = s.pendingPrompts.filter(
-        (entry) => entry.seq !== evt.seq,
+        (entry) => !pendingPromptMatches(entry, evt.seq),
       );
       break;
 
@@ -423,6 +423,7 @@ function createItemFromPayload(
         ...base,
         text: extractText(base.contentParts),
         isStreaming: payload.status === "in_progress",
+        promptId: payload.promptId ?? null,
         promptProvenance: payload.promptProvenance ?? null,
       };
 
@@ -510,6 +511,9 @@ function applyPayload(item: KnownTranscriptItem, payload: TranscriptItemPayload,
   item.contentParts = mergeContentParts(item.contentParts, payload.contentParts ?? []);
   if (item.kind === "user_message" && payload.promptProvenance !== undefined) {
     item.promptProvenance = payload.promptProvenance ?? null;
+  }
+  if (item.kind === "user_message" && payload.promptId !== undefined) {
+    item.promptId = payload.promptId ?? null;
   }
   item.lastUpdatedSeq = seq;
   item.completedAt = payload.status === "in_progress" ? null : ts;
@@ -1457,6 +1461,34 @@ function normalizeToolNameForSemanticKind(
   }
 
   return (title ?? "").trim().toLowerCase();
+}
+
+function pendingPromptMatches(
+  entry: PendingPromptEntry,
+  seq: number,
+): boolean {
+  return entry.seq === seq;
+}
+
+function upsertPendingPrompt(
+  entries: PendingPromptEntry[],
+  nextEntry: PendingPromptEntry,
+): PendingPromptEntry[] {
+  const index = entries.findIndex((entry) =>
+    pendingPromptMatches(entry, nextEntry.seq)
+  );
+  if (index === -1) {
+    return [...entries, nextEntry];
+  }
+  return entries.map((entry, entryIndex) =>
+    entryIndex === index
+      ? {
+        ...entry,
+        ...nextEntry,
+        promptId: nextEntry.promptId ?? entry.promptId,
+      }
+      : entry
+  );
 }
 
 function collectFileBadges(s: TranscriptState, turnId: string) {

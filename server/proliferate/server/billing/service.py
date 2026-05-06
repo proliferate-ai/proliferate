@@ -19,13 +19,13 @@ from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
     BILLING_MODE_OFF,
-    BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
-    BILLING_USAGE_EXPORT_STATUS_OBSERVED,
-    BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
     BILLING_PLAN_FREE,
     BILLING_PLAN_PRO,
     BILLING_PRICE_CLASS_LEGACY_CLOUD,
     BILLING_PRICE_CLASS_PRO,
+    BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
+    BILLING_USAGE_EXPORT_STATUS_OBSERVED,
+    BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
     MONTHLY_CLOUD_GRANT_TYPE,
@@ -58,8 +58,8 @@ from proliferate.db.store.billing import (
     BillingSnapshotState,
     account_usage_for_billing_subject,
     bind_stripe_customer_to_billing_subject,
-    claim_usage_exports_for_sending,
     claim_pending_seat_adjustments,
+    claim_usage_exports_for_sending,
     count_active_seats_for_billing_subject_id,
     ensure_billing_grant_record,
     get_or_create_stripe_customer_state_for_organization,
@@ -67,11 +67,11 @@ from proliferate.db.store.billing import (
     list_billing_subject_ids_for_usage_accounting,
     load_billing_snapshot_state,
     load_billing_snapshot_state_for_subject,
-    mark_usage_export_failed,
-    mark_usage_export_succeeded,
     mark_seat_adjustment_failed,
     mark_seat_adjustment_grant_issued,
     mark_seat_adjustment_stripe_confirmed,
+    mark_usage_export_failed,
+    mark_usage_export_succeeded,
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
     set_overage_policy_for_subject,
@@ -193,9 +193,8 @@ def _compute_unlimited_cloud_hours_state(
 ) -> UnlimitedCloudHoursState:
     subscription = _latest_healthy_cloud_subscription(subscriptions, now)
     manual_entitlement = _active_unlimited_cloud_entitlement(entitlements, now)
-    legacy_cloud_subscription = (
-        subscription is not None
-        and (not settings.pro_billing_enabled or _subscription_is_legacy_cloud(subscription))
+    legacy_cloud_subscription = subscription is not None and (
+        not settings.pro_billing_enabled or _subscription_is_legacy_cloud(subscription)
     )
     unlimited_boundaries = [
         boundary
@@ -233,7 +232,10 @@ def _hold_reason(holds: list[BillingHold]) -> str | None:
 def _subscription_is_cloud(subscription: BillingSubscription) -> bool:
     if not settings.pro_billing_enabled:
         configured_price_id = settings.stripe_cloud_monthly_price_id
-        return bool(configured_price_id) and subscription.cloud_monthly_price_id == configured_price_id
+        return (
+            bool(configured_price_id)
+            and subscription.cloud_monthly_price_id == configured_price_id
+        )
     return classify_monthly_price_id(subscription.cloud_monthly_price_id) in {
         BILLING_PRICE_CLASS_PRO,
         BILLING_PRICE_CLASS_LEGACY_CLOUD,
@@ -241,7 +243,9 @@ def _subscription_is_cloud(subscription: BillingSubscription) -> bool:
 
 
 def _subscription_is_pro(subscription: BillingSubscription) -> bool:
-    return classify_monthly_price_id(subscription.cloud_monthly_price_id) == BILLING_PRICE_CLASS_PRO
+    return (
+        classify_monthly_price_id(subscription.cloud_monthly_price_id) == BILLING_PRICE_CLASS_PRO
+    )
 
 
 def _subscription_is_legacy_cloud(subscription: BillingSubscription) -> bool:
@@ -441,8 +445,12 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         unlimited_state.legacy_cloud_subscription and settings.pro_billing_enabled
     )
     if settings.pro_billing_enabled:
-        plan = BILLING_PLAN_PRO if (is_paid_cloud or active_manual_unlimited) else BILLING_PLAN_FREE
-        cloud_repo_limit = numeric_policy.repo_environment_limit if numeric_policy is not None else None
+        plan = (
+            BILLING_PLAN_PRO if (is_paid_cloud or active_manual_unlimited) else BILLING_PLAN_FREE
+        )
+        cloud_repo_limit = (
+            numeric_policy.repo_environment_limit if numeric_policy is not None else None
+        )
         billable_seat_count = (
             numeric_policy.billable_seat_count if numeric_policy is not None else None
         )

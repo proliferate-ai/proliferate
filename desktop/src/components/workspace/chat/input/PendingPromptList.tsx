@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
 import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
+import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
 import {
@@ -12,7 +13,7 @@ import {
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];
   onBeginEdit: (seq: number) => void;
-  onDelete: (seq: number) => void;
+  onDelete: (entry: PendingPromptQueueRow) => void;
 }
 
 /**
@@ -38,7 +39,7 @@ export function PendingPromptList({
     >
       {entries.map((entry) => (
         <PendingPromptRow
-          key={entry.seq}
+          key={entry.key}
           entry={entry}
           onBeginEdit={onBeginEdit}
           onDelete={onDelete}
@@ -52,17 +53,26 @@ export function ConnectedPendingPromptList() {
   const activeSessionId = useActiveSessionId();
   const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
   const deletePendingPrompt = useDeletePendingPrompt();
+  const { cancelBeforeDispatch, dismissPrompt } = usePromptOutboxActions();
   const rows = useMemo(
     () => visiblePendingPrompts.map(derivePendingPromptQueueRow),
     [visiblePendingPrompts],
   );
 
   const handleDelete = useCallback(
-    (seq: number) => {
-      if (!activeSessionId) return;
-      void deletePendingPrompt(activeSessionId, seq);
+    (entry: PendingPromptQueueRow) => {
+      if (entry.deleteAction === "cancel_local" && entry.promptId) {
+        cancelBeforeDispatch(entry.promptId);
+        return;
+      }
+      if (entry.deleteAction === "dismiss_local" && entry.promptId) {
+        dismissPrompt(entry.promptId);
+        return;
+      }
+      if (!activeSessionId || entry.deleteAction !== "runtime") return;
+      void deletePendingPrompt(activeSessionId, entry.seq);
     },
-    [activeSessionId, deletePendingPrompt],
+    [activeSessionId, cancelBeforeDispatch, deletePendingPrompt, dismissPrompt],
   );
   const handleBeginEdit = useCallback(
     (seq: number) => {
@@ -89,7 +99,7 @@ export function ConnectedPendingPromptList() {
 interface PendingPromptRowProps {
   entry: PendingPromptQueueRow;
   onBeginEdit: (seq: number) => void;
-  onDelete: (seq: number) => void;
+  onDelete: (entry: PendingPromptQueueRow) => void;
 }
 
 function PendingPromptRow({
@@ -106,8 +116,8 @@ function PendingPromptRow({
   }, [onBeginEdit, seq, showEditAction]);
 
   const handleDelete = useCallback(() => {
-    onDelete(seq);
-  }, [onDelete, seq]);
+    onDelete(entry);
+  }, [entry, onDelete]);
 
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">

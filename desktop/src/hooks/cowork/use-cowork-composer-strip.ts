@@ -5,8 +5,8 @@ import type {
 } from "@anyharness/sdk";
 import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useCoworkManagedWorkspaces } from "./use-cowork-managed-workspaces";
 import { useCoworkStatus } from "./use-cowork-status";
 import { useCoworkThreads } from "./use-cowork-threads";
@@ -56,8 +56,8 @@ export interface CoworkComposerStripViewModel {
 
 export function useCoworkComposerStrip(): CoworkComposerStripViewModel | null {
   const activeSessionId = useActiveSessionId();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeCodingSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeCodingSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const { selectWorkspace } = useWorkspaceSelection();
   const openCodingSession = useOpenCoworkCodingSession();
   const { status } = useCoworkStatus();

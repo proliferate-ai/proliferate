@@ -21,7 +21,8 @@ import {
 import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -60,7 +61,7 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
 }
 
 function isAttemptCurrent(attemptId: string): boolean {
-  return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
+  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
 function buildRepoTargetFromRequest(
@@ -75,8 +76,8 @@ function buildRepoTargetFromRequest(
 
 export function useCreateCloudWorkspace() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
   const authUser = useAuthStore((state) => state.user);
   const { selectWorkspace } = useWorkspaceSelection();
@@ -162,7 +163,7 @@ export function useCreateCloudWorkspace() {
 
       const nextEntry = buildSubmittingPendingWorkspaceEntry({
         attemptId,
-        selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
+        selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
         source: "cloud-created",
         displayName: attempt.request.displayName ?? attempt.branchName,
         repoLabel,
@@ -278,7 +279,7 @@ export function useCreateCloudWorkspace() {
             retryCount,
           },
         });
-        const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
+        const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
         failPendingEntry(
           currentPending?.attemptId === attemptId
             ? currentPending

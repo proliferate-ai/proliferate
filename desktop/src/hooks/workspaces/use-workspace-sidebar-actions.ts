@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
@@ -19,7 +18,6 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceNavigationWorkflow } from "./use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const mobility = useWorkspaceMobilityState();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const {
@@ -153,19 +151,13 @@ export function useWorkspaceSidebarActions() {
     }
 
     navigateToWorkspaceShell();
-    // Use lightweight path when already in a workspace (sidebar creation)
-    // to avoid disrupting the current workspace with a pending shell.
-    const lightweight = !!selectedWorkspaceId;
     void createLocalWorkspaceAndEnter(sourceRoot, {
-      lightweight,
       repoGroupKeyToExpand: repoGroupKeyToExpand ?? sourceRoot,
     }).catch((error) => {
-      if (lightweight) {
-        const message = error instanceof Error ? error.message : "Failed to create workspace.";
-        showToast(message);
-      }
+      const message = error instanceof Error ? error.message : "Failed to create workspace.";
+      showToast(message);
     });
-  }, [createLocalWorkspaceAndEnter, navigateToWorkspaceShell, selectedWorkspaceId, showToast]);
+  }, [createLocalWorkspaceAndEnter, navigateToWorkspaceShell, showToast]);
 
   const handleCreateWorktreeWorkspace = useCallback((
     repoRootId: string | null,
@@ -176,30 +168,23 @@ export function useWorkspaceSidebarActions() {
     }
 
     navigateToWorkspaceShell();
-    // Use lightweight path when already in a workspace (sidebar creation)
-    // to avoid disrupting the current workspace with a pending shell.
-    const lightweight = !!selectedWorkspaceId;
     const latencyFlowId = startLatencyFlow({
       flowKind: "worktree_enter",
       source: "sidebar",
       targetWorkspaceId: repoRootId,
     });
     void createWorktreeAndEnter({ repoRootId }, {
-      lightweight,
       latencyFlowId,
       repoGroupKeyToExpand,
     }).catch((error) => {
       failLatencyFlow(latencyFlowId, "worktree_enter_failed");
-      if (lightweight) {
-        const message = error instanceof Error ? error.message : "Failed to create worktree.";
-        showToast(message);
-      }
+      const message = error instanceof Error ? error.message : "Failed to create worktree.";
+      showToast(message);
     });
   }, [
     createWorktreeAndEnter,
     isCreatingWorktreeWorkspace,
     navigateToWorkspaceShell,
-    selectedWorkspaceId,
     showToast,
   ]);
 

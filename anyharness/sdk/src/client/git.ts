@@ -16,6 +16,14 @@ import type {
 } from "../types/git.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
+type GitDiffClientOptions = GitDiffOptions & {
+  request?: AnyHarnessRequestOptions;
+};
+
+type ListBranchDiffFilesClientOptions = ListBranchDiffFilesOptions & {
+  request?: AnyHarnessRequestOptions;
+};
+
 export class GitClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
@@ -32,7 +40,7 @@ export class GitClient {
   async getDiff(
     workspaceId: string,
     path: string,
-    options: GitDiffOptions = {},
+    options: GitDiffClientOptions = {},
   ): Promise<GitDiffResponse> {
     const params: Array<[string, string]> = [["path", path]];
     const scope = options.scope ?? null;
@@ -52,12 +60,13 @@ export class GitClient {
 
     return this.transport.get<GitDiffResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff?${encodeQueryParams(params)}`,
+      withTimingCategory(options.request, "git.diff"),
     );
   }
 
   async listBranchDiffFiles(
     workspaceId: string,
-    options: ListBranchDiffFilesOptions = {},
+    options: ListBranchDiffFilesClientOptions = {},
   ): Promise<GitBranchDiffFilesResponse> {
     const params: Array<[string, string]> = [];
     const baseRef = options.baseRef?.trim();
@@ -67,12 +76,17 @@ export class GitClient {
     const query = encodeQueryParams(params);
     return this.transport.get<GitBranchDiffFilesResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff/branch-files${query ? `?${query}` : ""}`,
+      withTimingCategory(options.request, "git.branch_diff_files"),
     );
   }
 
-  async listBranches(workspaceId: string): Promise<GitBranchRef[]> {
+  async listBranches(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<GitBranchRef[]> {
     return this.transport.get<GitBranchRef[]>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/branches`,
+      options,
     );
   }
 

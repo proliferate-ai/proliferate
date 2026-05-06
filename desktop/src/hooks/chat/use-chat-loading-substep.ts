@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { CHAT_PRE_MESSAGE_LABELS } from "@/config/chat";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
@@ -23,7 +23,7 @@ import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selec
  *   4. loading-history         — slot exists, stream is open, transcript
  *      hasn't been hydrated yet.
  *   5. awaiting-first-turn     — hydrated and empty but the runtime is
- *      already marked running (race window between dispatch and first event).
+ *      already marked running; this is braille-only until the first row lands.
  */
 export type ChatLoadingSubstep =
   | "bootstrapping-workspace"
@@ -34,13 +34,13 @@ export type ChatLoadingSubstep =
 
 export interface ChatLoadingSubstepState {
   substep: ChatLoadingSubstep;
-  caption: string;
+  caption: string | null;
   workspaceName: string | null;
 }
 
 export function useChatLoadingSubstep(): ChatLoadingSubstepState {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const { hasSlot, transcriptHydrated, isEmpty, isRunning, streamConnectionState } =
     useActiveSessionSurfaceSnapshot();
   const { data: workspaceCollections } = useWorkspaces();

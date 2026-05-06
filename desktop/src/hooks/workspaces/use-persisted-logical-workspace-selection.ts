@@ -1,14 +1,13 @@
 import { useEffect, useRef } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useLogicalWorkspaces } from "./use-logical-workspaces";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 
 export function usePersistedLogicalWorkspaceSelection() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
-  const logicalStoreHydrated = useLogicalWorkspaceStore((state) => state._hydrated);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const logicalStoreHydrated = useSessionSelectionStore((state) => state.hydrated);
   const { logicalWorkspaces, isLoading } = useLogicalWorkspaces();
   const { selectWorkspace } = useWorkspaceSelection();
   const attemptedLogicalWorkspaceIdRef = useRef<string | null>(null);

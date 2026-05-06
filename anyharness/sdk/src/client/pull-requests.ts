@@ -3,14 +3,18 @@ import type {
   CreatePullRequestResponse,
   CurrentPullRequestResponse,
 } from "../types/hosting.js";
-import type { AnyHarnessTransport } from "./core.js";
+import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class PullRequestsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async getCurrent(workspaceId: string): Promise<CurrentPullRequestResponse> {
+  async getCurrent(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<CurrentPullRequestResponse> {
     return this.transport.get<CurrentPullRequestResponse>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/hosting/pull-requests/current`,
+      options,
     );
   }
 

@@ -105,9 +105,11 @@ export class SessionsClient {
 
   async getLiveConfig(
     sessionId: string,
+    options?: AnyHarnessRequestOptions,
   ): Promise<GetSessionLiveConfigResponse> {
     const response = await this.transport.get<GetSessionLiveConfigResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/live-config`,
+      options,
     );
     if (!response.liveConfig) {
       return response;

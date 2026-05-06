@@ -4,6 +4,7 @@ import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
 } from "@/lib/domain/chat/transcript-row-model";
+import { createPromptOutboxEntry } from "@/lib/domain/chat/prompt-outbox";
 import {
   shouldStickToVirtualBottom,
 } from "@/lib/domain/chat/transcript-virtual-rows";
@@ -60,6 +61,30 @@ describe("buildTranscriptRowModel", () => {
         kind: "turn",
         key: "turn:turn-complete:block:content",
         turnId: "turn-complete",
+        blockKey: "content",
+      }),
+      { kind: "pending_prompt", key: "pending-prompt:session-1" },
+    ]);
+  });
+
+  it("keeps an in-progress latest turn when it already has renderable content", () => {
+    const transcript = createTranscriptState("session-1");
+    addTurn(transcript, "turn-live", false);
+    addUserItem(transcript, "turn-live", "item-user", "Previous visible content");
+
+    const rows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: pendingPrompt(),
+      latestTurnId: "turn-live",
+      latestTurnHasAssistantRenderableContent: false,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        kind: "turn",
+        key: "turn:turn-live:block:content",
+        turnId: "turn-live",
         blockKey: "content",
       }),
       { kind: "pending_prompt", key: "pending-prompt:session-1" },
@@ -158,6 +183,30 @@ describe("buildTranscriptRowModel", () => {
       { kind: "pending_prompt", key: "pending-prompt:session-2" },
     ]);
   });
+
+  it("keys outbox prompt rows by prompt id", () => {
+    const transcript = createTranscriptState("session-1");
+    const rows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      visibleOutboxEntries: [
+        createPromptOutboxEntry({
+          clientPromptId: "prompt-1",
+          clientSessionId: "session-1",
+          text: "queued",
+          blocks: [{ type: "text", text: "queued" }],
+          now: "2026-01-01T00:00:00.000Z",
+        }),
+      ],
+      latestTurnId: null,
+      latestTurnHasAssistantRenderableContent: false,
+    });
+
+    expect(rows).toEqual([
+      { kind: "outbox_prompt", key: "prompt:prompt-1", clientPromptId: "prompt-1" },
+    ]);
+  });
 });
 
 describe("shouldStickToVirtualBottom", () => {
@@ -253,6 +302,27 @@ function addAssistantItems(
       startedSeq: index + 1,
     } as TranscriptState["itemsById"][string];
   }
+}
+
+function addUserItem(
+  transcript: TranscriptState,
+  turnId: string,
+  itemId: string,
+  text: string,
+) {
+  const turn = transcript.turnsById[turnId];
+  if (!turn) {
+    throw new Error(`missing test turn ${turnId}`);
+  }
+  turn.itemOrder.push(itemId);
+  transcript.itemsById[itemId] = {
+    kind: "user_message",
+    itemId,
+    turnId,
+    text,
+    isStreaming: false,
+    startedSeq: 1,
+  } as TranscriptState["itemsById"][string];
 }
 
 function pendingPrompt(): PendingPromptEntry {

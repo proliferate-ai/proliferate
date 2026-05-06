@@ -100,6 +100,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/catalogs/agents/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_effective_agent_launch_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cowork": {
         parameters: {
             query?: never;
@@ -2813,6 +2829,7 @@ export interface components {
         /** @enum {string} */
         PendingPromptRemovalReason: "executed" | "deleted";
         PendingPromptRemovedPayload: {
+            promptId?: string | null;
             reason: components["schemas"]["PendingPromptRemovalReason"];
             /** Format: int64 */
             seq: number;
@@ -2828,6 +2845,7 @@ export interface components {
         };
         PendingPromptUpdatedPayload: {
             contentParts?: components["schemas"]["ContentPart"][];
+            promptId?: string | null;
             promptProvenance?: null | components["schemas"]["PromptProvenance"];
             /** Format: int64 */
             seq: number;
@@ -2963,6 +2981,7 @@ export interface components {
         };
         PromptSessionRequest: {
             blocks: components["schemas"]["PromptInputBlock"][];
+            promptId?: string | null;
         };
         PromptSessionResponse: {
             /** Format: int64 */
@@ -3791,6 +3810,7 @@ export interface components {
             messageId?: string | null;
             nativeToolName?: string | null;
             parentToolCallId?: string | null;
+            promptId?: string | null;
             promptProvenance?: null | components["schemas"]["PromptProvenance"];
             rawInput?: unknown;
             rawOutput?: unknown;
@@ -4060,16 +4080,38 @@ export interface components {
             defaultModelId?: string | null;
             displayName: string;
             kind: string;
+            launchControls?: components["schemas"]["WorkspaceSessionLaunchControl"][];
             models: components["schemas"]["WorkspaceSessionLaunchModel"][];
         };
         WorkspaceSessionLaunchCatalog: {
             agents: components["schemas"]["WorkspaceSessionLaunchAgent"][];
+            catalogVersion: string;
             workspaceId: string;
+        };
+        WorkspaceSessionLaunchControl: {
+            createField?: string | null;
+            defaultValue?: string | null;
+            key: components["schemas"]["WorkspaceSessionLaunchControlKey"];
+            label: string;
+            phase: components["schemas"]["WorkspaceSessionLaunchControlPhase"];
+            type: string;
+            values: components["schemas"]["WorkspaceSessionLaunchControlValue"][];
+        };
+        /** @enum {string} */
+        WorkspaceSessionLaunchControlKey: "mode" | "collaboration_mode" | "access_mode" | "reasoning" | "effort" | "fast_mode";
+        /** @enum {string} */
+        WorkspaceSessionLaunchControlPhase: "create_session" | "live_default";
+        WorkspaceSessionLaunchControlValue: {
+            description?: string | null;
+            isDefault: boolean;
+            label: string;
+            value: string;
         };
         WorkspaceSessionLaunchModel: {
             displayName: string;
             id: string;
             isDefault: boolean;
+            launchControls?: components["schemas"]["WorkspaceSessionLaunchControl"][];
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
@@ -4353,6 +4395,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_effective_agent_launch_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Effective runtime agent launch catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSessionLaunchCatalog"];
                 };
             };
         };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PromptCapabilities, PromptInputBlock } from "@anyharness/sdk";
+import type { PromptCapabilities } from "@anyharness/sdk";
 import {
   isTextFileCandidate,
   pasteAttachmentName,
@@ -8,6 +8,10 @@ import {
   shouldCreatePasteAttachment,
   type PromptAttachmentDescriptor,
 } from "@/lib/domain/chat/prompt-content";
+import {
+  createPromptAttachmentSnapshot,
+  type PromptAttachmentSnapshot,
+} from "@/lib/domain/chat/prompt-attachment-snapshot";
 
 interface AttachmentEntry {
   descriptor: PromptAttachmentDescriptor;
@@ -24,27 +28,6 @@ function revokeAttachmentObjectUrl(entry: AttachmentEntry): void {
   if (entry.descriptor.objectUrl) {
     URL.revokeObjectURL(entry.descriptor.objectUrl);
   }
-}
-
-function readAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
-    reader.onload = () => {
-      const value = typeof reader.result === "string" ? reader.result : "";
-      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : value);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function readAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.readAsText(file);
-  });
 }
 
 export function usePromptAttachments(
@@ -179,36 +162,10 @@ export function usePromptAttachments(
     });
   }, []);
 
-  const buildBlocks = useCallback(async (text: string): Promise<PromptInputBlock[]> => {
-    const blocks: PromptInputBlock[] = [];
-    if (text.trim()) {
-      blocks.push({ type: "text", text });
-    }
-
-    for (const entry of entriesRef.current) {
-      if (entry.descriptor.kind === "image") {
-        blocks.push({
-          type: "image",
-          data: await readAsBase64(entry.file),
-          mimeType: entry.descriptor.mimeType,
-          name: entry.descriptor.name,
-          source: entry.descriptor.source,
-        });
-        continue;
-      }
-
-      blocks.push({
-        type: "resource",
-        text: await readAsText(entry.file),
-        uri: `file://${entry.descriptor.name}`,
-        name: entry.descriptor.name,
-        mimeType: entry.descriptor.mimeType,
-        size: entry.descriptor.size,
-        source: entry.descriptor.source,
-      });
-    }
-
-    return blocks;
+  const snapshotForSubmit = useCallback((): PromptAttachmentSnapshot[] => {
+    return entriesRef.current.map((entry) =>
+      createPromptAttachmentSnapshot(entry.descriptor, entry.file)
+    );
   }, []);
 
   return {
@@ -217,7 +174,7 @@ export function usePromptAttachments(
     addTextPaste,
     removeAttachment,
     clearAttachments,
-    buildBlocks,
+    snapshotForSubmit,
     hasAttachments: entries.length > 0,
   };
 }

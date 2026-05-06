@@ -6,7 +6,7 @@ import {
   type Workspace,
 } from "@anyharness/sdk";
 import { workspaceCollectionsScopeKey } from "./query-keys";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { getHomeDir } from "@/platform/tauri/shell";
@@ -68,7 +68,7 @@ export function useWorkspaceActions() {
     workspace: Workspace,
     source: "local_create" | "worktree_create",
   ) => {
-    const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+    const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
     const startedAt = startLatencyTimer();
     let previousLocalCount = 0;
     let nextLocalCount = 0;
@@ -102,7 +102,7 @@ export function useWorkspaceActions() {
     source: "local_create" | "worktree_create",
     workspaceId: string,
   ) => {
-    const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+    const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
     const startedAt = startLatencyTimer();
     logLatency("workspace.collections.invalidate.start", {
       source,

@@ -3,8 +3,9 @@ import { getRuntimeInfo, type RuntimeInfo } from "@/platform/tauri/runtime";
 import {
   restartRuntime as tauriRestartRuntime,
 } from "@/platform/tauri/credentials";
-// Narrow bootstrap wiring: this module is the canonical boot orchestrator for the harness store.
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+// Narrow bootstrap wiring: this module is the canonical boot orchestrator for
+// AnyHarness runtime connection state.
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
 
 export async function bootstrapHarnessRuntime(): Promise<void> {
@@ -12,7 +13,7 @@ export async function bootstrapHarnessRuntime(): Promise<void> {
     await connectToRuntime(getRuntimeInfo);
   } catch {
     // Tauri commands unavailable (e.g. dev mode) — try fallback URL
-    useHarnessStore.setState({ connectionState: "connecting", error: null });
+    useHarnessConnectionStore.setState({ connectionState: "connecting", error: null });
     setRuntimeUrlIfChanged(DEFAULT_RUNTIME_URL);
     await pollUntilHealthy(DEFAULT_RUNTIME_URL);
   }
@@ -22,25 +23,25 @@ export async function restartHarnessRuntime(): Promise<void> {
   try {
     await connectToRuntime(tauriRestartRuntime);
   } catch (error) {
-    useHarnessStore.setState({ connectionState: "failed", error: String(error) });
+    useHarnessConnectionStore.setState({ connectionState: "failed", error: String(error) });
   }
 }
 
 async function connectToRuntime(
   getRuntimeInfoFn: () => Promise<RuntimeInfo>,
 ): Promise<void> {
-  useHarnessStore.setState({ connectionState: "connecting", error: null });
+  useHarnessConnectionStore.setState({ connectionState: "connecting", error: null });
 
   const info = await getRuntimeInfoFn();
   setRuntimeUrlIfChanged(info.url);
 
   if (await confirmRuntimeReady(info.url)) {
-    useHarnessStore.setState({ connectionState: "healthy", error: null });
+    useHarnessConnectionStore.setState({ connectionState: "healthy", error: null });
     return;
   }
 
   if (info.status === "failed") {
-    useHarnessStore.setState({
+    useHarnessConnectionStore.setState({
       connectionState: "failed",
       error: `Runtime status: ${info.status}`,
     });
@@ -52,7 +53,7 @@ async function connectToRuntime(
 
 async function pollUntilHealthy(seedRuntimeUrl?: string): Promise<void> {
   const maxAttempts = 120;
-  let currentRuntimeUrl = seedRuntimeUrl ?? useHarnessStore.getState().runtimeUrl;
+  let currentRuntimeUrl = seedRuntimeUrl ?? useHarnessConnectionStore.getState().runtimeUrl;
 
   for (let i = 0; i < maxAttempts; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -61,15 +62,15 @@ async function pollUntilHealthy(seedRuntimeUrl?: string): Promise<void> {
 
       if (info.url !== currentRuntimeUrl) {
         currentRuntimeUrl = info.url;
-        useHarnessStore.setState({ runtimeUrl: info.url });
+        useHarnessConnectionStore.setState({ runtimeUrl: info.url });
       }
 
       if (await confirmRuntimeReady(info.url)) {
-        useHarnessStore.setState({ connectionState: "healthy", error: null });
+        useHarnessConnectionStore.setState({ connectionState: "healthy", error: null });
         return;
       }
       if (info.status === "failed") {
-        useHarnessStore.setState({ connectionState: "failed", error: `Runtime ${info.status}` });
+        useHarnessConnectionStore.setState({ connectionState: "failed", error: `Runtime ${info.status}` });
         return;
       }
     } catch {
@@ -77,12 +78,12 @@ async function pollUntilHealthy(seedRuntimeUrl?: string): Promise<void> {
     }
   }
   console.error("[harness] pollUntilHealthy: gave up after %d attempts", maxAttempts);
-  useHarnessStore.setState({ connectionState: "failed", error: "Runtime did not become healthy in time." });
+  useHarnessConnectionStore.setState({ connectionState: "failed", error: "Runtime did not become healthy in time." });
 }
 
 function setRuntimeUrlIfChanged(runtimeUrl: string): void {
-  if (useHarnessStore.getState().runtimeUrl !== runtimeUrl) {
-    useHarnessStore.setState({ runtimeUrl });
+  if (useHarnessConnectionStore.getState().runtimeUrl !== runtimeUrl) {
+    useHarnessConnectionStore.setState({ runtimeUrl });
   }
 }
 

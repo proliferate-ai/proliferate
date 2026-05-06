@@ -34,9 +34,9 @@ from proliferate.constants.billing import (
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
     MONTHLY_CLOUD_GRANT_TYPE,
+    PRO_FREE_TRIAL_HOURS,
     PRO_PERIOD_GRANT_TYPE,
     PRO_SEAT_PRORATION_GRANT_TYPE,
-    PRO_FREE_TRIAL_HOURS,
     REFILL_10H_GRANT_TYPE,
     USAGE_SEGMENT_RECENT_LOOKBACK_DAYS,
 )
@@ -858,7 +858,8 @@ async def maybe_create_org_seat_adjustment(
     if (
         subscription is None
         or subscription.monthly_subscription_item_id is None
-        or classify_monthly_price_id(subscription.cloud_monthly_price_id) != BILLING_PRICE_CLASS_PRO
+        or classify_monthly_price_id(subscription.cloud_monthly_price_id)
+        != BILLING_PRICE_CLASS_PRO
         or subscription.current_period_start is None
     ):
         return False
@@ -868,7 +869,9 @@ async def maybe_create_org_seat_adjustment(
         if subscription.seat_quantity is not None
         else target_quantity
     )
-    period_start = coerce_utc(subscription.current_period_start) or subscription.current_period_start
+    period_start = (
+        coerce_utc(subscription.current_period_start) or subscription.current_period_start
+    )
     now = utcnow()
     grant_quantity = 0
     if target_quantity > previous_quantity and membership_id is not None:
@@ -928,7 +931,10 @@ async def claim_pending_seat_adjustments(limit: int = 100) -> list[ClaimedSeatAd
                     BillingSubscription,
                     BillingSubscription.id == BillingSeatAdjustment.billing_subscription_id,
                 )
-                .join(BillingSubject, BillingSubject.id == BillingSeatAdjustment.billing_subject_id)
+                .join(
+                    BillingSubject,
+                    BillingSubject.id == BillingSeatAdjustment.billing_subject_id,
+                )
                 .where(BillingSeatAdjustment.status.in_(["pending", "failed_retryable"]))
                 .order_by(BillingSeatAdjustment.created_at.asc())
                 .limit(limit)
@@ -1338,7 +1344,11 @@ async def prepare_initial_org_seat_reconcile(
         )
         if subscription is None:
             return None
-        subject = await db.get(BillingSubject, subscription.billing_subject_id, with_for_update=True)
+        subject = await db.get(
+            BillingSubject,
+            subscription.billing_subject_id,
+            with_for_update=True,
+        )
         if (
             subject is None
             or subject.kind != BILLING_SUBJECT_KIND_ORGANIZATION
@@ -2378,7 +2388,7 @@ async def claim_usage_exports_for_sending(limit: int = 100) -> list[ClaimedUsage
                         ),
                         (BillingUsageExport.status == BILLING_USAGE_EXPORT_STATUS_SENDING)
                         & (BillingUsageExport.updated_at < stale_sending_before),
-                    )
+                    ),
                 )
                 .order_by(BillingUsageExport.created_at.asc())
                 .limit(limit)

@@ -33,10 +33,16 @@ import {
   type StartLatencyFlowInput,
 } from "@/lib/infra/latency-flow";
 import { logLatency } from "@/lib/infra/debug-latency";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  getSessionRecord,
+  getSessionRecords,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
-type PlanImplementationSessionSlot = {
+type PlanImplementationSessionRecord = {
   workspaceId: string | null;
   agentKind?: string | null;
   liveConfig: {
@@ -49,7 +55,7 @@ type PlanImplementationSessionSlot = {
 
 interface PlanImplementationHarnessState {
   activeSessionId: string | null;
-  sessionSlots: Record<string, PlanImplementationSessionSlot | undefined>;
+  sessionRecords: Record<string, PlanImplementationSessionRecord | undefined>;
 }
 
 interface PromptActiveSessionOptions {
@@ -90,9 +96,11 @@ interface ExecutePlanImplementationInput {
 export function useProposedPlanActions() {
   const queryClient = useQueryClient();
   const workspaceContext = useAnyHarnessWorkspaceContext();
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore(
+    (state) => state.setWorkspaceArrivalEvent,
+  );
   const showToast = useToastStore((state) => state.show);
   const [isImplementingPlan, setIsImplementingPlan] = useState(false);
   const isImplementingPlanRef = useRef(false);
@@ -172,7 +180,7 @@ export function useProposedPlanActions() {
       setIsImplementingPlan(true);
       await executePlanImplementation({
         plan,
-        getHarnessState: useHarnessStore.getState,
+        getHarnessState: getPlanImplementationHarnessState,
         setActiveSessionConfigOption,
         promptActiveSession,
         startLatencyFlow: startPromptLatencyFlow,
@@ -286,10 +294,9 @@ function patchCachedPlanQueries(
 }
 
 function patchCachedPlanTranscripts(plan: ProposedPlanDetail): void {
-  const state = useHarnessStore.getState();
   const candidateSessionIds = new Set([plan.sessionId, plan.sourceSessionId]);
   candidateSessionIds.forEach((sessionId) => {
-    const slot = state.sessionSlots[sessionId];
+    const slot = getSessionRecord(sessionId);
     if (!slot) {
       return;
     }
@@ -299,10 +306,17 @@ function patchCachedPlanTranscripts(plan: ProposedPlanDetail): void {
       return;
     }
 
-    useHarnessStore.getState().patchSessionSlot(sessionId, {
+    patchSessionRecord(sessionId, {
       transcript,
     });
   });
+}
+
+function getPlanImplementationHarnessState(): PlanImplementationHarnessState {
+  return {
+    activeSessionId: useSessionSelectionStore.getState().activeSessionId,
+    sessionRecords: getSessionRecords(),
+  };
 }
 
 export async function executePlanImplementation({
@@ -318,7 +332,7 @@ export async function executePlanImplementation({
   showToast,
 }: ExecutePlanImplementationInput): Promise<void> {
   const harnessState = getHarnessState();
-  const planSessionSlot = harnessState.sessionSlots[plan.sourceSessionId] ?? null;
+  const planSessionSlot = harnessState.sessionRecords[plan.sourceSessionId] ?? null;
   if (!planSessionSlot) {
     showToast("Plan session is not available.");
     return;
@@ -366,7 +380,7 @@ export async function executePlanImplementation({
 
   const latestHarnessState = getHarnessState();
   const latestPlanSessionSlot =
-    latestHarnessState.sessionSlots[plan.sourceSessionId] ?? null;
+    latestHarnessState.sessionRecords[plan.sourceSessionId] ?? null;
   if (
     latestHarnessState.activeSessionId !== plan.sourceSessionId
     || latestPlanSessionSlot?.workspaceId !== workspaceId

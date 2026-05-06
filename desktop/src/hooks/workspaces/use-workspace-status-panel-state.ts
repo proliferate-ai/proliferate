@@ -10,9 +10,8 @@ import { summarizeSetupFailure } from "@/lib/domain/workspaces/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaceArrivalState } from "@/hooks/workspaces/use-workspace-arrival-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
@@ -94,8 +93,8 @@ function buildPendingDetail(entry: PendingWorkspaceEntry): string | null {
 }
 
 export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
@@ -103,7 +102,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     materializedWorkspaceId: selectedWorkspaceId,
   });
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const { data: workspaceCollections } = useWorkspaces();
   const arrival = useWorkspaceArrivalState();
   const dismissedSetupFailures = useWorkspaceUiStore((s) => s.dismissedSetupFailures);
@@ -137,21 +136,19 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
 
   return useMemo(() => {
     if (pendingWorkspaceEntry) {
-      const shouldUseCloudStatus = pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
-        && selectedCloudWorkspace
-        && shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace);
-
-      if (!shouldUseCloudStatus) {
-        return {
-          kind: "pending",
-          entry: pendingWorkspaceEntry,
-          badgeLabel: buildPendingBadge(pendingWorkspaceEntry),
-          title: pendingWorkspaceEntry.displayName,
-          subtitle: buildPendingSubtitle(pendingWorkspaceEntry),
-          detail: buildPendingDetail(pendingWorkspaceEntry),
-          isFailed: pendingWorkspaceEntry.stage === "failed",
-        };
+      if (pendingWorkspaceEntry.stage !== "failed") {
+        return null;
       }
+
+      return {
+        kind: "pending",
+        entry: pendingWorkspaceEntry,
+        badgeLabel: buildPendingBadge(pendingWorkspaceEntry),
+        title: pendingWorkspaceEntry.displayName,
+        subtitle: buildPendingSubtitle(pendingWorkspaceEntry),
+        detail: buildPendingDetail(pendingWorkspaceEntry),
+        isFailed: true,
+      };
     }
 
     if (

@@ -12,7 +12,7 @@ import {
 } from "@anyharness/sdk";
 import { applyBatchedStreamSideEffects } from "@/hooks/sessions/session-stream-side-effects";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
-import type { SessionRelationship } from "@/stores/sessions/harness-store";
+import type { SessionRelationship } from "@/stores/sessions/session-types";
 
 const mocks = vi.hoisted(() => ({
   effectOrder: [] as string[],

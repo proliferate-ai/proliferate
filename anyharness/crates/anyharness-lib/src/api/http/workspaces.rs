@@ -869,6 +869,27 @@ pub async fn get_workspace_session_launch_catalog(
 
 #[utoipa::path(
     get,
+    path = "/v1/catalogs/agents/effective",
+    responses(
+        (status = 200, description = "Effective runtime agent launch catalog", body = WorkspaceSessionLaunchCatalog),
+    ),
+    tag = "catalogs"
+)]
+pub async fn get_effective_agent_launch_catalog(
+    State(state): State<AppState>,
+) -> Result<Json<WorkspaceSessionLaunchCatalog>, ApiError> {
+    let session_service = state.session_service.clone();
+    let catalog = run_blocking("effective agent catalog", move || {
+        session_service.get_effective_session_launch_catalog()
+    })
+    .await?
+    .map_err(|error| ApiError::internal(error.to_string()))?;
+
+    Ok(Json(workspace_session_launch_catalog_to_contract(catalog)))
+}
+
+#[utoipa::path(
+    get,
     path = "/v1/workspaces/{workspace_id}/detect-setup",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     responses(

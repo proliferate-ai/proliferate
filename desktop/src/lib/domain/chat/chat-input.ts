@@ -7,7 +7,6 @@ interface ChatInputAvailabilityArgs {
   selectedCloudRuntimePhase: "ready" | "resuming" | "failed" | null;
   selectedCloudRuntimeActionBlockReason: string | null;
   activeSessionId: string | null;
-  activeSessionHydrated: boolean;
   isConfiguredLaunchLoading: boolean;
   hasReadyConfiguredLaunch: boolean;
   configuredLaunchDisabledReason: string | null;
@@ -57,7 +56,6 @@ export function resolveChatInputAvailability({
   selectedCloudRuntimePhase,
   selectedCloudRuntimeActionBlockReason,
   activeSessionId,
-  activeSessionHydrated,
   isConfiguredLaunchLoading,
   hasReadyConfiguredLaunch,
   configuredLaunchDisabledReason,
@@ -98,14 +96,6 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "AnyHarness runtime is still starting.",
       areRuntimeControlsDisabled: true,
-    };
-  }
-
-  if (activeSessionId && !activeSessionHydrated) {
-    return {
-      isDisabled: true,
-      disabledReason: "Session is still loading. Try again in a moment.",
-      areRuntimeControlsDisabled: false,
     };
   }
 

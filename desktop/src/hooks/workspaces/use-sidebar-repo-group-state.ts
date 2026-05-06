@@ -10,7 +10,7 @@ import {
   type SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-sidebar-show-more-store";
 
@@ -26,7 +26,7 @@ export function useSidebarRepoGroupState({
   const {
     selectedWorkspaceId,
     workspaceSelectionNonce,
-  } = useHarnessStore(useShallow((state) => ({
+  } = useSessionSelectionStore(useShallow((state) => ({
     selectedWorkspaceId: state.selectedWorkspaceId,
     workspaceSelectionNonce: state.workspaceSelectionNonce,
   })));

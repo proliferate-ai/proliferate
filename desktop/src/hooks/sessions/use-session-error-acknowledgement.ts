@@ -1,9 +1,8 @@
 import { useEffect } from "react";
-import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import {
@@ -12,20 +11,19 @@ import {
 } from "@/hooks/ui/use-document-focus-visibility";
 
 export function useSessionErrorAcknowledgement(): void {
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const { workspaceUiKey, materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
     selectedLogicalWorkspaceId,
     materializedWorkspaceId: selectedWorkspaceId,
   });
-  const errorAttentionKey = useHarnessStore((state) => {
-    const sessionId = state.activeSessionId;
-    const slot = sessionId ? state.sessionSlots[sessionId] ?? null : null;
-    return resolveSessionErrorAttentionKey(slot);
-  });
+  const activeDirectoryEntry = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId] ?? null : null
+  );
+  const errorAttentionKey = activeDirectoryEntry?.activity.errorAttentionKey ?? null;
   const activeShellTabKeyByWorkspace = useWorkspaceUiStore(
     (state) => state.activeShellTabKeyByWorkspace,
   );

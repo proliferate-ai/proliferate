@@ -3,6 +3,7 @@
   "scripts": {
     "e2b:template": "node scripts/build-template.mjs",
     "e2b:smoke": "node scripts/smoke-e2b-runtime.mjs",
+    "latency:benchmark": "node scripts/latency-benchmark.mjs",
     "test:agent:setup": "node scripts/setup-agent-runtime-suite.mjs prepare",
     "test:agent:cleanup": "node scripts/setup-agent-runtime-suite.mjs cleanup",
     "test:agent:sdk": "pnpm --filter @anyharness/sdk test",
@@ -13,5 +14,8 @@
   },
   "dependencies": {
     "e2b": "^2.16.0"
+  },
+  "devDependencies": {
+    "playwright": "1.59.1"
   }
 }

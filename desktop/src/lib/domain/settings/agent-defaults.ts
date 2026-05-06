@@ -43,6 +43,7 @@ export interface SettingsAgentDefaultRow {
 }
 
 const SUPPORTED_LIVE_DEFAULT_KEYS = new Set<DefaultLiveSessionControlKey>([
+  "collaboration_mode",
   "reasoning",
   "effort",
   "fast_mode",

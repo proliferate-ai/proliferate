@@ -12,8 +12,8 @@ const harnessState = vi.hoisted(() => ({
   selectedWorkspaceId: null as string | null,
 }));
 
-vi.mock("@/stores/sessions/harness-store", () => ({
-  useHarnessStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
+vi.mock("@/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (selector: (state: { selectedWorkspaceId: string | null }) => unknown) =>
     selector(harnessState),
 }));
 

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
@@ -19,7 +19,7 @@ interface FinalizeSelectionOptions {
 }
 
 function isAttemptCurrent(attemptId: string): boolean {
-  return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
+  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
 function requestChatInputFocus(): void {
@@ -28,13 +28,13 @@ function requestChatInputFocus(): void {
 
 export function useWorkspaceEntryFlow() {
   const { selectWorkspace } = useWorkspaceSelection();
-  const enterPendingWorkspaceShell = useHarnessStore(
+  const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
   );
-  const setPendingWorkspaceEntry = useHarnessStore(
+  const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
-  const setWorkspaceArrivalEvent = useHarnessStore(
+  const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
 

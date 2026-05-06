@@ -1,15 +1,19 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { isCurrentSessionStreamHandle } from "@/lib/integrations/anyharness/session-stream-handles";
+import {
+  activitySnapshotFromDirectoryEntry,
+  useSessionDirectoryStore,
+} from "@/stores/sessions/session-directory-store";
 
 export function shouldReconnectStream(sessionId: string): boolean {
-  const slot = useHarnessStore.getState().sessionSlots[sessionId];
-  if (!slot || isPendingSessionId(sessionId)) {
+  const entry = useSessionDirectoryStore.getState().entriesById[sessionId];
+  if (!entry || isPendingSessionId(sessionId)) {
     return false;
   }
 
-  const viewState = resolveSessionViewState(slot);
+  const viewState = resolveSessionViewState(activitySnapshotFromDirectoryEntry(entry));
   return viewState === "working" || viewState === "needs_input";
 }
 
@@ -17,5 +21,5 @@ export function isCurrentStreamHandle(
   sessionId: string,
   handle: SessionStreamHandle,
 ): boolean {
-  return useHarnessStore.getState().sessionSlots[sessionId]?.sseHandle === handle;
+  return isCurrentSessionStreamHandle(sessionId, handle);
 }

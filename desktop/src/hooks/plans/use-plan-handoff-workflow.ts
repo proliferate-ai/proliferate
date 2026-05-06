@@ -32,7 +32,9 @@ import type {
 } from "@/lib/domain/chat/model-selection";
 import { resolveModelDisplayName } from "@/lib/domain/chat/model-display";
 import { getSessionClientAndWorkspace } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function usePlanHandoffWorkflow({
@@ -42,8 +44,8 @@ export function usePlanHandoffWorkflow({
   plan: PromptPlanAttachmentDescriptor;
   onCompleted: () => void;
 }) {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const connectionState = useHarnessStore((state) => state.connectionState);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const showToast = useToastStore((state) => state.show);
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
@@ -151,7 +153,7 @@ export function usePlanHandoffWorkflow({
       planReferenceContentPartFromDescriptor(plan),
     ];
     setIsSubmitting(true);
-    const previousActiveSessionId = useHarnessStore.getState().activeSessionId;
+    const previousActiveSessionId = useSessionSelectionStore.getState().activeSessionId;
     try {
       await executePlanHandoff({
         launchSelection,
@@ -175,7 +177,7 @@ export function usePlanHandoffWorkflow({
           source: "plan-handoff-restore",
         }),
         hasSession: (sessionId) =>
-          !!useHarnessStore.getState().sessionSlots[sessionId],
+          !!getSessionRecord(sessionId),
         onCompleted,
         showToast,
       });
@@ -292,13 +294,16 @@ async function applyPlanHandoffPrePromptConfigChanges(
     return;
   }
 
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
+  const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
   const client = getAnyHarnessClient(connection);
   for (const change of changes) {
-    const response = await client.sessions.setConfigOption(sessionId, {
-      configId: change.rawConfigId,
-      value: change.value,
-    });
+    const response = await client.sessions.setConfigOption(
+      materializedSessionId,
+      {
+        configId: change.rawConfigId,
+        value: change.value,
+      },
+    );
     if (response.applyState !== "applied") {
       // Queued config changes apply after a turn completes. Handoff must switch
       // out of plan mode before sending the first prompt, so queued is unsafe.
@@ -310,8 +315,7 @@ async function applyPlanHandoffPrePromptConfigChanges(
 function currentCollaborationModeForSession(
   sessionId: string,
 ): NormalizedSessionControl | null {
-  return useHarnessStore.getState()
-    .sessionSlots[sessionId]
+  return getSessionRecord(sessionId)
     ?.liveConfig
     ?.normalizedControls
     .collaborationMode ?? null;

@@ -8,7 +8,7 @@ import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import type { StartLatencyFlowInput } from "@/lib/infra/latency-flow";
 
-type TestSessionSlot = {
+type TestSessionRecord = {
   workspaceId: string | null;
   liveConfig: {
     normalizedControls: {
@@ -21,14 +21,14 @@ type TestSessionSlot = {
 
 type TestHarnessState = {
   activeSessionId: string | null;
-  sessionSlots: Record<string, TestSessionSlot | undefined>;
+  sessionRecords: Record<string, TestSessionRecord | undefined>;
 };
 
 describe("executePlanImplementation", () => {
   it("toasts and does not start a flow when the source session is missing", async () => {
     const deps = depsForStates([{
       activeSessionId: "session-1",
-      sessionSlots: {},
+      sessionRecords: {},
     }]);
 
     await executePlanImplementation({ plan: plan(), ...deps });
@@ -268,7 +268,7 @@ function state(input: {
 } = {}): TestHarnessState {
   return {
     activeSessionId: input.activeSessionId ?? "session-1",
-    sessionSlots: {
+    sessionRecords: {
       "session-1": {
         workspaceId: input.workspaceId === undefined ? "workspace-1" : input.workspaceId,
         agentKind: "codex",

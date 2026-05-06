@@ -19,9 +19,11 @@ export function ChatLoadingHero() {
 
   return (
     <DebugProfiler id="loading-braille">
-      <div className="flex flex-col items-center text-center">
+      <div className="flex flex-col items-center text-center" data-chat-loading-hero>
       <BrailleSweepBadge className="text-6xl text-foreground" />
-      <p className="mt-6 text-sm font-medium text-muted-foreground">{caption}</p>
+      {caption && (
+        <p className="mt-6 text-sm font-medium text-muted-foreground">{caption}</p>
+      )}
       {workspaceName && (
         <p className="mt-1 text-xs text-muted-foreground/70">{workspaceName}</p>
       )}

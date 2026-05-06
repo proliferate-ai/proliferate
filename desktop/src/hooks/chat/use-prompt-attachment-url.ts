@@ -13,9 +13,10 @@ export function usePromptAttachmentUrl(
     staleTime: Infinity,
     gcTime: 60_000,
     queryFn: async () => {
-      const { connection } = await getSessionClientAndWorkspace(sessionId!);
+      const { connection, materializedSessionId } =
+        await getSessionClientAndWorkspace(sessionId!);
       const blob = await getAnyHarnessClient(connection).sessions.fetchPromptAttachment(
-        sessionId!,
+        materializedSessionId,
         attachmentId!,
       );
       return blob;

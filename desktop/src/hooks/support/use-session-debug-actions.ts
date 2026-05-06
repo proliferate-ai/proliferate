@@ -26,10 +26,11 @@ import {
 } from "@/lib/domain/support/session-debug";
 import { copyText } from "@/platform/tauri/shell";
 import { isTauriDesktop, saveDiagnosticJson } from "@/platform/tauri/diagnostics";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import type { SessionSlot } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 export interface SessionDebugClient {
   runtime: {
@@ -63,10 +64,11 @@ export interface SessionDebugActionState {
   selectedWorkspaceId: string | null;
   selectedLogicalWorkspaceId: string | null;
   activeSessionId: string | null;
-  sessionSlots: Record<string, Pick<
-    SessionSlot,
+  sessionRecords: Record<string, Pick<
+    SessionDirectoryEntry,
     | "actionCapabilities"
     | "agentKind"
+    | "materializedSessionId"
     | "modeId"
     | "modelId"
     | "sessionId"
@@ -111,11 +113,11 @@ export function useSessionDebugActions() {
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
   const resolveConnection = workspaceContext.resolveConnection;
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const sessionSlots = useHarnessStore((state) => state.sessionSlots);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const sessionRecords = useSessionDirectoryStore((state) => state.entriesById);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const showToast = useToastStore((state) => state.show);
@@ -130,7 +132,7 @@ export function useSessionDebugActions() {
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
     activeSessionId,
-    sessionSlots,
+    sessionRecords,
   };
   const activeSessionWorkspaceId = resolveActiveSessionWorkspaceId(actionState);
   const canCopyInvestigationJson = Boolean(selectedWorkspaceId ?? activeSessionWorkspaceId);
@@ -265,8 +267,14 @@ export async function copyInvestigationJsonAction(
   const generatedAt = dependencies.now();
   const runtimeContext = await loadRuntimeDebugContext(state, dependencies, workspaceId);
   const activeSessionId = state.activeSessionId;
+  const materializedSessionId = activeSessionId
+    ? resolveMaterializedSessionIdForDebug(state, activeSessionId)
+    : null;
   const session = activeSessionId
-    ? await loadLocatorSession(runtimeContext.client, activeSessionId).catch(() => (
+    ? await loadLocatorSession(
+      runtimeContext.client,
+      materializedSessionId ?? activeSessionId,
+    ).catch(() => (
       fallbackLocatorSession(state, activeSessionId)
     ))
     : null;
@@ -275,7 +283,7 @@ export async function copyInvestigationJsonAction(
     runtimeContext,
     generatedAt,
     session,
-    owningSlotWorkspaceId: activeSlot(state)?.workspaceId ?? null,
+    owningSlotWorkspaceId: activeRecord(state)?.workspaceId ?? null,
   });
 
   await dependencies.copyText(JSON.stringify(locator, null, 2));
@@ -298,9 +306,10 @@ export async function exportActiveSessionDebugJsonAction(
 
   const generatedAt = dependencies.now();
   const runtimeContext = await loadRuntimeDebugContext(state, dependencies, workspaceId);
+  const materializedSessionId = requireMaterializedSessionIdForDebug(state, sessionId);
   const exportedSession = await exportSessionDebugData({
     client: runtimeContext.client,
-    sessionId,
+    sessionId: materializedSessionId,
   });
   const locator = buildLocator({
     state,
@@ -309,16 +318,16 @@ export async function exportActiveSessionDebugJsonAction(
     session: exportedSession.session
       ? sessionLocatorFromSession(exportedSession.session)
       : fallbackLocatorSession(state, sessionId),
-    owningSlotWorkspaceId: activeSlot(state)?.workspaceId ?? null,
+    owningSlotWorkspaceId: activeRecord(state)?.workspaceId ?? null,
   });
   const payload = buildSessionDebugExport({
     generatedAt,
-    scope: { kind: "session", id: sessionId },
+    scope: { kind: "session", id: materializedSessionId },
     locator,
     sessions: [exportedSession],
   });
   const contents = JSON.stringify(payload, null, 2);
-  const fileName = suggestSessionDebugFileName("session", sessionId, generatedAt);
+  const fileName = suggestSessionDebugFileName("session", materializedSessionId, generatedAt);
 
   return dependencies.saveDiagnosticJson(fileName, contents);
 }
@@ -385,11 +394,30 @@ export async function exportReplayRecordingAction(
   if (!runtimeContext.client.replay) {
     throw new Error("The AnyHarness SDK does not support replay export.");
   }
+  const materializedSessionId = requireMaterializedSessionIdForDebug(state, sessionId);
 
   const response = await runtimeContext.client.replay.exportRecording({
-    sessionId,
+    sessionId: materializedSessionId,
   });
   return response.recording;
+}
+
+function resolveMaterializedSessionIdForDebug(
+  state: SessionDebugActionState,
+  sessionId: string,
+): string | null {
+  return state.sessionRecords[sessionId]?.materializedSessionId ?? null;
+}
+
+function requireMaterializedSessionIdForDebug(
+  state: SessionDebugActionState,
+  sessionId: string,
+): string {
+  const materializedSessionId = resolveMaterializedSessionIdForDebug(state, sessionId);
+  if (!materializedSessionId) {
+    throw new Error("Session is still starting. Try again in a moment.");
+  }
+  return materializedSessionId;
 }
 
 async function loadRuntimeDebugContext(
@@ -501,18 +529,18 @@ function resolveActiveSessionWorkspaceId(state: SessionDebugActionState): string
     return null;
   }
 
-  return state.sessionSlots[sessionId]?.workspaceId ?? state.selectedWorkspaceId;
+  return state.sessionRecords[sessionId]?.workspaceId ?? state.selectedWorkspaceId;
 }
 
-function activeSlot(state: SessionDebugActionState) {
-  return state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null;
+function activeRecord(state: SessionDebugActionState) {
+  return state.activeSessionId ? state.sessionRecords[state.activeSessionId] ?? null : null;
 }
 
 function fallbackLocatorSession(
   state: SessionDebugActionState,
   sessionId: string,
 ): SessionDebugLocatorSession {
-  const slot = state.sessionSlots[sessionId] ?? null;
+  const slot = state.sessionRecords[sessionId] ?? null;
   return {
     id: sessionId,
     owningWorkspaceId: slot?.workspaceId ?? null,

@@ -15,6 +15,7 @@ interface ChatLaunchIntentState {
   markMaterializedIfActive: (
     intentId: string,
     materialized: {
+      clientSessionId?: string | null;
       workspaceId?: string | null;
       sessionId?: string | null;
     },
@@ -63,6 +64,10 @@ export const useChatLaunchIntentStore = create<ChatLaunchIntentState>((set) => (
     return {
       activeIntent: {
         ...state.activeIntent,
+        clientSessionId:
+          materialized.clientSessionId !== undefined
+            ? materialized.clientSessionId
+            : state.activeIntent.clientSessionId,
         materializedWorkspaceId:
           materialized.workspaceId !== undefined
             ? materialized.workspaceId

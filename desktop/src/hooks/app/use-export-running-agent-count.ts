@@ -1,21 +1,26 @@
 import { useEffect } from "react";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { setRunningAgentCount } from "@/platform/tauri/window";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  activitySnapshotFromDirectoryEntry,
+  useSessionDirectoryStore,
+} from "@/stores/sessions/session-directory-store";
 
-type SessionSlots = ReturnType<typeof useHarnessStore.getState>["sessionSlots"];
+type SessionEntries = ReturnType<typeof useSessionDirectoryStore.getState>["entriesById"];
 
-function countBusy(slots: SessionSlots): number {
-  return Object.values(slots).filter((slot) => isSessionSlotBusy(slot)).length;
+function countBusy(entries: SessionEntries): number {
+  return Object.values(entries).filter((entry) =>
+    isSessionSlotBusy(activitySnapshotFromDirectoryEntry(entry))
+  ).length;
 }
 
 export function useExportRunningAgentCount(): void {
   useEffect(() => {
-    let lastCount = countBusy(useHarnessStore.getState().sessionSlots);
+    let lastCount = countBusy(useSessionDirectoryStore.getState().entriesById);
     void setRunningAgentCount(lastCount);
 
-    const unsubscribe = useHarnessStore.subscribe((state) => {
-      const next = countBusy(state.sessionSlots);
+    const unsubscribe = useSessionDirectoryStore.subscribe((state) => {
+      const next = countBusy(state.entriesById);
       if (next !== lastCount) {
         lastCount = next;
         void setRunningAgentCount(next);

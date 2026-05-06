@@ -3,13 +3,15 @@ import {
   createOptimisticPendingPrompt,
   hasVisibleTranscriptContent,
   resolveVisibleOptimisticPrompt,
+  shouldClearOptimisticPromptAfterSessionSummary,
   shouldClearOptimisticPromptAfterPromptResponse,
+  shouldClearOptimisticPendingPromptForEnvelope,
   shouldClearOptimisticPendingPrompt,
   shouldShowPendingPromptActivity,
   turnHasAssistantRenderableTranscriptContent,
   turnHasRenderableTranscriptContent,
 } from "./pending-prompts";
-import { createTranscriptState, type PendingPromptEntry } from "@anyharness/sdk";
+import { createTranscriptState, type PendingPromptEntry, type SessionEventEnvelope } from "@anyharness/sdk";
 
 function durablePendingPrompt(text = "Queued text"): PendingPromptEntry {
   return {
@@ -95,6 +97,16 @@ describe("pending prompt visibility", () => {
     expect(shouldClearOptimisticPromptAfterPromptResponse("running")).toBe(false);
   });
 
+  it("clears optimistic prompt when a session summary reaches a terminal or idle state", () => {
+    expect(shouldClearOptimisticPromptAfterSessionSummary("idle")).toBe(true);
+    expect(shouldClearOptimisticPromptAfterSessionSummary("completed")).toBe(true);
+    expect(shouldClearOptimisticPromptAfterSessionSummary("errored")).toBe(true);
+    expect(shouldClearOptimisticPromptAfterSessionSummary("closed")).toBe(true);
+    expect(shouldClearOptimisticPromptAfterSessionSummary("running")).toBe(false);
+    expect(shouldClearOptimisticPromptAfterSessionSummary("starting")).toBe(false);
+    expect(shouldClearOptimisticPromptAfterSessionSummary(null)).toBe(false);
+  });
+
   it("keeps the activity indicator visible during the optimistic handoff", () => {
     expect(shouldShowPendingPromptActivity({
       optimisticPrompt: createOptimisticPendingPrompt(
@@ -112,6 +124,29 @@ describe("pending prompt visibility", () => {
     expect(shouldClearOptimisticPendingPrompt("pending_prompt_removed")).toBe(false);
     expect(shouldClearOptimisticPendingPrompt("turn_ended")).toBe(true);
     expect(shouldClearOptimisticPendingPrompt("pending_prompt_added")).toBe(false);
+  });
+
+  it("clears optimistic prompt once the stream echoes the submitted user message", () => {
+    expect(shouldClearOptimisticPendingPromptForEnvelope({
+      sessionId: "session-1",
+      seq: 1,
+      timestamp: "2026-04-13T12:00:01.000Z",
+      turnId: "turn-1",
+      itemId: "item-1",
+      event: {
+        type: "item_started",
+        item: {
+          kind: "user_message",
+          status: "completed",
+          sourceAgentKind: "codex",
+          contentParts: [{ type: "text", text: "Ship it" }],
+        },
+      },
+    } satisfies SessionEventEnvelope, createOptimisticPendingPrompt(
+      "Ship it",
+      "prompt-1",
+      "2026-04-13T12:00:00.000Z",
+    ))).toBe(true);
   });
 
   it("treats plan-only turns as not yet renderable", () => {

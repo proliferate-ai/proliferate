@@ -126,6 +126,8 @@ describe("executeLocalAutomationRun", () => {
         get: vi.fn().mockResolvedValue(workspace()),
         updateDisplayName: vi.fn().mockResolvedValue(workspace({ displayName: "Daily Check" })),
         getSessionLaunchCatalog: vi.fn().mockResolvedValue({
+          workspaceId: "workspace-1",
+          catalogVersion: "test",
           agents: [{ kind: "codex", models: [] }],
         }),
       },
@@ -167,6 +169,8 @@ describe("executeLocalAutomationRun", () => {
         createWorktree: vi.fn().mockResolvedValue({ workspace: workspace() }),
         updateDisplayName,
         getSessionLaunchCatalog: vi.fn().mockResolvedValue({
+          workspaceId: "workspace-1",
+          catalogVersion: "test",
           agents: [{ kind: "codex", models: [] }],
         }),
       },
@@ -204,6 +208,8 @@ describe("executeLocalAutomationRun", () => {
           resolveFromPath: vi.fn().mockResolvedValue({ workspace: workspace({ displayName }) }),
           updateDisplayName,
           getSessionLaunchCatalog: vi.fn().mockResolvedValue({
+            workspaceId: "workspace-1",
+            catalogVersion: "test",
             agents: [{ kind: "codex", models: [] }],
           }),
         },
@@ -233,6 +239,8 @@ describe("executeLocalAutomationRun", () => {
         }),
         updateDisplayName,
         getSessionLaunchCatalog: vi.fn().mockResolvedValue({
+          workspaceId: "workspace-1",
+          catalogVersion: "test",
           agents: [{ kind: "codex", models: [] }],
         }),
       },

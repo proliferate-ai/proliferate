@@ -10,8 +10,7 @@ import {
   type ShellIntentResult,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export type ChatShellIntentWrite<TIntent extends WorkspaceShellIntentKey = WorkspaceShellIntentKey> = ShellIntentResult & {
   shellWorkspaceId: string;
@@ -91,8 +90,8 @@ function resolveCurrentShellStateKey(
   return resolveWorkspaceShellStateKey({
     workspaceId,
     shellWorkspaceId,
-    selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
-    selectedLogicalWorkspaceId: useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId,
+    selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
+    selectedLogicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
   }) ?? workspaceId;
 }
 

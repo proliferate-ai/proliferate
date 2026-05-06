@@ -1,4 +1,4 @@
-import type { ContentPart } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
@@ -25,9 +25,26 @@ export interface ChatLaunchIntentFailure {
   failedAt: number;
 }
 
+export interface LaunchCatalogSnapshot {
+  snapshotId: string;
+  workspaceId: string | null;
+  runtimeUrl: string | null;
+  catalogVersion: string | null;
+  agents: WorkspaceSessionLaunchAgent[];
+  createdAt: number;
+}
+
 export interface ChatLaunchIntent {
   id: string;
+  clientSessionId?: string | null;
+  catalogSnapshotId?: string | null;
+  agentKind?: string | null;
+  modelId?: string | null;
+  modeId?: string | null;
+  launchControlValues?: Record<string, string>;
   promptId: string;
+  queuedPromptBlocks?: PromptInputBlock[];
+  optimisticContentParts?: ContentPart[];
   text: string;
   contentParts: ContentPart[];
   targetKind: ChatLaunchTargetKind;

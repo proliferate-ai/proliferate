@@ -24,8 +24,7 @@ import {
   type GitPanelMode,
 } from "@/lib/domain/workspaces/git-panel-diff";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
@@ -37,8 +36,8 @@ interface GitPanelWorkspaceContext {
 }
 
 export function useGitPanelState(mode: GitPanelMode) {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
   const activeWorkspaceId = selectedWorkspaceId;

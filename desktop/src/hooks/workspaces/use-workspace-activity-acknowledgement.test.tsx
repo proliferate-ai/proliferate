@@ -7,7 +7,7 @@ import {
   WORKSPACE_UI_DEFAULTS,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceActivityAcknowledgement } from "./use-workspace-activity-acknowledgement";
 
 const mocks = vi.hoisted(() => ({
@@ -37,8 +37,8 @@ describe("useWorkspaceActivityAcknowledgement", () => {
       ...WORKSPACE_UI_DEFAULTS,
       _hydrated: true,
     });
-    useLogicalWorkspaceStore.setState({
-      _hydrated: true,
+    useSessionSelectionStore.setState({
+      hydrated: true,
       selectedLogicalWorkspaceId: null,
     });
   });
@@ -55,7 +55,7 @@ describe("useWorkspaceActivityAcknowledgement", () => {
     });
     const materializedWorkspaceId = logicalWorkspace.localWorkspace?.id ?? "";
     mocks.logicalWorkspaces = [logicalWorkspace];
-    useLogicalWorkspaceStore.setState({
+    useSessionSelectionStore.setState({
       selectedLogicalWorkspaceId: logicalWorkspace.id,
     });
     useWorkspaceUiStore.setState({
@@ -84,7 +84,7 @@ describe("useWorkspaceActivityAcknowledgement", () => {
     const materializedWorkspaceId = logicalWorkspace.localWorkspace?.id ?? "";
     mocks.focused = false;
     mocks.logicalWorkspaces = [logicalWorkspace];
-    useLogicalWorkspaceStore.setState({
+    useSessionSelectionStore.setState({
       selectedLogicalWorkspaceId: logicalWorkspace.id,
     });
     useWorkspaceUiStore.setState({

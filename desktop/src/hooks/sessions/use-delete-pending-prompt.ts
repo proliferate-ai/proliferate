@@ -5,7 +5,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useDeletePendingPrompt() {
@@ -16,7 +16,7 @@ export function useDeletePendingPrompt() {
     async (sessionId: string, seq: number) => {
       try {
         await mutation.mutateAsync({ sessionId, seq });
-        const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+        const slot = getSessionRecord(sessionId);
         const workspaceId = slot?.workspaceId ?? null;
         trackProductEvent("chat_pending_prompt_deleted", {
           agent_kind: slot?.agentKind ?? "unknown",

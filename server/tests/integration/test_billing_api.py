@@ -422,9 +422,9 @@ class TestBillingApi:
             captured["customer"] = kwargs
             return {"id": "cus_org_checkout"}
 
-        async def fake_create_subscription_checkout_session(**kwargs: object) -> (
-            stripe_billing.StripeUrlResponse
-        ):
+        async def fake_create_subscription_checkout_session(
+            **kwargs: object,
+        ) -> stripe_billing.StripeUrlResponse:
             captured["checkout"] = kwargs
             return stripe_billing.StripeUrlResponse(url="https://checkout.test/org")
 
@@ -508,8 +508,14 @@ class TestBillingApi:
             "https://app.test/portal",
         )
 
-        owner_session = await _register_and_login(client, "billing-org-disabled-owner@example.com")
-        member_session = await _register_and_login(client, "billing-org-disabled-member@example.com")
+        owner_session = await _register_and_login(
+            client,
+            "billing-org-disabled-owner@example.com",
+        )
+        member_session = await _register_and_login(
+            client,
+            "billing-org-disabled-member@example.com",
+        )
         owner_id = uuid.UUID(owner_session["user_id"])
         member_id = uuid.UUID(member_session["user_id"])
         organization = Organization(name="Org Checkout Gate Test")

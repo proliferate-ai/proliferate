@@ -121,6 +121,9 @@ export function ChatTabWithMenu({
       onSelectPointerDownCapture={onSelectPointerDownCapture}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
+      data-chat-tab
+      data-chat-tab-id={tab.id}
+      data-chat-tab-active={tab.isActive ? "true" : "false"}
     />
   );
 

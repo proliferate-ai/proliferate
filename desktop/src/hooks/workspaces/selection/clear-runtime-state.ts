@@ -1,8 +1,9 @@
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { detachAndCloseSessionSlotStreams } from "@/lib/integrations/anyharness/session-runtime";
+import { detachAndCloseSessionStreams } from "@/lib/integrations/anyharness/session-runtime";
+import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { clearWorkspaceBootstrappedInSession } from "../workspace-bootstrap-memory";
 import type { WorkspaceSelectionDeps } from "./types";
 
@@ -11,12 +12,10 @@ export function clearWorkspaceRuntimeState(
   workspaceId: string,
   options?: { clearSelection?: boolean; clearDraftUiKey?: string | null },
 ): void {
-  const { sessionSlots, selectedWorkspaceId } = useHarnessStore.getState();
-  const workspaceSlots = Object.fromEntries(
-    Object.entries(sessionSlots).filter(([, slot]) => slot.workspaceId === workspaceId),
-  );
+  const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
+  const workspaceSlots = getWorkspaceSessionRecords(workspaceId);
 
-  detachAndCloseSessionSlotStreams(Object.keys(workspaceSlots));
+  detachAndCloseSessionStreams(Object.keys(workspaceSlots));
   deps.removeWorkspaceSlots(workspaceId);
   if (options?.clearDraftUiKey) {
     useChatInputStore.getState().clearDraft(options.clearDraftUiKey);

@@ -20,9 +20,11 @@ interface SessionConfigControlsProps {
 }
 
 export function SessionConfigControls({ agentKind, controls }: SessionConfigControlsProps) {
+  const uniqueControls = uniqueSessionControls(controls);
+
   return (
     <>
-      {controls.map((control) => (
+      {uniqueControls.map((control) => (
         isConfiguredModeControl(control) ? (
           <SessionModeControl key={control.key} agentKind={agentKind} control={control} />
         ) : control.key === "effort" ? (
@@ -35,6 +37,24 @@ export function SessionConfigControls({ agentKind, controls }: SessionConfigCont
       ))}
     </>
   );
+}
+
+function uniqueSessionControls(
+  controls: LiveSessionControlDescriptor[],
+): LiveSessionControlDescriptor[] {
+  const controlsByKey = new Map<string, LiveSessionControlDescriptor>();
+  const orderedKeys: string[] = [];
+
+  for (const control of controls) {
+    if (!controlsByKey.has(control.key)) {
+      orderedKeys.push(control.key);
+    }
+    controlsByKey.set(control.key, control);
+  }
+
+  return orderedKeys
+    .map((key) => controlsByKey.get(key))
+    .filter((control): control is LiveSessionControlDescriptor => control !== undefined);
 }
 
 function isConfiguredModeControl(

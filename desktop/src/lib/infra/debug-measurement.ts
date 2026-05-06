@@ -23,6 +23,7 @@ export type MeasurementOperationKind =
   | "session_history_older_chunk"
   | "session_stream_sample"
   | "session_stream_event_batch"
+  | "prompt_submit"
   | "composer_typing"
   | "workspace_background_reconcile"
   | "transcript_scroll"
@@ -30,7 +31,8 @@ export type MeasurementOperationKind =
   | "file_tree_scroll"
   | "session_rename"
   | "workspace_rename"
-  | "hover_sample";
+  | "hover_sample"
+  | "diff_review_sample";
 
 export type MeasurementSurface =
   | "workspace-shell"
@@ -47,7 +49,9 @@ export type MeasurementSurface =
   | "send-button"
   | "stop-button"
   | "header-tab"
-  | "sidebar-workspace-row";
+  | "sidebar-workspace-row"
+  | "all-changes-frame"
+  | "diff-viewer";
 
 export type MeasurementSampleKey =
   | "composer"
@@ -57,7 +61,8 @@ export type MeasurementSampleKey =
   | "send_button"
   | "stop_button"
   | "header_tab"
-  | "sidebar_workspace_row";
+  | "sidebar_workspace_row"
+  | "diff_review";
 
 export type MeasurementFinishReason =
   | "completed"
@@ -89,6 +94,12 @@ export type MeasurementWorkflowStep =
   | "workspace.bootstrap.launch_catalog"
   | "workspace.bootstrap.initial_session"
   | "workspace.bootstrap.session_select"
+  | "workspace.shell.pending_activation"
+  | "workspace.shell.after_paint"
+  | "workspace.shell.durable_intent"
+  | "workspace.shell.real_activation"
+  | "workspace.shell.pending_clear"
+  | "workspace.shell.pending_rollback"
   | "session.select.hot_slot_activate"
   | "session.select.ensure_sessions"
   | "session.select.slot_store"
@@ -109,7 +120,10 @@ export type MeasurementWorkflowStep =
   | "session.stream.resolve_target"
   | "session.resume.resolve_target"
   | "session.resume.workspace_get"
-  | "session.resume.resolve_mcp";
+  | "session.resume.resolve_mcp"
+  | "prompt.submit.blocks_prepare"
+  | "prompt.submit.enqueue"
+  | "prompt.submit.after_paint";
 
 export type MeasurementStateCountTarget =
   | "session.history.events_fetched"
@@ -340,6 +354,7 @@ interface MeasurementAggregateSnapshot {
   totalStoreApplyMs: number;
   maxStoreApplyMs: number;
   reactCommitCount: number;
+  firstCommitMs: number | null;
   totalCommitMs: number;
   maxCommitMs: number;
   renderCount: number;
@@ -508,6 +523,7 @@ interface MeasurementOperationAggregate {
   totalStoreApplyMs: number;
   maxStoreApplyMs: number;
   reactCommitCount: number;
+  firstCommitAtMs: number | null;
   totalCommitMs: number;
   maxCommitMs: number;
   renderCount: number;
@@ -541,9 +557,15 @@ interface MeasurementOperationRecord {
   cooldownMs: number;
   idleTimer: ReturnType<typeof setTimeout> | null;
   maxTimer: ReturnType<typeof setTimeout> | null;
+  inFlightRequestCount: number;
   hasMetrics: boolean;
   aggregate: MeasurementOperationAggregate;
 }
+
+type MeasurementOperationFinishListener = (input: {
+  operationId: MeasurementOperationId;
+  reason: MeasurementFinishReason;
+}) => void;
 
 interface MeasurementCategoryBinding {
   id: string;
@@ -564,11 +586,25 @@ const RECENT_OPERATION_EVENT_LIMIT = 1_000;
 const RECENT_MEMORY_SAMPLE_LIMIT = 1_000;
 const RECENT_SUMMARY_LIMIT = 500;
 const MEMORY_SAMPLE_INTERVAL_MS = 5_000;
+const HOT_BUDGET_REQUEST_COUNT = 0;
+const HOT_BUDGET_FIRST_COMMIT_MS = 50;
+const HOT_BUDGET_MAX_FRAME_GAP_MS = 50;
+const HOT_BUDGET_MAX_COMMIT_MS = 16;
+const HOT_BUDGET_TOTAL_COMMIT_MS = 80;
+const HOT_SURFACE_COMMIT_BUDGETS: Partial<Record<MeasurementSurface, number>> = {
+  "workspace-shell": 2,
+  "chat-surface": 2,
+  "session-transcript-pane": 2,
+  "transcript-list": 2,
+  "header-tabs": 3,
+  "workspace-sidebar": 3,
+};
 const operations = new Map<MeasurementOperationId, MeasurementOperationRecord>();
 const activeSampleOperations = new Map<string, MeasurementOperationId>();
 const cooldownUntilBySample = new Map<string, number>();
 const pendingCommitMarks = new Map<MeasurementOperationId, Set<MeasurementSurface>>();
 const categoryBindings = new Map<string, MeasurementCategoryBinding>();
+const operationFinishListeners = new Map<MeasurementOperationId, Set<MeasurementOperationFinishListener>>();
 const recentMetrics: MeasurementMetricEvent[] = [];
 const recentOperationEvents: MeasurementOperationEvent[] = [];
 const recentMemorySamples: MeasurementMemoryEvent[] = [];
@@ -654,6 +690,7 @@ export function startMeasurementOperation(input: {
     cooldownMs: input.cooldownMs ?? 0,
     idleTimer: null,
     maxTimer: null,
+    inFlightRequestCount: 0,
     hasMetrics: false,
     aggregate: createEmptyAggregate(),
   };
@@ -671,15 +708,40 @@ export function touchMeasurementOperation(id: MeasurementOperationId): void {
   if (!operation) {
     return;
   }
+  scheduleOperationIdleTimer(operation);
+}
+
+export function beginMeasurementRequest(
+  id: MeasurementOperationId | null | undefined,
+): () => void {
+  if (!id || !isDebugMeasurementEnabled()) {
+    return () => undefined;
+  }
+
+  const operation = operations.get(id);
+  if (!operation) {
+    return () => undefined;
+  }
+
+  operation.inFlightRequestCount += 1;
   if (operation.idleTimer) {
     clearTimeout(operation.idleTimer);
     operation.idleTimer = null;
   }
-  if (operation.idleTimeoutMs !== null) {
-    operation.idleTimer = setTimeout(() => {
-      finishMeasurementOperation(operation.id, "idle");
-    }, operation.idleTimeoutMs);
-  }
+
+  let finished = false;
+  return () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    const current = operations.get(id);
+    if (!current) {
+      return;
+    }
+    current.inFlightRequestCount = Math.max(0, current.inFlightRequestCount - 1);
+    scheduleOperationIdleTimer(current);
+  };
 }
 
 export function finishMeasurementOperation(
@@ -691,8 +753,9 @@ export function finishMeasurementOperation(
     return;
   }
   recordOperationEvent(operation, "finish", reason);
-  cleanupOperation(operation);
-  if (operation.hasMetrics) {
+  notifyOperationFinish(operation, reason);
+  cleanupOperation(operation, reason);
+  if (operation.hasMetrics || isHotPaintOperationKind(operation.kind)) {
     printSummaryRow(operation, reason);
   }
 }
@@ -706,8 +769,9 @@ export function cancelMeasurementOperation(
     return;
   }
   recordOperationEvent(operation, "finish", reason);
-  cleanupOperation(operation);
-  if (operation.hasMetrics) {
+  notifyOperationFinish(operation, reason);
+  cleanupOperation(operation, reason);
+  if (operation.hasMetrics || isHotPaintOperationKind(operation.kind)) {
     printSummaryRow(operation, reason);
   }
 }
@@ -728,6 +792,28 @@ export function finishOrCancelMeasurementOperation(
   } else {
     cancelMeasurementOperation(id, reason);
   }
+}
+
+export function onMeasurementOperationFinish(
+  id: MeasurementOperationId,
+  listener: MeasurementOperationFinishListener,
+): () => void {
+  let listeners = operationFinishListeners.get(id);
+  if (!listeners) {
+    listeners = new Set();
+    operationFinishListeners.set(id, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    const current = operationFinishListeners.get(id);
+    if (!current) {
+      return;
+    }
+    current.delete(listener);
+    if (current.size === 0) {
+      operationFinishListeners.delete(id);
+    }
+  };
 }
 
 export function markOperationForNextCommit(
@@ -756,6 +842,9 @@ export function getMeasurementRequestOptions(input: {
   if (input.operationId) {
     options.measurementOperationId = input.operationId;
     options.headers = mergeMeasurementHeader(input.headers, input.operationId);
+    options.timingLifecycle = {
+      onRequestStart: () => beginMeasurementRequest(input.operationId),
+    };
   }
   return options;
 }
@@ -798,15 +887,8 @@ export function recordMeasurementMetric(input: MeasurementMetricInput): void {
     if (!operation) {
       continue;
     }
-    if (input.type === "request" && isHotPaintOperationKind(operation.kind)) {
-      console.error("[debug-measurement] request attributed to hot paint operation", {
-        operationId: operation.id,
-        operationKind: operation.kind,
-        category: input.category,
-      });
-    }
     operation.hasMetrics = true;
-    applyMetric(operation.aggregate, input);
+    applyMetric(operation, input);
     touchMeasurementOperation(operation.id);
   }
 }
@@ -862,6 +944,7 @@ export function recordMeasurementDiagnostic(input: {
 export function measureDebugComputation<T>(input: {
   category: string;
   label: string;
+  operationId?: MeasurementOperationId | null;
   keys?: readonly string[];
   count?: (value: T) => number | undefined;
 }, compute: () => T): T {
@@ -873,6 +956,7 @@ export function measureDebugComputation<T>(input: {
   recordMeasurementDiagnostic({
     category: input.category,
     label: input.label,
+    operationId: input.operationId,
     startedAt,
     count: input.count?.(value),
     keys: input.keys,
@@ -894,6 +978,7 @@ export function resetDebugMeasurementForTest(): void {
   cooldownUntilBySample.clear();
   pendingCommitMarks.clear();
   categoryBindings.clear();
+  operationFinishListeners.clear();
   clearDebugMeasurementBuffer();
   operationSeq = 0;
   bindingSeq = 0;
@@ -1153,6 +1238,7 @@ function aggregateSnapshot(a: MeasurementOperationAggregate): MeasurementAggrega
     totalStoreApplyMs: round(a.totalStoreApplyMs),
     maxStoreApplyMs: round(a.maxStoreApplyMs),
     reactCommitCount: a.reactCommitCount,
+    firstCommitMs: a.firstCommitAtMs === null ? null : round(a.firstCommitAtMs),
     totalCommitMs: round(a.totalCommitMs),
     maxCommitMs: round(a.maxCommitMs),
     renderCount: a.renderCount,
@@ -1202,8 +1288,8 @@ function pushBounded<T>(items: T[], item: T, limit: number): void {
 }
 
 function resolveMetricOperationIds(input: MeasurementMetricInput): MeasurementOperationId[] {
-  if (input.operationId && operations.has(input.operationId)) {
-    return [input.operationId];
+  if (input.operationId) {
+    return operations.has(input.operationId) ? [input.operationId] : [];
   }
 
   if (input.type === "main_thread") {
@@ -1286,9 +1372,10 @@ function resolveBoundOperationIds(
 }
 
 function applyMetric(
-  aggregate: MeasurementOperationAggregate,
+  operation: MeasurementOperationRecord,
   input: MeasurementMetricInput,
 ): void {
+  const aggregate = operation.aggregate;
   switch (input.type) {
     case "request":
       aggregate.requestCount += 1;
@@ -1359,6 +1446,9 @@ function applyMetric(
     case "main_thread":
       applySurfaceBreakdown(aggregate, input);
       if (input.metric === "react_commit") {
+        if (aggregate.firstCommitAtMs === null) {
+          aggregate.firstCommitAtMs = now() - operation.startedAt;
+        }
         aggregate.reactCommitCount += input.count ?? 1;
         aggregate.totalCommitMs += input.durationMs ?? 0;
         aggregate.maxCommitMs = Math.max(aggregate.maxCommitMs, input.durationMs ?? 0);
@@ -1583,6 +1673,67 @@ function getOrCreate<K, V>(map: Map<K, V>, key: K, create: () => V): V {
   return next;
 }
 
+interface HotBudgetSummary {
+  passed: boolean;
+  failureLabels: string;
+  surfaceCommitFailures: string;
+  requestCount: number;
+  firstCommitMs: number | null;
+  maxFrameGapMs: number;
+  maxCommitMs: number;
+  totalCommitMs: number;
+}
+
+function evaluateHotBudget(aggregate: MeasurementOperationAggregate): HotBudgetSummary {
+  const failures: string[] = [];
+  const surfaceFailures: string[] = [];
+  const firstCommitMs = aggregate.firstCommitAtMs === null
+    ? null
+    : round(aggregate.firstCommitAtMs);
+  const maxFrameGapMs = round(aggregate.maxFrameGapMs);
+  const maxCommitMs = round(aggregate.maxCommitMs);
+  const totalCommitMs = round(aggregate.totalCommitMs);
+
+  if (aggregate.requestCount !== HOT_BUDGET_REQUEST_COUNT) {
+    failures.push("request_count");
+  }
+  if (firstCommitMs === null || firstCommitMs > HOT_BUDGET_FIRST_COMMIT_MS) {
+    failures.push("first_commit_ms");
+  }
+  if (maxFrameGapMs > HOT_BUDGET_MAX_FRAME_GAP_MS) {
+    failures.push("max_frame_gap_ms");
+  }
+  if (maxCommitMs > HOT_BUDGET_MAX_COMMIT_MS) {
+    failures.push("max_commit_ms");
+  }
+  if (totalCommitMs > HOT_BUDGET_TOTAL_COMMIT_MS) {
+    failures.push("total_commit_ms");
+  }
+
+  for (const [surface, budget] of Object.entries(HOT_SURFACE_COMMIT_BUDGETS)) {
+    if (budget === undefined) {
+      continue;
+    }
+    const breakdown = aggregate.surfaceBreakdowns.get(surface as MeasurementSurface);
+    const actual = breakdown?.reactCommitCount ?? 0;
+    if (actual > budget) {
+      failures.push("surface_commit_count");
+      surfaceFailures.push(`${surface}:${actual}/${budget}`);
+    }
+  }
+
+  return {
+    passed: failures.length === 0,
+    failureLabels: [...new Set(failures)].join(","),
+    surfaceCommitFailures: surfaceFailures.join(","),
+    requestCount: aggregate.requestCount,
+    firstCommitMs,
+    maxFrameGapMs,
+    maxCommitMs,
+    totalCommitMs,
+  };
+}
+
 function printSummaryRow(
   operation: MeasurementOperationRecord,
   reason: MeasurementFinishReason,
@@ -1622,6 +1773,7 @@ function printSummaryRow(
     totalStoreApplyMs: round(a.totalStoreApplyMs),
     maxStoreApplyMs: round(a.maxStoreApplyMs),
     reactCommitCount: a.reactCommitCount,
+    firstCommitMs: a.firstCommitAtMs === null ? null : round(a.firstCommitAtMs),
     totalCommitMs: round(a.totalCommitMs),
     maxCommitMs: round(a.maxCommitMs),
     renderCount: a.renderCount,
@@ -1762,6 +1914,31 @@ function printSummaryRow(
     });
   }
 
+  const hotBudget = isHotPaintOperationKind(operation.kind)
+    ? evaluateHotBudget(a)
+    : null;
+  if (hotBudget) {
+    rows.push({
+      ...base,
+      rowKind: "budget",
+      target: "hot_paint",
+      durationMs: null,
+      pass: hotBudget.passed,
+      failureLabels: hotBudget.failureLabels,
+      requestCount: hotBudget.requestCount,
+      requestBudgetCount: HOT_BUDGET_REQUEST_COUNT,
+      firstCommitMs: hotBudget.firstCommitMs,
+      firstCommitBudgetMs: HOT_BUDGET_FIRST_COMMIT_MS,
+      maxFrameGapMs: hotBudget.maxFrameGapMs,
+      maxFrameGapBudgetMs: HOT_BUDGET_MAX_FRAME_GAP_MS,
+      maxCommitMs: hotBudget.maxCommitMs,
+      maxCommitBudgetMs: HOT_BUDGET_MAX_COMMIT_MS,
+      totalCommitMs: hotBudget.totalCommitMs,
+      totalCommitBudgetMs: HOT_BUDGET_TOTAL_COMMIT_MS,
+      surfaceCommitFailures: hotBudget.surfaceCommitFailures,
+    });
+  }
+
   const payload: MeasurementSummaryPayload = {
     tag: "measurement_summary_json",
     operationId: operation.id,
@@ -1773,14 +1950,23 @@ function printSummaryRow(
   pushBounded(recentSummaries, payload, RECENT_SUMMARY_LIMIT);
   console.table(rows);
   console.debug("[measurement_summary_json]", JSON.stringify(payload));
+  if (hotBudget && !hotBudget.passed) {
+    console.error("[debug-measurement] hot paint budget violated", {
+      operationId: operation.id,
+      operationKind: operation.kind,
+      failureLabels: hotBudget.failureLabels,
+      requestCount: hotBudget.requestCount,
+      firstCommitMs: hotBudget.firstCommitMs,
+      maxFrameGapMs: hotBudget.maxFrameGapMs,
+      maxCommitMs: hotBudget.maxCommitMs,
+      totalCommitMs: hotBudget.totalCommitMs,
+      surfaceCommitFailures: hotBudget.surfaceCommitFailures,
+    });
+  }
 }
 
 function scheduleOperationTimers(operation: MeasurementOperationRecord): void {
-  if (operation.idleTimeoutMs !== null) {
-    operation.idleTimer = setTimeout(() => {
-      finishMeasurementOperation(operation.id, "idle");
-    }, operation.idleTimeoutMs);
-  }
+  scheduleOperationIdleTimer(operation);
   if (operation.maxDurationMs !== null) {
     operation.maxTimer = setTimeout(() => {
       finishMeasurementOperation(operation.id, "max_duration");
@@ -1788,16 +1974,54 @@ function scheduleOperationTimers(operation: MeasurementOperationRecord): void {
   }
 }
 
-function cleanupOperation(operation: MeasurementOperationRecord): void {
+function scheduleOperationIdleTimer(operation: MeasurementOperationRecord): void {
+  if (operation.idleTimer) {
+    clearTimeout(operation.idleTimer);
+    operation.idleTimer = null;
+  }
+  if (operation.idleTimeoutMs === null || operation.inFlightRequestCount > 0) {
+    return;
+  }
+  operation.idleTimer = setTimeout(() => {
+    finishMeasurementOperation(operation.id, "idle");
+  }, operation.idleTimeoutMs);
+}
+
+function notifyOperationFinish(
+  operation: MeasurementOperationRecord,
+  reason: MeasurementFinishReason,
+): void {
+  const listeners = operationFinishListeners.get(operation.id);
+  if (!listeners) {
+    return;
+  }
+  operationFinishListeners.delete(operation.id);
+  for (const listener of [...listeners]) {
+    try {
+      listener({ operationId: operation.id, reason });
+    } catch {
+      console.error("[debug-measurement] operation finish listener failed", {
+        operationId: operation.id,
+        operationKind: operation.kind,
+      });
+    }
+  }
+}
+
+function cleanupOperation(
+  operation: MeasurementOperationRecord,
+  reason: MeasurementFinishReason,
+): void {
   clearOperationTimers(operation);
   operations.delete(operation.id);
   pendingCommitMarks.delete(operation.id);
+  operationFinishListeners.delete(operation.id);
   if (operation.sampleKey) {
     const sampleMapKey = `${operation.kind}:${operation.sampleKey}`;
     if (activeSampleOperations.get(sampleMapKey) === operation.id) {
       activeSampleOperations.delete(sampleMapKey);
     }
-    if (operation.cooldownMs > 0) {
+    if (operation.cooldownMs > 0 && reason !== "unmount") {
       cooldownUntilBySample.set(sampleMapKey, now() + operation.cooldownMs);
     }
   }
@@ -1852,6 +2076,7 @@ function createEmptyAggregate(): MeasurementOperationAggregate {
     totalStoreApplyMs: 0,
     maxStoreApplyMs: 0,
     reactCommitCount: 0,
+    firstCommitAtMs: null,
     totalCommitMs: 0,
     maxCommitMs: 0,
     renderCount: 0,

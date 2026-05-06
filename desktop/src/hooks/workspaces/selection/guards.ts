@@ -1,10 +1,10 @@
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function isWorkspaceSelectionCurrent(
   workspaceId: string,
   selectionNonce: number,
 ): boolean {
-  const state = useHarnessStore.getState();
+  const state = useSessionSelectionStore.getState();
   return state.selectedWorkspaceId === workspaceId
     && state.workspaceSelectionNonce === selectionNonce;
 }

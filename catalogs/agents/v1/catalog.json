@@ -1,0 +1,1976 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-05-05.1",
+  "generatedAt": "2026-05-05T23:00:00Z",
+  "compatibility": {
+    "minRuntimeVersion": "0.1.0",
+    "maxRuntimeVersion": null,
+    "minDesktopVersion": null,
+    "maxDesktopVersion": null,
+    "supportedPlatforms": []
+  },
+  "agents": [
+    {
+      "kind": "claude",
+      "displayName": "Claude",
+      "description": "Claude Code through claude-agent-acp.",
+      "process": {
+        "native": {
+          "install": {
+            "kind": "direct_binary",
+            "latestVersionUrl": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
+            "binaryUrlTemplate": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/{platform}/claude",
+            "platformMap": {
+              "macos_arm64": "darwin-arm64",
+              "macos_x64": "darwin-x64",
+              "linux_x64": "linux-x64",
+              "linux_arm64": "linux-arm64",
+              "windows_x64": "win32-x64",
+              "windows_arm64": "win32-arm64"
+            }
+          }
+        },
+        "agentProcess": {
+          "install": {
+            "kind": "managed_npm_package",
+            "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#906204b3cd798180df75502783a587bad19614ec",
+            "packageSubdir": null,
+            "sourceBuildBinaryName": null,
+            "executableRelpath": "node_modules/.bin/claude-agent-acp"
+          }
+        },
+        "launch": {
+          "executableName": "claude-agent-acp",
+          "defaultArgs": []
+        },
+        "auth": {
+          "envVars": [
+            "ANTHROPIC_API_KEY"
+          ],
+          "login": {
+            "label": "Log in with Claude",
+            "command": {
+              "program": "claude",
+              "args": [
+                "/login"
+              ]
+            },
+            "reusesUserState": true,
+            "message": null
+          },
+          "discovery": "claude"
+        },
+        "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp"
+      },
+      "session": {
+        "defaultModelId": "us.anthropic.claude-sonnet-4-6",
+        "defaultModeId": "default",
+        "dynamicModels": false,
+        "modelDisplayPolicy": {
+          "defaultVisibleModelIds": [
+            "us.anthropic.claude-sonnet-4-6",
+            "us.anthropic.claude-opus-4-7",
+            "haiku"
+          ],
+          "allowUserVisibleModelSelection": true,
+          "moreModelsSource": "none"
+        },
+        "promptCapabilities": {
+          "image": true,
+          "audio": false,
+          "embeddedContext": true
+        },
+        "models": [
+          {
+            "id": "us.anthropic.claude-sonnet-4-6",
+            "displayName": "Sonnet",
+            "description": "Sonnet 4.6 \u00b7 Best for everyday tasks",
+            "aliases": [
+              "sonnet",
+              "claude-sonnet-4-6",
+              "claude-sonnet-4-5"
+            ],
+            "status": "active",
+            "isDefault": true,
+            "provider": "anthropic",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6[1m]",
+            "displayName": "Sonnet (1M context)",
+            "description": "Sonnet 4.6 for long sessions",
+            "aliases": [
+              "sonnet[1m]",
+              "claude-sonnet-4-6-1m",
+              "claude-sonnet-4-5-1m"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "long-context"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "1m"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "opus",
+            "displayName": "Opus 4.1",
+            "description": "Opus 4.1 \u00b7 Legacy",
+            "aliases": [
+              "claude-opus-4-1",
+              "claude-opus-4.1"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "legacy"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7",
+            "displayName": "Opus 4.7",
+            "description": "Opus 4.7 \u00b7 Most capable for complex work",
+            "aliases": [
+              "claude-opus-4-7"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "frontier"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7[1m]",
+            "displayName": "Opus 4.7 (1M context)",
+            "description": "Opus 4.7 for long sessions",
+            "aliases": [
+              "opus[1m]",
+              "claude-opus-4-7-1m",
+              "claude-opus-4-6-1m",
+              "claude-opus-4-5-1m"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "frontier",
+              "long-context"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "1m"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-6-v1",
+            "displayName": "Opus 4.6",
+            "description": "Opus 4.6 \u00b7 Most capable for complex work",
+            "aliases": [
+              "claude-opus-4-6"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "previous"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-6-v1[1m]",
+            "displayName": "Opus 4.6 (1M context)",
+            "description": "Opus 4.6 for long sessions",
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "previous",
+              "long-context"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "1m"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "haiku",
+            "displayName": "Haiku",
+            "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+            "aliases": [
+              "claude-haiku-4-5"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          }
+        ],
+        "controls": [
+          {
+            "key": "model",
+            "label": "Model",
+            "description": "AI model to use",
+            "type": "select",
+            "category": "model",
+            "defaultValue": "us.anthropic.claude-sonnet-4-6",
+            "apply": {
+              "createField": "modelId",
+              "liveConfigId": "model",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "agentModels",
+            "values": [],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "mode",
+            "label": "Mode",
+            "description": "Session permission mode",
+            "type": "select",
+            "category": "mode",
+            "defaultValue": "default",
+            "apply": {
+              "createField": "modeId",
+              "liveConfigId": "mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "auto",
+                "label": "Auto",
+                "description": "Use a model classifier to approve/deny permission prompts.",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "default",
+                "label": "Default",
+                "description": "Standard behavior, prompts for dangerous operations",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "acceptEdits",
+                "label": "Accept Edits",
+                "description": "Auto-accept file edit operations",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "plan",
+                "label": "Plan Mode",
+                "description": "Planning mode, no actual tool execution",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "dontAsk",
+                "label": "Don't Ask",
+                "description": "Don't prompt for permissions, deny if not pre-approved",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "bypassPermissions",
+                "label": "Bypass Permissions",
+                "description": "Bypass all permission checks",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "effort",
+            "label": "Effort",
+            "description": "Reasoning depth",
+            "type": "select",
+            "category": "thought_level",
+            "defaultValue": "high",
+            "apply": {
+              "createField": null,
+              "liveConfigId": "effort",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "low",
+                "label": "Low",
+                "description": null,
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "medium",
+                "label": "Medium",
+                "description": null,
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "high",
+                "label": "High",
+                "description": null,
+                "isDefault": true,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": false,
+              "session": true,
+              "automation": false,
+              "settings": true
+            }
+          },
+          {
+            "key": "fast_mode",
+            "label": "Fast Mode",
+            "description": "Favor faster responses",
+            "type": "select",
+            "category": "_fast_mode",
+            "defaultValue": "off",
+            "apply": {
+              "createField": null,
+              "liveConfigId": "fast_mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "off",
+                "label": "Off",
+                "description": null,
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "on",
+                "label": "On",
+                "description": null,
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": false,
+              "session": true,
+              "automation": false,
+              "settings": true
+            }
+          }
+        ],
+        "compatibility": {}
+      }
+    },
+    {
+      "kind": "codex",
+      "displayName": "Codex",
+      "description": "OpenAI Codex through codex-acp.",
+      "process": {
+        "native": {
+          "install": {
+            "kind": "tarball_release",
+            "latestUrlTemplate": "https://github.com/openai/codex/releases/latest/download/codex-{target}.tar.gz",
+            "versionedUrlTemplate": "https://github.com/openai/codex/releases/download/{version}/codex-{target}.tar.gz",
+            "expectedBinaryTemplate": "codex-{target}",
+            "platformMap": {
+              "macos_arm64": "aarch64-apple-darwin",
+              "macos_x64": "x86_64-apple-darwin",
+              "linux_x64": "x86_64-unknown-linux-musl",
+              "linux_arm64": "aarch64-unknown-linux-musl",
+              "windows_x64": "x86_64-pc-windows-msvc",
+              "windows_arm64": "aarch64-pc-windows-msvc"
+            }
+          }
+        },
+        "agentProcess": {
+          "install": {
+            "kind": "managed_npm_package",
+            "package": "@proliferateai/codex-acp@0.11.8",
+            "packageSubdir": null,
+            "sourceBuildBinaryName": null,
+            "executableRelpath": "node_modules/.bin/codex-acp"
+          }
+        },
+        "launch": {
+          "executableName": "codex-acp",
+          "defaultArgs": []
+        },
+        "auth": {
+          "envVars": [
+            "OPENAI_API_KEY",
+            "CODEX_API_KEY"
+          ],
+          "login": {
+            "label": "Log in with Codex",
+            "command": {
+              "program": "codex",
+              "args": [
+                "login"
+              ]
+            },
+            "reusesUserState": true,
+            "message": null
+          },
+          "discovery": "codex"
+        },
+        "docsUrl": "https://github.com/proliferate-ai/codex-acp"
+      },
+      "session": {
+        "defaultModelId": "gpt-5.5",
+        "defaultModeId": "auto",
+        "dynamicModels": false,
+        "modelDisplayPolicy": {
+          "defaultVisibleModelIds": [
+            "gpt-5.5",
+            "gpt-5.4",
+            "gpt-5.4-mini",
+            "gpt-5.3-codex",
+            "gpt-5.3-codex-spark",
+            "gpt-5.2"
+          ],
+          "allowUserVisibleModelSelection": true,
+          "moreModelsSource": "none"
+        },
+        "promptCapabilities": {
+          "image": true,
+          "audio": false,
+          "embeddedContext": true
+        },
+        "models": [
+          {
+            "id": "gpt-5.5",
+            "displayName": "GPT-5.5",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "aliases": [],
+            "status": "active",
+            "isDefault": true,
+            "provider": "openai",
+            "tags": [
+              "frontier"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": {
+              "kind": "managed_reinstall",
+              "message": "Update Codex tools and retry."
+            }
+          },
+          {
+            "id": "gpt-5.4",
+            "displayName": "gpt-5.4",
+            "description": "Strong model for everyday coding.",
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.4-mini",
+            "displayName": "GPT-5.4-Mini",
+            "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.3-codex",
+            "displayName": "gpt-5.3-codex",
+            "description": "Coding-optimized model.",
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.3-codex-spark",
+            "displayName": "GPT-5.3-Codex-Spark",
+            "description": "Ultra-fast coding model.",
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.2",
+            "displayName": "gpt-5.2",
+            "description": "Optimized for professional work and long-running agents.",
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          }
+        ],
+        "controls": [
+          {
+            "key": "model",
+            "label": "Model",
+            "description": "Choose which model Codex should use",
+            "type": "select",
+            "category": "model",
+            "defaultValue": "gpt-5.5",
+            "apply": {
+              "createField": "modelId",
+              "liveConfigId": "model",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "agentModels",
+            "values": [],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "mode",
+            "label": "Approval Preset",
+            "description": "Choose an approval and sandboxing preset for your session",
+            "type": "select",
+            "category": "mode",
+            "defaultValue": "auto",
+            "apply": {
+              "createField": "modeId",
+              "liveConfigId": "mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "read-only",
+                "label": "Read Only",
+                "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "auto",
+                "label": "Default",
+                "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "full-access",
+                "label": "Full Access",
+                "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "collaboration_mode",
+            "label": "Collaboration Mode",
+            "description": "Choose whether Codex should work in default or planning mode",
+            "type": "select",
+            "category": "collaboration_mode",
+            "defaultValue": "default",
+            "apply": {
+              "createField": null,
+              "liveConfigId": "collaboration_mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "plan",
+                "label": "Plan",
+                "description": "Switch to planning mode with Codex plan instructions",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "default",
+                "label": "Default",
+                "description": "Switch to default execution mode with Codex default instructions",
+                "isDefault": true,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": false,
+              "session": true,
+              "automation": false,
+              "settings": true
+            }
+          },
+          {
+            "key": "effort",
+            "label": "Reasoning Effort",
+            "description": "Choose how much reasoning effort the model should use",
+            "type": "select",
+            "category": "thought_level",
+            "defaultValue": "medium",
+            "apply": {
+              "createField": null,
+              "liveConfigId": "reasoning_effort",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "low",
+                "label": "Low",
+                "description": "Fast responses with lighter reasoning",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "medium",
+                "label": "Medium",
+                "description": "Balances speed and reasoning depth for everyday tasks",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "high",
+                "label": "High",
+                "description": "Greater reasoning depth for complex problems",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "xhigh",
+                "label": "Xhigh",
+                "description": "Extra high reasoning depth for complex problems",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": false,
+              "session": true,
+              "automation": false,
+              "settings": true
+            }
+          },
+          {
+            "key": "fast_mode",
+            "label": "Fast Mode",
+            "description": "Choose whether Codex should use fast mode",
+            "type": "select",
+            "category": "fast_mode",
+            "defaultValue": "off",
+            "apply": {
+              "createField": null,
+              "liveConfigId": "fast_mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "off",
+                "label": "Off",
+                "description": "Use Codex's default service tier",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "on",
+                "label": "On",
+                "description": "Request the fast Codex service tier",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": false,
+              "session": true,
+              "automation": false,
+              "settings": true
+            }
+          }
+        ],
+        "compatibility": {}
+      }
+    },
+    {
+      "kind": "gemini",
+      "displayName": "Gemini",
+      "description": "Gemini CLI through its ACP surface.",
+      "process": {
+        "native": null,
+        "agentProcess": {
+          "install": {
+            "kind": "registry_backed",
+            "registryId": "gemini",
+            "fallback": {
+              "kind": "binary_hint",
+              "candidateBinaries": [
+                "gemini"
+              ],
+              "args": [
+                "--experimental-acp"
+              ]
+            }
+          }
+        },
+        "launch": {
+          "executableName": "gemini",
+          "defaultArgs": []
+        },
+        "auth": {
+          "envVars": [
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY"
+          ],
+          "login": {
+            "label": "Log in with Gemini",
+            "command": {
+              "program": "gemini",
+              "args": []
+            },
+            "reusesUserState": true,
+            "message": "Run Gemini in a terminal, then choose Sign in with Google. If Gemini opens directly into chat, run /auth to switch authentication."
+          },
+          "discovery": "gemini"
+        },
+        "docsUrl": "https://github.com/google-gemini/gemini-cli"
+      },
+      "session": {
+        "defaultModelId": "auto-gemini-2.5",
+        "defaultModeId": "default",
+        "dynamicModels": false,
+        "modelDisplayPolicy": {
+          "defaultVisibleModelIds": [
+            "auto-gemini-2.5",
+            "gemini-3-flash-preview",
+            "gemini-3.1-pro-preview",
+            "gemini-3-pro-preview",
+            "gemini-2.5-pro"
+          ],
+          "allowUserVisibleModelSelection": true,
+          "moreModelsSource": "none"
+        },
+        "promptCapabilities": {
+          "image": true,
+          "audio": true,
+          "embeddedContext": true
+        },
+        "models": [
+          {
+            "id": "auto-gemini-2.5",
+            "displayName": "Auto (Gemini 2.5)",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": true,
+            "provider": "google",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-2.5-pro",
+            "displayName": "Gemini 2.5 Pro",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-2.5-flash",
+            "displayName": "Gemini 2.5 Flash",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-2.5-flash-lite",
+            "displayName": "Gemini 2.5 Flash Lite",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "auto-gemini-3",
+            "displayName": "Auto (Gemini 3)",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "candidate"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-3-pro-preview",
+            "displayName": "Gemini 3 Pro",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "preview"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-3-flash-preview",
+            "displayName": "Gemini 3 Flash",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "preview",
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-3.1-flash-lite-preview",
+            "displayName": "Gemini 3.1 Flash Lite",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "preview",
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-3.1-pro-preview",
+            "displayName": "Gemini 3.1 Pro",
+            "description": null,
+            "aliases": [
+              "gemini-3.1-pro"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "preview"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": true,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          }
+        ],
+        "controls": [
+          {
+            "key": "model",
+            "label": "Model",
+            "description": "Gemini model to use. If ACP does not expose a raw model config option, AnyHarness synthesizes this from direct ACP model state and applies it with set_session_model.",
+            "type": "select",
+            "category": "model",
+            "defaultValue": "auto-gemini-2.5",
+            "apply": {
+              "createField": "modelId",
+              "liveConfigId": "model",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "agentModels",
+            "values": [],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "mode",
+            "label": "Mode",
+            "description": "Gemini permission mode",
+            "type": "select",
+            "category": "mode",
+            "defaultValue": "default",
+            "apply": {
+              "createField": "modeId",
+              "liveConfigId": "mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "ignore_default",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "default",
+                "label": "Default",
+                "description": "Prompts for approval",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "autoEdit",
+                "label": "Auto Edit",
+                "description": "Auto-approves edit tools",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "yolo",
+                "label": "YOLO",
+                "description": "Auto-approves all tools",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "plan",
+                "label": "Plan",
+                "description": "Read-only mode",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          }
+        ],
+        "compatibility": {}
+      }
+    },
+    {
+      "kind": "cursor",
+      "displayName": "Cursor",
+      "description": "Cursor Agent CLI through ACP.",
+      "process": {
+        "native": null,
+        "agentProcess": {
+          "install": {
+            "kind": "registry_backed",
+            "registryId": "cursor-acp",
+            "fallback": {
+              "kind": "binary_hint",
+              "candidateBinaries": [
+                "cursor-agent"
+              ],
+              "args": [
+                "acp"
+              ]
+            }
+          }
+        },
+        "launch": {
+          "executableName": "cursor-agent",
+          "defaultArgs": []
+        },
+        "auth": {
+          "envVars": [
+            "CURSOR_API_KEY"
+          ],
+          "login": {
+            "label": "Log in with Cursor",
+            "command": {
+              "program": "cursor-agent",
+              "args": [
+                "login"
+              ]
+            },
+            "reusesUserState": true,
+            "message": null
+          },
+          "discovery": "cursor"
+        },
+        "docsUrl": "https://docs.cursor.com/cli/acp"
+      },
+      "session": {
+        "defaultModelId": "default[]",
+        "defaultModeId": "agent",
+        "dynamicModels": false,
+        "modelDisplayPolicy": {
+          "defaultVisibleModelIds": [
+            "default[]",
+            "composer-2[fast=true]",
+            "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+            "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+            "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]"
+          ],
+          "allowUserVisibleModelSelection": true,
+          "moreModelsSource": "none"
+        },
+        "promptCapabilities": {
+          "image": true,
+          "audio": false,
+          "embeddedContext": false
+        },
+        "models": [
+          {
+            "id": "default[]",
+            "displayName": "Auto",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": true,
+            "provider": "cursor",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "composer-2[fast=true]",
+            "displayName": "composer-2",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "cursor",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "composer-1.5[]",
+            "displayName": "composer-1.5",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "cursor",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.3-codex[reasoning=medium,fast=false]",
+            "displayName": "gpt-5.3-codex",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+            "displayName": "claude-sonnet-4-6",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [],
+            "capabilities": {
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+            "displayName": "gpt-5.5",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "frontier"
+            ],
+            "capabilities": {
+              "contextWindow": "272k"
+            },
+            "compatibility": {},
+            "launchRemediation": {
+              "kind": "external_update",
+              "message": "Update Cursor tools from Agent Settings, then retry."
+            }
+          },
+          {
+            "id": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]",
+            "displayName": "claude-opus-4-7",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "frontier"
+            ],
+            "capabilities": {
+              "contextWindow": "300k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
+            "displayName": "gpt-5.4",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {
+              "contextWindow": "272k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+            "displayName": "claude-opus-4-6",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [],
+            "capabilities": {
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "claude-opus-4-5[thinking=true]",
+            "displayName": "claude-opus-4-5",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.2[reasoning=medium,fast=false]",
+            "displayName": "gpt-5.2",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-3.1-pro[]",
+            "displayName": "gemini-3.1-pro",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.4-mini[reasoning=medium]",
+            "displayName": "gpt-5.4-mini",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.4-nano[reasoning=medium]",
+            "displayName": "gpt-5.4-nano",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "claude-haiku-4-5[thinking=true]",
+            "displayName": "claude-haiku-4-5",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.3-codex-spark[reasoning=medium]",
+            "displayName": "gpt-5.3-codex-spark",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "grok-4.3[context=200k]",
+            "displayName": "grok-4.3",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "xai",
+            "tags": [],
+            "capabilities": {
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "grok-4-20[thinking=true]",
+            "displayName": "grok-4-20",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "xai",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "claude-sonnet-4-5[thinking=true,context=200k]",
+            "displayName": "claude-sonnet-4-5",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [],
+            "capabilities": {
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.2-codex[reasoning=medium,fast=false]",
+            "displayName": "gpt-5.2-codex",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
+            "displayName": "gpt-5.1-codex-max",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.1[reasoning=medium]",
+            "displayName": "gpt-5.1",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-3-flash[]",
+            "displayName": "gemini-3-flash",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5.1-codex-mini[reasoning=medium]",
+            "displayName": "gpt-5.1-codex-mini",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "claude-sonnet-4[thinking=false,context=200k]",
+            "displayName": "claude-sonnet-4",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [],
+            "capabilities": {
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gpt-5-mini[]",
+            "displayName": "gpt-5-mini",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "openai",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "gemini-2.5-flash[]",
+            "displayName": "gemini-2.5-flash",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "google",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "kimi-k2.5[]",
+            "displayName": "kimi-k2.5",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "moonshot",
+            "tags": [],
+            "capabilities": {},
+            "compatibility": {},
+            "launchRemediation": null
+          }
+        ],
+        "controls": [
+          {
+            "key": "model",
+            "label": "Model",
+            "description": "Controls which model is used for responses",
+            "type": "select",
+            "category": "model",
+            "defaultValue": "default[]",
+            "apply": {
+              "createField": "modelId",
+              "liveConfigId": "model",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "agentModels",
+            "values": [],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "mode",
+            "label": "Mode",
+            "description": "Controls how the agent executes tasks",
+            "type": "select",
+            "category": "mode",
+            "defaultValue": "agent",
+            "apply": {
+              "createField": "modeId",
+              "liveConfigId": "mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "agent",
+                "label": "Agent",
+                "description": "Full agent capabilities with tool access",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "plan",
+                "label": "Plan",
+                "description": "Read-only mode for planning and designing before implementation",
+                "isDefault": false,
+                "status": "active"
+              },
+              {
+                "value": "ask",
+                "label": "Ask",
+                "description": "Q&A mode - no edits or command execution",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          }
+        ],
+        "compatibility": {}
+      }
+    },
+    {
+      "kind": "opencode",
+      "displayName": "OpenCode",
+      "description": "OpenCode through its ACP surface.",
+      "process": {
+        "native": null,
+        "agentProcess": {
+          "install": {
+            "kind": "registry_backed",
+            "registryId": "opencode",
+            "fallback": {
+              "kind": "npm_package",
+              "package": "opencode-ai",
+              "packageSubdir": null,
+              "sourceBuildBinaryName": null,
+              "executableRelpath": "node_modules/.bin/opencode-ai"
+            }
+          }
+        },
+        "launch": {
+          "executableName": "opencode-ai",
+          "defaultArgs": []
+        },
+        "auth": {
+          "envVars": [],
+          "login": null,
+          "discovery": "opencode"
+        },
+        "docsUrl": "https://opencode.ai"
+      },
+      "session": {
+        "defaultModelId": "opencode/big-pickle",
+        "defaultModeId": "build",
+        "dynamicModels": true,
+        "modelDisplayPolicy": {
+          "defaultVisibleModelIds": [
+            "opencode/big-pickle",
+            "opencode/gpt-5-nano",
+            "opencode/nemotron-3-super-free",
+            "opencode/minimax-m2.5-free",
+            "opencode/hy3-preview-free",
+            "anthropic/claude-sonnet-4-6",
+            "anthropic/claude-opus-4-7"
+          ],
+          "allowUserVisibleModelSelection": true,
+          "moreModelsSource": "lastKnownLiveSnapshot"
+        },
+        "promptCapabilities": {
+          "image": true,
+          "audio": false,
+          "embeddedContext": true
+        },
+        "models": [
+          {
+            "id": "opencode/big-pickle",
+            "displayName": "OpenCode Zen/Big Pickle",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": true,
+            "provider": "opencode",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "opencode/gpt-5-nano",
+            "displayName": "OpenCode Zen/GPT-5 Nano",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "opencode",
+            "tags": [
+              "fast"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "opencode/nemotron-3-super-free",
+            "displayName": "OpenCode Zen/Nemotron 3 Super Free",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "opencode",
+            "tags": [
+              "free"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "opencode/minimax-m2.5-free",
+            "displayName": "OpenCode Zen/MiniMax M2.5 Free",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "opencode",
+            "tags": [
+              "free"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "opencode/hy3-preview-free",
+            "displayName": "OpenCode Zen/Hy3 preview Free",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "opencode",
+            "tags": [
+              "free",
+              "preview"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "anthropic/claude-sonnet-4-6",
+            "displayName": "Anthropic/Claude Sonnet 4.6",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "anthropic/claude-opus-4-7",
+            "displayName": "Anthropic/Claude Opus 4.7",
+            "description": null,
+            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "frontier"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          }
+        ],
+        "controls": [
+          {
+            "key": "model",
+            "label": "Model",
+            "description": "OpenCode model/provider id. More models can be sourced from the last-known live OpenCode snapshot.",
+            "type": "select",
+            "category": "model",
+            "defaultValue": "opencode/big-pickle",
+            "apply": {
+              "createField": "modelId",
+              "liveConfigId": "model",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "discoveredModels",
+            "values": [],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          },
+          {
+            "key": "mode",
+            "label": "Session Mode",
+            "description": "OpenCode session mode",
+            "type": "select",
+            "category": "mode",
+            "defaultValue": "build",
+            "apply": {
+              "createField": "modeId",
+              "liveConfigId": "mode",
+              "liveSetter": "runtime_control",
+              "queueBeforeMaterialized": true
+            },
+            "queueWhileMaterializing": true,
+            "mutableAfterMaterialized": true,
+            "missingLiveConfigPolicy": "queue_then_conflict",
+            "valueSource": "inline",
+            "values": [
+              {
+                "value": "build",
+                "label": "Build",
+                "description": "The default agent. Executes tools based on configured permissions.",
+                "isDefault": true,
+                "status": "active"
+              },
+              {
+                "value": "plan",
+                "label": "Plan",
+                "description": "Plan mode. Disallows all edit tools.",
+                "isDefault": false,
+                "status": "active"
+              }
+            ],
+            "surfaces": {
+              "start": true,
+              "session": true,
+              "automation": true,
+              "settings": true
+            }
+          }
+        ],
+        "compatibility": {}
+      }
+    }
+  ]
+}

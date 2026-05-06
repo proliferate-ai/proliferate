@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
@@ -20,10 +20,10 @@ import {
 const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
 
 export function useCloudWorkspacePolling() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
-  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
+  const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const { data: workspaceCollections } = useWorkspaces();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
   const { selectWorkspace } = useWorkspaceSelection();
@@ -76,7 +76,7 @@ export function useCloudWorkspacePolling() {
 
         if (workspace.status === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
           shouldScheduleNextPoll = false;
-          const pending = useHarnessStore.getState().pendingWorkspaceEntry;
+          const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
           const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId
             && pending.stage === "awaiting-cloud-ready";
 
@@ -103,7 +103,7 @@ export function useCloudWorkspacePolling() {
             return;
           }
 
-          const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
+          const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
           if (
             currentPending
             && currentPending.workspaceId === selectedWorkspaceId

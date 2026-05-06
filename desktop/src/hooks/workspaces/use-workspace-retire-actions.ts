@@ -4,17 +4,18 @@ import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { clearWorkspaceRuntimeState } from "@/hooks/workspaces/selection/clear-runtime-state";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
 export function useWorkspaceRetireActions() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const clearSelection = useHarnessStore((state) => state.clearSelection);
-  const removeWorkspaceSlots = useHarnessStore((state) => state.removeWorkspaceSlots);
-  const setSelectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
+  const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.setSelectedLogicalWorkspaceId,
   );
   const clearFinishSuggestionDismissal = useWorkspaceUiStore(
@@ -36,9 +37,9 @@ export function useWorkspaceRetireActions() {
       const result = await client.workspaces.purge(workspaceId);
       if (result.outcome === "deleted") {
         clearFinishSuggestionDismissal(workspaceId);
-        const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
+        const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
         const selectedLogicalWorkspaceId =
-          useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId;
+          useSessionSelectionStore.getState().selectedLogicalWorkspaceId;
         const targetIsSelected =
           selectedWorkspaceId === workspaceId
           || (
@@ -46,7 +47,14 @@ export function useWorkspaceRetireActions() {
             && selectedLogicalWorkspaceId === options.logicalWorkspaceId
           );
         clearWorkspaceRuntimeState(
-          { removeWorkspaceSlots, clearSelection },
+          {
+            removeWorkspaceSlots: (removedWorkspaceId) => {
+              const removedSessionIds =
+                useSessionDirectoryStore.getState().removeWorkspaceEntries(removedWorkspaceId);
+              useSessionTranscriptStore.getState().removeEntries(removedSessionIds);
+            },
+            clearSelection,
+          },
           workspaceId,
           { clearSelection: targetIsSelected },
         );

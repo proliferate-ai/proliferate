@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
@@ -10,6 +11,7 @@ import { HomeTargetPicker } from "@/components/home/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
+import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@/components/ui/Button";
 import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
 import { useHomeNextState } from "@/hooks/home/use-home-next-state";
@@ -23,6 +25,7 @@ import {
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 import { Clock, Folder, Settings } from "@/components/ui/icons";
 import type { HomeActionId } from "@/lib/domain/home/home-screen";
 
@@ -38,6 +41,12 @@ function resolveActionIcon(actionId: HomeActionId) {
   }
 }
 
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    scheduleAfterNextPaint(resolve);
+  });
+}
+
 export function HomeNextScreen() {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,6 +60,10 @@ export function HomeNextScreen() {
   const [baseBranchOverride, setBaseBranchOverride] = useState<string | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
   const [targetSearch, setTargetSearch] = useState("");
+  const [submittedPreview, setSubmittedPreview] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const {
@@ -102,6 +115,7 @@ export function HomeNextScreen() {
     && homeNext.canLaunchTarget
     && !!homeNext.effectiveModelSelection
     && !!homeNext.launchTarget
+    && submittedPreview === null
     && !isLaunching;
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -126,17 +140,33 @@ export function HomeNextScreen() {
   async function handleSubmit() {
     if (!canSubmit || !homeNext.effectiveModelSelection || !homeNext.launchTarget) return;
 
+    const submittedDraft = draft;
+    const submittedText = submittedDraft.trim();
+    flushSync(() => {
+      setSubmittedPreview({
+        id: crypto.randomUUID(),
+        text: submittedText,
+      });
+      setDraft("");
+    });
+    await waitForNextPaint();
     const succeeded = await launch({
-      text: draft,
+      text: submittedDraft,
       modelSelection: homeNext.effectiveModelSelection,
       modeId: homeNext.effectiveModeId,
       target: homeNext.launchTarget,
     });
-    if (succeeded) setDraft("");
+    if (!succeeded) {
+      setSubmittedPreview(null);
+      setDraft(submittedDraft);
+    }
   }
 
   function handleCancel() {
-    if (!isLaunching) setDraft("");
+    if (!isLaunching) {
+      setSubmittedPreview(null);
+      setDraft("");
+    }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -197,6 +227,7 @@ export function HomeNextScreen() {
               >
                 <ComposerTextarea
                   data-telemetry-mask
+                  data-home-composer-editor
                   ref={textareaRef}
                   rows={4}
                   value={draft}
@@ -269,6 +300,20 @@ export function HomeNextScreen() {
               </div>
             </form>
           </ChatComposerSurface>
+
+          {submittedPreview ? (
+            <div
+              key={submittedPreview.id}
+              className="mt-5"
+              data-home-submit-preview
+            >
+              <UserMessage
+                sessionId={null}
+                content={submittedPreview.text}
+                contentParts={[{ type: "text", text: submittedPreview.text }]}
+              />
+            </div>
+          ) : null}
 
           {modelAvailabilityNotice ? (
             <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">

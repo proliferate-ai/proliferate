@@ -36,9 +36,27 @@ export function ChatComposerActions({
   };
 
   // While editing a queued prompt, the Save action takes over the primary
-  // button slot regardless of `isRunning` — the user must cancel the edit
-  // before they can reach the Stop control.
+  // button slot regardless of `isRunning`.
   if (isRunning && !isEditingQueuedPrompt) {
+    const canQueue = !isEmpty && !isDisabled;
+    if (canQueue) {
+      return (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onSubmit}
+          onPointerEnter={() => startHoverSample("send_button")}
+          title={`${CHAT_COMPOSER_LABELS.send} to queue`}
+          aria-label={`${CHAT_COMPOSER_LABELS.send} to queue`}
+          data-chat-send-button
+          className={buttonClassName}
+        >
+          <ArrowUp className="size-3.5" />
+        </Button>
+      );
+    }
+
     return (
       <Button
         type="button"
@@ -48,6 +66,7 @@ export function ChatComposerActions({
         onPointerEnter={() => startHoverSample("stop_button")}
         title={CHAT_COMPOSER_LABELS.stop}
         aria-label={CHAT_COMPOSER_LABELS.stop}
+        data-chat-stop-button
         className={buttonClassName}
       >
         <StopSquare className="size-3.5" />
@@ -71,6 +90,7 @@ export function ChatComposerActions({
       disabled={!canSubmit}
       title={title}
       aria-label={title}
+      data-chat-send-button
       className={buttonClassName}
     >
       <ArrowUp className="size-3.5" />

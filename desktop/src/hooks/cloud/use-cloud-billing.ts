@@ -15,7 +15,7 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { openExternal } from "@/platform/tauri/shell";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { cloudBillingKey, type CloudOwnerSelectionKey } from "./query-keys";
 
 function hasUsableBillingPlan(
@@ -164,7 +164,7 @@ export function useCloudBilling(
 
 export function useCloudBillingActions(owner?: CloudOwnerSelection) {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const billingOwnerKey = ownerKey(owner);
 
   async function invalidateCloudBillingState() {

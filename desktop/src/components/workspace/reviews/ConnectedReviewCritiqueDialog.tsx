@@ -2,10 +2,10 @@ import { useReviewAssignmentCritiqueQuery } from "@anyharness/sdk-react";
 import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function ConnectedReviewCritiqueDialog() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const target = useReviewUiStore((state) => state.critiqueTarget);
   const close = useReviewUiStore((state) => state.closeCritique);
   const critiqueQuery = useReviewAssignmentCritiqueQuery(

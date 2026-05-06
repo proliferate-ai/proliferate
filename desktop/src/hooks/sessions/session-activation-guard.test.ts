@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  createEmptySessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
 import {
   useWorkspaceUiStore,
   WORKSPACE_UI_DEFAULTS,
 } from "@/stores/preferences/workspace-ui-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import {
@@ -17,9 +21,11 @@ import {
 
 describe("session activation guard", () => {
   beforeEach(() => {
-    useHarnessStore.getState().clearSelection();
-    useLogicalWorkspaceStore.setState({
-      _hydrated: true,
+    useSessionSelectionStore.getState().clearSelection();
+    useSessionDirectoryStore.getState().clearEntries();
+    useSessionTranscriptStore.getState().clearEntries();
+    useSessionSelectionStore.setState({
+      hydrated: true,
       selectedLogicalWorkspaceId: null,
     });
     useWorkspaceUiStore.setState({
@@ -31,10 +37,9 @@ describe("session activation guard", () => {
   });
 
   it("commits a session only while the workspace nonce and guard token match", () => {
-    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
-    useHarnessStore.getState().putSessionSlot(
-      "session-1",
-      createEmptySessionSlot("session-1", "assistant", {
+    selectWorkspace("workspace-1");
+    putSessionRecord(
+      createEmptySessionRecord("session-1", "assistant", {
         workspaceId: "workspace-1",
       }),
     );
@@ -45,15 +50,14 @@ describe("session activation guard", () => {
     const outcome = commitActiveSession("session-1", guard);
 
     expect(outcome.result).toBe("completed");
-    expect(useHarnessStore.getState().activeSessionId).toBe("session-1");
-    expect(useHarnessStore.getState().activeSessionVersion).toBeGreaterThan(0);
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-1");
+    expect(useSessionSelectionStore.getState().activeSessionVersion).toBeGreaterThan(0);
   });
 
   it("returns stale when a newer activation intent replaces the guard", () => {
-    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
-    useHarnessStore.getState().putSessionSlot(
-      "session-1",
-      createEmptySessionSlot("session-1", "assistant", {
+    selectWorkspace("workspace-1");
+    putSessionRecord(
+      createEmptySessionRecord("session-1", "assistant", {
         workspaceId: "workspace-1",
       }),
     );
@@ -69,20 +73,18 @@ describe("session activation guard", () => {
       guard,
       reason: "intent-replaced",
     });
-    expect(useHarnessStore.getState().activeSessionId).toBeNull();
+    expect(useSessionSelectionStore.getState().activeSessionId).toBeNull();
   });
 
   it("direct chat shell intent writes invalidate older guarded activations", () => {
-    useHarnessStore.getState().setSelectedWorkspace("workspace-1");
-    useHarnessStore.getState().putSessionSlot(
-      "session-1",
-      createEmptySessionSlot("session-1", "assistant", {
+    selectWorkspace("workspace-1");
+    putSessionRecord(
+      createEmptySessionRecord("session-1", "assistant", {
         workspaceId: "workspace-1",
       }),
     );
-    useHarnessStore.getState().putSessionSlot(
-      "session-2",
-      createEmptySessionSlot("session-2", "assistant", {
+    putSessionRecord(
+      createEmptySessionRecord("session-2", "assistant", {
         workspaceId: "workspace-1",
       }),
     );
@@ -100,7 +102,7 @@ describe("session activation guard", () => {
         sessionActivationEpochAtWrite: guard.token,
       },
     });
-    useHarnessStore.getState().setActiveSessionId("session-2");
+    useSessionSelectionStore.getState().setActiveSessionId("session-2");
     writeChatShellIntentForSession({
       workspaceId: "workspace-1",
       sessionId: "session-2",
@@ -114,7 +116,7 @@ describe("session activation guard", () => {
       guard,
       reason: "intent-replaced",
     });
-    expect(useHarnessStore.getState().activeSessionId).toBe("session-2");
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-2");
     expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
       .toBe("chat:session-2");
     expect(useWorkspaceUiStore.getState().pendingChatActivationByWorkspace["workspace-1"])
@@ -122,11 +124,7 @@ describe("session activation guard", () => {
   });
 
   it("writes direct chat shell intent to the selected logical workspace key", () => {
-    useHarnessStore.getState().setSelectedWorkspace("materialized-workspace");
-    useLogicalWorkspaceStore.setState({
-      _hydrated: true,
-      selectedLogicalWorkspaceId: "logical-workspace",
-    });
+    selectWorkspace("materialized-workspace", "logical-workspace");
     useWorkspaceUiStore.getState().writeShellIntent({
       workspaceId: "logical-workspace",
       intent: "chat:old-session",
@@ -144,11 +142,7 @@ describe("session activation guard", () => {
   });
 
   it("uses the resolved logical shell key for owned pending replacement", () => {
-    useHarnessStore.getState().setSelectedWorkspace("materialized-workspace");
-    useLogicalWorkspaceStore.setState({
-      _hydrated: true,
-      selectedLogicalWorkspaceId: "logical-workspace",
-    });
+    selectWorkspace("materialized-workspace", "logical-workspace");
     useWorkspaceUiStore.getState().writeShellIntent({
       workspaceId: "logical-workspace",
       intent: "chat:old-session",
@@ -175,14 +169,9 @@ describe("session activation guard", () => {
   });
 
   it("remembers guarded session commits under the selected logical workspace key", () => {
-    useHarnessStore.getState().setSelectedWorkspace("materialized-workspace");
-    useLogicalWorkspaceStore.setState({
-      _hydrated: true,
-      selectedLogicalWorkspaceId: "logical-workspace",
-    });
-    useHarnessStore.getState().putSessionSlot(
-      "session-1",
-      createEmptySessionSlot("session-1", "assistant", {
+    selectWorkspace("materialized-workspace", "logical-workspace");
+    putSessionRecord(
+      createEmptySessionRecord("session-1", "assistant", {
         workspaceId: "materialized-workspace",
       }),
     );
@@ -198,11 +187,7 @@ describe("session activation guard", () => {
   });
 
   it("guards backend reuse shell selection and rolls back logical shell intent on stale", async () => {
-    useHarnessStore.getState().setSelectedWorkspace("materialized-workspace");
-    useLogicalWorkspaceStore.setState({
-      _hydrated: true,
-      selectedLogicalWorkspaceId: "logical-workspace",
-    });
+    selectWorkspace("materialized-workspace", "logical-workspace");
     useWorkspaceUiStore.getState().writeShellIntent({
       workspaceId: "logical-workspace",
       intent: "chat:old-session",
@@ -230,3 +215,10 @@ describe("session activation guard", () => {
       .toBeNull();
   });
 });
+
+function selectWorkspace(workspaceId: string, logicalWorkspaceId: string | null = null): void {
+  useSessionSelectionStore.getState().activateWorkspace({
+    logicalWorkspaceId,
+    workspaceId,
+  });
+}

@@ -26,6 +26,7 @@ function control(
 
 function liveConfig(overrides: {
   model?: string;
+  collaborationMode?: NormalizedSessionControl | null;
   reasoning?: NormalizedSessionControl | null;
   effort?: NormalizedSessionControl | null;
 }): SessionLiveConfigSnapshot {
@@ -43,7 +44,7 @@ function liveConfig(overrides: {
       reasoning: overrides.reasoning ?? null,
       effort: overrides.effort ?? null,
       fastMode: null,
-      collaborationMode: null,
+      collaborationMode: overrides.collaborationMode ?? null,
     },
   } as SessionLiveConfigSnapshot;
 }
@@ -155,5 +156,62 @@ describe("applySessionLaunchDefaults", () => {
     expect(result.liveConfig?.normalizedControls.effort?.currentValue).toBe("high");
     expect(result.session.liveConfig?.normalizedControls.effort?.currentValue)
       .toBe("high");
+  });
+
+  it("applies catalog collaboration mode defaults from live config support", async () => {
+    const firstLiveConfig = liveConfig({
+      collaborationMode: control("collaboration_mode", "collaboration-mode", "default", [
+        "default",
+        "plan",
+      ]),
+    });
+    const finalLiveConfig = liveConfig({
+      collaborationMode: control("collaboration_mode", "collaboration-mode", "plan", [
+        "default",
+        "plan",
+      ]),
+    });
+    const setConfigOption = vi.fn().mockResolvedValueOnce({
+      applyState: "applied",
+      session: session(finalLiveConfig),
+      liveConfig: finalLiveConfig,
+    });
+    const client = {
+      sessions: {
+        setConfigOption,
+        getLiveConfig: vi.fn(),
+      },
+    } as unknown as AnyHarnessClient;
+    const registries: ModelRegistry[] = [{
+      kind: "claude",
+      displayName: "Claude",
+      defaultModelId: "opus",
+      models: [{
+        id: "opus",
+        displayName: "Opus",
+        isDefault: true,
+        status: "active",
+        sessionDefaultControls: [],
+      }],
+    }];
+
+    const result = await applySessionLaunchDefaults({
+      client,
+      session: session(firstLiveConfig),
+      agentKind: "claude",
+      modelRegistries: registries,
+      defaultLiveSessionControlValuesByAgentKind: {
+        claude: {
+          collaboration_mode: "plan",
+        },
+      },
+    });
+
+    expect(setConfigOption).toHaveBeenCalledWith("session-1", {
+      configId: "collaboration-mode",
+      value: "plan",
+    });
+    expect(result.session.liveConfig?.normalizedControls.collaborationMode?.currentValue)
+      .toBe("plan");
   });
 });

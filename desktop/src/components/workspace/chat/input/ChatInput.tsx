@@ -1,19 +1,22 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent,
 } from "react";
+import type { PromptInputBlock } from "@anyharness/sdk";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   CHAT_COMPOSER_LABELS,
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
+  useActiveSessionCanCancelState,
   useActiveSessionRunningState,
 } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
@@ -31,7 +34,18 @@ import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
+import { promptAttachmentSnapshotsToContentParts } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls";
+import {
+  finishOrCancelMeasurementOperation,
+  recordMeasurementWorkflowStep,
+  startMeasurementOperation,
+} from "@/lib/infra/debug-measurement";
+import {
+  PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
+  PROMPT_SUBMIT_MEASUREMENT_SURFACES,
+} from "@/lib/infra/prompt-submit-measurement";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
@@ -63,12 +77,13 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
-  const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
+  const workspaceSelectionNonce = useSessionSelectionStore((state) => state.workspaceSelectionNonce);
   const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
   const activeSessionId = useActiveSessionId();
   const isRunning = useActiveSessionRunningState();
+  const canCancelActiveSession = useActiveSessionCanCancelState();
   const activeSessionIdForUi = suppressActiveSessionState ? null : activeSessionId;
-  const isRunningForUi = suppressActiveSessionState ? false : isRunning;
+  const isRunningForUi = suppressActiveSessionState ? false : isRunning && canCancelActiveSession;
   const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
     useChatDraftState();
   const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState({
@@ -78,9 +93,21 @@ export function ChatInput({
     suppressActiveSessionState,
   });
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
-  const effectiveSessionConfigControls = suppressActiveSessionState ? [] : sessionConfigControls;
-  const effectiveAgentKind = suppressActiveSessionState ? null : agentKind;
-  const effectiveModeControl = suppressActiveSessionState ? null : modeControl;
+  const launchConfigControls = suppressActiveSessionState ? [] : modelSelectorProps.launchControls;
+  const effectiveSessionConfigControls = useMemo(() => (
+    suppressActiveSessionState
+      ? []
+      : mergeSessionConfigControlDescriptors(launchConfigControls, sessionConfigControls)
+  ), [launchConfigControls, sessionConfigControls, suppressActiveSessionState]);
+  const effectiveAgentKind = suppressActiveSessionState
+    ? null
+    : agentKind ?? modelSelectorProps.launchAgentKind;
+  const effectiveModeControl = suppressActiveSessionState
+    ? null
+    : effectiveSessionConfigControls.find((control) => control.key === "collaboration_mode")
+      ?? effectiveSessionConfigControls.find((control) => control.key === "mode")
+      ?? modeControl
+      ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions({
     forceNewSession: suppressActiveSessionState,
   });
@@ -163,15 +190,41 @@ export function ChatInput({
       if (planAttachments.hasUnresolvedPlans) {
         return;
       }
+      const measurementOperationId = startMeasurementOperation({
+        kind: "prompt_submit",
+        surfaces: PROMPT_SUBMIT_MEASUREMENT_SURFACES,
+        maxDurationMs: PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
+      });
+      const trimmedPromptText = promptText.trim();
+      const blockPrepareStartedAt = performance.now();
+      const attachmentSnapshots = attachments.snapshotForSubmit();
       const blocks = [
-        ...await attachments.buildBlocks(promptText.trim()),
+        ...buildTextPromptBlocks(trimmedPromptText),
         ...planAttachments.blocks,
       ];
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "prompt.submit.blocks_prepare",
+        startedAt: blockPrepareStartedAt,
+        outcome: "completed",
+        count: blocks.length + attachmentSnapshots.length,
+      });
       const optimisticContentParts = [
-        ...(promptText.trim() ? [{ type: "text" as const, text: promptText.trim() }] : []),
+        ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
+        ...promptAttachmentSnapshotsToContentParts(attachmentSnapshots),
         ...planAttachments.contentParts,
       ];
-      await handleSubmit({ text: promptText, blocks, optimisticContentParts });
+      const submitted = await handleSubmit({
+        text: promptText,
+        blocks,
+        attachmentSnapshots,
+        optimisticContentParts,
+        measurementOperationId,
+      });
+      if (!submitted) {
+        finishOrCancelMeasurementOperation(measurementOperationId, "aborted");
+        return;
+      }
       attachments.clearAttachments();
       planAttachments.clearPlans();
     });
@@ -403,4 +456,8 @@ export function ChatInput({
       </div>
     </DebugProfiler>
   );
+}
+
+function buildTextPromptBlocks(text: string): PromptInputBlock[] {
+  return text ? [{ type: "text", text }] : [];
 }

@@ -6,7 +6,7 @@ import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workfl
 import { useCoworkThreads } from "@/hooks/cowork/use-cowork-threads";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
 import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/use-workspace-sidebar-activities";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { CoworkThreadItem } from "./CoworkThreadItem";
@@ -14,8 +14,8 @@ import { CoworkThreadItem } from "./CoworkThreadItem";
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
 export function CoworkThreadsSection() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const workspaceActivities = useWorkspaceSidebarActivityStates();
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);

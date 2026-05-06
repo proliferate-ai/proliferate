@@ -437,11 +437,14 @@ async def create_invitation(
     delivery = await _send_invitation_email(record, token, actor_user)
     invitation = record.invitation
     if delivery.sent or delivery.skipped:
-        invitation = await invitation_store.mark_invitation_delivery(
-            invitation_id=record.invitation.id,
-            sent=delivery.sent,
-            skipped=delivery.skipped,
-        ) or record.invitation
+        invitation = (
+            await invitation_store.mark_invitation_delivery(
+                invitation_id=record.invitation.id,
+                sent=delivery.sent,
+                skipped=delivery.skipped,
+            )
+            or record.invitation
+        )
     return OrganizationInvitationEmailResult(
         invitation=invitation,
         delivery_attempted=delivery.sent,
@@ -474,11 +477,14 @@ async def resend_invitation(
     delivery = await _send_invitation_email(record, token, actor_user)
     invitation = record.invitation
     if delivery.sent or delivery.skipped:
-        invitation = await invitation_store.mark_invitation_delivery(
-            invitation_id=record.invitation.id,
-            sent=delivery.sent,
-            skipped=delivery.skipped,
-        ) or record.invitation
+        invitation = (
+            await invitation_store.mark_invitation_delivery(
+                invitation_id=record.invitation.id,
+                sent=delivery.sent,
+                skipped=delivery.skipped,
+            )
+            or record.invitation
+        )
     return OrganizationInvitationEmailResult(
         invitation=invitation,
         delivery_attempted=delivery.sent,
