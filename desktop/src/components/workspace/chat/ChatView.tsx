@@ -58,6 +58,8 @@ function ChatContent({
           <ChatReadyHero />
         </ChatPreMessageCanvas>
       );
+    case "session-hydrating":
+      return <SessionTranscriptPane bottomInsetPx={stickyBottomInsetPx} />;
     case "session-switching":
       return <TranscriptSwitchingPlaceholder />;
     case "session-empty":
@@ -75,6 +77,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
   switch (mode.kind) {
     case "workspace-status":
     case "session-loading":
+    case "session-hydrating":
     case "session-empty":
     case "session-switching":
     case "session-transcript":

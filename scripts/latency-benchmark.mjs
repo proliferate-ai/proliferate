@@ -151,6 +151,31 @@ async function firstVisible(page, selectors, timeoutMs) {
   return null;
 }
 
+async function waitForVisibleSelectorTime(page, selector, timeoutMs) {
+  const handle = await page.waitForFunction(
+    (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) {
+        return null;
+      }
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      if (
+        style.visibility === "hidden"
+        || style.display === "none"
+        || rect.width <= 0
+        || rect.height <= 0
+      ) {
+        return null;
+      }
+      return performance.now();
+    },
+    selector,
+    { timeout: timeoutMs },
+  ).catch(() => null);
+  return handle ? await handle.jsonValue() : null;
+}
+
 async function waitForAppReady(page, timeoutMs) {
   return firstVisible(page, [
     "[data-chat-composer-editor]",
@@ -452,7 +477,9 @@ async function benchmarkWorkspaceProject(page, args) {
     return skipped("workspace-project", "No workspace row could be selected.");
   }
 
-  const before = await countVisible(page, "[data-chat-composer-editor]");
+  const pendingWorkspaceComposerSelector =
+    "[data-workspace-shell][data-pending-workspace='true'][data-workspace-ui-key^='pending-workspace:'] [data-chat-composer-editor]";
+  const before = await countVisible(page, pendingWorkspaceComposerSelector);
   const startedAt = await page.evaluate(() => performance.now());
   await page.keyboard.press("Meta+N");
   const pendingShellEvent = await waitForBrowserConsoleEvent(
@@ -461,30 +488,34 @@ async function benchmarkWorkspaceProject(page, args) {
     "workspace.entry.pending_shell",
     args.timeoutMs,
   );
-  const projected = pendingShellEvent
-    ? await firstVisible(page, [
-      "[data-chat-composer-editor]",
-      "[role='tab'][aria-selected='true']",
-    ], args.timeoutMs).then(Boolean).catch(() => false)
-    : false;
+  const projectedPaintAt = pendingShellEvent
+    ? await waitForVisibleSelectorTime(
+      page,
+      pendingWorkspaceComposerSelector,
+      args.timeoutMs,
+    )
+    : null;
   const finishedAt = await page.evaluate(() => performance.now());
-  const durationMs = pendingShellEvent
-    ? Math.round(pendingShellEvent.at - startedAt)
+  const durationMs = projectedPaintAt !== null
+    ? Math.round(projectedPaintAt - startedAt)
     : Math.round(finishedAt - startedAt);
-  const loadingHeroVisible = await countVisible(page, "[data-chat-loading-hero]");
-  const composerVisible = await countVisible(page, "[data-chat-composer-editor]");
+  const loadingHeroVisible = await countVisible(
+    page,
+    "[data-workspace-shell][data-pending-workspace='true'] [data-chat-loading-hero]",
+  );
+  const composerVisible = await countVisible(page, pendingWorkspaceComposerSelector);
 
   return {
     name: "workspace-project",
     ok: pendingShellEvent !== null
-      && projected
+      && projectedPaintAt !== null
       && durationMs <= args.budgets.workspaceProjectedMs
       && loadingHeroVisible === 0
       && composerVisible > 0,
     durationMs,
     budgetMs: args.budgets.workspaceProjectedMs,
     pendingShellEventSeen: pendingShellEvent !== null,
-    measuredBy: "workspace.entry.pending_shell",
+    measuredBy: "pending workspace composer paint",
     composerBefore: before,
     composerVisible,
     loadingHeroVisible,

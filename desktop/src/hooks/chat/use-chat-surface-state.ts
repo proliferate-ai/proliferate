@@ -16,6 +16,7 @@ export type ChatSurfaceState =
   | { kind: "launch-intent"; intentId: string }
   | { kind: "workspace-status" }
   | { kind: "session-loading"; sessionId: string | null }
+  | { kind: "session-hydrating"; sessionId: string }
   | { kind: "session-switching"; sessionId: string }
   | { kind: "session-empty"; sessionId: string | null }
   | { kind: "session-transcript"; sessionId: string };
@@ -130,6 +131,9 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   if (!hasSlot || awaitingHydration || (isEmpty && isRunning)) {
     if (scopedHasContent) {
       return { mode: { kind: "session-transcript", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
+    }
+    if (hasSlot && awaitingHydration) {
+      return { mode: { kind: "session-hydrating", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
     }
     return { mode: { kind: "session-empty", sessionId: scopedActiveSessionId }, selectedWorkspaceId };
   }

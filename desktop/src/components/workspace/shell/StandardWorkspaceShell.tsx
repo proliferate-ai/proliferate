@@ -31,6 +31,7 @@ import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/use-work
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
@@ -43,6 +44,10 @@ export function StandardWorkspaceShell() {
   // acknowledgement intentionally stays in ChatView because errors are
   // transcript-scoped and need the chat surface for context.
   useWorkspaceActivityAcknowledgement();
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
   const { layout, data } = useMainScreenState();
   const actions = useMainScreenActions({
     layout,
@@ -208,6 +213,10 @@ export function StandardWorkspaceShell() {
           >
             <div
               className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
+              data-workspace-shell
+              data-workspace-ui-key={selectedLogicalWorkspaceId ?? selectedWorkspaceId ?? ""}
+              data-pending-workspace={pendingWorkspaceEntry ? "true" : "false"}
+              data-pending-workspace-attempt-id={pendingWorkspaceEntry?.attemptId ?? undefined}
               data-telemetry-block
             >
               <div
