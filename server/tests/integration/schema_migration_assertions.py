@@ -72,9 +72,7 @@ async def assert_current_schema(
     organization_membership_checks = await conn.run_sync(
         lambda sync_conn: {
             constraint["name"]
-            for constraint in inspect(sync_conn).get_check_constraints(
-                "organization_membership"
-            )
+            for constraint in inspect(sync_conn).get_check_constraints("organization_membership")
         }
     )
     assert {
@@ -84,8 +82,7 @@ async def assert_current_schema(
 
     organization_invitation_indexes = await conn.run_sync(
         lambda sync_conn: {
-            index["name"]
-            for index in inspect(sync_conn).get_indexes("organization_invitation")
+            index["name"] for index in inspect(sync_conn).get_indexes("organization_invitation")
         }
     )
     assert "uq_organization_invitation_pending_email" in organization_invitation_indexes
@@ -111,17 +108,14 @@ async def assert_current_schema(
     runtime_checks = await conn.run_sync(
         lambda sync_conn: {
             constraint["name"]
-            for constraint in inspect(sync_conn).get_check_constraints(
-                "cloud_runtime_environment"
-            )
+            for constraint in inspect(sync_conn).get_check_constraints("cloud_runtime_environment")
         }
     )
     assert "ck_cloud_runtime_environment_v1_org_id_null" not in runtime_checks
 
     runtime_indexes = await conn.run_sync(
         lambda sync_conn: {
-            index["name"]
-            for index in inspect(sync_conn).get_indexes("cloud_runtime_environment")
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_runtime_environment")
         }
     )
     assert "uq_cloud_runtime_environment_org_repo_policy" in runtime_indexes
@@ -138,8 +132,7 @@ async def assert_current_schema(
 
     billing_grant_columns = await conn.run_sync(
         lambda sync_conn: {
-            column["name"]: column
-            for column in inspect(sync_conn).get_columns("billing_grant")
+            column["name"]: column for column in inspect(sync_conn).get_columns("billing_grant")
         }
     )
     assert billing_grant_columns["user_id"]["nullable"] is True
@@ -153,16 +146,13 @@ async def assert_current_schema(
     assert billing_entitlement_columns["user_id"]["nullable"] is True
 
     user_columns = await conn.run_sync(
-        lambda sync_conn: {
-            column["name"] for column in inspect(sync_conn).get_columns("user")
-        }
+        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("user")}
     )
     assert {"github_login", "avatar_url"} <= user_columns
 
     mcp_connection_columns = await conn.run_sync(
         lambda sync_conn: {
-            column["name"]
-            for column in inspect(sync_conn).get_columns("cloud_mcp_connection")
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_mcp_connection")
         }
     )
     assert {

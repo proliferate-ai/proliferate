@@ -77,8 +77,7 @@ async def _ensure_launcher_defers_startup_retention(
                 '  chmod +x "$tmp"',
                 '  mv "$tmp" "$launcher"',
                 "fi",
-                f"grep -q '^export {_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV}=1$' "
-                '"$launcher"',
+                f"grep -q '^export {_ANYHARNESS_DEFER_STARTUP_RETENTION_ENV}=1$' \"$launcher\"",
             ]
         )
     )

@@ -606,9 +606,7 @@ async def test_subscription_sync_does_not_reenable_disabled_pro_overage(
     subject.overage_enabled = False
     await db_session.commit()
 
-    await stripe_webhooks._sync_subscription(
-        subscription_payload | {"cancel_at_period_end": True}
-    )
+    await stripe_webhooks._sync_subscription(subscription_payload | {"cancel_at_period_end": True})
     await db_session.refresh(subject)
     assert subject.overage_enabled is False
 

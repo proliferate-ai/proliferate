@@ -374,7 +374,10 @@ async def validate_pro_subscription_price_configuration() -> None:
         pro_price.get("unit_amount") == PRO_SEAT_MONTHLY_AMOUNT_CENTS,
         "Pro monthly price must be $20/month.",
     )
-    _assert_price(_recurring(pro_price).get("interval") == "month", "Pro price must recur monthly.")
+    _assert_price(
+        _recurring(pro_price).get("interval") == "month",
+        "Pro price must recur monthly.",
+    )
 
     overage = await retrieve_price(overage_price_id)
     recurring = _recurring(overage)

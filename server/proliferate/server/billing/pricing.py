@@ -42,7 +42,10 @@ def configured_managed_cloud_overage_price_id() -> str:
 
 
 def configured_managed_cloud_meter_id() -> str:
-    return settings.stripe_managed_cloud_overage_meter_id.strip() or settings.stripe_sandbox_meter_id.strip()
+    return (
+        settings.stripe_managed_cloud_overage_meter_id.strip()
+        or settings.stripe_sandbox_meter_id.strip()
+    )
 
 
 def configured_managed_cloud_meter_event_name() -> str:
