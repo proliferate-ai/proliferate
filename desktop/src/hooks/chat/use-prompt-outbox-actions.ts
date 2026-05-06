@@ -20,6 +20,7 @@ export function usePromptOutboxActions() {
       workspaceId: entry.workspaceId,
       text: entry.text,
       blocks: entry.blocks.map((block) => ({ ...block })),
+      attachmentSnapshots: entry.attachmentSnapshots.map((snapshot) => ({ ...snapshot })),
       contentParts: entry.contentParts.map((part) => ({ ...part })),
       promptProvenance: entry.promptProvenance,
       placement: entry.placement,
@@ -53,8 +54,7 @@ export function usePromptOutboxActions() {
 }
 
 function canRetryEntry(entry: PromptOutboxEntry): boolean {
-  return entry.deliveryState === "failed_before_dispatch"
-    || entry.deliveryState === "unknown_after_dispatch";
+  return entry.deliveryState === "failed_before_dispatch";
 }
 
 function canDismissEntry(entry: PromptOutboxEntry): boolean {

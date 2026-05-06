@@ -34,6 +34,7 @@ import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
+import { promptAttachmentSnapshotsToContentParts } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls";
 import {
@@ -196,10 +197,9 @@ export function ChatInput({
       });
       const trimmedPromptText = promptText.trim();
       const blockPrepareStartedAt = performance.now();
+      const attachmentSnapshots = attachments.snapshotForSubmit();
       const blocks = [
-        ...(attachments.hasAttachments
-          ? await attachments.buildBlocks(trimmedPromptText)
-          : buildTextPromptBlocks(trimmedPromptText)),
+        ...buildTextPromptBlocks(trimmedPromptText),
         ...planAttachments.blocks,
       ];
       recordMeasurementWorkflowStep({
@@ -207,15 +207,17 @@ export function ChatInput({
         step: "prompt.submit.blocks_prepare",
         startedAt: blockPrepareStartedAt,
         outcome: "completed",
-        count: blocks.length,
+        count: blocks.length + attachmentSnapshots.length,
       });
       const optimisticContentParts = [
         ...(trimmedPromptText ? [{ type: "text" as const, text: trimmedPromptText }] : []),
+        ...promptAttachmentSnapshotsToContentParts(attachmentSnapshots),
         ...planAttachments.contentParts,
       ];
       const submitted = await handleSubmit({
         text: promptText,
         blocks,
+        attachmentSnapshots,
         optimisticContentParts,
         measurementOperationId,
       });

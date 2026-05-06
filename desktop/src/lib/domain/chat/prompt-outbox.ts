@@ -6,6 +6,10 @@ import type {
   SessionEventEnvelope,
   TranscriptState,
 } from "@anyharness/sdk";
+import {
+  clonePromptAttachmentSnapshot,
+  type PromptAttachmentSnapshot,
+} from "@/lib/domain/chat/prompt-attachment-snapshot";
 
 export type PromptOutboxDeliveryState =
   | "waiting_for_session"
@@ -28,6 +32,7 @@ export interface PromptOutboxEntry {
   workspaceId: string | null;
   text: string;
   blocks: PromptInputBlock[];
+  attachmentSnapshots: PromptAttachmentSnapshot[];
   contentParts: ContentPart[];
   promptProvenance: PromptProvenance | null;
   queuedSeq: number | null;
@@ -50,6 +55,7 @@ export interface PromptOutboxCreateInput {
   workspaceId?: string | null;
   text: string;
   blocks: readonly PromptInputBlock[];
+  attachmentSnapshots?: readonly PromptAttachmentSnapshot[];
   contentParts?: readonly ContentPart[];
   promptProvenance?: PromptProvenance | null;
   placement?: PromptOutboxPlacement;
@@ -72,6 +78,7 @@ export function createPromptOutboxEntry(input: PromptOutboxCreateInput): PromptO
     workspaceId: input.workspaceId ?? null,
     text: input.text,
     blocks: input.blocks.map(clonePromptInputBlock),
+    attachmentSnapshots: (input.attachmentSnapshots ?? []).map(clonePromptAttachmentSnapshot),
     contentParts: input.contentParts
       ? input.contentParts.map(cloneContentPart)
       : promptBlocksToContentParts(input.blocks),
@@ -504,6 +511,7 @@ function promptOutboxEntryEqual(a: PromptOutboxEntry, b: PromptOutboxEntry): boo
       && a.workspaceId === b.workspaceId
       && a.text === b.text
       && a.blocks === b.blocks
+      && a.attachmentSnapshots === b.attachmentSnapshots
       && a.contentParts === b.contentParts
       && a.promptProvenance === b.promptProvenance
       && a.queuedSeq === b.queuedSeq

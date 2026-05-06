@@ -105,6 +105,29 @@ describe("resolveWorkspaceShellActivation", () => {
     });
   });
 
+  it("keeps pending chat current after the durable intent write advances shell epoch", () => {
+    expect(resolveWorkspaceShellActivation({
+      ...BASE_INPUT,
+      storedIntent: "chat:b",
+      activeSessionId: "a",
+      currentShellActivationEpoch: 4,
+      currentSessionActivationEpoch: 9,
+      currentWorkspaceSelectionNonce: 4,
+      pendingChatActivation: {
+        attemptId: "attempt-1",
+        sessionId: "b",
+        intent: "chat:b",
+        guardToken: 9,
+        workspaceSelectionNonce: 4,
+        shellEpochAtWrite: 3,
+        sessionActivationEpochAtWrite: 9,
+      },
+    })).toEqual({
+      renderSurface: { kind: "chat-session-pending", sessionId: "b" },
+      highlightedTabKey: "chat:b",
+    });
+  });
+
   it("does not render pending chat when the pending tab is not ordered", () => {
     expect(resolveWorkspaceShellActivation({
       ...BASE_INPUT,

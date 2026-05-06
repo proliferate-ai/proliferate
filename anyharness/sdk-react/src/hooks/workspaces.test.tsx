@@ -55,7 +55,7 @@ describe("sdk-react workspace query request options", () => {
       .toContain("signal");
   });
 
-  it("keeps caller-provided request signals for workspace display queries", async () => {
+  it("composes caller-provided request signals for workspace display queries", async () => {
     mocks.getSessionLaunchCatalog.mockResolvedValue({
       workspaceId: "anyharness-workspace-1",
       catalogVersion: "test",
@@ -72,12 +72,16 @@ describe("sdk-react workspace query request options", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
+    const requestOptions = mocks.getSessionLaunchCatalog.mock.calls[0]?.[1];
     expect(mocks.getSessionLaunchCatalog).toHaveBeenCalledWith(
       "anyharness-workspace-1",
       expect.objectContaining({
-        signal: callerController.signal,
+        signal: expect.any(AbortSignal),
       }),
     );
+    expect(requestOptions?.signal).not.toBe(callerController.signal);
+    callerController.abort("caller-cancelled");
+    expect(requestOptions?.signal.aborted).toBe(true);
   });
 
   it("includes retire and purge preflight roots in workspace display cancellation roots", () => {

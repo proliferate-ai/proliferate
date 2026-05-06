@@ -10,6 +10,7 @@ export type PendingPromptQueueRowKind = "plain" | "wake" | "review_feedback";
 
 export interface PendingPromptQueueEntry {
   seq: number;
+  promptId?: string | null;
   text: string;
   contentParts: ContentPart[];
   isBeingEdited: boolean;
@@ -17,6 +18,7 @@ export interface PendingPromptQueueEntry {
 }
 
 export interface PendingPromptQueueRow {
+  key: string;
   seq: number;
   label: string;
   kind: PendingPromptQueueRowKind;
@@ -29,11 +31,13 @@ export function derivePendingPromptQueueRow(
   entry: PendingPromptQueueEntry,
 ): PendingPromptQueueRow {
   const isRuntimeConfirmed = entry.seq > 0;
+  const key = entry.promptId ? `prompt:${entry.promptId}` : `seq:${entry.seq}`;
   const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
     ? entry.promptProvenance
     : null;
   if (wakeProvenance) {
     return {
+      key,
       seq: entry.seq,
       label: collapseQueueLabel(formatWakePromptQueueText(wakeProvenance)),
       kind: "wake",
@@ -49,6 +53,7 @@ export function derivePendingPromptQueueRow(
   });
   if (reviewLabel) {
     return {
+      key,
       seq: entry.seq,
       label: collapseQueueLabel(reviewLabel),
       kind: "review_feedback",
@@ -60,6 +65,7 @@ export function derivePendingPromptQueueRow(
 
   const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
   return {
+    key,
     seq: entry.seq,
     label: collapseQueueLabel(summarizeContentParts(entry.contentParts, entry.text)) || "Queued message",
     kind: "plain",

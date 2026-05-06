@@ -24,17 +24,35 @@ const NOW = "2026-01-01T00:00:00.000Z";
 describe("prompt outbox", () => {
   it("snapshots prompt blocks and content parts when creating an entry", () => {
     const blocks: PromptInputBlock[] = [{ type: "text", text: "first" }];
+    const attachmentSnapshots = [{
+      id: "attachment-1",
+      name: "notes.txt",
+      mimeType: "text/plain",
+      size: 12,
+      kind: "text_resource" as const,
+      source: "upload" as const,
+      file: { name: "notes.txt" } as File,
+    }];
     const entry = createPromptOutboxEntry({
       clientPromptId: "prompt-1",
       clientSessionId: "client-session-1",
       text: "first",
       blocks,
+      attachmentSnapshots,
       now: NOW,
     });
 
     blocks[0] = { type: "text", text: "second" };
+    attachmentSnapshots[0] = {
+      ...attachmentSnapshots[0],
+      name: "mutated.txt",
+    };
 
     expect(entry.blocks).toEqual([{ type: "text", text: "first" }]);
+    expect(entry.attachmentSnapshots).toMatchObject([{
+      id: "attachment-1",
+      name: "notes.txt",
+    }]);
     expect(entry.contentParts).toEqual([{ type: "text", text: "first" }]);
   });
 

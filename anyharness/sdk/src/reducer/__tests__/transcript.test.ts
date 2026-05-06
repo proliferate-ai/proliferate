@@ -252,34 +252,45 @@ describe("transcript reducer", () => {
     expect(item.promptId).toBe("prompt-1");
   });
 
-  it("deduplicates pending prompt replay by prompt id", () => {
+  it("does not deduplicate distinct pending prompts by prompt id", () => {
     const state = reduceEvents(
       [
         pendingPromptAdded(1, 10, "prompt-1", "first"),
         pendingPromptAdded(2, 11, "prompt-1", "second"),
-        pendingPromptUpdated(3, 12, "prompt-1", "updated"),
+        pendingPromptUpdated(3, 11, "prompt-1", "updated"),
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingPrompts).toHaveLength(2);
+    expect(state.pendingPrompts[0]).toMatchObject({
+      seq: 10,
+      promptId: "prompt-1",
+      text: "first",
+    });
+    expect(state.pendingPrompts[1]).toMatchObject({
+      seq: 11,
+      promptId: "prompt-1",
+      text: "updated",
+    });
+  });
+
+  it("removes pending prompts by seq only when prompt id collides", () => {
+    const state = reduceEvents(
+      [
+        pendingPromptAdded(1, 10, "prompt-1", "first"),
+        pendingPromptAdded(2, 11, "prompt-1", "second"),
+        pendingPromptRemoved(3, 10, "prompt-1"),
       ],
       "session-1",
     );
 
     expect(state.pendingPrompts).toHaveLength(1);
     expect(state.pendingPrompts[0]).toMatchObject({
-      seq: 12,
+      seq: 11,
       promptId: "prompt-1",
-      text: "updated",
+      text: "second",
     });
-  });
-
-  it("removes pending prompts by prompt id when seq differs", () => {
-    const state = reduceEvents(
-      [
-        pendingPromptAdded(1, 10, "prompt-1", "first"),
-        pendingPromptRemoved(2, 99, "prompt-1"),
-      ],
-      "session-1",
-    );
-
-    expect(state.pendingPrompts).toEqual([]);
   });
 
   it("preserves plan reference content parts when later snapshots omit them", () => {

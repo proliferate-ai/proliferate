@@ -31,6 +31,7 @@ import { createPendingSessionId } from "@/lib/integrations/anyharness/session-ru
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import {
   finishOrCancelMeasurementOperation,
   type MeasurementOperationId,
@@ -72,6 +73,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const handleSubmit = useCallback(async (input?: {
     text: string;
     blocks: PromptInputBlock[];
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     optimisticContentParts?: ContentPart[];
     measurementOperationId?: MeasurementOperationId | null;
   }): Promise<boolean> => {
@@ -91,7 +93,8 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       : EMPTY_CHAT_DRAFT;
     const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
-    if (!hasPromptContent(text, blocks) || isDisabled) {
+    const attachmentSnapshots = input?.attachmentSnapshots ?? [];
+    if ((!hasPromptContent(text, blocks) && attachmentSnapshots.length === 0) || isDisabled) {
       return false;
     }
 
@@ -128,6 +131,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
           measurementOperationId: input?.measurementOperationId,
           promptId,
           blocks,
+          attachmentSnapshots,
           optimisticContentParts: input?.optimisticContentParts,
         });
       } else if (!selectedWorkspaceId && pendingWorkspaceEntry && pendingWorkspaceUiKey && launchSelection) {
@@ -153,6 +157,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
           sessionId: clientSessionId,
           text,
           blocks,
+          attachmentSnapshots,
           optimisticContentParts: input?.optimisticContentParts,
           workspaceId: pendingWorkspaceUiKey,
           measurementOperationId: input?.measurementOperationId,
@@ -163,10 +168,12 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
           await createSessionWithResolvedConfig({
             text,
             blocks,
+            attachmentSnapshots,
             optimisticContentParts: input?.optimisticContentParts,
             agentKind: launchSelection.kind,
             modelId: launchSelection.modelId,
             measurementOperationId: input?.measurementOperationId,
+            promptId,
             onBeforeOptimisticPrompt: clearDraftIfNeeded,
           });
         } else {
@@ -175,6 +182,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
             text,
             launchSelection.modelId,
             blocks,
+            attachmentSnapshots,
             input?.optimisticContentParts,
             clearDraftIfNeeded,
             input?.measurementOperationId,

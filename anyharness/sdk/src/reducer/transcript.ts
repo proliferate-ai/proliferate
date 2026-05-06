@@ -235,7 +235,7 @@ export function reduceEvent(
 
     case "pending_prompt_updated":
       s.pendingPrompts = s.pendingPrompts.map((entry) =>
-        pendingPromptMatches(entry, evt.seq, evt.promptId ?? null)
+        pendingPromptMatches(entry, evt.seq)
           ? {
             ...entry,
             seq: evt.seq,
@@ -250,7 +250,7 @@ export function reduceEvent(
 
     case "pending_prompt_removed":
       s.pendingPrompts = s.pendingPrompts.filter(
-        (entry) => !pendingPromptMatches(entry, evt.seq, evt.promptId ?? null),
+        (entry) => !pendingPromptMatches(entry, evt.seq),
       );
       break;
 
@@ -1466,9 +1466,8 @@ function normalizeToolNameForSemanticKind(
 function pendingPromptMatches(
   entry: PendingPromptEntry,
   seq: number,
-  promptId: string | null,
 ): boolean {
-  return entry.seq === seq || (!!promptId && entry.promptId === promptId);
+  return entry.seq === seq;
 }
 
 function upsertPendingPrompt(
@@ -1476,7 +1475,7 @@ function upsertPendingPrompt(
   nextEntry: PendingPromptEntry,
 ): PendingPromptEntry[] {
   const index = entries.findIndex((entry) =>
-    pendingPromptMatches(entry, nextEntry.seq, nextEntry.promptId)
+    pendingPromptMatches(entry, nextEntry.seq)
   );
   if (index === -1) {
     return [...entries, nextEntry];

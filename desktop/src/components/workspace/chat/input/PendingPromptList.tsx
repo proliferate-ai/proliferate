@@ -38,7 +38,7 @@ export function PendingPromptList({
     >
       {entries.map((entry) => (
         <PendingPromptRow
-          key={entry.seq}
+          key={entry.key}
           entry={entry}
           onBeginEdit={onBeginEdit}
           onDelete={onDelete}

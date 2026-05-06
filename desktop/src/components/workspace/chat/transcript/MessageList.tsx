@@ -1978,22 +1978,6 @@ function renderOutboxPromptControls(
     );
   }
 
-  if (entry.deliveryState === "unknown_after_dispatch") {
-    return (
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-chat-transcript-ignore
-          onClick={() => actions.retryPrompt(entry.clientPromptId)}
-        >
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
   return null;
 }
 

@@ -20,6 +20,7 @@ import {
   outboxEntriesForSession,
   resolvePromptOutboxPlacement,
 } from "@/lib/domain/chat/prompt-outbox";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
@@ -27,6 +28,7 @@ interface PromptSessionInput {
   sessionId: string;
   text: string;
   blocks?: PromptInputBlock[];
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   optimisticContentParts?: ContentPart[];
   workspaceId?: string | null;
   latencyFlowId?: string | null;
@@ -40,6 +42,7 @@ export function useSessionPromptWorkflow() {
     sessionId,
     text,
     blocks,
+    attachmentSnapshots,
     optimisticContentParts,
     workspaceId,
     latencyFlowId,
@@ -72,6 +75,7 @@ export function useSessionPromptWorkflow() {
         workspaceId: resolvedWorkspaceId,
         text,
         blocks: blocks ?? [{ type: "text", text }],
+        attachmentSnapshots,
         contentParts: optimisticContentParts,
         placement: resolvePromptOutboxPlacement({
           isSessionBusy: isSessionSlotBusy(slot),

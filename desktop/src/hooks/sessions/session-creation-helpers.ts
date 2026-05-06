@@ -12,6 +12,7 @@ import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import type { PausedSessionModelAvailability } from "@/hooks/sessions/use-session-model-availability-workflow";
 import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
 import {
   patchSessionRecord,
@@ -46,6 +47,7 @@ export function buildLatencyRequestOptions(latencyFlowId?: string | null) {
 export interface SessionCreateWithResolvedConfigRetryOptions {
   text: string;
   blocks?: PromptInputBlock[];
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   optimisticContentParts?: ContentPart[];
   agentKind: string;
   modelId: string;
@@ -58,6 +60,7 @@ export interface SessionCreateWithResolvedConfigRetryOptions {
   launchIntentId?: string | null;
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
+  preferExistingCompatibleSession?: boolean;
   modelAvailabilityRetryCount?: number;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;

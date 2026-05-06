@@ -1,9 +1,10 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import type { ContentPart, PromptInputBlock, WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock, Session, WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
@@ -71,6 +72,7 @@ import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
   blocks?: PromptInputBlock[];
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   optimisticContentParts?: ContentPart[];
   agentKind: string;
   modelId: string;
@@ -83,6 +85,7 @@ interface CreateSessionWithResolvedConfigOptions {
   launchIntentId?: string | null;
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
+  preferExistingCompatibleSession?: boolean;
   modelAvailabilityRetryCount?: number;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
@@ -160,7 +163,8 @@ export function useSessionCreationActions() {
       throw new Error(blockedReason);
     }
 
-    const hasPrompt = hasPromptContent(options.text, options.blocks);
+    const hasPrompt = hasPromptContent(options.text, options.blocks)
+      || (options.attachmentSnapshots?.length ?? 0) > 0;
     const promptId = hasPrompt ? options.promptId ?? createPromptId() : options.promptId ?? null;
     const shouldEnqueueInitialPrompt = hasPrompt && options.skipInitialPromptEnqueue !== true;
     const previousActiveSessionId = current.activeSessionId;
@@ -301,6 +305,7 @@ export function useSessionCreationActions() {
         sessionId: pendingSessionId,
         text: options.text,
         blocks: options.blocks,
+        attachmentSnapshots: options.attachmentSnapshots,
         optimisticContentParts: options.optimisticContentParts,
         workspaceId,
         latencyFlowId: options.latencyFlowId,
@@ -324,6 +329,51 @@ export function useSessionCreationActions() {
         runtimeUrl: target.baseUrl,
         authToken: target.authToken,
       });
+      if (options.preferExistingCompatibleSession) {
+        const existingSession = await client.sessions.list(
+          target.anyharnessWorkspaceId,
+          requestOptions,
+        )
+          .then((sessions) => findCompatibleExistingSession({
+            sessions,
+            agentKind: options.agentKind,
+            modelId: options.modelId,
+          }))
+          .catch(() => null);
+        if (existingSession) {
+          annotateLatencyFlow(options.latencyFlowId, {
+            targetSessionId: existingSession.id,
+          });
+          const realRecord = materializedRecordFromExistingSession({
+            clientSessionId: pendingSessionId,
+            session: existingSession,
+            workspaceId,
+            fallbackModelId: options.modelId,
+            fallbackModeId: resolvedModeId ?? null,
+            pendingConfigChanges: getSessionRecord(pendingSessionId)?.pendingConfigChanges ?? {},
+          });
+          materializeSessionRecord(pendingSessionId, existingSession.id, realRecord);
+          usePromptOutboxStore.getState().bindMaterializedSession(
+            pendingSessionId,
+            existingSession.id,
+          );
+          if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
+            rememberLastViewedSession(workspaceId, existingSession.id);
+          }
+          upsertWorkspaceSessionRecord(workspaceId, existingSession);
+          if (options.launchIntentId) {
+            useChatLaunchIntentStore.getState().markMaterializedIfActive(
+              options.launchIntentId,
+              {
+                clientSessionId: pendingSessionId,
+                workspaceId,
+                sessionId: existingSession.id,
+              },
+            );
+          }
+          return pendingSessionId;
+        }
+      }
       const targetWorkspace = await client.workspaces.get(
         target.anyharnessWorkspaceId,
         requestOptions,
@@ -691,5 +741,59 @@ function mergeLiveDefaultLaunchControls({
       ...(defaults[agentKind] ?? {}),
       ...liveControls,
     },
+  };
+}
+
+function findCompatibleExistingSession({
+  sessions,
+  agentKind,
+  modelId,
+}: {
+  sessions: readonly Session[];
+  agentKind: string;
+  modelId: string;
+}): Session | null {
+  return sessions.find((session) =>
+    session.agentKind === agentKind
+    && (!session.modelId || session.modelId === modelId)
+  ) ?? null;
+}
+
+function materializedRecordFromExistingSession({
+  clientSessionId,
+  session,
+  workspaceId,
+  fallbackModelId,
+  fallbackModeId,
+  pendingConfigChanges,
+}: {
+  clientSessionId: string;
+  session: Session;
+  workspaceId: string;
+  fallbackModelId: string;
+  fallbackModeId: string | null;
+  pendingConfigChanges: SessionRuntimeRecord["pendingConfigChanges"];
+}): SessionRuntimeRecord {
+  return {
+    ...createEmptySessionRecord(clientSessionId, session.agentKind, {
+      workspaceId,
+      materializedSessionId: session.id,
+      modelId: session.modelId ?? fallbackModelId,
+      modeId: session.modeId ?? fallbackModeId,
+      title: session.title ?? null,
+      actionCapabilities: session.actionCapabilities,
+      liveConfig: session.liveConfig ?? null,
+      executionSummary: session.executionSummary ?? null,
+      mcpBindingSummaries: session.mcpBindingSummaries ?? null,
+      lastPromptAt: session.lastPromptAt ?? null,
+      optimisticPrompt: null,
+      pendingConfigChanges,
+      sessionRelationship: { kind: "root" },
+    }),
+    status: resolveStatusFromExecutionSummary(
+      session.executionSummary,
+      session.status ?? "idle",
+    ),
+    transcriptHydrated: true,
   };
 }

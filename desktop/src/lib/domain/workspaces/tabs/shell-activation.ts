@@ -162,8 +162,10 @@ function isCurrentPendingChatActivation(
   if (!pending) {
     return false;
   }
+  const pendingShellIntentIsCurrent = pending.shellEpochAtWrite === input.currentShellActivationEpoch
+    || input.storedIntent === pending.intent;
   return pending.intent === key
-    && pending.shellEpochAtWrite === input.currentShellActivationEpoch
+    && pendingShellIntentIsCurrent
     && pending.guardToken === input.currentSessionActivationEpoch
     && pending.workspaceSelectionNonce === input.currentWorkspaceSelectionNonce
     && pending.sessionActivationEpochAtWrite === input.currentSessionActivationEpoch;

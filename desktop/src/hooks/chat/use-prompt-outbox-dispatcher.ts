@@ -5,6 +5,9 @@ import {
   type PromptOutboxEntry,
 } from "@/lib/domain/chat/prompt-outbox";
 import {
+  promptAttachmentSnapshotsToBlocks,
+} from "@/lib/domain/chat/prompt-attachment-snapshot";
+import {
   getLatencyFlowRequestHeaders,
   failLatencyFlow,
   finishLatencyFlow,
@@ -86,6 +89,13 @@ export function usePromptOutboxDispatcher(): void {
 
       const sessionBeforePrompt = getSessionRecord(entry.clientSessionId);
       const shouldGenerateTitle = !sessionBeforePrompt?.lastPromptAt;
+      const preparedBlocks = await preparePromptBlocks(latestBeforeDispatch);
+      const latestAfterPrepare = usePromptOutboxStore
+        .getState()
+        .entriesByPromptId[entry.clientPromptId];
+      if (!latestAfterPrepare || latestAfterPrepare.deliveryState !== "preparing") {
+        return;
+      }
       const {
         connection,
         workspaceId,
@@ -105,7 +115,7 @@ export function usePromptOutboxDispatcher(): void {
         resolvedSessionId,
         {
           promptId: entry.clientPromptId,
-          blocks: entry.blocks,
+          blocks: preparedBlocks,
         },
         requestOptions,
       );
@@ -140,13 +150,16 @@ export function usePromptOutboxDispatcher(): void {
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Prompt delivery failed.";
+      const failure = classifyPromptDispatchFailure(error, requestStarted);
       usePromptOutboxStore.getState().patchEntry(entry.clientPromptId, {
-        deliveryState: requestStarted ? "unknown_after_dispatch" : "failed_before_dispatch",
-        errorMessage: message,
+        deliveryState: failure.deliveryState,
+        errorMessage: failure.message,
       });
-      if (!requestStarted) {
-        failLatencyFlow(entry.latencyFlowId, "prompt_dispatch_failed_before_request");
+      if (failure.deliveryState === "failed_before_dispatch") {
+        failLatencyFlow(
+          entry.latencyFlowId,
+          requestStarted ? "prompt_dispatch_rejected" : "prompt_dispatch_failed_before_request",
+        );
       }
     }
   }, [
@@ -184,6 +197,72 @@ export function usePromptOutboxDispatcher(): void {
 
 function isActiveDispatcherOwner(owner: symbol | null): boolean {
   return owner !== null && activeDispatcherOwner === owner;
+}
+
+async function preparePromptBlocks(entry: PromptOutboxEntry) {
+  if (entry.attachmentSnapshots.length === 0) {
+    return entry.blocks;
+  }
+  const planBlocks = entry.blocks.filter((block) => block.type === "plan_reference");
+  return [
+    ...await promptAttachmentSnapshotsToBlocks(entry.text.trim(), entry.attachmentSnapshots),
+    ...planBlocks,
+  ];
+}
+
+export function classifyPromptDispatchFailure(
+  error: unknown,
+  requestStarted: boolean,
+): {
+  deliveryState: "failed_before_dispatch" | "unknown_after_dispatch";
+  message: string;
+} {
+  if (!requestStarted) {
+    return {
+      deliveryState: "failed_before_dispatch",
+      message: sanitizePromptDispatchErrorMessage(error),
+    };
+  }
+  const status = readErrorStatus(error);
+  if (status === 400 || status === 404 || status === 409 || status === 422) {
+    return {
+      deliveryState: "failed_before_dispatch",
+      message: sanitizePromptDispatchErrorMessage(error),
+    };
+  }
+  return {
+    deliveryState: "unknown_after_dispatch",
+    message: sanitizePromptDispatchErrorMessage(error),
+  };
+}
+
+function sanitizePromptDispatchErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "Prompt delivery failed.";
+}
+
+function readErrorStatus(error: unknown, depth = 0): number | null {
+  if (!error || typeof error !== "object" || depth > 2) {
+    return null;
+  }
+  const candidate = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+    cause?: unknown;
+  };
+  if (typeof candidate.status === "number") {
+    return candidate.status;
+  }
+  if (typeof candidate.statusCode === "number") {
+    return candidate.statusCode;
+  }
+  if (typeof candidate.response?.status === "number") {
+    return candidate.response.status;
+  }
+  return readErrorStatus(candidate.cause, depth + 1);
 }
 
 function scheduleAcceptedRunningHistoryReconcile({

@@ -211,6 +211,7 @@ export function useWorkspaceShellActivation() {
           selectSession,
           selection,
           sessionId,
+          setPendingChatActivation,
           shellStateKey,
           writeShellIntent,
         }).then(resolve, reject);
@@ -349,6 +350,7 @@ async function runDeferredChatTabActivation({
   selectSession,
   selection,
   sessionId,
+  setPendingChatActivation,
   shellStateKey,
   writeShellIntent,
 }: {
@@ -362,6 +364,7 @@ async function runDeferredChatTabActivation({
   selectSession: ReturnType<typeof useSessionActions>["selectSession"];
   selection?: SelectSessionOptionsWithoutGuard;
   sessionId: string;
+  setPendingChatActivation: WorkspaceUiStoreState["setPendingChatActivation"];
   shellStateKey: string;
   writeShellIntent: WorkspaceUiStoreState["writeShellIntent"];
 }): Promise<SessionActivationOutcome> {
@@ -393,6 +396,15 @@ async function runDeferredChatTabActivation({
     startedAt: durableStartedAt,
     outcome: previousWrite.changed ? "completed" : "skipped",
   });
+  const durablePending = pending.shellEpochAtWrite === previousWrite.epoch
+    ? pending
+    : { ...pending, shellEpochAtWrite: previousWrite.epoch };
+  if (durablePending !== pending) {
+    setPendingChatActivation({
+      workspaceId: shellStateKey,
+      pending: durablePending,
+    });
+  }
 
   try {
     const guardedSelectSession = selectSession as (
@@ -417,7 +429,7 @@ async function runDeferredChatTabActivation({
       rollbackPendingDurableIntent({
         hotOperationId,
         intent,
-        pending,
+        pending: durablePending,
         previousWrite,
         rollbackShellIntent,
         shellStateKey,
@@ -425,7 +437,7 @@ async function runDeferredChatTabActivation({
       clearMatchingPending({
         clearPendingChatActivation,
         hotOperationId,
-        pending,
+        pending: durablePending,
         shellStateKey,
         step: "workspace.shell.pending_clear",
       });
@@ -435,7 +447,7 @@ async function runDeferredChatTabActivation({
     clearMatchingPending({
       clearPendingChatActivation,
       hotOperationId,
-      pending,
+      pending: durablePending,
       shellStateKey,
       step: "workspace.shell.pending_clear",
     });
@@ -449,7 +461,7 @@ async function runDeferredChatTabActivation({
     rollbackPendingDurableIntent({
       hotOperationId,
       intent,
-      pending,
+      pending: durablePending,
       previousWrite,
       rollbackShellIntent,
       shellStateKey,
@@ -457,7 +469,7 @@ async function runDeferredChatTabActivation({
     clearMatchingPending({
       clearPendingChatActivation,
       hotOperationId,
-      pending,
+      pending: durablePending,
       shellStateKey,
       step: "workspace.shell.pending_clear",
     });

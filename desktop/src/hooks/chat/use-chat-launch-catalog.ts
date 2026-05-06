@@ -87,7 +87,7 @@ export function useChatLaunchCatalog({
       return null;
     }
     const catalogVersion = catalogData.catalogVersion || "unknown";
-    const snapshotWorkspaceId = selectedWorkspaceId ?? catalogData.workspaceId;
+    const snapshotWorkspaceId = selectedWorkspaceId ?? (catalogData.workspaceId || null);
     return {
       snapshotId: [
         "launch-catalog",

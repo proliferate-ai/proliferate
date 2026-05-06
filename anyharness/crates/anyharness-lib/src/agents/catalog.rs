@@ -1,8 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration as StdDuration;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+use std::time::{Duration as StdDuration, SystemTime, UNIX_EPOCH};
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -36,6 +40,7 @@ const BUNDLED_AGENT_CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../catalogs/agents/v1/catalog.json"
 ));
+static CACHE_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Returns the runtime-owned model registry catalog exposed by AnyHarness.
 ///
@@ -102,7 +107,7 @@ impl LaunchCatalogService {
             runtime_home
                 .join("agent-catalog")
                 .join("v1")
-                .join("catalog-cache.json"),
+                .join("launch-catalog-cache.json"),
             remote_url,
             allow_candidates,
         )
@@ -252,7 +257,7 @@ impl ModelCatalogService {
             runtime_home
                 .join("agent-catalog")
                 .join("v1")
-                .join("catalog-cache.json"),
+                .join("model-catalog-cache.json"),
             remote_url,
             allow_candidates,
         )
@@ -822,12 +827,9 @@ fn write_cache_file(path: &Path, cached: &CachedModelCatalog) -> anyhow::Result<
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let tmp_path = path.with_extension("json.tmp");
+    let tmp_path = unique_cache_tmp_path(path);
     fs::write(&tmp_path, serde_json::to_vec_pretty(cached)?)?;
-    if path.exists() {
-        fs::remove_file(path)?;
-    }
-    fs::rename(tmp_path, path)?;
+    replace_cache_file(&tmp_path, path)?;
     Ok(())
 }
 
@@ -836,12 +838,9 @@ fn write_launch_cache_file(path: &Path, cached: &CachedLaunchCatalog) -> anyhow:
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let tmp_path = path.with_extension("json.tmp");
+    let tmp_path = unique_cache_tmp_path(path);
     fs::write(&tmp_path, serde_json::to_vec_pretty(cached)?)?;
-    if path.exists() {
-        fs::remove_file(path)?;
-    }
-    fs::rename(tmp_path, path)?;
+    replace_cache_file(&tmp_path, path)?;
     Ok(())
 }
 
@@ -849,12 +848,41 @@ fn write_agent_cache_file(path: &Path, cached: &CachedAgentCatalog) -> anyhow::R
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let tmp_path = path.with_extension("json.tmp");
+    let tmp_path = unique_cache_tmp_path(path);
     fs::write(&tmp_path, serde_json::to_vec_pretty(cached)?)?;
-    if path.exists() {
-        fs::remove_file(path)?;
+    replace_cache_file(&tmp_path, path)?;
+    Ok(())
+}
+
+fn unique_cache_tmp_path(path: &Path) -> PathBuf {
+    let counter = CACHE_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("catalog-cache");
+    path.with_file_name(format!(
+        "{file_name}.{}.{}.{}.tmp",
+        std::process::id(),
+        nanos,
+        counter
+    ))
+}
+
+fn replace_cache_file(tmp_path: &Path, path: &Path) -> anyhow::Result<()> {
+    if let Err(error) = fs::remove_file(path) {
+        if error.kind() != io::ErrorKind::NotFound {
+            let _ = fs::remove_file(tmp_path);
+            return Err(error.into());
+        }
     }
-    fs::rename(tmp_path, path)?;
+    if let Err(error) = fs::rename(tmp_path, path) {
+        let _ = fs::remove_file(tmp_path);
+        return Err(error.into());
+    }
     Ok(())
 }
 
@@ -923,6 +951,30 @@ fn validate_agent_catalog_agent(
                     "agent catalog agent '{}' model alias '{}' collides",
                     agent.kind,
                     alias
+                );
+            }
+        }
+        if let Some(remediation) = &model.launch_remediation {
+            if model.status != ModelCatalogStatus::Active {
+                anyhow::bail!(
+                    "agent catalog agent '{}' model '{}' has launch remediation but is not active",
+                    agent.kind,
+                    model.id
+                );
+            }
+            let message = remediation.message.trim();
+            if message.is_empty() {
+                anyhow::bail!(
+                    "agent catalog agent '{}' model '{}' launch remediation message is empty",
+                    agent.kind,
+                    model.id
+                );
+            }
+            if message.chars().count() > LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS {
+                anyhow::bail!(
+                    "agent catalog agent '{}' model '{}' launch remediation message is too long",
+                    agent.kind,
+                    model.id
                 );
             }
         }
@@ -1001,6 +1053,16 @@ fn validate_agent_catalog_control(
             control.missing_live_config_policy
         );
     }
+    if let Some(create_field) = control.apply.create_field.as_deref() {
+        if !supported_agent_catalog_create_field(&control.key, create_field) {
+            anyhow::bail!(
+                "agent catalog agent '{}' control '{}' has unsupported createField '{}'",
+                agent_kind,
+                control.key,
+                create_field
+            );
+        }
+    }
     if control.value_source == "inline" {
         if control.values.is_empty() {
             anyhow::bail!(
@@ -1028,9 +1090,19 @@ fn validate_agent_catalog_control(
     Ok(())
 }
 
+fn supported_agent_catalog_create_field(control_key: &str, create_field: &str) -> bool {
+    matches!(
+        (control_key, create_field),
+        ("model", "modelId") | ("mode", "modeId")
+    )
+}
+
 fn agent_catalog_to_descriptors(
     catalog: &AgentCatalogDocument,
 ) -> anyhow::Result<Vec<AgentDescriptor>> {
+    // Trust boundary: process/install/auth descriptors may only be materialized
+    // from the bundled catalog. Remote catalog refresh paths intentionally use
+    // the session/model adapters below and must not call this conversion.
     validate_agent_catalog_document(catalog)?;
     catalog
         .agents
@@ -1369,7 +1441,13 @@ fn agent_catalog_control_to_launch_control(
         "model" => return None,
         _ => return None,
     };
-    let phase = if control.apply.create_field.is_some() {
+    let create_field = control
+        .apply
+        .create_field
+        .as_ref()
+        .filter(|field| supported_agent_catalog_create_field(&control.key, field))
+        .cloned();
+    let phase = if create_field.is_some() {
         anyharness_contract::v1::WorkspaceSessionLaunchControlPhase::CreateSession
     } else {
         anyharness_contract::v1::WorkspaceSessionLaunchControlPhase::LiveDefault
@@ -1390,7 +1468,7 @@ fn agent_catalog_control_to_launch_control(
             })
             .collect(),
         phase,
-        create_field: control.apply.create_field.clone(),
+        create_field,
     })
 }
 
@@ -2241,6 +2319,30 @@ mod tests {
             },
         )
         .expect("write launch cache file");
+    }
+
+    #[test]
+    fn agent_catalog_rejects_unsupported_create_field() {
+        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let codex = catalog
+            .agents
+            .iter_mut()
+            .find(|agent| agent.kind == "codex")
+            .expect("codex agent");
+        let effort = codex
+            .session
+            .controls
+            .iter_mut()
+            .find(|control| control.key == "effort")
+            .expect("effort control");
+        effort.apply.create_field = Some("arbitraryField".to_string());
+
+        let error = validate_agent_catalog_document(&catalog).expect_err("invalid create field");
+
+        assert!(
+            error.to_string().contains("unsupported createField"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]

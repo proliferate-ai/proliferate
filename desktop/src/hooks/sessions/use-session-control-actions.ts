@@ -41,6 +41,7 @@ import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/s
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
 
 interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;
@@ -57,6 +58,7 @@ interface LaunchPromptInput extends SessionLatencyFlowOptions {
   modelId: string;
   text: string;
   blocks?: PromptInputBlock[];
+  attachmentSnapshots?: PromptAttachmentSnapshot[];
   optimisticContentParts?: ContentPart[];
   promptId?: string | null;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
@@ -70,6 +72,7 @@ interface SessionControlDeps {
   createSessionWithResolvedConfig: (options: {
     text: string;
     blocks?: PromptInputBlock[];
+    attachmentSnapshots?: PromptAttachmentSnapshot[];
     optimisticContentParts?: ContentPart[];
     agentKind: string;
     modelId: string;
@@ -78,6 +81,7 @@ interface SessionControlDeps {
     latencyFlowId?: string | null;
     measurementOperationId?: MeasurementOperationId | null;
     promptId?: string | null;
+    preferExistingCompatibleSession?: boolean;
     onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   }) => Promise<string>;
   ensureWorkspaceSessions: (workspaceId: string) => Promise<Array<{
@@ -292,6 +296,7 @@ export function useSessionControlActions({
     text: string,
     options?: PromptLatencyFlowOptions & {
       blocks?: PromptInputBlock[];
+      attachmentSnapshots?: PromptAttachmentSnapshot[];
       optimisticContentParts?: ContentPart[];
     },
   ) => {
@@ -319,6 +324,7 @@ export function useSessionControlActions({
       sessionId,
       text,
       blocks: options?.blocks,
+      attachmentSnapshots: options?.attachmentSnapshots,
       optimisticContentParts: options?.optimisticContentParts,
       workspaceId,
       latencyFlowId: options?.latencyFlowId,
@@ -470,6 +476,7 @@ export function useSessionControlActions({
     text: string,
     modelId?: string,
     blocks?: PromptInputBlock[],
+    attachmentSnapshots?: PromptAttachmentSnapshot[],
     optimisticContentParts?: ContentPart[],
     onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void,
     measurementOperationId?: MeasurementOperationId | null,
@@ -493,29 +500,7 @@ export function useSessionControlActions({
           sessionId: slot.sessionId,
           text,
           blocks,
-          optimisticContentParts,
-          workspaceId,
-          onBeforeOptimisticPrompt,
-          measurementOperationId,
-          promptId,
-        });
-        return;
-      }
-    }
-
-    if (workspaceId) {
-      const sessions = await ensureWorkspaceSessions(workspaceId);
-      const backendSession = sessions.find((session) => session.agentKind === agentKind);
-      if (backendSession) {
-        await selectSessionWithShellIntentRollback({
-          workspaceId,
-          sessionId: backendSession.id,
-          selectSession,
-        });
-        await promptSession({
-          sessionId: backendSession.id,
-          text,
-          blocks,
+          attachmentSnapshots,
           optimisticContentParts,
           workspaceId,
           onBeforeOptimisticPrompt,
@@ -529,20 +514,21 @@ export function useSessionControlActions({
     await createSessionWithResolvedConfig({
       text,
       blocks,
+      attachmentSnapshots,
       optimisticContentParts,
       agentKind,
       modelId: modelId ?? agentKind,
+      ...(workspaceId ? { workspaceId } : {}),
       onBeforeOptimisticPrompt,
       measurementOperationId,
       promptId,
+      preferExistingCompatibleSession: true,
     });
   }, [
     activateSession,
     createSessionWithResolvedConfig,
-    ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
     promptSession,
-    selectSession,
   ]);
 
   const findOrCreateSessionForLaunch = useCallback(async ({
@@ -551,6 +537,7 @@ export function useSessionControlActions({
     modelId,
     text,
     blocks,
+    attachmentSnapshots,
     optimisticContentParts,
     latencyFlowId,
     promptId,
@@ -573,6 +560,7 @@ export function useSessionControlActions({
           sessionId: slot.sessionId,
           text,
           blocks,
+          attachmentSnapshots,
           optimisticContentParts,
           workspaceId,
           latencyFlowId,
@@ -598,6 +586,7 @@ export function useSessionControlActions({
         sessionId: backendSession.id,
         text,
         blocks,
+        attachmentSnapshots,
         optimisticContentParts,
         workspaceId,
         latencyFlowId,
@@ -610,6 +599,7 @@ export function useSessionControlActions({
     await createSessionWithResolvedConfig({
       text,
       blocks,
+      attachmentSnapshots,
       optimisticContentParts,
       agentKind,
       modelId,

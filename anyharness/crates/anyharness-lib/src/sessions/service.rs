@@ -23,6 +23,8 @@ use anyharness_contract::v1::{
     WorkspaceSessionLaunchControlPhase, WorkspaceSessionLaunchControlValue,
 };
 
+const EFFECTIVE_SESSION_LAUNCH_WORKSPACE_ID: &str = "";
+
 pub struct SessionService {
     session_store: SessionStore,
     attachment_storage: PromptAttachmentStorage,
@@ -496,7 +498,7 @@ impl SessionService {
     pub fn get_effective_session_launch_catalog(
         &self,
     ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
-        self.session_launch_catalog_data("__effective__")
+        self.session_launch_catalog_data(EFFECTIVE_SESSION_LAUNCH_WORKSPACE_ID)
     }
 
     fn session_launch_catalog_data(

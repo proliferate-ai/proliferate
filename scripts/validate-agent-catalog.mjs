@@ -23,7 +23,10 @@ const VALID_CONTROL_KEYS = new Set([
   "effort",
   "fast_mode",
 ]);
-const VALID_CREATE_FIELDS = new Set(["modelId", "modeId"]);
+const VALID_CREATE_FIELDS_BY_CONTROL = new Map([
+  ["model", "modelId"],
+  ["mode", "modeId"],
+]);
 const VALID_LIVE_SETTERS = new Set(["runtime_control"]);
 const VALID_REMEDIATION_KINDS = new Set(["managed_reinstall", "external_update", "restart"]);
 
@@ -61,14 +64,15 @@ function validateModel(model, agentKind, modelIds, aliasIds) {
     fail(`${agentKind}.${model.id}.isDefault must be boolean`);
   }
   if (model.launchRemediation !== null && model.launchRemediation !== undefined) {
+    if (model.status !== "active") {
+      fail(`${agentKind}.${model.id}.launchRemediation is only valid for active models`);
+    }
     if (!VALID_REMEDIATION_KINDS.has(model.launchRemediation?.kind)) {
       fail(`${agentKind}.${model.id}.launchRemediation.kind is invalid`);
     }
-    if (model.launchRemediation?.message !== undefined) {
-      assertString(model.launchRemediation.message, `${agentKind}.${model.id}.launchRemediation.message`);
-      if ([...model.launchRemediation.message.trim()].length > 160) {
-        fail(`${agentKind}.${model.id}.launchRemediation.message must be 160 characters or fewer`);
-      }
+    assertString(model.launchRemediation?.message, `${agentKind}.${model.id}.launchRemediation.message`);
+    if ([...model.launchRemediation.message.trim()].length > 160) {
+      fail(`${agentKind}.${model.id}.launchRemediation.message must be 160 characters or fewer`);
     }
   }
 }
@@ -93,7 +97,7 @@ function validateControl(control, agentKind, modelIds) {
     }
   }
   if (control?.apply?.createField !== null && control?.apply?.createField !== undefined) {
-    if (!VALID_CREATE_FIELDS.has(control.apply.createField)) {
+    if (VALID_CREATE_FIELDS_BY_CONTROL.get(control.key) !== control.apply.createField) {
       fail(`${agentKind}.${control.key}.apply.createField is invalid`);
     }
   }
