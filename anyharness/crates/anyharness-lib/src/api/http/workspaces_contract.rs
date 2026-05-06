@@ -1,11 +1,17 @@
 use anyharness_contract::v1::{
-    DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
+    DetectProjectSetupResponse, GetSetupStatusResponse,
+    SessionDefaultControl as ContractSessionDefaultControl,
+    SessionDefaultControlKey as ContractSessionDefaultControlKey,
+    SessionDefaultControlValue as ContractSessionDefaultControlValue, SetupHint, SetupHintCategory,
     SetupScriptStatus, Workspace, WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind,
     WorkspaceLifecycleState, WorkspaceSessionLaunchAgent, WorkspaceSessionLaunchCatalog,
     WorkspaceSessionLaunchModel, WorkspaceSurface,
 };
 
 use super::error::ApiError;
+use crate::agents::model::{
+    SessionDefaultControlKey, SessionDefaultControlMetadata, SessionDefaultControlValueMetadata,
+};
 use crate::sessions::service::{
     WorkspaceSessionLaunchAgentData, WorkspaceSessionLaunchCatalogData,
     WorkspaceSessionLaunchModelData,
@@ -186,5 +192,81 @@ fn workspace_session_launch_model_to_contract(
         id: model.id,
         display_name: model.display_name,
         is_default: model.is_default,
+        session_default_controls: model
+            .session_default_controls
+            .into_iter()
+            .map(session_default_control_to_contract)
+            .collect(),
+    }
+}
+
+fn session_default_control_to_contract(
+    control: SessionDefaultControlMetadata,
+) -> ContractSessionDefaultControl {
+    ContractSessionDefaultControl {
+        key: session_default_control_key_to_contract(control.key),
+        label: control.label,
+        values: control
+            .values
+            .into_iter()
+            .map(session_default_control_value_to_contract)
+            .collect(),
+        default_value: control.default_value,
+    }
+}
+
+fn session_default_control_value_to_contract(
+    value: SessionDefaultControlValueMetadata,
+) -> ContractSessionDefaultControlValue {
+    ContractSessionDefaultControlValue {
+        value: value.value,
+        label: value.label,
+        description: value.description,
+        is_default: value.is_default,
+    }
+}
+
+fn session_default_control_key_to_contract(
+    key: SessionDefaultControlKey,
+) -> ContractSessionDefaultControlKey {
+    match key {
+        SessionDefaultControlKey::Reasoning => ContractSessionDefaultControlKey::Reasoning,
+        SessionDefaultControlKey::Effort => ContractSessionDefaultControlKey::Effort,
+        SessionDefaultControlKey::FastMode => ContractSessionDefaultControlKey::FastMode,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workspace_launch_model_mapper_includes_session_default_controls() {
+        let model = workspace_session_launch_model_to_contract(WorkspaceSessionLaunchModelData {
+            id: "gpt-5.4".to_string(),
+            display_name: "GPT 5.4".to_string(),
+            is_default: true,
+            session_default_controls: vec![SessionDefaultControlMetadata {
+                key: SessionDefaultControlKey::Effort,
+                label: "Effort".to_string(),
+                default_value: Some("high".to_string()),
+                values: vec![SessionDefaultControlValueMetadata {
+                    value: "high".to_string(),
+                    label: "High".to_string(),
+                    description: None,
+                    is_default: true,
+                }],
+            }],
+        });
+
+        assert_eq!(model.session_default_controls.len(), 1);
+        assert_eq!(
+            model.session_default_controls[0].key,
+            ContractSessionDefaultControlKey::Effort
+        );
+        assert_eq!(
+            model.session_default_controls[0].default_value.as_deref(),
+            Some("high"),
+        );
     }
 }

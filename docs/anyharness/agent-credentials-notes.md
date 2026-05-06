@@ -107,11 +107,10 @@ Current allowlist in `desktop/src-tauri/src/commands/keychain.rs`:
 - `GOOGLE_API_KEY`
 - `GEMINI_API_KEY`
 
-But the runtime agent registry currently expects additional env vars in
+But the runtime agent registry currently expects an additional env var in
 `anyharness/crates/anyharness-lib/src/agents/registry.rs`:
 
 - `CURSOR_API_KEY`
-- `AMP_API_KEY`
 
 Effect:
 
@@ -127,7 +126,7 @@ This is the immediate bug to fix.
 
 Short-term fix:
 
-1. Add `CURSOR_API_KEY` and `AMP_API_KEY` to the desktop allowlist.
+1. Add `CURSOR_API_KEY` to the desktop allowlist.
 2. Add a regression test or assertion around the supported env-var list if
    possible.
 3. Make the setup UX explicitly state that a restart is required before the

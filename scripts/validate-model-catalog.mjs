@@ -17,7 +17,6 @@ const SUPPORTED_PROVIDER_KINDS = new Set([
   "gemini",
   "cursor",
   "opencode",
-  "amp",
 ]);
 
 function fail(message) {

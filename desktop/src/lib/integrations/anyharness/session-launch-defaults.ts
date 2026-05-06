@@ -38,6 +38,7 @@ interface ApplySessionLaunchDefaultsInput {
   session: Session;
   agentKind: string;
   modelRegistries: readonly ModelRegistry[];
+  projectedOverrides?: Partial<Record<DefaultLiveSessionControlKey, string>>;
   defaultLiveSessionControlValuesByAgentKind:
     DefaultLiveSessionControlValuesByAgentKind;
 }
@@ -57,6 +58,7 @@ export async function applySessionLaunchDefaults({
   session,
   agentKind,
   modelRegistries,
+  projectedOverrides,
   defaultLiveSessionControlValuesByAgentKind,
 }: ApplySessionLaunchDefaultsInput): Promise<ApplySessionLaunchDefaultsResult> {
   const registry = modelRegistries.find((candidate) => candidate.kind === agentKind);
@@ -91,7 +93,9 @@ export async function applySessionLaunchDefaults({
     defaultLiveSessionControlValuesByAgentKind[agentKind] ?? {};
 
   for (const controlKey of CONTROL_APPLY_ORDER) {
-    const defaultValue = defaults[controlKey]?.trim();
+    const defaultValue =
+      projectedOverrides?.[controlKey]?.trim()
+      || defaults[controlKey]?.trim();
     if (!defaultValue) {
       continue;
     }

@@ -7,7 +7,21 @@ use anyharness_contract::v1::{
 
 use crate::sessions::model::SessionLiveConfigSnapshotRecord;
 
+pub const DIRECT_MODEL_COMPAT_CONFIG_ID: &str = "model";
 pub const LEGACY_MODE_COMPAT_CONFIG_ID: &str = "mode";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectModelOption {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectModelState {
+    pub current_model_id: String,
+    pub available_models: Vec<DirectModelOption>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyModeOption {
@@ -45,6 +59,7 @@ const NORMALIZED_ORDER: &[NormalizedControlKind] = &[
 pub fn build_live_config_snapshot(
     _agent_kind: &str,
     config_options: &[acp::SessionConfigOption],
+    direct_model_state: Option<&DirectModelState>,
     legacy_mode_state: Option<&LegacyModeState>,
     prompt_capabilities: PromptCapabilities,
     source_seq: i64,
@@ -54,7 +69,8 @@ pub fn build_live_config_snapshot(
         .iter()
         .filter_map(into_raw_option)
         .collect::<Vec<_>>();
-    let normalized_controls = normalize_controls(&raw_config_options, legacy_mode_state);
+    let normalized_controls =
+        normalize_controls(&raw_config_options, direct_model_state, legacy_mode_state);
 
     SessionLiveConfigSnapshot {
         raw_config_options,
@@ -105,10 +121,12 @@ pub fn snapshot_from_record(
 
 fn normalize_controls(
     raw_options: &[RawSessionConfigOption],
+    direct_model_state: Option<&DirectModelState>,
     legacy_mode_state: Option<&LegacyModeState>,
 ) -> NormalizedSessionControls {
     let mut claimed = vec![false; raw_options.len()];
-    let model = claim_control(raw_options, &mut claimed, NormalizedControlKind::Model);
+    let model = claim_control(raw_options, &mut claimed, NormalizedControlKind::Model)
+        .or_else(|| direct_model_state.and_then(into_direct_model_control));
     let collaboration_mode = claim_control(
         raw_options,
         &mut claimed,
@@ -150,6 +168,48 @@ fn claim_control(
         .map(|(idx, _)| idx)?;
     claimed[index] = true;
     Some(into_normalized_control(&raw_options[index], Some(key)))
+}
+
+fn into_direct_model_control(
+    direct_model_state: &DirectModelState,
+) -> Option<NormalizedSessionControl> {
+    if direct_model_state.current_model_id.is_empty()
+        && direct_model_state.available_models.is_empty()
+    {
+        return None;
+    }
+
+    let mut values = direct_model_state
+        .available_models
+        .iter()
+        .map(|model| NormalizedSessionControlValue {
+            value: model.id.clone(),
+            label: model.name.clone(),
+            description: model.description.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    if !direct_model_state.current_model_id.is_empty()
+        && !values
+            .iter()
+            .any(|value| value.value == direct_model_state.current_model_id)
+    {
+        values.push(NormalizedSessionControlValue {
+            value: direct_model_state.current_model_id.clone(),
+            label: direct_model_state.current_model_id.clone(),
+            description: None,
+        });
+    }
+
+    Some(NormalizedSessionControl {
+        key: "model".to_string(),
+        raw_config_id: DIRECT_MODEL_COMPAT_CONFIG_ID.to_string(),
+        label: "Model".to_string(),
+        current_value: (!direct_model_state.current_model_id.is_empty())
+            .then(|| direct_model_state.current_model_id.clone()),
+        settable: values.len() > 1,
+        values,
+    })
 }
 
 fn into_legacy_mode_control(
@@ -388,10 +448,128 @@ mod tests {
                 .collect(),
         }
     }
+
+    fn direct_model_state(
+        current: &str,
+        values: &[(&str, &str, Option<&str>)],
+    ) -> DirectModelState {
+        DirectModelState {
+            current_model_id: current.to_string(),
+            available_models: values
+                .iter()
+                .map(|(id, name, description)| DirectModelOption {
+                    id: (*id).to_string(),
+                    name: (*name).to_string(),
+                    description: description.map(str::to_string),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn normalize_controls_synthesizes_model_from_direct_model_state() {
+        let controls = normalize_controls(
+            &[],
+            Some(&direct_model_state(
+                "gemini-3-flash-preview",
+                &[
+                    (
+                        "gemini-3-flash-preview",
+                        "Gemini 3 Flash",
+                        Some("Fast preview"),
+                    ),
+                    ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", None),
+                ],
+            )),
+            None,
+        );
+
+        let model = controls.model.expect("model control");
+        let values = model
+            .values
+            .iter()
+            .map(|value| {
+                (
+                    value.value.as_str(),
+                    value.label.as_str(),
+                    value.description.as_deref(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(model.raw_config_id, DIRECT_MODEL_COMPAT_CONFIG_ID);
+        assert_eq!(
+            model.current_value.as_deref(),
+            Some("gemini-3-flash-preview")
+        );
+        assert!(model.settable);
+        assert_eq!(
+            values,
+            vec![
+                (
+                    "gemini-3-flash-preview",
+                    "Gemini 3 Flash",
+                    Some("Fast preview"),
+                ),
+                ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite", None),
+            ]
+        );
+    }
+
+    #[test]
+    fn normalize_controls_prefers_raw_model_option_over_direct_model_state() {
+        let controls = normalize_controls(
+            &[model_option(&["raw-default", "raw-alt"])],
+            Some(&direct_model_state(
+                "direct-current",
+                &[("direct-current", "Direct Current", None)],
+            )),
+            None,
+        );
+
+        let model = controls.model.expect("model control");
+
+        assert_eq!(model.raw_config_id, "model");
+        assert_eq!(model.current_value.as_deref(), Some("raw-default"));
+        assert_eq!(
+            model
+                .values
+                .into_iter()
+                .map(|value| value.value)
+                .collect::<Vec<_>>(),
+            vec!["raw-default", "raw-alt"]
+        );
+    }
+
+    #[test]
+    fn normalize_controls_includes_current_direct_model_when_missing_from_values() {
+        let controls = normalize_controls(
+            &[],
+            Some(&direct_model_state(
+                "legacy-agent-model",
+                &[("known-model", "Known Model", None)],
+            )),
+            None,
+        );
+
+        let model = controls.model.expect("model control");
+
+        assert_eq!(model.current_value.as_deref(), Some("legacy-agent-model"));
+        assert_eq!(
+            model
+                .values
+                .into_iter()
+                .map(|value| value.value)
+                .collect::<Vec<_>>(),
+            vec!["known-model", "legacy-agent-model"]
+        );
+    }
+
     #[test]
     fn normalize_controls_preserves_all_live_model_values() {
         let controls = normalize_controls(
             &[model_option(&["default", "sonnet", "sonnet[1m]", "haiku"])],
+            None,
             None,
         );
 
@@ -410,6 +588,7 @@ mod tests {
         let controls = normalize_controls(
             &[model_option(&["default", "sonnet", "unlisted-live-model"])],
             None,
+            None,
         );
 
         let model = controls.model.expect("model control");
@@ -424,7 +603,7 @@ mod tests {
 
     #[test]
     fn normalize_controls_preserves_effort_values_including_max() {
-        let controls = normalize_controls(&[effort_option(&["low", "high", "max"])], None);
+        let controls = normalize_controls(&[effort_option(&["low", "high", "max"])], None, None);
 
         let effort = controls.effort.expect("effort control");
         let values = effort
@@ -440,6 +619,7 @@ mod tests {
     fn normalize_controls_synthesizes_legacy_mode_when_no_raw_mode_option_exists() {
         let controls = normalize_controls(
             &[model_option(&["default", "sonnet"])],
+            None,
             Some(&legacy_mode_state(&[
                 ("default", "Default"),
                 ("auto_edit", "Auto Edit"),
@@ -465,6 +645,7 @@ mod tests {
                 model_option(&["default", "sonnet"]),
                 mode_option(&["ask", "code"]),
             ],
+            None,
             Some(&legacy_mode_state(&[
                 ("default", "Default"),
                 ("auto_edit", "Auto Edit"),
@@ -501,6 +682,7 @@ mod tests {
                 ],
             }],
             None,
+            None,
         );
 
         let mode = controls.mode.expect("mode control");
@@ -524,6 +706,7 @@ mod tests {
         let snapshot = build_live_config_snapshot(
             "gemini",
             &[model],
+            None,
             Some(&legacy_mode_state(&[
                 ("default", "Default"),
                 ("auto_edit", "Auto Edit"),
@@ -591,6 +774,7 @@ mod tests {
                 },
             ],
             None,
+            None,
         );
 
         assert_eq!(
@@ -654,6 +838,7 @@ mod tests {
                     ],
                 },
             ],
+            None,
             None,
         );
 

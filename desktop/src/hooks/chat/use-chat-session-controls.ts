@@ -1,12 +1,16 @@
 import { useCallback, useMemo } from "react";
 import {
   buildLiveSessionControlDescriptors,
+  buildProjectedSessionControlDescriptors,
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls";
+import type { DefaultLiveSessionControlKey } from "@/lib/domain/preferences/user-preferences";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
+import { useLaunchProjectionOverrideStore } from "@/stores/chat/launch-projection-override-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useActiveSessionConfigState } from "./use-active-chat-session-selectors";
+import { useChatLaunchProjection } from "./use-chat-launch-projection";
 
 const EMPTY_CONTROLS: LiveSessionControlDescriptor[] = [];
 
@@ -19,6 +23,10 @@ export function useChatSessionControls(): {
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
   const { setActiveSessionConfigOption } = useSessionActions();
+  const projection = useChatLaunchProjection();
+  const setProjectedControlValue = useLaunchProjectionOverrideStore(
+    (state) => state.setControlValue,
+  );
 
   const onSelect = useCallback((rawConfigId: string, value: string) => {
     void setActiveSessionConfigOption(rawConfigId, value).catch((error) => {
@@ -29,7 +37,16 @@ export function useChatSessionControls(): {
 
   const controls = useMemo(() => {
     if (!activeSessionConfig.normalizedControls) {
-      return EMPTY_CONTROLS;
+      if (!projection) {
+        return EMPTY_CONTROLS;
+      }
+
+      return buildProjectedSessionControlDescriptors(
+        projection.projectedControls,
+        (key: DefaultLiveSessionControlKey, value: string) => {
+          setProjectedControlValue(projection.scopeId, key, value);
+        },
+      );
     }
 
     const nextControls = buildLiveSessionControlDescriptors(
@@ -52,6 +69,8 @@ export function useChatSessionControls(): {
     activeSessionConfig.workspaceId,
     getWorkspaceSurface,
     onSelect,
+    projection,
+    setProjectedControlValue,
   ]);
 
   const modeControl = useMemo(
@@ -63,7 +82,7 @@ export function useChatSessionControls(): {
   );
 
   return {
-    agentKind: activeSessionConfig.agentKind,
+    agentKind: activeSessionConfig.agentKind ?? projection?.agentKind ?? null,
     controls,
     modeControl,
   };

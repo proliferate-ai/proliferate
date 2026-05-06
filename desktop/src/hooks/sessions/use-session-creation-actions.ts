@@ -1,5 +1,12 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import type { ContentPart, PromptInputBlock, WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
+import type {
+  AnyHarnessClient,
+  ContentPart,
+  PromptInputBlock,
+  Session,
+  SessionLiveConfigSnapshot,
+  WorkspaceSessionLaunchCatalog,
+} from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
@@ -15,6 +22,10 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { useToastStore } from "@/stores/toast/toast-store";
 import { type SessionSlot, useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+import {
+  useLaunchProjectionOverrideStore,
+  type LaunchProjectionControlValues,
+} from "@/stores/chat/launch-projection-override-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
@@ -68,6 +79,7 @@ interface CreateSessionWithResolvedConfigOptions {
   launchIntentId?: string | null;
   reuseInFlightEmptySession?: boolean;
   modelAvailabilityRetryCount?: number;
+  projectedControlOverrides?: LaunchProjectionControlValues;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
 
@@ -78,6 +90,7 @@ interface CreateEmptySessionWithResolvedConfigOptions {
   workspaceId?: string;
   latencyFlowId?: string | null;
   reuseInFlightEmptySession?: boolean;
+  projectedControlOverrides?: LaunchProjectionControlValues;
 }
 
 async function ensureRuntimeReadyForSessions(): Promise<string> {
@@ -92,6 +105,39 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
   }
 
   return readyState.runtimeUrl;
+}
+
+async function applyProjectedModelOverride(input: {
+  client: AnyHarnessClient;
+  session: Session;
+  modelId: string;
+}): Promise<{ session: Session; liveConfig: SessionLiveConfigSnapshot | null }> {
+  const liveConfig = input.session.liveConfig
+    ?? (await input.client.sessions.getLiveConfig(input.session.id).catch(() => null))
+      ?.liveConfig
+    ?? null;
+  const modelControl = liveConfig?.normalizedControls.model ?? null;
+  if (
+    !modelControl
+    || !modelControl.settable
+    || modelControl.currentValue === input.modelId
+    || !modelControl.values.some((value) => value.value === input.modelId)
+  ) {
+    return { session: input.session, liveConfig };
+  }
+
+  const response = await input.client.sessions.setConfigOption(input.session.id, {
+    configId: modelControl.rawConfigId,
+    value: input.modelId,
+  }).catch(() => null);
+  if (!response) {
+    return { session: input.session, liveConfig };
+  }
+
+  return {
+    session: response.session,
+    liveConfig: response.liveConfig ?? response.session.liveConfig ?? liveConfig,
+  };
 }
 
 export function useSessionCreationActions() {
@@ -215,16 +261,46 @@ export function useSessionCreationActions() {
       preferredModeId,
     });
     const pendingSessionId = createPendingSessionId(options.agentKind);
+    const initialOverride = useLaunchProjectionOverrideStore.getState().patchOverride(
+      pendingSessionId,
+      {
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        modeId: resolvedModeId ?? null,
+        controlValues: options.projectedControlOverrides ?? {},
+      },
+    );
+    const resolveLatestPendingLaunchConfig = () => {
+      const override = useLaunchProjectionOverrideStore.getState()
+        .overrides[pendingSessionId] ?? initialOverride;
+      const controlValues = {
+        ...(options.projectedControlOverrides ?? {}),
+        ...(override.controlValues ?? {}),
+      };
+      return {
+        modelId:
+          override.agentKind === options.agentKind && override.modelId
+            ? override.modelId
+            : options.modelId,
+        modeId:
+          override.agentKind === options.agentKind && override.modeId !== undefined
+            ? override.modeId
+            : resolvedModeId ?? null,
+        controlValues,
+        revision: override.revision,
+      };
+    };
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
       targetSessionId: pendingSessionId,
     });
 
+    const initialLaunchConfig = resolveLatestPendingLaunchConfig();
     const optimisticSlot: SessionSlot = {
       ...createEmptySessionSlot(pendingSessionId, options.agentKind, {
         workspaceId,
-        modelId: options.modelId,
-        modeId: resolvedModeId ?? null,
+        modelId: initialLaunchConfig.modelId,
+        modeId: initialLaunchConfig.modeId,
         optimisticPrompt: null,
       }),
       status: "starting",
@@ -283,7 +359,8 @@ export function useSessionCreationActions() {
     writeOwnedShellIntent(pendingSessionId);
     pruneInactiveSessionStreams();
 
-    const createPromise = (async () => {
+    let createPromise: Promise<string>;
+    createPromise = (async () => {
       const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
       const runtimeUrl = await ensureRuntimeReadyForSessions();
 
@@ -317,12 +394,23 @@ export function useSessionCreationActions() {
       } = mcpLaunch;
       const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
       const session = await (async () => {
+        const latestLaunchConfig = resolveLatestPendingLaunchConfig();
+        const currentInFlight = inFlightSessionCreatesByWorkspace.get(workspaceId);
+        if (currentInFlight?.sessionId === pendingSessionId) {
+          inFlightSessionCreatesByWorkspace.set(workspaceId, {
+            ...currentInFlight,
+            modelId: latestLaunchConfig.modelId,
+            modeId: latestLaunchConfig.modeId,
+            controlOverrides: latestLaunchConfig.controlValues,
+            revision: latestLaunchConfig.revision,
+          });
+        }
         try {
           return await client.sessions.create({
             workspaceId: target.anyharnessWorkspaceId,
             agentKind: options.agentKind,
-            modelId: options.modelId,
-            ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+            modelId: latestLaunchConfig.modelId,
+            ...(latestLaunchConfig.modeId ? { modeId: latestLaunchConfig.modeId } : {}),
             mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
             mcpBindingSummaries: mcpBindingSummaries.length > 0
               ? mcpBindingSummaries
@@ -403,8 +491,12 @@ export function useSessionCreationActions() {
             options.latencyFlowId,
             "session_model_availability_reinstall_retry",
           );
+          const latestRetryConfig = resolveLatestPendingLaunchConfig();
           return createWithResolvedConfig({
             ...options,
+            modelId: latestRetryConfig.modelId,
+            modeId: latestRetryConfig.modeId ?? undefined,
+            projectedControlOverrides: latestRetryConfig.controlValues,
             latencyFlowId: null,
             modelAvailabilityRetryCount:
               (options.modelAvailabilityRetryCount ?? 0) + 1,
@@ -425,8 +517,12 @@ export function useSessionCreationActions() {
             options.latencyFlowId,
             "session_model_availability_restart_retry",
           );
+          const latestRetryConfig = resolveLatestPendingLaunchConfig();
           return createWithResolvedConfig({
             ...options,
+            modelId: latestRetryConfig.modelId,
+            modeId: latestRetryConfig.modeId ?? undefined,
+            projectedControlOverrides: latestRetryConfig.controlValues,
             latencyFlowId: null,
             modelAvailabilityRetryCount:
               (options.modelAvailabilityRetryCount ?? 0) + 1,
@@ -440,11 +536,18 @@ export function useSessionCreationActions() {
         }
       }
 
-      const launchDefaults = await applySessionLaunchDefaults({
+      const latestMaterializedConfig = resolveLatestPendingLaunchConfig();
+      const modelOverride = await applyProjectedModelOverride({
         client,
         session,
+        modelId: latestMaterializedConfig.modelId,
+      });
+      const launchDefaults = await applySessionLaunchDefaults({
+        client,
+        session: modelOverride.session,
         agentKind: options.agentKind,
         modelRegistries,
+        projectedOverrides: latestMaterializedConfig.controlValues,
         defaultLiveSessionControlValuesByAgentKind:
           useUserPreferencesStore.getState()
             .defaultLiveSessionControlValuesByAgentKind,
@@ -452,13 +555,14 @@ export function useSessionCreationActions() {
       const launchedSession = launchDefaults.session;
       const launchedLiveConfig = launchDefaults.liveConfig
         ?? launchedSession.liveConfig
+        ?? modelOverride.liveConfig
         ?? null;
 
       const realSlot: SessionSlot = {
         ...createEmptySessionSlot(launchedSession.id, options.agentKind, {
           workspaceId,
-          modelId: launchedSession.modelId ?? options.modelId,
-          modeId: launchedSession.modeId ?? resolvedModeId ?? null,
+          modelId: launchedSession.modelId ?? latestMaterializedConfig.modelId,
+          modeId: launchedSession.modeId ?? latestMaterializedConfig.modeId ?? null,
           title: launchedSession.title ?? null,
           actionCapabilities: launchedSession.actionCapabilities,
           liveConfig: launchedLiveConfig,
@@ -478,6 +582,7 @@ export function useSessionCreationActions() {
       replacePendingSessionSlot(pendingSessionId, launchedSession.id, realSlot, {
         remapActiveSession: ownsShellIntent,
       });
+      useLaunchProjectionOverrideStore.getState().clearScope(pendingSessionId);
       updateInFlightSessionCreateId(workspaceId, pendingSessionId, launchedSession.id);
       if (ownsShellIntent) {
         activateSession(launchedSession.id);
@@ -530,7 +635,10 @@ export function useSessionCreationActions() {
       inFlightSessionCreatesByWorkspace.set(workspaceId, {
         sessionId: pendingSessionId,
         agentKind: options.agentKind,
-        modelId: options.modelId,
+        modelId: initialLaunchConfig.modelId,
+        modeId: initialLaunchConfig.modeId,
+        controlOverrides: initialLaunchConfig.controlValues,
+        revision: initialLaunchConfig.revision,
         promise: createPromise,
       });
     }
@@ -540,6 +648,7 @@ export function useSessionCreationActions() {
     } catch (error) {
       const activeSessionIdBeforeRemoval = useHarnessStore.getState().activeSessionId;
       removeSessionSlot(pendingSessionId);
+      useLaunchProjectionOverrideStore.getState().clearScope(pendingSessionId);
       const rolledBackShellIntent = rollbackOwnedShellIntent();
       if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
         if (previousActiveSessionId) {
@@ -580,6 +689,7 @@ export function useSessionCreationActions() {
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
+      projectedControlOverrides: options.projectedControlOverrides,
     });
   }, [createSessionWithResolvedConfig]);
 

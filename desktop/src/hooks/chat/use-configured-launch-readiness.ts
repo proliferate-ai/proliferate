@@ -37,7 +37,10 @@ export function useConfiguredLaunchReadiness(
 
   const disabledReason = resolution.status === "unavailable" && configuredAgent && configuredAgent.readiness !== "ready"
     ? `${configuredAgent.displayName} is ${AGENT_READINESS_LABELS[configuredAgent.readiness].toLowerCase()}.`
-    : resolution.reason;
+    : launchCatalog.usesRegistryFallback && resolution.selection
+      ? "Preparing workspace launch options..."
+      : resolution.reason;
+  const isReady = resolution.status === "ready" && !launchCatalog.usesRegistryFallback;
 
   return {
     configuredKind: preferences.defaultChatAgentKind || null,
@@ -46,7 +49,7 @@ export function useConfiguredLaunchReadiness(
     disabledReason,
     status: resolution.status,
     isLoading: launchCatalog.isLoading || providerConfigsLoading,
-    isReady: resolution.status === "ready",
+    isReady,
     launchCatalog,
   };
 }

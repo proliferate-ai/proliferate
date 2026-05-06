@@ -9873,7 +9873,7 @@
           },
           "rawConfigId": {
             "type": "string",
-            "description": "Identifier sent back when mutating this control.\n\nThis is usually the raw ACP config option identifier, but compatibility\ncontrols may use a reserved synthetic identifier such as `mode`."
+            "description": "Identifier sent back when mutating this control.\n\nThis is usually the raw ACP config option identifier, but compatibility\ncontrols may use a reserved synthetic identifier such as `mode` or\n`model`."
           },
           "settable": {
             "type": "boolean",
@@ -13733,7 +13733,7 @@
         "properties": {
           "configId": {
             "type": "string",
-            "description": "Raw ACP config option identifier to mutate."
+            "description": "Raw ACP config option identifier to mutate, or a reserved compatibility\nidentifier such as `mode` or `model`."
           },
           "value": {
             "type": "string",
@@ -15738,6 +15738,12 @@
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "sessionDefaultControls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionDefaultControl"
+            }
           }
         }
       },

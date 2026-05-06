@@ -39,13 +39,24 @@ export interface ChatInputAvailability {
   isDisabled: boolean;
   disabledReason: string | null;
   areRuntimeControlsDisabled: boolean;
+  areLaunchControlsDisabled: boolean;
+  areUtilityActionsDisabled: boolean;
+  areLiveSessionControlsDisabled: boolean;
 }
 
 export function resolveChatDraftWorkspaceId(
   selectedLogicalWorkspaceId: string | null,
   selectedWorkspaceId: string | null,
+  pendingWorkspaceAttemptId?: string | null,
 ): string | null {
-  return selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+  return (pendingWorkspaceAttemptId ? pendingWorkspaceDraftKey(pendingWorkspaceAttemptId) : null)
+    ?? selectedLogicalWorkspaceId
+    ?? selectedWorkspaceId
+    ?? null;
+}
+
+export function pendingWorkspaceDraftKey(attemptId: string): string {
+  return `pending-workspace:${attemptId}`;
 }
 
 export function resolveChatInputAvailability({
@@ -67,6 +78,9 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "Select a workspace to start chatting.",
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -82,6 +96,9 @@ export function resolveChatInputAvailability({
               : "Cloud workspace is still preparing."
         ),
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -90,6 +107,9 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: selectedCloudRuntimeActionBlockReason,
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -98,6 +118,9 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "AnyHarness runtime is still starting.",
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -106,6 +129,9 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "Session is still loading. Try again in a moment.",
       areRuntimeControlsDisabled: false,
+      areLaunchControlsDisabled: false,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -114,6 +140,9 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "Starting session…",
       areRuntimeControlsDisabled: false,
+      areLaunchControlsDisabled: false,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -122,6 +151,9 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: configuredLaunchDisabledReason ?? "Your chosen default agent is not ready yet.",
       areRuntimeControlsDisabled: false,
+      areLaunchControlsDisabled: false,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     };
   }
 
@@ -129,6 +161,9 @@ export function resolveChatInputAvailability({
     isDisabled: false,
     disabledReason: null,
     areRuntimeControlsDisabled: false,
+    areLaunchControlsDisabled: false,
+    areUtilityActionsDisabled: false,
+    areLiveSessionControlsDisabled: false,
   };
 }
 

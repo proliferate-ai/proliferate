@@ -29,8 +29,8 @@ use crate::reviews::service::ReviewService;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, option_matches_key, snapshot_from_record,
-    snapshot_to_record, LegacyModeOption, LegacyModeState, NormalizedControlKind,
-    LEGACY_MODE_COMPAT_CONFIG_ID,
+    snapshot_to_record, DirectModelOption, DirectModelState, LegacyModeOption, LegacyModeState,
+    NormalizedControlKind, DIRECT_MODEL_COMPAT_CONFIG_ID, LEGACY_MODE_COMPAT_CONFIG_ID,
 };
 use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
 use crate::sessions::model::{
@@ -727,7 +727,7 @@ struct SessionStartupState {
     legacy_mode_state: Option<LegacyModeState>,
     config_options: Vec<acp::SessionConfigOption>,
     current_model_id: Option<String>,
-    available_model_ids: Vec<String>,
+    direct_model_state: Option<DirectModelState>,
     prompt_capabilities: anyharness_contract::v1::PromptCapabilities,
 }
 
@@ -772,17 +772,7 @@ impl SessionStartupState {
                 .models
                 .as_ref()
                 .map(|models| models.current_model_id.to_string()),
-            available_model_ids: response
-                .models
-                .as_ref()
-                .map(|models| {
-                    models
-                        .available_models
-                        .iter()
-                        .map(|model| model.model_id.to_string())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            direct_model_state: response.models.as_ref().map(into_direct_model_state),
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
@@ -799,17 +789,7 @@ impl SessionStartupState {
                 .models
                 .as_ref()
                 .map(|models| models.current_model_id.to_string()),
-            available_model_ids: response
-                .models
-                .as_ref()
-                .map(|models| {
-                    models
-                        .available_models
-                        .iter()
-                        .map(|model| model.model_id.to_string())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            direct_model_state: response.models.as_ref().map(into_direct_model_state),
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
@@ -826,18 +806,16 @@ impl SessionStartupState {
                 .models
                 .as_ref()
                 .map(|models| models.current_model_id.to_string()),
-            available_model_ids: response
-                .models
-                .as_ref()
-                .map(|models| {
-                    models
-                        .available_models
-                        .iter()
-                        .map(|model| model.model_id.to_string())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            direct_model_state: response.models.as_ref().map(into_direct_model_state),
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+        }
+    }
+
+    fn set_current_model_id(&mut self, current_model_id: impl Into<String>) {
+        let current_model_id = current_model_id.into();
+        self.current_model_id = Some(current_model_id.clone());
+        if let Some(direct_model_state) = self.direct_model_state.as_mut() {
+            direct_model_state.current_model_id = current_model_id;
         }
     }
 
@@ -853,6 +831,13 @@ impl SessionStartupState {
         self.legacy_mode_state
             .as_ref()
             .map(|state| !state.available_modes.is_empty())
+            .unwrap_or(false)
+    }
+
+    fn has_direct_model_control(&self) -> bool {
+        self.direct_model_state
+            .as_ref()
+            .map(|state| !state.current_model_id.is_empty() || !state.available_models.is_empty())
             .unwrap_or(false)
     }
 
@@ -965,6 +950,21 @@ fn into_legacy_mode_state(modes: &acp::SessionModeState) -> LegacyModeState {
                 id: mode.id.to_string(),
                 name: mode.name.clone(),
                 description: mode.description.clone(),
+            })
+            .collect(),
+    }
+}
+
+fn into_direct_model_state(models: &acp::SessionModelState) -> DirectModelState {
+    DirectModelState {
+        current_model_id: models.current_model_id.to_string(),
+        available_models: models
+            .available_models
+            .iter()
+            .map(|model| DirectModelOption {
+                id: model.model_id.to_string(),
+                name: model.name.clone(),
+                description: model.description.clone(),
             })
             .collect(),
     }
@@ -4050,7 +4050,6 @@ enum ConfigPurpose {
 enum ConfigApplyOutcome {
     NoChange,
     AppliedAuthoritative,
-    RequestedOnly,
     NotApplied,
 }
 
@@ -4410,6 +4409,7 @@ async fn emit_live_config_update(
     let snapshot = build_live_config_snapshot(
         source_agent_kind,
         &startup_state.config_options,
+        startup_state.direct_model_state.as_ref(),
         startup_state.legacy_mode_state.as_ref(),
         startup_state.prompt_capabilities,
         next_seq,
@@ -4421,7 +4421,7 @@ async fn emit_live_config_update(
         .as_ref()
         .and_then(|control| control.current_value.clone())
     {
-        startup_state.current_model_id = Some(model_id);
+        startup_state.set_current_model_id(model_id);
     }
     if let Some(mode_id) = snapshot
         .normalized_controls
@@ -4651,7 +4651,8 @@ fn pending_config_rank(startup_state: &SessionStartupState, config_id: &str) -> 
         .iter()
         .find(|option| {
             option.id.to_string() == config_id
-                || (config_id == "model" && option_matches_purpose(option, ConfigPurpose::Model))
+                || (config_id == DIRECT_MODEL_COMPAT_CONFIG_ID
+                    && option_matches_purpose(option, ConfigPurpose::Model))
                 || (config_id == LEGACY_MODE_COMPAT_CONFIG_ID
                     && option_matches_purpose(option, ConfigPurpose::Mode))
         })
@@ -4674,7 +4675,11 @@ fn pending_config_rank(startup_state: &SessionStartupState, config_id: &str) -> 
             }
         })
         .unwrap_or_else(|| {
-            if config_id == LEGACY_MODE_COMPAT_CONFIG_ID
+            if config_id == DIRECT_MODEL_COMPAT_CONFIG_ID
+                && startup_state.has_direct_model_control()
+            {
+                NormalizedControlKind::Model
+            } else if config_id == LEGACY_MODE_COMPAT_CONFIG_ID
                 && startup_state.has_raw_or_legacy_mode_control()
             {
                 NormalizedControlKind::Mode
@@ -4851,7 +4856,7 @@ fn find_select_option_for_request<'a>(
         .iter()
         .find(|option| option.id.to_string() == config_id)
         .or_else(|| {
-            if config_id == "model" {
+            if config_id == DIRECT_MODEL_COMPAT_CONFIG_ID {
                 find_select_option_by_purpose(config_options, ConfigPurpose::Model)
             } else if config_id == LEGACY_MODE_COMPAT_CONFIG_ID {
                 find_select_option_by_purpose(config_options, ConfigPurpose::Mode)
@@ -4862,7 +4867,7 @@ fn find_select_option_for_request<'a>(
 }
 
 fn is_model_config_request(config_id: &str, option: Option<&acp::SessionConfigOption>) -> bool {
-    config_id == "model"
+    config_id == DIRECT_MODEL_COMPAT_CONFIG_ID
         || option
             .map(|option| option_matches_purpose(option, ConfigPurpose::Model))
             .unwrap_or(false)
@@ -4895,18 +4900,31 @@ async fn apply_model_via_direct_setter(
     ))
     .await?;
 
-    Ok(ConfigApplyOutcome::RequestedOnly)
+    startup_state.set_current_model_id(desired_model_id.to_string());
+    set_select_option_current_value_for_purpose(
+        &mut startup_state.config_options,
+        ConfigPurpose::Model,
+        desired_model_id,
+    );
+
+    Ok(ConfigApplyOutcome::AppliedAuthoritative)
 }
 
 fn should_apply_model_via_direct_setter(
     startup_state: &SessionStartupState,
     desired_model_id: &str,
 ) -> bool {
-    startup_state.available_model_ids.is_empty()
-        || startup_state
-            .available_model_ids
-            .iter()
-            .any(|id| id == desired_model_id)
+    startup_state
+        .direct_model_state
+        .as_ref()
+        .map(|state| {
+            state.available_models.is_empty()
+                || state
+                    .available_models
+                    .iter()
+                    .any(|model| model.id == desired_model_id)
+        })
+        .unwrap_or(true)
 }
 
 async fn apply_mode_via_direct_setter_legacy(
@@ -4994,7 +5012,7 @@ mod tests {
 
     use super::{
         build_client_capabilities, build_system_prompt_meta, classify_agent_stderr_line,
-        extract_tagged_proposed_plan, finalize_established_actor_exit,
+        emit_live_config_update, extract_tagged_proposed_plan, finalize_established_actor_exit,
         find_select_option_for_request, first_prompt_system_prompt_append_for_codex_prompt,
         handle_notification, handle_notification_with_resume_replay_filter,
         is_missing_load_session_resource, is_mode_config_request, is_model_config_request,
@@ -5017,7 +5035,10 @@ mod tests {
     use crate::agents::registry::built_in_registry;
     use crate::persistence::Db;
     use crate::plans::{service::PlanService, store::PlanStore};
-    use crate::sessions::live_config::{snapshot_to_record, NormalizedControlKind};
+    use crate::sessions::live_config::{
+        snapshot_from_record, snapshot_to_record, DirectModelOption, DirectModelState,
+        NormalizedControlKind, DIRECT_MODEL_COMPAT_CONFIG_ID,
+    };
     use crate::sessions::{model::SessionRecord, store::SessionStore};
     use agent_client_protocol as acp;
     use anyharness_contract::v1::{
@@ -5251,7 +5272,7 @@ mod tests {
             legacy_mode_state: None,
             config_options: vec![],
             current_model_id: None,
-            available_model_ids: vec![],
+            direct_model_state: None,
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
         let mut persisted_config_state = PersistedSessionConfigState {
@@ -5426,7 +5447,7 @@ mod tests {
             legacy_mode_state: None,
             config_options: vec![],
             current_model_id: None,
-            available_model_ids: vec![],
+            direct_model_state: None,
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
         let mut persisted_config_state = PersistedSessionConfigState {
@@ -6032,7 +6053,7 @@ mod tests {
             legacy_mode_state: None,
             config_options: vec![collaboration_mode],
             current_model_id: None,
-            available_model_ids: Vec::new(),
+            direct_model_state: None,
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
 
@@ -6043,18 +6064,200 @@ mod tests {
     }
 
     #[test]
+    fn pending_config_rank_treats_synthetic_model_as_model_control() {
+        let startup_state = SessionStartupState {
+            current_mode_id: None,
+            legacy_mode_state: None,
+            config_options: Vec::new(),
+            current_model_id: Some("gemini-3-flash-preview".to_string()),
+            direct_model_state: Some(DirectModelState {
+                current_model_id: "gemini-3-flash-preview".to_string(),
+                available_models: vec![
+                    DirectModelOption {
+                        id: "gemini-3-flash-preview".to_string(),
+                        name: "Gemini 3 Flash".to_string(),
+                        description: None,
+                    },
+                    DirectModelOption {
+                        id: "gemini-2.5-flash-lite".to_string(),
+                        name: "Gemini 2.5 Flash Lite".to_string(),
+                        description: None,
+                    },
+                ],
+            }),
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+        };
+
+        assert_eq!(
+            pending_config_rank(&startup_state, DIRECT_MODEL_COMPAT_CONFIG_ID),
+            normalized_key_rank(NormalizedControlKind::Model)
+        );
+    }
+
+    #[tokio::test]
+    async fn emit_live_config_update_persists_synthetic_model_current_value() {
+        let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
+                rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+
+        let store = SessionStore::new(db.clone());
+        store
+            .insert(&SessionRecord {
+                id: "session-1".to_string(),
+                workspace_id: "workspace-1".to_string(),
+                agent_kind: "gemini".to_string(),
+                native_session_id: Some("native-1".to_string()),
+                requested_model_id: Some("gemini-2.5-flash-lite".to_string()),
+                current_model_id: Some("gemini-3-flash-preview".to_string()),
+                requested_mode_id: None,
+                current_mode_id: None,
+                title: None,
+                thinking_level_id: None,
+                thinking_budget_tokens: None,
+                status: "idle".to_string(),
+                created_at: "2026-03-25T00:00:00Z".to_string(),
+                updated_at: "2026-03-25T00:00:00Z".to_string(),
+                last_prompt_at: None,
+                closed_at: None,
+                dismissed_at: None,
+                mcp_bindings_ciphertext: None,
+                mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+                system_prompt_append: None,
+                subagents_enabled: true,
+                action_capabilities_json: None,
+                origin: None,
+            })
+            .expect("insert session");
+
+        let (event_tx, _) = broadcast::channel(16);
+        let event_sink = Arc::new(Mutex::new(SessionEventSink::new(
+            "session-1".to_string(),
+            "gemini".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            event_tx,
+            store.clone(),
+        )));
+        let mut startup_state = SessionStartupState {
+            current_mode_id: None,
+            legacy_mode_state: None,
+            config_options: Vec::new(),
+            current_model_id: Some("gemini-3-flash-preview".to_string()),
+            direct_model_state: Some(DirectModelState {
+                current_model_id: "gemini-3-flash-preview".to_string(),
+                available_models: vec![
+                    DirectModelOption {
+                        id: "gemini-3-flash-preview".to_string(),
+                        name: "Gemini 3 Flash".to_string(),
+                        description: None,
+                    },
+                    DirectModelOption {
+                        id: "gemini-2.5-flash-lite".to_string(),
+                        name: "Gemini 2.5 Flash Lite".to_string(),
+                        description: Some("Lite model".to_string()),
+                    },
+                ],
+            }),
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+        };
+        startup_state.set_current_model_id("gemini-2.5-flash-lite");
+        let mut persisted_config_state = PersistedSessionConfigState {
+            requested_model_id: Some("gemini-2.5-flash-lite".to_string()),
+            current_model_id: Some("gemini-3-flash-preview".to_string()),
+            requested_mode_id: None,
+            current_mode_id: None,
+        };
+
+        emit_live_config_update(
+            "gemini",
+            "session-1",
+            &store,
+            &event_sink,
+            &mut persisted_config_state,
+            &mut startup_state,
+            "2026-03-25T00:01:00Z".to_string(),
+        )
+        .await
+        .expect("emit live config");
+
+        let snapshot = store
+            .find_live_config_snapshot("session-1")
+            .expect("find snapshot")
+            .and_then(|record| snapshot_from_record(&record).ok())
+            .expect("snapshot");
+        let model = snapshot
+            .normalized_controls
+            .model
+            .expect("synthetic model control");
+
+        assert_eq!(model.raw_config_id, DIRECT_MODEL_COMPAT_CONFIG_ID);
+        assert_eq!(
+            model.current_value.as_deref(),
+            Some("gemini-2.5-flash-lite")
+        );
+        assert_eq!(
+            model
+                .values
+                .iter()
+                .find(|value| value.value == "gemini-2.5-flash-lite")
+                .and_then(|value| value.description.as_deref()),
+            Some("Lite model")
+        );
+
+        let record = store
+            .find_by_id("session-1")
+            .expect("find session")
+            .expect("session exists");
+        assert_eq!(
+            record.current_model_id.as_deref(),
+            Some("gemini-2.5-flash-lite")
+        );
+        assert_eq!(
+            persisted_config_state.current_model_id.as_deref(),
+            Some("gemini-2.5-flash-lite")
+        );
+    }
+
+    #[test]
     fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
         let mut startup_state = SessionStartupState {
             current_mode_id: None,
             legacy_mode_state: None,
             config_options: Vec::new(),
             current_model_id: None,
-            available_model_ids: vec![
-                "default".to_string(),
-                "sonnet".to_string(),
-                "sonnet[1m]".to_string(),
-                "haiku".to_string(),
-            ],
+            direct_model_state: Some(DirectModelState {
+                current_model_id: "default".to_string(),
+                available_models: vec![
+                    DirectModelOption {
+                        id: "default".to_string(),
+                        name: "Default".to_string(),
+                        description: None,
+                    },
+                    DirectModelOption {
+                        id: "sonnet".to_string(),
+                        name: "Sonnet".to_string(),
+                        description: None,
+                    },
+                    DirectModelOption {
+                        id: "sonnet[1m]".to_string(),
+                        name: "Sonnet 1M".to_string(),
+                        description: None,
+                    },
+                    DirectModelOption {
+                        id: "haiku".to_string(),
+                        name: "Haiku".to_string(),
+                        description: None,
+                    },
+                ],
+            }),
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
 
@@ -6071,7 +6274,12 @@ mod tests {
             "claude-opus-4-6"
         ));
 
-        startup_state.available_model_ids.clear();
+        startup_state
+            .direct_model_state
+            .as_mut()
+            .expect("direct model state")
+            .available_models
+            .clear();
         assert!(should_apply_model_via_direct_setter(
             &startup_state,
             "legacy-agent-model"

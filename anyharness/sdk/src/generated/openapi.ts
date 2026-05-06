@@ -2697,7 +2697,8 @@ export interface components {
              * @description Identifier sent back when mutating this control.
              *
              *     This is usually the raw ACP config option identifier, but compatibility
-             *     controls may use a reserved synthetic identifier such as `mode`.
+             *     controls may use a reserved synthetic identifier such as `mode` or
+             *     `model`.
              */
             rawConfigId: string;
             /** @description Whether the control currently exposes more than one selectable value. */
@@ -3582,7 +3583,10 @@ export interface components {
         };
         /** @description Request payload for changing a single live session config option. */
         SetSessionConfigOptionRequest: {
-            /** @description Raw ACP config option identifier to mutate. */
+            /**
+             * @description Raw ACP config option identifier to mutate, or a reserved compatibility
+             *     identifier such as `mode` or `model`.
+             */
             configId: string;
             /** @description Raw ACP value identifier to apply. */
             value: string;
@@ -4039,6 +4043,7 @@ export interface components {
             displayName: string;
             id: string;
             isDefault: boolean;
+            sessionDefaultControls?: components["schemas"]["SessionDefaultControl"][];
         };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";

@@ -83,6 +83,26 @@ describe("resolveModelDisplayName", () => {
       }),
     ).toBe("GPT 5.5");
   });
+
+  it("derives clean Gemini labels from live ids", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "gemini",
+        modelId: "gemini-3-pro-preview",
+        sourceLabels: ["gemini-3-pro-preview"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Gemini 3 Pro");
+
+    expect(
+      resolveModelDisplayName({
+        agentKind: "gemini",
+        modelId: "gemini-3.1-flash-lite-preview",
+        sourceLabels: ["gemini-3.1-flash-lite-preview"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Gemini 3.1 Flash Lite");
+  });
 });
 
 describe("shouldHideModel", () => {

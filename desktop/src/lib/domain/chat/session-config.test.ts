@@ -61,6 +61,55 @@ describe("mergeLaunchAgentsWithRegistries", () => {
     expect(merged[0]?.displayName).toBe("Codex");
   });
 
+  it("preserves launch model session default controls while decorating labels", () => {
+    const merged = mergeLaunchAgentsWithRegistries(
+      [
+        launchAgent({
+          kind: "codex",
+          models: [
+            {
+              id: "gpt-5.4",
+              displayName: "Live GPT 5.4",
+              isDefault: true,
+              sessionDefaultControls: [{
+                key: "effort",
+                label: "Effort",
+                defaultValue: "high",
+                values: [{
+                  value: "high",
+                  label: "High",
+                  isDefault: true,
+                }],
+              }],
+            },
+          ],
+        }),
+      ],
+      [
+        registry({
+          kind: "codex",
+          displayName: "Codex",
+          defaultModelId: "gpt-5.4",
+          models: [{
+            id: "gpt-5.4",
+            displayName: "GPT 5.4",
+            isDefault: true,
+            status: "active",
+          }],
+        }),
+      ],
+    );
+
+    expect(merged[0]?.models[0]).toMatchObject({
+      id: "gpt-5.4",
+      displayName: "GPT 5.4",
+      sessionDefaultControls: [{
+        key: "effort",
+        defaultValue: "high",
+      }],
+    });
+  });
+
   it("decorates alias matches while preserving live ids", () => {
     const merged = mergeLaunchAgentsWithRegistries(
       [

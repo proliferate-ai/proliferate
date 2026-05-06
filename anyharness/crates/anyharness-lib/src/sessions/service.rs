@@ -54,6 +54,7 @@ pub struct WorkspaceSessionLaunchModelData {
     pub id: String,
     pub display_name: String,
     pub is_default: bool,
+    pub session_default_controls: Vec<crate::agents::model::SessionDefaultControlMetadata>,
 }
 
 #[derive(Debug, Clone)]
@@ -458,6 +459,7 @@ impl SessionService {
                             id: model.id,
                             display_name: model.display_name,
                             is_default: model.is_default,
+                            session_default_controls: model.session_default_controls,
                         })
                         .collect(),
                 })

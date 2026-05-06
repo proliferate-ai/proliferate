@@ -26,7 +26,6 @@ const AGENT_DEFAULT_SECTION_ORDER: readonly string[] = [
   "gemini",
   "cursor",
   "opencode",
-  "amp",
 ];
 
 export function AgentDefaultsPane() {

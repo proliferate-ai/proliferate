@@ -156,4 +156,59 @@ describe("applySessionLaunchDefaults", () => {
     expect(result.session.liveConfig?.normalizedControls.effort?.currentValue)
       .toBe("high");
   });
+
+  it("applies projected overrides before stored global defaults", async () => {
+    const initialLiveConfig = liveConfig({
+      effort: control("effort", "effort-raw", "low", ["low", "high"]),
+    });
+    const finalLiveConfig = liveConfig({
+      effort: control("effort", "effort-raw", "high", ["low", "high"]),
+    });
+    const setConfigOption = vi.fn().mockResolvedValue({
+      applyState: "applied",
+      session: session(finalLiveConfig),
+      liveConfig: finalLiveConfig,
+    });
+    const client = {
+      sessions: {
+        setConfigOption,
+        getLiveConfig: vi.fn(),
+      },
+    } as unknown as AnyHarnessClient;
+    const registries: ModelRegistry[] = [{
+      kind: "claude",
+      displayName: "Claude",
+      defaultModelId: "opus",
+      models: [{
+        id: "opus",
+        displayName: "Opus",
+        isDefault: true,
+        status: "active",
+        sessionDefaultControls: [{
+          key: "effort",
+          label: "Effort",
+          values: [
+            { value: "low", label: "Low", isDefault: true },
+            { value: "high", label: "High", isDefault: false },
+          ],
+        }],
+      }],
+    }];
+
+    await applySessionLaunchDefaults({
+      client,
+      session: session(initialLiveConfig),
+      agentKind: "claude",
+      modelRegistries: registries,
+      projectedOverrides: { effort: "high" },
+      defaultLiveSessionControlValuesByAgentKind: {
+        claude: { effort: "low" },
+      },
+    });
+
+    expect(setConfigOption).toHaveBeenCalledWith("session-1", {
+      configId: "effort-raw",
+      value: "high",
+    });
+  });
 });

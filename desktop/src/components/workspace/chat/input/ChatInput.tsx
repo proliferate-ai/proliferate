@@ -70,9 +70,11 @@ export function ChatInput({
   const isRunningForUi = suppressActiveSessionState ? false : isRunning;
   const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
     useChatDraftState();
-  const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState({
-    activeSessionId: activeSessionIdForUi,
-  });
+  const {
+    isDisabled,
+    areLaunchControlsDisabled,
+    areUtilityActionsDisabled,
+  } = useChatAvailabilityState({ activeSessionId: activeSessionIdForUi });
   const modelSelectorProps = useChatModelSelectorState({
     suppressActiveSessionState,
   });
@@ -98,7 +100,7 @@ export function ChatInput({
     sdkWorkspaceId: materializedWorkspaceId,
   });
   const canUseUtilityActions =
-    !effectiveIsEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
+    !effectiveIsEditingQueuedPrompt && !isDisabled && !areUtilityActionsDisabled;
   const canAttach = canUseUtilityActions && attachments.canAttachFiles;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
@@ -341,7 +343,7 @@ export function ChatInput({
           <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
             <div
               className={`flex min-w-0 flex-nowrap items-center gap-[5px] ${
-                areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+                areLaunchControlsDisabled ? "pointer-events-none opacity-55" : ""
               }`}
             >
               <ModelSelector {...modelSelectorProps} />

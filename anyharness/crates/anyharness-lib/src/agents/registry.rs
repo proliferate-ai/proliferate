@@ -16,7 +16,6 @@ pub fn built_in_registry() -> Vec<AgentDescriptor> {
         gemini_descriptor(),
         cursor_descriptor(),
         opencode_descriptor(),
-        amp_descriptor(),
     ]
 }
 
@@ -186,52 +185,6 @@ fn cursor_descriptor() -> AgentDescriptor {
             discovery: CredentialDiscoveryKind::Cursor,
         },
         docs_url: Some("https://docs.cursor.com/cli/acp".into()),
-    }
-}
-
-fn amp_descriptor() -> AgentDescriptor {
-    AgentDescriptor {
-        kind: AgentKind::Amp,
-        native: Some(NativeArtifactSpec {
-            install: NativeInstallSpec::DirectBinary {
-                latest_version_url: Some(
-                    "https://storage.googleapis.com/amp-public-assets-prod-0/cli/cli-version.txt"
-                        .into(),
-                ),
-                binary_url_template:
-                    "https://storage.googleapis.com/amp-public-assets-prod-0/cli/{version}/amp-{platform}"
-                        .into(),
-                platform_map: vec![
-                    (Platform::MacosArm64, "darwin-arm64".into()),
-                    (Platform::MacosX64, "darwin-x64".into()),
-                    (Platform::LinuxX64, "linux-x64".into()),
-                    (Platform::LinuxArm64, "linux-arm64".into()),
-                    (Platform::WindowsX64, "win32-x64".into()),
-                    (Platform::WindowsArm64, "win32-arm64".into()),
-                ],
-            },
-        }),
-        agent_process: AgentProcessArtifactSpec {
-            install: AgentProcessInstallSpec::RegistryBacked {
-                registry_id: "amp-acp".into(),
-                fallback: AgentProcessFallback::NpmPackage {
-                    package: "amp-acp".into(),
-                    package_subdir: None,
-                    source_build_binary_name: None,
-                    executable_relpath: PathBuf::from("node_modules/.bin/amp-acp"),
-                },
-            },
-        },
-        launch: LaunchSpecTemplate {
-            executable_name: "amp-acp".into(),
-            default_args: vec![],
-        },
-        auth: AuthSpec {
-            env_vars: vec!["AMP_API_KEY".into()],
-            login: None,
-            discovery: CredentialDiscoveryKind::Amp,
-        },
-        docs_url: Some("https://ampcode.com".into()),
     }
 }
 

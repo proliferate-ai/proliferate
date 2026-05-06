@@ -52,9 +52,9 @@ preference directly from the store
 
 Registered agent kinds come from
 `anyharness/crates/anyharness-lib/src/agents/model.rs:6-47`: `claude`,
-`codex`, `gemini`, `cursor`, `opencode`, `amp`. All six are wired into the
+`codex`, `gemini`, `cursor`, `opencode`. All five are wired into the
 descriptor list at
-`anyharness/crates/anyharness-lib/src/agents/registry.rs:15-21`.
+`anyharness/crates/anyharness-lib/src/agents/registry.rs:15-20`.
 
 ## Per-agent matrix
 
@@ -188,19 +188,6 @@ will pass `mode_id` through verbatim.
 - Most permissive: **unknown from the repo.** Not defined in either the
   presentation table or anywhere runtime-side.
 
-### Amp (`amp`)
-
-Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/agents/model.rs:12,24,55`,
-`anyharness/crates/anyharness-lib/src/agents/registry.rs:193-235`) via
-`amp-acp`.
-
-**No entry in `desktop/src/config/session-control-presentations.ts`.** Not
-mentioned anywhere as having explicit mode values. Same caveats as Cursor
-and OpenCode apply.
-
-- Most permissive: **unknown from the repo.**
-
 ## Divergence between desktop labels and runtime behaviour
 
 - The desktop presentation table is descriptive, not enforced. The runtime
@@ -217,7 +204,7 @@ and OpenCode apply.
   options. The UI treats them as independent controls; the runtime
   normalizer explicitly keeps them separate
   (`live_config.rs:182-194`, `live_config.rs:538-600`).
-- Cursor, OpenCode, and Amp have zero desktop mode metadata. A cowork thread
+- Cursor and OpenCode have zero desktop mode metadata. A cowork thread
   created against one of these families today will send `mode_id = undefined`
   (since `defaultSessionModeByAgentKind` has no entry for them unless the
   user typed one in by hand) and inherit whatever default the ACP binary
@@ -235,9 +222,8 @@ recommendation. For the rest, explicitly: unknown — do not ship a default.
 | gemini   | `mode`              | `yolo`                       | High. Unambiguous in desktop config.             |
 | cursor   | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
 | opencode | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
-| amp      | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
 
-If cowork needs a permissive default for cursor / opencode / amp, the next
+If cowork needs a permissive default for cursor / opencode, the next
 step is to either (a) query the live `SessionLiveConfigSnapshot` after the
 first session starts and pick the most permissive value from the
 `normalized_controls.mode` bucket heuristically, or (b) extend the

@@ -141,7 +141,7 @@ Credential detection is layered:
    - otherwise return `MissingEnv`
 
 Provider-specific local discovery currently checks known local config/auth files
-for Claude, Codex, Gemini, OpenCode, Cursor, and Amp.
+for Claude, Codex, Gemini, OpenCode, and Cursor.
 
 OpenCode is intentionally treated as provider-managed for readiness. AnyHarness
 may detect `~/.local/share/opencode/auth.json` as a positive signal, but it does

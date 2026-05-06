@@ -79,7 +79,8 @@ pub struct NormalizedSessionControl {
     /// Identifier sent back when mutating this control.
     ///
     /// This is usually the raw ACP config option identifier, but compatibility
-    /// controls may use a reserved synthetic identifier such as `mode`.
+    /// controls may use a reserved synthetic identifier such as `mode` or
+    /// `model`.
     pub raw_config_id: String,
     /// Human-readable control label shown to users.
     pub label: String,
@@ -163,7 +164,8 @@ pub struct GetSessionLiveConfigResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SetSessionConfigOptionRequest {
-    /// Raw ACP config option identifier to mutate.
+    /// Raw ACP config option identifier to mutate, or a reserved compatibility
+    /// identifier such as `mode` or `model`.
     pub config_id: String,
     /// Raw ACP value identifier to apply.
     pub value: String,

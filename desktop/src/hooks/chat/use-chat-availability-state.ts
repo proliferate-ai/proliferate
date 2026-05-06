@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/chat/chat-input";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
+import { useChatLaunchProjection } from "./use-chat-launch-projection";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 
 export interface ChatAvailabilityState extends ChatInputAvailability {
@@ -34,6 +35,7 @@ export function useChatAvailabilityState(options?: {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const mobility = useWorkspaceMobilityState();
   const configuredLaunch = useConfiguredLaunchReadiness();
+  const launchProjection = useChatLaunchProjection();
   const activeReviewRun = useActiveReviewRun();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
@@ -70,6 +72,30 @@ export function useChatAvailabilityState(options?: {
   ]);
 
   if (pendingWorkspaceEntry) {
+    if (pendingWorkspaceEntry.stage !== "failed") {
+      if (!launchProjection) {
+        return {
+          isDisabled: true,
+          disabledReason: "Preparing launch options...",
+          areRuntimeControlsDisabled: true,
+          areLaunchControlsDisabled: true,
+          areUtilityActionsDisabled: true,
+          areLiveSessionControlsDisabled: true,
+          selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
+        };
+      }
+
+      return {
+        isDisabled: false,
+        disabledReason: null,
+        areRuntimeControlsDisabled: false,
+        areLaunchControlsDisabled: false,
+        areUtilityActionsDisabled: true,
+        areLiveSessionControlsDisabled: true,
+        selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
+      };
+    }
+
     const disabledReason = pendingWorkspaceEntry.stage === "failed"
       ? "Resolve workspace setup before starting chat."
       : pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
@@ -86,6 +112,9 @@ export function useChatAvailabilityState(options?: {
       isDisabled: true,
       disabledReason,
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
       selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
     };
   }
@@ -95,6 +124,9 @@ export function useChatAvailabilityState(options?: {
       isDisabled: true,
       disabledReason: mobility.status.description ?? "Workspace mobility is in progress.",
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
       selectedWorkspaceKind: mobility.selectedLogicalWorkspace?.effectiveOwner === "cloud"
         ? "cloud"
         : "local",
@@ -106,6 +138,9 @@ export function useChatAvailabilityState(options?: {
       isDisabled: true,
       disabledReason: "Review automation is running.",
       areRuntimeControlsDisabled: true,
+      areLaunchControlsDisabled: true,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
       selectedWorkspaceKind: selectedCloudWorkspaceId !== null ? "cloud" : "local",
     };
   }

@@ -789,7 +789,6 @@ pub fn bundled_model_registries() -> Vec<ModelRegistryMetadata> {
         gemini_registry(),
         cursor_registry(),
         opencode_registry(),
-        amp_registry(),
     ]
 }
 
@@ -1106,8 +1105,15 @@ fn gemini_registry() -> ModelRegistryMetadata {
                 false,
             ),
             model("auto-gemini-3", "Auto (Gemini 3)", None, false),
+            model("gemini-3-pro-preview", "Gemini 3 Pro", None, false),
             model("gemini-3-flash-preview", "Gemini 3 Flash", None, false),
             model("gemini-3.1-pro-preview", "Gemini 3.1 Pro", None, false),
+            model(
+                "gemini-3.1-flash-lite-preview",
+                "Gemini 3.1 Flash Lite",
+                None,
+                false,
+            ),
         ],
     )
 }
@@ -1182,14 +1188,6 @@ fn opencode_registry() -> ModelRegistryMetadata {
         "opencode",
         "OpenCode",
         vec![model("opencode/big-pickle", "Big Pickle", None, true)],
-    )
-}
-
-fn amp_registry() -> ModelRegistryMetadata {
-    registry(
-        "amp",
-        "Amp",
-        vec![model("amp-default", "Amp Default", None, true)],
     )
 }
 

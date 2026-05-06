@@ -42,7 +42,6 @@ fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> bool {
         CredentialDiscoveryKind::Gemini => detect_shared_local_auth(ProviderId::Gemini, home_dir),
         CredentialDiscoveryKind::OpenCode => detect_opencode_local_auth(home_dir),
         CredentialDiscoveryKind::Cursor => detect_cursor_local_auth(home_dir),
-        CredentialDiscoveryKind::Amp => detect_amp_local_auth(home_dir),
     }
 }
 
@@ -112,42 +111,6 @@ fn detect_cursor_local_auth(home_dir: &Path) -> bool {
     if let Some(user_id) = read_nested_string(&data, &["authInfo", "email"]) {
         if !user_id.is_empty() {
             return true;
-        }
-    }
-
-    false
-}
-
-/// Check Amp-specific local config for an API key.
-///
-/// Checks:
-/// - `~/.amp/config.json` for various API key field names
-fn detect_amp_local_auth(home_dir: &Path) -> bool {
-    let path = home_dir.join(".amp").join("config.json");
-    let Some(data) = read_json_file(&path) else {
-        return false;
-    };
-
-    let key_paths: &[&[&str]] = &[
-        &["anthropicApiKey"],
-        &["anthropic_api_key"],
-        &["apiKey"],
-        &["api_key"],
-        &["accessToken"],
-        &["access_token"],
-        &["token"],
-        &["auth", "anthropicApiKey"],
-        &["auth", "apiKey"],
-        &["auth", "token"],
-        &["anthropic", "apiKey"],
-        &["anthropic", "token"],
-    ];
-
-    for key_path in key_paths {
-        if let Some(val) = read_nested_string(&data, key_path) {
-            if !val.is_empty() {
-                return true;
-            }
         }
     }
 

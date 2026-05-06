@@ -8,6 +8,10 @@ import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import {
+  pendingWorkspaceQueuedPromptId,
+  usePendingWorkspaceQueuedPromptStore,
+} from "@/stores/chat/pending-workspace-queued-prompt-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import {
@@ -20,7 +24,10 @@ import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
 } from "@/lib/domain/chat/file-mentions";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import {
+  pendingWorkspaceDraftKey,
+  resolveChatDraftWorkspaceId,
+} from "@/lib/domain/chat/chat-input";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import {
@@ -28,6 +35,7 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
 import { completeChatPromptSubmitSideEffects } from "./chat-submit-effects";
+import { useChatLaunchProjection } from "./use-chat-launch-projection";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
@@ -35,6 +43,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const {
@@ -44,6 +53,9 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     promptActiveSession,
   } = useSessionActions();
   const clearDraft = useChatInputStore((state) => state.clearDraft);
+  const enqueuePendingWorkspacePrompt = usePendingWorkspaceQueuedPromptStore(
+    (state) => state.enqueue,
+  );
   const {
     activeSessionId,
     currentLaunchIdentity,
@@ -54,17 +66,22 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   });
   const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
+  const projection = useChatLaunchProjection();
 
   const handleSubmit = useCallback(async (input?: {
     text: string;
     blocks: PromptInputBlock[];
     optimisticContentParts?: ContentPart[];
   }) => {
-    if (!selectedWorkspaceId) {
+    if (!selectedWorkspaceId && !pendingWorkspaceEntry) {
       return;
     }
 
-    const draftKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
+    const draftKey = resolveChatDraftWorkspaceId(
+      selectedLogicalWorkspaceId,
+      selectedWorkspaceId,
+      pendingWorkspaceEntry?.attemptId ?? null,
+    );
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;
@@ -74,7 +91,43 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       return;
     }
 
-    const launchSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
+    const projectedSelection = projection
+      ? { kind: projection.agentKind, modelId: projection.modelId }
+      : null;
+    const launchSelection = scopedLaunchIdentity ?? projectedSelection ?? configuredLaunch.selection;
+
+    if (!selectedWorkspaceId && pendingWorkspaceEntry && pendingWorkspaceEntry.stage !== "failed") {
+      if (!launchSelection || !projection) {
+        showToast("Choose a ready model before sending a message.");
+        return;
+      }
+
+      enqueuePendingWorkspacePrompt({
+        id: pendingWorkspaceQueuedPromptId(pendingWorkspaceEntry.attemptId),
+        attemptId: pendingWorkspaceEntry.attemptId,
+        status: "pending",
+        workspaceId: null,
+        sessionId: null,
+        agentKind: launchSelection.kind,
+        modelId: launchSelection.modelId,
+        modeId: projection.modeId,
+        controlValues: projection.controlValues,
+        text,
+        blocks,
+        optimisticContentParts: input?.optimisticContentParts,
+        promptId: createPromptId(),
+        draftKey: draftKey ?? pendingWorkspaceDraftKey(pendingWorkspaceEntry.attemptId),
+        materializedDraftKey: null,
+        createdAt: Date.now(),
+        errorMessage: null,
+      });
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
     const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
@@ -116,6 +169,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
             optimisticContentParts: input?.optimisticContentParts,
             agentKind: launchSelection.kind,
             modelId: launchSelection.modelId,
+            projectedControlOverrides: projection?.controlValues,
             onBeforeOptimisticPrompt: clearDraftIfNeeded,
           });
         } else {
@@ -126,6 +180,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
             blocks,
             input?.optimisticContentParts,
             clearDraftIfNeeded,
+            projection?.controlValues,
           );
         }
       } else {
@@ -163,11 +218,14 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     clearDraft,
     configuredLaunch.selection,
     createSessionWithResolvedConfig,
+    enqueuePendingWorkspacePrompt,
     findOrCreateSession,
     hasSlot,
     forceNewSession,
     isDisabled,
+    pendingWorkspaceEntry,
     promptActiveSession,
+    projection,
     queryClient,
     runtimeUrl,
     selectedLogicalWorkspaceId,

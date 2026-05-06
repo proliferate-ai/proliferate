@@ -2,6 +2,9 @@ interface InFlightSessionCreate {
   sessionId: string;
   agentKind: string;
   modelId: string;
+  modeId?: string | null;
+  controlOverrides?: Record<string, string>;
+  revision?: number;
   promise: Promise<string>;
 }
 
@@ -20,5 +23,29 @@ export function updateInFlightSessionCreateId(
   inFlightSessionCreatesByWorkspace.set(workspaceId, {
     ...inFlightCreate,
     sessionId: nextSessionId,
+  });
+}
+
+export function patchInFlightSessionCreateConfig(
+  workspaceId: string | null | undefined,
+  sessionId: string,
+  patch: {
+    modelId?: string;
+    modeId?: string | null;
+    controlOverrides?: Record<string, string>;
+    revision?: number;
+  },
+): void {
+  if (!workspaceId) {
+    return;
+  }
+  const inFlightCreate = inFlightSessionCreatesByWorkspace.get(workspaceId);
+  if (!inFlightCreate || inFlightCreate.sessionId !== sessionId) {
+    return;
+  }
+
+  inFlightSessionCreatesByWorkspace.set(workspaceId, {
+    ...inFlightCreate,
+    ...patch,
   });
 }

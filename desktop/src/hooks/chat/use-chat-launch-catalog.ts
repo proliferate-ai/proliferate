@@ -13,7 +13,10 @@ import {
   type ModelSelectorGroup,
   type ModelSelectorSelection,
 } from "@/lib/domain/chat/model-selection";
-import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/session-config";
+import {
+  buildRegistryLaunchAgents,
+  mergeLaunchAgentsWithRegistries,
+} from "@/lib/domain/chat/session-config";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 
 const EMPTY_AGENTS: WorkspaceSessionLaunchAgent[] = [];
@@ -46,24 +49,34 @@ export function useChatLaunchCatalog({
         ? selectedCloudRuntime.state?.phase === "ready"
         : connectionState === "healthy"
     );
+  const canQueryModelRegistries = canQueryLaunchCatalog
+    || Boolean(pendingWorkspaceEntry)
+    || connectionState === "healthy"
+    || selectedCloudRuntime.state?.phase === "ready";
 
   const query = useWorkspaceSessionLaunchQuery({
     workspaceId: selectedWorkspaceId,
     enabled: canQueryLaunchCatalog,
   });
   const modelRegistriesQuery = useModelRegistriesQuery({
-    enabled: canQueryLaunchCatalog,
+    enabled: canQueryModelRegistries,
   });
+
+  const modelRegistries = modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES;
+  const shouldUseRegistryFallback =
+    !query.data?.agents && modelRegistries.length > 0;
 
   const launchAgents = useMemo(
     () => orderChatLaunchAgents(
       mergeLaunchAgentsWithRegistries(
-        query.data?.agents ?? EMPTY_AGENTS,
-        modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES,
+        shouldUseRegistryFallback
+          ? buildRegistryLaunchAgents(modelRegistries)
+          : query.data?.agents ?? EMPTY_AGENTS,
+        modelRegistries,
       )
         .filter(shouldExposeChatLaunchAgent),
     ),
-    [modelRegistriesQuery.data, query.data?.agents],
+    [modelRegistries, query.data?.agents, shouldUseRegistryFallback],
   );
 
   const defaultLaunchSelection = useMemo(
@@ -88,10 +101,12 @@ export function useChatLaunchCatalog({
     isLoading: query.isLoading || modelRegistriesQuery.isLoading,
     error: query.error ?? modelRegistriesQuery.error,
     launchAgents,
+    modelRegistries,
+    usesRegistryFallback: shouldUseRegistryFallback,
     defaultLaunchSelection,
     selectedLaunchSelection,
     groups,
     hasLaunchableAgents: launchAgents.length > 0,
-    isEmpty: !query.isLoading && launchAgents.length === 0,
+    isEmpty: !query.isLoading && !modelRegistriesQuery.isLoading && launchAgents.length === 0,
   };
 }

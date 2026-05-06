@@ -7,6 +7,7 @@ import {
   resolveModelDisplayName,
 } from "@/lib/domain/chat/model-display";
 import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
+import { useChatLaunchProjection } from "./use-chat-launch-projection";
 
 export interface ChatReadyContext {
   workspaceName: string | null;
@@ -22,6 +23,7 @@ export interface ChatReadyContext {
  */
 export function useChatReadyContext(): ChatReadyContext {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const agentKind = useHarnessStore((state) =>
     state.activeSessionId
       ? state.sessionSlots[state.activeSessionId]?.agentKind ?? null
@@ -42,23 +44,30 @@ export function useChatReadyContext(): ChatReadyContext {
     });
   });
   const { data: workspaceCollections } = useWorkspaces();
+  const projection = useChatLaunchProjection();
 
   return useMemo(() => {
     const workspace = selectedWorkspaceId
       ? workspaceCollections?.workspaces.find((candidate) => candidate.id === selectedWorkspaceId) ?? null
       : null;
 
-    const workspaceName = workspace ? workspaceDisplayName(workspace) : null;
-    const branchLabelRaw = workspace ? workspaceBranchLabel(workspace) : null;
+    const workspaceName = workspace
+      ? workspaceDisplayName(workspace)
+      : pendingWorkspaceEntry?.displayName ?? null;
+    const branchLabelRaw = workspace
+      ? workspaceBranchLabel(workspace)
+      : pendingWorkspaceEntry?.baseBranchName ?? null;
     // Avoid duplicating the workspace name in the context line when the
     // workspace's display name is already its branch (worktree case).
     const branchLabel = branchLabelRaw && branchLabelRaw !== workspaceName ? branchLabelRaw : null;
 
-    const agentDisplayName = agentKind ? getProviderDisplayName(agentKind) : null;
-    const modelDisplayName = agentKind && modelId
+    const effectiveAgentKind = agentKind ?? projection?.agentKind ?? null;
+    const effectiveModelId = modelId ?? projection?.modelId ?? null;
+    const agentDisplayName = effectiveAgentKind ? getProviderDisplayName(effectiveAgentKind) : null;
+    const modelDisplayName = effectiveAgentKind && effectiveModelId
       ? resolveModelDisplayName({
-        agentKind,
-        modelId,
+        agentKind: effectiveAgentKind,
+        modelId: effectiveModelId,
         sourceLabels: [liveConfigModelLabel],
       })
       : null;
@@ -73,6 +82,8 @@ export function useChatReadyContext(): ChatReadyContext {
     agentKind,
     liveConfigModelLabel,
     modelId,
+    pendingWorkspaceEntry,
+    projection,
     selectedWorkspaceId,
     workspaceCollections,
   ]);

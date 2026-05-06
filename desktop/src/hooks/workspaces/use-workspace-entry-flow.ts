@@ -2,8 +2,16 @@ import { useCallback } from "react";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { pendingWorkspaceDraftKey } from "@/lib/domain/chat/chat-input";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import {
+  pendingWorkspaceProjectionScope,
+  useLaunchProjectionOverrideStore,
+} from "@/stores/chat/launch-projection-override-store";
+import { usePendingWorkspaceQueuedPromptStore } from "@/stores/chat/pending-workspace-queued-prompt-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   ensureRepoGroupExpanded,
@@ -24,6 +32,38 @@ function isAttemptCurrent(attemptId: string): boolean {
 
 function requestChatInputFocus(): void {
   useChatInputStore.getState().requestFocus();
+}
+
+function resolveMaterializedDraftKey(workspaceId: string): string {
+  return resolveWorkspaceUiKey(
+    useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId,
+    workspaceId,
+  ) ?? workspaceId;
+}
+
+function handoffPendingWorkspaceDraft(entry: PendingWorkspaceEntry, workspaceId: string): string {
+  const draftKey = pendingWorkspaceDraftKey(entry.attemptId);
+  const materializedDraftKey = resolveMaterializedDraftKey(workspaceId);
+  const chatInput = useChatInputStore.getState();
+  const draft = chatInput.draftByWorkspaceId[draftKey] ?? null;
+  if (draft) {
+    chatInput.setDraft(materializedDraftKey, draft);
+    chatInput.clearDraft(draftKey);
+  }
+  return materializedDraftKey;
+}
+
+function handoffPendingWorkspaceProjection(
+  entry: PendingWorkspaceEntry,
+  workspaceId: string,
+  materializedDraftKey: string,
+): void {
+  usePendingWorkspaceQueuedPromptStore.getState().markMaterialized(entry.attemptId, {
+    workspaceId,
+    draftKey: materializedDraftKey,
+  });
+  useLaunchProjectionOverrideStore.getState()
+    .clearScope(pendingWorkspaceProjectionScope(entry.attemptId));
 }
 
 export function useWorkspaceEntryFlow() {
@@ -97,6 +137,8 @@ export function useWorkspaceEntryFlow() {
       setupScript: entry.setupScript,
       baseBranchName: entry.baseBranchName,
     }));
+    const materializedDraftKey = handoffPendingWorkspaceDraft(entry, workspaceId);
+    handoffPendingWorkspaceProjection(entry, workspaceId, materializedDraftKey);
     setPendingWorkspaceEntry(null);
     logLatency("workspace.entry.selection.success", {
       attemptId: entry.attemptId,

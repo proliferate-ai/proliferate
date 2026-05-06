@@ -104,10 +104,12 @@ export function mergeLaunchAgentsWithRegistries(
 
     const decoratedModels = agent.models.map((model) => {
       const registryModel = resolveRegistryModelForRow(registry, model.id);
+      const sessionDefaultControls =
+        model.sessionDefaultControls ?? registryModel?.sessionDefaultControls ?? [];
       return {
-        id: model.id,
+        ...model,
         displayName: registryModel?.displayName ?? model.displayName,
-        isDefault: model.isDefault,
+        ...(sessionDefaultControls.length > 0 ? { sessionDefaultControls } : {}),
       };
     });
 
@@ -139,6 +141,36 @@ export function mergeLaunchAgentsWithRegistries(
       displayName: registry.displayName,
       defaultModelId,
       models,
+    }];
+  });
+}
+
+export function buildRegistryLaunchAgents(
+  modelRegistries: ModelRegistry[],
+): WorkspaceSessionLaunchAgent[] {
+  return modelRegistries.flatMap((registry) => {
+    if (registry.models.length === 0) {
+      return [];
+    }
+
+    const defaultModel =
+      registry.models.find((model) => model.id === registry.defaultModelId)
+      ?? registry.models.find((model) => model.isDefault)
+      ?? registry.models[0];
+    const defaultModelId = defaultModel?.id ?? null;
+
+    return [{
+      kind: registry.kind,
+      displayName: registry.displayName,
+      defaultModelId,
+      models: registry.models.map((model) => ({
+        id: model.id,
+        displayName: model.displayName,
+        isDefault: model.id === defaultModelId,
+        ...((model.sessionDefaultControls ?? []).length > 0
+          ? { sessionDefaultControls: model.sessionDefaultControls }
+          : {}),
+      })),
     }];
   });
 }

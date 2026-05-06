@@ -7,8 +7,14 @@ import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workfl
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import {
+  pendingWorkspaceProjectionScope,
+  useLaunchProjectionOverrideStore,
+} from "@/stores/chat/launch-projection-override-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import { patchInFlightSessionCreateConfig } from "@/hooks/sessions/session-creation-in-flight";
 import { useActiveSessionLaunchState } from "./use-active-chat-session-selectors";
 import {
   EMPTY_CHAT_DRAFT,
@@ -27,6 +33,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const workspaceUiKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
   const currentDraft = useChatInputStore((state) =>
@@ -40,6 +47,9 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
   const { createEmptySessionWithResolvedConfig, setActiveSessionConfigOption } = useSessionActions();
+  const patchProjectionOverride = useLaunchProjectionOverrideStore(
+    (state) => state.patchOverride,
+  );
   const { createThreadFromSelection } = useCoworkThreadWorkflow();
   const {
     activeSessionId,
@@ -60,6 +70,32 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
 
     if (
       scopedActiveSessionId
+      && isPendingSessionId(scopedActiveSessionId)
+      && scopedCurrentLaunchIdentity?.kind === selection.kind
+    ) {
+      const override = patchProjectionOverride(scopedActiveSessionId, {
+        agentKind: selection.kind,
+        modelId: selection.modelId,
+      });
+      const state = useHarnessStore.getState();
+      const slot = state.sessionSlots[scopedActiveSessionId] ?? null;
+      useHarnessStore.getState().patchSessionSlot(scopedActiveSessionId, {
+        modelId: selection.modelId,
+      });
+      patchInFlightSessionCreateConfig(
+        slot?.workspaceId ?? selectedWorkspaceId,
+        scopedActiveSessionId,
+        {
+          modelId: selection.modelId,
+          revision: override.revision,
+        },
+      );
+      setWorkspaceArrivalEvent(null);
+      return;
+    }
+
+    if (
+      scopedActiveSessionId
       && scopedCurrentLaunchIdentity?.kind === selection.kind
       && scopedCurrentModelConfigId
     ) {
@@ -71,6 +107,18 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
           const message = error instanceof Error ? error.message : String(error);
           showToast(`Failed to switch model: ${message}`);
       });
+      return;
+    }
+
+    if (pendingWorkspaceEntry && pendingWorkspaceEntry.stage !== "failed") {
+      patchProjectionOverride(
+        pendingWorkspaceProjectionScope(pendingWorkspaceEntry.attemptId),
+        {
+          agentKind: selection.kind,
+          modelId: selection.modelId,
+        },
+      );
+      setWorkspaceArrivalEvent(null);
       return;
     }
 
@@ -122,6 +170,8 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     createThreadFromSelection,
     currentDraft,
     createEmptySessionWithResolvedConfig,
+    patchProjectionOverride,
+    pendingWorkspaceEntry,
     selectedWorkspace?.surface,
     selectedWorkspaceId,
     setActiveSessionConfigOption,

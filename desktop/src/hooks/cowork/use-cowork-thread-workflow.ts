@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/preference-resolvers";
+import { pendingWorkspaceDraftKey } from "@/lib/domain/chat/chat-input";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import {
   type WorkspaceCollections,
@@ -49,6 +50,11 @@ import {
   trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import {
+  pendingWorkspaceProjectionScope,
+  useLaunchProjectionOverrideStore,
+} from "@/stores/chat/launch-projection-override-store";
+import { usePendingWorkspaceQueuedPromptStore } from "@/stores/chat/pending-workspace-queued-prompt-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
@@ -302,6 +308,23 @@ export function useCoworkThreadWorkflow() {
         totalElapsedMs: elapsedMs(totalStartedAt),
       });
       if (isAttemptCurrent(entry.attemptId)) {
+        const pendingDraftKey = pendingWorkspaceDraftKey(entry.attemptId);
+        const pendingDraft = useChatInputStore.getState()
+          .draftByWorkspaceId[pendingDraftKey] ?? null;
+        if (pendingDraft) {
+          useChatInputStore.getState().setDraft(result.workspace.id, pendingDraft);
+          useChatInputStore.getState().clearDraft(pendingDraftKey);
+        }
+        usePendingWorkspaceQueuedPromptStore.getState().markMaterialized(
+          entry.attemptId,
+          {
+            workspaceId: result.workspace.id,
+            sessionId: launchedSession.id,
+            draftKey: result.workspace.id,
+          },
+        );
+        useLaunchProjectionOverrideStore.getState()
+          .clearScope(pendingWorkspaceProjectionScope(entry.attemptId));
         setPendingWorkspaceEntry(null);
       }
       return result;

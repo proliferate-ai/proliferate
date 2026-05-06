@@ -18,6 +18,7 @@ import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useLocalAutomationExecutor } from "@/hooks/automations/use-local-automation-executor"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
+import { usePendingWorkspaceQueuedPromptRunner } from "@/hooks/chat/use-pending-workspace-queued-prompt-runner"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import {
@@ -155,6 +156,7 @@ function AppRuntime() {
   useAgentAutoReconcile()
   useLocalAutomationExecutor()
   useHomeDeferredLaunchRunner()
+  usePendingWorkspaceQueuedPromptRunner()
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")

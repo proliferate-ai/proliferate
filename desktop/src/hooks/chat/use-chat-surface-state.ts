@@ -13,6 +13,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
+import { useChatLaunchProjection } from "./use-chat-launch-projection";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 
 export type ChatSurfaceState =
@@ -32,6 +33,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const launchProjection = useChatLaunchProjection();
   const rememberedSessionId = useWorkspaceUiStore((state) => {
     const workspaceKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
     return workspaceKey ? state.lastViewedSessionByWorkspace[workspaceKey] ?? null : null;
@@ -87,6 +89,9 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   }
 
   if (pendingWorkspaceEntry) {
+    if (pendingWorkspaceEntry.stage !== "failed" && launchProjection) {
+      return { mode: { kind: "session-empty", sessionId: null }, selectedWorkspaceId };
+    }
     return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
   }
 

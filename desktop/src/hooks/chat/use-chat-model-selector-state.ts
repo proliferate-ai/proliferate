@@ -4,6 +4,7 @@ import { getProviderDisplayName } from "@/config/providers";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { getPendingSessionConfigChange } from "@/lib/domain/sessions/pending-config";
+import { buildModelSelectorGroups } from "@/lib/domain/chat/model-selection";
 import {
   resolveMatchingModelControlLabel,
   resolveModelDisplayName,
@@ -13,6 +14,7 @@ import { useActiveSessionLaunchState } from "./use-active-chat-session-selectors
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
 import { useChatLaunchActions } from "./use-chat-launch-actions";
 import { useChatLaunchCatalog } from "./use-chat-launch-catalog";
+import { useChatLaunchProjection } from "./use-chat-launch-projection";
 
 function resolveCurrentModelDisplayName(args: {
   activeLaunchIdentity: { kind: string; modelId: string } | null;
@@ -53,10 +55,14 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
   const scopedLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
   const scopedPendingConfigChanges = suppressActiveSessionState ? null : pendingConfigChanges;
   const scopedModelControl = suppressActiveSessionState ? null : modelControl;
+  const projection = useChatLaunchProjection();
+  const projectedLaunchIdentity = projection
+    ? { kind: projection.agentKind, modelId: projection.modelId }
+    : null;
   const { handleLaunchSelect } = useChatLaunchActions({ suppressActiveSessionState });
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
   const launchCatalog = useChatLaunchCatalog({
-    activeSelection: scopedLaunchIdentity ?? configuredLaunch.selection,
+    activeSelection: scopedLaunchIdentity ?? projectedLaunchIdentity ?? configuredLaunch.selection,
     activeModelControl: scopedLaunchIdentity && scopedModelControl
       ? {
         kind: scopedLaunchIdentity.kind,
@@ -70,7 +76,7 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     scopedPendingConfigChanges,
     scopedModelControl?.rawConfigId ?? null,
   );
-  const currentSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
+  const currentSelection = scopedLaunchIdentity ?? projectedLaunchIdentity ?? configuredLaunch.selection;
   const displayedModelValue =
     pendingModelChange?.value
     ?? scopedModelControl?.currentValue
@@ -84,12 +90,12 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
   const currentModelDisplayName = useMemo(
     () => resolveCurrentModelDisplayName({
       activeLaunchIdentity: scopedLaunchIdentity,
-      defaultLaunchSelection: configuredLaunch.selection,
+      defaultLaunchSelection: currentSelection,
       launchAgents: launchCatalog.launchAgents,
       liveConfigLabel: liveConfigModelLabel,
     }),
     [
-      configuredLaunch.selection,
+      currentSelection,
       launchCatalog.launchAgents,
       liveConfigModelLabel,
       scopedLaunchIdentity,
@@ -101,6 +107,26 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     : selectedCloudRuntime.state
       ? "connecting"
       : connectionState;
+  const groups = useMemo(
+    () => buildModelSelectorGroups(
+      launchCatalog.launchAgents,
+      currentSelection,
+      scopedLaunchIdentity ?? projectedLaunchIdentity,
+      scopedLaunchIdentity && scopedModelControl
+        ? {
+          kind: scopedLaunchIdentity.kind,
+          values: scopedModelControl.values,
+        }
+        : null,
+    ),
+    [
+      currentSelection,
+      launchCatalog.launchAgents,
+      projectedLaunchIdentity,
+      scopedLaunchIdentity,
+      scopedModelControl,
+    ],
+  );
 
   return {
     connectionState: resolvedConnectionState,
@@ -121,7 +147,7 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
           pendingState: null,
         }
         : null,
-    groups: launchCatalog.groups,
+    groups,
     hasAgents,
     isLoading: agentsLoading || launchCatalog.isLoading,
     notReadyAgents,

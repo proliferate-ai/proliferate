@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::OriginContext;
+use super::{OriginContext, SessionDefaultControl};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -280,6 +280,8 @@ pub struct WorkspaceSessionLaunchModel {
     pub id: String,
     pub display_name: String,
     pub is_default: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_default_controls: Vec<SessionDefaultControl>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -411,4 +413,60 @@ pub struct StartWorkspaceSetupRequest {
     pub command: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_ref: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::v1::{SessionDefaultControlKey, SessionDefaultControlValue};
+
+    #[test]
+    fn workspace_launch_model_omits_empty_session_default_controls() {
+        let model = WorkspaceSessionLaunchModel {
+            id: "sonnet".to_string(),
+            display_name: "Sonnet".to_string(),
+            is_default: true,
+            session_default_controls: vec![],
+        };
+
+        let json = serde_json::to_value(model).expect("serialize launch model");
+
+        assert!(json.get("sessionDefaultControls").is_none());
+    }
+
+    #[test]
+    fn workspace_launch_model_serializes_session_default_controls() {
+        let model = WorkspaceSessionLaunchModel {
+            id: "sonnet".to_string(),
+            display_name: "Sonnet".to_string(),
+            is_default: true,
+            session_default_controls: vec![SessionDefaultControl {
+                key: SessionDefaultControlKey::Effort,
+                label: "Effort".to_string(),
+                default_value: Some("high".to_string()),
+                values: vec![SessionDefaultControlValue {
+                    value: "high".to_string(),
+                    label: "High".to_string(),
+                    description: None,
+                    is_default: true,
+                }],
+            }],
+        };
+
+        let json = serde_json::to_value(model).expect("serialize launch model");
+
+        assert_eq!(
+            json.get("sessionDefaultControls"),
+            Some(&serde_json::json!([{
+                "key": "effort",
+                "label": "Effort",
+                "defaultValue": "high",
+                "values": [{
+                    "value": "high",
+                    "label": "High",
+                    "isDefault": true
+                }]
+            }]))
+        );
+    }
 }

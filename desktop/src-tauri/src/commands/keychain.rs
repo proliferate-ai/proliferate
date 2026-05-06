@@ -22,7 +22,6 @@ const KNOWN_ENV_VARS: &[&str] = &[
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
     "CURSOR_API_KEY",
-    "AMP_API_KEY",
 ];
 
 fn dev_profile() -> Option<String> {

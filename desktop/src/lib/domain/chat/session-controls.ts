@@ -9,6 +9,10 @@ import {
   SESSION_CONTROL_ORDER,
   type SupportedLiveControlKey,
 } from "@/config/session-controls";
+import type {
+  LaunchProjectionControl,
+} from "@/lib/domain/chat/launch-projection";
+import type { DefaultLiveSessionControlKey } from "@/lib/domain/preferences/user-preferences";
 import {
   resolveDisplayedSessionControlState,
   type PendingSessionConfigChangeStatus,
@@ -94,6 +98,58 @@ export function buildLiveSessionControlDescriptors(
   }
 
   return controls;
+}
+
+export function buildProjectedSessionControlDescriptors(
+  projectedControls: readonly LaunchProjectionControl[],
+  onSelect: (key: DefaultLiveSessionControlKey, value: string) => void,
+): LiveSessionControlDescriptor[] {
+  return projectedControls.map((control) => {
+    const normalizedControl: NormalizedSessionControl = {
+      key: control.key,
+      label: control.label,
+      rawConfigId: `projected:${control.key}`,
+      currentValue: control.selectedValue.value,
+      values: control.values,
+      settable: control.values.length > 1,
+    };
+    const toggleState = resolveToggleState(
+      normalizedControl,
+      control.selectedValue.value,
+    );
+    const descriptorBase = {
+      key: control.key,
+      label: SESSION_CONTROL_LABELS[control.key],
+      detail: control.selectedValue.label,
+      rawConfigId: normalizedControl.rawConfigId,
+      settable: normalizedControl.settable,
+      pendingState: null,
+      options: control.values.map((value) => ({
+        value: value.value,
+        label: value.label,
+        description: value.description,
+        selected: value.value === control.selectedValue.value,
+      })),
+      onSelect: (value: string) => {
+        onSelect(control.key, value);
+      },
+    };
+
+    if (toggleState) {
+      return {
+        ...descriptorBase,
+        kind: "toggle" as const,
+        enabledValue: toggleState.enabledValue,
+        disabledValue: toggleState.disabledValue,
+        isEnabled: toggleState.isEnabled,
+      };
+    }
+
+    return {
+      ...descriptorBase,
+      kind: "select" as const,
+    };
+  });
 }
 
 export function currentValueLabel(

@@ -32,6 +32,7 @@ import {
 } from "@/lib/integrations/anyharness/session-runtime";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import type { LaunchProjectionControlValues } from "@/stores/chat/launch-projection-override-store";
 import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
@@ -49,6 +50,7 @@ interface LaunchPromptInput extends SessionLatencyFlowOptions {
   text: string;
   blocks?: PromptInputBlock[];
   optimisticContentParts?: ContentPart[];
+  projectedControlOverrides?: LaunchProjectionControlValues;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
 
@@ -66,6 +68,7 @@ interface SessionControlDeps {
     modeId?: string;
     workspaceId?: string;
     latencyFlowId?: string | null;
+    projectedControlOverrides?: LaunchProjectionControlValues;
     onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   }) => Promise<string>;
   ensureWorkspaceSessions: (workspaceId: string) => Promise<Array<{
@@ -442,6 +445,7 @@ export function useSessionControlActions({
     blocks?: PromptInputBlock[],
     optimisticContentParts?: ContentPart[],
     onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void,
+    projectedControlOverrides?: LaunchProjectionControlValues,
   ) => {
     const state = useHarnessStore.getState();
     const workspaceId = state.selectedWorkspaceId;
@@ -496,6 +500,7 @@ export function useSessionControlActions({
       optimisticContentParts,
       agentKind,
       modelId: modelId ?? agentKind,
+      projectedControlOverrides,
       onBeforeOptimisticPrompt,
     });
   }, [
@@ -515,6 +520,7 @@ export function useSessionControlActions({
     blocks,
     optimisticContentParts,
     latencyFlowId,
+    projectedControlOverrides,
     onBeforeOptimisticPrompt,
   }: LaunchPromptInput) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
@@ -575,6 +581,7 @@ export function useSessionControlActions({
       modelId,
       workspaceId,
       latencyFlowId,
+      projectedControlOverrides,
       onBeforeOptimisticPrompt,
     });
   }, [

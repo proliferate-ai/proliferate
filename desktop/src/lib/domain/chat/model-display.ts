@@ -86,6 +86,29 @@ function formatClaudeModelId(modelId: string): string | null {
   return normalizeWhitespace(`${titleCaseToken(family)} ${major}.${minor}${contextHint}`);
 }
 
+function formatGeminiModelId(modelId: string): string | null {
+  const autoMatch = /^auto-gemini-(\d(?:\.\d+)?)$/.exec(modelId);
+  if (autoMatch) {
+    return `Auto (Gemini ${autoMatch[1]})`;
+  }
+
+  const match = /^gemini-(\d(?:\.\d+)?)(?:-(.+))?$/.exec(modelId);
+  if (!match) {
+    return null;
+  }
+
+  const [, version, suffix = ""] = match;
+  const suffixLabel = suffix
+    .split("-")
+    .filter((token) => token && token.toLowerCase() !== "preview")
+    .map(titleCaseToken)
+    .join(" ");
+
+  return normalizeWhitespace(
+    `Gemini ${version}${suffixLabel ? ` ${suffixLabel}` : ""}`,
+  );
+}
+
 export function shouldHideModel(agentKind: string, modelId: string): boolean {
   if (HIDDEN_MODEL_IDS.has(modelKey(agentKind, modelId))) {
     return true;
@@ -136,6 +159,13 @@ export function resolveModelDisplayName(args: {
     }
   }
 
+  if (preferKnownAlias && agentKind === "gemini") {
+    const formatted = formatGeminiModelId(modelId);
+    if (formatted) {
+      return formatted;
+    }
+  }
+
   for (const candidate of sourceLabels) {
     if (!candidate) {
       continue;
@@ -153,5 +183,6 @@ export function resolveModelDisplayName(args: {
   }
 
   return formatGptModelId(modelId)
-    ?? formatClaudeModelId(modelId);
+    ?? formatClaudeModelId(modelId)
+    ?? formatGeminiModelId(modelId);
 }

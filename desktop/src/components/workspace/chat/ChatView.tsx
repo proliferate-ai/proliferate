@@ -117,7 +117,7 @@ export function ChatView({
   const canAcceptFileDrop = canAcceptChatFileDrop({
     isEditingQueuedPrompt: queuedPromptEditStatus.isEditing,
     isDisabled: availability.isDisabled,
-    areRuntimeControlsDisabled: availability.areRuntimeControlsDisabled,
+    areRuntimeControlsDisabled: availability.areUtilityActionsDisabled,
     hasActiveSession: !suppressSessionChrome && !!activeSessionId,
     supportsAttachments,
   });

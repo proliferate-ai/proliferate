@@ -16,6 +16,16 @@ describe("resolveChatDraftWorkspaceId", () => {
   it("returns null when no workspace is selected", () => {
     expect(resolveChatDraftWorkspaceId(null, null)).toBeNull();
   });
+
+  it("uses a pending workspace key when no materialized workspace exists", () => {
+    expect(resolveChatDraftWorkspaceId(null, null, "attempt-1"))
+      .toBe("pending-workspace:attempt-1");
+  });
+
+  it("uses the pending workspace key before a stale logical selection", () => {
+    expect(resolveChatDraftWorkspaceId("logical-1", null, "attempt-1"))
+      .toBe("pending-workspace:attempt-1");
+  });
 });
 
 describe("resolveChatInputAvailability", () => {
@@ -37,6 +47,9 @@ describe("resolveChatInputAvailability", () => {
       isDisabled: true,
       disabledReason: "Session is still loading. Try again in a moment.",
       areRuntimeControlsDisabled: false,
+      areLaunchControlsDisabled: false,
+      areUtilityActionsDisabled: true,
+      areLiveSessionControlsDisabled: true,
     });
   });
 
@@ -58,6 +71,9 @@ describe("resolveChatInputAvailability", () => {
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
+      areLaunchControlsDisabled: false,
+      areUtilityActionsDisabled: false,
+      areLiveSessionControlsDisabled: false,
     });
   });
 });

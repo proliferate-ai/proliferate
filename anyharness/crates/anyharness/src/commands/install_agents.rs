@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn resolve_requested_agents_defaults_to_all_agents() {
         let agents = resolve_requested_agents(&[]).expect("expected default agents");
-        assert_eq!(agents.len(), 6);
+        assert_eq!(agents.len(), 5);
         assert!(agents.iter().any(|agent| agent.as_str() == "codex"));
     }
 
@@ -118,5 +118,11 @@ mod tests {
     fn resolve_requested_agents_rejects_unknown_agent() {
         let error = resolve_requested_agents(&["nope".into()]).expect_err("expected parse error");
         assert!(error.to_string().contains("unknown agent kind `nope`"));
+    }
+
+    #[test]
+    fn resolve_requested_agents_rejects_removed_amp_agent() {
+        let error = resolve_requested_agents(&["amp".into()]).expect_err("expected parse error");
+        assert!(error.to_string().contains("unknown agent kind `amp`"));
     }
 }

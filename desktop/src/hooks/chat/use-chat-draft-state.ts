@@ -15,9 +15,13 @@ export function useChatDraftState() {
     (state) => state.selectedLogicalWorkspaceId,
   );
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const pendingWorkspaceAttemptId = useHarnessStore((state) =>
+    state.pendingWorkspaceEntry?.attemptId ?? null,
+  );
   const workspaceUiKey = resolveChatDraftWorkspaceId(
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
+    pendingWorkspaceAttemptId,
   );
   const { materializedWorkspaceId } = resolveSelectedWorkspaceIdentity({
     selectedLogicalWorkspaceId,
