@@ -276,19 +276,6 @@
           "status": "active"
         }
       ]
-    },
-    {
-      "kind": "amp",
-      "displayName": "Amp",
-      "defaultModelId": "amp-default",
-      "models": [
-        {
-          "id": "amp-default",
-          "displayName": "Amp Default",
-          "isDefault": true,
-          "status": "active"
-        }
-      ]
     }
   ]
 }

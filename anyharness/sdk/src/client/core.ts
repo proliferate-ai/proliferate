@@ -32,12 +32,14 @@ export interface AnyHarnessRequestOptions {
   measurementOperationId?: AnyHarnessMeasurementOperationId;
   timingCategory?: AnyHarnessTimingCategory;
   timingScope?: AnyHarnessTimingScope;
+  timingLifecycle?: AnyHarnessRequestTimingLifecycle;
 }
 
 export type AnyHarnessTimingCategory =
   | "workspace.get"
   | "workspace.list"
   | "workspace.detect_setup"
+  | "catalog.agents.effective"
   | "workspace.display_name.update"
   | "workspace.session_launch"
   | "workspace.setup_status"
@@ -68,10 +70,24 @@ export type AnyHarnessTimingCategory =
   | "file.delete"
   | "file.read"
   | "file.stat"
-  | "git.status";
+  | "git.status"
+  | "git.diff"
+  | "git.branch_diff_files";
 
 export interface AnyHarnessTimingScope {
   runtimeUrlHash?: string;
+}
+
+export interface AnyHarnessRequestStartEvent {
+  type: "request_start";
+  category: AnyHarnessTimingCategory;
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  measurementOperationId?: AnyHarnessMeasurementOperationId;
+  runtimeUrlHash?: string;
+}
+
+export interface AnyHarnessRequestTimingLifecycle {
+  onRequestStart?: (event: AnyHarnessRequestStartEvent) => void | (() => void);
 }
 
 export type AnyHarnessTimingEvent =
@@ -229,6 +245,7 @@ export class AnyHarnessTransport {
     headers: HeadersInit,
   ): Promise<Response> {
     const startedAt = timingNow();
+    const finishRequestLifecycle = this.startRequestLifecycle(method, options);
     try {
       const res = await this.fetch(`${this.baseUrl}${path}`, {
         method,
@@ -246,6 +263,44 @@ export class AnyHarnessTransport {
         timingNow() - startedAt,
       );
       throw error;
+    } finally {
+      finishRequestLifecycle();
+    }
+  }
+
+  private startRequestLifecycle(
+    method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
+    options: AnyHarnessRequestOptions | undefined,
+  ): () => void {
+    if (!options?.timingCategory || !options.timingLifecycle?.onRequestStart) {
+      return () => undefined;
+    }
+
+    try {
+      const finish = options.timingLifecycle.onRequestStart({
+        type: "request_start",
+        category: options.timingCategory,
+        method,
+        measurementOperationId: options.measurementOperationId,
+        runtimeUrlHash: options.timingScope?.runtimeUrlHash ?? hashTimingScope(this.baseUrl),
+      });
+      if (typeof finish !== "function") {
+        return () => undefined;
+      }
+      let finished = false;
+      return () => {
+        if (finished) {
+          return;
+        }
+        finished = true;
+        try {
+          finish();
+        } catch {
+          // Dev-only request lifecycle hooks must not affect transport results.
+        }
+      };
+    } catch {
+      return () => undefined;
     }
   }
 

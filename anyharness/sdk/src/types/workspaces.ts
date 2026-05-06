@@ -27,6 +27,14 @@ export type UpdateWorkspaceDisplayNameRequest =
   components["schemas"]["UpdateWorkspaceDisplayNameRequest"];
 export type WorkspaceSessionLaunchModel =
   components["schemas"]["WorkspaceSessionLaunchModel"];
+export type WorkspaceSessionLaunchControlKey =
+  components["schemas"]["WorkspaceSessionLaunchControlKey"];
+export type WorkspaceSessionLaunchControlPhase =
+  components["schemas"]["WorkspaceSessionLaunchControlPhase"];
+export type WorkspaceSessionLaunchControlValue =
+  components["schemas"]["WorkspaceSessionLaunchControlValue"];
+export type WorkspaceSessionLaunchControl =
+  components["schemas"]["WorkspaceSessionLaunchControl"];
 export type WorkspaceSessionLaunchAgent =
   components["schemas"]["WorkspaceSessionLaunchAgent"];
 export type WorkspaceSessionLaunchCatalog =

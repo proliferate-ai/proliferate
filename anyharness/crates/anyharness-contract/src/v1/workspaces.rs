@@ -274,12 +274,57 @@ pub struct UpdateWorkspaceDisplayNameRequest {
     pub display_name: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceSessionLaunchControlKey {
+    Mode,
+    CollaborationMode,
+    AccessMode,
+    Reasoning,
+    Effort,
+    FastMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceSessionLaunchControlPhase {
+    CreateSession,
+    LiveDefault,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSessionLaunchControlValue {
+    pub value: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSessionLaunchControl {
+    pub key: WorkspaceSessionLaunchControlKey,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub control_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<String>,
+    pub values: Vec<WorkspaceSessionLaunchControlValue>,
+    pub phase: WorkspaceSessionLaunchControlPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub create_field: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSessionLaunchModel {
     pub id: String,
     pub display_name: String,
     pub is_default: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub launch_controls: Vec<WorkspaceSessionLaunchControl>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -289,6 +334,8 @@ pub struct WorkspaceSessionLaunchAgent {
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_model_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub launch_controls: Vec<WorkspaceSessionLaunchControl>,
     pub models: Vec<WorkspaceSessionLaunchModel>,
 }
 
@@ -296,6 +343,7 @@ pub struct WorkspaceSessionLaunchAgent {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSessionLaunchCatalog {
     pub workspace_id: String,
+    pub catalog_version: String,
     pub agents: Vec<WorkspaceSessionLaunchAgent>,
 }
 

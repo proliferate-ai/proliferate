@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-05-05.1",
+  "generatedAt": "2026-05-05T00:00:00Z",
+  "agents": [
+    {
+      "kind": "claude",
+      "displayName": "Claude",
+      "defaultModelId": "sonnet",
+      "launchControls": [
+        {
+          "key": "mode",
+          "label": "Permissions",
+          "type": "select",
+          "defaultValue": "default",
+          "phase": "create_session",
+          "createField": "modeId",
+          "values": [
+            { "value": "default", "label": "Default", "description": "Ask before each action.", "isDefault": true },
+            { "value": "acceptEdits", "label": "Accept Edits", "description": "Auto-approve file edits.", "isDefault": false },
+            { "value": "plan", "label": "Plan", "description": "Plan without execution.", "isDefault": false },
+            { "value": "dontAsk", "label": "Don't Ask", "description": "Auto-approve most actions.", "isDefault": false },
+            { "value": "bypassPermissions", "label": "Bypass", "description": "Skip permission checks.", "isDefault": false }
+          ]
+        }
+      ],
+      "models": [
+        {
+          "id": "sonnet",
+          "displayName": "Sonnet 4.6",
+          "aliases": ["claude-sonnet-4-5", "claude-sonnet-4-6"],
+          "status": "active",
+          "isDefault": true,
+          "description": "Best for everyday tasks",
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        },
+        {
+          "id": "opus[1m]",
+          "displayName": "Opus 4.7",
+          "aliases": ["claude-opus-4-7", "claude-opus-4-7-1m", "opus"],
+          "status": "active",
+          "isDefault": false,
+          "description": "Most capable for complex work. 1M context.",
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        },
+        {
+          "id": "haiku",
+          "displayName": "Haiku 4.5",
+          "aliases": [],
+          "status": "active",
+          "isDefault": false,
+          "description": "Fastest for quick answers",
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        }
+      ]
+    },
+    {
+      "kind": "codex",
+      "displayName": "Codex",
+      "defaultModelId": "gpt-5.4",
+      "launchControls": [
+        {
+          "key": "mode",
+          "label": "Permissions",
+          "type": "select",
+          "defaultValue": "read-only",
+          "phase": "create_session",
+          "createField": "modeId",
+          "values": [
+            { "value": "read-only", "label": "Read Only", "description": "Inspect and plan without editing.", "isDefault": true },
+            { "value": "auto", "label": "Auto", "description": "Auto-approve standard edits.", "isDefault": false },
+            { "value": "full-access", "label": "Full Access", "description": "Allow unrestricted changes.", "isDefault": false }
+          ]
+        },
+        {
+          "key": "collaboration_mode",
+          "label": "Mode",
+          "type": "select",
+          "defaultValue": "default",
+          "phase": "live_default",
+          "values": [
+            { "value": "default", "label": "Default", "description": "Standard collaboration behavior.", "isDefault": true },
+            { "value": "plan", "label": "Plan", "description": "Plan before applying changes.", "isDefault": false }
+          ]
+        }
+      ],
+      "models": [
+        {
+          "id": "gpt-5.5",
+          "displayName": "GPT 5.5",
+          "aliases": [],
+          "status": "active",
+          "isDefault": false,
+          "description": "Latest OpenAI coding model",
+          "minRuntimeVersion": null,
+          "launchRemediation": { "kind": "managed_reinstall", "message": "Update Codex tools and retry." },
+          "launchControls": [
+            {
+              "key": "effort",
+              "label": "Reasoning effort",
+              "type": "select",
+              "defaultValue": "medium",
+              "phase": "live_default",
+              "values": [
+                { "value": "low", "label": "Low", "description": "Faster responses with lighter reasoning.", "isDefault": false },
+                { "value": "medium", "label": "Medium", "description": "Balanced speed and reasoning depth.", "isDefault": true },
+                { "value": "high", "label": "High", "description": "Greater reasoning depth for complex tasks.", "isDefault": false },
+                { "value": "xhigh", "label": "Extra High", "description": "Maximum reasoning depth for hard tasks.", "isDefault": false }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "gpt-5.4",
+          "displayName": "GPT 5.4",
+          "aliases": [],
+          "status": "active",
+          "isDefault": true,
+          "description": "Strong everyday coding model",
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "displayName": "GPT 5.4 Mini",
+          "aliases": [],
+          "status": "active",
+          "isDefault": false,
+          "description": "Small, fast coding model",
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        }
+      ]
+    },
+    {
+      "kind": "gemini",
+      "displayName": "Gemini",
+      "defaultModelId": "auto-gemini-2.5",
+      "launchControls": [
+        {
+          "key": "mode",
+          "label": "Permissions",
+          "type": "select",
+          "defaultValue": "default",
+          "phase": "create_session",
+          "createField": "modeId",
+          "values": [
+            { "value": "default", "label": "Default", "description": "Ask before each action.", "isDefault": true },
+            { "value": "autoEdit", "label": "Auto Edit", "description": "Auto-approve edits.", "isDefault": false },
+            { "value": "yolo", "label": "YOLO", "description": "Skip permission checks.", "isDefault": false },
+            { "value": "plan", "label": "Plan", "description": "Plan without execution.", "isDefault": false }
+          ]
+        }
+      ],
+      "models": [
+        {
+          "id": "auto-gemini-2.5",
+          "displayName": "Auto (Gemini 2.5)",
+          "aliases": [],
+          "status": "active",
+          "isDefault": true,
+          "description": null,
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        },
+        {
+          "id": "gemini-2.5-pro",
+          "displayName": "Gemini 2.5 Pro",
+          "aliases": [],
+          "status": "active",
+          "isDefault": false,
+          "description": null,
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        }
+      ]
+    },
+    {
+      "kind": "cursor",
+      "displayName": "Cursor",
+      "defaultModelId": "default[]",
+      "launchControls": [],
+      "models": [
+        {
+          "id": "default[]",
+          "displayName": "Auto",
+          "aliases": [],
+          "status": "active",
+          "isDefault": true,
+          "description": null,
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        }
+      ]
+    },
+    {
+      "kind": "opencode",
+      "displayName": "OpenCode",
+      "defaultModelId": "default",
+      "launchControls": [],
+      "models": [
+        {
+          "id": "default",
+          "displayName": "Default",
+          "aliases": [],
+          "status": "active",
+          "isDefault": true,
+          "description": null,
+          "minRuntimeVersion": null,
+          "launchRemediation": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api.proliferate.com/schemas/catalogs/launch/v1/schema.json",
+  "title": "Proliferate Launch Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogVersion", "generatedAt", "agents"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "catalogVersion": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/agent" }
+    }
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "displayName", "defaultModelId", "models", "launchControls"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "defaultModelId": { "type": "string", "minLength": 1 },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/model" }
+        },
+        "launchControls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/launchControl" }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "aliases",
+        "status",
+        "isDefault",
+        "description",
+        "minRuntimeVersion",
+        "launchRemediation"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "status": { "enum": ["candidate", "active", "deprecated", "hidden"] },
+        "isDefault": { "type": "boolean" },
+        "description": { "type": ["string", "null"] },
+        "minRuntimeVersion": { "type": ["string", "null"] },
+        "launchRemediation": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "message"],
+              "properties": {
+                "kind": { "enum": ["managed_reinstall", "external_update", "restart"] },
+                "message": { "type": "string", "minLength": 1, "maxLength": 160 }
+              }
+            }
+          ]
+        },
+        "launchControls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/launchControl" }
+        }
+      }
+    },
+    "launchControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "type", "defaultValue", "values", "phase"],
+      "properties": {
+        "key": {
+          "enum": [
+            "mode",
+            "collaboration_mode",
+            "access_mode",
+            "reasoning",
+            "effort",
+            "fast_mode"
+          ]
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "type": { "const": "select" },
+        "defaultValue": { "type": "string", "minLength": 1 },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/launchControlValue" }
+        },
+        "phase": { "enum": ["create_session", "live_default"] },
+        "createField": { "enum": ["modeId"] }
+      }
+    },
+    "launchControlValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "label", "description", "isDefault"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "isDefault": { "type": "boolean" }
+      }
+    }
+  }
+}

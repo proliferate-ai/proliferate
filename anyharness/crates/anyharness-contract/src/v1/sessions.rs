@@ -442,6 +442,8 @@ pub enum PromptAttachmentSource {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptSessionRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_id: Option<String>,
     pub blocks: Vec<PromptInputBlock>,
 }
 

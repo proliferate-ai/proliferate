@@ -94,6 +94,7 @@ module = [
     "proliferate.server.cloud.mcp_materialization.models",
     "proliferate.server.cloud.mcp_oauth.models",
     "proliferate.server.cloud.workspaces.models",
+    "proliferate.server.catalogs.models",
     "proliferate.server.cloud.credentials.models",
     "proliferate.server.cloud.repos.models",
     "proliferate.server.support.models",

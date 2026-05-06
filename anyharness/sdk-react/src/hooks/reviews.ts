@@ -11,6 +11,7 @@ import {
 } from "../context/AnyHarnessWorkspace.js";
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessReviewAssignmentCritiqueKey,
   anyHarnessSessionReviewsKey,
@@ -70,10 +71,13 @@ export function useSessionReviewsQuery(
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.reviews.listForSession(sessionId!);
+      return client.reviews.listForSession(
+        sessionId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }
@@ -101,10 +105,14 @@ export function useReviewAssignmentCritiqueQuery(
       !!assignmentId,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.reviews.getAssignmentCritique(reviewRunId!, assignmentId!);
+      return client.reviews.getAssignmentCritique(
+        reviewRunId!,
+        assignmentId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }

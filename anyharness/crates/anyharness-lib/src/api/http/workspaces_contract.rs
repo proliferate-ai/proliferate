@@ -143,6 +143,7 @@ pub(super) fn workspace_session_launch_catalog_to_contract(
 ) -> WorkspaceSessionLaunchCatalog {
     WorkspaceSessionLaunchCatalog {
         workspace_id: catalog.workspace_id,
+        catalog_version: catalog.catalog_version,
         agents: catalog
             .agents
             .into_iter()
@@ -171,6 +172,7 @@ fn workspace_session_launch_agent_to_contract(
         kind: agent.kind,
         display_name: agent.display_name,
         default_model_id: agent.default_model_id,
+        launch_controls: agent.launch_controls,
         models: agent
             .models
             .into_iter()
@@ -186,5 +188,6 @@ fn workspace_session_launch_model_to_contract(
         id: model.id,
         display_name: model.display_name,
         is_default: model.is_default,
+        launch_controls: model.launch_controls,
     }
 }

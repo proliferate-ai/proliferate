@@ -9,6 +9,7 @@ import type {
 } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
@@ -27,9 +28,9 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessAgentsKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.list();
+      return client.agents.list(requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -78,9 +79,9 @@ export function useAgentReconcileStatusQuery(
   return useQuery({
     queryKey: anyHarnessAgentReconcileStatusKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.agents.getReconcileStatus();
+      return client.agents.getReconcileStatus(requestOptionsWithSignal(undefined, signal));
     },
     refetchInterval: (query) => {
       if (!refetchWhileActive) return false;

@@ -47,6 +47,10 @@ pub fn build_router(state: AppState) -> Router {
             "/model-registries/{kind}",
             get(model_registries::get_model_registry),
         )
+        .route(
+            "/catalogs/agents/effective",
+            get(workspaces::get_effective_agent_launch_catalog),
+        )
         // Workspaces
         .route(
             "/workspaces",

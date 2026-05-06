@@ -234,6 +234,54 @@ describe("transcript reducer", () => {
     });
   });
 
+  it("preserves prompt ids on user-message transcript items", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        userMessageStarted(2, "user-1", [{ type: "text", text: "hello" }], "prompt-1"),
+        userMessageCompleted(3, "user-1", [{ type: "text", text: "hello" }], "prompt-1"),
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["user-1"];
+    expect(item.kind).toBe("user_message");
+    if (item.kind !== "user_message") {
+      throw new Error("expected user message item");
+    }
+    expect(item.promptId).toBe("prompt-1");
+  });
+
+  it("deduplicates pending prompt replay by prompt id", () => {
+    const state = reduceEvents(
+      [
+        pendingPromptAdded(1, 10, "prompt-1", "first"),
+        pendingPromptAdded(2, 11, "prompt-1", "second"),
+        pendingPromptUpdated(3, 12, "prompt-1", "updated"),
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingPrompts).toHaveLength(1);
+    expect(state.pendingPrompts[0]).toMatchObject({
+      seq: 12,
+      promptId: "prompt-1",
+      text: "updated",
+    });
+  });
+
+  it("removes pending prompts by prompt id when seq differs", () => {
+    const state = reduceEvents(
+      [
+        pendingPromptAdded(1, 10, "prompt-1", "first"),
+        pendingPromptRemoved(2, 99, "prompt-1"),
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingPrompts).toEqual([]);
+  });
+
   it("preserves plan reference content parts when later snapshots omit them", () => {
     const state = reduceEvents(
       [
@@ -1341,6 +1389,7 @@ function userMessageStarted(
   seq: number,
   itemId: string,
   contentParts: ContentPart[],
+  promptId: string | null = null,
 ): SessionEventEnvelope {
   return {
     sessionId: "session-1",
@@ -1354,6 +1403,7 @@ function userMessageStarted(
         kind: "user_message",
         status: "completed",
         sourceAgentKind: "claude",
+        promptId,
         contentParts,
       },
     },
@@ -1364,6 +1414,7 @@ function userMessageCompleted(
   seq: number,
   itemId: string,
   contentParts: ContentPart[],
+  promptId: string | null = null,
 ): SessionEventEnvelope {
   return {
     sessionId: "session-1",
@@ -1377,8 +1428,70 @@ function userMessageCompleted(
         kind: "user_message",
         status: "completed",
         sourceAgentKind: "claude",
+        promptId,
         contentParts,
       },
+    },
+  };
+}
+
+function pendingPromptAdded(
+  eventSeq: number,
+  pendingSeq: number,
+  promptId: string | null,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: eventSeq,
+    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
+    event: {
+      type: "pending_prompt_added",
+      seq: pendingSeq,
+      promptId,
+      text,
+      contentParts: [{ type: "text", text }],
+      queuedAt: `2026-04-04T00:00:0${eventSeq}Z`,
+      promptProvenance: null,
+    },
+  };
+}
+
+function pendingPromptUpdated(
+  eventSeq: number,
+  pendingSeq: number,
+  promptId: string | null,
+  text: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: eventSeq,
+    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
+    event: {
+      type: "pending_prompt_updated",
+      seq: pendingSeq,
+      promptId,
+      text,
+      contentParts: [{ type: "text", text }],
+      promptProvenance: null,
+    },
+  };
+}
+
+function pendingPromptRemoved(
+  eventSeq: number,
+  pendingSeq: number,
+  promptId: string | null,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: eventSeq,
+    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
+    event: {
+      type: "pending_prompt_removed",
+      seq: pendingSeq,
+      promptId,
+      reason: "deleted",
     },
   };
 }

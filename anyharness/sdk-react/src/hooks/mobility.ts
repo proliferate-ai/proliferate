@@ -11,6 +11,7 @@ import {
 } from "../context/AnyHarnessWorkspace.js";
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessSessionsKey,
   anyHarnessWorkspaceMobilityPreflightKey,
@@ -35,10 +36,13 @@ export function useWorkspaceMobilityPreflightQuery(options?: WorkspaceQueryOptio
   return useQuery({
     queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.mobility.preflight(resolved.connection.anyharnessWorkspaceId);
+      return client.mobility.preflight(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }

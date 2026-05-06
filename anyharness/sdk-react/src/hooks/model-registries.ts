@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessModelRegistriesKey,
   anyHarnessModelRegistryKey,
@@ -21,9 +22,9 @@ export function useModelRegistriesQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessModelRegistriesKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.modelRegistries.list();
+      return client.modelRegistries.list(requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -36,9 +37,9 @@ export function useModelRegistryQuery(options?: ModelRegistryQueryOptions) {
   return useQuery({
     queryKey: anyHarnessModelRegistryKey(runtimeUrl, kind),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && kind.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.modelRegistries.get(kind);
+      return client.modelRegistries.get(kind, requestOptionsWithSignal(undefined, signal));
     },
   });
 }

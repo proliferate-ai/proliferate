@@ -90,7 +90,7 @@ pub async fn create_session(
         mode_id = ?mode_id,
         system_prompt_append_count,
         mcp_server_count,
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
             prompt_id = latency_fields.prompt_id,
@@ -121,7 +121,7 @@ pub async fn create_session(
         workspace_id = %workspace_id,
         session_id = %record.id,
         elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
             prompt_id = latency_fields.prompt_id,
@@ -250,14 +250,22 @@ pub async fn prompt_session(
 ) -> Result<Json<PromptSessionResponse>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
+    let prompt_id = req
+        .prompt_id
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+        .cloned();
+    let prompt_id_for_trace = prompt_id
+        .clone()
+        .or_else(|| latency_fields.prompt_id.map(str::to_string));
     let started = Instant::now();
     tracing::info!(
         session_id = %session_id,
         block_count = req.blocks.len(),
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
         "[workspace-latency] session.http.prompt.request_received"
     );
 
@@ -266,17 +274,17 @@ pub async fn prompt_session(
             .await?;
     let outcome = state
         .session_runtime
-        .send_prompt(&session_id, req.blocks, latency.as_ref())
+        .send_prompt(&session_id, req.blocks, prompt_id, latency.as_ref())
         .await
         .map_err(map_send_prompt_error)?;
 
     tracing::info!(
         session_id = %session_id,
         elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
+            flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+            prompt_id = prompt_id_for_trace.as_deref(),
         "[workspace-latency] session.http.prompt.completed"
     );
 
@@ -1352,6 +1360,20 @@ mod tests {
         )
         .expect("deserialize prompt request");
 
+        assert_eq!(request.blocks.len(), 1);
+    }
+
+    #[test]
+    fn prompt_request_accepts_body_prompt_id() {
+        let request: PromptSessionRequest = serde_json::from_str(
+            r#"{
+                "promptId": "prompt-body",
+                "blocks": [{"type": "text", "text": "hello"}]
+            }"#,
+        )
+        .expect("deserialize prompt request");
+
+        assert_eq!(request.prompt_id.as_deref(), Some("prompt-body"));
         assert_eq!(request.blocks.len(), 1);
     }
 

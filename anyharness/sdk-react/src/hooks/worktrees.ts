@@ -5,6 +5,7 @@ import type {
 } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorktreesInventoryKey,
@@ -22,9 +23,9 @@ export function useWorktreeInventoryQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.worktrees.inventory();
+      return client.worktrees.inventory(requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -57,9 +58,9 @@ export function useWorktreeRetentionPolicyQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.worktrees.retentionPolicy();
+      return client.worktrees.retentionPolicy(requestOptionsWithSignal(undefined, signal));
     },
   });
 }

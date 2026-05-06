@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PrepareRepoRootMobilityDestinationRequest } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessRepoRootDetectSetupKey,
   anyHarnessRepoRootGitBranchesKey,
@@ -20,9 +21,9 @@ export function useRepoRootsQuery(options?: RuntimeQueryOptions) {
   return useQuery({
     queryKey: anyHarnessRepoRootsKey(runtimeUrl),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.repoRoots.list();
+      return client.repoRoots.list(requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -56,9 +57,9 @@ export function useRepoRootGitBranchesQuery(options: {
   return useQuery({
     queryKey: anyHarnessRepoRootGitBranchesKey(runtimeUrl, repoRootId),
     enabled: (options.enabled ?? true) && repoRootId.length > 0 && runtimeUrl.length > 0,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.repoRoots.listBranches(repoRootId);
+      return client.repoRoots.listBranches(repoRootId, requestOptionsWithSignal(undefined, signal));
     },
   });
 }
@@ -75,9 +76,9 @@ export function useDetectRepoRootSetupQuery(options: {
     queryKey: anyHarnessRepoRootDetectSetupKey(runtimeUrl, repoRootId),
     enabled: (options.enabled ?? true) && repoRootId.length > 0 && runtimeUrl.length > 0,
     staleTime: Infinity,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
-      return client.repoRoots.detectSetup(repoRootId);
+      return client.repoRoots.detectSetup(repoRootId, requestOptionsWithSignal(undefined, signal));
     },
   });
 }

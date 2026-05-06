@@ -6,6 +6,7 @@ import {
 } from "../context/AnyHarnessWorkspace.js";
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
+import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessPlanDocumentKey,
   anyHarnessPlanKey,
@@ -31,10 +32,13 @@ export function useWorkspacePlansQuery(options?: WorkspaceQueryOptions) {
   return useQuery({
     queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.plans.list(resolved.connection.anyharnessWorkspaceId);
+      return client.plans.list(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }
@@ -50,10 +54,14 @@ export function usePlanDetailQuery(
   return useQuery({
     queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, planId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.plans.get(resolved.connection.anyharnessWorkspaceId, planId!);
+      return client.plans.get(
+        resolved.connection.anyharnessWorkspaceId,
+        planId!,
+        requestOptionsWithSignal(undefined, signal),
+      );
     },
   });
 }
@@ -70,10 +78,14 @@ export function usePlanDetailsQueries(
     queries: planIds.map((planId) => ({
       queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, planId),
       enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
-      queryFn: async () => {
+      queryFn: async ({ signal }) => {
         const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
         const client = getAnyHarnessClient(resolved.connection);
-        return client.plans.get(resolved.connection.anyharnessWorkspaceId, planId!);
+        return client.plans.get(
+          resolved.connection.anyharnessWorkspaceId,
+          planId!,
+          requestOptionsWithSignal(undefined, signal),
+        );
       },
     })),
   });
@@ -91,11 +103,12 @@ export function usePlanDocumentQuery(
   return useQuery({
     queryKey: anyHarnessPlanDocumentKey(runtimeUrl, workspaceId, planId, materialize),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.plans.getDocument(resolved.connection.anyharnessWorkspaceId, planId!, {
         materialize,
+        ...requestOptionsWithSignal(undefined, signal),
       });
     },
   });

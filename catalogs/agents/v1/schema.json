@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api.proliferate.com/schemas/catalogs/agents/v1/schema.json",
+  "title": "Proliferate Agent Catalog",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "catalogVersion",
+    "generatedAt",
+    "agents"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "catalogVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "compatibility": {
+      "type": "object"
+    },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/agent"
+      }
+    }
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "required": [
+        "kind",
+        "displayName",
+        "process",
+        "session"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "claude",
+            "codex",
+            "gemini",
+            "cursor",
+            "opencode"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "process": {
+          "type": "object"
+        },
+        "session": {
+          "$ref": "#/$defs/session"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": [
+        "defaultModelId",
+        "models",
+        "controls"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "defaultModelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "defaultModeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/model"
+          }
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/control"
+          }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "id",
+        "displayName",
+        "status",
+        "isDefault"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "enum": [
+            "active",
+            "candidate",
+            "deprecated",
+            "hidden"
+          ]
+        },
+        "isDefault": {
+          "type": "boolean"
+        }
+      }
+    },
+    "control": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "type",
+        "defaultValue",
+        "surfaces",
+        "apply",
+        "missingLiveConfigPolicy",
+        "valueSource",
+        "values"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": [
+            "select"
+          ]
+        },
+        "defaultValue": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "valueSource": {
+          "enum": [
+            "inline",
+            "agentModels",
+            "discoveredModels"
+          ]
+        },
+        "missingLiveConfigPolicy": {
+          "enum": [
+            "ignore_default",
+            "queue_then_conflict",
+            "block_prompt",
+            "remediate"
+          ]
+        },
+        "values": {
+          "type": "array"
+        },
+        "surfaces": {
+          "type": "object",
+          "required": [
+            "start",
+            "session",
+            "automation",
+            "settings"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "start": {
+              "type": "boolean"
+            },
+            "session": {
+              "type": "boolean"
+            },
+            "automation": {
+              "type": "boolean"
+            },
+            "settings": {
+              "type": "boolean"
+            }
+          }
+        },
+        "apply": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

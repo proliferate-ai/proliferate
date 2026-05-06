@@ -16,7 +16,9 @@ services:
       retries: 5
 
   migrate:
-    build: .
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@db:5432/proliferate
       JWT_SECRET: local-dev-secret-change-in-production
@@ -27,7 +29,9 @@ services:
     command: ["alembic", "upgrade", "head"]
 
   api:
-    build: .
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     ports:
       - "8000:8000"
     environment:

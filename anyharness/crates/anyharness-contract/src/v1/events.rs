@@ -162,6 +162,8 @@ pub struct TranscriptItemPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
@@ -711,6 +713,8 @@ pub struct PendingPromptAddedPayload {
 #[serde(rename_all = "camelCase")]
 pub struct PendingPromptUpdatedPayload {
     pub seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_id: Option<String>,
     pub text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content_parts: Vec<ContentPart>,
@@ -722,6 +726,8 @@ pub struct PendingPromptUpdatedPayload {
 #[serde(rename_all = "camelCase")]
 pub struct PendingPromptRemovedPayload {
     pub seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_id: Option<String>,
     pub reason: PendingPromptRemovalReason,
 }
 
