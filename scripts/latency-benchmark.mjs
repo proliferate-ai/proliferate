@@ -422,9 +422,10 @@ async function benchmarkPromptSubmit(page, args) {
     .then(() => true)
     .catch(() => false);
   const probe = await readVisibleTextProbe(page, probeKey);
+  const finishedAt = await page.evaluate(() => performance.now());
   const durationMs = appeared && probe?.seenAt
     ? Math.round(probe.seenAt - startedAt)
-    : Math.round(performance.now() - startedAt);
+    : Math.round(finishedAt - startedAt);
   const sendButtons = await countVisible(page, "[data-chat-send-button]");
   const stopButtons = await countVisible(page, "[data-chat-stop-button]");
   const loadingHeroVisible = await countVisible(page, "[data-chat-loading-hero]");
@@ -460,10 +461,12 @@ async function benchmarkWorkspaceProject(page, args) {
     "workspace.entry.pending_shell",
     args.timeoutMs,
   );
-  const projected = await firstVisible(page, [
-    "[data-chat-composer-editor]",
-    "[role='tab'][aria-selected='true']",
-  ], args.timeoutMs).then(Boolean).catch(() => false);
+  const projected = pendingShellEvent
+    ? await firstVisible(page, [
+      "[data-chat-composer-editor]",
+      "[role='tab'][aria-selected='true']",
+    ], args.timeoutMs).then(Boolean).catch(() => false)
+    : false;
   const finishedAt = await page.evaluate(() => performance.now());
   const durationMs = pendingShellEvent
     ? Math.round(pendingShellEvent.at - startedAt)
@@ -473,13 +476,15 @@ async function benchmarkWorkspaceProject(page, args) {
 
   return {
     name: "workspace-project",
-    ok: projected
+    ok: pendingShellEvent !== null
+      && projected
       && durationMs <= args.budgets.workspaceProjectedMs
       && loadingHeroVisible === 0
       && composerVisible > 0,
     durationMs,
     budgetMs: args.budgets.workspaceProjectedMs,
-    measuredBy: pendingShellEvent ? "workspace.entry.pending_shell" : "visible-composer",
+    pendingShellEventSeen: pendingShellEvent !== null,
+    measuredBy: "workspace.entry.pending_shell",
     composerBefore: before,
     composerVisible,
     loadingHeroVisible,

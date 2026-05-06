@@ -4,9 +4,25 @@ on:
   push:
     branches: [main]
     tags: ["server-v*"]
-    paths: ["server/**", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/server-ci.yml"]
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/server-ci.yml"
+      - "catalogs/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/validate-agent-catalog.mjs"
+      - "scripts/validate-launch-catalog.mjs"
+      - "server/**"
   pull_request:
-    paths: ["server/**", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/server-ci.yml"]
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/server-ci.yml"
+      - "catalogs/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/validate-agent-catalog.mjs"
+      - "scripts/validate-launch-catalog.mjs"
+      - "server/**"
   workflow_dispatch:
 
 defaults:
@@ -28,6 +44,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Validate catalogs
+        run: |
+          node scripts/validate-agent-catalog.mjs
+          node scripts/validate-launch-catalog.mjs
+        working-directory: .
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -129,7 +151,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: server
+          context: .
+          file: server/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
 
