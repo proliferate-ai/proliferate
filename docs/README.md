@@ -12,9 +12,27 @@ start of the task, not after implementation has already started.
 ## Authoritative frontend standards
 
 - `docs/frontend/README.md`
-  - start here for frontend structure, ownership, data flow, and folder rules
+  - start here for frontend ownership, dependency direction, and migration order
+- `docs/frontend/components.md`
+  - component ownership, UI primitive usage, and component folder hierarchy
+- `docs/frontend/hooks.md`
+  - hook taxonomy, hook organization, and React behavior ownership
+- `docs/frontend/state.md`
+  - Zustand, React Query, providers, local state, and derived state
+- `docs/frontend/lib.md`
+  - domain logic, workflows, infra, config, copy, and presentation mappings
+- `docs/frontend/access.md`
+  - cloud, AnyHarness, and Tauri access boundaries
 - `docs/frontend/styling.md`
   - styling, theme token, and UI primitive rules
+- `docs/frontend/telemetry.md`
+  - analytics, Sentry, replay masking, and telemetry payload rules
+- `docs/frontend/chat-composer.md`
+  - chat composer and composer-adjacent surfaces
+- `docs/frontend/chat-transcript.md`
+  - transcript streaming, replay, row models, and long-history rendering
+- `docs/frontend/workspace-files.md`
+  - workspace file browsing, file viewing, diff viewing, and Changes
 
 ## Authoritative server standards
 

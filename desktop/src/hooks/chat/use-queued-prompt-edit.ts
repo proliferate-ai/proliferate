@@ -105,7 +105,7 @@ export function useQueuedPromptEdit(): {
   const isEditing = editingSeq != null;
 
   // Intentional exception to the "no watch-to-set" guideline
-  // (docs/frontend/README.md §3). The trigger is SSE arrival
+  // (docs/frontend/state.md). The trigger is SSE arrival
   // (PendingPromptRemoved), not local state that could be derived inline.
   // Mounted only in ChatInput so the effect runs once per store transition.
   useEffect(() => {
