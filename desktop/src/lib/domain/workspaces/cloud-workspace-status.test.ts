@@ -3,10 +3,10 @@ import {
   buildCloudWorkspaceCompactStatusView,
   buildCloudWorkspaceStatusScreenModel,
   descriptionForStartBlockReason,
-  shouldShowCloudWorkspaceStatusScreen,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud-workspace-status";
-import { CLOUD_STATUS_COMPACT_COPY } from "@/config/cloud-status-copy";
+} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
+import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud-workspace-status";
+import { CLOUD_STATUS_COMPACT_COPY } from "@/copy/cloud/cloud-status-copy";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 
 function makeCloudWorkspace(

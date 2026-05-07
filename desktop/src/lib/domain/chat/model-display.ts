@@ -1,7 +1,7 @@
 import {
   HIDDEN_MODEL_IDS,
   MODEL_DISPLAY_ALIASES,
-} from "@/config/model-display";
+} from "@/lib/domain/chat/models/model-display";
 
 function modelKey(agentKind: string, modelId: string): string {
   return `${agentKind}:${modelId}`;

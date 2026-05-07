@@ -8,7 +8,7 @@ import {
 } from "@/lib/domain/chat/session-mode-control";
 import type {
   ConfiguredSessionControlValue,
-} from "@/config/session-control-presentations";
+} from "@/lib/domain/chat/session-controls/presentation";
 
 export interface SettingsChatDefaultPreferences {
   defaultChatAgentKind: string;

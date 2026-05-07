@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom"
 import { LoadingState } from "@/components/feedback/LoadingIllustration"
-import { AUTH_GATE_LABELS } from "@/config/auth"
+import { AUTH_GATE_LABELS } from "@/copy/auth/auth-copy"
 import { useAuthStore } from "@/stores/auth/auth-store"
 
 export function BootstrappedRoute() {

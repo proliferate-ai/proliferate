@@ -10,9 +10,9 @@ import {
 import type { PromptInputBlock } from "@anyharness/sdk";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
-  CHAT_COMPOSER_LABELS,
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
+import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,

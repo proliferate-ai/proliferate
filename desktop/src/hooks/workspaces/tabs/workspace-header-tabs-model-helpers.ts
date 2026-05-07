@@ -1,5 +1,5 @@
 import type { Session } from "@anyharness/sdk";
-import { getProviderDisplayName } from "@/config/providers";
+import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
   resolveSessionViewState,

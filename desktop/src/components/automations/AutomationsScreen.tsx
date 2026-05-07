@@ -8,7 +8,7 @@ import { MainSidebarPageShell } from "@/components/workspace/shell/MainSidebarPa
 import { AutomationDetailContent } from "./AutomationDetailContent";
 import { AutomationEditorModal } from "./AutomationEditorModal";
 import { AutomationListContent } from "./AutomationListContent";
-import { AUTOMATION_PREEXECUTOR_COPY } from "@/config/automations";
+import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
 import { useAutomationActions } from "@/hooks/automations/use-automation-actions";
 import {
   useAutomationDetail,

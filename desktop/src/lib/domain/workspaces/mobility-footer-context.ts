@@ -8,8 +8,8 @@ import {
 import {
   mobilityDetailCopyLabel,
   mobilityLocationLabel,
-  type WorkspaceMobilityLocationKind,
-} from "@/config/mobility-copy";
+} from "@/lib/domain/workspaces/mobility/presentation";
+import type { WorkspaceMobilityLocationKind } from "@/lib/domain/workspaces/mobility/types";
 
 export type WorkspaceMobilitySelectedMaterializationKind = "local" | "cloud";
 export type MobilityFooterDetailKind = "path" | "repository";

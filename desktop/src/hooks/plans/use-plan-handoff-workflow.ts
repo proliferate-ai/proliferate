@@ -5,7 +5,7 @@ import type {
   PromptInputBlock,
 } from "@anyharness/sdk";
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import { PLAN_HANDOFF_DEFAULT_PROMPT } from "@/config/plan-prompts";
+import { PLAN_HANDOFF_DEFAULT_PROMPT } from "@/copy/plans/plan-prompts";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatLaunchCatalog } from "@/hooks/chat/use-chat-launch-catalog";

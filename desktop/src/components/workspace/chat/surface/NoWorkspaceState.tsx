@@ -1,5 +1,5 @@
 import { Folder } from "@/components/ui/icons";
-import { WORKSPACE_ARRIVAL_LABELS } from "@/config/workspace-arrival";
+import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
 import { ChatSurfaceCard } from "./ChatSurfaceCard";
 
 interface NoWorkspaceStateProps {

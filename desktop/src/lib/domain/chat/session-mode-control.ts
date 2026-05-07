@@ -4,7 +4,7 @@ import {
   type ConfiguredSessionControlValue,
   type SessionControlIconKey,
   type SessionControlTone,
-} from "@/config/session-control-presentations";
+} from "@/lib/domain/chat/session-controls/presentation";
 import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
 
 export type SessionModeTone = SessionControlTone;

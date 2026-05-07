@@ -1,3 +1,5 @@
+import type { SupportedLiveControlKey } from "@/config/session-controls";
+
 export type ConfiguredSessionControlKey = "mode" | "collaboration_mode";
 
 export type SessionControlTone =
@@ -30,6 +32,14 @@ export interface ConfiguredSessionControlValue {
 type ConfiguredSessionControlsByKey = Partial<
   Record<ConfiguredSessionControlKey, ConfiguredSessionControlValue[]>
 >;
+
+export const SESSION_CONTROL_LABELS: Record<SupportedLiveControlKey, string> = {
+  collaboration_mode: "Mode",
+  mode: "Permissions",
+  reasoning: "Reasoning",
+  effort: "Reasoning effort",
+  fast_mode: "Fast mode",
+};
 
 export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionControlsByKey> = {
   claude: {

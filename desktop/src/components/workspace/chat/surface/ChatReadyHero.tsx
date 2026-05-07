@@ -1,4 +1,4 @@
-import { CHAT_PRE_MESSAGE_LABELS } from "@/config/chat";
+import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
 import { useChatReadyContext } from "@/hooks/chat/use-chat-ready-context";
 import { formatChatReadyContextLine } from "@/lib/domain/chat/chat-ready-context";
 

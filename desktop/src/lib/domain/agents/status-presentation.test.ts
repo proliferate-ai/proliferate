@@ -3,7 +3,7 @@ import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import {
   getAgentDetailText,
   getAgentStatusDisplay,
-} from "@/lib/domain/agents/status";
+} from "@/lib/domain/agents/status-presentation";
 
 function buildAgent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {

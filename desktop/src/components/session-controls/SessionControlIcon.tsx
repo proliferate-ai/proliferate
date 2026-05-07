@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { SessionControlIconKey } from "@/config/session-control-presentations";
+import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/presentation";
 import {
   CircleQuestion,
   EditModeFilled,

@@ -4,7 +4,7 @@ import { SettingsCard } from "@/components/settings/SettingsCard";
 import {
   descriptionForStartBlockReason,
   titleForStartBlockReason,
-} from "@/lib/domain/workspaces/cloud-workspace-status";
+} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
 import type { BillingPlanInfo } from "@/lib/integrations/cloud/client";
 import { openExternal } from "@/platform/tauri/shell";
 import type { useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";

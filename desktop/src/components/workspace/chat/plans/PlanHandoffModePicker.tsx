@@ -1,4 +1,4 @@
-import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
+import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";

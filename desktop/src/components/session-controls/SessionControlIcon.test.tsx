@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SESSION_CONTROL_PRESENTATIONS } from "@/config/session-control-presentations";
-import type { SessionControlIconKey } from "@/config/session-control-presentations";
+import { SESSION_CONTROL_PRESENTATIONS } from "@/lib/domain/chat/session-controls/presentation";
+import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 
 describe("SessionControlIcon", () => {

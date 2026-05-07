@@ -1,5 +1,5 @@
 import type { Workspace } from "@anyharness/sdk";
-import { HOME_SCREEN_LABELS } from "@/config/home";
+import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
 import {
   workspaceBranchLabel,
   workspaceRepoName,

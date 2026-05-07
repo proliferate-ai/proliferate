@@ -4,7 +4,7 @@ import {
   claimPlanImplementationRun,
   executePlanImplementation,
 } from "@/hooks/plans/use-proposed-plan-actions";
-import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
+import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import type { StartLatencyFlowInput } from "@/lib/infra/latency-flow";
 

@@ -1,4 +1,4 @@
-import { AUTOMATION_RUN_COPY } from "@/config/automations";
+import { AUTOMATION_RUN_COPY } from "@/copy/automations/automation-copy";
 import type {
   AutomationResponse,
   AutomationRunResponse,

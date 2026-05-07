@@ -20,7 +20,7 @@ import {
 import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import {
   titleForStartBlockReason,
-} from "@/lib/domain/workspaces/cloud-workspace-status";
+} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
 import {
   Archive,
   Calendar,
@@ -33,7 +33,7 @@ import {
   Home,
   CircleQuestion,
 } from "@/components/ui/icons";
-import { CAPABILITY_COPY } from "@/config/capabilities";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";

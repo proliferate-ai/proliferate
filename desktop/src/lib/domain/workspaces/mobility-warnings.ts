@@ -1,5 +1,5 @@
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import type { WorkspaceMobilityBlockerCode } from "@/config/mobility-copy";
+import type { WorkspaceMobilityBlockerCode } from "@/lib/domain/workspaces/mobility/types";
 import type { LocalGitSyncSnapshot } from "@/lib/domain/workspaces/mobility-sync-recovery";
 import { joinLabels } from "@/lib/domain/workspaces/workspace-display";
 

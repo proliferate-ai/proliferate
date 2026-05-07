@@ -9,7 +9,7 @@ import {
 } from "@/lib/integrations/cloud/credentials";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { getProviderDisplayName } from "@/config/providers";
+import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import {
   cloudCredentialsKey,
   isCloudWorkspaceConnectionQueryKey,

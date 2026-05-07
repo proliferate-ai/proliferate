@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/Button";
 import { ExternalLink, GitHub, Mail, RefreshCw } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
-import { CAPABILITY_COPY } from "@/config/capabilities";
+import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import {
@@ -14,7 +14,7 @@ import {
   getAccountInitials,
   getAccountProfileSummary,
   getGitHubStatusLabel,
-} from "@/lib/domain/auth/account-profile";
+} from "@/lib/domain/auth/account-profile-presentation";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthActions } from "@/hooks/auth/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";

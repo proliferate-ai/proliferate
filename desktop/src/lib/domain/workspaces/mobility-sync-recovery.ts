@@ -1,8 +1,8 @@
-import {
-  mobilityBlockerCopy,
-  type WorkspaceMobilityBlockerCode,
-} from "@/config/mobility-copy";
-import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
+import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/presentation";
+import type {
+  WorkspaceMobilityBlockerCode,
+  WorkspaceMobilityDirection,
+} from "@/lib/domain/workspaces/mobility/types";
 import type {
   WorkspaceMobilityNormalizedBlockerCode,
   WorkspaceMobilityPrimaryBlocker,

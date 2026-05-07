@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/Button";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { CAPABILITY_COPY } from "@/config/capabilities";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
+import { CLOUD_SETUP_DOCS_URL } from "@/config/capabilities";
 import { openExternal } from "@/platform/tauri/shell";
 
 export function CloudAuthUnavailablePane() {
@@ -26,7 +27,7 @@ export function CloudAuthUnavailablePane() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => { void openExternal(CAPABILITY_COPY.cloudDocsUrl); }}
+            onClick={() => { void openExternal(CLOUD_SETUP_DOCS_URL); }}
             className="w-fit"
           >
             {CAPABILITY_COPY.cloudDocsLabel}

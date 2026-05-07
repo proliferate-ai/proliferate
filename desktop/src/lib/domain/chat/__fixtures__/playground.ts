@@ -14,7 +14,7 @@ import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival"
 import {
   buildCloudWorkspaceStatusScreenModel,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud-workspace-status";
+} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
 import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud-runtime-state";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 

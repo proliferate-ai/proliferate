@@ -32,7 +32,7 @@ import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/works
 import {
   getMobilityOverlayTitle,
   mobilityStatusCopy,
-} from "@/config/mobility-copy";
+} from "@/lib/domain/workspaces/mobility/presentation";
 import {
   ArrowRight,
   ArrowUp,

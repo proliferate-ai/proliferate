@@ -1,7 +1,7 @@
 import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
 import { ArrowRight, GitHub } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
-import { AUTH_LOGIN_LABELS } from "@/config/auth";
+import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
 
 interface LoginScreenProps {
   submitting: boolean;

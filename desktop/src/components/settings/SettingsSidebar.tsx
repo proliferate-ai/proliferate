@@ -3,12 +3,12 @@ import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft } from "@/components/ui/icons";
 import { SupportDialog } from "@/components/support/SupportDialog";
+import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
+import type { SettingsSection } from "@/config/settings";
 import {
-  SETTINGS_COPY,
   SETTINGS_NAV_GROUPS,
-  type SettingsSection,
   type SettingsNavItem,
-} from "@/config/settings";
+} from "@/components/settings/settings-navigation";
 import { useAppVersion } from "@/hooks/settings/use-app-version";
 import type { UpdaterPhase } from "@/hooks/updater/use-updater";
 

@@ -4,7 +4,7 @@ import type { ProposedPlanSummary } from "@anyharness/sdk";
 import {
   formatPlanAgentKindLabel,
   formatPlanDecisionStateLabel,
-} from "@/config/plans";
+} from "@/lib/domain/plans/plan-presentation";
 import {
   planAttachmentDescriptorFromDetail,
 } from "@/lib/domain/chat/prompt-content";

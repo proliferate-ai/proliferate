@@ -4,15 +4,17 @@ import type {
   AgentSummary,
   ReconcileAgentResult,
 } from "@anyharness/sdk";
-import { AGENT_SETUP_COPY } from "@/config/agents";
+import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import {
   agentNeedsInstall,
   agentSupportsCredentials,
+  isReadyAgent,
+} from "@/lib/domain/agents/status";
+import {
   formatAgentEnvVarLabel,
   getAgentSetupSubtitle,
-  isReadyAgent,
   type AgentReconcileState,
-} from "@/lib/domain/agents/status";
+} from "@/lib/domain/agents/status-presentation";
 import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
