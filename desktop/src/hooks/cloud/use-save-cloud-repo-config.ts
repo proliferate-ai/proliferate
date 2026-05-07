@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
-import { saveCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
+import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
+import { saveCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { readRepoTrackedTextFile } from "@/lib/integrations/anyharness/files";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -12,7 +12,7 @@ import {
   cloudRepoConfigKey,
   cloudRepoConfigsKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
-} from "./query-keys";
+} from "@/hooks/access/cloud/query-keys";
 import { emitRuntimeInputSyncEvent } from "./runtime-input-sync-events";
 
 interface SaveCloudRepoConfigInput {

@@ -3,7 +3,7 @@ import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { openExternal } from "@/platform/tauri/shell";
-import { updateCloudWorkspaceBranch } from "@/lib/integrations/cloud/workspaces";
+import { updateCloudWorkspaceBranch } from "@/lib/access/cloud/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

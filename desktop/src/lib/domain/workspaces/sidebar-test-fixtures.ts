@@ -1,7 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
-import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import {
   buildSidebarGroupStates,
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,

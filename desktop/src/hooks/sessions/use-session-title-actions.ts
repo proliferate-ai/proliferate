@@ -1,6 +1,6 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { generateSessionTitle } from "@/lib/integrations/cloud/ai-magic";
+import { generateSessionTitle } from "@/lib/access/cloud/ai-magic";
 import { getSessionClientAndWorkspace } from "@/lib/integrations/anyharness/session-runtime";
 import {
   finishMeasurementOperation,

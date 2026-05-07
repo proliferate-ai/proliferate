@@ -1,7 +1,7 @@
 import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { RunCloudWorkspaceSetupResponse } from "@/lib/integrations/cloud/client";
-import { runCloudWorkspaceSetup } from "@/lib/integrations/cloud/repo-configs";
+import type { RunCloudWorkspaceSetupResponse } from "@/lib/access/cloud/client";
+import { runCloudWorkspaceSetup } from "@/lib/access/cloud/repo-configs";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -9,7 +9,7 @@ import {
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { cloudWorkspaceRepoConfigStatusKey } from "./query-keys";
+import { cloudWorkspaceRepoConfigStatusKey } from "@/hooks/access/cloud/query-keys";
 
 export function useRunCloudWorkspaceSetup(workspaceId: string | null) {
   const queryClient = useQueryClient();

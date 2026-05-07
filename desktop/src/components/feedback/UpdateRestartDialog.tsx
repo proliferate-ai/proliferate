@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { useUpdater } from "@/hooks/updater/use-updater";
+import { useUpdater } from "@/hooks/access/tauri/use-updater";
 
 export function UpdateRestartDialog() {
   const {

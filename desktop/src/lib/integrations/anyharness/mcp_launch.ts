@@ -4,7 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import { finalizeLocalStdioCandidates } from "@/lib/domain/mcp/local-stdio-finalizer";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
-import { materializeCloudMcpServers } from "@/lib/integrations/cloud/mcp_materialization";
+import { materializeCloudMcpServers } from "@/lib/access/cloud/mcp_materialization";
 import {
   releaseGoogleWorkspaceMcpRuntimeEnv,
   resolveGoogleWorkspaceMcpRuntimeEnv,

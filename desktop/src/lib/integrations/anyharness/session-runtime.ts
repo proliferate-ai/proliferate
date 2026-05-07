@@ -22,11 +22,11 @@ import {
   type MeasurementOperationId,
   type MeasurementWorkflowStep,
 } from "@/lib/infra/debug-measurement";
-import { waitForSessionHistoryTimeout } from "@/lib/integrations/anyharness/session-history-timeout";
+import { waitForSessionHistoryTimeout } from "@/lib/access/anyharness/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
-} from "@/lib/integrations/anyharness/runtime-target";
+} from "@/lib/access/anyharness/runtime-target";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";

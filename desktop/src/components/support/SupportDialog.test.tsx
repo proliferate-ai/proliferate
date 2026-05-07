@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
-import type { SupportMessageContext } from "@/lib/integrations/cloud/support";
+import type { SupportMessageContext } from "@/lib/access/cloud/support";
 
 const supportState = vi.hoisted(() => ({
   current: null as SupportDialogStateMock | null,

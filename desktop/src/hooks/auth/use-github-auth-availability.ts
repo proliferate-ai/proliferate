@@ -4,7 +4,7 @@ import {
   getGitHubDesktopAuthAvailability,
   type GitHubDesktopAuthAvailability,
 } from "@/lib/integrations/auth/proliferate-auth";
-import { useControlPlaneHealth } from "@/hooks/cloud/use-control-plane-health";
+import { useControlPlaneHealth } from "@/hooks/access/cloud/use-control-plane-health";
 import { githubDesktopAuthAvailabilityKey } from "./query-keys";
 
 export function useGitHubDesktopAuthAvailability() {

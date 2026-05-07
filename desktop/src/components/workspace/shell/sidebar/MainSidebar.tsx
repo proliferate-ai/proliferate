@@ -37,7 +37,7 @@ import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
-import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarSupportContext } from "@/hooks/support/use-sidebar-support-context";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

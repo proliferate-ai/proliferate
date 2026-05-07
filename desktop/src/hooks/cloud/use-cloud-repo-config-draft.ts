@@ -11,7 +11,7 @@ import {
   type CloudEnvironmentDraft,
   type CloudEnvironmentDraftState,
 } from "@/lib/domain/settings/environment-draft";
-import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
+import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
 
 export interface CloudRepoEnvVarRow {
   id: string;

@@ -1,4 +1,4 @@
-import type { CloudWorkspaceStatus } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceStatus } from "@/lib/access/cloud/client";
 
 export type CloudSidebarStatusTone =
   | "ready"

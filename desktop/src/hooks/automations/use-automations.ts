@@ -3,12 +3,12 @@ import type {
   AutomationListResponse,
   AutomationResponse,
   AutomationRunListResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   getAutomation,
   listAutomationRuns,
   listAutomations,
-} from "@/lib/integrations/cloud/automations";
+} from "@/lib/access/cloud/automations";
 import {
   automationDetailKey,
   automationRunsKey,

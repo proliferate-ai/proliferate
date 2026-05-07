@@ -4,7 +4,7 @@ import { resolveWorkspaceExecutionSidebarActivityState } from "@/lib/domain/sess
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud-workspace-status";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/workspaces/workspace-display";
-import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import { cloudWorkspaceSyntheticId } from "./cloud-ids";
 
 export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud";

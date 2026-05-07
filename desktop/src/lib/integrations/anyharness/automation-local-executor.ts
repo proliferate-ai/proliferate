@@ -1,7 +1,7 @@
 import type {
   LocalAutomationRunClaimResponse,
   LocalAutomationMutationResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import type { AnyHarnessClient, GetSetupStatusResponse, Session, Workspace } from "@anyharness/sdk";
 import { AnyHarnessError } from "@anyharness/sdk";
 import {

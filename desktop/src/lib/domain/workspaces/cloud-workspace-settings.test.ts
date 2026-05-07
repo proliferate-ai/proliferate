@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { formatCloudWorkspaceSettingsError } from "./cloud-workspace-settings";
 
 describe("formatCloudWorkspaceSettingsError", () => {

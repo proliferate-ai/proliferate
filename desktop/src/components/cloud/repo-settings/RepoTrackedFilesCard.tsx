@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { CloudRepoFileMetadata } from "@/lib/integrations/cloud/client";
+import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
 import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,

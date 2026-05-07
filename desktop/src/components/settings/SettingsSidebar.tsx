@@ -10,7 +10,7 @@ import {
   type SettingsNavItem,
 } from "@/components/settings/settings-navigation";
 import { useAppVersion } from "@/hooks/settings/use-app-version";
-import type { UpdaterPhase } from "@/hooks/updater/use-updater";
+import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
   activeSection: SettingsSection;

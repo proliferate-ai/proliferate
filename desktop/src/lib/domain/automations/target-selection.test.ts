@@ -3,7 +3,7 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import type {
   CloudRepoConfigSummary,
   CloudWorkspaceSummary,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,

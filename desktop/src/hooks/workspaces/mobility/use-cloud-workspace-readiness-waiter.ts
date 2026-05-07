@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import type { CloudWorkspaceDetail } from "@/lib/integrations/cloud/client";
-import { getCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import { getCloudWorkspace } from "@/lib/access/cloud/workspaces";
 
 const CLOUD_WORKSPACE_READY_POLL_MS = 3_000;
 const CLOUD_WORKSPACE_READY_TIMEOUT_MS = 120_000;

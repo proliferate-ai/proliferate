@@ -3,7 +3,7 @@ import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import {
   checkControlPlaneReachable,
   getLastKnownControlPlaneReachable,
-} from "@/lib/integrations/cloud/health";
+} from "@/lib/access/cloud/health";
 import { controlPlaneHealthKey } from "./query-keys";
 
 export function useControlPlaneHealth() {

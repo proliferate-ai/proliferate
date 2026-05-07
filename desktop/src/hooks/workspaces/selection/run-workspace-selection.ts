@@ -14,10 +14,10 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/latency-flow";
-import { cloudBillingKey } from "@/hooks/cloud/query-keys";
+import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { startCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
 import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";

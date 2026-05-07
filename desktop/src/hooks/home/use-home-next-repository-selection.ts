@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import {
   buildCloudRepoActionBySourceRoot,

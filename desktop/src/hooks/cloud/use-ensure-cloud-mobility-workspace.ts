@@ -2,10 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudMobilityWorkspaceDetail,
   EnsureCloudMobilityWorkspaceRequest,
-} from "@/lib/integrations/cloud/client";
-import { ensureCloudMobilityWorkspace } from "@/lib/integrations/cloud/mobility";
+} from "@/lib/access/cloud/client";
+import { ensureCloudMobilityWorkspace } from "@/lib/access/cloud/mobility";
 import { applyCloudMobilityWorkspaceDetail } from "./mobility-cache";
-import { cloudMobilityWorkspacesKey } from "./query-keys";
+import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 
 export function useEnsureCloudMobilityWorkspace() {
   const queryClient = useQueryClient();

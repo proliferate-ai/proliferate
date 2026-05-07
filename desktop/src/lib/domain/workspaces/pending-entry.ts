@@ -1,5 +1,5 @@
 import type { SetupScriptExecution } from "@anyharness/sdk";
-import type { CreateCloudWorkspaceRequest } from "@/lib/integrations/cloud/client";
+import type { CreateCloudWorkspaceRequest } from "@/lib/access/cloud/client";
 import type { CreateWorktreeWorkspaceInput } from "@/lib/domain/workspaces/workspace-creation";
 
 export type PendingWorkspaceSource =

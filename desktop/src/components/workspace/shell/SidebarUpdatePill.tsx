@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { Check, LoaderCircle } from "@/components/ui/icons";
-import type { UpdaterPhase } from "@/hooks/updater/use-updater";
+import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SidebarUpdatePillProps {
   phase: UpdaterPhase;

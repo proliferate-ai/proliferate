@@ -2,18 +2,18 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudAgentKind,
   CloudCredentialMutationResponse,
-} from "@/lib/integrations/cloud/client";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import {
   deleteCloudCredential,
-} from "@/lib/integrations/cloud/credentials";
+} from "@/lib/access/cloud/credentials";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import {
   cloudCredentialsKey,
   isCloudWorkspaceConnectionQueryKey,
-} from "./query-keys";
+} from "@/hooks/access/cloud/query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import {
   captureTelemetryException,

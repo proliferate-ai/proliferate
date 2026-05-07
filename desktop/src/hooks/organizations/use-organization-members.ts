@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { listOrganizationMembers } from "@/lib/integrations/cloud/organizations";
+import { listOrganizationMembers } from "@/lib/access/cloud/organizations";
 import { organizationMembersKey } from "./query-keys";
 
 export function useOrganizationMembers(organizationId: string | null) {

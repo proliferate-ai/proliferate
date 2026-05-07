@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BillingPlanInfo, BillingUrlResponse } from "@/lib/integrations/cloud/client";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
+import type { BillingPlanInfo, BillingUrlResponse } from "@/lib/access/cloud/client";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import {
   type CloudOwnerSelection,
   createBillingPortalSession,
@@ -8,7 +8,7 @@ import {
   createRefillCheckoutSession,
   getCloudBillingPlan,
   updateOverageSettings,
-} from "@/lib/integrations/cloud/billing";
+} from "@/lib/access/cloud/billing";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
@@ -16,7 +16,7 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { openExternal } from "@/platform/tauri/shell";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { cloudBillingKey, type CloudOwnerSelectionKey } from "./query-keys";
+import { cloudBillingKey, type CloudOwnerSelectionKey } from "@/hooks/access/cloud/query-keys";
 
 function hasUsableBillingPlan(
   billingPlan: BillingPlanInfo | null | undefined,

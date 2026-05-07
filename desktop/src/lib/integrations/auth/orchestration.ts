@@ -46,7 +46,7 @@ import {
 import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
-import { checkControlPlaneReachable } from "@/lib/integrations/cloud/health";
+import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
 import {
   elapsedStartupMs,
   logStartupDebug,

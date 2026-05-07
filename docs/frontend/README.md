@@ -76,7 +76,6 @@ desktop/src/
     access/
       anyharness/
       cloud/
-      tauri/
     domain/
       <domain>/
         <subdomain>/
@@ -135,7 +134,7 @@ Use the lowest layer that can own the logic cleanly.
 | Scoped dependencies | `providers/**` | It defines an app/subtree context boundary. | General mutable UI state. | [guides/state.md](guides/state.md) |
 | Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [guides/lib.md](guides/lib.md) |
 | Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [guides/lib.md](guides/lib.md) |
-| Raw external access | `lib/access/<system>/**` | It owns raw cloud, AnyHarness desktop wiring, or Tauri wrappers. | Product UI state, product branching, or components. | [guides/access.md](guides/access.md) |
+| Raw external access | `lib/access/<system>/**` and `platform/tauri/**` | `lib/access` owns raw cloud and AnyHarness desktop wiring. `platform/tauri` owns raw native wrappers. | Product UI state, product branching, or components. | [guides/access.md](guides/access.md) |
 | Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [guides/lib.md](guides/lib.md) |
 | Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [guides/lib.md](guides/lib.md) |
 | Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [guides/lib.md](guides/lib.md) |

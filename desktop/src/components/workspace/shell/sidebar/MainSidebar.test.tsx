@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import type { SupportMessageContext } from "@/lib/integrations/cloud/support";
+import type { SupportMessageContext } from "@/lib/access/cloud/support";
 
 const supportDialogRender = vi.hoisted(() => vi.fn());
 
@@ -126,7 +126,7 @@ vi.mock("@/hooks/cloud/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 
-vi.mock("@/hooks/cloud/use-cloud-repo-configs", () => ({
+vi.mock("@/hooks/access/cloud/use-cloud-repo-configs", () => ({
   useCloudRepoConfigs: () => ({ data: { configs: [] }, isPending: false }),
 }));
 

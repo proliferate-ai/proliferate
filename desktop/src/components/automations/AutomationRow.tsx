@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { MoreHorizontal, Pause, Pencil, Play, Zap } from "@/components/ui/icons";
-import type { AutomationResponse } from "@/lib/integrations/cloud/client";
+import type { AutomationResponse } from "@/lib/access/cloud/client";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
 
 interface AutomationRowProps {

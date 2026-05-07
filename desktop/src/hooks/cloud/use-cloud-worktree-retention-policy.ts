@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudWorktreeRetentionPolicyRequest,
   CloudWorktreeRetentionPolicyResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   getCloudWorktreeRetentionPolicy,
   putCloudWorktreeRetentionPolicy,
-} from "@/lib/integrations/cloud/worktree-policy";
+} from "@/lib/access/cloud/worktree-policy";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import { cloudWorktreeRetentionPolicyKey } from "./query-keys";
+import { cloudWorktreeRetentionPolicyKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudWorktreeRetentionPolicy() {
   const authStatus = useAuthStore((state) => state.status);

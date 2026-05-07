@@ -6,7 +6,7 @@ import {
   buildWorkspaceCollections,
   workspaceCollectionsNeedActivityRefresh,
 } from "@/lib/domain/workspaces/collections";
-import { listCloudWorkspaces } from "@/lib/integrations/cloud/workspaces";
+import { listCloudWorkspaces } from "@/lib/access/cloud/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { workspaceCollectionsKey } from "./query-keys";

@@ -4,7 +4,7 @@ import {
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
   ProliferateClientError,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
 import type { BranchPrefixType } from "@/stores/preferences/user-preferences-store";
 import { generateWorkspaceSlug } from "./arrival";

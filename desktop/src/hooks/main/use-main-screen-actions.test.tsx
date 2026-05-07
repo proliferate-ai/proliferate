@@ -44,7 +44,7 @@ vi.mock("@/platform/tauri/shell", () => ({
   openExternal: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/integrations/cloud/workspaces", () => ({
+vi.mock("@/lib/access/cloud/workspaces", () => ({
   updateCloudWorkspaceBranch: vi.fn(async () => undefined),
 }));
 

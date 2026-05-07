@@ -1,7 +1,7 @@
 import type {
   CloudAgentKind,
   CloudCredentialStatus,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 
 export function describeCloudCredentialStatus(
   provider: CloudAgentKind,

@@ -2,7 +2,7 @@ import { AUTOMATION_RUN_COPY } from "@/copy/automations/automation-copy";
 import type {
   AutomationResponse,
   AutomationRunResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import { formatAutomationTimestamp } from "./schedule";
 
 export interface AutomationRowViewModel {

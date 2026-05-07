@@ -3,8 +3,8 @@ import type {
   CloudMobilityHandoffSummary,
   CloudMobilityWorkspaceDetail,
   CloudMobilityWorkspaceSummary,
-} from "@/lib/integrations/cloud/client";
-import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "./query-keys";
+} from "@/lib/access/cloud/client";
+import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 
 export function applyCloudMobilityWorkspaceDetail(
   queryClient: QueryClient,

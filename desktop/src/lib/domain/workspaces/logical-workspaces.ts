@@ -2,7 +2,7 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   humanizeBranchName,
   workspaceCurrentBranchName,

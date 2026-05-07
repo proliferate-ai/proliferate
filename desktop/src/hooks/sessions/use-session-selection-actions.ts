@@ -13,8 +13,8 @@ import {
   getWorkspaceClientAndId,
   isPendingSessionId,
 } from "@/lib/integrations/anyharness/session-runtime";
-import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
-import { resolveWorkspaceConnection } from "@/lib/integrations/anyharness/resolve-workspace-connection";
+import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
+import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";

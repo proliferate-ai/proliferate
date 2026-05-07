@@ -1,5 +1,5 @@
-import type { CloudAgentKind } from "@/lib/integrations/cloud/client";
-import { isCloudAgentKind, ProliferateClientError } from "@/lib/integrations/cloud/client";
+import type { CloudAgentKind } from "@/lib/access/cloud/client";
+import { isCloudAgentKind, ProliferateClientError } from "@/lib/access/cloud/client";
 import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
 
 export async function autoSyncDetectedCloudCredentialsIfNeeded(

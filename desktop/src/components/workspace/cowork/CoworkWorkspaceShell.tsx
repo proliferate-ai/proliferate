@@ -10,7 +10,7 @@ import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorks
 import { useResize } from "@/hooks/layout/use-resize";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
-import { useUpdater } from "@/hooks/updater/use-updater";
+import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import {
   useWorkspaceUiStore,

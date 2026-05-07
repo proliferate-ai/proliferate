@@ -46,7 +46,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/lib/integrations/anyharness/runtime-target", () => ({
+vi.mock("@/lib/access/anyharness/runtime-target", () => ({
   resolveRuntimeTargetForWorkspace: mocks.resolveRuntimeTargetForWorkspace,
 }));
 

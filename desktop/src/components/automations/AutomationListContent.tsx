@@ -1,5 +1,5 @@
 import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
-import type { AutomationResponse } from "@/lib/integrations/cloud/client";
+import type { AutomationResponse } from "@/lib/access/cloud/client";
 import { AutomationRow } from "./AutomationRow";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 

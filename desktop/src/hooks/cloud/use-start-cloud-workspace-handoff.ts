@@ -2,11 +2,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudMobilityHandoffSummary,
   StartCloudWorkspaceMobilityHandoffRequest,
-} from "@/lib/integrations/cloud/client";
-import { startCloudWorkspaceHandoff } from "@/lib/integrations/cloud/mobility";
+} from "@/lib/access/cloud/client";
+import { startCloudWorkspaceHandoff } from "@/lib/access/cloud/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
-import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "./query-keys";
+import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
 
 export function useStartCloudWorkspaceHandoff() {

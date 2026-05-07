@@ -15,7 +15,7 @@ import {
   getAgentSetupSubtitle,
   type AgentReconcileState,
 } from "@/lib/domain/agents/status-presentation";
-import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
+import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useAgentInstallationActions } from "./use-agent-installation-actions";

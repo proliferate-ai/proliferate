@@ -25,7 +25,7 @@ import type {
   AutomationRunResponse,
   CreateAutomationRequest,
   UpdateAutomationRequest,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";

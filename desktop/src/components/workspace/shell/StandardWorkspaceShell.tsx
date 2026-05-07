@@ -24,7 +24,7 @@ import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrom
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
-import { useUpdater } from "@/hooks/updater/use-updater";
+import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/use-workspace-activity-acknowledgement";

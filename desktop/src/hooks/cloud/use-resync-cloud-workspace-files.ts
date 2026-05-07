@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ResyncCloudWorkspaceFilesResponse } from "@/lib/integrations/cloud/client";
-import { resyncCloudWorkspaceFiles } from "@/lib/integrations/cloud/repo-configs";
+import type { ResyncCloudWorkspaceFilesResponse } from "@/lib/access/cloud/client";
+import { resyncCloudWorkspaceFiles } from "@/lib/access/cloud/repo-configs";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { cloudWorkspaceRepoConfigStatusKey } from "./query-keys";
+import { cloudWorkspaceRepoConfigStatusKey } from "@/hooks/access/cloud/query-keys";
 
 export function useResyncCloudWorkspaceFiles(workspaceId: string | null) {
   const queryClient = useQueryClient();

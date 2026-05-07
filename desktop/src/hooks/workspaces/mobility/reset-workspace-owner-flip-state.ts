@@ -1,6 +1,6 @@
 import { anyHarnessWorkspaceQueryKeyRoots } from "@anyharness/sdk-react";
 import type { QueryClient } from "@tanstack/react-query";
-import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
+import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 
 export async function resetWorkspaceOwnerFlipState(args: {
   queryClient: QueryClient;
@@ -15,10 +15,10 @@ export async function resetWorkspaceOwnerFlipState(args: {
   ) => void;
 }) {
   if (args.previousCloudWorkspaceId) {
-    await clearCachedCloudConnections(args.previousCloudWorkspaceId);
+    await clearCachedCloudConnections(args.queryClient, args.previousCloudWorkspaceId);
   }
   if (args.nextCloudWorkspaceId) {
-    await clearCachedCloudConnections(args.nextCloudWorkspaceId);
+    await clearCachedCloudConnections(args.queryClient, args.nextCloudWorkspaceId);
   }
 
   const queryRoots = new Set<string>();

@@ -1,5 +1,5 @@
 import type { CoworkArtifactDetailResponse } from "@anyharness/sdk";
-import { useControlPlaneHealth } from "@/hooks/cloud/use-control-plane-health";
+import { useControlPlaneHealth } from "@/hooks/access/cloud/use-control-plane-health";
 import { useCoworkArtifactViewer } from "@/hooks/cowork/use-cowork-artifact-viewer";
 
 interface CoworkArtifactViewerProps {

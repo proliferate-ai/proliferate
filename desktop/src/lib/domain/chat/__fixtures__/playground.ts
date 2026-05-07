@@ -16,7 +16,7 @@ import {
   type CloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
 import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud-runtime-state";
-import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 
 export const TODOS_SHORT: PlanEntry[] = [
   { content: "Read authoritative repo docs and MCP spec material", status: "completed" },
