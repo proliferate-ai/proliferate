@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/model-selection";
+import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
 import type { Workspace } from "@anyharness/sdk";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
@@ -12,8 +12,8 @@ import { useActiveSessionLaunchState } from "./use-active-chat-session-selectors
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/file-mentions";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+} from "@/lib/domain/chat/transcript/file-mentions";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   failLatencyFlow,
   startLatencyFlow,

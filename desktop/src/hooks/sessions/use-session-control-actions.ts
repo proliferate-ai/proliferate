@@ -41,7 +41,7 @@ import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/s
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 
 interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;

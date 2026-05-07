@@ -2,11 +2,11 @@ import { useMemo } from "react";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   resolveChatInputAvailability,
   type ChatInputAvailability,
-} from "@/lib/domain/chat/chat-input";
+} from "@/lib/domain/chat/composer/chat-input";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";

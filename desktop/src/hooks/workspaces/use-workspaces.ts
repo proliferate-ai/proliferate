@@ -1,11 +1,11 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
+import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildWorkspaceCollections,
   workspaceCollectionsNeedActivityRefresh,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import { listCloudWorkspaces } from "@/lib/access/cloud/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

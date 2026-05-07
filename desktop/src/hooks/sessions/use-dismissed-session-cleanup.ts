@@ -8,8 +8,8 @@ import {
 } from "@/stores/preferences/workspace-ui-store";
 import {
   resolveWithWorkspaceFallback,
-} from "@/lib/domain/workspaces/workspace-keyed-preferences";
-import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/workspace-ui-key";
+} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   getSessionRecord,

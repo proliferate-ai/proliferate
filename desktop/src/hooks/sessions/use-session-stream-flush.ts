@@ -29,8 +29,8 @@ import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch
 import {
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/chat/prompt-outbox";
-import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/pending-prompts";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
+import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,

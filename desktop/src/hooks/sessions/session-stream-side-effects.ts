@@ -21,7 +21,7 @@ import {
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
-} from "@/lib/domain/chat/subagent-launch";
+} from "@/lib/domain/chat/subagents/subagent-launch";
 import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
 import {
   notifyTurnEnd,

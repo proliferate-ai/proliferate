@@ -25,7 +25,7 @@ import {
 } from "@/lib/domain/sessions/activity";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useWorkspaceActiveChatTabId } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
-import type { ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
@@ -35,8 +35,8 @@ import {
 } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 
 export interface HeaderChatTabEntry extends GroupedChatTab {
   id: string;

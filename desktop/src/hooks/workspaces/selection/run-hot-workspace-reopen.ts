@@ -1,7 +1,7 @@
-import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
+import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   resolveHotReopenCandidate,
-} from "@/lib/domain/workspaces/hot-reopen";
+} from "@/lib/domain/workspaces/selection/hot-reopen";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,

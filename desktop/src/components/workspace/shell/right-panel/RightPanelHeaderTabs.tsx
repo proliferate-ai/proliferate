@@ -23,7 +23,7 @@ import {
   type RightPanelBrowserTab,
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel";
 import { ToolHeaderButton } from "@/components/workspace/shell/right-panel/ToolHeaderButton";
 import { TerminalHeaderButton } from "@/components/workspace/shell/right-panel/TerminalHeaderButton";
 import { BrowserHeaderButton } from "@/components/workspace/shell/right-panel/BrowserHeaderButton";

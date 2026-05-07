@@ -1,11 +1,11 @@
 import type { ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
-import { resolveModelForRegistry } from "@/lib/domain/chat/session-config";
+import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
 import {
   listConfiguredSessionControlValues,
   resolveEffectiveConfiguredSessionControlValue,
   withUpdatedDefaultSessionModeByAgentKind,
-} from "@/lib/domain/chat/session-mode-control";
+} from "@/lib/domain/chat/session-controls/session-mode-control";
 import type {
   ConfiguredSessionControlValue,
 } from "@/lib/domain/chat/session-controls/presentation";

@@ -7,7 +7,7 @@ import {
   fileDiffViewerTarget,
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { FileEditorView } from "./FileEditorView";
 

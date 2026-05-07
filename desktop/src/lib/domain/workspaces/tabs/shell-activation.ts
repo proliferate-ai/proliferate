@@ -5,7 +5,7 @@ import {
   type WorkspaceShellIntentKey,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { ViewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
+import type { ViewerTargetKey } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export interface PendingChatActivation {
   attemptId: string;

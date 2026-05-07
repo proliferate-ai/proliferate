@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
 import { ToolFileChip } from "./ToolFileChip";

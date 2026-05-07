@@ -4,9 +4,9 @@ import type { ProviderConfig } from "@anyharness/sdk";
 import { useShallow } from "zustand/react/shallow";
 import { AGENT_READINESS_LABELS } from "@/lib/domain/agents/readiness-presentation";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
-import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/preference-resolvers";
+import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/model-selection";
+import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
 import { useChatLaunchCatalog } from "./use-chat-launch-catalog";
 
 const EMPTY_PROVIDER_CONFIGS: ProviderConfig[] = [];

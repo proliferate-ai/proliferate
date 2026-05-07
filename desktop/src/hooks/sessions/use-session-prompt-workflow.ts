@@ -15,12 +15,12 @@ import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-ne
 import {
   getSessionRecord,
 } from "@/stores/sessions/session-records";
-import { createPromptId } from "@/lib/domain/chat/prompt-id";
+import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
   outboxEntriesForSession,
   resolvePromptOutboxPlacement,
-} from "@/lib/domain/chat/prompt-outbox";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 

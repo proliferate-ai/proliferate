@@ -46,27 +46,27 @@ import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
 import { useChatTranscriptSelection } from "@/hooks/chat/use-chat-transcript-selection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
+import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import {
   collectTurnCoworkArtifactToolCalls,
-} from "@/lib/domain/chat/cowork-artifact-tool-presentation";
+} from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
 import {
   describeToolCallDisplay,
   type ToolDisplayIconKey,
-} from "@/lib/domain/chat/tool-call-display";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+} from "@/lib/domain/chat/tools/tool-call-display";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import {
   buildTranscriptDisplayBlocks,
   buildTurnPresentation,
   summarizeCollapsedActions,
   type TurnDisplayBlock,
-} from "@/lib/domain/chat/transcript-presentation";
-import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript-copy";
-import { normalizeToolResultText } from "@/lib/domain/chat/tool-result-text";
+} from "@/lib/domain/chat/transcript/transcript-presentation";
+import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript-copy";
+import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
-} from "@/lib/domain/chat/claude-plan-tool-call";
+} from "@/lib/domain/chat/tools/claude-plan-tool-call";
 import {
   parseAsyncSubagentLaunch,
   parseSubagentLaunchResult,
@@ -75,7 +75,7 @@ import {
   resolveSubagentExecutionState,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
-} from "@/lib/domain/chat/subagent-launch";
+} from "@/lib/domain/chat/subagents/subagent-launch";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -101,28 +101,28 @@ import {
   turnHasAssistantRenderableTranscriptContent,
   resolveVisibleOptimisticPrompt,
   shouldShowPendingPromptActivity,
-} from "@/lib/domain/chat/pending-prompts";
+} from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   outboxEntryToPendingPromptEntry,
   renderableOutboxEntriesForTranscript,
   type PromptOutboxEntry,
-} from "@/lib/domain/chat/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
 import {
   type TranscriptVirtualRow,
-} from "@/lib/domain/chat/transcript-virtual-rows";
+} from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { useTranscriptRowModel } from "@/hooks/chat/use-transcript-row-model";
 import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
 import {
   lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-} from "@/lib/domain/chat/transcript-trailing-status";
+} from "@/lib/domain/chat/transcript/transcript-trailing-status";
 import {
   resolveAssistantTurnActionTime,
   resolveOptimisticPromptActionTime,
   resolveUserMessageActionTime,
-} from "@/lib/domain/chat/transcript-action-time";
-import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript-open-target";
+} from "@/lib/domain/chat/transcript/transcript-action-time";
+import type { TranscriptOpenSessionRole } from "@/lib/domain/chat/transcript/transcript-open-target";
 import type {
   FileChangeContentPart,
   FileReadContentPart,

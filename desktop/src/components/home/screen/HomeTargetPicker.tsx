@@ -19,7 +19,7 @@ import type {
   HomeNextRepoLaunchKind,
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 interface HomeTargetPickerProps {
   destination: HomeNextDestination;

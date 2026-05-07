@@ -11,9 +11,9 @@ import {
 import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";

@@ -12,8 +12,8 @@ import {
   type PromptDraftAttachmentDescriptor,
   type PromptDisplayAttachmentPart,
   type PromptDisplayPart,
-} from "@/lib/domain/chat/prompt-content";
-import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
+} from "@/lib/domain/chat/composer/prompt-content";
+import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/transcript/file-mention-links";
 
 type PromptContentRendererVariant = "transcript" | "compact";
 type PromptContentRendererLayout = "stack" | "wrap" | "auto";

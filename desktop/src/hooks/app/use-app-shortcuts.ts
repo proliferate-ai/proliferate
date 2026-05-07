@@ -2,7 +2,7 @@ import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import type { AppCommandActions } from "@/hooks/app/use-app-command-actions";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";
-import { resolveSidebarShortcutDigitTarget } from "@/lib/domain/workspaces/sidebar-shortcut-targets";
+import { resolveSidebarShortcutDigitTarget } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import {
   runRedoCommand,
   runSelectAllCommand,

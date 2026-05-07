@@ -8,7 +8,7 @@ import { getPendingSessionConfigChange } from "@/lib/domain/sessions/pending-con
 import {
   resolveMatchingModelControlLabel,
   resolveModelDisplayName,
-} from "@/lib/domain/chat/model-display";
+} from "@/lib/domain/chat/models/model-display";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
@@ -21,7 +21,7 @@ import {
   resolveToggleState,
   type LiveSessionControlDescriptor,
   type SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls";
+} from "@/lib/domain/chat/session-controls/session-controls";
 import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
 
 function resolveCurrentModelDisplayName(args: {

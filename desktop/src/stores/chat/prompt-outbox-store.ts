@@ -10,7 +10,7 @@ import {
   type PromptOutboxCreateInput,
   type PromptOutboxEntry,
   type PromptOutboxStateShape,
-} from "@/lib/domain/chat/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
 
 interface PromptOutboxStoreState extends PromptOutboxStateShape {
   dispatchVersion: number;

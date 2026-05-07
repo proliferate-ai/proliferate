@@ -13,7 +13,7 @@ import {
   type PublishCommitDraft,
   type PublishIntent,
   type PublishPullRequestDraft,
-} from "@/lib/domain/workspaces/publish-workflow";
+} from "@/lib/domain/workspaces/creation/publish-workflow";
 import { runWorkspacePublishWorkflow } from "./run-workspace-publish-workflow";
 
 export interface UseWorkspacePublishWorkflowOptions {

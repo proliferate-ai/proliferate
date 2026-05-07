@@ -4,7 +4,7 @@ import {
   getAnyHarnessClient,
 } from "@anyharness/sdk-react";
 import { useQueries } from "@tanstack/react-query";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
+import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 

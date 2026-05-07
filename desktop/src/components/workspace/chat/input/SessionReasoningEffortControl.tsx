@@ -1,6 +1,6 @@
-import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-reasoning-effort-control";
-import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-toggle-control";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
+import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-toggle-control";
+import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { Brain, Check, ChevronDown } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";

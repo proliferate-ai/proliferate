@@ -18,8 +18,8 @@ import {
   type GitPanelFile,
   type GitPanelMode,
   type GitPanelSectionScope,
-} from "@/lib/domain/workspaces/git-panel-diff";
-import { allChangesViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
+import { allChangesViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export function GitPanel() {
   const [changesFilter, setChangesFilter] = useState<GitPanelMode>("working_tree_composite");

@@ -19,7 +19,7 @@ import {
   resolveChatLaunchRetryMode,
   resolveLaunchIntentPendingWorkspaceId,
   type ChatLaunchRetryMode,
-} from "@/lib/domain/chat/launch-intent";
+} from "@/lib/domain/chat/launch/launch-intent";
 import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,

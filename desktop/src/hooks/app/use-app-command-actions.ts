@@ -14,12 +14,12 @@ import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
   resolveCloudRepoActionState,
-} from "@/lib/domain/workspaces/cloud-workspace-creation";
-import { getCloudRepoTargetForSelectedWorkspace, getRepoForSelectedWorkspace } from "@/lib/domain/workspaces/selected-repo-target";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import { getCloudRepoTargetForSelectedWorkspace, getRepoForSelectedWorkspace } from "@/lib/domain/workspaces/cloud/selected-repo-target";
 import {
   sidebarRepoGroupKeyForCloudTarget,
   sidebarRepoGroupKeyForWorkspace,
-} from "@/lib/domain/workspaces/sidebar-group-key";
+} from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {

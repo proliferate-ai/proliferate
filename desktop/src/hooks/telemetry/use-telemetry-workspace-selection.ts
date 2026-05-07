@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { DesktopWorkspaceKind } from "@/lib/domain/telemetry/events";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   setTelemetryTag,
   trackProductEvent,

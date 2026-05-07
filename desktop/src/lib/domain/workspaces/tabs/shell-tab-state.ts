@@ -14,7 +14,7 @@ import {
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export interface ResolveWorkspaceShellTabsStateArgs<TTab extends ShellChatTab> {
   selectedWorkspaceId: string | null;

@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/use-selected-logical-workspace";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   isWorkspaceMobilityTransitionPhase,
   resolveWorkspaceMobilityStatusModel,
-} from "@/lib/domain/workspaces/mobility-state-machine";
+} from "@/lib/domain/workspaces/mobility/mobility-state-machine";
 import { useCloudMobilityWorkspaceDetail } from "@/hooks/cloud/use-cloud-mobility-workspace-detail";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 

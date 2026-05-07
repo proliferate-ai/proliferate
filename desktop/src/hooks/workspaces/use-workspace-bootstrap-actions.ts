@@ -19,11 +19,11 @@ import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-ac
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
-} from "@/lib/domain/workspaces/selection";
-import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/collections";
-import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/model-selection";
-import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/session-config";
-import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection";
+} from "@/lib/domain/workspaces/selection/selection";
+import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
+import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-selection";
+import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/launch/session-config";
+import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
 import {
   elapsedMs,
   logLatency,

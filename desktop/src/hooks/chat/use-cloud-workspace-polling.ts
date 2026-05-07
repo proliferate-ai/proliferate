@@ -3,13 +3,13 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
+import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import {
   isCloudWorkspacePostReadyPending,
   shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
-} from "@/lib/domain/workspaces/cloud-workspace-status";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   elapsedMs,
   elapsedSince,

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/icons";
 import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
-import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
+import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";
 import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 

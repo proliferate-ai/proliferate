@@ -27,7 +27,7 @@ import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
 import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
-import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
+import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";
 import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import {
   getMobilityOverlayTitle,
@@ -51,7 +51,7 @@ import type {
   CoworkComposerWorkspaceRow,
 } from "@/hooks/cowork/use-cowork-composer-strip";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import {
   CLOUD_RUNTIME_RECONNECT_ERROR,
   CLOUD_RUNTIME_RECONNECTING,
@@ -93,7 +93,7 @@ import {
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,
-} from "@/lib/domain/chat/pending-prompt-queue";
+} from "@/lib/domain/chat/outbox/pending-prompt-queue";
 
 interface PlaygroundComposerProps {
   dockRef: Ref<HTMLDivElement>;

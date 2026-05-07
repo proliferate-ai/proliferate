@@ -6,7 +6,7 @@ import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/s
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
-import { viewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
+import { viewerTargetKey } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export const WorkspaceContentView = memo(function WorkspaceContentView() {
   const headerTabs = useWorkspaceHeaderTabsViewModelContext();

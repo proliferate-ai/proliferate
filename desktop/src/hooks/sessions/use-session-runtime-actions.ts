@@ -44,7 +44,7 @@ import {
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
 } from "@/lib/domain/sessions/pending-config";
-import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/pending-prompts";
+import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/outbox/pending-prompts";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import {
   clearSessionReconnectTimer,
@@ -54,7 +54,7 @@ import {
   rememberLastViewedSession,
   trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";

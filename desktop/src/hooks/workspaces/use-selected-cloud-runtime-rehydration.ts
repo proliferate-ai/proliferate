@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
+import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { startLatencyTimer } from "@/lib/infra/measurement/debug-latency";

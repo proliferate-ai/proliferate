@@ -20,18 +20,18 @@ import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness"
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/file-mentions";
+} from "@/lib/domain/chat/transcript/file-mentions";
 import {
   createEmptySessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/pending-entry";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import { createPromptId } from "@/lib/domain/chat/prompt-id";
-import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
+import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import {
   finishOrCancelMeasurementOperation,
   type MeasurementOperationId,

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { createPromptId } from "@/lib/domain/chat/prompt-id";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/prompt-outbox";
+import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";

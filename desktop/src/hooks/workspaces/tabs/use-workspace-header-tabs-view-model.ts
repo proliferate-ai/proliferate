@@ -37,7 +37,7 @@ import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-ta
 import type {
   FileViewerMode,
   ViewerTarget,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import {
   useWorkspaceFileBuffersStore,
   type WorkspaceFileBuffer,
@@ -48,11 +48,11 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   resolveWithWorkspaceFallback,
   sameStringArray,
-} from "@/lib/domain/workspaces/workspace-keyed-preferences";
+} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 

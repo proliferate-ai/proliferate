@@ -3,7 +3,7 @@ import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { normalizeContentParts } from "@/lib/domain/chat/prompt-content";
+import { normalizeContentParts } from "@/lib/domain/chat/composer/prompt-content";
 
 export interface UserMessageProps {
   sessionId: string | null;

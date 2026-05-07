@@ -55,7 +55,7 @@ import {
   viewerTargetLabel,
   viewerTargetDisplayPath,
   viewerTargetEditablePath,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";

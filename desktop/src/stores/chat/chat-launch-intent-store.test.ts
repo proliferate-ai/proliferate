@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatLaunchIntent } from "@/lib/domain/chat/launch-intent";
+import type { ChatLaunchIntent } from "@/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "./chat-launch-intent-store";
 
 function intent(overrides: Partial<ChatLaunchIntent> = {}): ChatLaunchIntent {

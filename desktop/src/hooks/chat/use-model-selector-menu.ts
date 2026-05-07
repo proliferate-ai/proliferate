@@ -3,7 +3,7 @@ import type { AgentSummary } from "@anyharness/sdk";
 import {
   filterModelSelectorGroups,
   type ModelSelectorGroup,
-} from "@/lib/domain/chat/model-selection";
+} from "@/lib/domain/chat/models/model-selection";
 
 interface UseModelSelectorMenuArgs {
   groups: ModelSelectorGroup[];

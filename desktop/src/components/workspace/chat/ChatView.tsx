@@ -27,12 +27,12 @@ import { useSessionErrorAcknowledgement } from "@/hooks/sessions/use-session-err
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/use-workspace-mobility-lifecycle";
-import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
+import { canAttachPromptContent } from "@/lib/domain/chat/composer/prompt-content";
 import {
   canAcceptChatFileDrop,
   isFileDrag,
   readFileDragInput,
-} from "@/lib/domain/chat/prompt-attachment-drag";
+} from "@/lib/domain/chat/composer/prompt-attachment-drag";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 
 function ChatContent({

@@ -13,13 +13,13 @@ import { getHomeDir } from "@/platform/tauri/shell";
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
-} from "@/lib/domain/workspaces/arrival";
+} from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "./use-workspaces";
-import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud-ids";
+import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -31,7 +31,7 @@ import {
   type ResolvedWorktreeCreation,
   type WorktreeCreationParams,
   resolveWorktreeCreationParams,
-} from "@/lib/domain/workspaces/workspace-creation";
+} from "@/lib/domain/workspaces/creation/workspace-creation";
 import { ensureRuntimeReady } from "./runtime-ready";
 import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
 import {

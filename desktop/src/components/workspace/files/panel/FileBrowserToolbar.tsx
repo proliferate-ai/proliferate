@@ -10,7 +10,7 @@ import {
   Search,
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import type { GitPanelMode } from "@/lib/domain/workspaces/git-panel-diff";
+import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 

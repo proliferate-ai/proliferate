@@ -17,13 +17,13 @@ import {
 import {
   shouldStickToVirtualBottom,
   type TranscriptVirtualRow,
-} from "@/lib/domain/chat/transcript-virtual-rows";
+} from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
   TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
   type TranscriptVirtualizationMode,
-} from "@/lib/domain/chat/transcript-virtualization-config";
+} from "@/lib/domain/chat/transcript/transcript-virtualization-config";
 import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,

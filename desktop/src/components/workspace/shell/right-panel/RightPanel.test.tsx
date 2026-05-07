@@ -9,7 +9,7 @@ import {
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   rightPanelBrowserHeaderKey,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel";
 import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";

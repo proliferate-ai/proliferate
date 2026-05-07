@@ -8,14 +8,14 @@ import type {
   TranscriptState,
   UserInputQuestion,
 } from "@anyharness/sdk";
-import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
-import type { PendingPromptQueueEntry } from "@/lib/domain/chat/pending-prompt-queue";
-import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
+import type { PendingPromptQueueEntry } from "@/lib/domain/chat/outbox/pending-prompt-queue";
+import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
 import {
   buildCloudWorkspaceStatusScreenModel,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
-import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud-runtime-state";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
+import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 
 export const TODOS_SHORT: PlanEntry[] = [

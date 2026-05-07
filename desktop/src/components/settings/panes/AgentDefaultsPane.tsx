@@ -10,7 +10,7 @@ import { ProviderIcon } from "@/components/ui/icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
-import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-mode-control";
+import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
   buildSettingsAgentDefaultRows,
   withUpdatedDefaultLiveSessionControlValueByAgentKind,

@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   ensureRepoGroupExpanded,

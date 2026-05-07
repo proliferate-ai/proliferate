@@ -22,8 +22,8 @@ import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-ef
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
-import { createPromptId } from "@/lib/domain/chat/prompt-id";
-import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
+import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
+import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
 import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";

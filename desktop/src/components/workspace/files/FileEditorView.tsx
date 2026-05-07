@@ -56,7 +56,7 @@ import {
   type FileViewerMode,
   type ViewerTarget,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import {
   proliferateDarkTheme,
   proliferateLightTheme,

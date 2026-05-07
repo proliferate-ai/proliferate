@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
+import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,

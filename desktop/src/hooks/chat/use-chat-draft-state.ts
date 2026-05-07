@@ -1,11 +1,11 @@
 import { useCallback } from "react";
-import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/chat-input";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/composer/chat-input";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/file-mentions";
+} from "@/lib/domain/chat/transcript/file-mentions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

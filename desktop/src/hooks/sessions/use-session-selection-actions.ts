@@ -40,7 +40,7 @@ import {
   startMeasurementOperation,
   type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
-import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/hot-reopen";
+import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   commitHotActiveSession,
@@ -63,7 +63,7 @@ import type {
   SessionRelationship,
 } from "@/stores/sessions/session-types";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export type WorkspaceSession = Session & { workspaceId: string };
 

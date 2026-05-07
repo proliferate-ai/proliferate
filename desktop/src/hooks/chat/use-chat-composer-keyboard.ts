@@ -1,11 +1,11 @@
 import { useCallback, type KeyboardEvent } from "react";
-import { getPreviousSessionModeValue } from "@/lib/domain/chat/session-mode-control";
+import { getPreviousSessionModeValue } from "@/lib/domain/chat/session-controls/session-mode-control";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
+import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import {
   isComposerSubmitKey,
   isRepeatedComposerSubmitKey,
-} from "@/lib/domain/chat/composer-keyboard";
+} from "@/lib/domain/chat/composer/composer-keyboard";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
 
 interface UseChatComposerKeyboardArgs {

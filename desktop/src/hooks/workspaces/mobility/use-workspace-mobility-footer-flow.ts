@@ -7,10 +7,10 @@ import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobil
 import { useMobilityPromptState } from "@/hooks/workspaces/mobility/use-mobility-prompt-state";
 import { useWorkspaceMobilityHandoffActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-handoff-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
-import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility-state-machine";
-import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mobility-footer-progress";
+import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
+import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mobility/mobility-footer-progress";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
-import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility-prompt";
+import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility/mobility-prompt";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 

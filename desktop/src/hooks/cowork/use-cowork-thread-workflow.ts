@@ -10,19 +10,19 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/preference-resolvers";
+import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
   workspaceFileTreeStateKey,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildSubmittingPendingWorkspaceEntry,
   createPendingWorkspaceAttemptId,
   type PendingCoworkRequestInput,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/pending-entry";
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   elapsedMs,
   elapsedSince,

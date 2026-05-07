@@ -8,7 +8,7 @@ import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import {
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel";
 import { openExternal } from "@/platform/tauri/shell";
 import { useMainScreenActions } from "./use-main-screen-actions";
 import type { MainScreenLayoutState } from "./use-main-screen-state";

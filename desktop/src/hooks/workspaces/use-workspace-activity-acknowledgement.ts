@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import {
   findLogicalWorkspace,
   latestLogicalWorkspaceTimestamp,
-} from "@/lib/domain/workspaces/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,

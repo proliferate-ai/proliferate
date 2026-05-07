@@ -5,7 +5,7 @@ import type {
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
 import { REVIEW_DEFAULT_MODE_ID_BY_AGENT_KIND } from "@/config/review-session-mode-defaults";
-import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-mode-control";
+import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
 
 export const DEFAULT_REVIEW_MAX_ROUNDS = 2;
 export const MAX_REVIEWERS_PER_RUN = 4;

@@ -10,7 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { getCloudMobilityWorkspaceDetail } from "@/lib/access/cloud/mobility";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { resetWorkspaceOwnerFlipState } from "@/hooks/workspaces/mobility/reset-workspace-owner-flip-state";
 import { useCloudWorkspaceHandoffPreflight } from "@/hooks/cloud/use-cloud-workspace-handoff-preflight";
 import { useCompleteCloudWorkspaceHandoffCleanup } from "@/hooks/cloud/use-complete-cloud-workspace-handoff-cleanup";
@@ -24,8 +24,8 @@ import { useCloudWorkspaceReadinessWaiter } from "@/hooks/workspaces/mobility/us
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
-import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility-preflight-error";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility/mobility-preflight-error";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";
 

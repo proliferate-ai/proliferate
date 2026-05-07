@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   createFileMentionNode,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/file-mentions";
+} from "@/lib/domain/chat/transcript/file-mentions";
 import { useChatInputStore } from "./chat-input-store";
 
 describe("chat input store", () => {

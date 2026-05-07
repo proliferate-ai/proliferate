@@ -14,7 +14,7 @@ import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolAction
 import { ReviewFeedbackSummaryView } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CircleAlert, Settings, Sparkles } from "@/components/ui/icons";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import {
   CLAUDE_PLAN_LONG,
   CLAUDE_PLAN_SHORT,

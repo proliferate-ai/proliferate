@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { fileWorkspaceShellTabKey } from "./shell-tabs";
 import { deriveWorkspaceFileTabSeed } from "./shell-file-seed";
 

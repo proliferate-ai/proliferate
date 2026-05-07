@@ -3,7 +3,7 @@ import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
+import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
 
 /**

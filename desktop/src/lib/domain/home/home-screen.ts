@@ -3,7 +3,7 @@ import { HOME_SCREEN_LABELS } from "@/copy/home/home-screen-copy";
 import {
   workspaceBranchLabel,
   workspaceRepoName,
-} from "@/lib/domain/workspaces/workspace-display";
+} from "@/lib/domain/workspaces/display/workspace-display";
 
 export type HomeActionId =
   | "resume-last-workspace"

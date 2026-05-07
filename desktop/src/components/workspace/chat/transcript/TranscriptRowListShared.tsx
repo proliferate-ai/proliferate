@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from "react";
 import { LoaderCircle } from "@/components/ui/icons";
-import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
 export const TRANSCRIPT_TOP_PADDING_PX = 16;

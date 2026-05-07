@@ -11,14 +11,14 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { deriveWorkspaceFileTabSeed } from "@/lib/domain/workspaces/tabs/shell-file-seed";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import {
   fileDiffViewerTarget,
   fileViewerTarget,
   type FileDiffViewerScope,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";

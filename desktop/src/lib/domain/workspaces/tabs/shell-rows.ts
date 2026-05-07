@@ -8,7 +8,7 @@ import {
   viewerWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
-import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export interface ShellChatTab extends GroupedChatTab {
   id: string;

@@ -4,7 +4,7 @@ import { splitFilePath } from "@/lib/domain/command-palette/entries";
 import {
   isFileViewerTarget,
   viewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 export interface CommandPaletteOpenFileEntry {

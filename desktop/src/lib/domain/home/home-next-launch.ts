@@ -14,7 +14,7 @@ import {
   type AgentModelOption,
   type AgentModelSelection,
 } from "@/lib/domain/agents/model-options";
-import { resolveModelForRegistry } from "@/lib/domain/chat/session-config";
+import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
 export type HomeNextRepositorySelection =

@@ -16,7 +16,7 @@ import {
 } from "@/platform/tauri/shell";
 import type { OpenTarget } from "@/platform/tauri/shell";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { resolvePreferredOpenTarget } from "@/lib/domain/chat/preference-resolvers";
+import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 interface TopBarProps {

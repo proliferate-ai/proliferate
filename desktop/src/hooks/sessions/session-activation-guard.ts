@@ -1,5 +1,5 @@
 import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

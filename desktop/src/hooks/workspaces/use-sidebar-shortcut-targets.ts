@@ -5,8 +5,8 @@ import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-
 import {
   buildSidebarGroupStates,
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
-} from "@/lib/domain/workspaces/sidebar";
-import { visibleSidebarShortcutTargetIds } from "@/lib/domain/workspaces/sidebar-shortcut-targets";
+} from "@/lib/domain/workspaces/sidebar/sidebar";
+import { visibleSidebarShortcutTargetIds } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-sidebar-show-more-store";

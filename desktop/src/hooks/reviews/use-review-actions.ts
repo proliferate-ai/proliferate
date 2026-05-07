@@ -12,7 +12,7 @@ import {
   useMarkReviewRevisionReadyMutation,
   useRetryReviewAssignmentMutation,
 } from "@anyharness/sdk-react";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
+import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import {
   buildReviewRequest,
   createReviewSetupDraft,

@@ -3,7 +3,7 @@ import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { runAddRepoWorkflow } from "@/lib/domain/workspaces/add-repo-workflow";
+import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
 import { pickFolder } from "@/platform/tauri/shell";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";

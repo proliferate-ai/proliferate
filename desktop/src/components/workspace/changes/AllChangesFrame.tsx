@@ -23,11 +23,11 @@ import {
   buildGitPanelFiles,
   gitPanelModeLabel,
   type GitPanelFile,
-} from "@/lib/domain/workspaces/git-panel-diff";
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 import {
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import {
   serializeViewedKey,
   useWorkspaceChangeReviewStore,

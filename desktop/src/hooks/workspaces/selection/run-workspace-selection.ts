@@ -1,14 +1,14 @@
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
+import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   markWorkspaceViewed,
   markWorkspaceViewedAt,
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection";
+import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection/selection";
 import {
   logLatency,
   startLatencyTimer,

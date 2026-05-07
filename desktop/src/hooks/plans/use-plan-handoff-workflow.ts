@@ -19,7 +19,7 @@ import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cl
 import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-content";
 import {
   listPlanHandoffModeOptions,
   resolvePlanHandoffModeId,
@@ -29,8 +29,8 @@ import {
 import type {
   ModelSelectorProps,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/model-selection";
-import { resolveModelDisplayName } from "@/lib/domain/chat/model-display";
+} from "@/lib/domain/chat/models/model-selection";
+import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
 import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";

@@ -12,7 +12,7 @@ import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { ArrowUpRight, LoaderCircle, X } from "@/components/ui/icons";
-import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 
 function SectionRow({

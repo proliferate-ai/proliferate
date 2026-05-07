@@ -1,6 +1,6 @@
 import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
 import { useChatReadyContext } from "@/hooks/chat/use-chat-ready-context";
-import { formatChatReadyContextLine } from "@/lib/domain/chat/chat-ready-context";
+import { formatChatReadyContextLine } from "@/lib/domain/chat/surface/chat-ready-context";
 
 /**
  * Hero variant shown when a session is hydrated but has no turns yet. The

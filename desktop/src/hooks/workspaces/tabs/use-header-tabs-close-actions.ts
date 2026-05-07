@@ -16,7 +16,7 @@ import {
   viewerTargetEditablePath,
   viewerTargetKey,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 
 function isStringPath(path: string | null): path is string {

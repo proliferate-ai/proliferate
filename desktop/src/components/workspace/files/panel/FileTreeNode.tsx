@@ -21,7 +21,7 @@ import {
   viewerTargetKey,
   type ViewerTarget,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { TargetIcon } from "@/components/workspace/open-target/OpenTargetMenu";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";

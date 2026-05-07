@@ -14,8 +14,8 @@ import {
   findLogicalWorkspace,
   logicalWorkspaceCloudMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
-} from "@/lib/domain/workspaces/logical-workspaces";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";

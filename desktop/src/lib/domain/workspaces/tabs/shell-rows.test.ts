@@ -8,7 +8,7 @@ import {
   chatWorkspaceShellTabKey,
   fileWorkspaceShellTabKey,
 } from "./shell-tabs";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 describe("buildHeaderShellRows", () => {
   const chatRows: HeaderStripRow<ShellChatTab>[] = [

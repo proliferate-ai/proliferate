@@ -9,7 +9,7 @@ import {
   type HomeActionId,
   buildHomeActionCards,
 } from "@/lib/domain/home/home-screen";
-import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/recency";
+import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 

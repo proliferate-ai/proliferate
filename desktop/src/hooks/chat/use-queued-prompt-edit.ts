@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
-import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/prompt-outbox";
+import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/outbox/prompt-outbox";
 import {
   useActivePendingPrompts,
   useActiveSessionId,

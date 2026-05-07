@@ -6,8 +6,8 @@ import {
 import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
-import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar";
-import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/workspace-display";
+import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar/sidebar";
+import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
 
 interface CoworkThreadRowProps {

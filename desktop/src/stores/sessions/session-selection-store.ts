@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   buildPendingWorkspaceUiKey,
   isPendingWorkspaceUiKey,
-} from "@/lib/domain/workspaces/pending-entry";
-import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
+} from "@/lib/domain/workspaces/creation/pending-entry";
+import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import type { HotPaintGate } from "@/stores/sessions/session-types";
 
