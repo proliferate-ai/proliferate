@@ -33,7 +33,7 @@ import {
   resolveWorktreeCreationParams,
 } from "@/lib/domain/workspaces/creation/workspace-creation";
 import { ensureRuntimeReady } from "./runtime-ready";
-import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
+import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
 import {
   elapsedMs,
   logLatency,

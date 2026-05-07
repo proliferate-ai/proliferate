@@ -102,6 +102,27 @@ export function useReadWorkspaceFileQuery(options: {
   });
 }
 
+export function useReadWorkspaceFileMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      path,
+    }: {
+      workspaceId?: string | null;
+      path: string;
+    }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(
+        workspace,
+        workspaceId ?? options?.workspaceId ?? workspace.workspaceId,
+      );
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.files.read(resolved.connection.anyharnessWorkspaceId, path);
+    },
+  });
+}
+
 export function useSearchWorkspaceFilesQuery(options: {
   workspaceId?: string | null;
   query?: string;

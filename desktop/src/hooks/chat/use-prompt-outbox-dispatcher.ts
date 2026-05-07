@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
   selectNextDispatchableOutboxEntry,
   type PromptOutboxEntry,
@@ -35,6 +35,7 @@ export function usePromptOutboxDispatcher(): void {
   const { applySessionSummary, rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
   const { maybeGenerateSessionTitle } = useSessionTitleActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const promptSessionMutation = usePromptSessionMutation();
   const inFlightSessionIdsRef = useRef(new Set<string>());
   const dispatcherOwnerRef = useRef<symbol | null>(null);
 
@@ -98,7 +99,6 @@ export function usePromptOutboxDispatcher(): void {
         return;
       }
       const {
-        connection,
         workspaceId,
         materializedSessionId: resolvedSessionId,
       } = await getSessionClientAndWorkspace(entry.clientSessionId);
@@ -112,14 +112,15 @@ export function usePromptOutboxDispatcher(): void {
         dispatchedAt: new Date().toISOString(),
       });
       requestStarted = true;
-      const response = await getAnyHarnessClient(connection).sessions.prompt(
-        resolvedSessionId,
-        {
+      const response = await promptSessionMutation.mutateAsync({
+        workspaceId,
+        sessionId: resolvedSessionId,
+        request: {
           promptId: entry.clientPromptId,
           blocks: preparedBlocks,
         },
         requestOptions,
-      );
+      });
 
       applySessionSummary(entry.clientSessionId, response.session, workspaceId);
       upsertWorkspaceSessionRecord(workspaceId, response.session);
@@ -173,6 +174,7 @@ export function usePromptOutboxDispatcher(): void {
   }, [
     applySessionSummary,
     maybeGenerateSessionTitle,
+    promptSessionMutation,
     rehydrateSessionSlotFromHistory,
     upsertWorkspaceSessionRecord,
   ]);

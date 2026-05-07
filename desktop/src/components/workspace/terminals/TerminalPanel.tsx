@@ -26,7 +26,7 @@ import {
   TERMINAL_OUTPUT_GAP_MESSAGE,
   type TerminalReplayEntry,
   type TerminalStreamIdentity,
-} from "@/lib/access/anyharness/terminal-handles";
+} from "@/lib/workflows/terminals/terminal-stream-registry";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";

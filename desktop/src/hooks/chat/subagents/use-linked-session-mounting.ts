@@ -1,10 +1,6 @@
 import { useCallback } from "react";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import {
-  getWorkspaceClientAndId,
-} from "@/lib/workflows/sessions/session-runtime";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useFetchSessionMutation } from "@anyharness/sdk-react";
 import {
   createSessionRecordFromSummary,
   getSessionRecord,
@@ -30,6 +26,7 @@ interface MountSubagentChildInput {
 }
 
 export function useLinkedSessionMounting() {
+  const fetchSessionMutation = useFetchSessionMutation();
   const mountLinkedSessionSlot = useCallback(async (
     input: MountLinkedSessionInput,
   ): Promise<void> => {
@@ -43,12 +40,11 @@ export function useLinkedSessionMounting() {
     }
 
     try {
-      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
-      const { connection } = await getWorkspaceClientAndId(runtimeUrl, input.workspaceId);
-      const session = await getAnyHarnessClient(connection).sessions.get(
-        input.sessionId,
-        input.requestHeaders ? { headers: input.requestHeaders } : undefined,
-      );
+      const session = await fetchSessionMutation.mutateAsync({
+        workspaceId: input.workspaceId,
+        sessionId: input.sessionId,
+        requestOptions: input.requestHeaders ? { headers: input.requestHeaders } : undefined,
+      });
 
       if (getSessionRecord(input.sessionId)) {
         return;
@@ -65,7 +61,7 @@ export function useLinkedSessionMounting() {
       // Linked session mounting is opportunistic. The source transcript still
       // contains durable metadata and users can open the linked session later.
     }
-  }, []);
+  }, [fetchSessionMutation]);
 
   const mountSubagentChildSession = useCallback((
     input: MountSubagentChildInput,

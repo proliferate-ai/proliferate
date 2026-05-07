@@ -5,7 +5,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { connectTerminal } from "@anyharness/sdk";
-import { resetTerminalStreamRegistryForTests } from "@/lib/access/anyharness/terminal-handles";
+import { resetTerminalStreamRegistryForTests } from "@/lib/workflows/terminals/terminal-stream-registry";
 import { useTerminalActions } from "./use-terminal-actions";
 
 const mockState = vi.hoisted(() => ({

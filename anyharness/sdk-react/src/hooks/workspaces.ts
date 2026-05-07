@@ -4,6 +4,7 @@ import type {
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
   StartWorkspaceSetupRequest,
+  UpdateWorkspaceDisplayNameRequest,
 } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import {
@@ -16,6 +17,7 @@ import {
 import {
   anyHarnessRepoRootsKey,
   anyHarnessRuntimeWorkspacesKey,
+  anyHarnessWorkspaceQueryKeyRoots,
   anyHarnessWorktreesInventoryKey,
   anyHarnessWorkspacePurgePreflightKey,
   anyHarnessWorkspaceDetectSetupKey,
@@ -51,6 +53,25 @@ export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.workspaces.list(requestOptionsWithSignal(options?.requestOptions, signal));
+    },
+  });
+}
+
+export function useWorkspaceQuery(options: WorkspaceQueryOptions) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: [...anyHarnessWorkspaceQueryKeyRoots(runtimeUrl, workspaceId), "detail"] as const,
+    enabled: (options.enabled ?? true) && !!workspaceId,
+    queryFn: async ({ signal }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.get(
+        resolved.connection.anyharnessWorkspaceId,
+        requestOptionsWithSignal(options.requestOptions, signal),
+      );
     },
   });
 }
@@ -111,6 +132,43 @@ export function useCreateWorktreeWorkspaceMutation() {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
       });
+    },
+  });
+}
+
+export function useUpdateWorkspaceDisplayNameMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      request,
+      requestOptions,
+    }: {
+      workspaceId: string;
+      request: UpdateWorkspaceDisplayNameRequest;
+      requestOptions?: AnyHarnessRequestOptions;
+    }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.workspaces.updateDisplayName(
+        resolved.connection.anyharnessWorkspaceId,
+        request,
+        requestOptions,
+      );
+    },
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessWorkspaceQueryKeyRoots(runtimeUrl, variables.workspaceId),
+        }),
+      ]);
     },
   });
 }

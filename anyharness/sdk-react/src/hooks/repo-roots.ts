@@ -46,6 +46,23 @@ export function useResolveRepoRootFromPathMutation() {
   });
 }
 
+export function useReadRepoRootFileMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+
+  return useMutation({
+    mutationFn: async ({
+      repoRootId,
+      path,
+    }: {
+      repoRootId: string;
+      path: string;
+    }) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.repoRoots.readFile(repoRootId, path);
+    },
+  });
+}
+
 export function useRepoRootGitBranchesQuery(options: {
   repoRootId?: string | null;
   enabled?: boolean;

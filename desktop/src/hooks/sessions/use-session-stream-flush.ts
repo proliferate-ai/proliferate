@@ -5,7 +5,7 @@ import type {
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
-import { logDevSSEEvent } from "@/lib/access/anyharness/session-runtime-dev-sse";
+import { logDevSSEEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,

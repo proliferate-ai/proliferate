@@ -12,7 +12,7 @@ import {
   type RuntimeInputSyncQueueState,
   type RuntimeInputSyncTrigger,
 } from "@/lib/domain/cloud/runtime-input-sync";
-import { readRepoTrackedTextFile } from "@/lib/access/anyharness/files";
+import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
 import { resyncCloudRepoFileFromLocal } from "@/lib/access/cloud/repo-configs";
 import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";

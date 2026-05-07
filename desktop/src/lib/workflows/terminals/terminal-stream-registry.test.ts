@@ -15,7 +15,7 @@ import {
   subscribeWithReplay,
   type TerminalReplayEntry,
   type TerminalStreamIdentity,
-} from "./terminal-handles";
+} from "./terminal-stream-registry";
 
 const mockState = vi.hoisted(() => ({
   connections: [] as Array<{

@@ -1,5 +1,5 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
+import { useUpdateSessionTitleMutation } from "@anyharness/sdk-react";
 import { generateSessionTitle } from "@/lib/access/cloud/ai-magic";
 import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 import {
@@ -35,6 +35,7 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 export function useSessionTitleActions() {
   const { applySessionSummary } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const updateSessionTitleMutation = useUpdateSessionTitleMutation();
 
   const updateSessionTitle = useCallback(async (sessionId: string, title: string) => {
     const trimmedTitle = title.trim();
@@ -42,18 +43,22 @@ export function useSessionTitleActions() {
       throw new Error("Chat title cannot be empty.");
     }
 
-    const { connection, workspaceId, materializedSessionId } =
+    const { workspaceId, materializedSessionId } =
       await getSessionClientAndWorkspace(sessionId);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
       surfaces: ["header-tabs", "workspace-sidebar", "chat-surface"],
       maxDurationMs: 10_000,
     });
-    const session = await getAnyHarnessClient(connection).sessions.updateTitle(
-      materializedSessionId,
-      { title: trimmedTitle },
-      getMeasurementRequestOptions({ operationId, category: "session.title.update" }),
-    );
+    const session = await updateSessionTitleMutation.mutateAsync({
+      workspaceId,
+      sessionId: materializedSessionId,
+      request: { title: trimmedTitle },
+      requestOptions: getMeasurementRequestOptions({
+        operationId,
+        category: "session.title.update",
+      }) ?? undefined,
+    });
 
     const storeStartedAt = performance.now();
     applySessionSummary(sessionId, session, workspaceId);
@@ -69,7 +74,7 @@ export function useSessionTitleActions() {
     }
 
     return session;
-  }, [applySessionSummary, upsertWorkspaceSessionRecord]);
+  }, [applySessionSummary, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
 
   const maybeGenerateSessionTitle = useCallback(async (input: {
     sessionId: string;
