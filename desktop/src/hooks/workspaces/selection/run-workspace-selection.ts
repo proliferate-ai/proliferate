@@ -1,19 +1,19 @@
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
+import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   markWorkspaceViewed,
   markWorkspaceViewedAt,
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection";
+import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection/selection";
 import {
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
-import { cancelLatencyFlow } from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/debug-latency";
+import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";

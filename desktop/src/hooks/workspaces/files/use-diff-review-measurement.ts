@@ -15,7 +15,7 @@ import {
   recordMeasurementMetric,
   startMeasurementOperation,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 const DIFF_REVIEW_IDLE_TIMEOUT_MS = 1_000;
 const DIFF_REVIEW_MAX_DURATION_MS = 6_000;

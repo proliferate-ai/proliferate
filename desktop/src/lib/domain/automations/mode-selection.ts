@@ -1,5 +1,5 @@
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
-import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-mode-control";
+import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
 
 export interface AutomationModePreferences {
   defaultSessionModeByAgentKind: Record<string, string>;

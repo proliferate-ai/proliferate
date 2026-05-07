@@ -15,7 +15,7 @@ import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/Ses
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
 import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/use-cowork-session-native-context-menu";
 import { useCoworkSessionActions } from "@/hooks/cowork/use-cowork-session-actions";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import { CoworkSessionActionsMenu } from "./CoworkSessionActionsMenu";
 
 function workspaceLabel(workspace: CoworkManagedWorkspaceSummary, index: number): string {

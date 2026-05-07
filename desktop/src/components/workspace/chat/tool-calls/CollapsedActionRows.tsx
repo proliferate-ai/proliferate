@@ -20,10 +20,10 @@ import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
   type ParsedToolCommand,
-} from "@/lib/domain/chat/transcript-presentation";
-import { describeToolCallDisplay } from "@/lib/domain/chat/tool-call-display";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
-import { normalizeToolResultText } from "@/lib/domain/chat/tool-result-text";
+} from "@/lib/domain/chat/transcript/transcript-presentation";
+import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 

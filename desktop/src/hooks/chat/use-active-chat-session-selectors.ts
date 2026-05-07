@@ -10,11 +10,11 @@ import {
 } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
-import { resolveCurrentModeLabel } from "@/lib/domain/chat/chat-input";
+import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
+import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
 import {
   hasVisibleTranscriptContent,
-} from "@/lib/domain/chat/pending-prompts";
+} from "@/lib/domain/chat/outbox/pending-prompts";
 import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@/lib/domain/sessions/activity";
 import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import {
@@ -23,7 +23,7 @@ import {
   queuedOutboxEntriesForSession,
   renderableOutboxEntriesForTranscript,
   type PromptOutboxEntry,
-} from "@/lib/domain/chat/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
 import { activitySnapshotFromDirectoryEntry, useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";

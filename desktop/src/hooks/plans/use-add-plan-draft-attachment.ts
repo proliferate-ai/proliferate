@@ -4,7 +4,7 @@ import {
   planAttachmentPointerFromDescriptor,
   type PromptPlanAttachmentDescriptor,
   type PromptPlanAttachmentPointer,
-} from "@/lib/domain/chat/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-content";
 import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 

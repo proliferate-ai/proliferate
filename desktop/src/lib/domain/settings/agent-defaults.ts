@@ -2,8 +2,8 @@ import type { ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
 import {
   resolveEffectiveConfiguredSessionControlValue,
   listConfiguredSessionControlValues,
-} from "@/lib/domain/chat/session-mode-control";
-import { resolveModelForRegistry } from "@/lib/domain/chat/session-config";
+} from "@/lib/domain/chat/session-controls/session-mode-control";
+import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import type {
   DefaultLiveSessionControlKey,

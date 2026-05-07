@@ -5,7 +5,7 @@ import {
   viewerTargetKey,
   type ViewerTarget,
   type ViewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export type WorkspaceShellTab =
   | { kind: "chat"; sessionId: string }

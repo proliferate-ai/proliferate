@@ -2,9 +2,9 @@ import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
@@ -14,7 +14,7 @@ import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-s
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 
 export function usePendingWorkspaceEntryActions() {
   const navigate = useNavigate();

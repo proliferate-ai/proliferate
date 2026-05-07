@@ -7,7 +7,7 @@ import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-s
 import {
   resolveChatLaunchRetryMode,
   type ChatLaunchRetryMode,
-} from "@/lib/domain/chat/launch-intent";
+} from "@/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";

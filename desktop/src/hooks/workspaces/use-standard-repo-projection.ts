@@ -2,7 +2,7 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useMemo } from "react";
 import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import { useCoworkStatus } from "@/hooks/cowork/use-cowork-status";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
+import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { useWorkspaces } from "./use-workspaces";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [];

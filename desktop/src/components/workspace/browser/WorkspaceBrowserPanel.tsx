@@ -18,11 +18,11 @@ import {
   Globe,
   RefreshCw,
 } from "@/components/ui/icons";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/right-panel";
+import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
 import {
   browserIframeSandbox,
   normalizeBrowserUrl,
-} from "@/lib/domain/workspaces/browser-url";
+} from "@/lib/domain/workspaces/shell/browser-url";
 import {
   browserWebviewLabel,
   closeBrowserWebview,

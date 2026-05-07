@@ -6,7 +6,7 @@ import {
   type LatencyFlowRecord,
   type LatencyFlowStage,
   listActiveLatencyFlows,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 function isSurfaceReady(modeKind: string): boolean {

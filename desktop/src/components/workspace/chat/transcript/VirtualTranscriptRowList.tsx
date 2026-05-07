@@ -17,17 +17,17 @@ import {
 import {
   shouldStickToVirtualBottom,
   type TranscriptVirtualRow,
-} from "@/lib/domain/chat/transcript-virtual-rows";
+} from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
   TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
   type TranscriptVirtualizationMode,
-} from "@/lib/domain/chat/transcript-virtualization-config";
+} from "@/lib/domain/chat/transcript/transcript-virtualization-config";
 import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { FullTranscriptRowList } from "@/components/workspace/chat/transcript/FullTranscriptRowList";
 import {
   buildRenderableRows,

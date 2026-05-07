@@ -4,7 +4,7 @@ import {
   FileChangesCard,
   FileDiffCard,
 } from "@/components/ui/content/FileDiffCard";
-import { collectTurnFilePatches } from "@/lib/domain/chat/turn-file-patches";
+import { collectTurnFilePatches } from "@/lib/domain/chat/transcript/turn-file-patches";
 import type { TranscriptState, TurnRecord } from "@anyharness/sdk";
 
 const TURN_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";

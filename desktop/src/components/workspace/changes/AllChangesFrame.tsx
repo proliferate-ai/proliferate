@@ -23,11 +23,11 @@ import {
   buildGitPanelFiles,
   gitPanelModeLabel,
   type GitPanelFile,
-} from "@/lib/domain/workspaces/git-panel-diff";
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 import {
   viewerTargetKey,
   type ViewerTarget,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import {
   serializeViewedKey,
   useWorkspaceChangeReviewStore,
@@ -37,7 +37,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import {
   recordMeasurementDiagnostic,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 

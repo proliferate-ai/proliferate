@@ -7,10 +7,10 @@ import {
   listActiveLatencyFlows,
   resetLatencyFlowsForTest,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { runWorkspaceSelection } from "./run-workspace-selection";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";

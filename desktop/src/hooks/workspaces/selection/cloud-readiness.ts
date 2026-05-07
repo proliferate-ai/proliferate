@@ -1,11 +1,11 @@
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import { getCloudWorkspace } from "@/lib/access/cloud/workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { isWorkspaceSelectionCurrent } from "./guards";

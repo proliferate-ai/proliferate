@@ -1,4 +1,4 @@
-import { SUBAGENT_COLOR_PALETTE } from "@/lib/domain/chat/subagent-braille-color";
+import { SUBAGENT_COLOR_PALETTE } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import { uniqueIds } from "@/lib/domain/workspaces/tabs/visibility";
 
 export const MANUAL_CHAT_GROUP_ID_PREFIX = "manual:";

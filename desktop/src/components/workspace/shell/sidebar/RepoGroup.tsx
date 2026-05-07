@@ -11,7 +11,7 @@ import {
   confirmRepoRemoval,
   repoRemovalConfirmationCopy,
   requestRepoRemovalConfirmation,
-} from "@/lib/domain/workspaces/repo-context-menu";
+} from "@/lib/domain/workspaces/sidebar/repo-context-menu";
 import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/use-repo-group-native-context-menu";
 import { SidebarActionButton } from "./SidebarActionButton";
 

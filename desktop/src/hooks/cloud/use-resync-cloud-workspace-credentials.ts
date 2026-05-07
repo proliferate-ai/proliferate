@@ -6,7 +6,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import { resyncCloudWorkspaceCredentials } from "@/lib/access/cloud/workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   captureTelemetryException,
   trackProductEvent,

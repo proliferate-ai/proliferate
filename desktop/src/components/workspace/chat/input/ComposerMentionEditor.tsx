@@ -19,7 +19,7 @@ import {
   isComposerMentionSelectKey,
   isRawComposerSubmitKey,
   isRepeatedComposerSubmitKey,
-} from "@/lib/domain/chat/composer-keyboard";
+} from "@/lib/domain/chat/composer/composer-keyboard";
 import {
   createTextDraft,
   findMentionTrigger,
@@ -28,14 +28,14 @@ import {
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
   type MentionTrigger,
-} from "@/lib/domain/chat/file-mentions";
-import { formatMarkdownFileLink } from "@/lib/domain/chat/file-mention-links";
+} from "@/lib/domain/chat/transcript/file-mentions";
+import { formatMarkdownFileLink } from "@/lib/domain/chat/transcript/file-mention-links";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   startMeasurementOperation,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
 import { ComposerTextarea } from "./ComposerTextarea";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "./ComposerTextareaFrame";

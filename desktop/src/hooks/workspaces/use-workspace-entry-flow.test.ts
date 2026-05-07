@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 const mocks = vi.hoisted(() => ({
@@ -50,7 +50,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => {
   return { useSessionSelectionStore };
 });
 
-vi.mock("@/lib/infra/debug-latency", () => ({
+vi.mock("@/lib/infra/measurement/debug-latency", () => ({
   elapsedSince: () => 0,
   logLatency: vi.fn(),
 }));

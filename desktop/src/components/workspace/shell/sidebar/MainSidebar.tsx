@@ -16,11 +16,11 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   isDefaultSidebarWorkspaceTypes,
   type SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar";
-import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud-workspace-creation";
+} from "@/lib/domain/workspaces/sidebar/sidebar";
+import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   titleForStartBlockReason,
-} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import {
   Archive,
   Calendar,
@@ -50,7 +50,7 @@ import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activ
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
-import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
+import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   label: string;

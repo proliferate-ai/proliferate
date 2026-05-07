@@ -10,7 +10,7 @@ import {
   resolveCloudRepoActionState,
   type CloudRepoActionState,
   type CloudWorkspaceRepoTarget,
-} from "@/lib/domain/workspaces/cloud-workspace-creation";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   findHomeNextLocalWorkspace,
   localBranchNames,

@@ -8,7 +8,7 @@ import {
 import {
   cancelOAuthConnectorConnect,
   connectOAuthConnector,
-} from "@/lib/infra/mcp/persistence";
+} from "@/lib/workflows/mcp/connector-persistence";
 import {
   captureTelemetryException,
   trackProductEvent,

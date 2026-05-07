@@ -4,8 +4,8 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { applyStreamEnvelopeBatch } from "@/lib/integrations/anyharness/session-stream-state";
-import { logDevSSEEvent } from "@/lib/integrations/anyharness/session-runtime-dev-sse";
+import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
+import { logDevSSEEvent } from "@/lib/access/anyharness/session-runtime-dev-sse";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -13,7 +13,7 @@ import {
   startMeasurementOperation,
   type MeasurementOperationId,
   type MeasurementSurface,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import type {
   SessionChildRelationship,
   SessionRelationship,
@@ -29,13 +29,13 @@ import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch
 import {
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/chat/prompt-outbox";
-import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/pending-prompts";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
+import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,
 } from "@/hooks/sessions/session-stream-side-effects";
-import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
+import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   activityFromTranscript,

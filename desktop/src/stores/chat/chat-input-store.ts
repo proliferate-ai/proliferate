@@ -5,7 +5,7 @@ import {
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/file-mentions";
+} from "@/lib/domain/chat/transcript/file-mentions";
 
 interface ChatInputState {
   draftByWorkspaceId: Record<string, ChatComposerDraft>;

@@ -3,7 +3,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import { ensureRuntimeReady } from "@/hooks/workspaces/runtime-ready";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";

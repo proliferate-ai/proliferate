@@ -16,8 +16,8 @@ import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,
-} from "@/lib/domain/chat/cowork-coding-tool-presentation";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+} from "@/lib/domain/chat/tools/cowork-coding-tool-presentation";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 
 interface CoworkCodingToolActionRowProps {
   item: ToolCallItem;

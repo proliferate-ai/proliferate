@@ -5,7 +5,7 @@ import {
   type WorkspaceShellActivationInput,
 } from "@/lib/domain/workspaces/tabs/shell-activation";
 import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type { ViewerTargetKey } from "@/lib/domain/workspaces/viewer-target";
+import type { ViewerTargetKey } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 const APP_KEY = fileWorkspaceShellTabKey("src/App.tsx") as ViewerTargetKey;
 

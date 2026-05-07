@@ -3,7 +3,7 @@ import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import {
   getWorkspaceClientAndId,
-} from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/workflows/sessions/session-runtime";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   createSessionRecordFromSummary,

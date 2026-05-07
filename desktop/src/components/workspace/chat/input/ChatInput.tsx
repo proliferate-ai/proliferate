@@ -33,19 +33,19 @@ import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
-import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
-import { promptAttachmentSnapshotsToContentParts } from "@/lib/domain/chat/prompt-attachment-snapshot";
+import { serializeChatDraftToPrompt } from "@/lib/domain/chat/transcript/file-mentions";
+import { promptAttachmentSnapshotsToContentParts } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls";
+import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
-} from "@/lib/infra/prompt-submit-measurement";
+} from "@/lib/infra/measurement/prompt-submit-measurement";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";

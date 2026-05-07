@@ -34,14 +34,14 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import {
   getSessionClientAndWorkspace,
   isPendingSessionId,
-} from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/workflows/sessions/session-runtime";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
-import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
+import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 
 interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;

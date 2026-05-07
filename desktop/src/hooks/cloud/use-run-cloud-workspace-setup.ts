@@ -6,7 +6,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { cloudWorkspaceRepoConfigStatusKey } from "@/hooks/access/cloud/query-keys";

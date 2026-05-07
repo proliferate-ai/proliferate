@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useEditPendingPromptMutation } from "@anyharness/sdk-react";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   captureTelemetryException,
   trackProductEvent,

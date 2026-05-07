@@ -1,4 +1,16 @@
+import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
+import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/access/cloud/client";
+
 export type WorkspaceMobilityDirection = "local_to_cloud" | "cloud_to_local";
+
+export interface WorkspaceMobilityConfirmSnapshot {
+  logicalWorkspaceId: string;
+  direction: WorkspaceMobilityDirection;
+  sourceWorkspaceId: string;
+  mobilityWorkspaceId: string;
+  sourcePreflight: WorkspaceMobilityPreflightResponse;
+  cloudPreflight: CloudWorkspaceMobilityPreflightResponse;
+}
 
 export type WorkspaceMobilityLocationKind =
   | "local_workspace"

@@ -19,17 +19,17 @@ import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-ac
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
-} from "@/lib/domain/workspaces/selection";
-import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/collections";
-import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/model-selection";
-import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/session-config";
-import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection";
+} from "@/lib/domain/workspaces/selection/selection";
+import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
+import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-selection";
+import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/launch/session-config";
+import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
 import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
-import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/debug-latency";
+import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
@@ -41,7 +41,7 @@ import {
   startMeasurementOperation,
   type MeasurementFinishReason,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,
@@ -52,7 +52,7 @@ import {
   patchSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { markWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 
 interface BootstrapWorkspaceInput {

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { Workspace } from "@anyharness/sdk";
 import { CoworkWorkspaceShell } from "@/components/workspace/cowork/CoworkWorkspaceShell";
 import { StandardWorkspaceShell } from "@/components/workspace/shell/screen/StandardWorkspaceShell";
-import { resolveWorkspaceShellSurface } from "@/lib/domain/workspaces/shell-surface";
+import { resolveWorkspaceShellSurface } from "@/lib/domain/workspaces/shell/shell-surface";
 import { usePersistedLogicalWorkspaceSelection } from "@/hooks/workspaces/use-persisted-logical-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

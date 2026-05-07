@@ -7,7 +7,7 @@ import {
 } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { isHotSessionClientId } from "@/lib/integrations/anyharness/hot-session-ingest-manager";
+import { isHotSessionClientId } from "@/lib/workflows/sessions/hot-session-ingest-manager";
 
 const ACTIVITY_RECONCILE_DELAY_MS = 5_000;
 const ACTIVITY_RECONCILE_MAX_SESSION_COUNT = 8;

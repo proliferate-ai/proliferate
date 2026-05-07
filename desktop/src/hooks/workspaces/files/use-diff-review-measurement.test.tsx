@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getDebugMeasurementDump,
   resetDebugMeasurementForTest,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 
 describe("useDiffReviewMeasurement", () => {

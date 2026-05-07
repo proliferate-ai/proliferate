@@ -13,8 +13,8 @@ import {
   buildCloudWorkspacePostReadyLabel,
   buildCloudWorkspaceSetupStatusLabel,
   formatCloudWorkspaceSettingsError,
-} from "@/lib/domain/workspaces/cloud-workspace-settings";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-settings";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 

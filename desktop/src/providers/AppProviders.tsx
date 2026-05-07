@@ -7,15 +7,15 @@ import type { CoworkStatus } from "@anyharness/sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, type ReactNode } from "react";
-import { appQueryClient } from "@/lib/infra/query-client";
+import { appQueryClient } from "@/lib/infra/query/query-client";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
   buildLogicalWorkspaces,
   findLogicalWorkspace,
   logicalWorkspaceCloudMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
-} from "@/lib/domain/workspaces/logical-workspaces";
-import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";

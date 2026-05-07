@@ -3,7 +3,7 @@ import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import { ArrowUp, StopSquare } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
+import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
 export function ChatComposerActions({
   isRunning,

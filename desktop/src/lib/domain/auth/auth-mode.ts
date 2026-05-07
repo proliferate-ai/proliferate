@@ -1,4 +1,4 @@
-import type { StoredAuthSession } from "@/platform/tauri/auth";
+import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
 
 const DEV_BYPASS_TOKEN = "proliferate-dev-auth-bypass";
 

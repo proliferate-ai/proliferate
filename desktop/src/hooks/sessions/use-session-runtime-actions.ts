@@ -1,7 +1,7 @@
 import {
   appendHistoryTail,
   replaySessionHistory,
-} from "@/lib/integrations/anyharness/session-stream-state";
+} from "@/lib/domain/sessions/stream/stream-state";
 import {
   createTranscriptState,
   type Session,
@@ -18,8 +18,8 @@ import {
   openSessionStream,
   resumeSession,
   type FlushAwareSessionStreamHandle,
-} from "@/lib/integrations/anyharness/session-runtime";
-import { logLatency } from "@/lib/infra/debug-latency";
+} from "@/lib/workflows/sessions/session-runtime";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -29,9 +29,9 @@ import {
   type MeasurementOperationId,
   type MeasurementOperationKind,
   type MeasurementSurface,
-} from "@/lib/infra/debug-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
-import { markLatencyFlowLiveAttached } from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/debug-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
+import { markLatencyFlowLiveAttached } from "@/lib/infra/measurement/latency-flow";
 import {
   resolveSessionViewState,
   resolveSessionStatus,
@@ -44,17 +44,17 @@ import {
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
 } from "@/lib/domain/sessions/pending-config";
-import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/pending-prompts";
+import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/outbox/pending-prompts";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import {
   clearSessionReconnectTimer,
   scheduleSessionReconnectTimer,
-} from "@/lib/integrations/anyharness/session-reconnect-state";
+} from "@/lib/access/anyharness/session-reconnect-state";
 import {
   rememberLastViewedSession,
   trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
-import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
@@ -71,7 +71,7 @@ import {
   useSessionStreamFlushControllerFactory,
   type SessionStreamFlushController,
 } from "@/hooks/sessions/use-session-stream-flush";
-import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
+import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   activityFromTranscript,
@@ -89,7 +89,7 @@ import {
   clearSessionStreamHandle,
   closeSessionStreamHandle,
   setSessionStreamHandle,
-} from "@/lib/integrations/anyharness/session-stream-handles";
+} from "@/lib/access/anyharness/session-stream-handles";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 
 const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;

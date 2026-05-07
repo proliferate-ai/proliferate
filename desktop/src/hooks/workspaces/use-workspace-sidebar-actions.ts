@@ -4,15 +4,15 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
-import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar";
+import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
 import { useWorkspaceActivationWorkflow } from "./use-workspace-activation-workflow";
 import { useAddRepo } from "./use-add-repo";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import { useWorkspaceRetireActions } from "./use-workspace-retire-actions";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceNavigationWorkflow } from "./use-workspace-navigation-workflow";

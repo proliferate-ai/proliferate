@@ -25,7 +25,7 @@ import {
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { Clock, Folder, Settings } from "@/components/ui/icons";
 import type { HomeActionId } from "@/lib/domain/home/home-screen";
 

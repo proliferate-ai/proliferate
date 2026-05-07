@@ -5,7 +5,7 @@ import type {
   ModelSelectorGroup as ModelSelectorGroupData,
   ModelSelectorProps,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/model-selection";
+} from "@/lib/domain/chat/models/model-selection";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import {

@@ -10,7 +10,7 @@ import {
   type StoredPendingAuthSession,
 } from "@/platform/tauri/auth";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
-import { closeAllSessionStreamHandles } from "@/lib/integrations/anyharness/session-stream-handles";
+import { closeAllSessionStreamHandles } from "@/lib/access/anyharness/session-stream-handles";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
@@ -26,7 +26,7 @@ import {
   startGitHubSignIn,
 } from "@/lib/domain/auth/github-signin-state";
 import { createDevBypassSession, isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
 import {
@@ -52,7 +52,7 @@ import {
   logStartupDebug,
   startStartupTimer,
   summarizeStartupError,
-} from "@/lib/infra/debug-startup";
+} from "@/lib/infra/measurement/debug-startup";
 
 function applyDevBypassState(): void {
   const session = createDevBypassSession();

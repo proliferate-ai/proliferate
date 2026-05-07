@@ -2,7 +2,7 @@ import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
 import type { QueryClient } from "@tanstack/react-query";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;

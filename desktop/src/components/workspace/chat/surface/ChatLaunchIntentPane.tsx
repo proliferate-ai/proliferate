@@ -5,7 +5,7 @@ import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage"
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 import { useChatLaunchIntentActions } from "@/hooks/chat/use-chat-launch-intent-actions";
-import { resolveChatLaunchIntentView } from "@/lib/domain/chat/launch-intent";
+import { resolveChatLaunchIntentView } from "@/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 
 interface ChatLaunchIntentPaneProps {

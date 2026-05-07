@@ -10,7 +10,7 @@ import {
   deriveDelegatedWorkSummary,
   type DelegatedWorkSummary,
   type DelegatedWorkSummaryCandidate,
-} from "@/lib/domain/chat/delegated-work";
+} from "@/lib/domain/chat/subagents/delegated-work";
 import {
   latestReviewRound,
   reviewRunReplacesStartingReview,

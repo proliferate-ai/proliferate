@@ -6,8 +6,8 @@ import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import {
   resolveMatchingModelControlLabel,
   resolveModelDisplayName,
-} from "@/lib/domain/chat/model-display";
-import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
+} from "@/lib/domain/chat/models/model-display";
+import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 
 export interface ChatReadyContext {
   workspaceName: string | null;

@@ -14,7 +14,7 @@ import {
   type AutomationTargetRow,
   type AutomationTargetSelection,
 } from "@/lib/domain/automations/target-selection";
-import { matchesPickerSearch } from "@/lib/infra/search";
+import { matchesPickerSearch } from "@/lib/infra/search/search";
 
 interface AutomationTargetPickerProps {
   groups: AutomationTargetGroup[];

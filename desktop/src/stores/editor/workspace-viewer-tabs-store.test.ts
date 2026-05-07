@@ -4,7 +4,7 @@ import {
   fileDiffViewerTarget,
   fileViewerTarget,
   viewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "./workspace-viewer-tabs-store";
 
 describe("workspace viewer tabs store", () => {

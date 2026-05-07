@@ -18,7 +18,7 @@ import {
   resolveSidebarWorkspaceTypes,
   toggleSidebarWorkspaceTypeSelection,
   type SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar";
 import {
   clampRightPanelWidth,
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
@@ -29,8 +29,8 @@ import {
   type RightPanelDurableState,
   type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/right-panel";
-import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/right-panel-migration";
+} from "@/lib/domain/workspaces/shell/right-panel";
+import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-migration";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
 import {
   parseWorkspaceShellTabKey,
@@ -40,12 +40,12 @@ import {
 import {
   sanitizeWorkspaceShellTabKeys,
 } from "@/lib/domain/workspaces/tabs/shell-file-seed";
-import { sameStringArray } from "@/lib/domain/workspaces/workspace-keyed-preferences";
-import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import {
   isDebugMeasurementEnabled,
   recordMeasurementDiagnostic,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 export interface WorkspaceUiState {
   _hydrated: boolean;

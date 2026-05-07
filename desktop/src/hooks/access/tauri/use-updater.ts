@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useUpdaterStore, loadLastCheckedAt } from "@/stores/updater/updater-store";
-import { persistValue } from "@/lib/infra/preferences-persistence";
+import { persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import type { UpdaterPhase } from "@/stores/updater/updater-store";
 import {
   checkForUpdate,

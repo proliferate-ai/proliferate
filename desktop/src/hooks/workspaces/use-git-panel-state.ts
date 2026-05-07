@@ -7,11 +7,11 @@ import { useMemo } from "react";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
+import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildLogicalWorkspaces,
   findLogicalWorkspace,
-} from "@/lib/domain/workspaces/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   buildGitPanelFiles,
   buildGitPanelSections,
@@ -22,7 +22,7 @@ import {
   resolveGitPanelBaseRef,
   sourceRootForGitPanel,
   type GitPanelMode,
-} from "@/lib/domain/workspaces/git-panel-diff";
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

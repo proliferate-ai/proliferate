@@ -5,7 +5,7 @@ import {
   resolveAutomationModeSelection,
   type AutomationModeOverride,
 } from "@/lib/domain/automations/mode-selection";
-import { launchControlToConfiguredSessionControlValues } from "@/lib/domain/chat/session-mode-control";
+import { launchControlToConfiguredSessionControlValues } from "@/lib/domain/chat/session-controls/session-mode-control";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 interface UseAutomationModeSelectionArgs {

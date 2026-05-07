@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTranscriptState } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import { toolItem } from "@/lib/domain/chat/transcript-presentation-test-fixtures";
+import { toolItem } from "@/lib/domain/chat/transcript/transcript-presentation-test-fixtures";
 import { CollapsedActions, InlineToolActions } from "./CollapsedActions";
 
 describe("CollapsedActions", () => {

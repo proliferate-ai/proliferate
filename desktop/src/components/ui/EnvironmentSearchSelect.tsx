@@ -5,7 +5,7 @@ import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopo
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Check, ChevronUpDown } from "@/components/ui/icons";
-import { matchesPickerSearch } from "@/lib/infra/search";
+import { matchesPickerSearch } from "@/lib/infra/search/search";
 
 export interface EnvironmentSearchSelectOption {
   id: string;

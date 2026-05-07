@@ -3,12 +3,12 @@ import { useShallow } from "zustand/react/shallow";
 import {
   findLogicalWorkspace,
   logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   resolveAutoShowMoreRepoKey,
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarGroupState,
-} from "@/lib/domain/workspaces/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";

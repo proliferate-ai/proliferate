@@ -6,7 +6,7 @@ import {
   buildCloudWorkspaceCompactStatusView,
   type CloudWorkspaceStatusScreenMode,
   type CloudWorkspaceStatusScreenModel,
-} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { CircleAlert, LoaderCircle } from "@/components/ui/icons";
 
 function SectionRow({

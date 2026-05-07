@@ -7,11 +7,11 @@ import { useMemo } from "react";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildSelectedCloudRuntimeViewModel,
   type SelectedCloudRuntimeViewModel,
-} from "@/lib/domain/workspaces/cloud-runtime-state";
+} from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 import { useCloudWorkspaceConnection } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/access/cloud/workspaces";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";

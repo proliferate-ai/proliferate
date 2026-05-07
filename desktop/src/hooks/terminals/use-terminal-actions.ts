@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   findReusableRunTerminalId,
   RUN_TERMINAL_TITLE,
@@ -31,7 +31,7 @@ import {
   sendInput,
   sendResize,
   type TerminalStreamIdentity,
-} from "@/lib/integrations/anyharness/terminal-handles";
+} from "@/lib/access/anyharness/terminal-handles";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";

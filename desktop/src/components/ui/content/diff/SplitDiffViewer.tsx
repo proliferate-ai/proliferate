@@ -1,6 +1,6 @@
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import type { DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
-import type { HighlightedToken } from "@/lib/infra/highlighting";
+import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
 type SplitDiffRow =
   | { key: string; oldLine: null; newLine: null; label: string }

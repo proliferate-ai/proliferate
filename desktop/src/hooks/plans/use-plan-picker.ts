@@ -7,7 +7,7 @@ import {
 } from "@/lib/domain/plans/plan-presentation";
 import {
   planAttachmentDescriptorFromDetail,
-} from "@/lib/domain/chat/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-content";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useAddPlanDraftAttachment } from "@/hooks/plans/use-add-plan-draft-attachment";
 

@@ -10,8 +10,8 @@ import {
 import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/prompt-content";
-import type { ModelSelectorProps } from "@/lib/domain/chat/model-selection";
+} from "@/lib/domain/chat/composer/prompt-content";
+import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selection";
 
 interface PlanHandoffDialogProps {
   open: boolean;

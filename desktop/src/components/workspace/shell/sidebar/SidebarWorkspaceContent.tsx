@@ -1,13 +1,13 @@
 import {
   resolveCloudRepoActionState,
   type CloudWorkspaceRepoTarget,
-} from "@/lib/domain/workspaces/cloud-workspace-creation";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarEmptyState,
   type SidebarGroupState,
   type SidebarIndicatorAction,
-} from "@/lib/domain/workspaces/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar";
 import { BrailleSweepBadge } from "@/components/ui/icons";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";

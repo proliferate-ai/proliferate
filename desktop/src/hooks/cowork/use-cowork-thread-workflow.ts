@@ -10,25 +10,25 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/preference-resolvers";
+import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
   workspaceFileTreeStateKey,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildSubmittingPendingWorkspaceEntry,
   createPendingWorkspaceAttemptId,
   type PendingCoworkRequestInput,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/pending-entry";
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   elapsedMs,
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
@@ -37,12 +37,12 @@ import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
-} from "@/lib/integrations/anyharness/mcp_launch";
+} from "@/lib/workflows/sessions/session-mcp-launch";
 import {
   createSessionRecordFromSummary,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
-import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
+import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,

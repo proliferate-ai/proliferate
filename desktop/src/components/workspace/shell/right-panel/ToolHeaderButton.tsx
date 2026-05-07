@@ -7,7 +7,7 @@ import {
   GitBranchIcon,
   type IconProps,
 } from "@/components/ui/icons";
-import type { RightPanelTool } from "@/lib/domain/workspaces/right-panel";
+import type { RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel";
 
 const HEADER_STABLE_TAB_CLASS = "ui-tab-system-tab";
 

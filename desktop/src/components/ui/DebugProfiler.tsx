@@ -3,7 +3,7 @@ import {
   isMainThreadMeasurementEnabled,
   recordMeasurementMetric,
   type MeasurementSurface,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 interface DebugProfilerProps {
   id: MeasurementSurface;

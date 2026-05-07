@@ -3,7 +3,7 @@ import {
   recordMeasurementMetric,
   type MeasurementCloudCategory,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 export interface CloudMeasurementOptions {
   measurementOperationId?: MeasurementOperationId | null;

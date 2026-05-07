@@ -18,10 +18,10 @@ import {
   resolveEffectiveLaunchSelection,
   type ModelSelectorGroup,
   type ModelSelectorSelection,
-} from "@/lib/domain/chat/model-selection";
-import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/session-config";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch-intent";
+} from "@/lib/domain/chat/models/model-selection";
+import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/launch/session-config";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
 
 const EMPTY_AGENTS: WorkspaceSessionLaunchAgent[] = [];
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];

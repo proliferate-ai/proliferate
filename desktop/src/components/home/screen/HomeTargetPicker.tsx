@@ -13,13 +13,13 @@ import {
   Plus,
   Sparkles,
 } from "@/components/ui/icons";
-import { matchesPickerSearch } from "@/lib/infra/search";
+import { matchesPickerSearch } from "@/lib/infra/search/search";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 
 interface HomeTargetPickerProps {
   destination: HomeNextDestination;

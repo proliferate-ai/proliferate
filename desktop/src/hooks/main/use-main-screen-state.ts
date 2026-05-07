@@ -20,8 +20,8 @@ import { useResize } from "@/hooks/layout/use-resize";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { shouldMountWorkspaceShell } from "@/lib/domain/chat/chat-surface";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { shouldMountWorkspaceShell } from "@/lib/domain/chat/surface/chat-surface";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   useWorkspaceUiStore,
   WORKSPACE_SIDEBAR_MAX_WIDTH,
@@ -39,9 +39,9 @@ import {
   reconcileRightPanelWorkspaceState,
   type RightPanelDurableState,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/right-panel";
-import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
-import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
+} from "@/lib/domain/workspaces/shell/right-panel";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";

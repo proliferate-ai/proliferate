@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
+import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 
 export function workspaceCollectionsScopeKey(runtimeUrl: string) {
   return ["workspaces", runtimeUrl] as const;

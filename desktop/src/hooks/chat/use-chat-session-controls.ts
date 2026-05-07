@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import {
   buildLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
-} from "@/lib/domain/chat/session-controls";
+} from "@/lib/domain/chat/session-controls/session-controls";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";

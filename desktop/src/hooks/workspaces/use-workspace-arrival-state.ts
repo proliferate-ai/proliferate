@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { SetupScriptExecution, Workspace } from "@anyharness/sdk";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
-import { buildWorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import { buildWorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

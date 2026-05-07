@@ -9,7 +9,7 @@ import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-ta
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import type { WorkspaceTabActionsContext } from "@/hooks/workspaces/use-workspace-tab-actions";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";

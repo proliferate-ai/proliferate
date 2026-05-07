@@ -4,7 +4,7 @@ import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobil
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useCloudToLocalHandoff } from "@/hooks/workspaces/mobility/use-cloud-to-local-handoff";
 import { useLocalToCloudHandoff } from "@/hooks/workspaces/mobility/use-local-to-cloud-handoff";
-import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
+import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 import type { WorkspaceMobilityState } from "./use-workspace-mobility-state";
 
 const PROMPT_PREPARE_TIMEOUT_MS = 12_000;

@@ -3,18 +3,18 @@ import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import {
   selectNextDispatchableOutboxEntry,
   type PromptOutboxEntry,
-} from "@/lib/domain/chat/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox";
 import {
   promptAttachmentSnapshotsToBlocks,
-} from "@/lib/domain/chat/prompt-attachment-snapshot";
+} from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import {
   getLatencyFlowRequestHeaders,
   failLatencyFlow,
   finishLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import {
   getSessionClientAndWorkspace,
-} from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/workflows/sessions/session-runtime";
 import {
   getSessionRecord,
   waitForSessionMaterialization,

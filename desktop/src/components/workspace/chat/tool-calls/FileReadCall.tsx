@@ -1,6 +1,6 @@
 import { FileText } from "@/components/ui/icons";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
 import { ToolFileChip } from "./ToolFileChip";

@@ -3,7 +3,7 @@ import { create } from "zustand";
 import {
   pathIsWithinWorkspaceEntry,
   remapPathWithinWorkspaceEntry,
-} from "@/lib/domain/workspaces/viewer-target";
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export type FileSaveState = "idle" | "saving" | "saved" | "error" | "conflict";
 

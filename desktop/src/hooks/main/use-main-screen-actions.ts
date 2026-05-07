@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { openExternal } from "@/platform/tauri/shell";
 import { updateCloudWorkspaceBranch } from "@/lib/access/cloud/workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -14,7 +14,7 @@ import {
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
@@ -23,7 +23,7 @@ import {
   CLOSED_PUBLISH_DIALOG_STATE,
   openPublishDialogState,
 } from "./publish-dialog-state";
-import type { PublishIntent } from "@/lib/domain/workspaces/publish-workflow";
+import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow";
 
 interface UseMainScreenActionsArgs {
   layout: MainScreenLayoutState;

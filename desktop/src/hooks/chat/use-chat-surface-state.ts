@@ -3,9 +3,9 @@ import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cl
 import {
   resolveLaunchIntentSurfaceOverride,
   shouldShowStructuralRepoWorkspaceStatus,
-} from "@/lib/domain/chat/chat-surface";
-import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud-workspace-status";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+} from "@/lib/domain/chat/surface/chat-surface";
+import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";

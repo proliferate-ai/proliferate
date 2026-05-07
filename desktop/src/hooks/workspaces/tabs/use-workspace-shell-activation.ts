@@ -13,8 +13,8 @@ import {
   viewerWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
-import { fileViewerTarget, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
-import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { fileViewerTarget, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -26,10 +26,10 @@ import {
   startMeasurementOperation,
   type MeasurementOperationId,
   type MeasurementSurface,
-} from "@/lib/infra/debug-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
-import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/hot-reopen";
-import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/infra/measurement/debug-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
+import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
+import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 
 const HOT_SWITCH_SURFACES = [

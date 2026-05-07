@@ -20,7 +20,7 @@ import {
 import {
   worktreeRetentionRunMessage,
   worktreeSettingsActionFailureMessage,
-} from "@/lib/domain/workspaces/worktree-settings-actions";
+} from "@/lib/domain/workspaces/sidebar/worktree-settings-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_ROWS: WorktreeInventoryRow[] = [];

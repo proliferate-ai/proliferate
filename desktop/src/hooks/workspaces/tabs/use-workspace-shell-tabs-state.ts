@@ -13,7 +13,7 @@ import {
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 import {
   resolveWorkspaceShellActivation,
   type WorkspaceShellActivation,
@@ -21,7 +21,7 @@ import {
 import {
   resolveWithWorkspaceFallback,
   sameStringArray,
-} from "@/lib/domain/workspaces/workspace-keyed-preferences";
+} from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

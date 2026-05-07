@@ -3,10 +3,10 @@
 import { createRef } from "react";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript-virtual-rows";
+import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { FullTranscriptRowList } from "./FullTranscriptRowList";
 
-vi.mock("@/lib/infra/debug-latency", () => ({
+vi.mock("@/lib/infra/measurement/debug-latency", () => ({
   logLatency: vi.fn(),
 }));
 

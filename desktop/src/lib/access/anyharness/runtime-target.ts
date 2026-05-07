@@ -3,7 +3,7 @@ import {
   getCloudWorkspace,
   getCloudWorkspaceConnection,
 } from "@/lib/access/cloud/workspaces";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 
 export interface RuntimeTarget {
   location: "local" | "cloud";

@@ -5,19 +5,19 @@ import type {
   CreateCloudWorkspaceRequest,
 } from "@/lib/access/cloud/client";
 import { createCloudWorkspace } from "@/lib/access/cloud/workspaces";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildNextCloudWorkspaceAttempt,
   collectKnownCloudBranchNames,
   buildCloudWorkspaceAttemptFromRequest,
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
-} from "@/lib/domain/workspaces/cloud-workspace-creation";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   buildSubmittingPendingWorkspaceEntry,
   createPendingWorkspaceAttemptId,
   type PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/pending-entry";
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
@@ -30,7 +30,7 @@ import { workspaceCollectionsScopeKey, getWorkspaceCollectionsFromCache } from "
 import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import { cloudBillingKey, cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
@@ -42,7 +42,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
 

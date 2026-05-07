@@ -15,20 +15,20 @@ import type {
 import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
-} from "@/lib/domain/workspaces/collections";
+} from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildRemoteLogicalWorkspaceId,
-} from "@/lib/domain/workspaces/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,
   markCloudDisplayNameSyncCompleted,
   resolveCloudDisplayNameSyncAttempt,
   shouldBackfillCloudDisplayNameFromRuntime,
   type CloudDisplayNameSyncState,
-} from "@/lib/domain/workspaces/cloud-display-name-sync";
+} from "@/lib/domain/workspaces/cloud/cloud-display-name-sync";
 import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   activitySnapshotFromDirectoryEntry,

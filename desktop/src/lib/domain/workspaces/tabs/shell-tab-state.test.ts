@@ -6,7 +6,7 @@ import {
   fileWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type { ShellChatTab } from "@/lib/domain/workspaces/tabs/shell-rows";
-import { fileViewerTarget } from "@/lib/domain/workspaces/viewer-target";
+import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 interface TestChatTab extends ShellChatTab {
   title: string;

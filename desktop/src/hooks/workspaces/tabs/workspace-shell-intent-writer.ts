@@ -5,7 +5,7 @@ import {
   type ChatWorkspaceShellTabKey,
   type WorkspaceShellIntentKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   type ShellIntentResult,
   useWorkspaceUiStore,

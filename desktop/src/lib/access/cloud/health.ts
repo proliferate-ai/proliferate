@@ -4,7 +4,7 @@ import {
   logStartupDebug,
   startStartupTimer,
   summarizeStartupError,
-} from "@/lib/infra/debug-startup";
+} from "@/lib/infra/measurement/debug-startup";
 
 let lastKnownControlPlaneReachable: boolean | null = null;
 

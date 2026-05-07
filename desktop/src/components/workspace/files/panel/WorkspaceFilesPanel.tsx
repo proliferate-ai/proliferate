@@ -18,12 +18,12 @@ import { useGitPanelState } from "@/hooks/workspaces/use-git-panel-state";
 import {
   buildChangedFileTree,
   type ChangedFileTreeNode,
-} from "@/lib/domain/workspaces/changed-file-tree";
+} from "@/lib/domain/workspaces/changes/changed-file-tree";
 import {
   gitPanelEmptyMessage,
   type GitPanelFile,
   type GitPanelSectionScope,
-} from "@/lib/domain/workspaces/git-panel-diff";
+} from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 interface WorkspaceFilesPanelProps {

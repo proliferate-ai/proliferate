@@ -8,7 +8,7 @@ import {
   resolveSelectionChangeAction,
   type TranscriptSelectionClampEdge,
   type TranscriptTargetFacts,
-} from "@/lib/domain/chat/transcript-selection";
+} from "@/lib/domain/chat/transcript/transcript-selection";
 
 interface UseChatTranscriptSelectionArgs {
   rootRef: RefObject<HTMLElement | null>;

@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/Button";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import { useActivePendingApproval } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatPermissionActions } from "@/hooks/chat/use-chat-permission-actions";
-import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
+import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 
 // Codex's approval header is just the title as medium-weight text — no
 // icon, no label chip, no uppercase prefix. The title itself is

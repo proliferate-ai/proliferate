@@ -19,7 +19,7 @@ import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-acti
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type {
   AutomationResponse,
   AutomationRunResponse,

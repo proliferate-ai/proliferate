@@ -5,7 +5,7 @@ import { useProposedPlanActions } from "@/hooks/plans/use-proposed-plan-actions"
 import {
   planAttachmentId,
   type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-content";
 
 type ProposedPlanTranscriptItem = Extract<TranscriptItem, { kind: "proposed_plan" }>;
 

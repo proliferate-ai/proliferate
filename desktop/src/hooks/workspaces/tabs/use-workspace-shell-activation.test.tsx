@@ -39,7 +39,7 @@ vi.mock("@/hooks/sessions/use-session-actions", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/schedule-after-next-paint", () => ({
+vi.mock("@/lib/infra/scheduling/schedule-after-next-paint", () => ({
   scheduleAfterNextPaint: vi.fn((callback: () => void) => {
     hookMocks.scheduledCallbacks.push(callback);
     return () => {
@@ -49,7 +49,7 @@ vi.mock("@/lib/infra/schedule-after-next-paint", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/debug-measurement", () => ({
+vi.mock("@/lib/infra/measurement/debug-measurement", () => ({
   finishOrCancelMeasurementOperation:
     measurementMocks.finishOrCancelMeasurementOperation,
   isDebugMeasurementEnabled: () => false,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
-import { logStartupDebug } from "@/lib/infra/debug-startup";
+import { logStartupDebug } from "@/lib/infra/measurement/debug-startup";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function useCloudAvailabilityState() {

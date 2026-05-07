@@ -7,19 +7,19 @@ import {
   buildWorkspaceArrivalEvent,
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
-} from "@/lib/domain/workspaces/arrival";
+} from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "./use-workspaces";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
-} from "@/lib/domain/workspaces/pending-entry";
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   type CreateWorktreeWorkspaceInput,
   type WorktreeCreationParams,
-} from "@/lib/domain/workspaces/workspace-creation";
-import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar-group-key";
+} from "@/lib/domain/workspaces/creation/workspace-creation";
+import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
 import {
   ensureRepoGroupExpanded,
 } from "@/stores/preferences/workspace-ui-store";
@@ -31,11 +31,11 @@ import {
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import {
   annotateLatencyFlow,
   failLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import {
   getWorkspaceSessionRecords,
   patchSessionRecord,

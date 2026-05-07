@@ -1,5 +1,5 @@
 import { useCloudWorkspaceHandoffHeartbeatLoop } from "@/hooks/workspaces/mobility/use-cloud-workspace-handoff-heartbeat-loop";
-import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility-state-machine";
+import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
 import { useWorkspaceMobilityState } from "./use-workspace-mobility-state";
 
 export function useWorkspaceMobilityLifecycle() {

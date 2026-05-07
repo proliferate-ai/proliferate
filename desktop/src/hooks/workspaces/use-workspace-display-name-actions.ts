@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
-} from "@/lib/domain/workspaces/collections";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/collections";
+import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   getCloudWorkspaceConnection,
   updateCloudWorkspaceDisplayName,
@@ -24,7 +24,7 @@ import {
   type MeasurementOperationId,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */

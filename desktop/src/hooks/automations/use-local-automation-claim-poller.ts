@@ -26,8 +26,8 @@ import {
 import {
   executeLocalAutomationRun,
   LocalAutomationExecutorError,
-} from "@/lib/integrations/anyharness/automation-local-executor";
-import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+} from "@/lib/workflows/automations/local-automation-executor";
+import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import { getHomeDir } from "@/platform/tauri/shell";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";

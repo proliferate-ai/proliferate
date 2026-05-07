@@ -6,7 +6,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { getWorkspaceClientAndId } from "@/lib/integrations/anyharness/session-runtime";
+import { getWorkspaceClientAndId } from "@/lib/workflows/sessions/session-runtime";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
-import { makeLocalLogicalWorkspace } from "@/lib/domain/workspaces/sidebar-test-fixtures";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { makeLocalLogicalWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 import {
   WORKSPACE_UI_DEFAULTS,
   useWorkspaceUiStore,

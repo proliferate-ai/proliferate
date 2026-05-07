@@ -30,11 +30,26 @@ Target shape:
 ```text
 lib/domain/
   chat/
+    composer/
+    launch/
+    models/
+    outbox/
+    session-controls/
+    subagents/
     surface/
+    tools/
     transcript/
-    prompt-outbox/
-  sessions/
   workspaces/
+    changes/
+    cloud/
+    creation/
+    display/
+    mobility/
+    selection/
+    shell/
+    sidebar/
+    tabs/
+    viewer/
 ```
 
 File naming:

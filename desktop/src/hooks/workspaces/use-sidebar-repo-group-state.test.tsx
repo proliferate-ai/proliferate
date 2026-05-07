@@ -2,11 +2,11 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   buildGroups,
   makeLocalLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar-test-fixtures";
+} from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import {

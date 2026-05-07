@@ -1,5 +1,3 @@
-import { AuthRequestError } from "@/lib/integrations/auth/proliferate-auth";
-
 export type TelemetryFailureKind =
   | "aborted"
   | "configuration_error"
@@ -13,14 +11,15 @@ export function classifyTelemetryFailure(error: unknown): TelemetryFailureKind {
     return "aborted";
   }
 
-  if (error instanceof AuthRequestError) {
-    if (error.status === 401 || error.status === 403) {
+  const status = errorStatus(error);
+  if (status !== null) {
+    if (status === 401 || status === 403) {
       return "permission_error";
     }
-    if (error.status >= 400 && error.status < 500) {
+    if (status >= 400 && status < 500) {
       return "configuration_error";
     }
-    if (error.status >= 500) {
+    if (status >= 500) {
       return "request_error";
     }
   }
@@ -58,4 +57,12 @@ export function classifyTelemetryFailure(error: unknown): TelemetryFailureKind {
   }
 
   return "unknown_error";
+}
+
+function errorStatus(error: unknown): number | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : null;
 }

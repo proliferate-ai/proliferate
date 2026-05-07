@@ -27,7 +27,7 @@ vi.mock("@/stores/preferences/workspace-ui-store", () => ({
   trackWorkspaceInteraction: mocks.trackWorkspaceInteraction,
 }));
 
-vi.mock("@/lib/integrations/anyharness/turn-end-events", () => ({
+vi.mock("@/lib/infra/events/turn-end-events", () => ({
   notifyTurnEnd: mocks.notifyTurnEnd,
   notifyUserFacingTurnEnd: mocks.notifyUserFacingTurnEnd,
 }));

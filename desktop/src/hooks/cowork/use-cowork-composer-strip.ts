@@ -5,7 +5,7 @@ import type {
 } from "@anyharness/sdk";
 import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useCoworkManagedWorkspaces } from "./use-cowork-managed-workspaces";
 import { useCoworkStatus } from "./use-cowork-status";

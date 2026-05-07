@@ -19,7 +19,7 @@ import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   listConfiguredSessionControlValues,
   resolveConfiguredSessionControlValue,
-} from "@/lib/domain/chat/session-mode-control";
+} from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
   clampRounds,
   DEFAULT_REVIEW_MAX_ROUNDS,

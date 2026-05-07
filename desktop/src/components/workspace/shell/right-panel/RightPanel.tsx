@@ -36,13 +36,13 @@ import {
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel";
 import {
   orderBrowserTabs,
   orderTerminals,
   resolvePrimaryDigitShortcutIndex,
   rightPanelStateEqual,
-} from "@/lib/domain/workspaces/right-panel-view";
+} from "@/lib/domain/workspaces/shell/right-panel-view";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {

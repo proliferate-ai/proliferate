@@ -3,8 +3,8 @@ import {
   buildMobilityFooterContext,
   type WorkspaceMobilitySelectedMaterializationKind,
   type MobilityFooterContext,
-} from "@/lib/domain/workspaces/mobility-footer-context";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+} from "@/lib/domain/workspaces/mobility/mobility-footer-context";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceMobilityState } from "./use-workspace-mobility-state";
 
