@@ -1,8 +1,7 @@
 # Frontend Hooks
 
-Hooks own React behavior. A hook should have one clear responsibility and
-should be named and organized so the responsibility is obvious before reading
-the implementation.
+Hooks own React behavior. A hook should have one clear responsibility, a clear
+folder kind, and a name that tells the reader what it returns or owns.
 
 ## Hook Types
 
@@ -10,7 +9,7 @@ the implementation.
 
 Tiny reusable browser/UI mechanics with no product concepts.
 
-Examples:
+Path:
 
 ```text
 hooks/ui/keyboard/use-keyboard-shortcut.ts
@@ -26,7 +25,7 @@ or cloud.
 
 React Query or mutation wrappers around external systems.
 
-Examples:
+Path:
 
 ```text
 hooks/access/cloud/use-cloud-billing.ts
@@ -38,6 +37,17 @@ Access hooks own query keys, `useQuery`, `useMutation`, retries, invalidation,
 and request telemetry. Product hooks should use access hooks instead of
 constructing clients or calling raw endpoint helpers directly.
 
+Access hook naming:
+
+- `use-<resource>.ts` for queries
+- `use-<resource>-detail.ts` for one entity
+- `use-<action>-mutation.ts` for one mutation
+- `use-<resource>-actions.ts` only for a tight group of related mutations
+- `query-keys.ts` for key factories in the same access domain
+
+Access hooks may call `lib/access/**`, `@anyharness/sdk-react`, or
+`@anyharness/sdk`. They should not contain product workflow branching.
+
 ### Derived Hooks
 
 Read store/provider/query state and return UI-ready state. They should not
@@ -45,6 +55,17 @@ write, fetch, invalidate, navigate, or emit telemetry.
 
 Use derived hooks when a component needs one stable answer from many inputs,
 such as "what chat surface should render?"
+
+Path:
+
+```text
+hooks/<domain>/derived/use-<thing>-state.ts
+hooks/<domain>/derived/use-<thing>-model.ts
+```
+
+Derived hooks may call other derived hooks and read access hooks. They must not
+call mutation hooks except to read stable status that is already exposed as
+state.
 
 ### Workflow Hooks
 
@@ -62,6 +83,28 @@ Workflow hooks should read like route handlers:
 They should not bury large product algorithms inline. Move reusable logic to
 `lib/domain` or `lib/workflows`.
 
+Path:
+
+```text
+hooks/<domain>/workflows/use-<workflow>-actions.ts
+hooks/<domain>/workflows/use-<workflow>-workflow.ts
+```
+
+Workflow hooks may:
+
+- read stores, providers, and access hooks
+- expose callbacks used by components
+- call `lib/domain` for pure decisions
+- call `lib/workflows` for multi-step product sequences
+- perform query invalidation and store updates at the React boundary
+
+Workflow hooks must not:
+
+- construct raw clients
+- call raw endpoint paths or raw Tauri invoke wrappers
+- contain large reusable algorithms inline
+- become a grab bag of unrelated actions
+
 ### Lifecycle Hooks
 
 Mounted background behavior: streams, dispatchers, subscriptions, polling,
@@ -71,11 +114,31 @@ Lifecycle hooks are effect-driven. Keep their ownership comments explicit:
 "Owns X. Does not own Y." They should be mounted once at the correct boundary
 and should clean up every subscription or timer they create.
 
+Path:
+
+```text
+hooks/<domain>/lifecycle/use-<thing>-lifecycle.ts
+hooks/<domain>/lifecycle/use-<thing>-dispatcher.ts
+hooks/<domain>/lifecycle/use-<thing>-reconciler.ts
+```
+
+Use lifecycle hooks for background behavior triggered by mounting or external
+events, not direct user clicks.
+
 ### Facade Hooks
 
 Thin composition wrappers around several hooks. Facades are acceptable when
 they create a simpler interface for a component. If a facade grows large or
 contains branching business logic, split the underlying responsibilities.
+
+Path:
+
+```text
+hooks/<domain>/facade/use-<surface>.ts
+```
+
+Facade hooks should mostly rename and group values. They should not introduce
+new product behavior.
 
 ## Folder Shape
 
@@ -106,6 +169,9 @@ should move toward the taxonomy above.
 - Components should not call `queryClient.invalidateQueries` directly.
 - Components should not call multiple store setters in sequence; put that in a
   workflow hook.
+- Product workflow hooks should read like route handlers. If the middle of the
+  hook is the business algorithm, extract that algorithm to `lib/domain` or
+  `lib/workflows`.
 - Query key helpers live alongside their access/query hooks.
 - Reducers are pure functions, not hooks. Do not use a `use-` prefix for pure
   reducers.

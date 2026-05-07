@@ -9,12 +9,22 @@ platform APIs directly.
 ```text
 lib/access/
   cloud/
+    client.ts
+    <resource>.ts
   anyharness/
+    runtime-target.ts
+    runtime-bootstrap.ts
   tauri/
+    <capability>.ts
 hooks/access/
   cloud/
+    query-keys.ts
+    use-<resource>.ts
+    use-<action>-mutation.ts
   anyharness/
+    use-<resource>.ts
   tauri/
+    use-<capability>-actions.ts
 ```
 
 Existing code may still live under older transitional paths such as
@@ -31,6 +41,14 @@ move toward the access shape above.
 - generated OpenAPI request/response types
 - transport normalization
 
+File naming:
+
+- `client.ts` for client setup, auth/refresh middleware, and shared transport
+  error types
+- `<resource>.ts` for named request helpers such as `workspaces.ts`,
+  `billing.ts`, or `credentials.ts`
+- no React hooks, Zustand stores, query invalidation, navigation, or JSX
+
 `hooks/access/cloud/**` owns React-facing access:
 
 - query keys
@@ -39,6 +57,14 @@ move toward the access shape above.
 - retries
 - request telemetry
 - UI-safe error handling
+
+File naming:
+
+- `query-keys.ts` for cloud query key factories
+- `use-<resource>.ts` for list or summary queries
+- `use-<resource>-detail.ts` for single-entity queries
+- `use-<action>-mutation.ts` for one mutation
+- `use-<resource>-actions.ts` only for a tight mutation group
 
 Do not create ad hoc `openapi-fetch` clients outside the cloud access layer.
 Do not call raw `client.GET`, `client.POST`, `client.PUT`, or `client.DELETE`
@@ -59,6 +85,11 @@ generic SDK cannot know:
 - runtime bootstrap and credentials
 - desktop-specific compatibility adapters
 
+File naming should name the desktop wiring concern, such as
+`runtime-target.ts`, `runtime-bootstrap.ts`, or `workspace-connection.ts`.
+Do not name files after generic AnyHarness resources if the SDK can own that
+resource.
+
 Do not add a parallel generic AnyHarness request layer in desktop. If the
 operation is a normal AnyHarness resource operation, prefer the SDK or SDK
 React hook.
@@ -75,6 +106,9 @@ Use wrappers for:
 - filesystem access
 - native window operations
 - shell/open-in-editor operations
+
+File naming should name the native capability, such as `updater.ts`,
+`filesystem.ts`, `window.ts`, `shell.ts`, or `diagnostics.ts`.
 
 React-facing Tauri behavior belongs in `hooks/access/tauri/**` or a product
 workflow hook that calls the wrapper. Components should not call raw Tauri APIs

@@ -37,6 +37,17 @@ lib/domain/
   workspaces/
 ```
 
+File naming:
+
+- `<specific-rule>.ts` for pure decisions and computations
+- `<thing>-model.ts` for model construction
+- `<thing>-reducer.ts` for pure reducers
+- `<thing>-presentation.ts` or `presentation.ts` for state-to-display metadata
+- `<thing>.test.ts` next to meaningful pure logic when coverage is useful
+
+Avoid names like `utils.ts`, `helpers.ts`, or `types.ts` unless the file is
+truly tiny and local to one subdomain. Prefer names that state the product rule.
+
 ## `lib/workflows/**`
 
 Plain non-React product sequences.
@@ -58,6 +69,20 @@ Rules:
 - Keep side effects explicit in the dependency interface.
 - Workflow hooks should remain thin controllers around these functions.
 
+Target shape:
+
+```text
+lib/workflows/
+  sessions/
+    create-session-workflow.ts
+    prompt-session-workflow.ts
+  workspaces/
+    materialize-workspace-workflow.ts
+```
+
+Workflow functions should accept a small dependency object instead of importing
+singletons. That keeps the sequence testable and makes side effects visible.
+
 ## `lib/infra/**`
 
 Generic technical machinery that does not care about product domains.
@@ -74,6 +99,19 @@ Examples:
 If a function knows about chats, sessions, workspaces, agents, billing, or
 repositories, it is not infra.
 
+Target shape:
+
+```text
+lib/infra/
+  persistence/
+  scheduling/
+  measurement/
+  ids/
+  logging/
+```
+
+Organize infra by technical mechanism, not by product domain.
+
 ## `config/**`
 
 Real static configuration: constants, limits, option sets, route ids, default
@@ -88,6 +126,15 @@ Good examples:
 - runtime default constants
 
 Do not put human-facing copy or presentation mappings here.
+
+File naming should name the constant area, not the component using it:
+
+```text
+config/app-routes.ts
+config/chat-layout.ts
+config/runtime.ts
+config/shortcuts.ts
+```
 
 ## `copy/**`
 
@@ -104,6 +151,14 @@ Examples:
 Prefer complete copy variants over tiny string shards. It is okay for copy to
 be conditional, but the condition should usually live in domain/presentation
 logic rather than in a component.
+
+Target shape:
+
+```text
+copy/home/home-screen-copy.ts
+copy/cloud/cloud-status-copy.ts
+copy/plans/plan-prompts.ts
+```
 
 ## Presentation Mappings
 

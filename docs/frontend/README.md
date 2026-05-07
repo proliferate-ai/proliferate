@@ -7,11 +7,13 @@ Scope:
 - `desktop/src/**`
 
 Use this doc first to understand the frontend ownership model. Then read the
-focused doc for the layer or surface you are changing.
+layer doc and any surface spec that applies to the code you are changing.
 
 ## Read Order
 
-Always start here, then read the relevant focused docs:
+Always start here.
+
+Layer docs:
 
 - [components.md](components.md) for component ownership, UI primitives, and
   component folder hierarchy.
@@ -26,6 +28,9 @@ Always start here, then read the relevant focused docs:
   usage.
 - [telemetry.md](telemetry.md) for analytics, Sentry, replay masking, or
   telemetry payloads.
+
+Surface specs:
+
 - [chat-composer.md](chat-composer.md) for the chat composer area.
 - [chat-transcript.md](chat-transcript.md) for transcript streaming, replay,
   row models, or long-history rendering.
@@ -45,6 +50,8 @@ desktop/src/
   components/
     ui/
     <domain>/
+      <surface>/
+        <role>/
   config/
   copy/
   hooks/
@@ -65,9 +72,11 @@ desktop/src/
       tauri/
     domain/
       <domain>/
+        <subdomain>/
     workflows/
       <domain>/
     infra/
+      <technical-concern>/
   pages/
   providers/
   stores/
@@ -103,19 +112,24 @@ focused doc that owns the layer.
 
 Use the lowest layer that can own the logic cleanly.
 
-| Concern | Owner | Rule of thumb |
-| --- | --- | --- |
-| Local presentational state | Component state | Keep it local when only one subtree needs it. |
-| Shared client state | `stores/**` | Selection, panels, drafts, resize state, active ids, and other client-only state. |
-| Remote state | TanStack Query | Authoritative server/runtime data that can be refetched. |
-| React behavior | `hooks/**` | Effects, query/mutation wiring, route gates, workflow controllers, and derived UI state. |
-| Scoped dependencies | `providers/**` | App/subtree boundaries such as query client, auth, telemetry, and runtime context. |
-| Pure product rules | `lib/domain/**` | No React, JSX, stores, query clients, or external access. |
-| Plain product workflows | `lib/workflows/**` | Non-React sequences that coordinate dependencies passed in by hooks. |
-| External access | `lib/access/**` and access hooks | Cloud, AnyHarness, and Tauri boundaries. |
-| Technical utilities | `lib/infra/**` | Generic machinery such as persistence, scheduling, measurement, ids, and batching. |
-| Static constants | `config/**` | Real constants/options/limits/default ids/orderings. |
-| Product copy | `copy/**` | User-facing words, copy variants, and authored prompt text. |
+| Concern | Path | Put it here when | Do not put here | Details |
+| --- | --- | --- | --- | --- |
+| Product UI | `components/<domain>/<surface>/<role>/**` | It renders product-specific UI. | Raw access, query invalidation, multi-step workflows, reusable product rules. | [components.md](components.md) |
+| UI primitives | `components/ui/**` | It is reusable without product knowledge. | Product-specific copy, stores, access, or workflow behavior. | [components.md](components.md), [styling.md](styling.md) |
+| Generic UI hooks | `hooks/ui/<mechanic>/**` | It wraps browser/UI mechanics with no product concepts. | Sessions, workspaces, cloud, agents, billing, or other product concepts. | [hooks.md](hooks.md) |
+| Access hooks | `hooks/access/<system>/**` | It is a React Query/mutation wrapper around cloud, AnyHarness, or Tauri. | Product workflow branching or JSX. | [hooks.md](hooks.md), [access.md](access.md), [state.md](state.md) |
+| Product derived hooks | `hooks/<domain>/derived/**` | It computes UI-ready state from stores, providers, and queries. | Writes, effects, raw access, navigation, or telemetry. | [hooks.md](hooks.md) |
+| Product workflow hooks | `hooks/<domain>/workflows/**` | It exposes user-action callbacks and coordinates React dependencies. | Large business algorithms or raw clients. | [hooks.md](hooks.md) |
+| Product lifecycle hooks | `hooks/<domain>/lifecycle/**` | It owns mounted effects, streams, dispatchers, polling, or reconciliation. | Render logic or user-click workflow branching. | [hooks.md](hooks.md) |
+| Shared client state | `stores/<domain>/<concern>-store.ts` | It is client-only state such as selected ids, drafts, panels, or active UI. | Server/runtime caches, API calls, navigation, telemetry, or multi-store orchestration. | [state.md](state.md) |
+| Scoped dependencies | `providers/**` | It defines an app/subtree context boundary. | General mutable UI state. | [state.md](state.md) |
+| Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [lib.md](lib.md) |
+| Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [lib.md](lib.md) |
+| Raw external access | `lib/access/<system>/**` | It owns raw cloud, AnyHarness desktop wiring, or Tauri wrappers. | Product UI state, product branching, or components. | [access.md](access.md) |
+| Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [lib.md](lib.md) |
+| Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [lib.md](lib.md) |
+| Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [lib.md](lib.md) |
+| Presentation mappings | `lib/domain/<domain>/<subdomain>/presentation.ts` | It maps product state to labels, tone, icons, descriptions, or visibility. | Transport access or mutable UI state. | [lib.md](lib.md) |
 
 ## Dependency Direction
 
@@ -129,17 +143,3 @@ Use the lowest layer that can own the logic cleanly.
 - `lib/workflows` may coordinate multiple dependencies, but those dependencies
   are passed in. It does not import React hooks.
 - Raw cloud, AnyHarness, and Tauri access stays behind the access boundary.
-
-## Migration Order
-
-Keep migrations reviewable. Do not mix mechanical movement, access rewiring,
-and deep behavioral hook cleanup in the same PR.
-
-1. Architecture docs.
-2. Config/copy/presentation split.
-3. Component hierarchy cleanup.
-4. Access boundary skeleton.
-5. Move raw access behind access/query hooks.
-6. `lib/domain`, `lib/workflows`, and `lib/infra` cleanup.
-7. Hook cleanup by domain.
-8. Tests, playground, and latency pass.
