@@ -37,6 +37,32 @@ Stores should expose simple verbs such as `setActiveSessionId`, `patchDraft`,
 or `clearSelection`. Avoid verbs that imply orchestration, such as `submit`,
 `sync`, `load`, `refresh`, or `bootstrap`.
 
+### Store Facades
+
+Cross-store facades are allowed only as local state adapters. Use them when a
+domain has split stores but callers need one narrow way to read or patch the
+local state model.
+
+Allowed:
+
+- read from multiple stores
+- write to multiple stores with simple local setters
+- hide storage layout during a store split
+- expose local state helpers with no remote side effects
+
+Not allowed:
+
+- API calls
+- React Query invalidation or cache writes
+- navigation
+- telemetry
+- toasts
+- timers, streams, or subscriptions
+- raw client construction
+
+If a facade starts coordinating external work or product sequences, move that
+logic to a workflow hook or `lib/workflows/**`.
+
 ## Remote State
 
 TanStack Query owns authoritative remote state from cloud, AnyHarness, and
@@ -54,8 +80,10 @@ hooks/access/<system>/**       # app-owned query and mutation hooks
   policy.
 - Use generated response types or SDK types as the source of truth for remote
   transport shapes.
-- Product workflow hooks may coordinate invalidation, but the query/mutation
-  primitive belongs in an access hook.
+- Product workflow hooks may decide that remote state needs refreshing or
+  updating, but access hooks own the query keys and cache shape. Product
+  workflow hooks should call access-owned callbacks instead of constructing
+  query keys or writing cache objects directly.
 
 ## Providers
 

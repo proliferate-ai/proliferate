@@ -9,6 +9,10 @@ state/actions, tiny local UI callbacks, JSX out.
   product logic.
 - Components may call hooks. Hooks should provide the data, callbacks, and
   state needed for rendering.
+- Components may import small pure domain/presentation helpers directly when
+  the helper only builds local render metadata, such as a row label, tone, or
+  icon choice. If the composition reads multiple stores/queries or combines
+  several product concerns, put it behind a derived hook instead.
 - Components may own local presentational state that only their subtree needs.
 - If a component has real computation in `useMemo`, move the computation into a
   derived hook or `lib/domain` helper.
@@ -25,6 +29,7 @@ Allowed component logic:
   prop callback
 - local-only measurement, hover, drag, focus, and menu state
 - simple formatting that is truly local and not a repeated product rule
+- small calls to pure presentation/domain helpers for local render metadata
 
 Red flags:
 
@@ -35,6 +40,8 @@ Red flags:
 - non-trivial `useMemo` or `useEffect`
 - inline status-to-label/tone/icon maps
 - callbacks that read like workflows
+- async mutations, file parsing, sorting/filtering product models, or
+  multi-step state transitions
 
 ## Folder Shape
 
@@ -81,6 +88,21 @@ Avoid new root buckets like `modals`, `panels`, `sidebar`, or `topbar`.
 Domain-aware dialogs, panels, sidebars, and toolbars stay inside their owning
 product area.
 
+Folder hygiene:
+
+- A top-level `components/<domain>/` folder should represent a real product
+  area, not a UI shape or transport boundary.
+- Single-file folders are usually not worth it. Keep the file in its parent
+  unless the folder is clearly about to hold a cohesive surface/role.
+- Pick one shape per parent. A folder should not mix many direct component
+  files with some nested role folders unless the direct files are the surface
+  entrypoints.
+- Avoid `shared/` and `common/` inside surfaces. Reuse moves up to
+  `components/ui/**` for generic primitives or to a domain root when it remains
+  product-aware.
+- When a flat component folder grows past roughly ten files, introduce
+  surface/role folders before adding more unrelated components.
+
 ## UI Primitives
 
 - Put foundational primitives and shells in `components/ui/**`.
@@ -102,9 +124,20 @@ product area.
 - Use `React.memo` only when props are reference-stable and the component
   demonstrably re-renders due to parent state churn.
 - Component files use `PascalCase.tsx`.
+- Do not put `.ts` files under `components/**`. Static metadata, copy,
+  config, and pure presentation helpers belong in `config/**`, `copy/**`, or
+  `lib/domain/**`.
 - Component names should describe the product surface or UI primitive they own.
 - Avoid generic names like `Panel`, `Modal`, `Content`, or `Row` unless the
   folder path already makes the ownership unambiguous.
+
+File size guidance:
+
+- Prefer splitting product component files before roughly 300 lines.
+- Component files around 500 lines need a strong reason to stay whole.
+- Size alone is not the only signal. Split earlier when a component mixes
+  rendering with workflows, product-model construction, repeated presentation
+  maps, or non-trivial effects.
 
 ## Settings
 

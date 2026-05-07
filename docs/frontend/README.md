@@ -9,6 +9,23 @@ Scope:
 Use this doc first to understand the frontend ownership model. Then read the
 layer doc and any surface spec that applies to the code you are changing.
 
+## North Star
+
+The frontend is organized for legibility by file path. When a developer sees a
+file location, they should know what kind of logic is allowed there before
+opening the file. When something breaks or needs to change, they should know
+where to look first.
+
+Structural rules are not aesthetic. They prevent mixed-ownership files from
+becoming god modules that nobody can change confidently.
+
+The single rule behind this guide:
+
+> A file should be readable cold. A contributor should be able to open the top
+> file in a feature and understand what it owns, what it exposes, and where the
+> real work lives. If understanding the file requires following imports through
+> unrelated layers, the structure is wrong.
+
 ## Read Order
 
 Always start here.
@@ -65,18 +82,21 @@ desktop/src/
     access/
       anyharness/
       cloud/
-      tauri/
+      mcp/
       tauri/
     ui/
     <domain>/
       derived/
       workflows/
       lifecycle/
+      ui/
+      cache/
       facade/
   lib/
     access/
       anyharness/
       cloud/
+      tauri/
     domain/
       <domain>/
         <subdomain>/
@@ -107,9 +127,15 @@ focused doc that owns the layer.
 - Hooks are not the default extraction unit. Use hooks for React behavior; use
   plain functions for pure logic, product workflows, access helpers, and infra
   utilities.
+- Product hook domains are organized by responsibility folders. New
+  non-migration hook files should not sit directly under `hooks/<domain>/`.
 - Preserve current UI and behavior unless an explicit behavior change is
   requested.
 - Delete dead code when replacing an implementation.
+- Move toward the target architecture incrementally. Do not create empty
+  folder trees or speculative abstractions.
+- Cleanup PRs should state whether they are behavior-preserving extractions or
+  behavior changes. Do not mix both unless the task explicitly requires it.
 - Avoid god modules and god stores. Prefer splitting before roughly 400 lines.
   Files at 600+ lines need a strong reason to stay whole. Mixed ownership
   should be split even below those thresholds.
@@ -131,6 +157,8 @@ Use the lowest layer that can own the logic cleanly.
 | Product derived hooks | `hooks/<domain>/derived/**` | It computes UI-ready state from stores, providers, and queries. | Writes, effects, raw access, navigation, or telemetry. | [guides/hooks.md](guides/hooks.md) |
 | Product workflow hooks | `hooks/<domain>/workflows/**` | It exposes user-action callbacks and coordinates React dependencies. | Large business algorithms or raw clients. | [guides/hooks.md](guides/hooks.md) |
 | Product lifecycle hooks | `hooks/<domain>/lifecycle/**` | It owns mounted effects, streams, dispatchers, polling, or reconciliation. | Render logic or user-click workflow branching. | [guides/hooks.md](guides/hooks.md) |
+| Product UI-mechanic hooks | `hooks/<domain>/ui/**` | It wraps UI mechanics that are specific to one product domain. | Generic browser mechanics or product workflows. | [guides/hooks.md](guides/hooks.md) |
+| Product cache hooks | `hooks/<domain>/cache/**` | It owns a product-composed cache that combines multiple external/local sources. | One-resource external query wrappers or raw access. | [guides/hooks.md](guides/hooks.md), [guides/access.md](guides/access.md), [guides/state.md](guides/state.md) |
 | Shared client state | `stores/<domain>/<concern>-store.ts` | It is client-only state such as selected ids, drafts, panels, or active UI. | Server/runtime caches, API calls, navigation, telemetry, or multi-store orchestration. | [guides/state.md](guides/state.md) |
 | Scoped dependencies | `providers/**` | It defines an app/subtree context boundary. | General mutable UI state. | [guides/state.md](guides/state.md) |
 | Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [guides/lib.md](guides/lib.md) |
@@ -146,6 +174,9 @@ Use the lowest layer that can own the logic cleanly.
 - Components may call hooks and render UI primitives.
 - Product hooks may read stores/providers, call access hooks, and call
   `lib/domain` or `lib/workflows` functions.
+- Product hooks do not own React Query key definitions or query cache shape.
+  They call access hooks/cache callbacks when a workflow needs remote state
+  invalidated or updated.
 - Stores do not call hooks, clients, query invalidation, navigation, telemetry,
   or other stores.
 - `lib/domain` does not import React, stores, query clients, access helpers, or
@@ -153,3 +184,25 @@ Use the lowest layer that can own the logic cleanly.
 - `lib/workflows` may coordinate multiple dependencies, but those dependencies
   are passed in. It does not import React hooks.
 - Raw cloud, AnyHarness, and Tauri access stays behind the access boundary.
+
+Dependency direction is one-way:
+
+```text
+components -> hooks -> lib/workflows -> lib/domain/lib/infra -> lib/access
+```
+
+Stores are read by hooks. `lib/**` files do not read stores directly unless a
+focused area doc explicitly marks the file as a transitional state adapter.
+
+## Cleanup Discipline
+
+- Move ownership violations before introducing new abstractions.
+- Do not leave duplicate old and new paths behind after a migration.
+- Do not create one-file folders or empty target trees to satisfy a diagram.
+- Prefer one bounded product area per PR.
+- Keep public hook/component APIs stable unless the cleanup explicitly changes
+  callsites.
+- When splitting a file, preserve behavior first; improve behavior in a
+  separate PR.
+- Use focused tests around moved domain/workflow logic when the logic is
+  meaningful or risky.
