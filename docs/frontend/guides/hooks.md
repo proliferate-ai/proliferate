@@ -96,6 +96,8 @@ Workflow hooks may:
 - expose callbacks used by components
 - call `lib/domain` for pure decisions
 - call `lib/workflows` for multi-step product sequences
+- pass access-hook callbacks, store setters, and other side-effect functions
+  into `lib/workflows`
 - perform query invalidation and store updates at the React boundary
 
 Workflow hooks must not:
@@ -104,6 +106,22 @@ Workflow hooks must not:
 - call raw endpoint paths or raw Tauri invoke wrappers
 - contain large reusable algorithms inline
 - become a grab bag of unrelated actions
+
+The workflow hook is the React boundary. It is allowed to call hooks. Plain
+`lib/workflows` functions are not.
+
+Default shape:
+
+```text
+Component
+  -> useProductWorkflowActions()
+    -> useAccessMutation()
+    -> useStore(selector)
+    -> runPlainWorkflow(input, {
+         accessCall: mutation.mutateAsync,
+         storeSetter,
+       })
+```
 
 ### Lifecycle Hooks
 
@@ -172,6 +190,7 @@ should move toward the taxonomy above.
 - Product workflow hooks should read like route handlers. If the middle of the
   hook is the business algorithm, extract that algorithm to `lib/domain` or
   `lib/workflows`.
+- Hooks may call hooks. Plain functions in `lib/**` must not call hooks.
 - Query key helpers live alongside their access/query hooks.
 - Reducers are pure functions, not hooks. Do not use a `use-` prefix for pure
   reducers.

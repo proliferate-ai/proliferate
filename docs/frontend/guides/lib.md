@@ -68,6 +68,10 @@ Rules:
 - Dependencies are passed in as arguments.
 - Keep side effects explicit in the dependency interface.
 - Workflow hooks should remain thin controllers around these functions.
+- Do not import access hooks, stores, query clients, or React providers.
+- Do not construct raw clients or call raw endpoint paths unless the workflow is
+  explicitly designed as an access-layer helper. Product workflows should
+  receive access callbacks from the hook that calls them.
 
 Target shape:
 
@@ -82,6 +86,35 @@ lib/workflows/
 
 Workflow functions should accept a small dependency object instead of importing
 singletons. That keeps the sequence testable and makes side effects visible.
+
+Example shape:
+
+```ts
+export async function createWorkspaceWorkflow(input, deps) {
+  const workspace = await deps.createWorkspace(input.workspace);
+  const session = await deps.createSession({ workspaceId: workspace.id });
+  deps.activateWorkspace({ workspaceId: workspace.id, sessionId: session.id });
+  return { workspace, session };
+}
+```
+
+The corresponding hook wires the dependencies:
+
+```ts
+export function useCreateWorkspaceActions() {
+  const createWorkspace = useCreateWorkspaceMutation();
+  const createSession = useCreateSessionMutation();
+  const activateWorkspace = useSelectionStore((state) => state.activateWorkspace);
+
+  return {
+    create: (input) => createWorkspaceWorkflow(input, {
+      createWorkspace: createWorkspace.mutateAsync,
+      createSession: createSession.mutateAsync,
+      activateWorkspace,
+    }),
+  };
+}
+```
 
 ## `lib/infra/**`
 

@@ -116,14 +116,18 @@ directly.
 
 ## Product Usage Pattern
 
-Product hooks should compose access instead of owning it directly:
+Product hooks should compose access instead of owning it directly. The product
+hook is the React boundary: it may call access hooks, read stores, and pass the
+resulting callbacks into plain workflow functions.
 
 ```text
 Component
-  -> product workflow/derived hook
+  -> product workflow hook
     -> access hook or SDK hook
-    -> lib/access raw helper or external SDK
+      -> lib/access raw helper or external SDK
+    -> lib/workflows function receives access callbacks as dependencies
 ```
 
 Keep business rules in `lib/domain` or `lib/workflows`. Keep transport details
-in access. Keep rendering in components.
+in access. Keep rendering in components. Do not call React hooks from
+`lib/workflows`.
