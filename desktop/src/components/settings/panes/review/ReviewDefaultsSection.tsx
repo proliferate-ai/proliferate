@@ -1,6 +1,6 @@
 import type { ReviewKind } from "@anyharness/sdk";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";

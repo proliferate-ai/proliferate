@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { ChevronRight, CloudUpload, Mail, RefreshCw, Trash } from "@/components/ui/icons";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import {
   Avatar,
   OrganizationLogo,

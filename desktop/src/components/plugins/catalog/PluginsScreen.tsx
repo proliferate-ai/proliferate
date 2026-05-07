@@ -1,6 +1,6 @@
 import { PageContentFrame } from "@/components/ui/PageContentFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { MainSidebarPageShell } from "@/components/workspace/shell/MainSidebarPageShell";
+import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ConnectorCatalogPage } from "./ConnectorCatalogPage";
 
 export function PluginsScreen() {

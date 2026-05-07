@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/Button";
 import { PageContentFrame } from "@/components/ui/PageContentFrame";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ArrowLeft, Pause, Pencil, Play, Plus, Zap } from "@/components/ui/icons";
-import { MainSidebarPageShell } from "@/components/workspace/shell/MainSidebarPageShell";
-import { AutomationDetailContent } from "./AutomationDetailContent";
-import { AutomationEditorModal } from "./AutomationEditorModal";
-import { AutomationListContent } from "./AutomationListContent";
+import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
+import { AutomationDetailContent } from "@/components/automations/list/AutomationDetailContent";
+import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
+import { AutomationListContent } from "@/components/automations/list/AutomationListContent";
 import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
 import { useAutomationActions } from "@/hooks/automations/use-automation-actions";
 import {

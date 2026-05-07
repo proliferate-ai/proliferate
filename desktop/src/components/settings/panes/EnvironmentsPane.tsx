@@ -7,7 +7,7 @@ import {
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
 

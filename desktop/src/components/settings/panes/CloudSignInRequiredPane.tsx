@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";

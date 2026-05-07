@@ -1,19 +1,19 @@
-import { HomeNextScreen } from "@/components/home/HomeNextScreen";
+import { HomeNextScreen } from "@/components/home/screen/HomeNextScreen";
 import { useCallback, useEffect, useMemo } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
 import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
 import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { ChatView } from "@/components/workspace/chat/ChatView";
-import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
-import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
+import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
+import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
 import {
   WorkspaceHeaderTabsViewModelProvider,
-} from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
-import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/WorkspaceShellActionsContext";
+} from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
+import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
+import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@/components/ui/IconButton";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SplitPanel } from "@/components/ui/icons";

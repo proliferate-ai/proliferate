@@ -10,8 +10,8 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { SidebarUpdatePill } from "./SidebarUpdatePill";
-import { MainSidebar } from "./sidebar/MainSidebar";
+import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
+import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 
 interface MainSidebarPageShellProps {
   children: ReactNode;

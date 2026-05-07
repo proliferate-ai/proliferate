@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { SettingsScreen } from "@/components/settings/SettingsScreen";
+import { SettingsScreen } from "@/components/settings/screen/SettingsScreen";
 import { useSettingsNavigation } from "@/hooks/settings/use-settings-navigation";
 import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositories";
 

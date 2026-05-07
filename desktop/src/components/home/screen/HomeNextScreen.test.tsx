@@ -76,15 +76,15 @@ vi.mock("@/stores/home/home-draft-handoff-store", () => ({
   }),
 }));
 
-vi.mock("@/components/home/HomeTargetPicker", () => ({
+vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
   HomeTargetPicker: () => <div data-testid="target-picker" />,
 }));
 
-vi.mock("@/components/home/HomeModelPicker", () => ({
+vi.mock("@/components/home/screen/HomeModelPicker", () => ({
   HomeModelPicker: () => <div data-testid="model-picker" />,
 }));
 
-vi.mock("@/components/home/HomeModePicker", () => ({
+vi.mock("@/components/home/screen/HomeModePicker", () => ({
   HomeModePicker: () => <div data-testid="mode-picker" />,
 }));
 

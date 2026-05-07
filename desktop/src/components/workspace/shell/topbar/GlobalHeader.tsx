@@ -5,7 +5,7 @@ import {
 } from "react";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/preference-resolvers";
-import { HeaderTabs } from "@/components/workspace/shell/HeaderTabs";
+import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
 import { Button } from "@/components/ui/Button";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { GitActionsButton } from "@/components/workspace/git/GitActionsButton";

@@ -5,7 +5,7 @@ import type {
   Ref,
 } from "react";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
+import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";

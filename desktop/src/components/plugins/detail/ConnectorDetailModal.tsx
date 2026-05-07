@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { ConnectorAboutTab } from "./ConnectorAboutTab";
 import { ConnectorConfigureTab } from "./ConnectorConfigureTab";
-import { ConnectorIcon } from "./ConnectorIcon";
+import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorToolsTab } from "./ConnectorToolsTab";
 
 type DetailCallbacks = {

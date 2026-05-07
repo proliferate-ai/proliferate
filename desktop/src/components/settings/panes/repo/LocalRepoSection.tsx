@@ -7,7 +7,7 @@ import {
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
 import { EnvironmentSearchSelect } from "@/components/ui/EnvironmentSearchSelect";
-import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
+import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Monitor } from "@/components/ui/icons";

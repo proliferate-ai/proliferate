@@ -2,7 +2,7 @@ import { memo } from "react";
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/use-workspace-content-shortcuts";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
-import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
+import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";

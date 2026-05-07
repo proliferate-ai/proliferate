@@ -12,9 +12,9 @@ import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import {
   getAgentGroupBadgeTone,
 } from "@/lib/domain/agents/group-presentation";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 export function AgentsPane() {

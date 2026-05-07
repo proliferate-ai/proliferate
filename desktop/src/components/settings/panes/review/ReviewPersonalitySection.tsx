@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import {

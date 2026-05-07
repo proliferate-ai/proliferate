@@ -9,8 +9,8 @@ import {
   type ShortcutDef,
   type ShortcutKey,
 } from "@/config/shortcuts";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { Input } from "@/components/ui/Input";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 

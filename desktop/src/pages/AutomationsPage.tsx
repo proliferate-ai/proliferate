@@ -1,4 +1,4 @@
-import { AutomationsScreen } from "@/components/automations/AutomationsScreen";
+import { AutomationsScreen } from "@/components/automations/screen/AutomationsScreen";
 
 export function AutomationsPage() {
   return <AutomationsScreen />;

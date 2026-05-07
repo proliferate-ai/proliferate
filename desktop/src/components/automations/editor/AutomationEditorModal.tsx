@@ -35,9 +35,9 @@ import {
   AutomationTemplatePopover,
   reasoningIcon,
 } from "./AutomationEditorControls";
-import { AutomationModePicker } from "./AutomationModePicker";
-import { AutomationModelPicker } from "./AutomationModelPicker";
-import { AutomationTargetPicker } from "./AutomationTargetPicker";
+import { AutomationModePicker } from "@/components/automations/controls/AutomationModePicker";
+import { AutomationModelPicker } from "@/components/automations/controls/AutomationModelPicker";
+import { AutomationTargetPicker } from "@/components/automations/controls/AutomationTargetPicker";
 
 type SchedulePresetValue = AutomationSchedulePresetOrCustom;
 

@@ -4,7 +4,7 @@ import type {
   AutomationResponse,
   AutomationRunResponse,
 } from "@/lib/access/cloud/client";
-import { AutomationRunTimeline } from "./AutomationRunTimeline";
+import { AutomationRunTimeline } from "@/components/automations/timeline/AutomationRunTimeline";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 
 interface AutomationDetailContentProps {

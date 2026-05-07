@@ -43,7 +43,7 @@ import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-ta
 import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-actions";
 import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
 import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
-import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/WorkspaceHeaderTabsViewModelContext";
+import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";

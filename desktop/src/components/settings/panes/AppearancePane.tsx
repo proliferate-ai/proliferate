@@ -1,8 +1,8 @@
 import type { FC, ReactNode } from "react";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { Button } from "@/components/ui/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
