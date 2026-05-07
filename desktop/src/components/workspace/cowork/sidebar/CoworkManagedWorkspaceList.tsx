@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";
-import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
+import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
 import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/use-cowork-session-native-context-menu";
 import { useCoworkSessionActions } from "@/hooks/cowork/use-cowork-session-actions";

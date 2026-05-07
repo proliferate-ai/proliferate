@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import {
   descriptionForStartBlockReason,
   titleForStartBlockReason,

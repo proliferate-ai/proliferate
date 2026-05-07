@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { CLOUD_SETUP_DOCS_URL } from "@/config/capabilities";
 import { openExternal } from "@/platform/tauri/shell";

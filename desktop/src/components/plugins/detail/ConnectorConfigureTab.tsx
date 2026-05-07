@@ -11,8 +11,8 @@ import type {
 import { openExternal } from "@/platform/tauri/shell";
 import { Button } from "@/components/ui/Button";
 import { ExternalLink } from "@/components/ui/icons";
-import { ConnectorSecretFields } from "./ConnectorSecretFields";
-import { ConnectorSettingsFields } from "./ConnectorSettingsFields";
+import { ConnectorSecretFields } from "@/components/plugins/fields/ConnectorSecretFields";
+import { ConnectorSettingsFields } from "@/components/plugins/fields/ConnectorSettingsFields";
 
 export function ConnectorConfigureTab({
   disabled,

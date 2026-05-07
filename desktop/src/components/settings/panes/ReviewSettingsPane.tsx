@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
 import { useModelRegistriesQuery } from "@anyharness/sdk-react";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { ReviewDefaultsSection } from "@/components/settings/panes/review/ReviewDefaultsSection";
 import { ReviewPersonalitySection } from "@/components/settings/panes/review/ReviewPersonalitySection";
 import { Button } from "@/components/ui/Button";

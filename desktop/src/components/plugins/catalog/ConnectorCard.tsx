@@ -2,9 +2,9 @@ import type {
   AvailableCardModel,
   ConnectedCardModel,
 } from "@/hooks/mcp/use-connectors-catalog-state";
-import { ConnectorIcon } from "./ConnectorIcon";
-import { ConnectorOverflowMenu } from "./ConnectorOverflowMenu";
-import { ConnectorStatusChip } from "./ConnectorStatusChip";
+import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
+import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";
+import { ConnectorStatusChip } from "@/components/plugins/status/ConnectorStatusChip";
 
 const CARD_BASE =
   "group flex h-full min-h-[132px] flex-col items-start rounded-2xl border border-border bg-card p-4 text-left transition-colors";

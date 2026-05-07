@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { CloudBillingSummary } from "@/components/settings/panes/CloudBillingSummary";
 import { OrganizationBillingSection } from "@/components/settings/panes/billing/OrganizationBillingSection";
 import { Button } from "@/components/ui/Button";

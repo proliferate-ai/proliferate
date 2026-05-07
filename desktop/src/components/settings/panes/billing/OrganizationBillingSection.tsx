@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
 import type { CloudOwnerSelection } from "@/lib/access/cloud/billing";
 import type { BillingPlanInfo } from "@/lib/access/cloud/client";

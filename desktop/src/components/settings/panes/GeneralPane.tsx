@@ -1,9 +1,9 @@
 import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { Button } from "@/components/ui/Button";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { Switch } from "@/components/ui/Switch";

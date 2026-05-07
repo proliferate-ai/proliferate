@@ -1,5 +1,5 @@
 import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Badge } from "@/components/ui/Badge";
 
 interface CloudWorkspaceTrackedFilesCardProps {

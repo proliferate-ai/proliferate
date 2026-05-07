@@ -8,8 +8,8 @@ import {
   AvailableConnectorCard,
   ConnectedConnectorCard,
 } from "./ConnectorCard";
-import { ConnectorDetailModal } from "./ConnectorDetailModal";
-import { DeleteConnectorDialog } from "./DeleteConnectorDialog";
+import { ConnectorDetailModal } from "@/components/plugins/detail/ConnectorDetailModal";
+import { DeleteConnectorDialog } from "@/components/plugins/detail/DeleteConnectorDialog";
 
 export function ConnectorCatalogPage() {
   const state = useConnectorsCatalogState();

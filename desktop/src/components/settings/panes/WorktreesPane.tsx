@@ -11,7 +11,7 @@ import {
   EnvironmentPanelRow,
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
-import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
+import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/use-worktree-cleanup-policy";
 import {
   useWorktreeSettingsTargets,

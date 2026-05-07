@@ -5,9 +5,9 @@ import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   HOME_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
-import { HomeModePicker } from "@/components/home/HomeModePicker";
-import { HomeModelPicker } from "@/components/home/HomeModelPicker";
-import { HomeTargetPicker } from "@/components/home/HomeTargetPicker";
+import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
+import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
+import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
