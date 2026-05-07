@@ -1,9 +1,5 @@
 import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
-import { getSessionRecord } from "@/stores/sessions/session-records";
-import {
-  isHotSessionTargetCurrent,
-  useSessionIngestStore,
-} from "@/stores/sessions/session-ingest-store";
+import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
 
 interface EnsureSessionStreamOptions {
   awaitOpen?: boolean;
@@ -18,12 +14,39 @@ interface EnsureSessionStreamOptions {
   isCurrent?: () => boolean;
 }
 
+interface HotSessionIngestStateDeps {
+  setHotTargets: (targets: readonly HotSessionTarget[]) => number;
+  markWarming: (clientSessionId: string) => void;
+  markCurrentIfContiguous: (clientSessionId: string, lastAppliedSeq: number) => void;
+  markStale: (
+    clientSessionId: string,
+    patch?: {
+      lastAppliedSeq?: number;
+      lastObservedSeq?: number;
+      gapAfterSeq?: number | null;
+      lastErrorAt?: string | null;
+    },
+  ) => void;
+  markCold: (clientSessionId: string) => void;
+  getFreshness: (clientSessionId: string) => "current" | "warming" | "stale" | "cold" | null;
+  isTargetCurrent: (
+    clientSessionId: string,
+    generation: number,
+    materializedSessionId: string | null,
+  ) => boolean;
+  getSessionRecord: (clientSessionId: string) => {
+    streamConnectionState: string | null;
+    lastSeq: number;
+  } | null;
+}
+
 export interface HotSessionIngestManagerDeps {
   ensureSessionStreamConnected: (
     clientSessionId: string,
     options?: EnsureSessionStreamOptions,
   ) => Promise<void>;
   closeSessionSlotStream: (clientSessionId: string) => void;
+  state: HotSessionIngestStateDeps;
 }
 
 interface ActiveHotStream {
@@ -43,7 +66,7 @@ export function reconcileHotSessions(
   targets: readonly HotSessionTarget[],
   deps: HotSessionIngestManagerDeps,
 ): void {
-  const generation = useSessionIngestStore.getState().setHotTargets(targets);
+  const generation = deps.state.setHotTargets(targets);
   const nextTargetIds = new Set(targets.map((target) => target.clientSessionId));
 
   for (const clientSessionId of activeStreamsByClientSessionId.keys()) {
@@ -55,7 +78,7 @@ export function reconcileHotSessions(
   for (const target of targets) {
     if (!target.streamable || !target.materializedSessionId) {
       clearRetry(target.clientSessionId);
-      useSessionIngestStore.getState().markWarming(target.clientSessionId);
+      deps.state.markWarming(target.clientSessionId);
       continue;
     }
     const streamableTarget = {
@@ -76,7 +99,7 @@ export function reconcileHotSessions(
       existing
       && existing.materializedSessionId === target.materializedSessionId
       && existing.generation === generation
-      && isHotSessionTargetCurrent(
+      && deps.state.isTargetCurrent(
         target.clientSessionId,
         generation,
         target.materializedSessionId,
@@ -110,7 +133,7 @@ function connectHotTarget(
   retryAttempt: number,
 ): void {
   clearRetry(target.clientSessionId);
-  useSessionIngestStore.getState().markWarming(target.clientSessionId);
+  deps.state.markWarming(target.clientSessionId);
 
   const stream: ActiveHotStream = {
     clientSessionId: target.clientSessionId,
@@ -135,13 +158,13 @@ function connectHotTarget(
       scheduleRetry(target, generation, deps, current?.retryAttempt ?? retryAttempt);
     },
     isCurrent: () =>
-      isHotSessionTargetCurrent(
+      deps.state.isTargetCurrent(
         target.clientSessionId,
         generation,
         target.materializedSessionId,
       ),
   }).then(() => {
-    if (!isHotSessionTargetCurrent(
+    if (!deps.state.isTargetCurrent(
       target.clientSessionId,
       generation,
       target.materializedSessionId,
@@ -153,31 +176,29 @@ function connectHotTarget(
       current.opening = false;
       current.retryAttempt = 0;
     }
-    const record = getSessionRecord(target.clientSessionId);
+    const record = deps.state.getSessionRecord(target.clientSessionId);
     if (record?.streamConnectionState === "open") {
-      useSessionIngestStore.getState().markCurrentIfContiguous(
+      deps.state.markCurrentIfContiguous(
         target.clientSessionId,
-        record.transcript.lastSeq,
+        record.lastSeq,
       );
-    } else {
-      const freshness = useSessionIngestStore.getState()
-        .freshnessByClientSessionId[target.clientSessionId]?.freshness;
-      if (freshness !== "stale") {
-        useSessionIngestStore.getState().markWarming(target.clientSessionId);
-      }
+      return;
+    }
+    if (deps.state.getFreshness(target.clientSessionId) !== "stale") {
+      deps.state.markWarming(target.clientSessionId);
     }
   }).catch(() => {
-    if (!isHotSessionTargetCurrent(
+    if (!deps.state.isTargetCurrent(
       target.clientSessionId,
       generation,
       target.materializedSessionId,
     )) {
       return;
     }
-    const record = getSessionRecord(target.clientSessionId);
-    useSessionIngestStore.getState().markStale(target.clientSessionId, {
-      lastAppliedSeq: record?.transcript.lastSeq ?? 0,
-      lastObservedSeq: record?.transcript.lastSeq ?? 0,
+    const record = deps.state.getSessionRecord(target.clientSessionId);
+    deps.state.markStale(target.clientSessionId, {
+      lastAppliedSeq: record?.lastSeq ?? 0,
+      lastObservedSeq: record?.lastSeq ?? 0,
       gapAfterSeq: null,
       lastErrorAt: new Date().toISOString(),
     });
@@ -191,7 +212,7 @@ function scheduleRetry(
   deps: HotSessionIngestManagerDeps,
   retryAttempt: number,
 ): void {
-  if (!isHotSessionTargetCurrent(
+  if (!deps.state.isTargetCurrent(
     target.clientSessionId,
     generation,
     target.materializedSessionId,
@@ -211,7 +232,7 @@ function scheduleRetry(
     if (current?.retryTimer) {
       current.retryTimer = null;
     }
-    if (!isHotSessionTargetCurrent(
+    if (!deps.state.isTargetCurrent(
       target.clientSessionId,
       generation,
       target.materializedSessionId,
@@ -229,7 +250,7 @@ function closeHotStream(
   clearRetry(clientSessionId);
   deps.closeSessionSlotStream(clientSessionId);
   activeStreamsByClientSessionId.delete(clientSessionId);
-  useSessionIngestStore.getState().markCold(clientSessionId);
+  deps.state.markCold(clientSessionId);
 }
 
 function clearRetry(clientSessionId: string): void {

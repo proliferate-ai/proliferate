@@ -55,7 +55,7 @@ import {
   loadConnectorPaneData,
   setConnectorEnabled,
   updateConnectorSecret,
-} from "@/lib/infra/mcp/persistence";
+} from "@/lib/workflows/mcp/connector-persistence";
 
 function secretCatalogEntry(id = "context7") {
   const secretFields = [

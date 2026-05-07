@@ -5,8 +5,8 @@ import {
   classifyOAuthCommandTelemetryFailure,
   OAuthConnectorCommandError,
 } from "@/lib/domain/mcp/oauth";
-import { cancelOAuthConnectorConnect } from "@/lib/infra/mcp/persistence";
-import { reconnectOAuthConnector } from "@/lib/infra/mcp/persistence";
+import { cancelOAuthConnectorConnect } from "@/lib/workflows/mcp/connector-persistence";
+import { reconnectOAuthConnector } from "@/lib/workflows/mcp/connector-persistence";
 import {
   captureTelemetryException,
   trackProductEvent,

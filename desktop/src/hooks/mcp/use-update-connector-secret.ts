@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConnectorSettings } from "@/lib/domain/mcp/types";
-import { updateConnectorSecret } from "@/lib/infra/mcp/persistence";
+import { updateConnectorSecret } from "@/lib/workflows/mcp/connector-persistence";
 import {
   captureTelemetryException,
   trackProductEvent,

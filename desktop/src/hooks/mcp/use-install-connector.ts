@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConnectorSettings } from "@/lib/domain/mcp/types";
 import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
-import { cancelLocalOAuthConnectorConnect, installConnector } from "@/lib/infra/mcp/persistence";
+import { cancelLocalOAuthConnectorConnect, installConnector } from "@/lib/workflows/mcp/connector-persistence";
 import {
   captureTelemetryException,
   trackProductEvent,

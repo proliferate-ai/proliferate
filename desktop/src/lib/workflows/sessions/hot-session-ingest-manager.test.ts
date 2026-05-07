@@ -9,10 +9,12 @@ import {
 } from "@/stores/sessions/session-ingest-store";
 import {
   createEmptySessionRecord,
+  getSessionRecord,
   patchSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { isHotSessionTargetCurrent } from "@/stores/sessions/session-ingest-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
@@ -148,5 +150,27 @@ function depsWithEnsure(
   return {
     closeSessionSlotStream: vi.fn(),
     ensureSessionStreamConnected: vi.fn(ensure),
+    state: {
+      setHotTargets: (targets) => useSessionIngestStore.getState().setHotTargets(targets),
+      markWarming: (clientSessionId) => useSessionIngestStore.getState().markWarming(clientSessionId),
+      markCurrentIfContiguous: (clientSessionId, lastAppliedSeq) =>
+        useSessionIngestStore.getState().markCurrentIfContiguous(clientSessionId, lastAppliedSeq),
+      markStale: (clientSessionId, patch) =>
+        useSessionIngestStore.getState().markStale(clientSessionId, patch),
+      markCold: (clientSessionId) => useSessionIngestStore.getState().markCold(clientSessionId),
+      getFreshness: (clientSessionId) =>
+        useSessionIngestStore.getState().freshnessByClientSessionId[clientSessionId]?.freshness ?? null,
+      isTargetCurrent: (clientSessionId, generation, materializedSessionId) =>
+        isHotSessionTargetCurrent(clientSessionId, generation, materializedSessionId),
+      getSessionRecord: (clientSessionId) => {
+        const record = getSessionRecord(clientSessionId);
+        return record
+          ? {
+            streamConnectionState: record.streamConnectionState,
+            lastSeq: record.transcript.lastSeq,
+          }
+          : null;
+      },
+    },
   };
 }

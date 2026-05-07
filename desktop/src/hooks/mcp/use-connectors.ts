@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { loadConnectorPaneData } from "@/lib/infra/mcp/persistence";
+import { loadConnectorPaneData } from "@/lib/workflows/mcp/connector-persistence";
 import { mcpConnectorsKey } from "./query-keys";
 
 export function useConnectors() {

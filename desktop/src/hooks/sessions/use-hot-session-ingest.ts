@@ -11,6 +11,8 @@ import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/select
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { isHotSessionTargetCurrent, useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
@@ -92,6 +94,28 @@ export function useHotSessionIngest(): void {
   const managerDeps = useMemo<HotSessionIngestManagerDeps>(() => ({
     closeSessionSlotStream,
     ensureSessionStreamConnected,
+    state: {
+      setHotTargets: (nextTargets) => useSessionIngestStore.getState().setHotTargets(nextTargets),
+      markWarming: (clientSessionId) => useSessionIngestStore.getState().markWarming(clientSessionId),
+      markCurrentIfContiguous: (clientSessionId, lastAppliedSeq) =>
+        useSessionIngestStore.getState().markCurrentIfContiguous(clientSessionId, lastAppliedSeq),
+      markStale: (clientSessionId, patch) =>
+        useSessionIngestStore.getState().markStale(clientSessionId, patch),
+      markCold: (clientSessionId) => useSessionIngestStore.getState().markCold(clientSessionId),
+      getFreshness: (clientSessionId) =>
+        useSessionIngestStore.getState().freshnessByClientSessionId[clientSessionId]?.freshness ?? null,
+      isTargetCurrent: (clientSessionId, generation, materializedSessionId) =>
+        isHotSessionTargetCurrent(clientSessionId, generation, materializedSessionId),
+      getSessionRecord: (clientSessionId) => {
+        const record = getSessionRecord(clientSessionId);
+        return record
+          ? {
+            streamConnectionState: record.streamConnectionState,
+            lastSeq: record.transcript.lastSeq,
+          }
+          : null;
+      },
+    },
   }), [closeSessionSlotStream, ensureSessionStreamConnected]);
   const managerDepsRef = useRef(managerDeps);
   managerDepsRef.current = managerDeps;
