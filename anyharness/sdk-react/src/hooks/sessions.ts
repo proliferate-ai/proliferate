@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AnyHarnessRequestOptions,
   CreateSessionRequest,
   ForkSessionRequest,
   ListSessionEventsOptions,
@@ -32,6 +33,10 @@ import {
 interface WorkspaceQueryOptions {
   workspaceId?: string | null;
   enabled?: boolean;
+}
+
+interface WorkspaceMutationInput {
+  workspaceId?: string | null;
 }
 
 type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
@@ -83,6 +88,23 @@ export function useSessionQuery(
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.get(sessionId!, requestOptionsWithSignal(undefined, signal));
+    },
+  });
+}
+
+export function useFetchSessionMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async (input: {
+      workspaceId?: string | null;
+      sessionId: string;
+      requestOptions?: AnyHarnessRequestOptions;
+    }) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.get(input.sessionId, input.requestOptions);
     },
   });
 }
@@ -211,22 +233,35 @@ export function useCreateSessionMutation(options?: { workspaceId?: string | null
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: CreateSessionRequest) => {
-      const systemPromptAppend = (input as { systemPromptAppend?: string[] }).systemPromptAppend;
+    mutationFn: async (
+      input: CreateSessionRequest | {
+        workspaceId?: string | null;
+        request: CreateSessionRequest;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const request = "request" in input ? input.request : input;
+      const systemPromptAppend = (request as { systemPromptAppend?: string[] }).systemPromptAppend;
       console.debug("[anyharness sdk-react] createSession", {
-        workspaceId: input.workspaceId,
-        agentKind: input.agentKind,
-        modelId: input.modelId,
+        workspaceId: request.workspaceId,
+        agentKind: request.agentKind,
+        modelId: request.modelId,
         hasSystemPromptAppend: !!systemPromptAppend?.length,
         systemPromptAppend,
       });
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, options?.workspaceId);
+      const workspaceId = "request" in input
+        ? input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId
+        : options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.create(input);
+      return client.sessions.create(request, "request" in input ? input.requestOptions : undefined);
     },
-    onSuccess: async () => {
+    onSuccess: async (_response, input) => {
+      const workspaceId = "request" in input
+        ? input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId
+        : options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionsKey(runtimeUrl, options?.workspaceId ?? workspace.workspaceId),
+        queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
       });
     },
   });
@@ -236,15 +271,21 @@ export function useSetSessionConfigOptionMutation(options?: { workspaceId?: stri
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: { sessionId: string; request: SetSessionConfigOptionRequest }) => {
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        request: SetSessionConfigOptionRequest;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.setConfigOption(input.sessionId, input.request);
     },
     onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
@@ -264,15 +305,22 @@ export function usePromptSessionMutation(options?: { workspaceId?: string | null
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: { sessionId: string; request: PromptSessionRequest }) => {
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        request: PromptSessionRequest;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.prompt(input.sessionId, input.request);
+      return client.sessions.prompt(input.sessionId, input.request, input.requestOptions);
     },
     onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
         queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, variables.sessionId),
       });
@@ -406,15 +454,22 @@ export function useUpdateSessionTitleMutation(options?: { workspaceId?: string |
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: { sessionId: string; request: UpdateSessionTitleRequest }) => {
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        request: UpdateSessionTitleRequest;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.updateTitle(input.sessionId, input.request);
+      return client.sessions.updateTitle(input.sessionId, input.request, input.requestOptions);
     },
     onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
@@ -431,15 +486,22 @@ export function useCancelSessionMutation(options?: { workspaceId?: string | null
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (sessionId: string) => {
+    mutationFn: async (input: string | (WorkspaceMutationInput & { sessionId: string })) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const workspaceId = typeof input === "string"
+        ? options?.workspaceId ?? workspace.workspaceId
+        : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.cancel(sessionId);
     },
-    onSuccess: async (_response, sessionId) => {
+    onSuccess: async (_response, input) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const workspaceId = typeof input === "string"
+        ? options?.workspaceId ?? workspace.workspaceId
+        : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
@@ -452,15 +514,22 @@ export function useDismissSessionMutation(options?: { workspaceId?: string | nul
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (sessionId: string) => {
+    mutationFn: async (input: string | (WorkspaceMutationInput & { sessionId: string })) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const workspaceId = typeof input === "string"
+        ? options?.workspaceId ?? workspace.workspaceId
+        : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.dismiss(sessionId);
     },
-    onSuccess: async (_response, sessionId) => {
+    onSuccess: async (_response, input) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const workspaceId = typeof input === "string"
+        ? options?.workspaceId ?? workspace.workspaceId
+        : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
@@ -473,15 +542,22 @@ export function useCloseSessionMutation(options?: { workspaceId?: string | null 
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (sessionId: string) => {
+    mutationFn: async (input: string | (WorkspaceMutationInput & { sessionId: string })) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const workspaceId = typeof input === "string"
+        ? options?.workspaceId ?? workspace.workspaceId
+        : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.close(sessionId);
     },
-    onSuccess: async (_response, sessionId) => {
+    onSuccess: async (_response, input) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const workspaceId = typeof input === "string"
+        ? options?.workspaceId ?? workspace.workspaceId
+        : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
@@ -494,15 +570,21 @@ export function useRestoreDismissedSessionMutation(options?: { workspaceId?: str
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const queryClient = useQueryClient();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input?: WorkspaceMutationInput & {
+      requestOptions?: AnyHarnessRequestOptions;
+    }) => {
+      const workspaceId = input?.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.restoreDismissed(resolved.connection.anyharnessWorkspaceId);
+      return client.sessions.restoreDismissed(
+        resolved.connection.anyharnessWorkspaceId,
+        input?.requestOptions,
+      );
     },
-    onSuccess: async (response) => {
+    onSuccess: async (response, input) => {
+      const workspaceId = input?.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const invalidations = [
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
       ];
@@ -520,17 +602,52 @@ export function useRestoreDismissedSessionMutation(options?: { workspaceId?: str
 
 export function useResolveSessionInteractionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
     mutationFn: async (input: {
+      workspaceId?: string | null;
       sessionId: string;
       requestId: string;
       request: ResolveInteractionRequest;
     }) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       await client.sessions.resolveInteraction(input.sessionId, input.requestId, input.request);
+    },
+  });
+}
+
+export function useRevealMcpElicitationUrlMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async (input: {
+      workspaceId?: string | null;
+      sessionId: string;
+      requestId: string;
+    }) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.revealMcpElicitationUrl(input.sessionId, input.requestId);
+    },
+  });
+}
+
+export function useFetchPromptAttachmentMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async (input: {
+      workspaceId?: string | null;
+      sessionId: string;
+      attachmentId: string;
+    }) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.fetchPromptAttachment(input.sessionId, input.attachmentId);
     },
   });
 }

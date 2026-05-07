@@ -1,4 +1,4 @@
-import { getPreferencesStore } from "@/platform/tauri/store";
+import { getPreferencesStore } from "@/lib/access/tauri/store";
 
 export async function readPersistedValue<T>(key: string): Promise<T | undefined> {
   try {

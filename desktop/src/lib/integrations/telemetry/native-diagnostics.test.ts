@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   logRendererDiagnosticMock: vi.fn(),
 }));
 
-vi.mock("@/platform/tauri/diagnostics", () => ({
+vi.mock("@/lib/access/tauri/diagnostics", () => ({
   logRendererDiagnostic: mocks.logRendererDiagnosticMock,
 }));
 

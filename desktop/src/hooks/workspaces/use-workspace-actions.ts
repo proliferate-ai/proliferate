@@ -9,7 +9,7 @@ import { workspaceCollectionsScopeKey } from "./query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { getHomeDir } from "@/platform/tauri/shell";
+import { getHomeDir } from "@/lib/access/tauri/shell";
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
@@ -33,7 +33,7 @@ import {
   resolveWorktreeCreationParams,
 } from "@/lib/domain/workspaces/creation/workspace-creation";
 import { ensureRuntimeReady } from "./runtime-ready";
-import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
+import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
 import {
   elapsedMs,
   logLatency,

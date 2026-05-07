@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
 import { saveCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
-import { readRepoTrackedTextFile } from "@/lib/access/anyharness/files";
+import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {

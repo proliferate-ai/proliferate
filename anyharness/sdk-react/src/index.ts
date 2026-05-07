@@ -94,6 +94,7 @@ export {
 export { useProviderConfigsQuery } from "./hooks/providers.js";
 export {
   useRepoRootsQuery,
+  useReadRepoRootFileMutation,
   useResolveRepoRootFromPathMutation,
   useRepoRootGitBranchesQuery,
   useDetectRepoRootSetupQuery,
@@ -117,11 +118,13 @@ export {
 } from "./hooks/cowork.js";
 export {
   useRuntimeWorkspacesQuery,
+  useWorkspaceQuery,
   useDetectProjectSetupQuery,
   useSetupStatusQuery,
   useRerunSetupMutation,
   useStartSetupMutation,
   useWorkspaceSessionLaunchQuery,
+  useUpdateWorkspaceDisplayNameMutation,
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
@@ -142,6 +145,7 @@ export {
 export {
   useWorkspaceSessionsQuery,
   useSessionQuery,
+  useFetchSessionMutation,
   useSessionLiveConfigQuery,
   useSessionEventsQuery,
   useSessionSubagentsQuery,
@@ -150,6 +154,7 @@ export {
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,
   usePromptSessionTextMutation,
+  useFetchPromptAttachmentMutation,
   useForkSessionMutation,
   useEditPendingPromptMutation,
   useDeletePendingPromptMutation,
@@ -160,10 +165,12 @@ export {
   useCloseSessionMutation,
   useRestoreDismissedSessionMutation,
   useResolveSessionInteractionMutation,
+  useRevealMcpElicitationUrlMutation,
 } from "./hooks/sessions.js";
 export {
   useWorkspacePlansQuery,
   usePlanDetailQuery,
+  useFetchPlanMutation,
   usePlanDetailsQueries,
   usePlanDocumentQuery,
   useMaterializePlanDocumentMutation,
@@ -200,6 +207,7 @@ export {
   useWorkspaceFilesQuery,
   useSearchWorkspaceFilesQuery,
   useReadWorkspaceFileQuery,
+  useReadWorkspaceFileMutation,
   useStatWorkspaceFileQuery,
   useWriteWorkspaceFileMutation,
   useCreateWorkspaceFileMutation,
@@ -209,6 +217,7 @@ export {
 } from "./hooks/files.js";
 export {
   useTerminalsQuery,
+  useListTerminalsMutation,
   useCreateTerminalMutation,
   useResizeTerminalMutation,
   useUpdateTerminalTitleMutation,

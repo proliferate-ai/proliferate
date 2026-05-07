@@ -3,13 +3,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
-import { openExternal } from "@/platform/tauri/shell";
+import { openExternal } from "@/lib/access/tauri/shell";
 import {
   closeBrowserWebview,
   ensureBrowserWebview,
   hideBrowserWebview,
   isBrowserWebviewAvailable,
-} from "@/platform/tauri/browser-webview";
+} from "@/lib/access/tauri/browser-webview";
 
 const browserWebviewMocks = vi.hoisted(() => ({
   closeBrowserWebview: vi.fn(async () => undefined),
@@ -21,11 +21,24 @@ const browserWebviewMocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock("@/platform/tauri/shell", () => ({
+vi.mock("@/lib/access/tauri/shell", () => ({
+  copyPath: vi.fn(async () => undefined),
+  copyText: vi.fn(async () => undefined),
+  getHomeDir: vi.fn(async () => "/Users/pablo"),
+  listAvailableEditors: vi.fn(async () => []),
+  listOpenTargets: vi.fn(async () => []),
+  openEmailCompose: vi.fn(async () => undefined),
   openExternal: vi.fn(async () => undefined),
+  openGmailCompose: vi.fn(async () => undefined),
+  openInEditor: vi.fn(async () => undefined),
+  openInTerminal: vi.fn(async () => undefined),
+  openOutlookCompose: vi.fn(async () => undefined),
+  openTarget: vi.fn(async () => undefined),
+  pickFolder: vi.fn(async () => null),
+  revealInFinder: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/platform/tauri/browser-webview", () => browserWebviewMocks);
+vi.mock("@/lib/access/tauri/browser-webview", () => browserWebviewMocks);
 
 afterEach(() => {
   cleanup();

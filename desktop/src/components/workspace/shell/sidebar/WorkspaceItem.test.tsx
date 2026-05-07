@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { WorkspaceItem } from "./WorkspaceItem";
 
-vi.mock("@/platform/tauri/context-menu", () => ({
+vi.mock("@/lib/access/tauri/context-menu", () => ({
   canShowNativeContextMenu: () => false,
   showNativeContextMenu: vi.fn(),
 }));

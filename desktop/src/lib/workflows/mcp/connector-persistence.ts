@@ -37,7 +37,7 @@ import {
   sanitizeCloudConnectorSettings,
   unavailableInstalledCatalogEntry,
 } from "./local-oauth-persistence";
-import { openExternal } from "@/platform/tauri/shell";
+import { openExternal } from "@/lib/access/tauri/shell";
 
 export interface ConnectorPaneData {
   installed: InstalledConnectorRecord[];

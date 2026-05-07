@@ -3,7 +3,7 @@ import {
   canShowNativeContextMenu,
   showNativeContextMenu,
   type NativeContextMenuItem,
-} from "@/platform/tauri/context-menu";
+} from "@/lib/access/tauri/context-menu";
 
 /**
  * Attach a native (Tauri/muda) context menu to an element. Returns a

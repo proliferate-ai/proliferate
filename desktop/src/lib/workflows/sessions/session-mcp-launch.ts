@@ -8,8 +8,8 @@ import { materializeCloudMcpServers } from "@/lib/access/cloud/mcp_materializati
 import {
   releaseGoogleWorkspaceMcpRuntimeEnv,
   resolveGoogleWorkspaceMcpRuntimeEnv,
-} from "@/platform/tauri/google-workspace-mcp";
-import { commandExists } from "@/platform/tauri/process";
+} from "@/lib/access/tauri/google-workspace-mcp";
+import { commandExists } from "@/lib/access/tauri/process";
 
 export interface ConnectorLaunchContext {
   targetLocation: "local" | "cloud";

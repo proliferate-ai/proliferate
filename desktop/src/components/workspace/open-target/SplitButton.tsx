@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { ChevronDown } from "@/components/ui/icons";
 import { OpenTargetMenu, TargetIcon } from "./OpenTargetMenu";
 import { OpenTargetIcon } from "./OpenTargetIcon";
-import type { OpenTarget } from "@/platform/tauri/shell";
+import type { OpenTarget } from "@/lib/access/tauri/shell";
 
 interface SplitButtonProps {
   icon?: ReactNode;

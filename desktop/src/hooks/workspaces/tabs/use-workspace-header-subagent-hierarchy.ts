@@ -4,7 +4,6 @@ import { useShallow } from "zustand/react/shallow";
 import {
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
-  getAnyHarnessClient,
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
 } from "@anyharness/sdk-react";
@@ -24,6 +23,8 @@ import {
   collectReviewSessionRelationshipHints,
   type ReviewSessionRelationshipHint,
 } from "@/lib/domain/reviews/session-relationship-hints";
+import { getSessionSubagents } from "@/lib/access/anyharness/sessions";
+import { listSessionReviews } from "@/lib/access/anyharness/reviews";
 import {
   collectSubagentSessionRelationshipHints,
   type SubagentSessionRelationshipHint,
@@ -103,8 +104,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
             workspace,
             args.workspaceId,
           );
-          const client = getAnyHarnessClient(resolved.connection);
-          return client.sessions.getSubagents(materializedSessionId, { signal });
+          return getSessionSubagents(resolved.connection, materializedSessionId, { signal });
         },
         staleTime: 5_000,
       };
@@ -124,8 +124,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
             workspace,
             args.workspaceId,
           );
-          const client = getAnyHarnessClient(resolved.connection);
-          return client.reviews.listForSession(materializedSessionId, { signal });
+          return listSessionReviews(resolved.connection, materializedSessionId, { signal });
         },
         staleTime: 2_500,
       };

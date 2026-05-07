@@ -47,18 +47,39 @@ export function useCreateTerminalMutation(options?: { workspaceId?: string | nul
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
   const runtimeUrl = useWorkspaceRuntimeUrl();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: CreateTerminalRequest) => {
+    mutationFn: async (
+      input: CreateTerminalRequest | { workspaceId?: string | null; request: CreateTerminalRequest },
+    ) => {
+      const request = "request" in input ? input.request : input;
+      const workspaceId = "request" in input
+        ? input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId
+        : options?.workspaceId ?? workspace.workspaceId;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.terminals.create(resolved.connection.anyharnessWorkspaceId, input);
+      return client.terminals.create(resolved.connection.anyharnessWorkspaceId, request);
     },
-    onSuccess: async () => {
+    onSuccess: async (_response, input) => {
+      const workspaceId = "request" in input
+        ? input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId
+        : options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
         queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
       });
+    },
+  });
+}
+
+export function useListTerminalsMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async (input?: { workspaceId?: string | null }) => {
+      const workspaceId = input?.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.terminals.list(resolved.connection.anyharnessWorkspaceId);
     },
   });
 }

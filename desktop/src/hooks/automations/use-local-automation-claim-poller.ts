@@ -1,4 +1,3 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
@@ -28,7 +27,8 @@ import {
   LocalAutomationExecutorError,
 } from "@/lib/workflows/automations/local-automation-executor";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
-import { getHomeDir } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { createLocalAutomationRuntimeClient } from "@/lib/access/anyharness/automation-client";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
@@ -62,6 +62,7 @@ export function useLocalAutomationClaimPoller(args: {
   runtimeUrl: string;
 }): void {
   const queryClient = useQueryClient();
+  const { getHomeDir } = useTauriShellActions();
   const workspacesQuery = useWorkspaces();
   const activeRef = useRef(false);
   const candidates = useMemo(
@@ -102,6 +103,7 @@ export function useLocalAutomationClaimPoller(args: {
             claim,
             candidates,
             executorId,
+            getHomeDir,
             runtimeUrl: args.runtimeUrl,
             queryClient,
           });
@@ -132,13 +134,14 @@ export function useLocalAutomationClaimPoller(args: {
         clearTimeout(timer);
       }
     };
-  }, [args.enabled, args.runtimeUrl, candidates, queryClient]);
+  }, [args.enabled, args.runtimeUrl, candidates, getHomeDir, queryClient]);
 }
 
 async function processClaim(args: {
   claim: LocalAutomationRunClaimResponse;
   candidates: readonly LocalAutomationRepoCandidate[];
   executorId: string;
+  getHomeDir: () => Promise<string>;
   runtimeUrl: string;
   queryClient: QueryClient;
 }): Promise<void> {
@@ -148,7 +151,7 @@ async function processClaim(args: {
     return;
   }
 
-  const homeDir = await getHomeDir();
+  const homeDir = await args.getHomeDir();
   const repoConfig = useRepoPreferencesStore.getState().repoConfigs[candidate.repoRoot.path];
   const plan = buildLocalAutomationWorktreePlan({
     claim: args.claim,
@@ -164,7 +167,7 @@ async function processClaim(args: {
     claimActive = false;
   };
   heartbeat.onLostClaim = stopOnLostClaim;
-  const client = getAnyHarnessClient({ runtimeUrl: args.runtimeUrl });
+  const client = createLocalAutomationRuntimeClient({ runtimeUrl: args.runtimeUrl });
   try {
     await executeLocalAutomationRun({
       client,

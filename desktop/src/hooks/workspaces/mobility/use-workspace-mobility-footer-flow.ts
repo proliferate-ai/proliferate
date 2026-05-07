@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { copyText, openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -15,6 +15,7 @@ import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/prolifer
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 
 export function useWorkspaceMobilityFooterFlow() {
+  const { copyText, openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const {
     signIn: signInWithGitHub,

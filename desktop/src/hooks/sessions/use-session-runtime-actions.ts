@@ -49,7 +49,7 @@ import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary"
 import {
   clearSessionReconnectTimer,
   scheduleSessionReconnectTimer,
-} from "@/lib/access/anyharness/session-reconnect-state";
+} from "@/lib/workflows/sessions/session-reconnect-state";
 import {
   rememberLastViewedSession,
   trackWorkspaceInteraction,

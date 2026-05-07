@@ -3,13 +3,14 @@ import type { CloudCredentialStatus } from "@/lib/access/cloud/client";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { listCloudCredentialStatuses } from "@/lib/access/cloud/credentials";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
+import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
 
 export function useCloudCredentials() {
   const { cloudActive } = useCloudAvailabilityState();
+  const { listSyncableCloudCredentials } = useTauriCredentialsActions();
 
   return useQuery<CloudCredentialStatus[]>({
     queryKey: cloudCredentialsKey(),

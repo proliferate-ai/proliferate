@@ -13,7 +13,7 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { cloudBillingKey, type CloudOwnerSelectionKey } from "@/hooks/access/cloud/query-keys";
@@ -164,6 +164,7 @@ export function useCloudBilling(
 
 export function useCloudBillingActions(owner?: CloudOwnerSelection) {
   const queryClient = useQueryClient();
+  const { openExternal } = useTauriShellActions();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const billingOwnerKey = ownerKey(owner);
 

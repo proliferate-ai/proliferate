@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   releaseGoogleWorkspaceMcpRuntimeEnvMock: vi.fn(),
 }));
 
-vi.mock("@/platform/tauri/process", () => ({
+vi.mock("@/lib/access/tauri/process", () => ({
   commandExists: mocks.commandExistsMock,
 }));
 
@@ -15,7 +15,7 @@ vi.mock("@/lib/access/cloud/mcp_materialization", () => ({
   materializeCloudMcpServers: mocks.materializeCloudMcpServersMock,
 }));
 
-vi.mock("@/platform/tauri/google-workspace-mcp", () => ({
+vi.mock("@/lib/access/tauri/google-workspace-mcp", () => ({
   resolveGoogleWorkspaceMcpRuntimeEnv: mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock,
   releaseGoogleWorkspaceMcpRuntimeEnv: mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock,
 }));

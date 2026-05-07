@@ -1,12 +1,12 @@
 import type { WorkspaceRetirePreflightResponse } from "@anyharness/sdk";
 import {
   anyHarnessWorkspaceRetirePreflightKey,
-  getAnyHarnessClient,
 } from "@anyharness/sdk-react";
 import { useQueries } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { getWorkspaceRetirePreflight } from "@/lib/access/anyharness/workspaces";
 
 export interface WorkspaceFinishSuggestion {
   workspaceId: string;
@@ -31,8 +31,7 @@ export function useWorkspaceFinishSuggestions(
       enabled: runtimeUrl.trim().length > 0,
       staleTime: 60_000,
       queryFn: async ({ signal }) => {
-        const client = getAnyHarnessClient({ runtimeUrl });
-        return client.workspaces.retirePreflight(workspace.id, { signal });
+        return getWorkspaceRetirePreflight({ runtimeUrl }, workspace.id, { signal });
       },
     })),
   });

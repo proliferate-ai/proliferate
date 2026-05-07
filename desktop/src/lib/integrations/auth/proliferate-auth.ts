@@ -2,7 +2,7 @@ import {
   openAuthSessionUrl,
   type StoredAuthSession,
   type StoredPendingAuthSession,
-} from "@/platform/tauri/auth"
+} from "@/lib/access/tauri/auth"
 import {
   buildProliferateApiUrl,
 } from "@/lib/infra/proliferate-api"

@@ -18,8 +18,8 @@ import {
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthActions } from "@/hooks/auth/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
-import { openExternal } from "@/platform/tauri/shell";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function AccountPane() {
@@ -27,6 +27,7 @@ export function AccountPane() {
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
   const { signOut } = useAuthActions();
+  const { openExternal } = useTauriShellActions();
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,

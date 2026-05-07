@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { resolveFallbackSessionModelId } from "@/lib/domain/sessions/model-fallback";
 import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
@@ -11,17 +11,19 @@ import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session
 
 export function useSessionModelFallbackAction() {
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   return useCallback(async (sessionId: string, fallbackModelId: string) => {
-    const { connection, workspaceId, materializedSessionId } =
+    const { workspaceId, materializedSessionId } =
       await getSessionClientAndWorkspace(sessionId);
-    const response = await getAnyHarnessClient(connection).sessions.setConfigOption(
-      materializedSessionId,
-      {
+    const response = await setSessionConfigOptionMutation.mutateAsync({
+      workspaceId,
+      sessionId: materializedSessionId,
+      request: {
         configId: "model",
         value: fallbackModelId,
       },
-    );
+    });
 
     upsertWorkspaceSessionRecord(workspaceId, response.session);
 
@@ -56,5 +58,5 @@ export function useSessionModelFallbackAction() {
     });
 
     return response;
-  }, [upsertWorkspaceSessionRecord]);
+  }, [setSessionConfigOptionMutation, upsertWorkspaceSessionRecord]);
 }

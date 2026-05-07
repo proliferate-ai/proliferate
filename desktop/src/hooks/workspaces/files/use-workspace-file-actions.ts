@@ -1,7 +1,6 @@
 import { useCallback } from "react";
 import { AnyHarnessError } from "@anyharness/sdk";
 import {
-  getAnyHarnessClient,
   type AnyHarnessClientConnection,
   anyHarnessWorkspaceFileKey,
   anyHarnessWorkspaceFileTreeKey,
@@ -19,6 +18,10 @@ import {
   type FileDiffViewerScope,
   type ViewerTarget,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
+import {
+  listWorkspaceFiles,
+  readWorkspaceFile,
+} from "@/lib/access/anyharness/workspace-file-transport";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
@@ -91,8 +94,12 @@ export function useWorkspaceFileActions() {
     await queryClient.prefetchQuery({
       queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, materializedWorkspaceId, dirPath),
       queryFn: async ({ signal }) => {
-        const client = getAnyHarnessClient(buildConnection(runtimeUrl, authToken));
-        return client.files.list(anyharnessWorkspaceId, dirPath, { signal });
+        return listWorkspaceFiles(
+          buildConnection(runtimeUrl, authToken),
+          anyharnessWorkspaceId,
+          dirPath,
+          { signal },
+        );
       },
     });
   }, [queryClient]);
@@ -343,8 +350,12 @@ export function useWorkspaceFileActions() {
     const read = await queryClient.fetchQuery({
       queryKey,
       queryFn: async ({ signal }) => {
-        const client = getAnyHarnessClient(buildConnection(runtimeUrl, authToken));
-        return client.files.read(anyharnessWorkspaceId, filePath, { signal });
+        return readWorkspaceFile(
+          buildConnection(runtimeUrl, authToken),
+          anyharnessWorkspaceId,
+          filePath,
+          { signal },
+        );
       },
       staleTime: 0,
     });

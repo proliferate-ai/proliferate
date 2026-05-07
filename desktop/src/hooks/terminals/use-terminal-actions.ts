@@ -5,7 +5,6 @@ import {
 } from "@anyharness/sdk";
 import {
   anyHarnessTerminalsKey,
-  getAnyHarnessClient,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -31,7 +30,15 @@ import {
   sendInput,
   sendResize,
   type TerminalStreamIdentity,
-} from "@/lib/access/anyharness/terminal-handles";
+} from "@/lib/workflows/terminals/terminal-stream-registry";
+import {
+  closeTerminal,
+  createWorkspaceTerminal,
+  listWorkspaceTerminals,
+  resizeTerminal,
+  runTerminalCommand,
+  updateTerminalTitle,
+} from "@/lib/access/anyharness/terminals";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -193,8 +200,7 @@ export function useTerminalActions() {
       return [];
     }
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-    const client = getAnyHarnessClient(connection);
-    const records = await client.terminals.list(connection.anyharnessWorkspaceId);
+    const records = await listWorkspaceTerminals(connection);
     setWorkspaceTerminalRecords(workspaceId, records);
     return records;
   }, [
@@ -214,8 +220,7 @@ export function useTerminalActions() {
       throw new Error(blockedReason);
     }
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-    const client = getAnyHarnessClient(connection);
-    const record = await client.terminals.create(connection.anyharnessWorkspaceId, {
+    const record = await createWorkspaceTerminal(connection, {
       cols,
       rows,
       title: options?.title,
@@ -241,10 +246,9 @@ export function useTerminalActions() {
     }
 
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-    const client = getAnyHarnessClient(connection);
     let records: TerminalRecord[] = [];
     try {
-      records = await client.terminals.list(connection.anyharnessWorkspaceId);
+      records = await listWorkspaceTerminals(connection);
       setWorkspaceTerminalRecords(workspaceId, records);
     } catch {
       // Listing is used for Run reuse. If it fails, preserve the existing behavior
@@ -259,7 +263,7 @@ export function useTerminalActions() {
       return existingRunTabId;
     }
 
-    const record = await client.terminals.create(connection.anyharnessWorkspaceId, {
+    const record = await createWorkspaceTerminal(connection, {
       cols,
       rows,
       title: RUN_TERMINAL_TITLE,
@@ -336,8 +340,7 @@ export function useTerminalActions() {
 
     try {
       const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-      const client = getAnyHarnessClient(connection);
-      await client.terminals.close(terminalId);
+      await closeTerminal(connection, terminalId);
       clearClosedTerminalState(terminalId, workspaceId);
       return "closed";
     } catch (error) {
@@ -369,8 +372,7 @@ export function useTerminalActions() {
     }
     try {
       const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-      const client = getAnyHarnessClient(connection);
-      await client.terminals.resize(terminalId, { cols, rows });
+      await resizeTerminal(connection, terminalId, { cols, rows });
     } catch {
       // Non-fatal
     }
@@ -388,8 +390,7 @@ export function useTerminalActions() {
 
     try {
       const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-      const client = getAnyHarnessClient(connection);
-      const record = await client.terminals.updateTitle(terminalId, { title });
+      const record = await updateTerminalTitle(connection, terminalId, { title });
       await invalidateWorkspaceTerminals(workspaceId);
       return record;
     } catch (error) {
@@ -416,8 +417,7 @@ export function useTerminalActions() {
       throw new Error(blockedReason);
     }
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-    const client = getAnyHarnessClient(connection);
-    const response = await client.terminals.runCommand(terminalId, {
+    const response = await runTerminalCommand(connection, terminalId, {
       command,
       interrupt: true,
     });

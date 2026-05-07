@@ -12,10 +12,8 @@ import {
 import {
   anyHarnessPlanKey,
   anyHarnessPlansKey,
-  getAnyHarnessClient,
-  resolveWorkspaceConnectionFromContext,
   useApprovePlanMutation,
-  useAnyHarnessWorkspaceContext,
+  useFetchPlanMutation,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
 import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
@@ -95,7 +93,6 @@ interface ExecutePlanImplementationInput {
 
 export function useProposedPlanActions() {
   const queryClient = useQueryClient();
-  const workspaceContext = useAnyHarnessWorkspaceContext();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
@@ -107,6 +104,7 @@ export function useProposedPlanActions() {
   const availability = useChatAvailabilityState();
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
+  const fetchPlanMutation = useFetchPlanMutation({ workspaceId: selectedWorkspaceId });
   const reviewActions = useReviewActions();
   const { promptActiveSession, setActiveSessionConfigOption } = useSessionActions();
   const approvePlanMutation = approveMutation.mutateAsync;
@@ -118,15 +116,10 @@ export function useProposedPlanActions() {
   }, [queryClient, runtimeUrl, selectedWorkspaceId]);
 
   const refreshAndApplyPlanDecision = useCallback(async (planId: string) => {
-    const resolved = await resolveWorkspaceConnectionFromContext(
-      workspaceContext,
-      selectedWorkspaceId,
-    );
-    const client = getAnyHarnessClient(resolved.connection);
-    const plan = await client.plans.get(
-      resolved.connection.anyharnessWorkspaceId,
+    const plan = await fetchPlanMutation.mutateAsync({
+      workspaceId: selectedWorkspaceId,
       planId,
-    );
+    });
     applyPlanDecision(plan);
     logLatency("plan.decision.refreshed", {
       planId,
@@ -136,7 +129,7 @@ export function useProposedPlanActions() {
       decisionVersion: plan.decisionVersion,
     });
     return plan;
-  }, [applyPlanDecision, selectedWorkspaceId, workspaceContext]);
+  }, [applyPlanDecision, fetchPlanMutation, selectedWorkspaceId]);
 
   const approvePlan = useCallback((planId: string, expectedDecisionVersion: number) => {
     void runPlanDecisionMutation({

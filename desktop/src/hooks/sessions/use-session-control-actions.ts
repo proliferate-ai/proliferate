@@ -9,7 +9,12 @@ import {
   type ResolveInteractionRequest,
   type UserInputSubmittedAnswer,
 } from "@anyharness/sdk";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import {
+  useCancelSessionMutation,
+  useResolveSessionInteractionMutation,
+  useRevealMcpElicitationUrlMutation,
+  useSetSessionConfigOptionMutation,
+} from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import {
@@ -32,8 +37,8 @@ import {
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
-  getSessionClientAndWorkspace,
   isPendingSessionId,
+  getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
@@ -130,6 +135,10 @@ export function useSessionControlActions({
   const showToast = useToastStore((state) => state.show);
   const { promptSession } = useSessionPromptWorkflow();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const cancelSessionMutation = useCancelSessionMutation();
+  const resolveInteractionMutation = useResolveSessionInteractionMutation();
+  const revealMcpElicitationUrlMutation = useRevealMcpElicitationUrlMutation();
+  const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   const setActiveSessionConfigOption = useCallback(async (
     configId: string,
@@ -183,10 +192,11 @@ export function useSessionControlActions({
     });
 
     try {
-      const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
-      const response = await getAnyHarnessClient(connection).sessions.setConfigOption(materializedSessionId, {
-        configId,
-        value,
+      const { materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+      const response = await setSessionConfigOptionMutation.mutateAsync({
+        workspaceId,
+        sessionId: materializedSessionId,
+        request: { configId, value },
       });
 
       if (workspaceId) {
@@ -290,7 +300,13 @@ export function useSessionControlActions({
       }
       throw error;
     }
-  }, [getWorkspaceRuntimeBlockReason, getWorkspaceSurface, showToast, upsertWorkspaceSessionRecord]);
+  }, [
+    getWorkspaceRuntimeBlockReason,
+    getWorkspaceSurface,
+    setSessionConfigOptionMutation,
+    showToast,
+    upsertWorkspaceSessionRecord,
+  ]);
 
   const promptActiveSession = useCallback(async (
     text: string,
@@ -348,13 +364,13 @@ export function useSessionControlActions({
     }
 
     try {
-      const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
-      await getAnyHarnessClient(connection).sessions.cancel(materializedSessionId);
+      const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
+      await cancelSessionMutation.mutateAsync({ workspaceId, sessionId: materializedSessionId });
       patchSessionRecord(sessionId, { status: "idle" });
     } catch {
       // Cancel failed.
     }
-  }, [getWorkspaceRuntimeBlockReason, showToast]);
+  }, [cancelSessionMutation, getWorkspaceRuntimeBlockReason, showToast]);
 
   const resolvePermission = useCallback(async (
     input: { decision?: "allow" | "deny"; optionId?: string },
@@ -374,16 +390,19 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+    const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
     const request: ResolveInteractionRequest = input.optionId
       ? { outcome: "selected", optionId: input.optionId }
       : { outcome: "decision", decision: input.decision ?? "deny" };
-    await getAnyHarnessClient(connection).sessions.resolveInteraction(
-      materializedSessionId,
-      permission.requestId,
-      request,
+    await resolveInteractionMutation.mutateAsync(
+      {
+        workspaceId,
+        sessionId: materializedSessionId,
+        requestId: permission.requestId,
+        request,
+      },
     );
-  }, [getWorkspaceRuntimeBlockReason]);
+  }, [getWorkspaceRuntimeBlockReason, resolveInteractionMutation]);
 
   const resolveUserInput = useCallback(async (
     input:
@@ -405,16 +424,17 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+    const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
     const request: ResolveInteractionRequest = input.outcome === "submitted"
       ? { outcome: "submitted", answers: input.answers }
       : { outcome: "cancelled" };
-    await getAnyHarnessClient(connection).sessions.resolveInteraction(
-      materializedSessionId,
-      userInput.requestId,
+    await resolveInteractionMutation.mutateAsync({
+      workspaceId,
+      sessionId: materializedSessionId,
+      requestId: userInput.requestId,
       request,
-    );
-  }, [getWorkspaceRuntimeBlockReason]);
+    });
+  }, [getWorkspaceRuntimeBlockReason, resolveInteractionMutation]);
 
   const resolveMcpElicitation = useCallback(async (
     input:
@@ -437,16 +457,17 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
+    const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
     const request: ResolveInteractionRequest = input.outcome === "accepted"
       ? { outcome: "accepted", fields: input.fields }
       : { outcome: input.outcome };
-    await getAnyHarnessClient(connection).sessions.resolveInteraction(
-      materializedSessionId,
-      mcpElicitation.requestId,
+    await resolveInteractionMutation.mutateAsync({
+      workspaceId,
+      sessionId: materializedSessionId,
+      requestId: mcpElicitation.requestId,
       request,
-    );
-  }, [getWorkspaceRuntimeBlockReason]);
+    });
+  }, [getWorkspaceRuntimeBlockReason, resolveInteractionMutation]);
 
   const revealMcpElicitationUrl = useCallback(async (): Promise<McpElicitationUrlRevealResponse | null> => {
     const state = useSessionSelectionStore.getState();
@@ -464,12 +485,13 @@ export function useSessionControlActions({
       throw new Error(blockedReason);
     }
 
-    const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
-    return getAnyHarnessClient(connection).sessions.revealMcpElicitationUrl(
-      materializedSessionId,
-      mcpElicitation.requestId,
-    );
-  }, [getWorkspaceRuntimeBlockReason]);
+    const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
+    return revealMcpElicitationUrlMutation.mutateAsync({
+      workspaceId,
+      sessionId: materializedSessionId,
+      requestId: mcpElicitation.requestId,
+    });
+  }, [getWorkspaceRuntimeBlockReason, revealMcpElicitationUrlMutation]);
 
   const findOrCreateSession = useCallback(async (
     agentKind: string,

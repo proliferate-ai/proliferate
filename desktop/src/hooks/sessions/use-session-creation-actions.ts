@@ -1,4 +1,3 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ContentPart, PromptInputBlock, Session, WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +6,7 @@ import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
+import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
 import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
@@ -49,7 +49,17 @@ import {
 } from "@/lib/infra/measurement/latency-flow";
 import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
+import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
+import { listModelRegistries } from "@/lib/access/anyharness/model-registries";
+import {
+  closeSession,
+  createSession,
+  listWorkspaceSessions,
+} from "@/lib/access/anyharness/sessions";
+import {
+  getWorkspace,
+  getWorkspaceSessionLaunchCatalog,
+} from "@/lib/access/anyharness/workspaces";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   rememberLastViewedSession,
@@ -132,12 +142,12 @@ export function useSessionCreationActions() {
   const showToast = useToastStore((state) => state.show);
 
   const closeCreatedMismatchSession = useCallback(async (
-    client: ReturnType<typeof getAnyHarnessClient>,
+    connection: { runtimeUrl: string; authToken?: string | null },
     sessionId: string,
     workspaceId: string,
   ) => {
     try {
-      await client.sessions.close(sessionId);
+      await closeSession(connection, sessionId);
     } catch (error) {
       // Local cleanup still removes the discovery-only session from view.
       captureTelemetryException(error, {
@@ -326,13 +336,17 @@ export function useSessionCreationActions() {
 
       const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
       const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
-      const client = getAnyHarnessClient({
+      const targetConnection = {
         runtimeUrl: target.baseUrl,
         authToken: target.authToken,
-      });
+      };
+      const workspaceConnection = {
+        ...targetConnection,
+        anyharnessWorkspaceId: target.anyharnessWorkspaceId,
+      };
       if (options.preferExistingCompatibleSession) {
-        const existingSession = await client.sessions.list(
-          target.anyharnessWorkspaceId,
+        const existingSession = await listWorkspaceSessions(
+          workspaceConnection,
           requestOptions,
         )
           .then((sessions) => findCompatibleExistingSession({
@@ -375,7 +389,8 @@ export function useSessionCreationActions() {
           return pendingSessionId;
         }
       }
-      const targetWorkspace = await client.workspaces.get(
+      const targetWorkspace = await getWorkspace(
+        targetConnection,
         target.anyharnessWorkspaceId,
         requestOptions,
       ).catch(() => null);
@@ -400,7 +415,7 @@ export function useSessionCreationActions() {
       const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
       const session = await (async () => {
         try {
-          return await client.sessions.create({
+          return await createSession(targetConnection, {
             workspaceId: target.anyharnessWorkspaceId,
             agentKind: options.agentKind,
             modelId: options.modelId,
@@ -421,11 +436,11 @@ export function useSessionCreationActions() {
         targetSessionId: session.id,
       });
 
-      const modelRegistries = await client.modelRegistries.list().catch(() => []);
+      const modelRegistries = await listModelRegistries(targetConnection).catch(() => []);
       const launchCatalog: WorkspaceSessionLaunchCatalog | null =
         session.requestedModelId && session.modelId
-        ? await client.workspaces.getSessionLaunchCatalog(
-          target.anyharnessWorkspaceId,
+        ? await getWorkspaceSessionLaunchCatalog(
+          workspaceConnection,
           requestOptions,
         ).catch(() => null)
         : null;
@@ -445,13 +460,13 @@ export function useSessionCreationActions() {
         const decision = await requestSessionModelAvailabilityDecision(pausedLaunch)
           .catch(async (error) => {
             if (error instanceof SessionModelAvailabilityBusyError) {
-              await closeCreatedMismatchSession(client, session.id, workspaceId);
+              await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
             }
             throw error;
           });
 
         if (decision.kind === "cancel") {
-          await closeCreatedMismatchSession(client, session.id, workspaceId);
+          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
           if (options.launchIntentId) {
             useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
           }
@@ -460,7 +475,7 @@ export function useSessionCreationActions() {
         }
 
         if (decision.kind === "external_update") {
-          await closeCreatedMismatchSession(client, session.id, workspaceId);
+          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
           navigate("/settings?section=agents");
           cancelLatencyFlow(
             options.latencyFlowId,
@@ -473,12 +488,12 @@ export function useSessionCreationActions() {
 
         if (decision.kind === "managed_reinstall") {
           if ((options.modelAvailabilityRetryCount ?? 0) >= 1) {
-            await closeCreatedMismatchSession(client, session.id, workspaceId);
+            await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
             throw new Error(
               `${pausedLaunch.requestedModelDisplayName} is still not exposed after updating ${pausedLaunch.providerDisplayName}.`,
             );
           }
-          await closeCreatedMismatchSession(client, session.id, workspaceId);
+          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
           await installAgent(options.agentKind, { reinstall: true });
           await refreshAgentResources();
           cancelLatencyFlow(
@@ -499,12 +514,12 @@ export function useSessionCreationActions() {
 
         if (decision.kind === "restart") {
           if ((options.modelAvailabilityRetryCount ?? 0) >= 1) {
-            await closeCreatedMismatchSession(client, session.id, workspaceId);
+            await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
             throw new Error(
               `${pausedLaunch.requestedModelDisplayName} is still not exposed after restarting ${pausedLaunch.providerDisplayName}.`,
             );
           }
-          await closeCreatedMismatchSession(client, session.id, workspaceId);
+          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
           await restartHarnessRuntime();
           cancelLatencyFlow(
             options.latencyFlowId,
@@ -535,7 +550,7 @@ export function useSessionCreationActions() {
         values: queuedConfigValuesBeforeDefaults,
       });
       const launchDefaults = await applySessionLaunchDefaults({
-        client,
+        client: createSessionLaunchDefaultsClient(targetConnection),
         session,
         agentKind: options.agentKind,
         modelRegistries,

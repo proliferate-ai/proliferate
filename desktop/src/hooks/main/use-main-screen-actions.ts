@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { updateCloudWorkspaceBranch } from "@/lib/access/cloud/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
@@ -39,6 +39,7 @@ export function useMainScreenActions({
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const { openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const {
     rightPanelOpen,
@@ -121,7 +122,7 @@ export function useMainScreenActions({
     if (url) {
       void openExternal(url);
     }
-  }, [existingPr]);
+  }, [existingPr, openExternal]);
 
   const handleCommandPaletteOpen = useCallback(() => {
     setCommandPaletteOpen(true);

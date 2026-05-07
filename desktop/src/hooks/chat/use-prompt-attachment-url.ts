@@ -1,24 +1,26 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import { useFetchPromptAttachmentMutation } from "@anyharness/sdk-react";
 import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 
 export function usePromptAttachmentUrl(
   sessionId: string | null | undefined,
   attachmentId: string | null | undefined,
 ) {
+  const fetchPromptAttachmentMutation = useFetchPromptAttachmentMutation();
   const query = useQuery({
     queryKey: ["prompt-attachment", sessionId, attachmentId],
     enabled: !!sessionId && !!attachmentId,
     staleTime: Infinity,
     gcTime: 60_000,
     queryFn: async () => {
-      const { connection, materializedSessionId } =
+      const { materializedSessionId, workspaceId } =
         await getSessionClientAndWorkspace(sessionId!);
-      const blob = await getAnyHarnessClient(connection).sessions.fetchPromptAttachment(
-        materializedSessionId,
-        attachmentId!,
-      );
+      const blob = await fetchPromptAttachmentMutation.mutateAsync({
+        workspaceId,
+        sessionId: materializedSessionId,
+        attachmentId: attachmentId!,
+      });
       return blob;
     },
   });

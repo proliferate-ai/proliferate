@@ -28,9 +28,9 @@ import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buf
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
-  openTarget as execOpenTarget,
   type OpenTarget,
-} from "@/platform/tauri/shell";
+  useTauriShellActions,
+} from "@/hooks/access/tauri/use-shell-actions";
 
 interface FileTreeNodeProps {
   entry: WorkspaceFileEntry;
@@ -57,6 +57,7 @@ function FileTreeNodeInner({ entry, level, targets }: FileTreeNodeProps) {
   const { activateChatShell, activateViewerTarget } = useWorkspaceShellActivation();
   const renameBufferPathPrefix = useWorkspaceFileBuffersStore((state) => state.renamePathPrefix);
   const clearBufferPathPrefix = useWorkspaceFileBuffersStore((state) => state.clearPathPrefix);
+  const { openTarget: execOpenTarget } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const renameMutation = useRenameWorkspaceEntryMutation({
     workspaceId: materializedWorkspaceId,

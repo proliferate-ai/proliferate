@@ -66,6 +66,19 @@ export function usePlanDetailQuery(
   });
 }
 
+export function useFetchPlanMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async (input: { workspaceId?: string | null; planId: string }) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.plans.get(resolved.connection.anyharnessWorkspaceId, input.planId);
+    },
+  });
+}
+
 export function usePlanDetailsQueries(
   planIds: readonly (string | null | undefined)[],
   options?: WorkspaceQueryOptions,

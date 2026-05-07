@@ -4,7 +4,7 @@ import type {
   NormalizedSessionControl,
   PromptInputBlock,
 } from "@anyharness/sdk";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { PLAN_HANDOFF_DEFAULT_PROMPT } from "@/copy/plans/plan-prompts";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
@@ -64,6 +64,7 @@ export function usePlanHandoffWorkflow({
   } = useSessionActions();
   const { activateChatTab } = useWorkspaceShellActivation();
   const { promptSession } = useSessionPromptWorkflow();
+  const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
     ? connectionState
@@ -168,6 +169,7 @@ export function usePlanHandoffWorkflow({
           applyPlanHandoffPrePromptConfigChanges(
             sessionId,
             currentCollaborationModeForSession(sessionId),
+            setSessionConfigOptionMutation.mutateAsync,
           ),
         promptSession,
         dismissSession,
@@ -194,6 +196,7 @@ export function usePlanHandoffWorkflow({
     promptSession,
     selectedModeId,
     selectedWorkspaceId,
+    setSessionConfigOptionMutation,
     showToast,
   ]);
 
@@ -288,22 +291,23 @@ export async function executePlanHandoff({
 async function applyPlanHandoffPrePromptConfigChanges(
   sessionId: string,
   collaborationMode: NormalizedSessionControl | null,
+  setSessionConfigOption: ReturnType<typeof useSetSessionConfigOptionMutation>["mutateAsync"],
 ): Promise<void> {
   const changes = resolvePlanHandoffPrePromptConfigChanges(collaborationMode);
   if (changes.length === 0) {
     return;
   }
 
-  const { connection, materializedSessionId } = await getSessionClientAndWorkspace(sessionId);
-  const client = getAnyHarnessClient(connection);
+  const { materializedSessionId, workspaceId } = await getSessionClientAndWorkspace(sessionId);
   for (const change of changes) {
-    const response = await client.sessions.setConfigOption(
-      materializedSessionId,
-      {
+    const response = await setSessionConfigOption({
+      workspaceId,
+      sessionId: materializedSessionId,
+      request: {
         configId: change.rawConfigId,
         value: change.value,
       },
-    );
+    });
     if (response.applyState !== "applied") {
       // Queued config changes apply after a turn completes. Handoff must switch
       // out of plan mode before sending the first prompt, so queued is unsafe.

@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
-import { pickFolder } from "@/platform/tauri/shell";
+import { pickFolder } from "@/lib/access/tauri/shell";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { useToastStore } from "@/stores/toast/toast-store";

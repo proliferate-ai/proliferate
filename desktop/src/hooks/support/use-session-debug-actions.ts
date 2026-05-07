@@ -1,5 +1,4 @@
 import {
-  getAnyHarnessClient,
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
   type AnyHarnessResolvedConnection,
@@ -24,13 +23,14 @@ import {
   type SessionDebugLocatorSession,
   type SessionDebugRuntimeLocation,
 } from "@/lib/domain/support/session-debug";
-import { copyText } from "@/platform/tauri/shell";
-import { isTauriDesktop, saveDiagnosticJson } from "@/platform/tauri/diagnostics";
+import { useTauriDiagnosticsActions } from "@/hooks/access/tauri/use-diagnostics-actions";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 
 export interface SessionDebugClient {
   runtime: {
@@ -112,6 +112,11 @@ interface BuildLocatorInput {
 export function useSessionDebugActions() {
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;
+  const { copyText } = useTauriShellActions();
+  const {
+    isTauriDesktop,
+    saveDiagnosticJson,
+  } = useTauriDiagnosticsActions();
   const resolveConnection = workspaceContext.resolveConnection;
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -154,8 +159,8 @@ export function useSessionDebugActions() {
       },
       workspaceId,
     ),
-    getClient: (connection) => getAnyHarnessClient(connection),
-  }), [contextWorkspaceId, resolveConnection]);
+    getClient: createSessionDebugClient,
+  }), [contextWorkspaceId, copyText, resolveConnection, saveDiagnosticJson]);
 
   useEffect(() => {
     let cancelled = false;

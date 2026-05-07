@@ -16,7 +16,10 @@ import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { FilePlus, FolderPlus } from "@/components/ui/icons";
-import { listOpenTargets, type OpenTarget } from "@/platform/tauri/shell";
+import {
+  type OpenTarget,
+  useTauriShellActions,
+} from "@/hooks/access/tauri/use-shell-actions";
 import { FileTreeNode } from "./FileTreeNode";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
@@ -37,6 +40,7 @@ function FileTreePaneInner() {
   const runtimeUrl = useWorkspaceViewerTabsStore((s) => s.runtimeUrl);
   const authToken = useWorkspaceViewerTabsStore((s) => s.authToken);
   const treeStateKey = useWorkspaceViewerTabsStore((s) => s.treeStateKey);
+  const { listOpenTargets } = useTauriShellActions();
   const selectedDirectory = useWorkspaceFileTreeUiStore(
     (s) => treeStateKey ? s.selectedDirectoryByTreeKey[treeStateKey] ?? "" : "",
   );
@@ -52,7 +56,7 @@ function FileTreePaneInner() {
 
   useEffect(() => {
     void listOpenTargets("file").then(setTargets);
-  }, []);
+  }, [listOpenTargets]);
   useEffect(() => () => {
     finishOrCancelMeasurementOperation(scrollSampleOperationRef.current, "unmount");
     scrollSampleOperationRef.current = null;

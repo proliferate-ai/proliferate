@@ -22,7 +22,7 @@ import {
   type MeasurementOperationId,
   type MeasurementWorkflowStep,
 } from "@/lib/infra/measurement/debug-measurement";
-import { waitForSessionHistoryTimeout } from "@/lib/access/anyharness/session-history-timeout";
+import { waitForSessionHistoryTimeout } from "@/lib/infra/abort/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
@@ -141,6 +141,18 @@ export function getWorkspaceClientAndId(
     connection: buildConnection(target.baseUrl, target.authToken),
     target,
   }));
+}
+
+export async function fetchWorkspaceSessionSummaries(
+  runtimeUrl: string,
+  workspaceId: string,
+  options?: Parameters<ReturnType<typeof getAnyHarnessClient>["sessions"]["list"]>[1],
+): Promise<Session[]> {
+  const { connection, target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId);
+  return getAnyHarnessClient(connection).sessions.list(
+    target.anyharnessWorkspaceId,
+    options,
+  );
 }
 
 export async function getSessionClientAndWorkspace(

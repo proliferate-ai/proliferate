@@ -11,8 +11,8 @@ import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/select
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
 import { isHotSessionTargetCurrent, useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";

@@ -1,4 +1,3 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCloudWorktreeRetentionPolicy, usePutCloudWorktreeRetentionPolicy } from "@/hooks/cloud/use-cloud-worktree-retention-policy";
@@ -15,6 +14,7 @@ import type {
   WorktreeSettingsTarget,
   WorktreeSettingsTargetState,
 } from "./use-worktree-settings-targets";
+import { getWorktreeRetentionPolicy } from "@/lib/access/anyharness/worktrees";
 
 const seededCloudPolicyRuntimeKeys = new Set<string>();
 const syncedPolicyKeys = new Set<string>();
@@ -77,8 +77,7 @@ export function useWorktreeCleanupPolicy(
       if (!localTarget) {
         throw new Error("Local runtime is unavailable.");
       }
-      return getAnyHarnessClient({ runtimeUrl: localTarget.runtimeUrl })
-        .worktrees.retentionPolicy();
+      return getWorktreeRetentionPolicy({ runtimeUrl: localTarget.runtimeUrl });
     },
     enabled: preferencesHydrated && adoptionPending && localTarget !== null,
     retry: 1,

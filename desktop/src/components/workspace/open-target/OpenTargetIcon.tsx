@@ -3,7 +3,7 @@ import {
   OPEN_TARGET_FALLBACK_ICON,
   OPEN_TARGET_ICON_DEFINITIONS,
 } from "@/config/open-targets";
-import type { OpenTargetIconId } from "@/platform/tauri/shell";
+import type { OpenTargetIconId } from "@/lib/access/tauri/shell";
 
 type OpenTargetIconVariant = "inline" | "menu";
 

@@ -8,7 +8,7 @@ import {
   matchShortcutDef,
 } from "@/lib/domain/shortcuts/matching";
 import { shouldDispatchKeyboardShortcut } from "@/lib/domain/shortcuts/dispatch-policy";
-import { listenForShortcutMenuEvents } from "@/platform/tauri/menu";
+import { useTauriMenuEvents } from "@/hooks/access/tauri/use-menu-events";
 
 const DISPATCH_SHORTCUTS = Object.values(SHORTCUTS);
 const SHORTCUT_IDS = new Set<ShortcutId>(DISPATCH_SHORTCUTS.map((shortcut) => shortcut.id));
@@ -45,6 +45,8 @@ export function resolveKeyboardShortcut(
 }
 
 export function useShortcutDispatcher(): void {
+  const { listenForShortcutMenuEvents } = useTauriMenuEvents();
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const resolved = resolveKeyboardShortcut(event);
@@ -89,5 +91,5 @@ export function useShortcutDispatcher(): void {
       unlistenMenu();
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, []);
+  }, [listenForShortcutMenuEvents]);
 }

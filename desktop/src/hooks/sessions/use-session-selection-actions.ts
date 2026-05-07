@@ -1,6 +1,7 @@
 import {
   anyHarnessSessionsKey,
-  getAnyHarnessClient,
+  useDismissSessionMutation,
+  useRestoreDismissedSessionMutation,
 } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,12 +10,12 @@ import {
   resolveStatusFromExecutionSummary,
 } from "@/lib/domain/sessions/activity";
 import {
+  fetchWorkspaceSessionSummaries,
   getSessionClientAndWorkspace,
   getWorkspaceClientAndId,
   isPendingSessionId,
 } from "@/lib/workflows/sessions/session-runtime";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
-import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
@@ -104,9 +105,9 @@ export async function fetchWorkspaceSessions(
     measurementOperationId?: MeasurementOperationId | null;
   },
 ): Promise<WorkspaceSession[]> {
-  const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId);
-  const sessions = await getAnyHarnessClient(connection).sessions.list(
-    connection.anyharnessWorkspaceId,
+  const sessions = await fetchWorkspaceSessionSummaries(
+    runtimeUrl,
+    workspaceId,
     getMeasurementRequestOptions({
       operationId: options?.measurementOperationId,
       category: "session.list",
@@ -149,6 +150,8 @@ export function useSessionSelectionActions() {
   const {
     upsertWorkspaceSessionRecord,
   } = useWorkspaceSessionCache();
+  const dismissSessionMutation = useDismissSessionMutation();
+  const restoreDismissedSessionMutation = useRestoreDismissedSessionMutation();
 
   const ensureWorkspaceSessions = useCallback(async (
     workspaceId: string,
@@ -541,9 +544,12 @@ export function useSessionSelectionActions() {
     }
 
     try {
-      const { connection, materializedSessionId } =
+      const { materializedSessionId, workspaceId: resolvedWorkspaceId } =
         await getSessionClientAndWorkspace(sessionId);
-      await getAnyHarnessClient(connection).sessions.dismiss(materializedSessionId);
+      await dismissSessionMutation.mutateAsync({
+        workspaceId: resolvedWorkspaceId,
+        sessionId: materializedSessionId,
+      });
     } catch {
       // Dismiss failed.
     }
@@ -551,6 +557,7 @@ export function useSessionSelectionActions() {
     cleanupDismissedSession(sessionId, workspaceId);
   }, [
     cleanupDismissedSession,
+    dismissSessionMutation,
     getWorkspaceRuntimeBlockReason,
     showToast,
   ]);
@@ -603,7 +610,7 @@ export function useSessionSelectionActions() {
       });
 
       const targetResolveStartedAt = startLatencyTimer();
-      const { connection, target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId);
+      const { target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId);
       logLatency("session.restore.target_resolved", {
         workspaceId,
         anyharnessWorkspaceId: target.anyharnessWorkspaceId,
@@ -614,10 +621,10 @@ export function useSessionSelectionActions() {
 
       const requestOptions = buildLatencyRequestOptions(options?.latencyFlowId);
       const restoreRequestStartedAt = startLatencyTimer();
-      const restored = await getAnyHarnessClient(connection).sessions.restoreDismissed(
-        target.anyharnessWorkspaceId,
+      const restored = await restoreDismissedSessionMutation.mutateAsync({
+        workspaceId,
         requestOptions,
-      );
+      });
       logLatency("session.restore.request_completed", {
         workspaceId,
         restored: restored !== null,
@@ -665,6 +672,7 @@ export function useSessionSelectionActions() {
     }
   }, [
     getWorkspaceRuntimeBlockReason,
+    restoreDismissedSessionMutation,
     showToast,
     upsertWorkspaceSessionRecord,
   ]);

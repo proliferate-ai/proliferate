@@ -1,17 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { configuredAgentEnvVarsKey } from "./query-keys";
 import {
-  deleteEnvVarSecret,
-  listConfiguredEnvVarNames,
-  setEnvVarSecret,
-} from "@/platform/tauri/credentials";
+  useTauriCredentialsActions,
+} from "@/hooks/access/tauri/use-credentials-actions";
 import { credentialProviderForEnvVar } from "@/lib/domain/cloud/runtime-input-sync";
 import { emitRuntimeInputSyncEvent } from "@/hooks/cloud/runtime-input-sync-events";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 
 const EMPTY_CONFIGURED_ENV_VARS: string[] = [];
 
-async function readConfiguredEnvVarNames() {
+async function readConfiguredEnvVarNames(
+  listConfiguredEnvVarNames: () => Promise<string[]>,
+) {
   try {
     return await listConfiguredEnvVarNames();
   } catch {
@@ -21,11 +21,16 @@ async function readConfiguredEnvVarNames() {
 
 export function useLocalAgentCredentials() {
   const queryClient = useQueryClient();
+  const {
+    deleteEnvVarSecret,
+    listConfiguredEnvVarNames,
+    setEnvVarSecret,
+  } = useTauriCredentialsActions();
   const markRestartRequired = useAgentCredentialsStore((state) => state.markRestartRequired);
 
   const configuredEnvVarsQuery = useQuery({
     queryKey: configuredAgentEnvVarsKey(),
-    queryFn: readConfiguredEnvVarNames,
+    queryFn: () => readConfiguredEnvVarNames(listConfiguredEnvVarNames),
     staleTime: Infinity,
   });
 

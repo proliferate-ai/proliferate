@@ -1,5 +1,4 @@
 import {
-  getAnyHarnessClient,
   resolveRuntimeConnection,
   useAnyHarnessRuntimeContext,
   useCreateCoworkThreadMutation,
@@ -43,6 +42,7 @@ import {
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
+import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,
@@ -201,7 +201,7 @@ export function useCoworkThreadWorkflow() {
       }
 
       const launchDefaults = await applySessionLaunchDefaults({
-        client: getAnyHarnessClient(resolveRuntimeConnection(anyHarnessRuntime)),
+        client: createSessionLaunchDefaultsClient(resolveRuntimeConnection(anyHarnessRuntime)),
         session: result.session,
         agentKind: input.agentKind,
         modelRegistries,

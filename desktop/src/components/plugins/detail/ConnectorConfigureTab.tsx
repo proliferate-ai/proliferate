@@ -8,7 +8,7 @@ import type {
   ConnectorCatalogEntry,
   ConnectorSettings,
 } from "@/lib/domain/mcp/types";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { Button } from "@/components/ui/Button";
 import { ExternalLink } from "@/components/ui/icons";
 import { ConnectorSecretFields } from "@/components/plugins/fields/ConnectorSecretFields";
@@ -42,6 +42,7 @@ export function ConnectorConfigureTab({
   variant: ConnectorSetupVariant;
 }) {
   const showReconnectBanner = focus === "reconnect" || status?.intent === "needs_reconnect";
+  const { openExternal } = useTauriShellActions();
 
   return (
     <div className="space-y-4">

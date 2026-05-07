@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { applyMacWindowChrome } from "@/platform/tauri/window";
+import { useTauriWindowActions } from "@/hooks/access/tauri/use-window-actions";
 
 function isTauriDesktop(): boolean {
   return typeof window !== "undefined"
@@ -20,6 +20,7 @@ function isMacPlatform(): boolean {
 
 export function MacWindowControlsSafeArea() {
   const shouldRender = isTauriDesktop() && isMacPlatform();
+  const { applyMacWindowChrome } = useTauriWindowActions();
 
   useEffect(() => {
     if (!shouldRender) {

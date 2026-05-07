@@ -32,7 +32,7 @@ import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstr
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
-import { logRendererEvent } from "@/platform/tauri/diagnostics"
+import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
 import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
 import { AutomationsPage } from "@/pages/AutomationsPage"
 import { LoginPage } from "@/pages/LoginPage"

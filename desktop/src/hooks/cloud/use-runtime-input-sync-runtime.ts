@@ -12,10 +12,10 @@ import {
   type RuntimeInputSyncQueueState,
   type RuntimeInputSyncTrigger,
 } from "@/lib/domain/cloud/runtime-input-sync";
-import { readRepoTrackedTextFile } from "@/lib/access/anyharness/files";
+import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
 import { resyncCloudRepoFileFromLocal } from "@/lib/access/cloud/repo-configs";
 import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
-import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
+import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -89,6 +89,7 @@ function classifyRuntimeInputSyncFailure(error: unknown): RuntimeInputSyncFailur
 
 export function useRuntimeInputSyncRuntime() {
   const queryClient = useQueryClient();
+  const { listSyncableCloudCredentials } = useTauriCredentialsActions();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
   const cloudRuntimeInputSyncEnabled = useUserPreferencesStore(
@@ -252,7 +253,7 @@ export function useRuntimeInputSyncRuntime() {
     }
 
     enqueue(descriptors);
-  }, [enqueue]);
+  }, [enqueue, listSyncableCloudCredentials]);
 
   const runKeepFreshCycle = useCallback(async (trigger: RuntimeInputSyncTrigger) => {
     if (!keepFreshActiveRef.current) {

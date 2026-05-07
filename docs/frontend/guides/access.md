@@ -14,6 +14,8 @@ lib/access/
   anyharness/
     runtime-target.ts
     runtime-bootstrap.ts
+  tauri/
+    <capability>.ts
 hooks/access/
   cloud/
     query-keys.ts
@@ -101,9 +103,10 @@ React hook.
 
 ## Tauri
 
-Raw Tauri access belongs behind the Tauri access/platform boundary.
-`platform/tauri/**` remains the raw native boundary in this app;
-`hooks/access/tauri/**` is the React-facing access boundary.
+Raw Tauri access belongs behind the Tauri access boundary.
+`lib/access/tauri/**` is the only desktop frontend path that should import
+`@tauri-apps/api` or call native `invoke` directly. `hooks/access/tauri/**` is
+the React-facing access boundary.
 
 Use wrappers for:
 

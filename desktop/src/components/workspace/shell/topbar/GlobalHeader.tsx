@@ -11,10 +11,9 @@ import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { GitActionsButton } from "@/components/workspace/git/GitActionsButton";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import {
-  listOpenTargets,
-  openTarget as execOpenTarget,
   type OpenTarget,
-} from "@/platform/tauri/shell";
+  useTauriShellActions,
+} from "@/hooks/access/tauri/use-shell-actions";
 import {
   Play,
   SplitPanel,
@@ -63,26 +62,30 @@ export function GlobalHeader({
   useDebugRenderCount("global-header");
 
   const [targets, setTargets] = useState<OpenTarget[]>([]);
+  const {
+    listOpenTargets,
+    openTarget: execOpenTarget,
+  } = useTauriShellActions();
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
   const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
   const workspacePath = selectedWorkspace?.path;
 
   useEffect(() => {
     void listOpenTargets("directory").then(setTargets);
-  }, []);
+  }, [listOpenTargets]);
 
   const handleDefaultOpen = useCallback(() => {
     if (!workspacePath) return;
     const targetId = preferredTarget?.id ?? "finder";
     void execOpenTarget(targetId, workspacePath);
-  }, [workspacePath, preferredTarget]);
+  }, [execOpenTarget, workspacePath, preferredTarget]);
 
   const handleTargetClick = useCallback(
     (targetId: string) => {
       if (!workspacePath) return;
       void execOpenTarget(targetId, workspacePath);
     },
-    [workspacePath],
+    [execOpenTarget, workspacePath],
   );
 
   return (

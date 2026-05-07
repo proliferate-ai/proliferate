@@ -1,4 +1,4 @@
-import { logRendererDiagnostic } from "@/platform/tauri/diagnostics";
+import { logRendererDiagnostic } from "@/lib/access/tauri/diagnostics";
 import { getRuntimeDesktopAppConfig } from "@/lib/infra/proliferate-api";
 
 const DEDUPE_WINDOW_MS = 3_000;

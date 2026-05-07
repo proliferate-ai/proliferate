@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   closeBrowserWebview,
   ensureBrowserWebview,
-} from "@/platform/tauri/browser-webview";
+} from "@/lib/access/tauri/browser-webview";
 
 const webviewMocks = vi.hoisted(() => {
   class MockLogicalPosition {

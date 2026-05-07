@@ -12,7 +12,7 @@ import {
 } from "./lib/integrations/telemetry/client";
 import { elapsedStartupMs, startStartupTimer } from "./lib/infra/measurement/debug-startup";
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
-import { logRendererEvent } from "./platform/tauri/diagnostics";
+import { logRendererEvent } from "./lib/access/tauri/diagnostics";
 import { AppProviders } from "./providers/AppProviders";
 import "./index.css";
 
