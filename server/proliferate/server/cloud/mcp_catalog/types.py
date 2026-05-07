@@ -132,6 +132,7 @@ class CatalogEntry:
     capabilities: tuple[str, ...]
     setup_kind: ConnectorSetupKind = "none"
     oauth_client_mode: ConnectorOAuthClientMode | None = None
+    requested_scopes: tuple[str, ...] = ()
     cloud_secret_sync: bool = False
     secret_fields: tuple[CatalogSecretField, ...] = ()
     settings_fields: tuple[CatalogSettingField, ...] = ()

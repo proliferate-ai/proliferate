@@ -10,7 +10,9 @@ from proliferate.server.cloud.mcp_catalog.catalog import (
     CatalogSettingField,
     EnvTemplate,
     HttpLaunchTemplate,
+    SLACK_READ_ONLY_SCOPES,
     StaticUrl,
+    build_connector_catalog,
     get_catalog_entry,
     parse_settings,
     render_http_launch,
@@ -81,6 +83,8 @@ def test_hosted_expansion_connectors_are_in_catalog() -> None:
         "render",
         "neon",
         "huggingface",
+        "sentry",
+        "brave",
     }:
         assert connector_id in catalog_ids
 
@@ -92,6 +96,9 @@ def test_hosted_expansion_connectors_are_in_catalog() -> None:
         "render": "render",
         "neon": "neon",
         "huggingface": "huggingface",
+        "sentry": "sentry",
+        "brave": "brave",
+        "slack": "slack",
     }
     for connector_id, icon_id in expected_icon_ids.items():
         entry = get_catalog_entry(connector_id)
@@ -105,7 +112,7 @@ def test_hosted_expansion_connectors_are_in_catalog() -> None:
     assert cloudflare_docs.secret_fields == ()
     assert cloudflare_docs.display_url == "https://docs.mcp.cloudflare.com/mcp"
 
-    for connector_id in ("gitlab",):
+    for connector_id in ("gitlab", "sentry"):
         entry = get_catalog_entry(connector_id)
         assert entry is not None
         assert entry.transport == "http"
@@ -127,6 +134,51 @@ def test_hosted_expansion_connectors_are_in_catalog() -> None:
         "Authorization": "Bearer neon-token",
         "x-read-only": "true",
     }
+
+    sentry = get_catalog_entry("sentry")
+    assert sentry is not None
+    assert sentry.display_url == "https://mcp.sentry.dev/mcp"
+
+    brave = get_catalog_entry("brave")
+    assert brave is not None
+    assert brave.transport == "stdio"
+    assert brave.auth_kind == "secret"
+    assert brave.availability == "local_only"
+    assert brave.cloud_secret_sync is False
+    assert brave.command == "npx"
+    assert [template.value for template in brave.args] == [
+        "-y",
+        "@brave/brave-search-mcp-server",
+        "--transport",
+        "stdio",
+    ]
+    assert [(template.name, template.kind, template.field_id) for template in brave.env] == [
+        ("BRAVE_API_KEY", "secret", "api_key")
+    ]
+
+    slack = get_catalog_entry("slack")
+    assert slack is not None
+    assert slack.requested_scopes == SLACK_READ_ONLY_SCOPES
+    assert not any(
+        forbidden in capability.lower()
+        for capability in slack.capabilities
+        for forbidden in ("send", "reaction", "manage")
+    )
+
+
+def test_vercel_catalog_entry_is_feature_gated(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "cloud_mcp_vercel_enabled", False)
+    assert "vercel" not in {entry.id for entry in build_connector_catalog()}
+
+    monkeypatch.setattr(settings, "cloud_mcp_vercel_enabled", True)
+    vercel = get_catalog_entry("vercel")
+
+    assert vercel is not None
+    assert vercel.transport == "http"
+    assert vercel.auth_kind == "oauth"
+    assert vercel.oauth_client_mode == "dcr"
+    assert vercel.display_url == "https://mcp.vercel.com"
+    assert vercel.icon_id == "vercel"
 
 
 def test_static_oauth_catalog_entries_are_hidden_until_enabled_and_configured(

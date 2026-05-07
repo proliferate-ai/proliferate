@@ -1,9 +1,11 @@
 import type { SVGProps } from "react";
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
+import braveIcon from "@/assets/connector-icons/brave.svg";
 import cloudflareIcon from "@/assets/connector-icons/cloudflare.svg";
 import context7Icon from "@/assets/connector-icons/context7.jpeg";
 import exaIcon from "@/assets/connector-icons/exa.svg";
 import filesystemIcon from "@/assets/connector-icons/filesystem.svg";
+import gmailIcon from "@/assets/connector-icons/gmail.svg";
 import gitlabIcon from "@/assets/connector-icons/gitlab.svg";
 import huggingfaceIcon from "@/assets/connector-icons/huggingface.svg";
 import neonIcon from "@/assets/connector-icons/neon.svg";
@@ -13,6 +15,9 @@ import posthogIcon from "@/assets/connector-icons/posthog.svg";
 import renderIcon from "@/assets/connector-icons/render.svg";
 import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
+import sentryIcon from "@/assets/connector-icons/sentry.svg";
+import slackIcon from "@/assets/connector-icons/slack.svg";
+import vercelIcon from "@/assets/connector-icons/vercel.svg";
 import { useResolvedMode } from "@/hooks/theme/use-theme";
 import { selectConnectorIconTileClass } from "@/lib/domain/mcp/connector-icon-tile";
 import {
@@ -20,7 +25,6 @@ import {
   Folder,
   GitHub,
   Globe,
-  Mail,
   MessageSquare,
   Search,
   Sun,
@@ -62,7 +66,6 @@ function TavilyGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
 const CONNECTOR_ICONS = {
   calendar: Calendar,
   github: GitHub,
-  gmail: Mail,
   globe: Globe,
   linear: LinearGlyph,
   search: Search,
@@ -82,9 +85,11 @@ interface ConnectorIconImageConfig {
 
 const CONNECTOR_ICON_IMAGES = {
   cloudflare: { lightSrc: cloudflareIcon },
+  brave: { lightSrc: braveIcon },
   context7: { lightSrc: context7Icon },
   exa: { lightSrc: exaIcon },
   filesystem: { lightSrc: filesystemIcon },
+  gmail: { lightSrc: gmailIcon },
   gitlab: { lightSrc: gitlabIcon },
   huggingface: { lightSrc: huggingfaceIcon },
   neon: { lightSrc: neonIcon },
@@ -96,7 +101,10 @@ const CONNECTOR_ICON_IMAGES = {
     darkSrc: renderDarkIcon,
     darkTileClassName: "bg-background",
   },
+  sentry: { lightSrc: sentryIcon },
+  slack: { lightSrc: slackIcon },
   supabase: { lightSrc: supabaseIcon },
+  vercel: { lightSrc: vercelIcon },
 } as const;
 
 type ConnectorIconSize = "sm" | "md" | "lg";

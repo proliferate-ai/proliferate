@@ -422,6 +422,11 @@ class CloudMcpConnection(Base):
     __tablename__ = "cloud_mcp_connection"
     __table_args__ = (
         UniqueConstraint("user_id", "connection_id"),
+        CheckConstraint(
+            "(catalog_entry_id IS NOT NULL AND custom_definition_id IS NULL) "
+            "OR (catalog_entry_id IS NULL AND custom_definition_id IS NOT NULL)",
+            name="ck_cloud_mcp_connection_v1_exactly_one_target",
+        ),
         CheckConstraint("user_id IS NOT NULL", name="ck_cloud_mcp_connection_v1_user_id"),
         CheckConstraint("org_id IS NULL", name="ck_cloud_mcp_connection_v1_org_id_null"),
     )
@@ -430,7 +435,12 @@ class CloudMcpConnection(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
     org_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     connection_id: Mapped[str] = mapped_column(String(255))
-    catalog_entry_id: Mapped[str] = mapped_column(String(255))
+    catalog_entry_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    custom_definition_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_mcp_custom_definition.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=True,
+    )
     catalog_entry_version: Mapped[int] = mapped_column(Integer, default=1)
     server_name: Mapped[str] = mapped_column(String(255), default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -446,6 +456,33 @@ class CloudMcpConnection(Base):
         onupdate=utcnow,
     )
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CloudMcpCustomDefinition(Base):
+    __tablename__ = "cloud_mcp_custom_definition"
+    __table_args__ = (
+        UniqueConstraint("user_id", "definition_id"),
+        CheckConstraint("user_id IS NOT NULL", name="ck_cloud_mcp_custom_definition_v1_user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    definition_id: Mapped[str] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text, default="")
+    transport: Mapped[str] = mapped_column(String(32))
+    auth_kind: Mapped[str] = mapped_column(String(32))
+    availability: Mapped[str] = mapped_column(String(32))
+    template_json: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
 
 
 class CloudMcpConnectionAuth(Base):

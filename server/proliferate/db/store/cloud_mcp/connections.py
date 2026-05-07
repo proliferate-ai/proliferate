@@ -57,6 +57,7 @@ async def _connection_record(
         org_id=record.org_id,
         connection_id=record.connection_id,
         catalog_entry_id=record.catalog_entry_id,
+        custom_definition_db_id=record.custom_definition_id,
         catalog_entry_version=record.catalog_entry_version,
         server_name=record.server_name,
         enabled=record.enabled,
@@ -134,10 +135,11 @@ async def get_user_connection_by_db_id(
 async def upsert_user_connection(
     *,
     user_id: UUID,
-    catalog_entry_id: str,
+    catalog_entry_id: str | None,
     catalog_entry_version: int,
     server_name: str,
     settings_json: str,
+    custom_definition_db_id: UUID | None = None,
     connection_id: str | None = None,
     enabled: bool = True,
 ) -> CloudMcpConnectionRecord:
@@ -154,6 +156,7 @@ async def upsert_user_connection(
                 org_id=None,
                 connection_id=connection_id or str(uuid.uuid4()),
                 catalog_entry_id=catalog_entry_id,
+                custom_definition_id=custom_definition_db_id,
                 catalog_entry_version=catalog_entry_version,
                 server_name=server_name,
                 enabled=enabled,
@@ -171,6 +174,7 @@ async def upsert_user_connection(
             return await _connection_record(db, connection)
 
         connection.catalog_entry_id = catalog_entry_id
+        connection.custom_definition_id = custom_definition_db_id
         connection.catalog_entry_version = catalog_entry_version
         connection.server_name = server_name
         connection.enabled = enabled

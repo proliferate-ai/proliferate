@@ -91,6 +91,7 @@ module = [
     "proliferate.auth.desktop.models",
     "proliferate.server.cloud.mcp_catalog.models",
     "proliferate.server.cloud.mcp_connections.models",
+    "proliferate.server.cloud.mcp_custom_definitions.models",
     "proliferate.server.cloud.mcp_materialization.models",
     "proliferate.server.cloud.mcp_oauth.models",
     "proliferate.server.cloud.workspaces.models",

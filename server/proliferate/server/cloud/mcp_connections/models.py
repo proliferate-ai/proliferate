@@ -8,6 +8,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
+from proliferate.server.cloud.mcp_custom_definitions.models import (
+    CustomMcpDefinitionSummaryModel,
+)
 
 CloudMcpAuthKind = Literal["secret", "oauth", "none"]
 CloudMcpAuthStatus = Literal["ready", "needs_reconnect", "error"]
@@ -22,7 +25,9 @@ class CloudMcpConnectionSettings(BaseModel):
 
 
 class CreateCloudMcpConnectionRequest(BaseModel):
-    catalog_entry_id: str = Field(alias="catalogEntryId")
+    target_kind: Literal["curated", "custom"] | None = Field(default=None, alias="targetKind")
+    catalog_entry_id: str | None = Field(default=None, alias="catalogEntryId")
+    custom_definition_id: str | None = Field(default=None, alias="customDefinitionId")
     settings: dict[str, object] | None = None
     enabled: bool = True
 
@@ -43,7 +48,16 @@ class SyncCloudMcpConnectionRequest(BaseModel):
 
 class CloudMcpConnectionResponse(BaseModel):
     connection_id: str = Field(serialization_alias="connectionId")
-    catalog_entry_id: str = Field(serialization_alias="catalogEntryId")
+    target_kind: Literal["curated", "custom"] = Field(serialization_alias="targetKind")
+    catalog_entry_id: str | None = Field(default=None, serialization_alias="catalogEntryId")
+    custom_definition_id: str | None = Field(
+        default=None,
+        serialization_alias="customDefinitionId",
+    )
+    custom_definition: CustomMcpDefinitionSummaryModel | None = Field(
+        default=None,
+        serialization_alias="customDefinition",
+    )
     catalog_entry_version: int = Field(serialization_alias="catalogEntryVersion")
     server_name: str = Field(serialization_alias="serverName")
     enabled: bool
@@ -80,10 +94,16 @@ def cloud_mcp_connection_payload(
     settings: dict[str, object],
     auth_kind: CloudMcpAuthKind,
     auth_status: CloudMcpAuthStatus,
+    *,
+    custom_definition_id: str | None = None,
+    custom_definition: CustomMcpDefinitionSummaryModel | None = None,
 ) -> CloudMcpConnectionResponse:
     return CloudMcpConnectionResponse(
         connection_id=record.connection_id,
+        target_kind="custom" if custom_definition_id else "curated",
         catalog_entry_id=record.catalog_entry_id,
+        custom_definition_id=custom_definition_id,
+        custom_definition=custom_definition,
         catalog_entry_version=record.catalog_entry_version,
         server_name=record.server_name,
         enabled=record.enabled,
@@ -100,12 +120,14 @@ def cloud_mcp_connection_payload(
 def cloud_mcp_connection_status_payload(
     record: CloudMcpConnectionRecord,
 ) -> CloudMcpConnectionSyncStatus:
+    if record.catalog_entry_id is None:
+        raise ValueError("Legacy MCP connection status requires a curated catalog entry id.")
     auth = record.auth
     payload_ciphertext = record.payload_ciphertext
     synced = bool((auth is not None and auth.auth_status == "ready") or payload_ciphertext)
     return CloudMcpConnectionSyncStatus(
         connection_id=str(record.connection_id),
-        catalog_entry_id=str(record.catalog_entry_id),
+        catalog_entry_id=record.catalog_entry_id,
         synced=synced,
         last_synced_at=_to_iso(record.last_synced_at),
     )

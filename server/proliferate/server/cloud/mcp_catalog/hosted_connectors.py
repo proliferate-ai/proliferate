@@ -10,6 +10,32 @@ from proliferate.server.cloud.mcp_catalog.types import (
 
 HOSTED_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
     CatalogEntry(
+        id="sentry",
+        version=1,
+        name="Sentry",
+        one_liner="Inspect Sentry issues, traces, releases, and debugging context.",
+        description=(
+            "Use Sentry to inspect issues, traces, releases, and project context "
+            "through Sentry's hosted MCP server."
+        ),
+        docs_url="https://github.com/getsentry/sentry-mcp",
+        availability="universal",
+        transport="http",
+        auth_kind="oauth",
+        oauth_client_mode="dcr",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.sentry.dev/mcp"),
+            display_url="https://mcp.sentry.dev/mcp",
+        ),
+        server_name_base="sentry",
+        icon_id="sentry",
+        capabilities=(
+            "Inspect Sentry issues and events",
+            "Review traces and release context",
+            "Bring production error context into debugging sessions",
+        ),
+    ),
+    CatalogEntry(
         id="cloudflare_docs",
         version=1,
         name="Cloudflare Docs",

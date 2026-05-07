@@ -140,6 +140,13 @@ export type PatchCloudMcpConnectionRequest =
   components["schemas"]["PatchCloudMcpConnectionRequest"];
 export type PutCloudMcpSecretAuthRequest =
   components["schemas"]["PutCloudMcpSecretAuthRequest"];
+export type CustomMcpDefinition = components["schemas"]["CustomMcpDefinitionSummaryModel"];
+export type CustomMcpDefinitionsResponse =
+  components["schemas"]["CustomMcpDefinitionsResponse"];
+export type CreateCustomMcpDefinitionRequest =
+  components["schemas"]["CreateCustomMcpDefinitionRequest"];
+export type PatchCustomMcpDefinitionRequest =
+  components["schemas"]["PatchCustomMcpDefinitionRequest"];
 export type CloudMcpOAuthFlowStatusResponse =
   components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
 export type StartCloudMcpOAuthFlowResponse =

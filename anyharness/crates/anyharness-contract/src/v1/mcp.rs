@@ -135,6 +135,7 @@ pub enum SessionMcpBindingNotAppliedReason {
     WorkspacePathUnresolved,
     PolicyDisabled,
     ResolverError,
+    InvalidSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

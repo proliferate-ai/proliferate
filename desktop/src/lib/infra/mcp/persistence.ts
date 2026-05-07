@@ -6,6 +6,7 @@ import {
 import {
   validateOAuthConnectorSettings,
 } from "@/lib/domain/mcp/oauth";
+import { customDefinitionToCatalogEntry } from "@/lib/domain/mcp/custom-definition";
 import { connectorSettingsToCloud as domainConnectorSettingsToCloud } from "@/lib/domain/mcp/settings-schema";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
@@ -27,6 +28,7 @@ import {
   startCloudMcpOAuthFlow,
 } from "@/lib/integrations/cloud/mcp_oauth";
 import { getCloudMcpCatalog } from "@/lib/integrations/cloud/mcp_catalog";
+import { listCustomMcpDefinitions } from "@/lib/integrations/cloud/mcp_custom_definitions";
 import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/integrations/cloud/client";
 import {
   augmentLocalOAuthInstalledStatus,
@@ -55,19 +57,29 @@ async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
     getCloudMcpCatalog(),
     listCloudMcpConnections(),
   ]);
+  const customDefinitions = await listCustomMcpDefinitions().catch(() => ({ definitions: [] }));
   const entries = catalog.entries
     .map(cloudCatalogEntryToLocal)
     .filter(isConnectorCatalogEntryAvailable);
+  const customEntries = customDefinitions.definitions
+    .filter((definition) => !definition.deletedAt && definition.enabled)
+    .map(customDefinitionToCatalogEntry)
+    .filter(isConnectorCatalogEntryAvailable);
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  const customEntriesById = new Map(
+    customEntries.map((entry) => [entry.id.replace(/^custom:/, ""), entry]),
+  );
   const installedBase = connectionsResponse.connections
-    .map((connection) => cloudConnectionToInstalledRecord(connection, entriesById))
+    .map((connection) =>
+      cloudConnectionToInstalledRecord(connection, entriesById, customEntriesById)
+    )
     .filter((record): record is InstalledConnectorRecord => record !== null);
   const installed = await augmentLocalOAuthInstalledStatus(installedBase);
   void reconcileLocalOAuthPendingSetups(installed);
   const installedEntryIds = new Set(installed.map((record) => record.catalogEntry.id));
   return {
     installed,
-    available: entries.filter((entry) => !installedEntryIds.has(entry.id)),
+    available: [...entries, ...customEntries].filter((entry) => !installedEntryIds.has(entry.id)),
   };
 }
 
@@ -80,6 +92,41 @@ async function loadCloudCatalogEntry(catalogEntryId: string): Promise<ConnectorC
     throw new Error("Connector catalog entry was not found.");
   }
   return entry;
+}
+
+async function loadConnectorEntry(catalogEntryId: string): Promise<ConnectorCatalogEntry> {
+  if (catalogEntryId.startsWith("custom:")) {
+    const definitionId = catalogEntryId.replace(/^custom:/, "");
+    const definitions = await listCustomMcpDefinitions();
+    const definition = definitions.definitions.find((item) => item.definitionId === definitionId);
+    if (!definition) {
+      throw new Error("Custom connector definition was not found.");
+    }
+    return customDefinitionToCatalogEntry(definition);
+  }
+  return loadCloudCatalogEntry(catalogEntryId);
+}
+
+function customEntryFromConnection(connection: CloudMcpConnection): ConnectorCatalogEntry | null {
+  return connection.customDefinition
+    ? customDefinitionToCatalogEntry(connection.customDefinition)
+    : null;
+}
+
+async function loadConnectorEntryForConnection(
+  connection: CloudMcpConnection,
+): Promise<ConnectorCatalogEntry> {
+  if (connection.targetKind === "custom") {
+    const customEntry = customEntryFromConnection(connection);
+    if (!customEntry) {
+      throw new Error("Custom connector definition was not found.");
+    }
+    return customEntry;
+  }
+  if (!connection.catalogEntryId) {
+    throw new Error("Connector catalog entry was not found.");
+  }
+  return loadCloudCatalogEntry(connection.catalogEntryId);
 }
 
 function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalogEntry {
@@ -132,6 +179,7 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
     return {
       ...common,
       transport: "stdio",
+      authKind: entry.authKind === "secret" ? "secret" : "none",
       command: entry.command ?? "",
       args: (entry.args ?? []).map(cloudArgTemplateToLocal),
       env: (entry.env ?? []).map(cloudEnvTemplateToLocal),
@@ -206,9 +254,21 @@ function assertNeverTemplateSource(source: never): never {
 function cloudConnectionToInstalledRecord(
   connection: CloudMcpConnection,
   entriesById: Map<string, ConnectorCatalogEntry>,
+  customEntriesById: Map<string, ConnectorCatalogEntry>,
 ): InstalledConnectorRecord | null {
-  const catalogEntry = entriesById.get(connection.catalogEntryId)
-    ?? unavailableInstalledCatalogEntry(connection);
+  const catalogEntry = connection.targetKind === "custom"
+    ? (
+        (connection.customDefinitionId
+          ? customEntriesById.get(connection.customDefinitionId)
+          : undefined)
+        ?? (connection.customDefinition
+          ? customDefinitionToCatalogEntry(connection.customDefinition)
+          : null)
+      )
+    : (
+        (connection.catalogEntryId ? entriesById.get(connection.catalogEntryId) : undefined)
+        ?? unavailableInstalledCatalogEntry(connection)
+      );
   if (!catalogEntry) {
     return null;
   }
@@ -218,7 +278,9 @@ function cloudConnectionToInstalledRecord(
     broken: connection.authStatus !== "ready",
     metadata: {
       connectionId: connection.connectionId,
-      catalogEntryId: catalogEntry.id,
+      targetKind: connection.targetKind ?? "curated",
+      catalogEntryId: connection.catalogEntryId ?? catalogEntry.id,
+      customDefinitionId: connection.customDefinitionId ?? undefined,
       enabled: connection.enabled,
       serverName: connection.serverName,
       createdAt: connection.createdAt,
@@ -234,7 +296,7 @@ export async function installConnector(
   secretValues: Record<string, string>,
   settings?: ConnectorSettings,
 ): Promise<void> {
-  const catalogEntry = await loadCloudCatalogEntry(catalogEntryId);
+  const catalogEntry = await loadConnectorEntry(catalogEntryId);
   if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
     throw new Error(`${catalogEntry.name} isn't available yet.`);
   }
@@ -250,7 +312,12 @@ export async function installConnector(
   validateConnectorSecretValues(catalogEntry, normalizedSecrets);
 
   const connection = await createCloudMcpConnection({
-    catalogEntryId: catalogEntry.id,
+    ...(catalogEntry.id.startsWith("custom:")
+      ? {
+          targetKind: "custom" as const,
+          customDefinitionId: catalogEntry.id.replace(/^custom:/, ""),
+        }
+      : { catalogEntryId: catalogEntry.id }),
     settings: domainConnectorSettingsToCloud(catalogEntry, settings),
     enabled: true,
   });
@@ -266,7 +333,7 @@ export async function connectOAuthConnector(
   settings?: ConnectorSettings,
   pendingAliasConnectionId?: string,
 ): Promise<ConnectOAuthConnectorResult> {
-  const catalogEntry = await loadCloudCatalogEntry(catalogEntryId);
+  const catalogEntry = await loadConnectorEntry(catalogEntryId);
   if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
     throw new Error(`${catalogEntry.name} isn't available yet.`);
   }
@@ -366,7 +433,7 @@ export async function reconnectOAuthConnector(
   if (!connection) {
     throw new Error("Connector was not found.");
   }
-  const catalogEntry = await loadCloudCatalogEntry(connection.catalogEntryId);
+  const catalogEntry = await loadConnectorEntryForConnection(connection);
   if (catalogEntry.setupKind === "local_oauth") {
     return reconnectLocalOAuthConnector(connection, catalogEntry);
   }
@@ -396,7 +463,7 @@ export async function updateConnectorSecret(
   if (!connection) {
     throw new Error("Connector was not found.");
   }
-  const catalogEntry = await loadCloudCatalogEntry(connection.catalogEntryId);
+  const catalogEntry = await loadConnectorEntryForConnection(connection);
   const fields = getConnectorSecretFields(catalogEntry);
   if (fields.length === 0) {
     throw new Error(`${catalogEntry.name} doesn't store a token.`);

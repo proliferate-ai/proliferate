@@ -2,6 +2,7 @@ export type ConnectorCatalogId = string;
 
 export type ConnectorAvailability = "universal" | "local_only" | "cloud_only";
 export type ConnectorSetupKind = "none" | "local_oauth";
+export type ConnectorAuthKind = "secret" | "oauth" | "none";
 
 export interface ConnectorCatalogField {
   id: string;
@@ -101,6 +102,7 @@ export type HttpConnectorCatalogEntry =
 
 export interface StdioConnectorCatalogEntry extends ConnectorCatalogEntryBase {
   transport: "stdio";
+  authKind: "secret" | "none";
   command: string;
   args: readonly ConnectorArgTemplate[];
   env: readonly ConnectorEnvTemplate[];
@@ -112,7 +114,9 @@ export type ConnectorCatalogEntry =
 
 export interface SavedConnectorMetadata {
   connectionId: string;
-  catalogEntryId: ConnectorCatalogId;
+  targetKind: "curated" | "custom";
+  catalogEntryId?: ConnectorCatalogId | null;
+  customDefinitionId?: string | null;
   enabled: boolean;
   serverName: string;
   createdAt: string;
@@ -123,7 +127,8 @@ export interface SavedConnectorMetadata {
 
 export interface ConnectorDeleteTombstone {
   connectionId: string;
-  catalogEntryId: ConnectorCatalogId;
+  catalogEntryId?: ConnectorCatalogId | null;
+  customDefinitionId?: string | null;
   deletedAt: string;
   lastAttemptAt: string | null;
 }
@@ -141,7 +146,8 @@ export interface InstalledConnectorRecord {
 
 interface ConnectorLaunchResolutionWarningBase {
   connectionId: string;
-  catalogEntryId: ConnectorCatalogId;
+  catalogEntryId?: ConnectorCatalogId | null;
+  customDefinitionId?: string | null;
   connectorName: string;
 }
 

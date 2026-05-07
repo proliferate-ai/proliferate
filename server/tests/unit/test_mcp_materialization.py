@@ -14,6 +14,7 @@ from proliferate.server.cloud.mcp_catalog.catalog import (
     EnvTemplate,
     HttpLaunchTemplate,
     StaticUrl,
+    get_catalog_entry,
 )
 from proliferate.server.cloud.mcp_materialization import service
 from proliferate.server.cloud.mcp_materialization.models import (
@@ -187,6 +188,37 @@ async def test_stdio_secret_and_setting_sources_resolve_to_static_launch_values(
     assert candidate.env[0].source.kind == "static"
     assert candidate.env[0].source.value == "secret-token"
     assert "secret-token" not in result.summaries[0].model_dump_json(by_alias=True)
+
+
+@pytest.mark.asyncio
+async def test_brave_v2_secret_materializes_local_stdio_candidate_without_leaking_secret() -> None:
+    entry = get_catalog_entry("brave")
+    assert entry is not None
+    temp = _connection(catalog_entry_id=entry.id)
+    record = _connection(
+        catalog_entry_id=entry.id,
+        auth=_auth(temp.id, {"secretFields": {"api_key": "brave-secret-token"}}),
+    )
+
+    result = await service._materialize_record(record, target_location="local")
+
+    assert result.servers == []
+    assert len(result.candidates) == 1
+    candidate = result.candidates[0]
+    assert candidate.catalog_entry_id == "brave"
+    assert candidate.command == "npx"
+    assert [arg.source.value for arg in candidate.args] == [
+        "-y",
+        "@brave/brave-search-mcp-server",
+        "--transport",
+        "stdio",
+    ]
+    assert [(env.name, env.source.kind, env.source.value) for env in candidate.env] == [
+        ("BRAVE_API_KEY", "static", "brave-secret-token")
+    ]
+    assert result.summaries[0].outcome == "applied"
+    assert "brave-secret-token" not in result.summaries[0].model_dump_json(by_alias=True)
+    assert "brave-secret-token" not in repr(result)
 
 
 @pytest.mark.asyncio

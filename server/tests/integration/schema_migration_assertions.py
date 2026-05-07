@@ -158,11 +158,31 @@ async def assert_current_schema(
     assert {
         "org_id",
         "catalog_entry_version",
+        "custom_definition_id",
         "server_name",
         "enabled",
         "settings_json",
         "config_version",
     } <= mcp_connection_columns
+    custom_definition_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("cloud_mcp_custom_definition")
+        }
+    )
+    assert {
+        "user_id",
+        "definition_id",
+        "version",
+        "name",
+        "description",
+        "transport",
+        "auth_kind",
+        "availability",
+        "template_json",
+        "enabled",
+        "deleted_at",
+    } <= custom_definition_columns
 
     version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
     assert version == head_revision

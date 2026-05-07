@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
+import socket
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from urllib.parse import urlparse
 from uuid import UUID
 
 from proliferate.config import settings
@@ -13,6 +16,7 @@ from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
 )
 from proliferate.db.store.cloud_mcp.connections import list_user_connections
+from proliferate.db.store.cloud_mcp.custom_definitions import list_custom_definitions_by_db_ids
 from proliferate.db.store.cloud_mcp.oauth_clients import get_oauth_client
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.integrations.mcp_oauth import McpOAuthProviderError, refresh_token
@@ -30,6 +34,9 @@ from proliferate.server.cloud.mcp_catalog.catalog import (
     render_http_launch,
     validate_secret_fields,
     validate_settings,
+)
+from proliferate.server.cloud.mcp_custom_definitions.service import (
+    custom_definition_to_catalog_entry,
 )
 from proliferate.server.cloud.mcp_materialization.models import (
     CloudMcpMaterializationWarningModel,
@@ -53,6 +60,7 @@ from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json
 _OAUTH_REFRESH_SKEW = timedelta(seconds=60)
 _MATERIALIZATION_CONCURRENCY = 5
 _MATERIALIZATION_TIMEOUT_SECONDS = 20.0
+_DNS_RESOLUTION_TIMEOUT_SECONDS = 3.0
 _oauth_refresh_locks: dict[UUID, asyncio.Lock] = {}
 _oauth_refresh_locks_guard = asyncio.Lock()
 
@@ -89,6 +97,108 @@ def _cloud_mcp_enabled_or_raise() -> None:
         raise CloudApiError("cloud_mcp_disabled", "Cloud MCP is disabled.", status_code=403)
 
 
+async def _custom_entries_for_records(
+    user_id: UUID,
+    records: list[CloudMcpConnectionRecord],
+) -> tuple[dict[UUID, CatalogEntry], dict[UUID, CatalogEntry]]:
+    definition_ids = {
+        record.custom_definition_db_id
+        for record in records
+        if record.custom_definition_db_id is not None
+    }
+    definitions = await list_custom_definitions_by_db_ids(user_id, definition_ids)
+    entries: dict[UUID, CatalogEntry] = {}
+    disabled_entries: dict[UUID, CatalogEntry] = {}
+    for definition in definitions:
+        try:
+            entry = custom_definition_to_catalog_entry(definition)
+        except ValueError:
+            continue
+        if definition.deleted_at is not None or not definition.enabled:
+            disabled_entries[definition.id] = entry
+        else:
+            entries[definition.id] = entry
+    return entries, disabled_entries
+
+
+def _entry_for_record(
+    record: CloudMcpConnectionRecord,
+    custom_entries: dict[UUID, CatalogEntry],
+) -> CatalogEntry | None:
+    if record.catalog_entry_id is not None:
+        return get_catalog_entry(record.catalog_entry_id)
+    if record.custom_definition_db_id is None:
+        return None
+    return custom_entries.get(record.custom_definition_db_id)
+
+
+def _entry_is_configured(record: CloudMcpConnectionRecord, entry: CatalogEntry) -> bool:
+    if record.catalog_entry_id is None:
+        return True
+    return catalog_entry_is_configured(entry)
+
+
+def _custom_definition_public_id(entry: CatalogEntry) -> str | None:
+    prefix = "custom:"
+    return entry.id[len(prefix) :] if entry.id.startswith(prefix) else None
+
+
+def _is_custom_record(record: CloudMcpConnectionRecord) -> bool:
+    return record.catalog_entry_id is None
+
+
+def _ip_is_blocked_for_cloud(value: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return True
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+async def _custom_cloud_http_url_is_allowed(
+    record: CloudMcpConnectionRecord,
+    url: str,
+    target_location: Literal["local", "cloud"],
+) -> bool:
+    if not _is_custom_record(record) or target_location != "cloud":
+        return True
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    try:
+        literal = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        return not _ip_is_blocked_for_cloud(str(literal))
+    loop = asyncio.get_running_loop()
+    try:
+        addresses = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                socket.getaddrinfo,
+                parsed.hostname,
+                parsed.port or 443,
+                0,
+                socket.SOCK_STREAM,
+            ),
+            timeout=_DNS_RESOLUTION_TIMEOUT_SECONDS,
+        )
+    except (OSError, TimeoutError):
+        return False
+    resolved = {result[4][0] for result in addresses}
+    if not resolved:
+        return False
+    return not any(_ip_is_blocked_for_cloud(str(address)) for address in resolved)
+
+
 def _warning(
     record: CloudMcpConnectionRecord,
     entry: CatalogEntry,
@@ -96,7 +206,8 @@ def _warning(
 ) -> CloudMcpMaterializationWarningModel:
     return CloudMcpMaterializationWarningModel(
         connection_id=record.connection_id,
-        catalog_entry_id=entry.id,
+        catalog_entry_id=record.catalog_entry_id,
+        custom_definition_id=_custom_definition_public_id(entry),
         connector_name=entry.name,
         server_name=record.server_name,
         kind=kind,
@@ -130,12 +241,22 @@ async def materialize_cloud_mcp_servers(
     requested = set(body.connection_ids or [])
     if requested:
         records = [record for record in records if record.connection_id in requested]
+    custom_entries, disabled_custom_entries = await _custom_entries_for_records(
+        user_id,
+        records,
+    )
 
     semaphore = asyncio.Semaphore(_MATERIALIZATION_CONCURRENCY)
     results = await asyncio.gather(
         *[
             _materialize_record_with_timeout(
                 record,
+                entry=_entry_for_record(record, custom_entries),
+                disabled_entry=(
+                    disabled_custom_entries.get(record.custom_definition_db_id)
+                    if record.custom_definition_db_id is not None
+                    else None
+                ),
                 target_location=body.target_location,
                 semaphore=semaphore,
             )
@@ -159,19 +280,32 @@ async def materialize_cloud_mcp_servers(
 async def _materialize_record_with_timeout(
     record: CloudMcpConnectionRecord,
     *,
+    entry: CatalogEntry | None,
+    disabled_entry: CatalogEntry | None,
     target_location: Literal["local", "cloud"],
     semaphore: asyncio.Semaphore,
 ) -> _MaterializedRecordResult:
     async with semaphore:
+        if disabled_entry is not None:
+            return _MaterializedRecordResult(
+                summaries=[
+                    _summary(
+                        record,
+                        disabled_entry,
+                        outcome="not_applied",
+                        reason="resolver_error",
+                    )
+                ],
+                warnings=[_warning(record, disabled_entry, "resolver_error")],
+            )
+        if entry is None:
+            return _MaterializedRecordResult()
         try:
             return await asyncio.wait_for(
-                _materialize_record(record, target_location=target_location),
+                _materialize_record(record, entry=entry, target_location=target_location),
                 timeout=_MATERIALIZATION_TIMEOUT_SECONDS,
             )
         except TimeoutError:
-            entry = get_catalog_entry(record.catalog_entry_id)
-            if entry is None:
-                return _MaterializedRecordResult()
             return _MaterializedRecordResult(
                 summaries=[
                     _summary(
@@ -184,9 +318,6 @@ async def _materialize_record_with_timeout(
                 warnings=[_warning(record, entry, "resolver_error")],
             )
         except Exception:
-            entry = get_catalog_entry(record.catalog_entry_id)
-            if entry is None:
-                return _MaterializedRecordResult()
             return _MaterializedRecordResult(
                 summaries=[
                     _summary(
@@ -203,14 +334,16 @@ async def _materialize_record_with_timeout(
 async def _materialize_record(
     record: CloudMcpConnectionRecord,
     *,
+    entry: CatalogEntry | None = None,
     target_location: Literal["local", "cloud"],
 ) -> _MaterializedRecordResult:
     if not record.enabled:
         return _MaterializedRecordResult()
-    entry = get_catalog_entry(record.catalog_entry_id)
+    if entry is None and record.catalog_entry_id is not None:
+        entry = get_catalog_entry(record.catalog_entry_id)
     if entry is None:
         return _MaterializedRecordResult()
-    if not catalog_entry_is_configured(entry):
+    if not _entry_is_configured(record, entry):
         return _MaterializedRecordResult()
     if not connector_supports_target(entry, target_location):
         return _MaterializedRecordResult(
@@ -240,7 +373,7 @@ async def _materialize_record(
             summaries=[_summary(record, entry, outcome="applied")],
         )
     if entry.auth_kind == "none":
-        result = _materialize_no_auth_http(record, entry, target_location=target_location)
+        result = await _materialize_no_auth_http(record, entry, target_location=target_location)
         if result is None:
             return _MaterializedRecordResult(
                 summaries=[
@@ -253,7 +386,7 @@ async def _materialize_record(
             summaries=[_summary(record, entry, outcome="applied")],
         )
     if entry.auth_kind == "secret":
-        result, http_failure = _materialize_secret_http(
+        result, http_failure = await _materialize_secret_http(
             record,
             entry,
             target_location=target_location,
@@ -312,7 +445,8 @@ def _materialize_stdio_candidate(
     return (
         LocalStdioCandidateModel(
             connection_id=record.connection_id,
-            catalog_entry_id=entry.id,
+            catalog_entry_id=record.catalog_entry_id,
+            custom_definition_id=_custom_definition_public_id(entry),
             server_name=record.server_name,
             connector_name=entry.name,
             setup_kind=entry.setup_kind,
@@ -422,7 +556,7 @@ def _secret_fields_for_record(
         return None
 
 
-def _materialize_no_auth_http(
+async def _materialize_no_auth_http(
     record: CloudMcpConnectionRecord,
     entry: CatalogEntry,
     *,
@@ -436,9 +570,11 @@ def _materialize_no_auth_http(
         )
     except CatalogConfigurationError:
         return None
+    if not await _custom_cloud_http_url_is_allowed(record, launch.url, target_location):
+        return None
     return SessionMcpHttpServerModel(
         connection_id=record.connection_id,
-        catalog_entry_id=entry.id,
+        catalog_entry_id=record.catalog_entry_id,
         server_name=record.server_name,
         url=launch.url,
         headers=[
@@ -448,7 +584,7 @@ def _materialize_no_auth_http(
     )
 
 
-def _materialize_secret_http(
+async def _materialize_secret_http(
     record: CloudMcpConnectionRecord,
     entry: CatalogEntry,
     *,
@@ -470,10 +606,12 @@ def _materialize_secret_http(
         )
     except CatalogConfigurationError:
         return None, _HttpMaterializationFailure("invalid_settings", "invalid_settings")
+    if not await _custom_cloud_http_url_is_allowed(record, launch.url, target_location):
+        return None, _HttpMaterializationFailure("invalid_settings", "invalid_settings")
     return (
         SessionMcpHttpServerModel(
             connection_id=record.connection_id,
-            catalog_entry_id=entry.id,
+            catalog_entry_id=record.catalog_entry_id,
             server_name=record.server_name,
             url=launch.url,
             headers=[
@@ -509,7 +647,7 @@ async def _materialize_oauth_http(
     return (
         SessionMcpHttpServerModel(
             connection_id=record.connection_id,
-            catalog_entry_id=entry.id,
+            catalog_entry_id=record.catalog_entry_id,
             server_name=record.server_name,
             url=launch.url,
             headers=[
@@ -600,7 +738,7 @@ async def _ready_oauth_access_token_locked(
         await get_oauth_client(
             issuer=issuer,
             redirect_uri=redirect_uri,
-            catalog_entry_id=record.catalog_entry_id,
+            catalog_entry_id=record.catalog_entry_id or "",
         )
         if isinstance(issuer, str) and isinstance(redirect_uri, str)
         else None

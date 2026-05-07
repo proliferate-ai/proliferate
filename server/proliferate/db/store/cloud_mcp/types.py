@@ -26,7 +26,7 @@ class CloudMcpConnectionRecord:
     user_id: UUID
     org_id: UUID | None
     connection_id: str
-    catalog_entry_id: str
+    catalog_entry_id: str | None
     catalog_entry_version: int
     server_name: str
     enabled: bool
@@ -38,6 +38,25 @@ class CloudMcpConnectionRecord:
     updated_at: datetime
     last_synced_at: datetime
     auth: CloudMcpAuthRecord | None
+    custom_definition_db_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class CloudMcpCustomDefinitionRecord:
+    id: UUID
+    user_id: UUID
+    definition_id: str
+    version: int
+    name: str
+    description: str
+    transport: str
+    auth_kind: str
+    availability: str
+    template_json: str
+    enabled: bool
+    deleted_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass(frozen=True)
