@@ -1,8 +1,8 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
-import type { CloudRepoFileMetadata } from "@/lib/integrations/cloud/client";
-import { useCloudRepoConfig } from "@/hooks/cloud/use-cloud-repo-config";
+import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
+import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
 import { useCloudWorkspaceRepoConfigStatus } from "@/hooks/cloud/use-cloud-workspace-repo-config-status";
 import { useResyncCloudWorkspaceCredentials } from "@/hooks/cloud/use-resync-cloud-workspace-credentials";
 import { useResyncCloudWorkspaceFiles } from "@/hooks/cloud/use-resync-cloud-workspace-files";

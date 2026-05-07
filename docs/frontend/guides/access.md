@@ -14,8 +14,6 @@ lib/access/
   anyharness/
     runtime-target.ts
     runtime-bootstrap.ts
-  tauri/
-    <capability>.ts
 hooks/access/
   cloud/
     query-keys.ts
@@ -66,6 +64,10 @@ File naming:
 - `use-<action>-mutation.ts` for one mutation
 - `use-<resource>-actions.ts` only for a tight mutation group
 
+New cloud query/mutation wrappers belong in `hooks/access/cloud/**`. Existing
+`hooks/cloud/**` is transitional; product workflow hooks should migrate to
+their owning product hook domain.
+
 Do not create ad hoc `openapi-fetch` clients outside the cloud access layer.
 Do not call raw `client.GET`, `client.POST`, `client.PUT`, or `client.DELETE`
 from product hooks or components.
@@ -100,6 +102,8 @@ React hook.
 ## Tauri
 
 Raw Tauri access belongs behind the Tauri access/platform boundary.
+`platform/tauri/**` remains the raw native boundary in this app;
+`hooks/access/tauri/**` is the React-facing access boundary.
 
 Use wrappers for:
 

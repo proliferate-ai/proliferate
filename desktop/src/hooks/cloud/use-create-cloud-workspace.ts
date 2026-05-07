@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
-} from "@/lib/integrations/cloud/client";
-import { createCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+} from "@/lib/access/cloud/client";
+import { createCloudWorkspace } from "@/lib/access/cloud/workspaces";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   buildNextCloudWorkspaceAttempt,
@@ -18,7 +18,7 @@ import {
   createPendingWorkspaceAttemptId,
   type PendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/pending-entry";
-import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
+import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -31,7 +31,7 @@ import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
 } from "@/lib/domain/workspaces/collections";
-import { cloudBillingKey, cloudCredentialsKey } from "./query-keys";
+import { cloudBillingKey, cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
 import {
@@ -103,7 +103,7 @@ export function useCreateCloudWorkspace() {
       }
     },
     onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(workspace.id);
+      await clearCachedCloudConnections(queryClient, workspace.id);
       queryClient.setQueriesData<WorkspaceCollections | undefined>(
         { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
         (collections) => upsertCloudWorkspaceCollections(collections, workspace),

@@ -1,25 +1,25 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   deleteCloudWorkspace,
   getCloudWorkspace,
   startCloudWorkspace,
   updateCloudWorkspaceBranch,
-} from "@/lib/integrations/cloud/workspaces";
+} from "@/lib/access/cloud/workspaces";
 import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
 } from "@/lib/domain/workspaces/collections";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
+import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { cloudBillingKey } from "./query-keys";
+import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
@@ -108,7 +108,7 @@ export function useCloudWorkspaceActions() {
       }
     },
     onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(workspace.id);
+      await clearCachedCloudConnections(queryClient, workspace.id);
       primeCloudWorkspace(workspace);
       await invalidateCloudResources();
       const syntheticWorkspaceId = cloudWorkspaceSyntheticId(workspace.id);
@@ -154,7 +154,7 @@ export function useCloudWorkspaceActions() {
         ? workspaceId.slice("cloud:".length)
         : workspaceId;
       await deleteCloudWorkspace(cloudWorkspaceId);
-      await clearCachedCloudConnections(cloudWorkspaceId);
+      await clearCachedCloudConnections(queryClient, cloudWorkspaceId);
     },
     onSuccess: async (_, workspaceId, context) => {
       const runtimeWorkspaceId = resolveCloudWorkspaceRuntimeId(workspaceId);

@@ -1,8 +1,8 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import type { CloudConnectionInfo } from "@/lib/integrations/cloud/client";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
-import { getCloudWorkspaceConnection } from "@/lib/integrations/cloud/workspaces";
-import { cloudWorkspaceConnectionKey } from "./query-keys";
+import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { getCloudWorkspaceConnection } from "@/lib/access/cloud/workspaces";
+import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
 
 const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
 const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;

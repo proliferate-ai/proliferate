@@ -7,12 +7,12 @@ import {
   revokeOrganizationInvitation,
   updateOrganization,
   updateOrganizationMembership,
-} from "@/lib/integrations/cloud/organizations";
+} from "@/lib/access/cloud/organizations";
 import type {
   OrganizationInviteRequest,
   OrganizationMembershipUpdateRequest,
   OrganizationUpdateRequest,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   organizationInvitationsKey,
   organizationMembersKey,

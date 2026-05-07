@@ -2,14 +2,14 @@ import { useMemo, useState } from "react";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { SUPPORT_EMAIL_ADDRESS } from "@/config/capabilities";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
-import { useSendSupportMessage } from "@/hooks/cloud/use-send-support-message";
+import { useSendSupportMessage } from "@/hooks/access/cloud/use-send-support-message";
 import { useSessionDebugActions } from "@/hooks/support/use-session-debug-actions";
 import {
   buildSupportEmailBody,
   formatSupportContextLabel,
   normalizeSupportMessageForSend,
 } from "@/lib/domain/support/formatting";
-import type { SupportMessageContext } from "@/lib/integrations/cloud/client";
+import type { SupportMessageContext } from "@/lib/access/cloud/client";
 import {
   copyText,
   openEmailCompose,

@@ -1,4 +1,4 @@
-import type { CloudRepoFileMetadata } from "@/lib/integrations/cloud/client";
+import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { Badge } from "@/components/ui/Badge";
 

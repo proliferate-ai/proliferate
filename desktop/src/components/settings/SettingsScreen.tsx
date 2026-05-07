@@ -22,7 +22,7 @@ import {
 } from "@/lib/domain/settings/repositories";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useUpdater } from "@/hooks/updater/use-updater";
+import { useUpdater } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;

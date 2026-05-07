@@ -1,5 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import { shouldPollCloudWorkspaceForUpdates } from "@/lib/domain/workspaces/cloud-workspace-status";
 
 function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(workspaces: T[]): T[] {

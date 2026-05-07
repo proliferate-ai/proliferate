@@ -5,7 +5,7 @@ import {
   resetDebugMeasurementForTest,
   startMeasurementOperation,
 } from "@/lib/infra/debug-measurement";
-import { measureCloudRequest } from "@/lib/integrations/cloud/timing";
+import { measureCloudRequest } from "@/lib/access/cloud/timing";
 
 describe("cloud timing", () => {
   afterEach(() => {

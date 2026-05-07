@@ -1,4 +1,4 @@
-import { resolveWorkspaceConnection } from "@/lib/integrations/anyharness/resolve-workspace-connection";
+import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
   elapsedMs,
   logLatency,
@@ -6,8 +6,8 @@ import {
 } from "@/lib/infra/debug-latency";
 import { ensureRuntimeReady } from "@/hooks/workspaces/runtime-ready";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { cloudWorkspaceConnectionKey } from "@/hooks/cloud/query-keys";
-import { getCloudWorkspaceConnection } from "@/lib/integrations/cloud/workspaces";
+import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
+import { getCloudWorkspaceConnection } from "@/lib/access/cloud/workspaces";
 import type {
   ReadyCloudReadinessResult,
   WorkspaceConnectionResult,

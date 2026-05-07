@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type {
   OrganizationMemberResponse,
   OrganizationResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 
 export function OrganizationLogo({
   organization,

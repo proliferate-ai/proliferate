@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
 import { useActiveOrganization } from "@/hooks/organizations/use-active-organization";
 import { useOrganizationMembers } from "@/hooks/organizations/use-organization-members";
-import type { OrganizationMemberResponse } from "@/lib/integrations/cloud/client";
+import type { OrganizationMemberResponse } from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_MEMBERS: OrganizationMemberResponse[] = [];

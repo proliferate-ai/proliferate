@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import {
   buildWorkspaceCollections,
   cloudWorkspaceGroupKey,

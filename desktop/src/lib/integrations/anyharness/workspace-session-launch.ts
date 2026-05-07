@@ -1,6 +1,6 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
-import { resolveWorkspaceConnection } from "./resolve-workspace-connection";
+import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 
 export async function fetchWorkspaceSessionLaunchCatalog(
   runtimeUrl: string,

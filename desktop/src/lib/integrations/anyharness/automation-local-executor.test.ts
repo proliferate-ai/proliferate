@@ -3,7 +3,7 @@ import type { AnyHarnessClient, Workspace } from "@anyharness/sdk";
 import type {
   LocalAutomationMutationResponse,
   LocalAutomationRunClaimResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import type {
   LocalAutomationRepoCandidate,
   LocalAutomationWorktreePlan,

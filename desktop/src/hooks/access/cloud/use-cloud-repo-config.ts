@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
-import { getCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
+import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
+import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { cloudRepoConfigKey } from "./query-keys";
 
 export function useCloudRepoConfig(

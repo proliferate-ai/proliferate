@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CloudWorkspaceRepoConfigStatusResponse } from "@/lib/integrations/cloud/client";
-import { getCloudWorkspaceRepoConfigStatus } from "@/lib/integrations/cloud/repo-configs";
-import { cloudWorkspaceRepoConfigStatusKey } from "./query-keys";
+import type { CloudWorkspaceRepoConfigStatusResponse } from "@/lib/access/cloud/client";
+import { getCloudWorkspaceRepoConfigStatus } from "@/lib/access/cloud/repo-configs";
+import { cloudWorkspaceRepoConfigStatusKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudWorkspaceRepoConfigStatus(
   workspaceId: string | null | undefined,

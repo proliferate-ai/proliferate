@@ -1,15 +1,9 @@
-import { cloudWorkspaceConnectionKey } from "@/hooks/cloud/query-keys";
-import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
-import type { CloudAgentKind, CloudConnectionInfo, CloudWorkspaceDetail } from "@/lib/integrations/cloud/client";
-import { getCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import {
+  getCloudWorkspace,
+  getCloudWorkspaceConnection,
+} from "@/lib/access/cloud/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { appQueryClient } from "@/lib/infra/query-client";
-
-async function fetchCloudConnection(workspaceId: string): Promise<CloudConnectionInfo> {
-  return appQueryClient.fetchQuery(
-    cloudWorkspaceConnectionQueryOptions(workspaceId),
-  );
-}
 
 export interface RuntimeTarget {
   location: "local" | "cloud";
@@ -19,29 +13,6 @@ export interface RuntimeTarget {
   runtimeGeneration: number;
   allowedAgentKinds?: CloudAgentKind[];
   readyAgentKinds?: CloudAgentKind[];
-}
-
-export async function clearCachedCloudConnections(workspaceId?: string): Promise<void> {
-  if (workspaceId) {
-    const filters = {
-      queryKey: cloudWorkspaceConnectionKey(workspaceId),
-      exact: true as const,
-    };
-    await appQueryClient.cancelQueries(filters);
-    appQueryClient.removeQueries(filters);
-    return;
-  }
-
-  const filters = {
-    predicate: (query: { queryKey: readonly unknown[] }) => {
-      const key = query.queryKey;
-      return key[0] === "cloud"
-        && key[1] === "workspaces"
-        && key[3] === "connection";
-    },
-  };
-  await appQueryClient.cancelQueries(filters);
-  appQueryClient.removeQueries(filters);
 }
 
 export async function resolveRuntimeTargetForWorkspace(
@@ -64,7 +35,7 @@ export async function resolveRuntimeTargetForWorkspace(
     throw new Error("Cloud workspace is not ready yet.");
   }
 
-  const connection = await fetchCloudConnection(cloudWorkspace.id);
+  const connection = await getCloudWorkspaceConnection(cloudWorkspace.id);
 
   return {
     location: "cloud",

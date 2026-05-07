@@ -4,8 +4,8 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import { cloudRepositoryKey, isCloudRepository } from "@/lib/domain/settings/repositories";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useCloudCredentials } from "./use-cloud-credentials";
-import { useCloudRepoConfigs } from "./use-cloud-repo-configs";
+import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
+import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 
 const EMPTY_REPOSITORIES: SettingsRepositoryEntry[] = [];
 

@@ -8,8 +8,8 @@ import {
   resetLatencyFlowsForTest,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
-import { startCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import { runWorkspaceSelection } from "./run-workspace-selection";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
@@ -23,7 +23,7 @@ vi.mock("./connection", () => ({
   resolveSelectionConnection: vi.fn(),
 }));
 
-vi.mock("@/lib/integrations/cloud/workspaces", () => ({
+vi.mock("@/lib/access/cloud/workspaces", () => ({
   startCloudWorkspace: vi.fn(),
 }));
 

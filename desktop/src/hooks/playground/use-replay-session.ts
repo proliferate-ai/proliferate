@@ -2,7 +2,7 @@ import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ReplayRecordingSummary } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
-import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
+import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
 import { closeSessionStreamHandle } from "@/lib/integrations/anyharness/session-stream-handles";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

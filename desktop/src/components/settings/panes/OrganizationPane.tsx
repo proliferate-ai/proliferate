@@ -29,7 +29,7 @@ import type {
   OrganizationInvitationResponse,
   OrganizationMemberResponse,
   OrganizationResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_MEMBERS: OrganizationMemberResponse[] = [];

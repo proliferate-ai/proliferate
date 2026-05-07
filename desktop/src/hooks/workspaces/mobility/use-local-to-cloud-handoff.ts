@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { getCloudMobilityWorkspaceDetail } from "@/lib/integrations/cloud/mobility";
+import { getCloudMobilityWorkspaceDetail } from "@/lib/access/cloud/mobility";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { resetWorkspaceOwnerFlipState } from "@/hooks/workspaces/mobility/reset-workspace-owner-flip-state";
 import { useCloudWorkspaceHandoffPreflight } from "@/hooks/cloud/use-cloud-workspace-handoff-preflight";

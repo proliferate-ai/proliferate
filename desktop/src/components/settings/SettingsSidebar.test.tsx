@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsSidebar } from "@/components/settings/SettingsSidebar";
-import type { SupportMessageContext } from "@/lib/integrations/cloud/support";
+import type { SupportMessageContext } from "@/lib/access/cloud/support";
 
 const supportDialogRender = vi.hoisted(() => vi.fn());
 

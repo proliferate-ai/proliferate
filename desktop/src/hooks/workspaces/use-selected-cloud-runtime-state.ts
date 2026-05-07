@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudConnectionInfo,
   CloudWorkspaceStatus,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import { useMemo } from "react";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -13,10 +13,10 @@ import {
   type SelectedCloudRuntimeViewModel,
 } from "@/lib/domain/workspaces/cloud-runtime-state";
 import { useCloudWorkspaceConnection } from "@/hooks/cloud/use-cloud-workspace-connection";
-import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/integrations/cloud/workspaces";
-import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
+import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/access/cloud/workspaces";
+import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { cloudBillingKey } from "@/hooks/cloud/query-keys";
+import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import { useIsHotPaintGatePendingForWorkspace } from "./use-hot-paint-gate";
@@ -46,7 +46,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     },
     mutationFn: async (workspaceId: string) => startCloudWorkspaceRequest(workspaceId),
     onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(workspace.id);
+      await clearCachedCloudConnections(queryClient, workspace.id);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: workspaceCollectionsScopeKey(runtimeUrl),

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
   LocalAutomationRunClaimResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   attachLocalAutomationRunSession,
   attachLocalAutomationRunWorkspace,
@@ -15,7 +15,7 @@ import {
   markLocalAutomationRunDispatching,
   markLocalAutomationRunFailed,
   markLocalAutomationRunProvisioningWorkspace,
-} from "@/lib/integrations/cloud/automations";
+} from "@/lib/access/cloud/automations";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,

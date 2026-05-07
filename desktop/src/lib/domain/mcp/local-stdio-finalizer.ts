@@ -2,7 +2,7 @@ import type {
   SessionMcpBindingSummary,
   SessionMcpServer,
 } from "@anyharness/sdk";
-import type { LocalStdioCandidate } from "@/lib/integrations/cloud/client";
+import type { LocalStdioCandidate } from "@/lib/access/cloud/client";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 
 export interface LocalStdioFinalizationContext {

@@ -11,7 +11,7 @@ vi.mock("@/platform/tauri/process", () => ({
   commandExists: mocks.commandExistsMock,
 }));
 
-vi.mock("@/lib/integrations/cloud/mcp_materialization", () => ({
+vi.mock("@/lib/access/cloud/mcp_materialization", () => ({
   materializeCloudMcpServers: mocks.materializeCloudMcpServersMock,
 }));
 

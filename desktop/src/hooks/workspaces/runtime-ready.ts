@@ -1,4 +1,4 @@
-import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
+import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export async function ensureRuntimeReady(): Promise<string> {

@@ -1,5 +1,5 @@
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/integrations/cloud/client";
+import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/access/cloud/client";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 import { create } from "zustand";
 

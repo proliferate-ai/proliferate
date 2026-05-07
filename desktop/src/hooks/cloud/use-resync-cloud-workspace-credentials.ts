@@ -4,8 +4,8 @@ import {
   anyHarnessWorkspaceSessionLaunchKey,
 } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CloudWorkspaceDetail } from "@/lib/integrations/cloud/client";
-import { resyncCloudWorkspaceCredentials } from "@/lib/integrations/cloud/workspaces";
+import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import { resyncCloudWorkspaceCredentials } from "@/lib/access/cloud/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   captureTelemetryException,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/integrations/telemetry/client";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { isCloudWorkspaceConnectionQueryKey } from "./query-keys";
+import { isCloudWorkspaceConnectionQueryKey } from "@/hooks/access/cloud/query-keys";
 
 export function useResyncCloudWorkspaceCredentials(workspaceId: string | null) {
   const queryClient = useQueryClient();

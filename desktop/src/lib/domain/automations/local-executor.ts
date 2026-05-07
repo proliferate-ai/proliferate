@@ -1,7 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
   LocalAutomationRunClaimResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 
 export interface LocalAutomationRepositoryIdentity {
   provider: string;

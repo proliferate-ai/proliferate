@@ -4,14 +4,14 @@ import type {
   AutomationRunResponse,
   CreateAutomationRequest,
   UpdateAutomationRequest,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   createAutomation,
   pauseAutomation,
   resumeAutomation,
   runAutomationNow,
   updateAutomation,
-} from "@/lib/integrations/cloud/automations";
+} from "@/lib/access/cloud/automations";
 import {
   automationDetailKey,
   automationRunsKey,

@@ -20,7 +20,7 @@ import type {
   AutomationResponse,
   CreateAutomationRequest,
   UpdateAutomationRequest,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   defaultAutomationTimezone,
   presetForRrule,

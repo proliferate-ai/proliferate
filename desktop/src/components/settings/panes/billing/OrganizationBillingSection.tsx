@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
-import type { CloudOwnerSelection } from "@/lib/integrations/cloud/billing";
-import type { BillingPlanInfo } from "@/lib/integrations/cloud/client";
+import type { CloudOwnerSelection } from "@/lib/access/cloud/billing";
+import type { BillingPlanInfo } from "@/lib/access/cloud/client";
 
 type OrganizationRole = "owner" | "admin" | "member" | null;
 

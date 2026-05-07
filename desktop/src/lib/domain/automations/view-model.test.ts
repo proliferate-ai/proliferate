@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   AutomationResponse,
   AutomationRunResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   automationRunStatusLabel,
   buildAutomationRowViewModel,

@@ -13,8 +13,8 @@ import {
   type RuntimeInputSyncTrigger,
 } from "@/lib/domain/cloud/runtime-input-sync";
 import { readRepoTrackedTextFile } from "@/lib/integrations/anyharness/files";
-import { resyncCloudRepoFileFromLocal } from "@/lib/integrations/cloud/repo-configs";
-import { getCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
+import { resyncCloudRepoFileFromLocal } from "@/lib/access/cloud/repo-configs";
+import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
@@ -26,7 +26,7 @@ import {
   cloudRepoConfigKey,
   cloudRepoConfigsKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
-} from "./query-keys";
+} from "@/hooks/access/cloud/query-keys";
 import { syncLocalCloudCredentialToCloud } from "./cloud-credential-sync";
 import { subscribeRuntimeInputSyncEvents } from "./runtime-input-sync-events";
 

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositories";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import {
@@ -9,7 +9,7 @@ import {
 import type {
   AutomationResponse,
   CloudRepoConfigSummary,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
 

@@ -1,4 +1,4 @@
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 
 interface CloudWorkspaceSettingsErrorSources {
   credentialError: Error | null;

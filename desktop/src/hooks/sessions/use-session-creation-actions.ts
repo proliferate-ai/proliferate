@@ -7,8 +7,8 @@ import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
-import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
-import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
+import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
+import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
@@ -40,7 +40,7 @@ import {
   createPendingSessionId,
   pruneInactiveSessionStreams,
 } from "@/lib/integrations/anyharness/session-runtime";
-import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
+import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import {
@@ -49,7 +49,7 @@ import {
 } from "@/lib/infra/latency-flow";
 import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
+import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   rememberLastViewedSession,

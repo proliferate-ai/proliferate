@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { LocalAutomationRunClaimResponse } from "@/lib/integrations/cloud/client";
+import type { LocalAutomationRunClaimResponse } from "@/lib/access/cloud/client";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,

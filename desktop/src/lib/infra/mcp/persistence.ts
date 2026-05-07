@@ -20,14 +20,14 @@ import {
   listCloudMcpConnections,
   patchCloudMcpConnection,
   putCloudMcpSecretAuth,
-} from "@/lib/integrations/cloud/mcp_connections";
+} from "@/lib/access/cloud/mcp_connections";
 import {
   cancelCloudMcpOAuthFlow,
   getCloudMcpOAuthFlowStatus,
   startCloudMcpOAuthFlow,
-} from "@/lib/integrations/cloud/mcp_oauth";
-import { getCloudMcpCatalog } from "@/lib/integrations/cloud/mcp_catalog";
-import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/mcp_oauth";
+import { getCloudMcpCatalog } from "@/lib/access/cloud/mcp_catalog";
+import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/access/cloud/client";
 import {
   augmentLocalOAuthInstalledStatus,
   deleteLocalOAuthConnectorDataBeforeCloudDelete,

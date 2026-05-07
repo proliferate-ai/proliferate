@@ -9,7 +9,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { cloudWorkspaceConnectionKey } from "@/hooks/cloud/query-keys";
+import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
@@ -19,7 +19,7 @@ import {
 import {
   resolveWorkspaceConnection,
   type AnyHarnessDesktopResolvedConnection,
-} from "@/lib/integrations/anyharness/resolve-workspace-connection";
+} from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
   adoptTerminalStreamIdentity,
   clearTerminal,

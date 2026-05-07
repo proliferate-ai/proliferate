@@ -7,11 +7,11 @@ import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import {
   updateCloudWorkspaceBranch,
   updateCloudWorkspaceDisplayName,
-} from "@/lib/integrations/cloud/workspaces";
+} from "@/lib/access/cloud/workspaces";
 import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceDetail,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
@@ -27,7 +27,7 @@ import {
   type CloudDisplayNameSyncState,
 } from "@/lib/domain/workspaces/cloud-display-name-sync";
 import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
-import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
+import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {

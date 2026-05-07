@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useSupportDialogState } from "@/hooks/support/use-support-dialog-state";
 import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
-import type { SupportMessageContext } from "@/lib/integrations/cloud/client";
+import type { SupportMessageContext } from "@/lib/access/cloud/client";
 
 const sendSupportMessage = vi.hoisted(() => vi.fn(async () => {}));
 const showToast = vi.hoisted(() => vi.fn());
@@ -13,7 +13,7 @@ vi.mock("@/hooks/capabilities/use-app-capabilities", () => ({
   useAppCapabilities: () => ({ supportEnabled: true }),
 }));
 
-vi.mock("@/hooks/cloud/use-send-support-message", () => ({
+vi.mock("@/hooks/access/cloud/use-send-support-message", () => ({
   useSendSupportMessage: () => ({
     sendSupportMessage,
     isSendingSupportMessage: false,

@@ -35,7 +35,7 @@ vi.mock("@/hooks/cloud/use-cloud-availability-state", () => ({
   }),
 }));
 
-vi.mock("@/lib/integrations/cloud/workspaces", () => ({
+vi.mock("@/lib/access/cloud/workspaces", () => ({
   listCloudWorkspaces: mocks.listCloudWorkspaces,
 }));
 

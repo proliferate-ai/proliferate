@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CloudMobilityHandoffSummary } from "@/lib/integrations/cloud/client";
-import { completeCloudWorkspaceHandoffCleanup } from "@/lib/integrations/cloud/mobility";
+import type { CloudMobilityHandoffSummary } from "@/lib/access/cloud/client";
+import { completeCloudWorkspaceHandoffCleanup } from "@/lib/access/cloud/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
-import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "./query-keys";
+import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCompleteCloudWorkspaceHandoffCleanup() {
   const queryClient = useQueryClient();

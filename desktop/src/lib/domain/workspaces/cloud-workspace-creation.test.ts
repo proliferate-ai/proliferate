@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import {
   buildCloudRepoActionBySourceRoot,
   buildCloudWorkspaceAttemptFromRequest,

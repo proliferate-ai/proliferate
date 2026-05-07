@@ -4,11 +4,11 @@ import {
   anyHarnessCoworkStatusKey,
 } from "@anyharness/sdk-react";
 import type { CoworkStatus } from "@anyharness/sdk";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, type ReactNode } from "react";
 import { appQueryClient } from "@/lib/infra/query-client";
-import { resolveWorkspaceConnection } from "@/lib/integrations/anyharness/resolve-workspace-connection";
+import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
   buildLogicalWorkspaces,
   findLogicalWorkspace,
@@ -16,7 +16,7 @@ import {
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/logical-workspaces";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
-import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
+import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

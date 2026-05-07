@@ -58,7 +58,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   getAnyHarnessClient: vi.fn(),
 }));
 
-vi.mock("@/hooks/cloud/query-keys", () => ({
+vi.mock("@/hooks/access/cloud/query-keys", () => ({
   cloudWorkspaceConnectionKey: (workspaceId: string) => [
     "cloud",
     "workspaces",
@@ -78,7 +78,7 @@ vi.mock("@/hooks/workspaces/use-workspace-runtime-block", () => ({
   }),
 }));
 
-vi.mock("@/lib/integrations/anyharness/resolve-workspace-connection", () => ({
+vi.mock("@/lib/access/anyharness/resolve-workspace-connection", () => ({
   resolveWorkspaceConnection: vi.fn(async () => ({
     runtimeUrl: "http://runtime.test",
     authToken: mockState.token,

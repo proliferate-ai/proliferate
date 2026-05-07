@@ -3,7 +3,7 @@ import { ArrowLeft } from "@/components/ui/icons";
 import type {
   AutomationResponse,
   AutomationRunResponse,
-} from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
 import { AutomationRunTimeline } from "./AutomationRunTimeline";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 

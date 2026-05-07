@@ -21,14 +21,14 @@ import {
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
 import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
-import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useRuntimeInputSyncSummary } from "@/hooks/cloud/use-runtime-input-sync-summary";
 import type {
   CloudAgentKind,
   CloudCredentialStatus,
   CloudRepoConfigSummary,
-} from "@/lib/integrations/cloud/client";
-import { isCloudAgentKind } from "@/lib/integrations/cloud/client";
+} from "@/lib/access/cloud/client";
+import { isCloudAgentKind } from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];

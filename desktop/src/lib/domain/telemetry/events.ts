@@ -1,4 +1,4 @@
-import type { CloudAgentKind } from "@/lib/integrations/cloud/client";
+import type { CloudAgentKind } from "@/lib/access/cloud/client";
 import type { TelemetryFailureKind } from "./failures";
 
 export type DesktopTelemetryRoute =

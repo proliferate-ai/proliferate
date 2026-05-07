@@ -1,8 +1,8 @@
 import type {
   CloudAgentKind,
   CloudCredentialMutationResponse,
-} from "@/lib/integrations/cloud/client";
-import { syncCloudCredential } from "@/lib/integrations/cloud/credentials";
+} from "@/lib/access/cloud/client";
+import { syncCloudCredential } from "@/lib/access/cloud/credentials";
 import { exportSyncableCloudCredential } from "@/platform/tauri/credentials";
 
 export async function syncLocalCloudCredentialToCloud(

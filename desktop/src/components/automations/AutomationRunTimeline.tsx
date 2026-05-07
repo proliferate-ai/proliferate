@@ -1,5 +1,5 @@
 import { memo, type KeyboardEvent } from "react";
-import type { AutomationRunResponse } from "@/lib/integrations/cloud/client";
+import type { AutomationRunResponse } from "@/lib/access/cloud/client";
 import {
   automationRunStatusLabel,
   automationRunTimestampLabel,

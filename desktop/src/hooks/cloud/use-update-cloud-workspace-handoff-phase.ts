@@ -2,10 +2,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   CloudMobilityHandoffSummary,
   UpdateCloudWorkspaceMobilityHandoffPhaseRequest,
-} from "@/lib/integrations/cloud/client";
-import { updateCloudWorkspaceHandoffPhase } from "@/lib/integrations/cloud/mobility";
+} from "@/lib/access/cloud/client";
+import { updateCloudWorkspaceHandoffPhase } from "@/lib/access/cloud/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
-import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "./query-keys";
+import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 
 export function useUpdateCloudWorkspaceHandoffPhase() {
   const queryClient = useQueryClient();
