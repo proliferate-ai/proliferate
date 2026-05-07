@@ -73,6 +73,9 @@ from product hooks or components.
 ## AnyHarness
 
 Generic AnyHarness React access goes through `@anyharness/sdk-react`.
+Product hooks should not call `getAnyHarnessClient` directly except in
+transitional code. Put normal AnyHarness resource operations behind
+`@anyharness/sdk-react` or `hooks/access/anyharness/**`.
 
 Low-level framework-agnostic primitives, such as streams, transcript reducers,
 and terminal connections, belong in `@anyharness/sdk`.

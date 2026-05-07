@@ -83,6 +83,11 @@ Workflow hooks should read like route handlers:
 They should not bury large product algorithms inline. Move reusable logic to
 `lib/domain` or `lib/workflows`.
 
+Do not create more hooks just to hide complexity. Extract to another hook only
+when the extracted code genuinely owns React state, effects, context,
+subscriptions, or query behavior. Otherwise extract a plain function into
+`lib/domain`, `lib/workflows`, `lib/access`, or `lib/infra`.
+
 Path:
 
 ```text
@@ -109,6 +114,13 @@ Workflow hooks must not:
 
 The workflow hook is the React boundary. It is allowed to call hooks. Plain
 `lib/workflows` functions are not.
+
+The default split is:
+
+```text
+workflow hook = gathers React/store/query/provider deps + returns callbacks
+lib/workflows function = receives input + deps and runs the product sequence
+```
 
 Default shape:
 
@@ -146,8 +158,9 @@ events, not direct user clicks.
 ### Facade Hooks
 
 Thin composition wrappers around several hooks. Facades are acceptable when
-they create a simpler interface for a component. If a facade grows large or
-contains branching business logic, split the underlying responsibilities.
+they create a simpler interface for a component or preserve compatibility
+during a migration. If a facade grows large or contains branching business
+logic, split the underlying responsibilities.
 
 Path:
 
@@ -156,7 +169,8 @@ hooks/<domain>/facade/use-<surface>.ts
 ```
 
 Facade hooks should mostly rename and group values. They should not introduce
-new product behavior.
+new product behavior. A facade that only re-exports one or two callbacks is
+usually noise; keep the public hook or use a plain function instead.
 
 ## Folder Shape
 

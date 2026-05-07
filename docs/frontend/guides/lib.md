@@ -86,6 +86,8 @@ lib/workflows/
 
 Workflow functions should accept a small dependency object instead of importing
 singletons. That keeps the sequence testable and makes side effects visible.
+Use an `(input, deps)` shape by default. The dependency object should expose
+side effects as named callbacks, not hidden imports.
 
 Example shape:
 
@@ -95,6 +97,26 @@ export async function createWorkspaceWorkflow(input, deps) {
   const session = await deps.createSession({ workspaceId: workspace.id });
   deps.activateWorkspace({ workspaceId: workspace.id, sessionId: session.id });
   return { workspace, session };
+}
+```
+
+Another example:
+
+```ts
+export async function closeTerminalWorkflow(input, deps) {
+  const blockedReason = deps.getBlockReason(input.workspaceId);
+  if (blockedReason) {
+    deps.showToast(blockedReason);
+    return "blocked";
+  }
+
+  try {
+    await deps.closeTerminal(input.terminalId, input.workspaceId);
+    deps.clearTerminalState(input.terminalId, input.workspaceId);
+    return "closed";
+  } finally {
+    await deps.invalidateTerminals(input.workspaceId);
+  }
 }
 ```
 

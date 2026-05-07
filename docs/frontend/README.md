@@ -104,6 +104,9 @@ focused doc that owns the layer.
   `providers/**` are `.ts` only unless a file must render JSX.
 - Pages are route entrypoints only: read params/navigation state, call
   page-level hooks, and render a screen component.
+- Hooks are not the default extraction unit. Use hooks for React behavior; use
+  plain functions for pure logic, product workflows, access helpers, and infra
+  utilities.
 - Preserve current UI and behavior unless an explicit behavior change is
   requested.
 - Delete dead code when replacing an implementation.
