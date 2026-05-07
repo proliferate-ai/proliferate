@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
-import type { BranchPrefixType } from "@/stores/preferences/user-preferences-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { BranchPrefixType } from "@/lib/domain/preferences/user-preferences";
 
 export function resolveBranchPrefix(
   prefixType: BranchPrefixType,

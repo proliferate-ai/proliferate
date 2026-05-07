@@ -1,5 +1,5 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
-import { clearSessionReconnectTimer } from "@/lib/integrations/anyharness/session-reconnect-state";
+import { clearSessionReconnectTimer } from "@/lib/access/anyharness/session-reconnect-state";
 
 export interface ManagedSessionStreamHandle extends SessionStreamHandle {
   flushPendingEvents?: () => void;

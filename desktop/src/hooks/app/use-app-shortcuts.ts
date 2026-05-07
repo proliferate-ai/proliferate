@@ -7,7 +7,7 @@ import {
   runRedoCommand,
   runSelectAllCommand,
   runUndoCommand,
-} from "@/lib/infra/dom-select-all";
+} from "@/lib/infra/dom/dom-select-all";
 
 export function useAppShortcuts(actions: AppCommandActions): void {
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();

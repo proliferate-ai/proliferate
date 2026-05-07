@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildMobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
 import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
 import type { LocalGitSyncSnapshot } from "@/lib/domain/workspaces/mobility-sync-recovery";
-import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 
 function makeStatus(overrides: Partial<WorkspaceMobilityStatusModel> = {}): WorkspaceMobilityStatusModel {
   return {

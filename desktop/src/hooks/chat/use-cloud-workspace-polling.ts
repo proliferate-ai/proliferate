@@ -15,7 +15,7 @@ import {
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 
 const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
 

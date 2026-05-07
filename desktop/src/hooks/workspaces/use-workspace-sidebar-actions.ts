@@ -12,7 +12,7 @@ import { useAddRepo } from "./use-add-repo";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import { useWorkspaceRetireActions } from "./use-workspace-retire-actions";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceNavigationWorkflow } from "./use-workspace-navigation-workflow";

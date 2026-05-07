@@ -12,7 +12,7 @@ import {
   type LegacyUserPreferencesInput,
   type UserPreferences,
 } from "@/lib/domain/preferences/user-preferences";
-import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 
 export {
   migrateUserPreferences,

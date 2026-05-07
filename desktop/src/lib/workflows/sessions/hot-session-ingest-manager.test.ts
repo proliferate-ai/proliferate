@@ -3,7 +3,7 @@ import {
   reconcileHotSessions,
   resetHotSessionIngestManagerForTest,
   type HotSessionIngestManagerDeps,
-} from "@/lib/integrations/anyharness/hot-session-ingest-manager";
+} from "@/lib/workflows/sessions/hot-session-ingest-manager";
 import {
   useSessionIngestStore,
 } from "@/stores/sessions/session-ingest-store";

@@ -1,4 +1,4 @@
-import type { MeasurementSurface } from "@/lib/infra/debug-measurement";
+import type { MeasurementSurface } from "@/lib/infra/measurement/debug-measurement";
 
 export const PROMPT_SUBMIT_MEASUREMENT_SURFACES = [
   "chat-composer",

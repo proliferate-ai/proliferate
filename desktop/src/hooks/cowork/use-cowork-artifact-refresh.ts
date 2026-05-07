@@ -8,7 +8,7 @@ import {
   offTurnEnd,
   onTurnEnd,
   type TurnEndCallback,
-} from "@/lib/integrations/anyharness/turn-end-events";
+} from "@/lib/infra/events/turn-end-events";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 

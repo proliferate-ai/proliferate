@@ -6,7 +6,7 @@ import {
 import {
   reconcileHotSessions,
   type HotSessionIngestManagerDeps,
-} from "@/lib/integrations/anyharness/hot-session-ingest-manager";
+} from "@/lib/workflows/sessions/hot-session-ingest-manager";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";

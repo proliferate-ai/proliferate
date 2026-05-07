@@ -14,7 +14,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
@@ -24,7 +24,7 @@ import {
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;

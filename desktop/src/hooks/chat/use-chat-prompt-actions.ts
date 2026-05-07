@@ -27,7 +27,7 @@ import {
 } from "@/stores/sessions/session-records";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/pending-entry";
-import { createPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
@@ -35,11 +35,11 @@ import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachme
 import {
   finishOrCancelMeasurementOperation,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import { completeChatPromptSubmitSideEffects } from "./chat-submit-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {

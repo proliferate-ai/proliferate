@@ -46,7 +46,7 @@ import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
@@ -59,7 +59,7 @@ import {
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
+import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
 export function HeaderTabs() {
   useDebugRenderCount("header-tabs");

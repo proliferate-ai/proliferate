@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeBase64UrlUtf8 } from "@/lib/infra/base64url";
+import { encodeBase64UrlUtf8 } from "@/lib/infra/encoding/base64url";
 import {
   allChangesViewerTarget,
   defaultFileViewerMode,

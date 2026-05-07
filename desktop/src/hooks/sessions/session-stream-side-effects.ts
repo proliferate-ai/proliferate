@@ -26,7 +26,7 @@ import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-sto
 import {
   notifyTurnEnd,
   notifyUserFacingTurnEnd,
-} from "@/lib/integrations/anyharness/turn-end-events";
+} from "@/lib/infra/events/turn-end-events";
 import type {
   SessionChildRelationship,
   SessionRelationship,
@@ -35,7 +35,7 @@ import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,
 } from "@/hooks/sessions/session-runtime-pending-config";
-import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
 
 export interface ReconciledStreamConfigIntent {
   liveConfig: SessionLiveConfigSnapshot;

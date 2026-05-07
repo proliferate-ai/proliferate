@@ -24,7 +24,7 @@ import {
   getSessionStreamHandle,
   setSessionStreamHandle,
   resetSessionStreamHandlesForTest,
-} from "@/lib/integrations/anyharness/session-stream-handles";
+} from "@/lib/access/anyharness/session-stream-handles";
 
 const mocks = vi.hoisted(() => ({
   listEvents: vi.fn(),
@@ -50,7 +50,7 @@ vi.mock("@/lib/access/anyharness/runtime-target", () => ({
   resolveRuntimeTargetForWorkspace: mocks.resolveRuntimeTargetForWorkspace,
 }));
 
-vi.mock("@/lib/integrations/anyharness/mcp_launch", () => ({
+vi.mock("@/lib/workflows/sessions/session-mcp-launch", () => ({
   resolveSessionMcpServersForLaunch: mocks.resolveSessionMcpServersForLaunch,
 }));
 

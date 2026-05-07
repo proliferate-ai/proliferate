@@ -23,7 +23,7 @@ vi.mock("@/platform/tauri/google-workspace-mcp", () => ({
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
-} from "@/lib/integrations/anyharness/mcp_launch";
+} from "@/lib/workflows/sessions/session-mcp-launch";
 
 type LaunchContext = Parameters<typeof resolveSessionMcpServersForLaunch>[0];
 

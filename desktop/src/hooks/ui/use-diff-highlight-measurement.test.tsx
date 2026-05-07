@@ -7,7 +7,7 @@ import {
   getDebugMeasurementDump,
   resetDebugMeasurementForTest,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
 
 const SECRET_PATCH = [

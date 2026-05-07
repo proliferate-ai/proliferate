@@ -41,11 +41,11 @@ import {
   sanitizeWorkspaceShellTabKeys,
 } from "@/lib/domain/workspaces/tabs/shell-file-seed";
 import { sameStringArray } from "@/lib/domain/workspaces/workspace-keyed-preferences";
-import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import {
   isDebugMeasurementEnabled,
   recordMeasurementDiagnostic,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 export interface WorkspaceUiState {
   _hydrated: boolean;

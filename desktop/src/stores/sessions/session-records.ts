@@ -26,7 +26,7 @@ import type {
 import {
   DEFAULT_SESSION_ACTION_CAPABILITIES,
 } from "@/stores/sessions/session-types";
-import { batchSessionStoreWrites } from "@/lib/infra/react-batching";
+import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 
 // Imperative facade over the split session stores. The underlying stores stay
 // single-purpose; workflow hooks use this module when a logical session record

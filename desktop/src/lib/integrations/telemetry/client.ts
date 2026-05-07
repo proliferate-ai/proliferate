@@ -7,7 +7,7 @@ import {
   type DesktopTelemetryRoutingState,
   resolveDesktopTelemetryRoutingState,
 } from "@/lib/domain/telemetry/mode";
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import {
   getProliferateApiBaseUrl,
   getProliferateApiOrigin,

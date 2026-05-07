@@ -11,18 +11,10 @@ import {
   logStartupDebug,
   startStartupTimer,
   summarizeStartupError,
-} from "@/lib/infra/debug-startup"
+} from "@/lib/infra/measurement/debug-startup"
+import type { AuthUser } from "@/lib/domain/auth/auth-user"
 
-export interface AuthUser {
-  id: string
-  email: string
-  display_name: string | null
-  github_login?: string | null
-  avatar_url?: string | null
-  is_active?: boolean
-  is_verified?: boolean
-  role?: string
-}
+export type { AuthUser }
 
 interface DesktopTokenResponse {
   access_token: string

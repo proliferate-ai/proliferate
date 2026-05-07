@@ -50,7 +50,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => {
   return { useSessionSelectionStore };
 });
 
-vi.mock("@/lib/infra/debug-latency", () => ({
+vi.mock("@/lib/infra/measurement/debug-latency", () => ({
   elapsedSince: () => 0,
   logLatency: vi.fn(),
 }));

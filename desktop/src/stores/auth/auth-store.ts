@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth"
+import type { AuthUser } from "@/lib/domain/auth/auth-user"
 import type { StoredAuthSession } from "@/platform/tauri/auth"
 
 export type AuthStatus = "bootstrapping" | "anonymous" | "authenticated"

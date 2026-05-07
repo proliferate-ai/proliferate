@@ -12,8 +12,8 @@ import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/
 import {
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
-import { cancelLatencyFlow } from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/debug-latency";
+import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";

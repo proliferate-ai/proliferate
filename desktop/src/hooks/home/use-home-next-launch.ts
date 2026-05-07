@@ -30,8 +30,8 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+} from "@/lib/infra/measurement/latency-flow";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 
 interface HomeNextLaunchInput {
   text: string;

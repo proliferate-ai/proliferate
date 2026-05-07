@@ -24,7 +24,7 @@ import {
   type MeasurementOperationId,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */

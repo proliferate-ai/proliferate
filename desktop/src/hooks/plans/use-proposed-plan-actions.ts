@@ -31,8 +31,8 @@ import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
-} from "@/lib/infra/latency-flow";
-import { logLatency } from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/latency-flow";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   getSessionRecord,

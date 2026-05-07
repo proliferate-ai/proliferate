@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  type ResolveHotSessionTargetsInput,
   resolveHotSessionTargets,
 } from "@/lib/domain/sessions/hot-session-policy";
-import {
-  createEmptySessionRecord,
-} from "@/stores/sessions/session-records";
-import type {
-  SessionDirectoryEntry,
-} from "@/stores/sessions/session-types";
+
+type HotSessionDirectoryEntry = NonNullable<
+  ResolveHotSessionTargetsInput["directoryEntriesById"][string]
+>;
 
 describe("resolveHotSessionTargets", () => {
   it("includes visible unselected tabs in the selected workspace", () => {
@@ -94,17 +93,23 @@ function fixtures(
   sessionIds: string[],
   options?: { materialized?: boolean },
 ): {
-  directory: Record<string, SessionDirectoryEntry>;
+  directory: Record<string, HotSessionDirectoryEntry>;
   promptActivity: Record<string, number>;
 } {
-  const directory: Record<string, SessionDirectoryEntry> = {};
+  const directory: Record<string, HotSessionDirectoryEntry> = {};
   const promptActivity: Record<string, number> = {};
   for (const sessionId of sessionIds) {
-    const record = createEmptySessionRecord(sessionId, "codex", {
+    directory[sessionId] = {
       materializedSessionId: options?.materialized === false ? null : sessionId,
       workspaceId: "workspace-1",
-    });
-    directory[sessionId] = record;
+      status: "idle",
+      executionSummary: null,
+      streamConnectionState: "disconnected",
+      activity: {
+        isStreaming: false,
+        pendingInteractions: [],
+      },
+    };
     promptActivity[sessionId] = 0;
   }
   return { directory, promptActivity };

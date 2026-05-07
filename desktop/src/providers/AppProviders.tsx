@@ -7,7 +7,7 @@ import type { CoworkStatus } from "@anyharness/sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, type ReactNode } from "react";
-import { appQueryClient } from "@/lib/infra/query-client";
+import { appQueryClient } from "@/lib/infra/query/query-client";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
   buildLogicalWorkspaces,

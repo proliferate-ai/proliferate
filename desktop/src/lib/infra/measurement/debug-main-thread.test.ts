@@ -5,8 +5,8 @@ import {
   recordMeasurementMetric,
   resetDebugMeasurementForTest,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
-import { installDebugMainThreadDetectors } from "@/lib/infra/debug-main-thread";
+} from "@/lib/infra/measurement/debug-measurement";
+import { installDebugMainThreadDetectors } from "@/lib/infra/measurement/debug-main-thread";
 
 describe("debug main-thread detectors", () => {
   afterEach(() => {

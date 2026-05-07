@@ -15,19 +15,19 @@ import type {
 import {
   resolveSessionViewState,
 } from "@/lib/domain/sessions/activity";
-import { logLatency } from "@/lib/infra/debug-latency";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   getMeasurementRequestOptions,
   recordMeasurementWorkflowStep,
   type MeasurementOperationId,
   type MeasurementWorkflowStep,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { waitForSessionHistoryTimeout } from "@/lib/access/anyharness/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/access/anyharness/runtime-target";
-import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
+import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
@@ -45,7 +45,7 @@ import {
   flushAllSessionStreamHandles,
   getSessionStreamHandle,
   type ManagedSessionStreamHandle,
-} from "@/lib/integrations/anyharness/session-stream-handles";
+} from "@/lib/access/anyharness/session-stream-handles";
 
 interface SessionStreamCallbacks {
   onHandle?: (handle: SessionStreamHandle) => void;

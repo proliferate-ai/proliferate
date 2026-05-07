@@ -79,7 +79,7 @@ vi.mock("@/stores/preferences/workspace-ui-store", () => ({
   markWorkspaceViewed: workspaceUiMocks.markWorkspaceViewed,
 }));
 
-vi.mock("@/lib/infra/latency-flow", () => ({
+vi.mock("@/lib/infra/measurement/latency-flow", () => ({
   failLatencyFlow: latencyMocks.failLatencyFlow,
   startLatencyFlow: latencyMocks.startLatencyFlow,
 }));

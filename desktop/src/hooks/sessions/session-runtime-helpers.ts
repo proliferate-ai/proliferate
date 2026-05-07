@@ -1,7 +1,7 @@
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
-import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
-import { isCurrentSessionStreamHandle } from "@/lib/integrations/anyharness/session-stream-handles";
+import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
+import { isCurrentSessionStreamHandle } from "@/lib/access/anyharness/session-stream-handles";
 import {
   activitySnapshotFromDirectoryEntry,
   useSessionDirectoryStore,

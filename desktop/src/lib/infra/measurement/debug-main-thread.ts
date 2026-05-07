@@ -2,7 +2,7 @@ import {
   isMainThreadMeasurementEnabled,
   recordMeasurementMetric,
   setLongTaskObserverSupportedForMeasurement,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 const FRAME_GAP_THRESHOLD_MS = 50;
 

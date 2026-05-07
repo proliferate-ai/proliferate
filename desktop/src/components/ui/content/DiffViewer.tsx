@@ -10,8 +10,8 @@ import type {
   DiffHunk,
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
-import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
-import type { HighlightedToken } from "@/lib/infra/highlighting";
+import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
 interface DiffViewerProps {
   patch: string;

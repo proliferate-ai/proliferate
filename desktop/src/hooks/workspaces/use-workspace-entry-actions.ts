@@ -31,11 +31,11 @@ import {
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import {
   annotateLatencyFlow,
   failLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import {
   getWorkspaceSessionRecords,
   patchSessionRecord,

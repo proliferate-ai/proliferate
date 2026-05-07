@@ -41,11 +41,11 @@ import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
-} from "@/lib/infra/prompt-submit-measurement";
+} from "@/lib/infra/measurement/prompt-submit-measurement";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";

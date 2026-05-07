@@ -25,7 +25,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

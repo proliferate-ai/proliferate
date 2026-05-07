@@ -1,4 +1,4 @@
-import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 import {

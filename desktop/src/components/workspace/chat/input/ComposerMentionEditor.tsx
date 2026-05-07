@@ -35,7 +35,7 @@ import {
   markOperationForNextCommit,
   startMeasurementOperation,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
 import { ComposerTextarea } from "./ComposerTextarea";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "./ComposerTextareaFrame";

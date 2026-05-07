@@ -50,7 +50,7 @@ import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activ
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
-import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
+import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   label: string;

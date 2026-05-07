@@ -1,5 +1,3 @@
-import { ProliferateClientError } from "@/lib/access/cloud/client";
-
 interface CloudWorkspaceSettingsErrorSources {
   credentialError: Error | null;
   fileError: Error | null;
@@ -28,10 +26,7 @@ export function formatCloudWorkspaceSettingsError(
 }
 
 function formatCredentialErrorMessage(error: Error): string {
-  if (
-    error instanceof ProliferateClientError
-    && error.code === "workspace_not_ready"
-  ) {
+  if ((error as { code?: unknown }).code === "workspace_not_ready") {
     return "Start the workspace before re-syncing credentials.";
   }
   return error.message;

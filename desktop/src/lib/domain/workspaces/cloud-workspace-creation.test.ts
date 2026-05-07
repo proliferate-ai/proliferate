@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
 import {
   buildCloudRepoActionBySourceRoot,
   buildCloudWorkspaceAttemptFromRequest,
@@ -180,13 +179,19 @@ describe("cloud workspace creation helpers", () => {
 
   it("recognizes server-reported branch conflicts", () => {
     expect(isCloudWorkspaceBranchConflictError(
-      new ProliferateClientError("exists", 400, "github_branch_already_exists"),
+      cloudError("exists", "github_branch_already_exists"),
     )).toBe(true);
     expect(isCloudWorkspaceBranchConflictError(
-      new ProliferateClientError("exists", 400, "cloud_branch_already_exists"),
+      cloudError("exists", "cloud_branch_already_exists"),
     )).toBe(true);
     expect(isCloudWorkspaceBranchConflictError(
-      new ProliferateClientError("bad", 400, "github_branch_not_found"),
+      cloudError("bad", "github_branch_not_found"),
     )).toBe(false);
   });
 });
+
+function cloudError(message: string, code: string): Error {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+}

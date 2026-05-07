@@ -17,7 +17,7 @@ import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key"
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

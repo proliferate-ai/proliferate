@@ -31,7 +31,7 @@ import type {
   ModelSelectorSelection,
 } from "@/lib/domain/chat/model-selection";
 import { resolveModelDisplayName } from "@/lib/domain/chat/model-display";
-import { getSessionClientAndWorkspace } from "@/lib/integrations/anyharness/session-runtime";
+import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

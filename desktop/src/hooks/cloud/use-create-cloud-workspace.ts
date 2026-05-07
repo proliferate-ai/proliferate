@@ -42,7 +42,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
 

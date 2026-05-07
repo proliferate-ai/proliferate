@@ -38,8 +38,8 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
-import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/debug-latency";
+import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
 
 interface CreateWorktreeMutationInput {
   params: WorktreeCreationParams;

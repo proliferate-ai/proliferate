@@ -13,7 +13,7 @@ import {
   Plus,
   Sparkles,
 } from "@/components/ui/icons";
-import { matchesPickerSearch } from "@/lib/infra/search";
+import { matchesPickerSearch } from "@/lib/infra/search/search";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,

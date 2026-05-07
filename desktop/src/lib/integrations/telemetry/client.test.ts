@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { DesktopTelemetryRoutingState } from "@/lib/domain/telemetry/mode";
 
 const mocks = vi.hoisted(() => {

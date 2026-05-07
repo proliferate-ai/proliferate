@@ -5,12 +5,12 @@ import {
   measureDebugComputation,
   recordMeasurementDiagnostic,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import {
   highlightLines,
   type HighlightedToken,
   type HighlightTheme,
-} from "@/lib/infra/highlighting";
+} from "@/lib/infra/editor/highlighting";
 import { useResolvedMode } from "@/hooks/theme/use-theme";
 
 interface DiffHighlightResult {

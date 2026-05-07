@@ -1,7 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { buildBranchName } from "@/lib/domain/workspaces/branch-naming";
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
-import type { BranchPrefixType } from "@/stores/preferences/user-preferences-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { BranchPrefixType } from "@/lib/domain/preferences/user-preferences";
 
 export interface CreateWorktreeWorkspaceInput {
   repoRootId: string;

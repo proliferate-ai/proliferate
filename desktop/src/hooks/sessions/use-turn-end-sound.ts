@@ -3,7 +3,7 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import {
   offUserFacingTurnEnd,
   onUserFacingTurnEnd,
-} from "@/lib/integrations/anyharness/turn-end-events";
+} from "@/lib/infra/events/turn-end-events";
 import dingSrc from "@/assets/sounds/ding.mp3";
 import gongSrc from "@/assets/sounds/gong.mp3";
 

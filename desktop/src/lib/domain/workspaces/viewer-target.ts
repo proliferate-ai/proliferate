@@ -3,7 +3,7 @@ import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
 import {
   decodeBase64UrlUtf8,
   encodeBase64UrlUtf8,
-} from "@/lib/infra/base64url";
+} from "@/lib/infra/encoding/base64url";
 
 export type FileViewerMode = "edit" | "rendered" | "diff";
 export type DiffViewerLayout = "unified" | "split";

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { formatCloudWorkspaceSettingsError } from "./cloud-workspace-settings";
 
 describe("formatCloudWorkspaceSettingsError", () => {
@@ -26,13 +25,12 @@ describe("formatCloudWorkspaceSettingsError", () => {
   });
 
   it("maps workspace_not_ready credential errors to a friendly readiness message", () => {
+    const error = new Error("workspace is not ready") as Error & { code: string };
+    error.code = "workspace_not_ready";
+
     expect(
       formatCloudWorkspaceSettingsError({
-        credentialError: new ProliferateClientError(
-          "workspace is not ready",
-          409,
-          "workspace_not_ready",
-        ),
+        credentialError: error,
         fileError: null,
         setupError: null,
         lastApplyError: null,
@@ -40,10 +38,13 @@ describe("formatCloudWorkspaceSettingsError", () => {
     ).toBe("Credential sync failed: Start the workspace before re-syncing credentials.");
   });
 
-  it("falls back to the raw message for other ProliferateClientError codes", () => {
+  it("falls back to the raw message for other cloud error codes", () => {
+    const error = new Error("boom") as Error & { code: string };
+    error.code = "internal";
+
     expect(
       formatCloudWorkspaceSettingsError({
-        credentialError: new ProliferateClientError("boom", 500, "internal"),
+        credentialError: error,
         fileError: null,
         setupError: null,
         lastApplyError: null,

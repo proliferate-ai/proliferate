@@ -37,7 +37,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import {
   recordMeasurementDiagnostic,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 

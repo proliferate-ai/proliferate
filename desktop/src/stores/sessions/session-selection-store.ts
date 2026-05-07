@@ -5,7 +5,7 @@ import {
   isPendingWorkspaceUiKey,
 } from "@/lib/domain/workspaces/pending-entry";
 import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
-import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import type { HotPaintGate } from "@/stores/sessions/session-types";
 
 const LOGICAL_WORKSPACE_SELECTION_KEY = "selected_logical_workspace_id";

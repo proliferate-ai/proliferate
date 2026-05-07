@@ -47,7 +47,7 @@ import {
   SELECT_ALL_COMMAND_EVENT,
   UNDO_COMMAND_EVENT,
   selectElementContents,
-} from "@/lib/infra/dom-select-all";
+} from "@/lib/infra/dom/dom-select-all";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
 import {
   defaultFileViewerMode,
@@ -62,7 +62,7 @@ import {
   proliferateLightTheme,
   THEME_NAME_DARK,
   THEME_NAME_LIGHT,
-} from "@/lib/infra/monaco-theme";
+} from "@/lib/infra/editor/monaco-theme";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";

@@ -10,7 +10,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
-import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
 
 export type HarnessConnectionState = "connecting" | "healthy" | "failed";
 export type ClientSessionId = string;

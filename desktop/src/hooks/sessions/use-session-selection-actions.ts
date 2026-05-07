@@ -12,7 +12,7 @@ import {
   getSessionClientAndWorkspace,
   getWorkspaceClientAndId,
   isPendingSessionId,
-} from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/workflows/sessions/session-runtime";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
@@ -24,12 +24,12 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,
   getLatencyFlowRequestHeaders,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import {
   finishOrCancelMeasurementOperation,
   finishMeasurementOperation,
@@ -39,9 +39,9 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/hot-reopen";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   commitHotActiveSession,
   commitActiveSession,

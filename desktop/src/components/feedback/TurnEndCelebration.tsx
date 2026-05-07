@@ -3,7 +3,7 @@ import { ProliferateIcon } from "@/components/ui/icons";
 import {
   offUserFacingTurnEnd,
   onUserFacingTurnEnd,
-} from "@/lib/integrations/anyharness/turn-end-events";
+} from "@/lib/infra/events/turn-end-events";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 export function TurnEndCelebration() {

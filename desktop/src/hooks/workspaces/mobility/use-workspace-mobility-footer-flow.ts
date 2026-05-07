@@ -12,7 +12,7 @@ import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mob
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility-prompt";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
-import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
+import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 
 export function useWorkspaceMobilityFooterFlow() {
   const showToast = useToastStore((state) => state.show);

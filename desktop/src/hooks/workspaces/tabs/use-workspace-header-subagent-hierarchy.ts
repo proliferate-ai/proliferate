@@ -31,7 +31,7 @@ import {
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
-import { measureDebugComputation } from "@/lib/infra/debug-measurement";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 export interface HeaderSubagentParentRow {
   sessionId: string;

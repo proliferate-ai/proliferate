@@ -11,7 +11,7 @@ import {
 import {
   elapsedSince,
   logLatency,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 
 interface FinalizeSelectionOptions {
   latencyFlowId?: string | null;

@@ -14,7 +14,7 @@ import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-s
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 
 export function usePendingWorkspaceEntryActions() {
   const navigate = useNavigate();

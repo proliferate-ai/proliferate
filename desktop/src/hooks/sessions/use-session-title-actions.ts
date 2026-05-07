@@ -1,13 +1,13 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { generateSessionTitle } from "@/lib/access/cloud/ai-magic";
-import { getSessionClientAndWorkspace } from "@/lib/integrations/anyharness/session-runtime";
+import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 import {
   finishMeasurementOperation,
   getMeasurementRequestOptions,
   recordMeasurementMetric,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useAuthStore } from "@/stores/auth/auth-store";

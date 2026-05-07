@@ -8,7 +8,7 @@ import type {
   LocalAutomationRepoCandidate,
   LocalAutomationWorktreePlan,
 } from "@/lib/domain/automations/local-executor";
-import { executeLocalAutomationRun } from "./automation-local-executor";
+import { executeLocalAutomationRun } from "./local-automation-executor";
 
 const accepted = (): LocalAutomationMutationResponse => ({
   accepted: true,

@@ -11,7 +11,7 @@ import {
   recordMeasurementMetric,
   resetDebugMeasurementForTest,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 describe("debug measurement registry", () => {
   afterEach(() => {

@@ -1,7 +1,7 @@
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
-import { detachAndCloseSessionStreams } from "@/lib/integrations/anyharness/session-runtime";
+import { detachAndCloseSessionStreams } from "@/lib/workflows/sessions/session-runtime";
 import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { clearWorkspaceBootstrappedInSession } from "../workspace-bootstrap-memory";

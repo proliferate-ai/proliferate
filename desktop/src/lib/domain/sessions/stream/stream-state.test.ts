@@ -6,7 +6,7 @@ import {
   applyStreamEnvelope,
   applyStreamEnvelopeBatch,
   replaySessionHistory,
-} from "@/lib/integrations/anyharness/session-stream-state";
+} from "@/lib/domain/sessions/stream/stream-state";
 
 describe("session-stream-state", () => {
   it("ignores duplicate stream envelopes", () => {

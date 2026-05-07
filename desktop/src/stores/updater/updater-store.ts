@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { readPersistedValue } from "@/lib/infra/preferences-persistence";
+import { readPersistedValue } from "@/lib/infra/persistence/preferences-persistence";
 
 export type UpdaterPhase =
   | "idle"

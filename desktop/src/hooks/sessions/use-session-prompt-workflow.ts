@@ -3,15 +3,15 @@ import { useCallback } from "react";
 import { flushSync } from "react-dom";
 import {
   finishLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
-import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/infra/prompt-submit-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+} from "@/lib/infra/measurement/debug-measurement";
+import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/infra/measurement/prompt-submit-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   getSessionRecord,
 } from "@/stores/sessions/session-records";

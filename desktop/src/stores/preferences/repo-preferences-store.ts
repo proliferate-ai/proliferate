@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
+import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 
 export interface RepoConfig {
   defaultBranch: string | null;

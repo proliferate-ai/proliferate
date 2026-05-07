@@ -14,15 +14,15 @@ import {
 } from "@/stores/sessions/session-records";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import {
   finishMeasurementOperation,
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-} from "@/lib/infra/debug-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+} from "@/lib/infra/measurement/debug-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";
 import { resolveSelectionConnection } from "./connection";

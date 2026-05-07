@@ -5,7 +5,7 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

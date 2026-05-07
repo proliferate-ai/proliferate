@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
-import { replaySessionHistory } from "@/lib/integrations/anyharness/session-stream-state";
+import { replaySessionHistory } from "@/lib/domain/sessions/stream/stream-state";
 import {
   createEmptySessionRecord,
   getSessionRecord,

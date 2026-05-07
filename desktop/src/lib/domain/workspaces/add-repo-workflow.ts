@@ -5,7 +5,7 @@ import {
   elapsedMs,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 
 function resolveRepoName(repoRoot: RepoRoot): string {
   return repoRoot.displayName?.trim()

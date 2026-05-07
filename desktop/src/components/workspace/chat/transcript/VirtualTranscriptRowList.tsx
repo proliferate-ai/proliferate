@@ -27,7 +27,7 @@ import {
 import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import { FullTranscriptRowList } from "@/components/workspace/chat/transcript/FullTranscriptRowList";
 import {
   buildRenderableRows,

@@ -4,8 +4,7 @@ import type {
   ProviderConfig,
   WorkspaceSessionLaunchAgent,
 } from "@anyharness/sdk";
-import type { OpenTarget } from "@/platform/tauri/shell";
-import type { UserPreferences } from "@/stores/preferences/user-preferences-store";
+import type { UserPreferences } from "@/lib/domain/preferences/user-preferences";
 import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,
@@ -236,10 +235,10 @@ function resolveProviderConfigModel(
     ?? null;
 }
 
-export function resolvePreferredOpenTarget(
-  targets: OpenTarget[],
+export function resolvePreferredOpenTarget<T extends { id: string; kind?: string }>(
+  targets: T[],
   prefs: Pick<UserPreferences, "defaultOpenInTargetId">,
-): OpenTarget | null {
+): T | null {
   const preferred = targets.find((target) => target.id === prefs.defaultOpenInTargetId);
   if (preferred) return preferred;
   return targets.find((target) => target.kind === "editor") ?? targets[0] ?? null;

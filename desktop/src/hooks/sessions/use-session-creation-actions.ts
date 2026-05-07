@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/prompt-attachment-snapshot";
-import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
-import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
+import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
+import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
 import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
@@ -39,15 +39,15 @@ import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-wo
 import {
   createPendingSessionId,
   pruneInactiveSessionStreams,
-} from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/workflows/sessions/session-runtime";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,
-} from "@/lib/infra/latency-flow";
-import type { MeasurementOperationId } from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/latency-flow";
+import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { DESKTOP_ORIGIN } from "@/lib/access/anyharness/origin";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";

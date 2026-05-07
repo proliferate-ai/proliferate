@@ -19,7 +19,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 
 const URGENT_CHAT_HIGHLIGHT_FALLBACK_TIMEOUT_MS = 1_500;
 

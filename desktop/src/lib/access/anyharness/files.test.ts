@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   readRepoTrackedTextFile,
   readWorkspaceTextFile,
-} from "@/lib/integrations/anyharness/files";
+} from "@/lib/access/anyharness/files";
 
 const clientMocks = vi.hoisted(() => ({
   filesRead: vi.fn(),

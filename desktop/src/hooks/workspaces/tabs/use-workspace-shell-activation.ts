@@ -26,10 +26,10 @@ import {
   startMeasurementOperation,
   type MeasurementOperationId,
   type MeasurementSurface,
-} from "@/lib/infra/debug-measurement";
-import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
+} from "@/lib/infra/measurement/debug-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/hot-reopen";
-import { isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 
 const HOT_SWITCH_SURFACES = [

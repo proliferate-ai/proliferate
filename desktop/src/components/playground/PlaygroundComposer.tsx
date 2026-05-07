@@ -28,7 +28,7 @@ import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
-import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import {
   getMobilityOverlayTitle,
   mobilityStatusCopy,

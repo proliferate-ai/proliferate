@@ -54,7 +54,7 @@ import {
   sameStringArray,
 } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
-import { measureDebugComputation } from "@/lib/infra/debug-measurement";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 export interface HeaderChatTabEntry extends GroupedChatTab {
   id: string;

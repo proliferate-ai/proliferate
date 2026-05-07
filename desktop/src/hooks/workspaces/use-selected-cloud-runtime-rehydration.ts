@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { startLatencyTimer } from "@/lib/infra/debug-latency";
+import { startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceBootstrapActions } from "./use-workspace-bootstrap-actions";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import type { SelectedCloudRuntimeState } from "./use-selected-cloud-runtime-state";

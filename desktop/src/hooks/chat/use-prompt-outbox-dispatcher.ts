@@ -11,10 +11,10 @@ import {
   getLatencyFlowRequestHeaders,
   failLatencyFlow,
   finishLatencyFlow,
-} from "@/lib/infra/latency-flow";
+} from "@/lib/infra/measurement/latency-flow";
 import {
   getSessionClientAndWorkspace,
-} from "@/lib/integrations/anyharness/session-runtime";
+} from "@/lib/workflows/sessions/session-runtime";
 import {
   getSessionRecord,
   waitForSessionMaterialization,

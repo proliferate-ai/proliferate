@@ -3,10 +3,9 @@ import {
   type CloudRepoConfigSummary,
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
-  ProliferateClientError,
 } from "@/lib/access/cloud/client";
-import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
-import type { BranchPrefixType } from "@/stores/preferences/user-preferences-store";
+import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { BranchPrefixType } from "@/lib/domain/preferences/user-preferences";
 import { generateWorkspaceSlug } from "./arrival";
 import {
   buildBranchName,
@@ -213,9 +212,9 @@ export function buildCloudWorkspaceAttemptFromRequest(
 }
 
 export function isCloudWorkspaceBranchConflictError(error: unknown): boolean {
-  return error instanceof ProliferateClientError
-    && (
-      error.code === "github_branch_already_exists"
-      || error.code === "cloud_branch_already_exists"
-    );
+  const code = error instanceof Error
+    ? (error as { code?: unknown }).code
+    : null;
+  return code === "github_branch_already_exists"
+    || code === "cloud_branch_already_exists";
 }

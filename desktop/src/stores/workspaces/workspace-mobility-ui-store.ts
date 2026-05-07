@@ -1,16 +1,5 @@
-import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/access/cloud/client";
-import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import { create } from "zustand";
-
-export interface WorkspaceMobilityConfirmSnapshot {
-  logicalWorkspaceId: string;
-  direction: WorkspaceMobilityDirection;
-  sourceWorkspaceId: string;
-  mobilityWorkspaceId: string;
-  sourcePreflight: WorkspaceMobilityPreflightResponse;
-  cloudPreflight: CloudWorkspaceMobilityPreflightResponse;
-}
 
 interface WorkspaceMobilityUiState {
   confirmSnapshotByLogicalWorkspaceId: Record<string, WorkspaceMobilityConfirmSnapshot>;

@@ -3,7 +3,7 @@ import {
   isMainThreadMeasurementEnabled,
   recordMeasurementMetric,
   type MeasurementSurface,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 export function useDebugRenderCount(surface: MeasurementSurface): void {
   const renderCountRef = useRef(0);

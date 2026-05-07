@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   isDebugMeasurementEnabled,
   recordMeasurementDiagnostic,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 
 type DebugValueMap = Record<string, unknown>;
 

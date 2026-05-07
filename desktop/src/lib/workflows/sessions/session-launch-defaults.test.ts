@@ -6,7 +6,7 @@ import type {
   Session,
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
-import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
+import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 
 function control(
   key: string,

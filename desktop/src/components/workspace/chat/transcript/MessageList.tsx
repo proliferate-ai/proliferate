@@ -81,7 +81,7 @@ import {
   markOperationForNextCommit,
   startMeasurementOperation,
   type MeasurementOperationId,
-} from "@/lib/infra/debug-measurement";
+} from "@/lib/infra/measurement/debug-measurement";
 import {
   isAgentSessionProvenance,
   resolveReviewFeedbackPromptReference,

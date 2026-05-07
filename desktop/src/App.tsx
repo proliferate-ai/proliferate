@@ -27,7 +27,7 @@ import {
   elapsedStartupMs,
   logStartupDebug,
   startStartupTimer,
-} from "@/lib/infra/debug-startup"
+} from "@/lib/infra/measurement/debug-startup"
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"

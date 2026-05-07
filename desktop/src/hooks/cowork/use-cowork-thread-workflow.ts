@@ -28,7 +28,7 @@ import {
   elapsedSince,
   logLatency,
   startLatencyTimer,
-} from "@/lib/infra/debug-latency";
+} from "@/lib/infra/measurement/debug-latency";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
@@ -37,12 +37,12 @@ import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
-} from "@/lib/integrations/anyharness/mcp_launch";
+} from "@/lib/workflows/sessions/session-mcp-launch";
 import {
   createSessionRecordFromSummary,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
-import { applySessionLaunchDefaults } from "@/lib/integrations/anyharness/session-launch-defaults";
+import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import {
   markWorkspaceViewed,
   rememberLastViewedSession,

@@ -1,4 +1,8 @@
-import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
+import type {
+  PendingInteraction,
+  SessionExecutionSummary,
+  SessionStatus,
+} from "@anyharness/sdk";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 
 export const MAX_HOT_SESSION_STREAMS = 12;
@@ -19,12 +23,24 @@ export interface HotSessionTarget {
   streamable: boolean;
 }
 
+interface HotSessionDirectoryEntry {
+  materializedSessionId: string | null;
+  workspaceId: string | null;
+  status: SessionStatus | null;
+  executionSummary: SessionExecutionSummary | null;
+  streamConnectionState: "disconnected" | "connecting" | "open" | "ended";
+  activity: {
+    isStreaming: boolean;
+    pendingInteractions: PendingInteraction[];
+  };
+}
+
 export interface ResolveHotSessionTargetsInput {
   selectedWorkspaceId: string | null;
   activeSessionId: string | null;
   visibleChatSessionIds: readonly string[];
   workspaceSessionIds: readonly string[];
-  directoryEntriesById: Record<string, SessionDirectoryEntry | undefined>;
+  directoryEntriesById: Record<string, HotSessionDirectoryEntry | undefined>;
   promptActivityBySessionId: Record<string, number | undefined>;
   maxHotSessionStreams?: number;
 }
