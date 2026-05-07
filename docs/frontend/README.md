@@ -13,29 +13,36 @@ layer doc and any surface spec that applies to the code you are changing.
 
 Always start here.
 
-Layer docs:
+Guides define reusable engineering standards: where code goes, what each layer
+may own, and which patterns are allowed.
 
-- [components.md](components.md) for component ownership, UI primitives, and
-  component folder hierarchy.
-- [hooks.md](hooks.md) for hook taxonomy, hook organization, and React behavior
-  ownership.
-- [state.md](state.md) for Zustand stores, React Query, providers, and local
-  state.
-- [lib.md](lib.md) for pure product logic, workflows, infra utilities, config,
-  copy, and presentation mappings.
-- [access.md](access.md) for cloud, AnyHarness, and Tauri access boundaries.
-- [styling.md](styling.md) for styling, theme tokens, primitives, and theme
-  usage.
-- [telemetry.md](telemetry.md) for analytics, Sentry, replay masking, or
-  telemetry payloads.
+Guides:
 
-Surface specs:
+- [guides/components.md](guides/components.md) for component ownership, UI
+  primitives, and component folder hierarchy.
+- [guides/hooks.md](guides/hooks.md) for hook taxonomy, hook organization, and
+  React behavior ownership.
+- [guides/state.md](guides/state.md) for Zustand stores, React Query,
+  providers, and local state.
+- [guides/lib.md](guides/lib.md) for pure product logic, workflows, infra
+  utilities, config, copy, and presentation mappings.
+- [guides/access.md](guides/access.md) for cloud, AnyHarness, and Tauri access
+  boundaries.
+- [guides/styling.md](guides/styling.md) for styling, theme tokens,
+  primitives, and theme usage.
+- [guides/telemetry.md](guides/telemetry.md) for analytics, Sentry, replay
+  masking, or telemetry payloads.
 
-- [chat-composer.md](chat-composer.md) for the chat composer area.
-- [chat-transcript.md](chat-transcript.md) for transcript streaming, replay,
-  row models, or long-history rendering.
-- [workspace-files.md](workspace-files.md) for workspace file browsing, file
-  viewing, diff viewing, Changes, or all-changes review.
+Specs define product/surface contracts: UX invariants, performance invariants,
+edge cases, and focused verification for a specific product surface.
+
+Specs:
+
+- [specs/chat-composer.md](specs/chat-composer.md) for the chat composer area.
+- [specs/chat-transcript.md](specs/chat-transcript.md) for transcript
+  streaming, replay, row models, or long-history rendering.
+- [specs/workspace-files.md](specs/workspace-files.md) for workspace file
+  browsing, file viewing, diff viewing, Changes, or all-changes review.
 
 ## Target Shape
 
@@ -114,22 +121,22 @@ Use the lowest layer that can own the logic cleanly.
 
 | Concern | Path | Put it here when | Do not put here | Details |
 | --- | --- | --- | --- | --- |
-| Product UI | `components/<domain>/<surface>/<role>/**` | It renders product-specific UI. | Raw access, query invalidation, multi-step workflows, reusable product rules. | [components.md](components.md) |
-| UI primitives | `components/ui/**` | It is reusable without product knowledge. | Product-specific copy, stores, access, or workflow behavior. | [components.md](components.md), [styling.md](styling.md) |
-| Generic UI hooks | `hooks/ui/<mechanic>/**` | It wraps browser/UI mechanics with no product concepts. | Sessions, workspaces, cloud, agents, billing, or other product concepts. | [hooks.md](hooks.md) |
-| Access hooks | `hooks/access/<system>/**` | It is a React Query/mutation wrapper around cloud, AnyHarness, or Tauri. | Product workflow branching or JSX. | [hooks.md](hooks.md), [access.md](access.md), [state.md](state.md) |
-| Product derived hooks | `hooks/<domain>/derived/**` | It computes UI-ready state from stores, providers, and queries. | Writes, effects, raw access, navigation, or telemetry. | [hooks.md](hooks.md) |
-| Product workflow hooks | `hooks/<domain>/workflows/**` | It exposes user-action callbacks and coordinates React dependencies. | Large business algorithms or raw clients. | [hooks.md](hooks.md) |
-| Product lifecycle hooks | `hooks/<domain>/lifecycle/**` | It owns mounted effects, streams, dispatchers, polling, or reconciliation. | Render logic or user-click workflow branching. | [hooks.md](hooks.md) |
-| Shared client state | `stores/<domain>/<concern>-store.ts` | It is client-only state such as selected ids, drafts, panels, or active UI. | Server/runtime caches, API calls, navigation, telemetry, or multi-store orchestration. | [state.md](state.md) |
-| Scoped dependencies | `providers/**` | It defines an app/subtree context boundary. | General mutable UI state. | [state.md](state.md) |
-| Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [lib.md](lib.md) |
-| Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [lib.md](lib.md) |
-| Raw external access | `lib/access/<system>/**` | It owns raw cloud, AnyHarness desktop wiring, or Tauri wrappers. | Product UI state, product branching, or components. | [access.md](access.md) |
-| Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [lib.md](lib.md) |
-| Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [lib.md](lib.md) |
-| Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [lib.md](lib.md) |
-| Presentation mappings | `lib/domain/<domain>/<subdomain>/presentation.ts` | It maps product state to labels, tone, icons, descriptions, or visibility. | Transport access or mutable UI state. | [lib.md](lib.md) |
+| Product UI | `components/<domain>/<surface>/<role>/**` | It renders product-specific UI. | Raw access, query invalidation, multi-step workflows, reusable product rules. | [guides/components.md](guides/components.md) |
+| UI primitives | `components/ui/**` | It is reusable without product knowledge. | Product-specific copy, stores, access, or workflow behavior. | [guides/components.md](guides/components.md), [guides/styling.md](guides/styling.md) |
+| Generic UI hooks | `hooks/ui/<mechanic>/**` | It wraps browser/UI mechanics with no product concepts. | Sessions, workspaces, cloud, agents, billing, or other product concepts. | [guides/hooks.md](guides/hooks.md) |
+| Access hooks | `hooks/access/<system>/**` | It is a React Query/mutation wrapper around cloud, AnyHarness, or Tauri. | Product workflow branching or JSX. | [guides/hooks.md](guides/hooks.md), [guides/access.md](guides/access.md), [guides/state.md](guides/state.md) |
+| Product derived hooks | `hooks/<domain>/derived/**` | It computes UI-ready state from stores, providers, and queries. | Writes, effects, raw access, navigation, or telemetry. | [guides/hooks.md](guides/hooks.md) |
+| Product workflow hooks | `hooks/<domain>/workflows/**` | It exposes user-action callbacks and coordinates React dependencies. | Large business algorithms or raw clients. | [guides/hooks.md](guides/hooks.md) |
+| Product lifecycle hooks | `hooks/<domain>/lifecycle/**` | It owns mounted effects, streams, dispatchers, polling, or reconciliation. | Render logic or user-click workflow branching. | [guides/hooks.md](guides/hooks.md) |
+| Shared client state | `stores/<domain>/<concern>-store.ts` | It is client-only state such as selected ids, drafts, panels, or active UI. | Server/runtime caches, API calls, navigation, telemetry, or multi-store orchestration. | [guides/state.md](guides/state.md) |
+| Scoped dependencies | `providers/**` | It defines an app/subtree context boundary. | General mutable UI state. | [guides/state.md](guides/state.md) |
+| Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [guides/lib.md](guides/lib.md) |
+| Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [guides/lib.md](guides/lib.md) |
+| Raw external access | `lib/access/<system>/**` | It owns raw cloud, AnyHarness desktop wiring, or Tauri wrappers. | Product UI state, product branching, or components. | [guides/access.md](guides/access.md) |
+| Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [guides/lib.md](guides/lib.md) |
+| Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [guides/lib.md](guides/lib.md) |
+| Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [guides/lib.md](guides/lib.md) |
+| Presentation mappings | `lib/domain/<domain>/<subdomain>/presentation.ts` | It maps product state to labels, tone, icons, descriptions, or visibility. | Transport access or mutable UI state. | [guides/lib.md](guides/lib.md) |
 
 ## Dependency Direction
 

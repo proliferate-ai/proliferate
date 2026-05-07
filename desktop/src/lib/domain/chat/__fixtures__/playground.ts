@@ -58,7 +58,7 @@ export const FILE_MENTION_SEARCH_RESULTS: SearchWorkspaceFilesResponse["results"
   },
   {
     name: "chat-composer.md",
-    path: "docs/frontend/chat-composer.md",
+    path: "docs/frontend/specs/chat-composer.md",
   },
 ];
 

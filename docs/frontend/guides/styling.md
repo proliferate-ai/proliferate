@@ -5,7 +5,7 @@ Scope:
 - `desktop/src/**`
 
 This file covers styling-only rules. Read
-[README.md](README.md) for structure, ownership, and data-flow guidance.
+[README.md](../README.md) for structure, ownership, and data-flow guidance.
 
 ## Semantic Tokens
 

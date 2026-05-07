@@ -76,5 +76,5 @@ It should therefore:
 
 ## References
 
-- [docs/frontend/README.md](/Users/pablo/proliferate-workspace-mobility-plan/docs/frontend/README.md)
-- [docs/frontend/chat-composer.md](/Users/pablo/proliferate-workspace-mobility-plan/docs/frontend/chat-composer.md)
+- [docs/frontend/README.md](../../frontend/README.md)
+- [docs/frontend/specs/chat-composer.md](../../frontend/specs/chat-composer.md)

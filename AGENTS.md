@@ -68,21 +68,22 @@ at the start of the task, not halfway through implementation.
 
 1. `docs/frontend/README.md`
 2. The focused frontend doc for the layer being changed:
-   - `docs/frontend/components.md`
-   - `docs/frontend/hooks.md`
-   - `docs/frontend/state.md`
-   - `docs/frontend/lib.md`
-   - `docs/frontend/access.md`
+   - `docs/frontend/guides/components.md`
+   - `docs/frontend/guides/hooks.md`
+   - `docs/frontend/guides/state.md`
+   - `docs/frontend/guides/lib.md`
+   - `docs/frontend/guides/access.md`
 3. Specialized docs when relevant:
-   - `docs/frontend/styling.md` for styling, primitives, tokens, or theme usage
-   - `docs/frontend/telemetry.md` for analytics, Sentry, replay masking, or
-     telemetry payloads
-   - `docs/frontend/chat-composer.md` for the composer, composer-adjacent
+   - `docs/frontend/guides/styling.md` for styling, primitives, tokens, or
+     theme usage
+   - `docs/frontend/guides/telemetry.md` for analytics, Sentry, replay
+     masking, or telemetry payloads
+   - `docs/frontend/specs/chat-composer.md` for the composer, composer-adjacent
      panels, workspace review panels/defaults, or Claude plan card
-   - `docs/frontend/chat-transcript.md` for transcript streaming, replay,
-     transcript row models, or long-history rendering
-   - `docs/frontend/workspace-files.md` for workspace file browsing, file
-     viewing, diff viewing, Changes, or all-changes review
+   - `docs/frontend/specs/chat-transcript.md` for transcript streaming,
+     replay, transcript row models, or long-history rendering
+   - `docs/frontend/specs/workspace-files.md` for workspace file browsing,
+     file viewing, diff viewing, Changes, or all-changes review
 
 ### SDK (`anyharness/sdk/**`, `anyharness/sdk-react/**`)
 
