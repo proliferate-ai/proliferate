@@ -20,7 +20,11 @@ start of the task, not after implementation has already started.
 - `docs/frontend/guides/state.md`
   - Zustand, React Query, providers, local state, and derived state
 - `docs/frontend/guides/lib.md`
-  - domain logic, workflows, infra, config, copy, and presentation mappings
+  - domain logic, workflows, infra, and side-effect planners
+- `docs/frontend/guides/config.md`
+  - static constants, limits, option sets, route ids, defaults, and ordering
+- `docs/frontend/guides/copy.md`
+  - authored user-facing copy and reusable presentation mappings
 - `docs/frontend/guides/access.md`
   - cloud, AnyHarness, and Tauri access boundaries
 - `docs/frontend/guides/styling.md`

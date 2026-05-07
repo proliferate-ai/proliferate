@@ -42,7 +42,11 @@ Guides:
 - [guides/state.md](guides/state.md) for Zustand stores, React Query,
   providers, and local state.
 - [guides/lib.md](guides/lib.md) for pure product logic, workflows, infra
-  utilities, config, copy, and presentation mappings.
+  utilities, and side-effect planners.
+- [guides/config.md](guides/config.md) for static constants, limits, option
+  sets, route ids, defaults, and ordering.
+- [guides/copy.md](guides/copy.md) for authored user-facing copy and reusable
+  presentation mappings.
 - [guides/access.md](guides/access.md) for cloud, AnyHarness, and Tauri access
   boundaries.
 - [guides/styling.md](guides/styling.md) for styling, theme tokens,
@@ -112,7 +116,7 @@ desktop/src/
 ```
 
 Do not add new top-level frontend folders without updating this doc and the
-focused doc that owns the layer.
+focused doc that owns the layer. And only update this after getting permission from a human.
 
 ## Hard Rules
 
@@ -165,9 +169,9 @@ Use the lowest layer that can own the logic cleanly.
 | Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [guides/lib.md](guides/lib.md) |
 | Raw external access | `lib/access/<system>/**` | `lib/access` owns raw cloud, AnyHarness desktop wiring, and Tauri native wrappers. | Product UI state, product branching, or components. | [guides/access.md](guides/access.md) |
 | Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [guides/lib.md](guides/lib.md) |
-| Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [guides/lib.md](guides/lib.md) |
-| Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [guides/lib.md](guides/lib.md) |
-| Presentation mappings | `lib/domain/<domain>/<subdomain>/presentation.ts` | It maps product state to labels, tone, icons, descriptions, or visibility. | Transport access or mutable UI state. | [guides/lib.md](guides/lib.md) |
+| Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [guides/config.md](guides/config.md) |
+| Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [guides/copy.md](guides/copy.md) |
+| Presentation mappings | `lib/domain/<domain>/<subdomain>/presentation.ts` | It maps product state to labels, tone, icons, descriptions, or visibility. | Transport access or mutable UI state. | [guides/copy.md](guides/copy.md) |
 
 ## Dependency Direction
 
@@ -193,6 +197,23 @@ components -> hooks -> lib/workflows -> lib/domain/lib/infra -> lib/access
 
 Stores are read by hooks. `lib/**` files do not read stores directly unless a
 focused area doc explicitly marks the file as a transitional state adapter.
+
+## CI-Enforced Repo Shape
+
+Frontend ownership boundaries are enforced by
+`scripts/check_frontend_boundaries.py` in CI. The check is a ratchet: existing
+violations live in `scripts/frontend_boundaries_allowlist.txt`, and new
+violations fail the repo-shape job.
+
+The allowlist is temporary migration debt. Cleanup PRs should remove allowlist
+entries whenever they move a path to the target architecture or reduce the
+number of violations in that file.
+
+React Query cache shape is owned by access hooks by default. The only
+product-domain exception is a product-composed cache under
+`hooks/<domain>/cache/**`; ordinary workflow, lifecycle, derived, and component
+files should call access/cache callbacks instead of importing `useQueryClient`
+or hand-editing query keys.
 
 ## Cleanup Discipline
 

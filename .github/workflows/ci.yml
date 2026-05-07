@@ -22,6 +22,9 @@ jobs:
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
+      - name: Check frontend layer boundaries
+        run: python3 scripts/check_frontend_boundaries.py
+
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py
 

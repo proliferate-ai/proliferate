@@ -40,6 +40,8 @@ Red flags:
 - non-trivial `useMemo` or `useEffect`
 - inline status-to-label/tone/icon maps
 - callbacks that read like workflows
+- imperative UI engine setup, subscriptions, or cleanup, such as xterm,
+  Monaco, canvas, media players, or map engines
 - async mutations, file parsing, sorting/filtering product models, or
   multi-step state transitions
 
@@ -86,7 +88,7 @@ components/settings/panes/cloud/CloudPane.tsx
 
 Avoid new root buckets like `modals`, `panels`, `sidebar`, or `topbar`.
 Domain-aware dialogs, panels, sidebars, and toolbars stay inside their owning
-product area.
+product area (under the hoo  using the components from the `ui` folder for shared UI structure for modals, buttons, etc.)
 
 Folder hygiene:
 
@@ -130,6 +132,24 @@ Folder hygiene:
 - Component names should describe the product surface or UI primitive they own.
 - Avoid generic names like `Panel`, `Modal`, `Content`, or `Row` unless the
   folder path already makes the ownership unambiguous.
+
+## Imperative UI Engines
+
+Components may render the host element for imperative UI engines, such as
+xterm, Monaco, canvas, media players, or map engines. The setup and lifecycle
+for those engines belongs in hooks:
+
+```text
+components/workspace/terminals/TerminalViewport.tsx
+hooks/terminals/lifecycle/use-xterm-viewport.ts
+hooks/terminals/lifecycle/use-terminal-stream-replay.ts
+```
+
+The component should provide refs, props, and render shell. The lifecycle hook
+should own dynamic imports, engine construction, subscriptions, observers,
+stream handles, event wiring, focus retries, and cleanup. Pure presentation
+rules, such as labels or replay-entry decisions, still belong in `lib/domain/**`
+when they can be expressed without DOM or engine instances.
 
 File size guidance:
 
