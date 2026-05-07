@@ -1,12 +1,12 @@
 import {
   getMobilityOverlayTitle,
   mobilityStatusCopy,
-} from "@/config/mobility-copy";
+} from "@/lib/domain/workspaces/mobility/presentation";
 import {
   isWorkspaceMobilityTransitionPhase,
   type WorkspaceMobilityUiPhase,
 } from "@/lib/domain/workspaces/mobility-state-machine";
-import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
+import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 
 export interface MobilityFooterProgressStatus {
   title: string;

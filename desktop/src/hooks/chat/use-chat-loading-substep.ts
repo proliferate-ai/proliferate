@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CHAT_PRE_MESSAGE_LABELS } from "@/config/chat";
+import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";

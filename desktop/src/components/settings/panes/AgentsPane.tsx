@@ -1,7 +1,7 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { AGENTS_PAGE_COPY } from "@/config/agents";
+import { AGENTS_PAGE_COPY } from "@/copy/agents/agents-copy";
 import type { AgentsPaneRowState } from "@/hooks/agents/use-agents-pane-state";
 import { useAgentsPaneState } from "@/hooks/agents/use-agents-pane-state";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
@@ -11,7 +11,7 @@ import { ProviderIcon } from "@/components/ui/icons";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import {
   getAgentGroupBadgeTone,
-} from "@/lib/domain/agents/groups";
+} from "@/lib/domain/agents/group-presentation";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";

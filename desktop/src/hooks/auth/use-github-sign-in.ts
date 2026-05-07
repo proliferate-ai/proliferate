@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { CAPABILITY_COPY } from "@/config/capabilities";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useAuthActions } from "@/hooks/auth/use-auth-actions";

@@ -5,10 +5,10 @@ import type {
 } from "@anyharness/sdk";
 import {
   SESSION_CONTROL_ACCESSORS,
-  SESSION_CONTROL_LABELS,
   SESSION_CONTROL_ORDER,
   type SupportedLiveControlKey,
 } from "@/config/session-controls";
+import { SESSION_CONTROL_LABELS } from "@/lib/domain/chat/session-controls/presentation";
 import {
   resolveDisplayedSessionControlState,
   type PendingSessionConfigChangeStatus,

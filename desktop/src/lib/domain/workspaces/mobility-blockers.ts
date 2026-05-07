@@ -1,10 +1,8 @@
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
 import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/integrations/cloud/client";
-import {
-  mobilityBlockerCopy,
-  type WorkspaceMobilityBlockerCode,
-} from "@/config/mobility-copy";
-import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
+import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/presentation";
+import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
+import type { WorkspaceMobilityBlockerCode } from "@/lib/domain/workspaces/mobility/types";
 
 export type WorkspaceMobilityNormalizedBlockerCode =
   | WorkspaceMobilityBlockerCode

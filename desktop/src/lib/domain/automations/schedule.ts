@@ -1,6 +1,6 @@
-import { AUTOMATION_SCHEDULE_PRESET_OPTIONS } from "@/config/automations";
+import { AUTOMATION_SCHEDULE_PRESETS } from "@/config/automations";
 
-export type AutomationSchedulePreset = typeof AUTOMATION_SCHEDULE_PRESET_OPTIONS[number]["value"];
+export type AutomationSchedulePreset = typeof AUTOMATION_SCHEDULE_PRESETS[number]["value"];
 export type AutomationSchedulePresetOrCustom = AutomationSchedulePreset | "custom";
 
 const DEFAULT_AUTOMATION_TIME = "09:00";
@@ -30,8 +30,8 @@ export function defaultAutomationTimezone(): string {
 }
 
 export function rruleForPreset(preset: AutomationSchedulePreset): string {
-  return AUTOMATION_SCHEDULE_PRESET_OPTIONS.find((option) => option.value === preset)?.rrule
-    ?? AUTOMATION_SCHEDULE_PRESET_OPTIONS[0].rrule;
+  return AUTOMATION_SCHEDULE_PRESETS.find((option) => option.value === preset)?.rrule
+    ?? AUTOMATION_SCHEDULE_PRESETS[0].rrule;
 }
 
 export function rruleForPresetAtTime(
@@ -89,17 +89,6 @@ export function timeForRrule(rrule: string): string {
 
 export function schedulePresetAcceptsTime(preset: AutomationSchedulePresetOrCustom): preset is Exclude<AutomationSchedulePreset, "hourly"> {
   return preset === "daily" || preset === "weekdays" || preset === "weekends";
-}
-
-export function formatScheduleControlLabel(
-  preset: AutomationSchedulePresetOrCustom,
-  rrule: string,
-): string {
-  if (preset === "custom") return "Custom schedule";
-  if (preset === "hourly") return "Hourly";
-  const label = AUTOMATION_SCHEDULE_PRESET_OPTIONS.find((option) => option.value === preset)?.label
-    ?? "Schedule";
-  return `${label} at ${formatTimeLabel(timeForRrule(rrule))}`;
 }
 
 export function validateAutomationTimezone(timezone: string): string | null {
@@ -160,15 +149,6 @@ function parseRruleParts(rrule: string): Record<string, string> | null {
     parts[key] = value;
   }
   return parts;
-}
-
-function formatTimeLabel(timeValue: string): string {
-  const parsed = parseAutomationTime(timeValue) ?? parseAutomationTime(DEFAULT_AUTOMATION_TIME)!;
-  const date = new Date(2000, 0, 1, parsed.hour, parsed.minute);
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
 }
 
 export function validateAutomationRrule(rrule: string): string | null {

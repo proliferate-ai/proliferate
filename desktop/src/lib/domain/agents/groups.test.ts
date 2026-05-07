@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import {
   classifyAgent,
-  getAgentGroupBadgeTone,
 } from "@/lib/domain/agents/groups";
+import { getAgentGroupBadgeTone } from "@/lib/domain/agents/group-presentation";
 
 function buildAgent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {

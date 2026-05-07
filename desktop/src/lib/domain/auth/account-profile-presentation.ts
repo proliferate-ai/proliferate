@@ -1,5 +1,5 @@
-import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
-import { CAPABILITY_COPY } from "@/config/capabilities";
+import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 
 export interface AccountDisplayNameInput {
   email: string | null | undefined;

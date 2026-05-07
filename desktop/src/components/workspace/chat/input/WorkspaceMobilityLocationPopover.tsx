@@ -8,13 +8,11 @@ import {
   GitBranch,
   GitCommit,
 } from "@/components/ui/icons";
-import { mobilityReconnectCopy } from "@/config/mobility-copy";
+import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
-import type {
-  WorkspaceMobilityConfirmSnapshot,
-  WorkspaceMobilityDirection,
-} from "@/stores/workspaces/workspace-mobility-ui-store";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
+import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 
 function HandoffRoute({ direction }: { direction: WorkspaceMobilityDirection }) {
   const source = direction === "cloud_to_local"

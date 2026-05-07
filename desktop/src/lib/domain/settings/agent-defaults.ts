@@ -4,7 +4,7 @@ import {
   listConfiguredSessionControlValues,
 } from "@/lib/domain/chat/session-mode-control";
 import { resolveModelForRegistry } from "@/lib/domain/chat/session-config";
-import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
+import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import type {
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,

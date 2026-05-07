@@ -1,4 +1,4 @@
-import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
+import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-mode-control";
 
 export interface AutomationModePreferences {

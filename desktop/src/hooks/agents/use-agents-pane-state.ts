@@ -7,18 +7,18 @@ import type {
   ReconcileAgentResult,
 } from "@anyharness/sdk";
 import { useShallow } from "zustand/react/shallow";
-import { AGENTS_PAGE_COPY } from "@/config/agents";
+import { AGENTS_PAGE_COPY } from "@/copy/agents/agents-copy";
 import {
   classifyAgent,
   type AgentGroup,
 } from "@/lib/domain/agents/groups";
+import { isReadyAgent } from "@/lib/domain/agents/status";
 import {
   getAgentDetailText,
   getAgentStatusDisplay,
-  isReadyAgent,
   type AgentReconcileState,
   type AgentStatusDisplay,
-} from "@/lib/domain/agents/status";
+} from "@/lib/domain/agents/status-presentation";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useAgentCatalog } from "./use-agent-catalog";
 import { useAgentInstallationActions } from "./use-agent-installation-actions";

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { CHAT_MODEL_SELECTOR_LABELS } from "@/config/chat";
+import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import type {
   ModelSelectorGroup as ModelSelectorGroupData,
   ModelSelectorProps,

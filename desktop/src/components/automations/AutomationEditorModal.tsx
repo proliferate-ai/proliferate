@@ -6,7 +6,7 @@ import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import {
   AUTOMATION_REASONING_EFFORT_OPTIONS,
-} from "@/config/automations";
+} from "@/lib/domain/automations/options-presentation";
 import { useAutomationModelSelection } from "@/hooks/automations/use-automation-model-selection";
 import { useAutomationModeSelection } from "@/hooks/automations/use-automation-mode-selection";
 import { useAutomationTargetSelection } from "@/hooks/automations/use-automation-target-selection";

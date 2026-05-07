@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useProviderConfigsQuery } from "@anyharness/sdk-react";
 import type { ProviderConfig } from "@anyharness/sdk";
 import { useShallow } from "zustand/react/shallow";
-import { AGENT_READINESS_LABELS } from "@/config/agents";
+import { AGENT_READINESS_LABELS } from "@/lib/domain/agents/readiness-presentation";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";

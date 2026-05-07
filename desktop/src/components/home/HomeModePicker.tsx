@@ -4,7 +4,7 @@ import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check } from "@/components/ui/icons";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
-import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
+import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 
 interface HomeModePickerProps {
   modes: ConfiguredSessionControlValue[];

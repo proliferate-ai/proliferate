@@ -8,8 +8,8 @@ import { usePlanPicker } from "@/hooks/plans/use-plan-picker";
 import {
   formatPlanAgentKindLabel,
   formatPlanDecisionStateLabel,
-  PLAN_PICKER_SEARCH_PLACEHOLDER,
-} from "@/config/plans";
+} from "@/lib/domain/plans/plan-presentation";
+import { PLAN_PICKER_SEARCH_PLACEHOLDER } from "@/copy/plans/plan-picker-copy";
 
 interface PlanPickerPopoverProps {
   workspaceUiKey: string | null;

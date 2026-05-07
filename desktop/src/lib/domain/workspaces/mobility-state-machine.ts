@@ -1,6 +1,6 @@
 import type { CloudMobilityHandoffSummary } from "@/lib/integrations/cloud/client";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
-import { mobilityStatusCopy } from "@/config/mobility-copy";
+import { mobilityStatusCopy } from "@/lib/domain/workspaces/mobility/presentation";
 
 export type WorkspaceMobilityUiPhase =
   | "idle"

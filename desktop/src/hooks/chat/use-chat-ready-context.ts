@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { getProviderDisplayName } from "@/config/providers";
+import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { Session } from "@anyharness/sdk";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
-import { getProviderDisplayName } from "@/config/providers";
+import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import {
   useWorkspaceHeaderSubagentHierarchy,
   type HeaderSubagentChildRow,

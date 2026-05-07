@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
+import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import { buildPlanImplementationPrompt } from "./implementation-prompt";
 

@@ -1,5 +1,5 @@
 import type { SetupScriptExecution, Workspace, WorkspaceKind } from "@anyharness/sdk";
-import { WORKSPACE_ARRIVAL_LABELS } from "@/config/workspace-arrival";
+import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/collections";
 import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
 

@@ -28,11 +28,3 @@ export const SESSION_CONTROL_ACCESSORS: Record<
   effort: "effort",
   fast_mode: "fastMode",
 };
-
-export const SESSION_CONTROL_LABELS: Record<SupportedLiveControlKey, string> = {
-  collaboration_mode: "Mode",
-  mode: "Permissions",
-  reasoning: "Reasoning",
-  effort: "Reasoning effort",
-  fast_mode: "Fast mode",
-};

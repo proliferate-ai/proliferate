@@ -1,0 +1,1 @@
+export const MOBILITY_SUCCESS_DWELL_MS = 1_400;

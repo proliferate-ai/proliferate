@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getMobilityOverlayTitle,
-  MOBILITY_SUCCESS_DWELL_MS,
   mobilityReconnectCopy,
   mobilityStatusCopy,
-} from "@/config/mobility-copy";
-import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
+} from "@/lib/domain/workspaces/mobility/presentation";
+import { MOBILITY_SUCCESS_DWELL_MS } from "@/config/workspace-mobility";
+import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 import { useWorkspaceMobilityCleanupActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-cleanup-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 

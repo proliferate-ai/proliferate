@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
-import type { CloudWorkspaceStatusScreenModel } from "@/lib/domain/workspaces/cloud-workspace-status";
+import type { CloudWorkspaceStatusScreenModel } from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
 import {
   buildCloudWorkspaceStatusScreenModel,
-  shouldShowCloudWorkspaceStatusScreen,
-} from "@/lib/domain/workspaces/cloud-workspace-status";
+} from "@/lib/domain/workspaces/cloud-workspace-status-presentation";
+import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { summarizeSetupFailure } from "@/lib/domain/workspaces/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";

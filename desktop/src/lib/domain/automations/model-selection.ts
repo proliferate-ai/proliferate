@@ -1,9 +1,11 @@
 import type { AgentSummary, ModelRegistry } from "@anyharness/sdk";
 import {
-  AUTOMATION_AGENT_KIND_LABELS,
   AUTOMATION_SUPPORTED_AGENT_KINDS,
   type AutomationSupportedAgentKind,
 } from "@/config/automations";
+import {
+  AUTOMATION_AGENT_KIND_LABELS,
+} from "@/lib/domain/automations/options-presentation";
 import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,

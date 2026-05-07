@@ -1,9 +1,9 @@
-import { CHAT_MODE_CONTROL_LABELS } from "@/config/chat";
+import { CHAT_MODE_CONTROL_LABELS } from "@/copy/chat/chat-copy";
 import {
   resolveSessionControlPresentation,
 } from "@/lib/domain/chat/session-mode-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
-import type { ConfiguredSessionControlKey } from "@/config/session-control-presentations";
+import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";

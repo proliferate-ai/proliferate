@@ -1,4 +1,4 @@
-import { CHAT_COMPOSER_LABELS } from "@/config/chat";
+import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import { ArrowUp, StopSquare } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";

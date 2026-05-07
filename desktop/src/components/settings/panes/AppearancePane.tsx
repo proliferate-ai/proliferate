@@ -13,7 +13,7 @@ import {
   READABLE_CODE_FONT_SIZE_OPTIONS,
   UI_FONT_SIZE_LABELS,
   UI_FONT_SIZE_OPTIONS,
-} from "@/config/appearance";
+} from "@/lib/domain/preferences/appearance-presentation";
 import {
   COLOR_MODES,
   isModeLockedPreset,

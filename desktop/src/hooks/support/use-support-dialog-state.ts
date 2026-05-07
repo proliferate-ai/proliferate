@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { CAPABILITY_COPY } from "@/config/capabilities";
+import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
+import { SUPPORT_EMAIL_ADDRESS } from "@/config/capabilities";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useSendSupportMessage } from "@/hooks/cloud/use-send-support-message";
 import { useSessionDebugActions } from "@/hooks/support/use-session-debug-actions";
@@ -60,7 +61,7 @@ export function useSupportDialogState({
 
   async function handleCopyEmail() {
     try {
-      await copyText(CAPABILITY_COPY.supportEmailAddress);
+      await copyText(SUPPORT_EMAIL_ADDRESS);
       showToast("Support email copied.", "info");
     } catch {
       showToast("Failed to copy support email.");
@@ -70,7 +71,7 @@ export function useSupportDialogState({
   async function handleEmail() {
     try {
       await openEmailCompose({
-        to: CAPABILITY_COPY.supportEmailAddress,
+        to: SUPPORT_EMAIL_ADDRESS,
         subject: CAPABILITY_COPY.supportEmailSubject,
         body: fallbackBody,
       });
@@ -83,7 +84,7 @@ export function useSupportDialogState({
   async function handleGmail() {
     try {
       await openGmailCompose({
-        to: CAPABILITY_COPY.supportEmailAddress,
+        to: SUPPORT_EMAIL_ADDRESS,
         subject: CAPABILITY_COPY.supportEmailSubject,
         body: fallbackBody,
       });
@@ -96,7 +97,7 @@ export function useSupportDialogState({
   async function handleOutlook() {
     try {
       await openOutlookCompose({
-        to: CAPABILITY_COPY.supportEmailAddress,
+        to: SUPPORT_EMAIL_ADDRESS,
         subject: CAPABILITY_COPY.supportEmailSubject,
         body: fallbackBody,
       });
@@ -135,7 +136,7 @@ export function useSupportDialogState({
     canExportReplayRecording: sessionDebugActions.canExportReplayRecording,
     canExportWorkspaceJson: sessionDebugActions.canExportWorkspaceJson,
     contextLabel,
-    fallbackEmail: CAPABILITY_COPY.supportEmailAddress,
+    fallbackEmail: SUPPORT_EMAIL_ADDRESS,
     handleCopyInvestigationJson: sessionDebugActions.handleCopyInvestigationJson,
     handleExportActiveSessionJson: sessionDebugActions.handleExportActiveSessionJson,
     handleExportReplayRecording: sessionDebugActions.handleExportReplayRecording,

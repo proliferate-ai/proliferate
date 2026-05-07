@@ -1,5 +1,5 @@
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
-import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
+import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
 import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
