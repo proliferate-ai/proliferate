@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 MAX_LINES = 600
+COMPONENT_MAX_LINES = 500
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "max_lines_allowlist.txt"
 CHECK_ROOTS = [
@@ -46,6 +47,15 @@ def count_lines(path: Path) -> int:
     return data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
+def max_lines_for(relative_path: str) -> int:
+    if (
+        relative_path.startswith("desktop/src/components/")
+        and relative_path.endswith(".tsx")
+    ):
+        return COMPONENT_MAX_LINES
+    return MAX_LINES
+
+
 def iter_source_files() -> list[tuple[str, int]]:
     files: list[tuple[str, int]] = []
     for root_entry in CHECK_ROOTS:
@@ -69,28 +79,32 @@ def iter_source_files() -> list[tuple[str, int]]:
 
 def main() -> int:
     allowlist = load_allowlist()
-    violations: list[tuple[str, int]] = []
+    violations: list[tuple[str, int, int]] = []
     stale_allowlist: list[str] = []
 
     for relative_path, line_count in iter_source_files():
-        if line_count <= MAX_LINES:
+        max_lines = max_lines_for(relative_path)
+        if line_count <= max_lines:
             if relative_path in allowlist:
                 stale_allowlist.append(relative_path)
             continue
         if relative_path in allowlist:
             continue
-        violations.append((relative_path, line_count))
+        violations.append((relative_path, line_count, max_lines))
 
     stale_allowlist.extend(sorted(path for path in allowlist if not (REPO_ROOT / path).exists()))
 
     if not violations and not stale_allowlist:
-        print(f"Max-lines check passed ({MAX_LINES} lines).")
+        print(
+            "Max-lines check passed "
+            f"(repo max {MAX_LINES}, component max {COMPONENT_MAX_LINES} lines)."
+        )
         return 0
 
     if violations:
-        print(f"Files above {MAX_LINES} lines that are not allowlisted:")
-        for relative_path, line_count in violations:
-            print(f"  {relative_path}: {line_count}")
+        print("Files above their max line threshold that are not allowlisted:")
+        for relative_path, line_count, max_lines in violations:
+            print(f"  {relative_path}: {line_count} (max {max_lines})")
 
     if stale_allowlist:
         if violations:

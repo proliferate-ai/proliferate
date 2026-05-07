@@ -289,9 +289,11 @@ events, not direct user clicks.
 
 Lifecycle hooks may manage imperative controllers, not only passive
 `useEffect` blocks. Streams, reconnect loops, background dispatchers, hot
-session ingest, and long-lived subscriptions are lifecycle concerns when their
-main trigger is mounting or external events. The hook should make the owned
-system obvious and keep timers, handles, and cleanup in one readable place.
+session ingest, xterm or Monaco instances, canvas controllers, media players,
+and long-lived subscriptions are lifecycle concerns when their main trigger is
+mounting or external events. The hook should make the owned system obvious and
+keep timers, handles, observers, event wiring, and cleanup in one readable
+place.
 
 If extracting lifecycle logic creates one giant dependency interface, the
 extraction boundary is too large. Keep the lifecycle hook as the readable
@@ -391,13 +393,16 @@ Most god hooks are not solved by immediately creating workflows. First look for
 pure decisions trapped in hooks, repeated selector boilerplate, and raw access
 or cache code in the wrong layer.
 
-Example: terminal actions should usually stay as one public
-`useTerminalActions` hook. The hook gathers React dependencies and returns
-`createTab`, `closeTab`, `renameTab`, and related callbacks. Record actions
-move to `lib/workflows/terminals/terminal-record-workflows.ts`, stream
-connection behavior moves to `terminal-stream-workflows.ts`, and normal
-terminal resource calls should use `@anyharness/sdk-react` hooks. Desktop
-access should keep only runtime/transport wiring that SDK React cannot own.
+Action bundle hooks are junctions, not homes for every concern behind the
+actions. A bundle hook exposes callbacks for one product capability. It may
+inline simple actions and call access hooks, derived hooks, lifecycle or
+registry helpers, and real `lib/workflows/**` functions. It should not own raw
+access, query keys, remote cache shape, module-level coordination state, or
+long-lived registry behavior.
+
+Do not re-export pure stateless functions through action hooks. If a function
+does not need React state or hook-owned dependencies, import it from the module
+that owns it.
 
 Example: prompt outbox dispatch should stay as one app-mounted lifecycle hook.
 The hook owns singleton mount behavior, store subscription, and in-flight loop

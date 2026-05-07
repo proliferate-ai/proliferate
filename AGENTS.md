@@ -72,6 +72,8 @@ at the start of the task, not halfway through implementation.
    - `docs/frontend/guides/hooks.md`
    - `docs/frontend/guides/state.md`
    - `docs/frontend/guides/lib.md`
+   - `docs/frontend/guides/config.md`
+   - `docs/frontend/guides/copy.md`
    - `docs/frontend/guides/access.md`
 3. Specialized docs when relevant:
    - `docs/frontend/guides/styling.md` for styling, primitives, tokens, or

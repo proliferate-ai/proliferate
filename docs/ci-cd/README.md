@@ -170,6 +170,8 @@ Flow:
 1. `.github/workflows/ci.yml` runs on pushes to `main`, on pull requests, and
    by manual dispatch.
 2. It validates:
+   - repo shape checks, including max source file length, frontend layer
+     boundaries, and server layer boundaries
    - the Rust workspace with `cargo check` and `cargo test`
    - `@anyharness/sdk` generation and build
    - the desktop frontend build
