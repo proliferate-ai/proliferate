@@ -2,7 +2,7 @@ import { OFFICIAL_HOSTED_API_ORIGINS } from "@/config/capabilities";
 import {
   type DesktopAppConfig,
   getDesktopAppConfig,
-} from "@/platform/tauri/config";
+} from "@/lib/access/tauri/config";
 
 const DEFAULT_PROLIFERATE_API_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_DESKTOP_APP_CONFIG: DesktopAppConfig = {

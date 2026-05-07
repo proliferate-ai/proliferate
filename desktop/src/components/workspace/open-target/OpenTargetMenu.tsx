@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Copy } from "@/components/ui/icons";
 import { OpenTargetIcon } from "./OpenTargetIcon";
-import type { OpenTarget } from "@/platform/tauri/shell";
+import type { OpenTarget } from "@/lib/access/tauri/shell";
 
 export function TargetIcon({ target, size = "size-3.5" }: { target: OpenTarget; size?: string }) {
   if (target.kind === "copy") {

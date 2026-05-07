@@ -26,7 +26,7 @@ const storeMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/platform/tauri/store", () => ({
+vi.mock("@/lib/access/tauri/store", () => ({
   getPreferencesStore: storeMocks.getPreferencesStore,
 }));
 

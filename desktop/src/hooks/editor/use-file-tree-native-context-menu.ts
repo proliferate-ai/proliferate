@@ -1,6 +1,6 @@
 import { useNativeContextMenu } from "@/hooks/ui/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/platform/tauri/context-menu";
-import type { OpenTarget } from "@/platform/tauri/shell";
+import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import type { OpenTarget } from "@/lib/access/tauri/shell";
 
 export function useFileTreeNativeContextMenu({
   targets,

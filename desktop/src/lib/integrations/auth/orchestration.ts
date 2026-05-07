@@ -1,4 +1,4 @@
-import { ensureDeepLinkBridge } from "@/platform/tauri/deep-link";
+import { ensureDeepLinkBridge } from "@/lib/access/tauri/deep-link";
 import {
   clearStoredAuthSession,
   clearStoredPendingAuthSession,
@@ -8,7 +8,7 @@ import {
   setStoredPendingAuthSession,
   type StoredAuthSession,
   type StoredPendingAuthSession,
-} from "@/platform/tauri/auth";
+} from "@/lib/access/tauri/auth";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 import { closeAllSessionStreamHandles } from "@/lib/access/anyharness/session-stream-handles";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";

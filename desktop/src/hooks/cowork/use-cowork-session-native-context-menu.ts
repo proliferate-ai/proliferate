@@ -1,5 +1,5 @@
 import { useNativeContextMenu } from "@/hooks/ui/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/platform/tauri/context-menu";
+import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
 
 export function useCoworkSessionNativeContextMenu({
   onRename,

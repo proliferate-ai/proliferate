@@ -2,7 +2,6 @@ import {
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorktreesInventoryKey,
   anyHarnessWorktreesRetentionPolicyKey,
-  getAnyHarnessClient,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -12,6 +11,10 @@ import type {
   WorktreeSettingsTarget,
   WorktreeSettingsTargetState,
 } from "@/hooks/workspaces/use-worktree-settings-targets";
+import {
+  runWorktreeRetention,
+  updateWorktreeRetentionPolicy,
+} from "@/lib/access/anyharness/worktrees";
 
 const EMPTY_TARGETS: WorktreeSettingsTargetState[] = [];
 
@@ -65,10 +68,10 @@ export function useLocalWorktreeSettingsTarget() {
     maxMaterializedWorktreesPerRepo: number,
     options: { runDeferredCleanup?: boolean } = {},
   ) => {
-    const client = getAnyHarnessClient({ runtimeUrl: target.runtimeUrl });
-    await client.worktrees.updateRetentionPolicy({ maxMaterializedWorktreesPerRepo });
+    const connection = { runtimeUrl: target.runtimeUrl };
+    await updateWorktreeRetentionPolicy(connection, { maxMaterializedWorktreesPerRepo });
     if (options.runDeferredCleanup) {
-      await client.worktrees.runRetention();
+      await runWorktreeRetention(connection);
     }
     await refreshTarget(target);
   }, [refreshTarget]);

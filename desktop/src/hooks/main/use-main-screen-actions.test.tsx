@@ -9,7 +9,7 @@ import {
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel";
-import { openExternal } from "@/platform/tauri/shell";
+import { openExternal } from "@/lib/access/tauri/shell";
 import { useMainScreenActions } from "./use-main-screen-actions";
 import type { MainScreenLayoutState } from "./use-main-screen-state";
 
@@ -40,7 +40,7 @@ vi.mock("@/stores/toast/toast-store", () => ({
     selector({ show: vi.fn() }),
 }));
 
-vi.mock("@/platform/tauri/shell", () => ({
+vi.mock("@/lib/access/tauri/shell", () => ({
   openExternal: vi.fn(async () => undefined),
 }));
 

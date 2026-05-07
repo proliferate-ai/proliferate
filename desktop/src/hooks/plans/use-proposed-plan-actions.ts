@@ -12,7 +12,6 @@ import {
 import {
   anyHarnessPlanKey,
   anyHarnessPlansKey,
-  getAnyHarnessClient,
   resolveWorkspaceConnectionFromContext,
   useApprovePlanMutation,
   useAnyHarnessWorkspaceContext,
@@ -34,6 +33,7 @@ import {
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getWorkspacePlan } from "@/lib/access/anyharness/plans";
 import {
   getSessionRecord,
   getSessionRecords,
@@ -122,11 +122,7 @@ export function useProposedPlanActions() {
       workspaceContext,
       selectedWorkspaceId,
     );
-    const client = getAnyHarnessClient(resolved.connection);
-    const plan = await client.plans.get(
-      resolved.connection.anyharnessWorkspaceId,
-      planId,
-    );
+    const plan = await getWorkspacePlan(resolved.connection, planId);
     applyPlanDecision(plan);
     logLatency("plan.decision.refreshed", {
       planId,

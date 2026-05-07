@@ -3,9 +3,11 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { CLOUD_SETUP_DOCS_URL } from "@/config/capabilities";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 export function CloudUnavailablePane() {
+  const { openExternal } = useTauriShellActions();
+
   return (
     <section className="space-y-6">
       <SettingsPageHeader

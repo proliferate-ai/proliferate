@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
 import type { ConnectorCatalogEntry, ConnectorCatalogField } from "@/lib/domain/mcp/types";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
@@ -63,6 +63,7 @@ function ConnectorSecretFieldInput({
   value: string;
 }) {
   const inputId = useId();
+  const { openExternal } = useTauriShellActions();
   const [visible, setVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const hint = describeFieldPrefixHint(field, value);

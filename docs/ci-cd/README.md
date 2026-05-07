@@ -22,8 +22,8 @@ publishing, or the desktop in-app update flow.
 desktop/
   infra/main.tf              # updater bucket, CloudFront, GitHub OIDC release role
   src-tauri/tauri.conf.json  # updater endpoint, public key, bundle config
-  src/platform/tauri/updater.ts
-  src/hooks/updater/use-updater.ts
+  src/lib/access/tauri/updater.ts
+  src/hooks/access/tauri/use-updater.ts
   src/stores/updater/updater-store.ts
   src/components/settings/UpdateSettings.tsx
   src/components/feedback/UpdateBanner.tsx
@@ -311,8 +311,8 @@ make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
 Source of truth:
 
 - `desktop/src-tauri/tauri.conf.json`
-- `desktop/src/platform/tauri/updater.ts`
-- `desktop/src/hooks/updater/use-updater.ts`
+- `desktop/src/lib/access/tauri/updater.ts`
+- `desktop/src/hooks/access/tauri/use-updater.ts`
 - `desktop/src/stores/updater/updater-store.ts`
 - `desktop/src/components/settings/UpdateSettings.tsx`
 - `desktop/src/components/feedback/UpdateBanner.tsx`
@@ -321,9 +321,9 @@ Flow:
 
 1. Tauri reads the updater endpoint from `desktop/src-tauri/tauri.conf.json`.
 2. The packaged app checks `https://downloads.proliferate.com/desktop/stable/latest.json`.
-3. `desktop/src/platform/tauri/updater.ts` is the only frontend wrapper around
+3. `desktop/src/lib/access/tauri/updater.ts` is the only frontend wrapper around
    `@tauri-apps/plugin-updater` and relaunch behavior.
-4. `desktop/src/hooks/updater/use-updater.ts` owns the UI-facing updater flow:
+4. `desktop/src/hooks/access/tauri/use-updater.ts` owns the UI-facing updater flow:
    - initial delayed check
    - six-hour polling
    - download progress
@@ -448,8 +448,8 @@ Current boundary:
 | Cloud template rolling-tag promotion | `scripts/promote-cloud-template.mjs` |
 | Updater manifest format | `scripts/generate-updater-manifest.mjs` |
 | Updater endpoint and signing public key | `desktop/src-tauri/tauri.conf.json` |
-| Frontend updater platform wrapper | `desktop/src/platform/tauri/updater.ts` |
-| Frontend updater orchestration | `desktop/src/hooks/updater/use-updater.ts` |
+| Frontend updater platform wrapper | `desktop/src/lib/access/tauri/updater.ts` |
+| Frontend updater orchestration | `desktop/src/hooks/access/tauri/use-updater.ts` |
 | Frontend updater local state | `desktop/src/stores/updater/updater-store.ts` |
 | Frontend updater UI surfaces | `desktop/src/components/settings/UpdateSettings.tsx`, `desktop/src/components/feedback/UpdateBanner.tsx` |
 | Desktop updater infra and publish permissions | `desktop/infra/main.tf` |

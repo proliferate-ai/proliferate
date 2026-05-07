@@ -1,8 +1,8 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import { getRuntimeInfo, type RuntimeInfo } from "@/platform/tauri/runtime";
+import { getRuntimeInfo, type RuntimeInfo } from "@/lib/access/tauri/runtime";
 import {
   restartRuntime as tauriRestartRuntime,
-} from "@/platform/tauri/credentials";
+} from "@/lib/access/tauri/credentials";
 // Narrow bootstrap wiring: this module is the canonical boot orchestrator for
 // AnyHarness runtime connection state.
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

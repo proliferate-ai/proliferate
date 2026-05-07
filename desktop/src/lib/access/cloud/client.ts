@@ -5,7 +5,7 @@ import {
   getStoredAuthSession,
   setStoredAuthSession,
   type StoredAuthSession,
-} from "@/platform/tauri/auth";
+} from "@/lib/access/tauri/auth";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { getCurrentAuthSession } from "@/lib/domain/auth/current-auth-session";

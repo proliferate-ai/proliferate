@@ -9,7 +9,7 @@ import {
   LocalMcpOAuthError,
   reconcileGoogleWorkspaceMcpPendingSetups,
   startGoogleWorkspaceMcpAuth,
-} from "@/platform/tauri/google-workspace-mcp";
+} from "@/lib/access/tauri/google-workspace-mcp";
 
 const pendingLocalOAuthSetups = new Map<string, { cancelled: boolean }>();
 

@@ -9,7 +9,7 @@ import { workspaceCollectionsScopeKey } from "./query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { getHomeDir } from "@/platform/tauri/shell";
+import { getHomeDir } from "@/lib/access/tauri/shell";
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,

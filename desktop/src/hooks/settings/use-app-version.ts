@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getAppVersion } from "@/platform/tauri/updater";
+import { getAppVersion } from "@/lib/access/tauri/updater";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { appVersionKey } from "./query-keys";
 

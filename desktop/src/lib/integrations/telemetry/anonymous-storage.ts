@@ -3,12 +3,12 @@ import {
   type AnonymousTelemetryPersistedState,
   createDefaultAnonymousTelemetryPersistedState,
 } from "@/lib/domain/telemetry/anonymous-events";
-import { getAppVersion } from "@/platform/tauri/updater";
+import { getAppVersion } from "@/lib/access/tauri/updater";
 import {
   type AnonymousTelemetryBootstrapRecord,
   loadNativeAnonymousTelemetryBootstrap,
   saveNativeAnonymousTelemetryState,
-} from "@/platform/tauri/anonymous-telemetry";
+} from "@/lib/access/tauri/anonymous-telemetry";
 
 const BROWSER_INSTALL_ID_KEY = "proliferate.anonymousTelemetry.installId";
 const BROWSER_STATE_KEY = "proliferate.anonymousTelemetry.desktopState";

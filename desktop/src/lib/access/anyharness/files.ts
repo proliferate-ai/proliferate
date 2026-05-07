@@ -1,5 +1,5 @@
-import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import type { AnyHarnessRequestOptions, ReadWorkspaceFileResponse } from "@anyharness/sdk";
+import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
 
 export type RepoTrackedFileSourceKind = "workspace" | "repo_root";
 
@@ -33,6 +33,24 @@ export async function readWorkspaceTextFile(
     relativePath,
   );
   return readTextFileContent(response, relativePath);
+}
+
+export function listWorkspaceFiles(
+  connection: AnyHarnessClientConnection,
+  workspaceId: string,
+  dirPath: string,
+  request?: AnyHarnessRequestOptions,
+) {
+  return getAnyHarnessClient(connection).files.list(workspaceId, dirPath, request);
+}
+
+export function readWorkspaceFile(
+  connection: AnyHarnessClientConnection,
+  workspaceId: string,
+  filePath: string,
+  request?: AnyHarnessRequestOptions,
+) {
+  return getAnyHarnessClient(connection).files.read(workspaceId, filePath, request);
 }
 
 export async function readRepoRootTextFile(

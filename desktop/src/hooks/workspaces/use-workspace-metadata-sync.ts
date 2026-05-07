@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { getAnyHarnessClient, useGitStatusQuery } from "@anyharness/sdk-react";
+import { useGitStatusQuery } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
@@ -30,6 +30,7 @@ import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backf
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import {
   activitySnapshotFromDirectoryEntry,
   useSessionDirectoryStore,
@@ -195,10 +196,10 @@ export function useWorkspaceMetadataSync() {
 
       syncingCloudDisplayNameRef.current = syncKey;
       try {
-        const runtimeWorkspace = await getAnyHarnessClient({
+        const runtimeWorkspace = await getWorkspace({
           runtimeUrl: cloudRuntimeUrl,
           authToken: accessToken,
-        }).workspaces.get(runtimeWorkspaceId);
+        }, runtimeWorkspaceId);
         const backfill = shouldBackfillCloudDisplayNameFromRuntime({
           runtimeDisplayName: runtimeWorkspace.displayName,
           backfillSuppressed: isCloudDisplayNameBackfillSuppressed(selectedCloudWorkspaceId),

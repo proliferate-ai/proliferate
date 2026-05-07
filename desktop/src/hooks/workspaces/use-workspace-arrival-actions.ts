@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { OpenTarget } from "@/platform/tauri/shell";
 import {
-  listOpenTargets,
-  openTarget as execOpenTarget,
-} from "@/platform/tauri/shell";
+  type OpenTarget,
+  useTauriShellActions,
+} from "@/hooks/access/tauri/use-shell-actions";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
@@ -19,6 +18,10 @@ export function useWorkspaceArrivalActions({
   sourceRepoRootPath,
 }: UseWorkspaceArrivalActionsArgs) {
   const navigate = useNavigate();
+  const {
+    listOpenTargets,
+    openTarget: execOpenTarget,
+  } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const [targets, setTargets] = useState<OpenTarget[]>([]);
@@ -51,7 +54,7 @@ export function useWorkspaceArrivalActions({
     return () => {
       cancelled = true;
     };
-  }, [workspacePath]);
+  }, [listOpenTargets, workspacePath]);
 
   const handleTargetClick = useCallback((target: OpenTarget) => {
     if (!workspacePath) {
@@ -62,7 +65,7 @@ export function useWorkspaceArrivalActions({
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to open workspace: ${message}`);
     });
-  }, [showToast, workspacePath]);
+  }, [execOpenTarget, showToast, workspacePath]);
 
   const handleOpenRepositorySettings = useCallback(() => {
     navigate(buildSettingsHref({ section: "repo", repo: sourceRepoRootPath }));

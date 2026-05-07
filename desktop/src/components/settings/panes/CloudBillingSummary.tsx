@@ -6,7 +6,7 @@ import {
   titleForStartBlockReason,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import type { BillingPlanInfo } from "@/lib/access/cloud/client";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import type { useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
 
 type CloudBillingActions = ReturnType<typeof useCloudBillingActions>;
@@ -80,6 +80,7 @@ export function CloudBillingSummary({
   manageBillingLabel = "Manage billing",
   upgradeLabel,
 }: CloudBillingSummaryProps) {
+  const { openExternal } = useTauriShellActions();
   const hasUnlimitedHours = billingPlan.hasUnlimitedCloudHours;
   const proBillingLive = billingPlan.proBillingEnabled;
   const remainingHours = proBillingLive && billingPlan.isPaidCloud

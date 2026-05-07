@@ -32,12 +32,12 @@ vi.mock("@/lib/access/cloud/mcp_oauth", () => ({
   startCloudMcpOAuthFlow: vi.fn(),
 }));
 
-vi.mock("@/platform/tauri/shell", () => ({
+vi.mock("@/lib/access/tauri/shell", () => ({
   openExternal: vi.fn(),
 }));
 
-vi.mock("@/platform/tauri/google-workspace-mcp", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/platform/tauri/google-workspace-mcp")>();
+vi.mock("@/lib/access/tauri/google-workspace-mcp", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/access/tauri/google-workspace-mcp")>();
   return {
     ...actual,
     startGoogleWorkspaceMcpAuth: mocks.startGoogleWorkspaceMcpAuthMock,

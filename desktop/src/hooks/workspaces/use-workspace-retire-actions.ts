@@ -1,4 +1,3 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
@@ -9,6 +8,12 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import {
+  getWorkspace,
+  purgeWorkspace,
+  retryPurgeWorkspace,
+  retryRetireWorkspaceCleanup,
+} from "@/lib/access/anyharness/workspaces";
 
 export function useWorkspaceRetireActions() {
   const queryClient = useQueryClient();
@@ -33,8 +38,8 @@ export function useWorkspaceRetireActions() {
       workspaceId: string,
       options: { logicalWorkspaceId?: string | null } = {},
     ) => {
-      const client = getAnyHarnessClient({ runtimeUrl });
-      const result = await client.workspaces.purge(workspaceId);
+      const connection = { runtimeUrl };
+      const result = await purgeWorkspace(connection, workspaceId);
       if (result.outcome === "deleted") {
         clearFinishSuggestionDismissal(workspaceId);
         const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
@@ -67,11 +72,11 @@ export function useWorkspaceRetireActions() {
       return result;
     },
     retryCleanup: async (workspaceId: string) => {
-      const client = getAnyHarnessClient({ runtimeUrl });
-      const workspace = await client.workspaces.get(workspaceId);
+      const connection = { runtimeUrl };
+      const workspace = await getWorkspace(connection, workspaceId);
       const result = workspace.cleanupOperation === "purge"
-        ? await client.workspaces.retryPurge(workspaceId)
-        : await client.workspaces.retryRetireCleanup(workspaceId);
+        ? await retryPurgeWorkspace(connection, workspaceId)
+        : await retryRetireWorkspaceCleanup(connection, workspaceId);
       await refresh();
       return result;
     },

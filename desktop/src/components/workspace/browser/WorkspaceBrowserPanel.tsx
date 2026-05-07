@@ -24,13 +24,9 @@ import {
   normalizeBrowserUrl,
 } from "@/lib/domain/workspaces/shell/browser-url";
 import {
-  browserWebviewLabel,
-  closeBrowserWebview,
-  ensureBrowserWebview,
-  hideBrowserWebview,
-  isBrowserWebviewAvailable,
-} from "@/platform/tauri/browser-webview";
-import { openExternal } from "@/platform/tauri/shell";
+  useTauriBrowserWebviewActions,
+} from "@/hooks/access/tauri/use-browser-webview-actions";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 interface WorkspaceBrowserPanelProps {
   workspaceId: string | null;
@@ -52,12 +48,19 @@ export function WorkspaceBrowserPanel({
   onUpdateUrl,
 }: WorkspaceBrowserPanelProps) {
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const {
+    isBrowserWebviewAvailable,
+  } = useTauriBrowserWebviewActions();
+  const { openExternal } = useTauriShellActions();
   const activeTab = tabs.find((tab) => tab.id === activeBrowserId) ?? null;
   const [draftById, setDraftById] = useState<Record<string, string>>({});
   const [statusById, setStatusById] = useState<Record<string, FrameStatus>>({});
   const [reloadNonceById, setReloadNonceById] = useState<Record<string, number>>({});
   const [urlError, setUrlError] = useState(false);
-  const nativeWebviewsAvailable = useMemo(() => isBrowserWebviewAvailable(), []);
+  const nativeWebviewsAvailable = useMemo(
+    () => isBrowserWebviewAvailable(),
+    [isBrowserWebviewAvailable],
+  );
   useEffect(() => {
     if (browserWebviewDiagnosticLoggingEnabled() && !nativeWebviewsAvailable) {
       console.debug("[browser-webview]", "native unavailable; iframe fallback active");
@@ -256,9 +259,15 @@ function BrowserNativeSurface({
   status: FrameStatus;
   onStatusChange: (tabId: string, status: FrameStatus) => void;
 }) {
+  const {
+    browserWebviewLabel,
+    closeBrowserWebview,
+    ensureBrowserWebview,
+    hideBrowserWebview,
+  } = useTauriBrowserWebviewActions();
   const label = useMemo(
     () => browserWebviewLabel(workspaceId, tab.id),
-    [tab.id, workspaceId],
+    [browserWebviewLabel, tab.id, workspaceId],
   );
   const lastLoadKeyRef = useRef<string | null>(null);
 
@@ -266,7 +275,7 @@ function BrowserNativeSurface({
     return () => {
       void closeBrowserWebview(label);
     };
-  }, [label]);
+  }, [closeBrowserWebview, label]);
 
   useEffect(() => {
     if (!tab.url) {
@@ -328,6 +337,9 @@ function BrowserNativeSurface({
   }, [
     active,
     contentRef,
+    closeBrowserWebview,
+    ensureBrowserWebview,
+    hideBrowserWebview,
     isPanelVisible,
     label,
     nativeOverlaysHidden,
@@ -444,6 +456,8 @@ function BrowserUnavailableOverlay({
   description: string;
   url: string;
 }) {
+  const { openExternal } = useTauriShellActions();
+
   return (
     <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center bg-sidebar-background/95 px-8 backdrop-blur">
       <div className="flex max-w-72 flex-col items-center text-center">

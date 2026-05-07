@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
-import { setRunningAgentCount } from "@/platform/tauri/window";
+import { useTauriWindowActions } from "@/hooks/access/tauri/use-window-actions";
 import {
   activitySnapshotFromDirectoryEntry,
   useSessionDirectoryStore,
@@ -15,6 +15,8 @@ function countBusy(entries: SessionEntries): number {
 }
 
 export function useExportRunningAgentCount(): void {
+  const { setRunningAgentCount } = useTauriWindowActions();
+
   useEffect(() => {
     let lastCount = countBusy(useSessionDirectoryStore.getState().entriesById);
     void setRunningAgentCount(lastCount);
@@ -28,5 +30,5 @@ export function useExportRunningAgentCount(): void {
     });
 
     return unsubscribe;
-  }, []);
+  }, [setRunningAgentCount]);
 }

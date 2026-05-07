@@ -2,7 +2,6 @@ import {
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorktreesInventoryKey,
   anyHarnessWorktreesRetentionPolicyKey,
-  getAnyHarnessClient,
 } from "@anyharness/sdk-react";
 import type {
   PruneOrphanWorktreeRequest,
@@ -18,6 +17,17 @@ import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  getWorktreeInventory,
+  pruneOrphanWorktree,
+  runWorktreeRetention,
+  updateWorktreeRetentionPolicy,
+} from "@/lib/access/anyharness/worktrees";
+import {
+  purgeWorkspace,
+  retryPurgeWorkspace,
+  retireWorkspace,
+} from "@/lib/access/anyharness/workspaces";
 
 const EMPTY_CLOUD_WORKSPACES: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["cloudWorkspaces"] = [];
 
@@ -109,11 +119,10 @@ export function useWorktreeSettingsTargets() {
     queries: targets.map((target) => ({
       queryKey: targetDataKey(target),
       queryFn: async ({ signal }): Promise<WorktreeInventoryResponse> => {
-        const client = getAnyHarnessClient({
+        return getWorktreeInventory({
           runtimeUrl: target.runtimeUrl,
           authToken: target.authToken,
-        });
-        return client.worktrees.inventory({ signal });
+        }, { signal });
       },
       enabled: target.runtimeUrl.trim().length > 0,
     })),
@@ -147,23 +156,18 @@ export function useWorktreeSettingsTargets() {
     ]);
   }, [queryClient, runtimeUrl]);
 
-  const clientForTarget = useCallback((target: WorktreeSettingsTarget) => getAnyHarnessClient({
-    runtimeUrl: target.runtimeUrl,
-    authToken: target.authToken,
-  }), []);
-
   const syncPolicyToTarget = useCallback(async (
     target: WorktreeSettingsTarget,
     maxMaterializedWorktreesPerRepo: number,
     options: { runDeferredCleanup?: boolean } = {},
   ) => {
-    const client = clientForTarget(target);
-    await client.worktrees.updateRetentionPolicy({ maxMaterializedWorktreesPerRepo });
+    const connection = targetConnection(target);
+    await updateWorktreeRetentionPolicy(connection, { maxMaterializedWorktreesPerRepo });
     if (options.runDeferredCleanup) {
-      await client.worktrees.runRetention();
+      await runWorktreeRetention(connection);
     }
     await refreshTarget(target);
-  }, [clientForTarget, refreshTarget]);
+  }, [refreshTarget]);
 
   return {
     targets: targetStates,
@@ -173,21 +177,21 @@ export function useWorktreeSettingsTargets() {
       target: WorktreeSettingsTarget,
       maxMaterializedWorktreesPerRepo: number,
     ): Promise<RunWorktreeRetentionResponse> => {
-      const client = clientForTarget(target);
-      await client.worktrees.updateRetentionPolicy({ maxMaterializedWorktreesPerRepo });
-      const result = await client.worktrees.runRetention();
+      const connection = targetConnection(target);
+      await updateWorktreeRetentionPolicy(connection, { maxMaterializedWorktreesPerRepo });
+      const result = await runWorktreeRetention(connection);
       await refreshTarget(target);
       return result;
     },
     pruneOrphan: async (target: WorktreeSettingsTarget, input: PruneOrphanWorktreeRequest) => {
-      await clientForTarget(target).worktrees.pruneOrphan(input);
+      await pruneOrphanWorktree(targetConnection(target), input);
       await refreshTarget(target);
     },
     pruneWorkspaceCheckout: async (
       target: WorktreeSettingsTarget,
       workspaceId: string,
     ): Promise<WorkspaceRetireResponse> => {
-      const result = await clientForTarget(target).workspaces.retire(workspaceId);
+      const result = await retireWorkspace(targetConnection(target), workspaceId);
       await refreshTarget(target);
       return result;
     },
@@ -195,7 +199,7 @@ export function useWorktreeSettingsTargets() {
       target: WorktreeSettingsTarget,
       workspaceId: string,
     ): Promise<WorkspacePurgeResponse> => {
-      const result = await clientForTarget(target).workspaces.purge(workspaceId);
+      const result = await purgeWorkspace(targetConnection(target), workspaceId);
       await refreshTarget(target);
       return result;
     },
@@ -203,10 +207,17 @@ export function useWorktreeSettingsTargets() {
       target: WorktreeSettingsTarget,
       workspaceId: string,
     ): Promise<WorkspacePurgeResponse> => {
-      const result = await clientForTarget(target).workspaces.retryPurge(workspaceId);
+      const result = await retryPurgeWorkspace(targetConnection(target), workspaceId);
       await refreshTarget(target);
       return result;
     },
+  };
+}
+
+function targetConnection(target: WorktreeSettingsTarget) {
+  return {
+    runtimeUrl: target.runtimeUrl,
+    authToken: target.authToken,
   };
 }
 

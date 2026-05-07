@@ -3,13 +3,14 @@ import {
   getConnectorAuthLabel,
   getConnectorAvailabilityLabel,
 } from "@/lib/domain/mcp/display";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { Button } from "@/components/ui/Button";
 import { ExternalLink } from "@/components/ui/icons";
 
 export function ConnectorAboutTab({ entry }: { entry: ConnectorCatalogEntry }) {
   const authLabel = getConnectorAuthLabel(entry);
   const availabilityLabel = getConnectorAvailabilityLabel(entry);
+  const { openExternal } = useTauriShellActions();
 
   return (
     <div className="space-y-4">

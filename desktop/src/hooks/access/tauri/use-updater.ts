@@ -7,7 +7,7 @@ import {
   downloadAndInstall,
   relaunch,
   isTauriPackaged,
-} from "@/platform/tauri/updater";
+} from "@/lib/access/tauri/updater";
 import {
   trackProductEvent,
   captureTelemetryException,

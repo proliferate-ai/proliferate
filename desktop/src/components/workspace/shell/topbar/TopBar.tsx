@@ -11,10 +11,9 @@ import {
   SplitPanelRight,
 } from "@/components/ui/icons";
 import {
-  listOpenTargets,
-  openTarget as execOpenTarget,
-} from "@/platform/tauri/shell";
-import type { OpenTarget } from "@/platform/tauri/shell";
+  type OpenTarget,
+  useTauriShellActions,
+} from "@/hooks/access/tauri/use-shell-actions";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -46,6 +45,10 @@ export function TopBar({
 }: TopBarProps) {
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const [copied, setCopied] = useState(false);
+  const {
+    listOpenTargets,
+    openTarget: execOpenTarget,
+  } = useTauriShellActions();
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renaming, setRenaming] = useState(false);
@@ -53,7 +56,7 @@ export function TopBar({
 
   useEffect(() => {
     void listOpenTargets("directory").then(setTargets);
-  }, []);
+  }, [listOpenTargets]);
 
   const defaultOpenInTargetId = useUserPreferencesStore((state) => state.defaultOpenInTargetId);
   const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
@@ -65,14 +68,14 @@ export function TopBar({
     if (!workspacePath) return;
     const targetId = preferredTarget?.id ?? "finder";
     void execOpenTarget(targetId, workspacePath).catch(() => {});
-  }, [workspacePath, preferredTarget]);
+  }, [execOpenTarget, workspacePath, preferredTarget]);
 
   const handleTargetClick = useCallback(
     (targetId: string) => {
       if (!workspacePath) return;
       void execOpenTarget(targetId, workspacePath).catch(() => {});
     },
-    [workspacePath],
+    [execOpenTarget, workspacePath],
   );
 
   const handleCopyBranch = useCallback(() => {

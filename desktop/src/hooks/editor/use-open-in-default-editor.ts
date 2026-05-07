@@ -4,7 +4,7 @@ import {
   listOpenTargets,
   openTarget as execOpenTarget,
   type OpenTarget,
-} from "@/platform/tauri/shell";
+} from "@/lib/access/tauri/shell";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";

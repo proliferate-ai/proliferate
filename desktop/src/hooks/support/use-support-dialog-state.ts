@@ -10,13 +10,8 @@ import {
   normalizeSupportMessageForSend,
 } from "@/lib/domain/support/formatting";
 import type { SupportMessageContext } from "@/lib/access/cloud/client";
-import {
-  copyText,
-  openEmailCompose,
-  openGmailCompose,
-  openOutlookCompose,
-} from "@/platform/tauri/shell";
-import { exportDebugBundle, isTauriDesktop } from "@/platform/tauri/diagnostics";
+import { useTauriDiagnosticsActions } from "@/hooks/access/tauri/use-diagnostics-actions";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -31,6 +26,16 @@ export function useSupportDialogState({
 }: UseSupportDialogStateOptions) {
   const { supportEnabled } = useAppCapabilities();
   const authStatus = useAuthStore((state) => state.status);
+  const {
+    copyText,
+    openEmailCompose,
+    openGmailCompose,
+    openOutlookCompose,
+  } = useTauriShellActions();
+  const {
+    exportDebugBundle,
+    isTauriDesktop,
+  } = useTauriDiagnosticsActions();
   const showToast = useToastStore((state) => state.show);
   const { sendSupportMessage, isSendingSupportMessage } = useSendSupportMessage();
   const sessionDebugActions = useSessionDebugActions();

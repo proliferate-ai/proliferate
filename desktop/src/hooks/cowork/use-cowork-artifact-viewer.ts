@@ -6,13 +6,14 @@ import {
   isCoworkRuntimeMessage,
   type CoworkRuntimeMessage,
 } from "@/lib/domain/cowork/artifacts";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 export function useCoworkArtifactViewer(
   detail: CoworkArtifactDetailResponse | null,
   enabled: boolean,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const { openExternal } = useTauriShellActions();
   const [ready, setReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<CoworkRuntimeMessage | null>(null);
   const runtimeUrl = useMemo(() => {
@@ -78,7 +79,7 @@ export function useCoworkArtifactViewer(
     return () => {
       window.removeEventListener("message", handleMessage);
     };
-  }, [enabled, runtimeOrigin]);
+  }, [enabled, openExternal, runtimeOrigin]);
 
   useEffect(() => {
     if (!ready) {

@@ -37,16 +37,29 @@ vi.mock("@/hooks/support/use-session-debug-actions", () => ({
   }),
 }));
 
-vi.mock("@/platform/tauri/diagnostics", () => ({
+vi.mock("@/lib/access/tauri/diagnostics", () => ({
   exportDebugBundle: vi.fn(async () => null),
   isTauriDesktop: () => false,
+  logRendererDiagnostic: vi.fn(async () => undefined),
+  logRendererEvent: vi.fn(async () => undefined),
+  saveDiagnosticJson: vi.fn(async () => null),
 }));
 
-vi.mock("@/platform/tauri/shell", () => ({
+vi.mock("@/lib/access/tauri/shell", () => ({
+  copyPath: vi.fn(async () => undefined),
   copyText: vi.fn(async () => {}),
+  getHomeDir: vi.fn(async () => "/Users/pablo"),
+  listAvailableEditors: vi.fn(async () => []),
+  listOpenTargets: vi.fn(async () => []),
   openEmailCompose: vi.fn(async () => {}),
+  openExternal: vi.fn(async () => undefined),
   openGmailCompose: vi.fn(async () => {}),
+  openInEditor: vi.fn(async () => undefined),
+  openInTerminal: vi.fn(async () => undefined),
   openOutlookCompose: vi.fn(async () => {}),
+  openTarget: vi.fn(async () => undefined),
+  pickFolder: vi.fn(async () => null),
+  revealInFinder: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/stores/auth/auth-store", () => ({

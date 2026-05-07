@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { ExternalLink } from "@/components/ui/icons";
-import { openExternal } from "@/platform/tauri/shell";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 interface RunCommandHelpProps {
   scope: string;
@@ -14,6 +14,8 @@ export function RunCommandHelp({
   scope,
   className = "text-sm text-muted-foreground",
 }: RunCommandHelpProps) {
+  const { openExternal } = useTauriShellActions();
+
   return (
     <p className={className}>
       Runs inside the {scope}.{" "}

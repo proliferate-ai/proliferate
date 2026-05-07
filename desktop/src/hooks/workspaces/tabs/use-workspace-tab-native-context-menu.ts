@@ -5,7 +5,7 @@ import type {
   WorkspaceTabContextMenuCommand,
   WorkspaceTabContextMenuItem,
 } from "@/lib/domain/workspaces/tabs/context-menu";
-import type { NativeContextMenuItem } from "@/platform/tauri/context-menu";
+import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
 
 export function useWorkspaceTabNativeContextMenu({
   items,
