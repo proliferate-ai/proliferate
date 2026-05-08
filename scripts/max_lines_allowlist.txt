@@ -44,9 +44,6 @@ desktop/src/components/workspace/chat/transcript/MessageList.tsx
 desktop/src/components/workspace/chat/transcript/VirtualTranscriptRowList.tsx
 desktop/src/components/workspace/chat/tool-calls/CollapsedActionRows.tsx
 desktop/src/components/workspace/files/FileEditorView.tsx
-desktop/src/components/workspace/shell/topbar/HeaderTabs.tsx
-desktop/src/components/workspace/shell/right-panel/RightPanel.tsx
-desktop/src/components/workspace/shell/right-panel/RightPanelHeaderTabs.tsx
 desktop/src/hooks/sessions/use-session-control-actions.ts
 desktop/src/hooks/sessions/use-session-creation-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts

@@ -1,10 +1,7 @@
 import {
   useCallback,
-  useEffect,
-  useRef,
   useState,
 } from "react";
-import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ListFilter, Plus } from "@/components/ui/icons";
@@ -46,10 +43,11 @@ import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
+import { useHeaderTabsUrgentHighlight } from "@/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
+import { hasAnyHeaderSubagentChildren } from "@/lib/domain/workspaces/tabs/group-rows";
 import {
   viewerTargetKey,
   viewerTargetLabel,
@@ -57,7 +55,6 @@ import {
   viewerTargetEditablePath,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
@@ -85,20 +82,6 @@ export function HeaderTabs() {
   const { activateViewerTarget } = useWorkspaceShellActivation();
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
-  const urgentHighlightedChatSessionId = useWorkspaceUiStore((state) =>
-    viewModel.workspaceUiKey
-      ? state.urgentHighlightedChatSessionByWorkspace[viewModel.workspaceUiKey] ?? null
-      : null
-  );
-  const setUrgentHighlightedChatSessionForWorkspace = useWorkspaceUiStore(
-    (state) => state.setUrgentHighlightedChatSessionForWorkspace,
-  );
-  const clearUrgentHighlightedChatSessionForWorkspace = useWorkspaceUiStore(
-    (state) => state.clearUrgentHighlightedChatSessionForWorkspace,
-  );
-  const urgentChatActivationAttemptRef = useRef(0);
-  const cancelUrgentChatActivationRef = useRef<(() => void) | null>(null);
-  const urgentHighlightTimeoutRef = useRef<number | null>(null);
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
   const shellTabOrderActions = useShellTabOrderActions({
     workspaceId: viewModel.workspaceUiKey,
@@ -189,118 +172,19 @@ export function HeaderTabs() {
       cooldownMs: 2000,
     });
   }, []);
-  const clearUrgentChatHighlight = useCallback(() => {
-    urgentChatActivationAttemptRef.current += 1;
-    cancelUrgentChatActivationRef.current?.();
-    cancelUrgentChatActivationRef.current = null;
-    if (urgentHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(urgentHighlightTimeoutRef.current);
-      urgentHighlightTimeoutRef.current = null;
-    }
-    if (viewModel.workspaceUiKey) {
-      clearUrgentHighlightedChatSessionForWorkspace(viewModel.workspaceUiKey);
-    }
-  }, [clearUrgentHighlightedChatSessionForWorkspace, viewModel.workspaceUiKey]);
-  const previewHeaderChatTab = useCallback((sessionId: string) => {
-    const workspaceUiKey = viewModel.workspaceUiKey;
-    if (!workspaceUiKey) {
-      return;
-    }
-    const attempt = urgentChatActivationAttemptRef.current + 1;
-    urgentChatActivationAttemptRef.current = attempt;
-    cancelUrgentChatActivationRef.current?.();
-    cancelUrgentChatActivationRef.current = null;
-    if (urgentHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(urgentHighlightTimeoutRef.current);
-      urgentHighlightTimeoutRef.current = null;
-    }
-
-    flushSync(() => {
-      setUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
-    });
-    urgentHighlightTimeoutRef.current = window.setTimeout(() => {
-      if (urgentChatActivationAttemptRef.current !== attempt) {
-        return;
-      }
-      urgentHighlightTimeoutRef.current = null;
-      clearUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
-    }, 700);
-  }, [
-    clearUrgentHighlightedChatSessionForWorkspace,
-    setUrgentHighlightedChatSessionForWorkspace,
-    viewModel.workspaceUiKey,
-  ]);
-  const activateHeaderChatTab = useCallback((sessionId: string) => {
-    const workspaceUiKey = viewModel.workspaceUiKey;
-    if (!workspaceUiKey) {
-      return;
-    }
-    const attempt = urgentChatActivationAttemptRef.current + 1;
-    urgentChatActivationAttemptRef.current = attempt;
-    cancelUrgentChatActivationRef.current?.();
-    cancelUrgentChatActivationRef.current = null;
-    if (urgentHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(urgentHighlightTimeoutRef.current);
-      urgentHighlightTimeoutRef.current = null;
-    }
-
-    flushSync(() => {
-      setUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
-    });
-    urgentHighlightTimeoutRef.current = window.setTimeout(() => {
-      if (urgentChatActivationAttemptRef.current !== attempt) {
-        return;
-      }
-      urgentHighlightTimeoutRef.current = null;
-      clearUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
-    }, 1500);
-
-    cancelUrgentChatActivationRef.current = scheduleAfterNextPaint(() => {
-      if (urgentChatActivationAttemptRef.current !== attempt) {
-        return;
-      }
-      cancelUrgentChatActivationRef.current = null;
-      chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
-    });
-  }, [
-    chatVisibilityActions,
-    clearUrgentHighlightedChatSessionForWorkspace,
-    setUrgentHighlightedChatSessionForWorkspace,
-    viewModel.workspaceUiKey,
-  ]);
-
-  useEffect(() => () => {
-    cancelUrgentChatActivationRef.current?.();
-    if (urgentHighlightTimeoutRef.current !== null) {
-      window.clearTimeout(urgentHighlightTimeoutRef.current);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!urgentHighlightedChatSessionId) {
-      return;
-    }
-    if (
-      viewModel.activeShellTab?.kind === "chat"
-      && viewModel.activeShellTab.sessionId === urgentHighlightedChatSessionId
-    ) {
-      if (urgentHighlightTimeoutRef.current !== null) {
-        window.clearTimeout(urgentHighlightTimeoutRef.current);
-        urgentHighlightTimeoutRef.current = null;
-      }
-      if (viewModel.workspaceUiKey) {
-        clearUrgentHighlightedChatSessionForWorkspace(
-          viewModel.workspaceUiKey,
-          urgentHighlightedChatSessionId,
-        );
-      }
-    }
-  }, [
-    clearUrgentHighlightedChatSessionForWorkspace,
+  const activateChatSessionFromHeader = useCallback((sessionId: string) => {
+    chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
+  }, [chatVisibilityActions.showChatSessionTab]);
+  const {
     urgentHighlightedChatSessionId,
-    viewModel.activeShellTab,
-    viewModel.workspaceUiKey,
-  ]);
+    clearUrgentChatHighlight,
+    previewHeaderChatTab,
+    activateHeaderChatTab,
+  } = useHeaderTabsUrgentHighlight({
+    workspaceUiKey: viewModel.workspaceUiKey,
+    activeShellTab: viewModel.activeShellTab,
+    onActivateChatSession: activateChatSessionFromHeader,
+  });
 
   return (
     <DebugProfiler id="header-tabs">
@@ -551,7 +435,8 @@ export function HeaderTabs() {
         })}
       </WorkspaceTabStrip>
 
-      {(viewModel.menuChatTabs.length > 1 || hasAnySubagents(viewModel.childrenByParentSessionId)) && (
+      {(viewModel.menuChatTabs.length > 1
+        || hasAnyHeaderSubagentChildren(viewModel.childrenByParentSessionId)) && (
         <PopoverButton
           align="end"
           trigger={(
@@ -609,13 +494,4 @@ export function HeaderTabs() {
       </div>
     </DebugProfiler>
   );
-}
-
-function hasAnySubagents(childrenByParentSessionId: Map<string, unknown[]>): boolean {
-  for (const children of childrenByParentSessionId.values()) {
-    if (children.length > 0) {
-      return true;
-    }
-  }
-  return false;
 }

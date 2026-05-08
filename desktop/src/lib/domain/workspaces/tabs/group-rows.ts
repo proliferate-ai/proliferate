@@ -31,6 +31,17 @@ export type HeaderStripRow<TTab extends GroupedChatTab = GroupedChatTab> =
   | PillRow
   | TabRow<TTab>;
 
+export function hasAnyHeaderSubagentChildren(
+  childrenByParentSessionId: ReadonlyMap<string, readonly unknown[]>,
+): boolean {
+  for (const children of childrenByParentSessionId.values()) {
+    if (children.length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
   groupedTabs: TTab[];
   childrenByParentSessionId: ReadonlyMap<string, readonly unknown[]>;
