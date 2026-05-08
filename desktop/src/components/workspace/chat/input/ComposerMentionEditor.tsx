@@ -13,7 +13,7 @@ import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
-import { useChatFileMentionSearch } from "@/hooks/chat/use-chat-file-mention-search";
+import { useChatFileMentionSearch } from "@/hooks/chat/ui/use-chat-file-mention-search";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import {
   isComposerMentionSelectKey,
