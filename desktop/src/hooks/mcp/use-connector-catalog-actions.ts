@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { useConnectOAuthConnector } from "@/hooks/mcp/use-connect-oauth-connector";
-import { useDeleteConnector } from "@/hooks/mcp/use-delete-connector";
-import { useInstallConnector } from "@/hooks/mcp/use-install-connector";
+import { useConnectOAuthConnector } from "@/hooks/access/mcp/connectors/use-connect-oauth-connector";
+import { useDeleteConnector } from "@/hooks/access/mcp/connectors/use-delete-connector";
+import { useInstallConnector } from "@/hooks/access/mcp/connectors/use-install-connector";
+import { useReconnectOAuthConnector } from "@/hooks/access/mcp/connectors/use-reconnect-oauth-connector";
+import { useUpdateConnectorSecret } from "@/hooks/access/mcp/connectors/use-update-connector-secret";
 import { useInstalledConnectorActions } from "@/hooks/mcp/use-installed-connector-actions";
-import { useReconnectOAuthConnector } from "@/hooks/mcp/use-reconnect-oauth-connector";
-import { useUpdateConnectorSecret } from "@/hooks/mcp/use-update-connector-secret";
 import type {
   ConnectorCatalogEntry,
   ConnectorSettings,

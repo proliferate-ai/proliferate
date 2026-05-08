@@ -12,21 +12,17 @@ const mocks = vi.hoisted(() => {
   const workspacesList = vi.fn();
   const repoRootsList = vi.fn();
   const listCloudWorkspaces = vi.fn();
-  const getAnyHarnessClient = vi.fn(() => ({
-    workspaces: { list: workspacesList },
-    repoRoots: { list: repoRootsList },
-  }));
 
   return {
-    getAnyHarnessClient,
     listCloudWorkspaces,
     repoRootsList,
     workspacesList,
   };
 });
 
-vi.mock("@anyharness/sdk-react", () => ({
-  getAnyHarnessClient: mocks.getAnyHarnessClient,
+vi.mock("@/lib/access/anyharness/workspaces", () => ({
+  listRepoRoots: mocks.repoRootsList,
+  listRuntimeWorkspaces: mocks.workspacesList,
 }));
 
 vi.mock("@/hooks/cloud/use-cloud-availability-state", () => ({

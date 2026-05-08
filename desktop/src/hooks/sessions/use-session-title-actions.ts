@@ -9,7 +9,7 @@ import {
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const requestedAutoSessionTitles = new Map<string, number>();

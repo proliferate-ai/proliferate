@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
 import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
-import { useCloudWorkspaceRepoConfigStatus } from "@/hooks/cloud/use-cloud-workspace-repo-config-status";
-import { useResyncCloudWorkspaceCredentials } from "@/hooks/cloud/use-resync-cloud-workspace-credentials";
-import { useResyncCloudWorkspaceFiles } from "@/hooks/cloud/use-resync-cloud-workspace-files";
-import { useRunCloudWorkspaceSetup } from "@/hooks/cloud/use-run-cloud-workspace-setup";
+import { useCloudWorkspaceRepoConfigStatus } from "@/hooks/access/cloud/use-cloud-workspace-repo-config-status";
+import { useResyncCloudWorkspaceCredentials } from "@/hooks/access/cloud/use-resync-cloud-workspace-credentials";
+import { useResyncCloudWorkspaceFiles } from "@/hooks/access/cloud/use-resync-cloud-workspace-files";
+import { useRunCloudWorkspaceSetup } from "@/hooks/access/cloud/use-run-cloud-workspace-setup";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {

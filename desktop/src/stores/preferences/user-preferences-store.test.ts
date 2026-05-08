@@ -1,15 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { THEME_PRESETS } from "@/config/theme";
 import {
-  bootstrapUserPreferences,
+  clearWorktreeAutoDeleteLimitAdoption,
   hasPendingWorktreeAutoDeleteLimitAdoption,
-  markWorktreeAutoDeleteLimitAdopted,
+  selectPersistedUserPreferencesSlice,
+} from "@/lib/domain/preferences/persisted-metadata";
+import {
   migrateUserPreferences,
   PERSISTED_RECORD_BACKFILL,
   USER_PREFERENCE_DEFAULTS,
-  useUserPreferencesStore,
   type UserPreferences,
-} from "@/stores/preferences/user-preferences-store";
+} from "@/lib/domain/preferences/user-preferences";
+import {
+  loadUserPreferences,
+  persistUserPreferences,
+} from "@/lib/workflows/preferences/user-preferences-persistence";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const storeMocks = vi.hoisted(() => {
   const values = new Map<string, unknown>();
@@ -30,10 +36,22 @@ vi.mock("@/lib/access/tauri/store", () => ({
   getPreferencesStore: storeMocks.getPreferencesStore,
 }));
 
-async function flushPersist(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+async function bootstrapUserPreferencesForTest(): Promise<void> {
+  const loaded = await loadUserPreferences();
+  useUserPreferencesStore.getState().hydrate(loaded);
+  if (loaded.shouldPersist) {
+    await persistUserPreferences(loaded.preferences, loaded.persistedMetadata);
+  }
+}
+
+async function markWorktreeAutoDeleteLimitAdoptedForTest(): Promise<void> {
+  const state = useUserPreferencesStore.getState();
+  const nextMetadata = clearWorktreeAutoDeleteLimitAdoption(state._persistedMetadata);
+  state.setPersistedMetadata(nextMetadata);
+  await persistUserPreferences(
+    selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
+    nextMetadata,
+  );
 }
 
 describe("user preference migration", () => {
@@ -46,11 +64,12 @@ describe("user preference migration", () => {
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: false,
+      _persistedMetadata: {},
     });
   });
 
   it("defaults true new users to Mono dark with transparent chrome disabled", async () => {
-    await bootstrapUserPreferences();
+    await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("mono");
@@ -65,7 +84,7 @@ describe("user preference migration", () => {
   it("backfills legacy per-key users with old appearance defaults", async () => {
     storeMocks.values.set("defaultChatAgentKind", "claude");
 
-    await bootstrapUserPreferences();
+    await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("ship");
@@ -76,9 +95,7 @@ describe("user preference migration", () => {
     storeMocks.values.set("defaultChatAgentKind", "claude");
     storeMocks.values.set("defaultChatModelId", "claude-sonnet-4-5");
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.defaultChatAgentKind).toBe("claude");
     expect(preferences.defaultChatModelIdByAgentKind).toEqual({
@@ -97,7 +114,7 @@ describe("user preference migration", () => {
       transparentChromeEnabled: undefined,
     } as unknown as UserPreferences);
 
-    await bootstrapUserPreferences();
+    await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("ship");
@@ -109,12 +126,12 @@ describe("user preference migration", () => {
     delete persisted.worktreeAutoDeleteLimit;
     storeMocks.values.set("user_preferences", persisted);
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.worktreeAutoDeleteLimit).toBe(20);
-    expect(hasPendingWorktreeAutoDeleteLimitAdoption()).toBe(true);
+    expect(hasPendingWorktreeAutoDeleteLimitAdoption(
+      useUserPreferencesStore.getState()._persistedMetadata,
+    )).toBe(true);
     const nextPersisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(nextPersisted.worktreeAutoDeleteLimit).toBeUndefined();
     expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBe(true);
@@ -125,11 +142,9 @@ describe("user preference migration", () => {
     delete persisted.worktreeAutoDeleteLimit;
     storeMocks.values.set("user_preferences", persisted);
 
-    await bootstrapUserPreferences();
+    await bootstrapUserPreferencesForTest();
     useUserPreferencesStore.getState().set("worktreeAutoDeleteLimit", 50);
-    await markWorktreeAutoDeleteLimitAdopted();
-    await flushPersist();
-
+    await markWorktreeAutoDeleteLimitAdoptedForTest();
     const nextPersisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(nextPersisted.worktreeAutoDeleteLimit).toBe(50);
     expect(nextPersisted.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
@@ -152,7 +167,7 @@ describe("user preference migration", () => {
       transparentChromeEnabled: true,
     } satisfies UserPreferences);
 
-    await bootstrapUserPreferences();
+    await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("ship");
@@ -167,9 +182,7 @@ describe("user preference migration", () => {
       onboardingPrimaryGoalId: "build",
     } as unknown as UserPreferences);
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     const state = useUserPreferencesStore.getState() as unknown as Record<string, unknown>;
     expect(state.onboardingCompletedVersion).toBeUndefined();
     expect(state.onboardingPrimaryGoalId).toBeUndefined();
@@ -186,9 +199,7 @@ describe("user preference migration", () => {
       futurePreference: true,
     } as unknown as UserPreferences);
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     expect(storeMocks.set).not.toHaveBeenCalled();
   });
 
@@ -199,9 +210,7 @@ describe("user preference migration", () => {
       futurePreference: true,
     } as unknown as UserPreferences);
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(persisted.themePreset).toBe("ship");
     expect(persisted.futurePreference).toBe(true);
@@ -214,9 +223,7 @@ describe("user preference migration", () => {
       futurePreference: true,
     } as unknown as UserPreferences);
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(persisted.branchPrefixType).toBe(PERSISTED_RECORD_BACKFILL.branchPrefixType);
     expect(persisted.futurePreference).toBe(true);
@@ -229,9 +236,7 @@ describe("user preference migration", () => {
       defaultChatModelId: "gpt-5.4-mini",
     });
 
-    await bootstrapUserPreferences();
-    await flushPersist();
-
+    await bootstrapUserPreferencesForTest();
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.defaultChatModelIdByAgentKind).toEqual({
       codex: "gpt-5.4-mini",
@@ -384,7 +389,7 @@ describe("user preference migration", () => {
       powersInCodingSessionsEnabled: true,
     });
 
-    await bootstrapUserPreferences();
+    await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);

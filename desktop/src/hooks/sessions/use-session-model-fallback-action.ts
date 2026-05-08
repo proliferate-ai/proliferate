@@ -7,7 +7,7 @@ import {
   getSessionRecord,
   patchSessionRecord,
 } from "@/stores/sessions/session-records";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export function useSessionModelFallbackAction() {
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();

@@ -40,15 +40,15 @@ vi.mock("@/hooks/mcp/use-connectors-catalog-state", () => ({
   useConnectorsCatalogState: () => connectorsCatalogState.state,
 }));
 
-vi.mock("@/hooks/mcp/use-connect-oauth-connector", () => ({
+vi.mock("@/hooks/access/mcp/connectors/use-connect-oauth-connector", () => ({
   useConnectOAuthConnector: () => resetMutation(),
 }));
 
-vi.mock("@/hooks/mcp/use-delete-connector", () => ({
+vi.mock("@/hooks/access/mcp/connectors/use-delete-connector", () => ({
   useDeleteConnector: () => ({ mutateAsync: vi.fn().mockResolvedValue(undefined) }),
 }));
 
-vi.mock("@/hooks/mcp/use-install-connector", () => ({
+vi.mock("@/hooks/access/mcp/connectors/use-install-connector", () => ({
   useInstallConnector: () => ({ mutateAsync: vi.fn().mockResolvedValue(undefined) }),
 }));
 
@@ -59,11 +59,11 @@ vi.mock("@/hooks/mcp/use-installed-connector-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/mcp/use-reconnect-oauth-connector", () => ({
+vi.mock("@/hooks/access/mcp/connectors/use-reconnect-oauth-connector", () => ({
   useReconnectOAuthConnector: () => resetMutation(),
 }));
 
-vi.mock("@/hooks/mcp/use-update-connector-secret", () => ({
+vi.mock("@/hooks/access/mcp/connectors/use-update-connector-secret", () => ({
   useUpdateConnectorSecret: () => ({ mutateAsync: vi.fn().mockResolvedValue(undefined) }),
 }));
 

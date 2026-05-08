@@ -27,7 +27,7 @@ import {
   cloudRepoConfigsKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "@/hooks/access/cloud/query-keys";
-import { syncLocalCloudCredentialToCloud } from "./cloud-credential-sync";
+import { syncLocalCloudCredentialToCloud } from "@/lib/access/cloud/credential-sync";
 import { subscribeRuntimeInputSyncEvents } from "./runtime-input-sync-events";
 
 const HOURLY_RETRY_MS = 3_600_000;

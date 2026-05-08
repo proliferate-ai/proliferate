@@ -127,7 +127,6 @@ export function commitHotActiveSession(
   }
   state.activateHotSession({
     sessionId,
-    workspaceId: guard.workspaceId,
     hotPaintGate,
   });
   if (entry.materializedSessionId) {

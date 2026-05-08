@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCloudWorktreeRetentionPolicy, usePutCloudWorktreeRetentionPolicy } from "@/hooks/cloud/use-cloud-worktree-retention-policy";
+import { useCloudWorktreeRetentionPolicy, usePutCloudWorktreeRetentionPolicy } from "@/hooks/access/cloud/use-cloud-worktree-retention-policy";
+import { useHasPendingWorktreeAutoDeleteAdoption } from "@/hooks/preferences/derived/use-pending-worktree-auto-delete-adoption";
+import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import {
-  hasPendingWorktreeAutoDeleteLimitAdoption,
-  markWorktreeAutoDeleteLimitAdopted,
-  useUserPreferencesStore,
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
   WORKTREE_AUTO_DELETE_LIMIT_MAX,
   WORKTREE_AUTO_DELETE_LIMIT_MIN,
-} from "@/stores/preferences/user-preferences-store";
+} from "@/lib/domain/preferences/user-preferences";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import type {
   WorktreeSettingsTarget,
@@ -56,9 +56,8 @@ export function useWorktreeCleanupPolicy(
   const preferenceValue = useUserPreferencesStore((state) => state.worktreeAutoDeleteLimit);
   const setPreference = useUserPreferencesStore((state) => state.set);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
-  const [adoptionPending, setAdoptionPending] = useState(
-    () => hasPendingWorktreeAutoDeleteLimitAdoption(),
-  );
+  const adoptionPending = useHasPendingWorktreeAutoDeleteAdoption();
+  const markWorktreeAutoDeleteLimitAdopted = useWorktreeAutoDeleteAdoption();
   const [draftValue, setDraftValue] = useState("");
   const [localErrorMessage, setLocalErrorMessage] = useState<string | null>(null);
   const cloudPolicy = useCloudWorktreeRetentionPolicy();
@@ -126,7 +125,7 @@ export function useWorktreeCleanupPolicy(
 
     if (authStatus === "authenticated" && cloudPolicy.data?.source === "persisted") {
       setPreference("worktreeAutoDeleteLimit", cloudPolicy.data.maxMaterializedWorktreesPerRepo);
-      void markWorktreeAutoDeleteLimitAdopted().then(() => setAdoptionPending(false));
+      void markWorktreeAutoDeleteLimitAdopted();
       return;
     }
 
@@ -149,8 +148,6 @@ export function useWorktreeCleanupPolicy(
       }).then(() => {
         setPreference("worktreeAutoDeleteLimit", localPolicyValue);
         return markWorktreeAutoDeleteLimitAdopted();
-      }).then(() => {
-        setAdoptionPending(false);
       }).catch((error) => {
         seededCloudPolicyRuntimeKeys.delete(localTarget.key);
         setLocalErrorMessage(error instanceof Error ? error.message : String(error));
@@ -160,7 +157,7 @@ export function useWorktreeCleanupPolicy(
 
     if (authStatus !== "authenticated" || cloudPolicy.data?.source === "default") {
       setPreference("worktreeAutoDeleteLimit", localPolicyValue);
-      void markWorktreeAutoDeleteLimitAdopted().then(() => setAdoptionPending(false));
+      void markWorktreeAutoDeleteLimitAdopted();
     }
   }, [
     adoptionPending,
@@ -168,6 +165,7 @@ export function useWorktreeCleanupPolicy(
     cloudPolicy.data,
     localTarget,
     localPolicyQuery.data,
+    markWorktreeAutoDeleteLimitAdopted,
     preferencesHydrated,
     putCloudPolicyAsync,
     setPreference,
@@ -239,7 +237,6 @@ export function useWorktreeCleanupPolicy(
     }
     setPreference("worktreeAutoDeleteLimit", parsedDraft);
     await markWorktreeAutoDeleteLimitAdopted();
-    setAdoptionPending(false);
     setDraftValue("");
     setLocalErrorMessage(null);
   }, [
@@ -247,6 +244,7 @@ export function useWorktreeCleanupPolicy(
     cloudLoading,
     cloudPolicy.isError,
     parsedDraft,
+    markWorktreeAutoDeleteLimitAdopted,
     putCloudPolicyAsync,
     setPreference,
   ]);

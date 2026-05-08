@@ -1,4 +1,3 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
@@ -15,6 +14,10 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
+import {
+  listRepoRoots,
+  listRuntimeWorkspaces,
+} from "@/lib/access/anyharness/workspaces";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
@@ -120,12 +123,13 @@ export function useWorkspaces() {
         runtimeUrl,
         cloudActive,
       });
-      const client = getAnyHarnessClient({ runtimeUrl });
+      const connection = { runtimeUrl };
       try {
         const fetchStartedAt = performance.now();
         const [localWorkspaces, repoRoots, cloudWorkspaces] = await Promise.all([
           fallbackOnNonAbort(
-            client.workspaces.list(
+            listRuntimeWorkspaces(
+              connection,
               requestOptionsWithSignal(
                 getMeasurementRequestOptions({ operationId, category: "workspace.list" })
                   ?? undefined,
@@ -135,7 +139,8 @@ export function useWorkspaces() {
             [],
           ),
           fallbackOnNonAbort(
-            client.repoRoots.list(
+            listRepoRoots(
+              connection,
               requestOptionsWithSignal(
                 getMeasurementRequestOptions({ operationId, category: "repo_root.list" })
                   ?? undefined,

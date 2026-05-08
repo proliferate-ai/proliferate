@@ -17,7 +17,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
+import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

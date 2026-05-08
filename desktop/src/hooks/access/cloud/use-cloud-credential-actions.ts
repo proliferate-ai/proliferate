@@ -19,7 +19,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { syncLocalCloudCredentialToCloud } from "./cloud-credential-sync";
+import { syncLocalCloudCredentialToCloud } from "@/lib/access/cloud/credential-sync";
 
 function describeCloudCredentialActionFailure(
   action: "sync" | "clear",

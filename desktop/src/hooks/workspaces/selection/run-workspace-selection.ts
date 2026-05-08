@@ -15,7 +15,7 @@ import {
 } from "@/lib/infra/measurement/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
-import { isCloudWorkspaceNotReadyError } from "@/hooks/cloud/use-cloud-workspace-connection";
+import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
 import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";

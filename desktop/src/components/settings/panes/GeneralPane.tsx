@@ -12,10 +12,8 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/settings/use-available-editors";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
 import type { EditorInfo, OpenTargetIconId } from "@/lib/access/tauri/shell";
-import {
-  type TurnEndSoundId,
-  useUserPreferencesStore,
-} from "@/stores/preferences/user-preferences-store";
+import type { TurnEndSoundId } from "@/lib/domain/preferences/user-preferences";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const EMPTY_EDITORS: EditorInfo[] = [];
 const FINDER_TARGET = { id: "finder", label: "Finder", iconId: "finder" as const };

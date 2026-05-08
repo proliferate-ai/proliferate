@@ -51,11 +51,3 @@ export function useInstallConnector() {
     cancelPendingLocalOAuth: cancelLocalOAuthConnectorConnect,
   };
 }
-
-export function trackConnectorConnectClicked(catalogEntryId: string) {
-  trackProductEvent("connector_connect_clicked", {
-    connector_id: catalogEntryId,
-    auth_style: "cloud",
-    availability: "cloud",
-  });
-}

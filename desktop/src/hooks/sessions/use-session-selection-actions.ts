@@ -19,7 +19,7 @@ import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstr
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import {
   elapsedMs,
@@ -305,7 +305,6 @@ export function useSessionSelectionActions() {
           ? commitHotActiveSession(sessionId, guard, hotPaintGate)
           : (useSessionSelectionStore.getState().activateHotSession({
             sessionId,
-            workspaceId: existingSlot.workspaceId!,
             hotPaintGate,
           }), null);
         if (commitOutcome?.result === "stale") {

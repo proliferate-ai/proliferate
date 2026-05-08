@@ -18,7 +18,10 @@ import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useLocalAutomationExecutor } from "@/hooks/automations/use-local-automation-executor"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
+import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
+import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
 import { usePromptOutboxDispatcher } from "@/hooks/chat/use-prompt-outbox-dispatcher"
+import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/use-local-worktree-settings-target"
@@ -40,13 +43,8 @@ import { MainPage } from "@/pages/MainPage"
 import { PluginsPage } from "@/pages/PluginsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
-import {
-  bootstrapUserPreferences,
-  useUserPreferencesStore,
-} from "@/stores/preferences/user-preferences-store"
-import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-store"
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
-import { bootstrapSessionSelection } from "@/stores/sessions/session-selection-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
@@ -158,7 +156,10 @@ function AppRuntime() {
   useAgentAutoReconcile()
   useLocalAutomationExecutor()
   useHomeDeferredLaunchRunner()
+  useUserPreferencesLifecycle()
+  useRepoPreferencesLifecycle()
   usePromptOutboxDispatcher()
+  useSessionSelectionLifecycle()
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")
@@ -198,10 +199,7 @@ function AppRuntime() {
     }
     systemModeQuery.addEventListener("change", handleSystemModeChange)
 
-    void bootstrapUserPreferences().then(applyStoredAppearance)
-    void bootstrapRepoPreferences()
     void bootstrapWorkspaceUi()
-    void bootstrapSessionSelection()
 
     const authBootstrapStartedAt = startStartupTimer()
     recordAppRendererEvent("app.auth_bootstrap.start")

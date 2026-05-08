@@ -10,7 +10,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+export type { HotPaintGate } from "@/lib/domain/sessions/hot-paint-gate";
 
 export type HarnessConnectionState = "connecting" | "healthy" | "failed";
 export type ClientSessionId = string;
@@ -56,14 +56,6 @@ export type SessionChildRelationship =
     relation?: string | null;
     workspaceId?: string | null;
   };
-
-export interface HotPaintGate {
-  workspaceId: string;
-  sessionId: ClientSessionId;
-  nonce: number;
-  operationId: MeasurementOperationId | null;
-  kind: "workspace_hot_reopen" | "session_hot_switch";
-}
 
 export interface SessionDirectoryActivitySummary {
   isStreaming: boolean;

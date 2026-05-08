@@ -1,10 +1,10 @@
+import type { Session } from "@anyharness/sdk";
 import {
   anyHarnessSessionKey,
   anyHarnessSessionsKey,
 } from "@anyharness/sdk-react";
-import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Session } from "@anyharness/sdk";
+import { useCallback } from "react";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export type WorkspaceSession = Session & { workspaceId: string };

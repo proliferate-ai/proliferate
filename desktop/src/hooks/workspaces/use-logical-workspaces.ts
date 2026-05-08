@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import { useCloudMobilityWorkspaces } from "@/hooks/cloud/use-cloud-mobility-workspaces";
+import { useCloudMobilityWorkspaces } from "@/hooks/access/cloud/use-cloud-mobility-workspaces";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { useStandardRepoProjection } from "./use-standard-repo-projection";

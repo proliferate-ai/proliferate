@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export function useCoworkSessionActions() {

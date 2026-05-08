@@ -12,7 +12,7 @@ import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
 } from "@/lib/domain/workspaces/cloud/collections";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -21,7 +21,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { useCloudCredentialActions } from "./use-cloud-credential-actions";
+import { useCloudCredentialActions } from "@/hooks/access/cloud/use-cloud-credential-actions";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import {
   captureTelemetryException,

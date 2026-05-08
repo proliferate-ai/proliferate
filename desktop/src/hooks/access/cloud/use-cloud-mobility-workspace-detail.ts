@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CloudMobilityWorkspaceDetail } from "@/lib/access/cloud/client";
 import { getCloudMobilityWorkspaceDetail } from "@/lib/access/cloud/mobility";
-import { useCloudAvailabilityState } from "./use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { cloudMobilityWorkspaceKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudMobilityWorkspaceDetail(

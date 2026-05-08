@@ -3,16 +3,15 @@ import {
   persistDefaultSessionModePreference,
   shouldPersistDefaultSessionModePreference,
 } from "@/hooks/sessions/session-mode-preferences";
-import {
-  USER_PREFERENCE_DEFAULTS,
-  useUserPreferencesStore,
-} from "@/stores/preferences/user-preferences-store";
+import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user-preferences";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 describe("session mode preferences", () => {
   beforeEach(() => {
     useUserPreferencesStore.setState({
       ...USER_PREFERENCE_DEFAULTS,
       _hydrated: false,
+      _persistedMetadata: {},
     });
   });
 

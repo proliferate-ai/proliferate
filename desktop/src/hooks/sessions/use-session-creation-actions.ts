@@ -42,7 +42,7 @@ import {
 } from "@/lib/workflows/sessions/session-runtime";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,

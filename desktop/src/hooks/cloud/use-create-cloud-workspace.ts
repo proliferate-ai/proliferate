@@ -32,8 +32,8 @@ import {
   upsertCloudWorkspaceCollections,
 } from "@/lib/domain/workspaces/cloud/collections";
 import { cloudBillingKey, cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
-import { useCloudCredentialActions } from "./use-cloud-credential-actions";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
+import { useCloudCredentialActions } from "@/hooks/access/cloud/use-cloud-credential-actions";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import {
   captureTelemetryException,
   trackProductEvent,
