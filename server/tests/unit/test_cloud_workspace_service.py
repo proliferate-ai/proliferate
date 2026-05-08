@@ -231,7 +231,7 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("workspace start should stop before credential/runtime work")
 
-    monkeypatch.setattr(workspace_service, "_require_cloud_workspace_for_user", _require_workspace)
+    monkeypatch.setattr(workspace_service, "cloud_workspace_user_can_read", _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
@@ -289,7 +289,7 @@ async def test_start_cloud_workspace_requeues_error_workspace(
 
     monkeypatch.setattr(
         workspace_service,
-        "_require_cloud_workspace_for_user",
+        "cloud_workspace_user_can_read",
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
@@ -361,7 +361,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
 
     monkeypatch.setattr(
         workspace_service,
-        "_require_cloud_workspace_for_user",
+        "cloud_workspace_user_can_read",
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
@@ -440,7 +440,7 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
 
     monkeypatch.setattr(
         workspace_service,
-        "_require_cloud_workspace_for_user",
+        "cloud_workspace_user_can_read",
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
