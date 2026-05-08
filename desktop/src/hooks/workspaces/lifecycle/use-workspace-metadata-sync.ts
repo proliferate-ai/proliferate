@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
@@ -9,13 +8,8 @@ import {
   updateCloudWorkspaceDisplayName,
 } from "@/lib/access/cloud/workspaces";
 import type {
-  CloudMobilityWorkspaceSummary,
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
-import {
-  type WorkspaceCollections,
-  upsertCloudWorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildRemoteLogicalWorkspaceId,
 } from "@/lib/domain/workspaces/cloud/logical-workspaces";
@@ -27,7 +21,6 @@ import {
   type CloudDisplayNameSyncState,
 } from "@/lib/domain/workspaces/cloud/cloud-display-name-sync";
 import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backfill-suppression";
-import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspace } from "@/lib/access/anyharness/workspaces";
@@ -36,8 +29,9 @@ import {
   useSessionDirectoryStore,
 } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 250;
 
@@ -50,12 +44,15 @@ function buildLogicalIdForCloudWorkspace(workspace: CloudWorkspaceDetail): strin
   );
 }
 
+// Owns mounted metadata synchronization for the selected workspace.
+// Display state and user-triggered workspace actions live in sibling hook folders.
 export function useWorkspaceMetadataSync() {
-  const queryClient = useQueryClient();
   const syncingCloudBranchRef = useRef<string | null>(null);
   const syncingCloudDisplayNameRef = useRef<string | null>(null);
   const cloudDisplayNameSyncStateRef = useRef<CloudDisplayNameSyncState | null>(null);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
+  const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
@@ -121,34 +118,14 @@ export function useWorkspaceMetadataSync() {
           selectedCloudWorkspace.id,
           currentBranch,
         );
-        queryClient.setQueriesData<WorkspaceCollections | undefined>(
-          { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-          (collections) => upsertCloudWorkspaceCollections(collections, cloudWorkspace),
-        );
-        queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
-          cloudMobilityWorkspacesKey(),
-          (workspaces) => workspaces?.map((workspace) => (
-            workspace.cloudWorkspaceId === cloudWorkspace.id
-              ? {
-                ...workspace,
-                repo: {
-                  ...workspace.repo,
-                  branch: cloudWorkspace.repo.branch,
-                },
-                updatedAt: cloudWorkspace.updatedAt,
-              }
-              : workspace
-          )),
-        );
+        upsertCloudWorkspace(cloudWorkspace);
         const currentSelectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
         if (currentSelectedWorkspaceId === cloudWorkspaceSyntheticId(cloudWorkspace.id)) {
           useSessionSelectionStore.getState().setSelectedLogicalWorkspaceId(
             buildLogicalIdForCloudWorkspace(cloudWorkspace),
           );
         }
-        await queryClient.invalidateQueries({
-          queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-        });
+        await invalidateWorkspaceCollections();
       } finally {
         if (selectedCloudWorkspace) {
           syncingCloudBranchRef.current = null;
@@ -157,9 +134,9 @@ export function useWorkspaceMetadataSync() {
     })();
   }, [
     gitStatusQuery.data?.currentBranch,
-    queryClient,
-    runtimeUrl,
+    invalidateWorkspaceCollections,
     selectedCloudWorkspace,
+    upsertCloudWorkspace,
   ]);
 
   useEffect(() => {
@@ -215,25 +192,8 @@ export function useWorkspaceMetadataSync() {
           decision.state,
           syncKey,
         );
-        queryClient.setQueriesData<WorkspaceCollections | undefined>(
-          { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-          (collections) => upsertCloudWorkspaceCollections(collections, cloudWorkspace),
-        );
-        await queryClient.invalidateQueries({
-          queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-        });
-        queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
-          cloudMobilityWorkspacesKey(),
-          (workspaces) => workspaces?.map((workspace) => (
-            workspace.cloudWorkspaceId === cloudWorkspace.id
-              ? {
-                ...workspace,
-                displayName: cloudWorkspace.displayName,
-                updatedAt: cloudWorkspace.updatedAt,
-              }
-              : workspace
-          )),
-        );
+        upsertCloudWorkspace(cloudWorkspace);
+        await invalidateWorkspaceCollections();
       } catch {
         // Retry on the next interval while this blank cloud workspace remains selected.
       } finally {
@@ -248,11 +208,12 @@ export function useWorkspaceMetadataSync() {
     );
     return () => window.clearInterval(intervalId);
   }, [
-    queryClient,
+    invalidateWorkspaceCollections,
     runtimeUrl,
     selectedCloudRuntime.connectionInfo,
     selectedCloudRuntime.state?.phase,
     selectedCloudWorkspace,
+    upsertCloudWorkspace,
   ]);
 
   return gitStatusQuery;

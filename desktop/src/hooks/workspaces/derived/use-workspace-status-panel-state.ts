@@ -9,7 +9,7 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cl
 import { summarizeSetupFailure } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useWorkspaceArrivalState } from "@/hooks/workspaces/use-workspace-arrival-state";
+import { useWorkspaceArrivalState } from "@/hooks/workspaces/derived/use-workspace-arrival-state";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
@@ -92,6 +92,8 @@ function buildPendingDetail(entry: PendingWorkspaceEntry): string | null {
     .join(" · ") || null;
 }
 
+// Owns the read-only workspace status panel state shown above the composer.
+// User actions for the panel live in workspaces/workflows.
 export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(

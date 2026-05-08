@@ -1,12 +1,7 @@
 import type { WorkspaceRetirePreflightResponse } from "@anyharness/sdk";
-import {
-  anyHarnessWorkspaceRetirePreflightKey,
-} from "@anyharness/sdk-react";
-import { useQueries } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useWorkspaceRetirePreflightQueries } from "@/hooks/access/anyharness/workspaces/use-workspace-retire-preflights";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { getWorkspaceRetirePreflight } from "@/lib/access/anyharness/workspaces";
 
 export interface WorkspaceFinishSuggestion {
   workspaceId: string;
@@ -14,27 +9,18 @@ export interface WorkspaceFinishSuggestion {
   preflight: WorkspaceRetirePreflightResponse;
 }
 
+// Owns read-only finish-suggestion state for standard worktree workspaces.
+// AnyHarness retire-preflight query shape lives in the access hook.
 export function useWorkspaceFinishSuggestions(
   collections: WorkspaceCollections | undefined,
 ): Record<string, WorkspaceFinishSuggestion> {
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const dismissals = useWorkspaceUiStore((state) => state.finishSuggestionDismissalsByWorkspaceId);
   const workspaces = collections?.localWorkspaces.filter((workspace) =>
     workspace.kind === "worktree"
     && (workspace.surface ?? "standard") === "standard"
     && workspace.lifecycleState !== "retired"
   ) ?? [];
-
-  const queries = useQueries({
-    queries: workspaces.map((workspace) => ({
-      queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspace.id),
-      enabled: runtimeUrl.trim().length > 0,
-      staleTime: 60_000,
-      queryFn: async ({ signal }) => {
-        return getWorkspaceRetirePreflight({ runtimeUrl }, workspace.id, { signal });
-      },
-    })),
-  });
+  const queries = useWorkspaceRetirePreflightQueries(workspaces.map((workspace) => workspace.id));
 
   const suggestions: Record<string, WorkspaceFinishSuggestion> = {};
   queries.forEach((query, index) => {

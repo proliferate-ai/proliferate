@@ -13,8 +13,8 @@ import {
 } from "@/lib/domain/workspaces/sidebar/sidebar";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
-import { useWorkspaceMetadataSync } from "@/hooks/workspaces/use-workspace-metadata-sync";
-import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/use-workspace-finish-suggestions";
+import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
+import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/derived/use-workspace-finish-suggestions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
