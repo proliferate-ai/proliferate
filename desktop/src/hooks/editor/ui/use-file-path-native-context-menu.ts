@@ -10,6 +10,7 @@ export function useFilePathNativeContextMenu({
   onOpen: () => void;
   onCopy: () => void;
 }) {
+  // Product-specific native context menu wiring for file-path UI surfaces.
   return useNativeContextMenu(() =>
     buildFilePathNativeContextMenuItems({
       canOpen,

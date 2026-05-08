@@ -24,7 +24,7 @@ import {
   isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
-import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useRuntimeInputSyncSummary } from "@/hooks/cloud/use-runtime-input-sync-summary";

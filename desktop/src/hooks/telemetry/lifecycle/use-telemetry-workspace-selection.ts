@@ -1,17 +1,12 @@
 import { useEffect, useRef } from "react";
-import type { DesktopWorkspaceKind } from "@/lib/domain/telemetry/events";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { resolveDesktopTelemetryWorkspaceKind } from "@/lib/domain/telemetry/workspace-kind";
 import {
   setTelemetryTag,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
-function workspaceKind(workspaceId: string | null): DesktopWorkspaceKind | "none" {
-  if (!workspaceId) return "none";
-  return parseCloudWorkspaceSyntheticId(workspaceId) ? "cloud" : "local";
-}
-
+// Owns selected-workspace telemetry tags and events. Does not own workspace kind classification.
 export function useTelemetryWorkspaceSelection() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const previousWorkspaceIdRef = useRef<string | null>(null);
@@ -20,7 +15,7 @@ export function useTelemetryWorkspaceSelection() {
     if (previousWorkspaceIdRef.current === selectedWorkspaceId) return;
     previousWorkspaceIdRef.current = selectedWorkspaceId;
 
-    const kind = workspaceKind(selectedWorkspaceId);
+    const kind = resolveDesktopTelemetryWorkspaceKind(selectedWorkspaceId);
     setTelemetryTag("workspace_kind", kind);
 
     if (kind === "none") return;

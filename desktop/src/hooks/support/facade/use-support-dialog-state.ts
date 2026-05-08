@@ -3,7 +3,7 @@ import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { SUPPORT_EMAIL_ADDRESS } from "@/config/capabilities";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useSendSupportMessage } from "@/hooks/access/cloud/use-send-support-message";
-import { useSessionDebugActions } from "@/hooks/support/use-session-debug-actions";
+import { useSessionDebugActions } from "@/hooks/support/workflows/use-session-debug-actions";
 import {
   buildSupportEmailBody,
   formatSupportContextLabel,
@@ -20,6 +20,10 @@ interface UseSupportDialogStateOptions {
   context: SupportMessageContext;
 }
 
+/**
+ * Owns support dialog UI state and user-facing support actions.
+ * Does not own session debug collection internals.
+ */
 export function useSupportDialogState({
   onClose,
   context,

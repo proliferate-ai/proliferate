@@ -8,7 +8,7 @@ import {
   useWorkspaceFilesQuery,
 } from "@anyharness/sdk-react";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useFileTreeNativeContextMenu } from "@/hooks/editor/use-file-tree-native-context-menu";
+import { useFileTreeNativeContextMenu } from "@/hooks/editor/ui/use-file-tree-native-context-menu";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { ChevronRight, FilePlus, FolderPlus, Pencil, Trash } from "@/components/ui/icons";

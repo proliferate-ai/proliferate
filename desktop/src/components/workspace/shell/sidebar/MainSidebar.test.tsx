@@ -134,7 +134,7 @@ vi.mock("@/hooks/ui/use-debug-render-count", () => ({
   useDebugRenderCount: () => {},
 }));
 
-vi.mock("@/hooks/support/use-sidebar-support-context", () => ({
+vi.mock("@/hooks/support/derived/use-sidebar-support-context", () => ({
   useSidebarSupportContext: () => ({
     source: "sidebar",
     intent: "general",
