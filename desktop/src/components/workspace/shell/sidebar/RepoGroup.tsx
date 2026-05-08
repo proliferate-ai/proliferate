@@ -12,7 +12,7 @@ import {
   repoRemovalConfirmationCopy,
   requestRepoRemovalConfirmation,
 } from "@/lib/domain/workspaces/sidebar/repo-context-menu";
-import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/use-repo-group-native-context-menu";
+import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { SidebarActionButton } from "./SidebarActionButton";
 
 interface RepoGroupProps {

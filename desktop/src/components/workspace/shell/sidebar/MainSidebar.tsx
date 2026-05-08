@@ -43,9 +43,9 @@ import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-su
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
-import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
-import { useSidebarRepoGroupState } from "@/hooks/workspaces/use-sidebar-repo-group-state";
-import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
+import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
+import { useSidebarRepoGroupState } from "@/hooks/workspaces/facade/use-sidebar-repo-group-state";
+import { useWorkspaceSidebarState } from "@/hooks/workspaces/derived/use-workspace-sidebar-state";
 import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
 import {
   buildCloudRepoSettingsHref,

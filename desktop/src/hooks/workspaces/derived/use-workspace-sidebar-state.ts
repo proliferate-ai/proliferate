@@ -16,7 +16,7 @@ import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/use-workspace-metadata-sync";
 import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/use-workspace-finish-suggestions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/use-workspace-sidebar-activities";
+import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

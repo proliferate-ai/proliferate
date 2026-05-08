@@ -6,16 +6,16 @@ import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-works
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar";
-import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
-import { useWorkspaceActivationWorkflow } from "./use-workspace-activation-workflow";
-import { useAddRepo } from "./use-add-repo";
+import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
+import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
+import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { useWorkspaceRetireActions } from "./use-workspace-retire-actions";
+import { useWorkspaceRetireActions } from "@/hooks/workspaces/use-workspace-retire-actions";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceNavigationWorkflow } from "./use-workspace-navigation-workflow";
+import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
   const mobility = useWorkspaceMobilityState();

@@ -1,6 +1,6 @@
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
-import { useSidebarShortcutTargets } from "@/hooks/workspaces/use-sidebar-shortcut-targets";
+import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";
 import { resolveSidebarShortcutDigitTarget } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import {
