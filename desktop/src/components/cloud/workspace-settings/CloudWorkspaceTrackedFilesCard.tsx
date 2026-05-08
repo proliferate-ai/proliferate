@@ -1,9 +1,13 @@
-import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Badge } from "@/components/ui/Badge";
 
+interface CloudWorkspaceTrackedFileMetadata {
+  relativePath: string;
+  updatedAt: string;
+}
+
 interface CloudWorkspaceTrackedFilesCardProps {
-  trackedFiles: CloudRepoFileMetadata[];
+  trackedFiles: CloudWorkspaceTrackedFileMetadata[];
 }
 
 export function CloudWorkspaceTrackedFilesCard({
