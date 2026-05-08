@@ -75,6 +75,8 @@ Allowed:
 - Route declarations with typed Pydantic return annotations.
 - Resource-access deps via `Depends(<domain>_user_can_<action>)`.
 - Authentication deps via `Depends(get_current_user)`.
+- Session injection via `db: AsyncSession = Depends(get_async_session)` —
+  the handler receives the request session and passes it to the service.
 - Response construction via `<domain>/models.py` payload functions.
 - Request body validation via Pydantic input models.
 
@@ -82,7 +84,11 @@ Banned:
 
 - Authorization checks inline in handler bodies. Use deps.
 - Direct `db/store/**` imports.
-- `AsyncSessionDep`, `get_async_session`, or `async_session_factory` imports.
+- Calling `AsyncSession` methods (`db.execute`, `db.commit`, `db.add`)
+  inside the handler body. The handler injects `db` and forwards it; only
+  services and stores call methods on it.
+- `async_session_factory` imports. The handler uses
+  `Depends(get_async_session)`, never opens its own session.
 - SQLAlchemy imports.
 - Business logic. Move to `service.py`.
 - ORM model imports other than `User` from auth.
@@ -96,20 +102,26 @@ between handlers and stores.
 
 Allowed:
 
-- Composing multiple store function calls within a single transaction.
+- `db: AsyncSession` as a parameter (passed by the handler or the worker
+  entry point). Service functions take this and thread it to stores.
+- Composing multiple store function calls within a single transaction
+  (the request session by default; `db.begin_nested()` for narrower
+  atomicity).
 - Calling integrations via their public API.
 - Calling pure functions in `domain/`.
 - Calling other domains' public service functions for *writes*.
 - Calling other domains' stores for *reads*.
 - Raising domain errors (`raise WorkspaceAlreadyDeleting(...)`).
-- `async with db.begin_nested():` for narrower atomicity.
 
 Banned:
 
-- `AsyncSession`, `AsyncSessionDep`, `get_async_session`,
-  `async_session_factory`, SQLAlchemy direct imports.
+- `async_session_factory` imports. Services don't open sessions; they
+  receive them.
+- SQLAlchemy direct imports (`from sqlalchemy import ...`).
 - `select()`, `insert()`, `update()`, `delete()`, `db.execute()`. All DB
   access goes through stores.
+- `db.commit()` or `db.rollback()`. Transactions are owned by the caller
+  (the FastAPI dep for HTTP handlers; the worker entry point for workers).
 - Authorization checks inline. Use route deps for resource access; call
   `domain/policy.py` for product rules.
 - Inline status-to-label maps or other repeated presentation logic.

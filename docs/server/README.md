@@ -107,19 +107,70 @@ server/proliferate/
 Do not add new top-level server folders without updating this doc and the
 focused guide that owns the layer.
 
+## Transitional State
+
+This doc describes the **target** architecture. The codebase is migrating
+toward it; some existing patterns still need to be reshaped before every
+hard rule below holds true everywhere.
+
+Files named in the target shape that **do not yet exist** (or are partial):
+
+- `server/proliferate/errors.py` — the shared base for `ProliferateError`,
+  `NotFoundError`, `PermissionDenied`, `Conflict`. Today error types are
+  scattered or per-domain only.
+- `auth/authorization.py` — `require_org_role`, `OwnerContext`,
+  `PolicyVerdict` are currently in `server/organizations/service.py`; they
+  migrate to a dedicated module so domains stop cross-importing from
+  organizations.
+- `server/<domain>/access.py` — resource-access route deps. Most domains
+  don't have one today; access checks happen inline in services.
+- `server/<domain>/domain/policy.py` — pure product-rule verdicts. Today
+  most product rules are inline `if not condition: raise HTTPException(...)`
+  blocks in services.
+
+Patterns that **need migration**:
+
+- **DB session threading.** Today many handlers receive only `User` (no
+  `db`), and stores self-open sessions internally. Target: handlers receive
+  `db: AsyncSession = Depends(get_async_session)`, services accept and
+  thread `db`, stores never open sessions or commit. See
+  [guides/database.md](guides/database.md).
+- **Vendor clients in product code.** `server/cloud/runtime/anyharness_api.py`,
+  `session_api.py`, and `workspace_operations.py` are the AnyHarness HTTP
+  client living inside the product domain. Target: move to
+  `integrations/anyharness/`.
+- **Sibling helper files importing ORM.** `billing/reconciler.py`,
+  `billing/stripe_webhooks.py`, several `cloud/runtime/*.py` files import
+  from `db.models` and do service-layer work. Target: see
+  [guides/domains.md](guides/domains.md) on service decomposition.
+- **God files.** `db/store/billing.py` (2746 lines), `cloud/workspaces/service.py`
+  (1135), `cloud/runtime/provision.py` (1082), and others need
+  decomposition under the rules in the relevant guide.
+- **Pydantic constructors accepting ORM.** Currently in
+  `cloud/repo_config/models.py` and `cloud/workspaces/models.py`. Target:
+  every constructor takes a dataclass.
+
+Cleanup work should preserve current behavior, then incrementally move to
+the target shape. New code should follow the rules below. PRs that
+introduce new code in the **old** patterns require a justification.
+
 ## Hard Rules
 
 ### Layer law
 
 - `api.py` is transport only. It parses the request, calls the right service,
-  and returns the response. It must not import `db/store/**`, `AsyncSessionDep`,
-  `get_async_session`, `async_session_factory`, or SQLAlchemy directly. The
-  only ORM model import allowed in handlers is `User` from auth.
+  and returns the response. It may import `Depends`, `get_async_session`, and
+  `current_active_user` (or equivalent auth dep) **only for use as
+  `Depends(...)` injections** — never to call directly. It must not import
+  `db/store/**`, must not call `AsyncSession` methods, and must not import
+  SQLAlchemy. The only ORM model import allowed in handlers is `User` from
+  auth.
 - `service.py` owns business logic, orchestration, invariants, and validation.
-  It may call stores and integrations. It must not import `AsyncSession`,
-  `AsyncSessionDep`, `get_async_session`, `async_session_factory`, or
-  SQLAlchemy directly. It must not run `select(...)`, `insert(...)`,
-  `update(...)`, `delete(...)`, or `db.execute(...)`.
+  It accepts an `AsyncSession` parameter passed by the handler and threads it
+  to stores. It must not import `async_session_factory` or open its own
+  sessions. It must not import SQLAlchemy directly. It must not run
+  `select(...)`, `insert(...)`, `update(...)`, `delete(...)`, or
+  `db.execute(...)`.
 - All database access lives in `db/store/**`. Stores own query construction
   and DB execution.
 - `db/models/**` owns ORM table definitions only.
@@ -128,8 +179,9 @@ focused guide that owns the layer.
   dataclass intermediate layer is mandatory.
 - Raw third-party SDK and API calls belong behind `integrations/**`.
 - Pure product rules belong in `server/<domain>/domain/<concern>.py`. They
-  must not import React, async, I/O, stores, the query client, or platform
-  APIs. They return data, never `Promise[*]`-equivalent (no async exports).
+  must not import FastAPI, SQLAlchemy, async I/O libraries, integrations,
+  stores, config, or HTTP exception types. They are synchronous: no `async
+  def` exports. They return data.
 - `middleware/**` is only for cross-cutting HTTP request lifecycle concerns.
 
 ### Type pipeline
@@ -314,8 +366,8 @@ Persistence rule:
 - `service.py` calls stores in `db/store/**`, integrations in `integrations/**`,
   pure functions in `<domain>/domain/**`, and other domains' public service
   functions (writes) or stores (reads).
-- `<domain>/domain/**` is pure: it does not import React-equivalent (FastAPI),
-  `db/store/**`, the query client, integrations, or platform APIs.
+- `<domain>/domain/**` is pure: it does not import FastAPI, SQLAlchemy,
+  `db/store/**`, integrations, async I/O libraries, or HTTP exception types.
 - `db/store/**` calls `db/models/**` and SQLAlchemy. Nothing else may import
   SQLAlchemy.
 - `db/models/**` is leaf: it does not import services, stores, or integrations.
