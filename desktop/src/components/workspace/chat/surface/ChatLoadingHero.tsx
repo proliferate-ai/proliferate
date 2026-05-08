@@ -1,4 +1,4 @@
-import { useChatLoadingSubstep } from "@/hooks/chat/use-chat-loading-substep";
+import { useChatLoadingSubstep } from "@/hooks/chat/derived/use-chat-loading-substep";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { BrailleSweepBadge } from "@/components/ui/icons";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";

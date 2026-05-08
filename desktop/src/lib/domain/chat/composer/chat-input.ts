@@ -10,6 +10,22 @@ interface ChatInputAvailabilityArgs {
   isConfiguredLaunchLoading: boolean;
   hasReadyConfiguredLaunch: boolean;
   configuredLaunchDisabledReason: string | null;
+  pendingWorkspaceEntry: ChatInputPendingWorkspaceEntry | null;
+  mobility: ChatInputMobilityState | null;
+  hasBusyReview: boolean;
+}
+
+export type ChatSelectedWorkspaceKind = "cloud" | "local";
+
+export interface ChatInputPendingWorkspaceEntry {
+  source: "local-created" | "worktree-created" | "cloud-created" | "cowork-created";
+  stage: "submitting" | "awaiting-cloud-ready" | "failed";
+}
+
+export interface ChatInputMobilityState {
+  handoffActive: boolean;
+  statusDescription: string | null;
+  selectedEffectiveOwner: "cloud" | "local" | null;
 }
 
 interface ModeValueLike {
@@ -40,6 +56,10 @@ export interface ChatInputAvailability {
   areRuntimeControlsDisabled: boolean;
 }
 
+export interface ChatInputAvailabilityState extends ChatInputAvailability {
+  selectedWorkspaceKind: ChatSelectedWorkspaceKind;
+}
+
 export function resolveChatDraftWorkspaceId(
   selectedLogicalWorkspaceId: string | null,
   selectedWorkspaceId: string | null,
@@ -59,12 +79,54 @@ export function resolveChatInputAvailability({
   isConfiguredLaunchLoading,
   hasReadyConfiguredLaunch,
   configuredLaunchDisabledReason,
-}: ChatInputAvailabilityArgs): ChatInputAvailability {
+  pendingWorkspaceEntry,
+  mobility,
+  hasBusyReview,
+}: ChatInputAvailabilityArgs): ChatInputAvailabilityState {
+  const selectedWorkspaceKind = isCloudWorkspaceSelected ? "cloud" : "local";
+
+  if (pendingWorkspaceEntry) {
+    if (pendingWorkspaceEntry.stage !== "failed") {
+      return {
+        isDisabled: false,
+        disabledReason: null,
+        areRuntimeControlsDisabled: false,
+        selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
+      };
+    }
+
+    return {
+      isDisabled: true,
+      disabledReason: "Resolve workspace setup before starting chat.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
+    };
+  }
+
+  if (mobility?.handoffActive) {
+    return {
+      isDisabled: true,
+      disabledReason: mobility.statusDescription ?? "Workspace mobility is in progress.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: mobility.selectedEffectiveOwner === "cloud" ? "cloud" : "local",
+    };
+  }
+
+  if (hasBusyReview) {
+    return {
+      isDisabled: true,
+      disabledReason: "Review automation is running.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
+    };
+  }
+
   if (!selectedWorkspaceId) {
     return {
       isDisabled: true,
       disabledReason: "Select a workspace to start chatting.",
       areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
     };
   }
 
@@ -77,9 +139,10 @@ export function resolveChatInputAvailability({
             ? "Cloud workspace is archived."
             : selectedCloudWorkspaceStatus === "error"
               ? "Cloud workspace hit an error. Retry provisioning to continue."
-              : "Cloud workspace is still preparing."
+            : "Cloud workspace is still preparing."
         ),
       areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
     };
   }
 
@@ -88,6 +151,7 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: selectedCloudRuntimeActionBlockReason,
       areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
     };
   }
 
@@ -96,6 +160,7 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "AnyHarness runtime is still starting.",
       areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind,
     };
   }
 
@@ -104,6 +169,7 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: "Starting session…",
       areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind,
     };
   }
 
@@ -112,6 +178,7 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: configuredLaunchDisabledReason ?? "Your chosen default agent is not ready yet.",
       areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind,
     };
   }
 
@@ -119,6 +186,7 @@ export function resolveChatInputAvailability({
     isDisabled: false,
     disabledReason: null,
     areRuntimeControlsDisabled: false,
+    selectedWorkspaceKind,
   };
 }
 

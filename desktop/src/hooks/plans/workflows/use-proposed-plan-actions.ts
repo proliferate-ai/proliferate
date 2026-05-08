@@ -17,7 +17,7 @@ import {
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
 import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
-import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
+import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";

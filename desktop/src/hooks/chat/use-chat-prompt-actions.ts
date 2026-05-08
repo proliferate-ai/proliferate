@@ -14,8 +14,8 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import {
   useActiveSessionLaunchState,
   useActiveSessionSurfaceSnapshot,
-} from "./derived/use-active-chat-session-selectors";
-import { useChatAvailabilityState } from "./use-chat-availability-state";
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import {
   EMPTY_CHAT_DRAFT,

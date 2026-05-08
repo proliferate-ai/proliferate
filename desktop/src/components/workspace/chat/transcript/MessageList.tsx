@@ -110,7 +110,7 @@ import {
 import {
   type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
-import { useTranscriptRowModel } from "@/hooks/chat/use-transcript-row-model";
+import { useTranscriptRowModel } from "@/hooks/chat/derived/use-transcript-row-model";
 import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
 import {
   lastTopLevelItemIsAssistantProseWithText,
