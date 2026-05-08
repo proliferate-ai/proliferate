@@ -15,6 +15,8 @@ import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-s
 
 const EMPTY_BRANCHES: GitBranchRef[] = [];
 
+// Owns repository settings form state and save/revert actions.
+// Does not own repository discovery or workspace cache updates.
 export function useRepositorySettings(repository: SettingsRepositoryEntry | null) {
   const sourceRoot = repository?.sourceRoot ?? null;
   const repoConfig = useRepoPreferencesStore((state) =>

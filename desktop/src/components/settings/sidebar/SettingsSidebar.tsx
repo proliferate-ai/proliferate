@@ -9,7 +9,7 @@ import {
   SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
 } from "@/components/settings/settings-navigation";
-import { useAppVersion } from "@/hooks/settings/use-app-version";
+import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {

@@ -9,7 +9,7 @@ import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { Switch } from "@/components/ui/Switch";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useAvailableEditors } from "@/hooks/settings/use-available-editors";
+import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
 import type { TurnEndSoundId } from "@/lib/domain/preferences/user-preferences";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";

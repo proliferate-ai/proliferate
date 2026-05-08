@@ -11,6 +11,8 @@ interface UseSettingsNavigationArgs {
   repositories: SettingsRepositoryEntry[];
 }
 
+// Owns settings route normalization and navigation callbacks.
+// Does not own section content state.
 export function useSettingsNavigation({
   repositories,
 }: UseSettingsNavigationArgs) {

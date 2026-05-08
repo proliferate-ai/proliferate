@@ -1,9 +1,11 @@
 import { useEffect } from "react";
+import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
-import { useOrganizations } from "./use-organizations";
 
 const EMPTY_ORGANIZATIONS: never[] = [];
 
+// Owns the settings-facing active organization model.
+// Does not own organization cloud queries or mutations.
 export function useActiveOrganization() {
   const activeOrganizationId = useOrganizationStore((state) => state.activeOrganizationId);
   const setActiveOrganizationId = useOrganizationStore((state) => state.setActiveOrganizationId);
