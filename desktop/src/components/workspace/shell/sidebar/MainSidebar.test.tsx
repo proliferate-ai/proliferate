@@ -206,7 +206,7 @@ vi.mock("@/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
   }),
 }));
 
-vi.mock("@/hooks/sessions/use-session-activity-reconciler", () => ({
+vi.mock("@/hooks/sessions/lifecycle/use-session-activity-reconciler", () => ({
   useSessionActivityReconciler: () => {},
 }));
 

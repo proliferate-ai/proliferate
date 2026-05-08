@@ -4,9 +4,9 @@ import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

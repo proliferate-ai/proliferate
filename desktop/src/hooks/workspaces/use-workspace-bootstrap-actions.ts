@@ -7,9 +7,9 @@ import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,

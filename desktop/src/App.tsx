@@ -24,7 +24,7 @@ import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-works
 import { usePromptOutboxDispatcher } from "@/hooks/chat/use-prompt-outbox-dispatcher"
 import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
-import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
+import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
 import {

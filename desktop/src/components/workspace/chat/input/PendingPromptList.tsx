@@ -4,7 +4,7 @@ import { Pencil, X } from "@/components/ui/icons";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
-import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
+import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pending-prompt";
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueRow,

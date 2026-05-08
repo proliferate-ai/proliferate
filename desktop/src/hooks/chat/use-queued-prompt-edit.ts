@@ -5,7 +5,7 @@ import {
   useActivePendingPrompts,
   useActiveSessionId,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useEditPendingPrompt } from "@/hooks/sessions/use-edit-pending-prompt";
+import { useEditPendingPrompt } from "@/hooks/sessions/workflows/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 
 export interface VisiblePendingPromptEntry extends PendingPromptEntry {

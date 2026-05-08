@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useChatPermissionActions() {

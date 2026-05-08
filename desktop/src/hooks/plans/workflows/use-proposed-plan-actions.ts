@@ -17,7 +17,7 @@ import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-ef
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";

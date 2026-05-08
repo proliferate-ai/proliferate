@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 

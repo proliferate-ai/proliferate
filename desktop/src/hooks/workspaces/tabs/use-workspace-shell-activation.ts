@@ -18,7 +18,7 @@ import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,

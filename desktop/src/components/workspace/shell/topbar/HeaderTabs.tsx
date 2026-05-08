@@ -19,9 +19,9 @@ import {
   renderChatTabIcon,
 } from "@/components/workspace/shell/tabs/tab-rendering";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
-import { useSessionForkActions } from "@/hooks/sessions/use-session-fork-actions";
-import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
+import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";

@@ -3,11 +3,11 @@ import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import {
   isSessionModelAvailabilityCancelled,
   isSessionModelAvailabilityRoutedToSettings,
-} from "@/hooks/sessions/use-session-model-availability-workflow";
+} from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
