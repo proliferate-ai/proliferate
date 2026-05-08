@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from proliferate.server.cloud.mcp_catalog.types import (
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogEntry,
     CatalogSettingField,
     HttpLaunchTemplate,

@@ -22,10 +22,8 @@ from proliferate.db.store.cloud_mcp.connections import (
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    get_catalog_entry,
-)
-from proliferate.server.cloud.mcp_catalog.types import CatalogEntry
+from proliferate.server.cloud.mcp_catalog.catalog import get_catalog_entry
+from proliferate.server.cloud.mcp_catalog.domain.types import CatalogEntry
 from proliferate.server.cloud.mcp_connections.domain.connection_rules import (
     McpConnectionRuleViolation,
     connection_oauth_resource_url,

@@ -10,17 +10,20 @@ from proliferate.constants.cloud_mcp import (
     CLOUD_MCP_CONNECTION_ID_PATTERN,
     CLOUD_MCP_SERVER_NAME_MAX_LENGTH,
 )
-from proliferate.server.cloud.mcp_catalog.renderer import (
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     parse_settings as catalog_parse_settings,
 )
-from proliferate.server.cloud.mcp_catalog.renderer import (
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     render_oauth_resource_url,
     validate_secret_fields,
 )
-from proliferate.server.cloud.mcp_catalog.renderer import (
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     validate_settings as catalog_validate_settings,
 )
-from proliferate.server.cloud.mcp_catalog.types import CatalogConfigurationError, CatalogEntry
+from proliferate.server.cloud.mcp_catalog.domain.types import (
+    CatalogConfigurationError,
+    CatalogEntry,
+)
 
 CloudMcpAuthKind = Literal["secret", "oauth", "none"]
 CloudMcpAuthStatus = Literal["ready", "needs_reconnect", "error"]
