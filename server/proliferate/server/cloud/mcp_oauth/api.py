@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_oauth.models import (
     CloudMcpOAuthFlowStatusResponse,
     StartCloudMcpOAuthFlowResponse,
@@ -34,10 +34,7 @@ async def start_cloud_mcp_oauth_flow_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> StartCloudMcpOAuthFlowResponse:
-    try:
-        return await start_cloud_mcp_oauth_flow(db, user_id=user.id, connection_id=connection_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await start_cloud_mcp_oauth_flow(db, user_id=user.id, connection_id=connection_id)
 
 
 @router.get("/oauth/flows/{flow_id}", response_model=CloudMcpOAuthFlowStatusResponse)
@@ -46,10 +43,7 @@ async def get_cloud_mcp_oauth_flow_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
-    try:
-        return await get_cloud_mcp_oauth_flow_status(db, user_id=user.id, flow_id=flow_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await get_cloud_mcp_oauth_flow_status(db, user_id=user.id, flow_id=flow_id)
 
 
 @router.post("/oauth/flows/{flow_id}/cancel", response_model=CloudMcpOAuthFlowStatusResponse)
@@ -58,10 +52,7 @@ async def cancel_cloud_mcp_oauth_flow_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
-    try:
-        return await cancel_cloud_mcp_oauth_flow(db, user_id=user.id, flow_id=flow_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await cancel_cloud_mcp_oauth_flow(db, user_id=user.id, flow_id=flow_id)
 
 
 @router.get("/oauth/callback", response_class=HTMLResponse)
