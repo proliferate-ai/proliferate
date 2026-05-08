@@ -6,6 +6,8 @@ from contextlib import suppress
 from typing import NoReturn
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.compat import (
     legacy_delete_connection,
@@ -176,14 +178,18 @@ def _connection_auth_status(value: str) -> CloudMcpAuthStatus:
     return "error"
 
 
-async def list_cloud_mcp_connections(user_id: UUID) -> CloudMcpConnectionsResponse:
-    records = await list_user_connections(user_id)
+async def list_cloud_mcp_connections(
+    db: AsyncSession,
+    user_id: UUID,
+) -> CloudMcpConnectionsResponse:
+    records = await list_user_connections(db, user_id)
     return CloudMcpConnectionsResponse(
         connections=[_connection_payload(record) for record in records]
     )
 
 
 async def create_cloud_mcp_connection(
+    db: AsyncSession,
     user_id: UUID,
     body: CreateCloudMcpConnectionRequest,
 ) -> CloudMcpConnectionResponse:
@@ -194,7 +200,7 @@ async def create_cloud_mcp_connection(
     if not catalog_entry_is_configured(entry):
         _invalid_payload("Connector catalog entry is not configured for this deployment.")
     settings = _validate_settings(entry, body.settings)
-    existing = await list_user_connections(user_id)
+    existing = await list_user_connections(db, user_id)
     if any(record.catalog_entry_id == entry.id for record in existing):
         _invalid_payload(f"{entry.name} is already connected.")
     connection_id = ""
@@ -204,6 +210,7 @@ async def create_cloud_mcp_connection(
         connection_id,
     )
     record = await upsert_user_connection(
+        db,
         user_id=user_id,
         catalog_entry_id=entry.id,
         catalog_entry_version=entry.version,
@@ -213,13 +220,14 @@ async def create_cloud_mcp_connection(
     )
     if entry.auth_kind == "none":
         await upsert_connection_auth(
+            db,
             connection_db_id=record.id,
             auth_kind="none",
             auth_status="ready",
             payload_ciphertext=None,
             payload_format="json-v1",
         )
-        refreshed = await get_user_connection(user_id, record.connection_id)
+        refreshed = await get_user_connection(db, user_id, record.connection_id)
         if refreshed is None:
             _not_found()
         record = refreshed
@@ -227,12 +235,13 @@ async def create_cloud_mcp_connection(
 
 
 async def patch_cloud_mcp_connection(
+    db: AsyncSession,
     user_id: UUID,
     connection_id: str,
     body: PatchCloudMcpConnectionRequest,
 ) -> CloudMcpConnectionResponse:
     cleaned_connection_id = validate_connection_id(connection_id)
-    existing = await get_user_connection(user_id, cleaned_connection_id)
+    existing = await get_user_connection(db, user_id, cleaned_connection_id)
     if existing is None:
         _not_found()
     entry = get_catalog_entry(existing.catalog_entry_id)
@@ -250,6 +259,7 @@ async def patch_cloud_mcp_connection(
                 _invalid_payload("Reconnect this MCP before changing URL-affecting settings.")
         settings_json = _settings_json(new_settings)
     record = await patch_user_connection(
+        db,
         user_id=user_id,
         connection_id=cleaned_connection_id,
         enabled=body.enabled,
@@ -262,12 +272,13 @@ async def patch_cloud_mcp_connection(
 
 
 async def put_cloud_mcp_connection_secret_auth(
+    db: AsyncSession,
     user_id: UUID,
     connection_id: str,
     body: PutCloudMcpSecretAuthRequest,
 ) -> CloudMcpConnectionResponse:
     cleaned_connection_id = validate_connection_id(connection_id)
-    record = await get_user_connection(user_id, cleaned_connection_id)
+    record = await get_user_connection(db, user_id, cleaned_connection_id)
     if record is None:
         _not_found()
     entry = get_catalog_entry(record.catalog_entry_id)
@@ -275,35 +286,39 @@ async def put_cloud_mcp_connection_secret_auth(
         _invalid_payload("Connector catalog entry was not found.")
     cleaned = _clean_secret_fields(entry, body.secret_fields)
     await upsert_connection_auth(
+        db,
         connection_db_id=record.id,
         auth_kind="secret",
         auth_status="ready",
         payload_ciphertext=encrypt_json({"secretFields": cleaned}),
         payload_format="secret-fields-v1",
     )
-    updated = await get_user_connection(user_id, cleaned_connection_id)
+    updated = await get_user_connection(db, user_id, cleaned_connection_id)
     if updated is None:
         _not_found()
     return _connection_payload(updated)
 
 
 async def delete_cloud_mcp_connection_for_user(
+    db: AsyncSession,
     user_id: UUID,
     connection_id: str,
 ) -> None:
-    await delete_user_connection(user_id, validate_connection_id(connection_id))
+    await delete_user_connection(db, user_id, validate_connection_id(connection_id))
 
 
 async def list_cloud_mcp_connection_statuses(
+    db: AsyncSession,
     user_id: UUID,
 ) -> list[CloudMcpConnectionSyncStatus]:
     return [
         cloud_mcp_connection_status_payload(record)
-        for record in await legacy_list_connections(user_id)
+        for record in await legacy_list_connections(db, user_id)
     ]
 
 
 async def sync_cloud_mcp_connection_for_user(
+    db: AsyncSession,
     user_id: UUID,
     connection_id: str,
     body: SyncCloudMcpConnectionRequest,
@@ -315,7 +330,7 @@ async def sync_cloud_mcp_connection_for_user(
     if not entry.cloud_secret_sync:
         _invalid_payload(f"{entry.name} does not support legacy cloud secret sync.")
     cleaned = _clean_secret_fields(entry, body.secret_fields)
-    existing = await list_user_connections(user_id)
+    existing = await list_user_connections(db, user_id)
     server_name = _generate_server_name(
         entry,
         {
@@ -326,6 +341,7 @@ async def sync_cloud_mcp_connection_for_user(
         cleaned_connection_id,
     )
     await legacy_upsert_secret_connection(
+        db,
         user_id=user_id,
         connection_id=cleaned_connection_id,
         catalog_entry=entry,
@@ -346,10 +362,12 @@ def _oauth_resource_url(entry: CatalogEntry, settings: dict[str, object]) -> str
 
 
 async def delete_legacy_cloud_mcp_connection_for_user(
+    db: AsyncSession,
     user_id: UUID,
     connection_id: str,
 ) -> None:
     await legacy_delete_connection(
+        db,
         user_id=user_id,
         connection_id=validate_connection_id(connection_id),
     )

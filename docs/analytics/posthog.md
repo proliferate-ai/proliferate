@@ -48,8 +48,8 @@ enabled.
   - trigger: auth state changes in the telemetry bootstrap flow
   - code path:
     - `desktop/src/providers/TelemetryProvider.tsx`
-    - `desktop/src/hooks/telemetry/use-telemetry-bootstrap.ts`
-    - `desktop/src/hooks/telemetry/use-telemetry-auth-identity.ts`
+    - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-bootstrap.ts`
+    - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-auth-identity.ts`
     - `desktop/src/lib/integrations/telemetry/client.ts`
     - `desktop/src/lib/integrations/telemetry/posthog.ts`
   - sends:
@@ -113,7 +113,7 @@ No server PostHog env vars exist in the current implementation.
 - Desktop PostHog adapter:
   - `desktop/src/lib/integrations/telemetry/posthog.ts`
 - Desktop auth identity hook:
-  - `desktop/src/hooks/telemetry/use-telemetry-auth-identity.ts`
+  - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-auth-identity.ts`
 - Exact events currently captured:
   - `chat_session_created`
   - `chat_prompt_submitted`

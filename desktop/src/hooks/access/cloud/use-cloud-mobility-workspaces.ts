@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
 import { listCloudMobilityWorkspaces } from "@/lib/access/cloud/mobility";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 
 const EMPTY_CLOUD_MOBILITY_WORKSPACES: CloudMobilityWorkspaceSummary[] = [];

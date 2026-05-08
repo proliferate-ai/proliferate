@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
 import { useScheduleSubagentWakeMutation } from "@anyharness/sdk-react";
-import { useCoworkComposerStrip } from "@/hooks/cowork/use-cowork-composer-strip";
+import { useCoworkComposerStrip } from "@/hooks/cowork/facade/use-cowork-composer-strip";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";

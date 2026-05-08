@@ -13,7 +13,7 @@ import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ChevronRight } from "@/components/ui/icons";
-import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
+import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import {
   classifyCollapsedAction,

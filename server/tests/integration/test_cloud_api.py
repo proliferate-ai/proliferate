@@ -70,7 +70,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
     from proliferate.auth.models import UserCreate
     from proliferate.auth.users import UserManager
     from proliferate.db.engine import get_async_session
-    from proliferate.db.store.users import get_user_db
+    from proliferate.auth.users import get_user_db
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -735,6 +735,7 @@ class TestCloudMcpConnections:
         assert len(records) == 1
 
         initial = await upsert_connection_auth(
+            db_session,
             connection_db_id=records[0].id,
             auth_kind="oauth",
             auth_status="ready",
@@ -742,6 +743,7 @@ class TestCloudMcpConnections:
             payload_format="oauth-bundle-v1",
         )
         updated = await update_connection_auth_if_version(
+            db_session,
             connection_db_id=records[0].id,
             expected_auth_version=initial.auth_version,
             auth_kind="oauth",
@@ -753,6 +755,7 @@ class TestCloudMcpConnections:
         assert updated.auth_version == initial.auth_version + 1
 
         stale = await update_connection_auth_if_version(
+            db_session,
             connection_db_id=records[0].id,
             expected_auth_version=initial.auth_version,
             auth_kind="oauth",
@@ -801,6 +804,7 @@ class TestCloudMcpConnections:
         records = await _list_mcp_connections(db_session, session["user_id"])
         linear_record = next(record for record in records if record.catalog_entry_id == "linear")
         await upsert_connection_auth(
+            db_session,
             connection_db_id=linear_record.id,
             auth_kind="oauth",
             auth_status="ready",
@@ -818,6 +822,7 @@ class TestCloudMcpConnections:
             ),
             payload_format="oauth-bundle-v1",
         )
+        await db_session.commit()
 
         async def _raise_provider_error(**_kwargs: object) -> object:
             raise RuntimeError("provider unavailable")
@@ -867,6 +872,7 @@ class TestCloudMcpConnections:
 
         state_hash = hashlib.sha256(b"oauth-state").hexdigest()
         flow = await create_oauth_flow_canceling_existing(
+            db_session,
             connection_db_id=records[0].id,
             user_id=uuid.UUID(session["user_id"]),
             state_hash=state_hash,
@@ -881,11 +887,11 @@ class TestCloudMcpConnections:
             expires_at=datetime(2099, 1, 1, tzinfo=UTC),
         )
 
-        claimed = await claim_active_oauth_flow_by_state_hash(state_hash)
+        claimed = await claim_active_oauth_flow_by_state_hash(db_session, state_hash)
         assert claimed is not None
         assert claimed.id == flow.id
         assert claimed.status == "exchanging"
-        assert await claim_active_oauth_flow_by_state_hash(state_hash) is None
+        assert await claim_active_oauth_flow_by_state_hash(db_session, state_hash) is None
 
     @pytest.mark.asyncio
     async def test_oauth_callback_uses_cached_dcr_client_secret(
@@ -911,6 +917,7 @@ class TestCloudMcpConnections:
 
         redirect_uri = "https://api.example.com/v1/cloud/mcp/oauth/callback"
         await upsert_oauth_client(
+            db_session,
             issuer="https://api.supabase.com",
             redirect_uri=redirect_uri,
             catalog_entry_id="supabase",
@@ -924,6 +931,7 @@ class TestCloudMcpConnections:
         )
         state = "oauth-state-with-secret"
         flow = await create_oauth_flow_canceling_existing(
+            db_session,
             connection_db_id=records[0].id,
             user_id=uuid.UUID(session["user_id"]),
             state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
@@ -937,6 +945,7 @@ class TestCloudMcpConnections:
             authorization_url="https://api.supabase.com/v1/oauth/authorize",
             expires_at=datetime(2099, 1, 1, tzinfo=UTC),
         )
+        await db_session.commit()
         captured: dict[str, object] = {}
 
         async def _exchange_token(**kwargs: object) -> TokenResponse:
@@ -972,7 +981,7 @@ class TestCloudMcpConnections:
         assert captured["token_endpoint_auth_method"] is None
 
         db_session.expire_all()
-        stored = await claim_active_oauth_flow_by_state_hash(flow.state_hash)
+        stored = await claim_active_oauth_flow_by_state_hash(db_session, flow.state_hash)
         assert stored is None
         auths = await _list_mcp_connection_auths(db_session)
         assert len(auths) == 1

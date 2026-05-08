@@ -6,10 +6,18 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from fastapi_users import BaseUserManager, UUIDIDMixin
+from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.models.auth import User
-from proliferate.db.store.users import get_user_db
+from proliferate.db.engine import get_async_session
+from proliferate.db.models.auth import OAuthAccount, User
+
+
+async def get_user_db(
+    session: Annotated[AsyncSession, Depends(get_async_session)],
+) -> AsyncGenerator[SQLAlchemyUserDatabase[User, OAuthAccount], None]:
+    yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):

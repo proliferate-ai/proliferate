@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import CloudMcpOAuthClient
@@ -29,25 +30,43 @@ def _record(client: CloudMcpOAuthClient) -> CloudMcpOAuthClientRecord:
 
 
 async def get_oauth_client(
+    db: AsyncSession,
     *,
     issuer: str,
     redirect_uri: str,
     catalog_entry_id: str,
 ) -> CloudMcpOAuthClientRecord | None:
-    async with db_engine.async_session_factory() as db:
-        client = (
-            await db.execute(
-                select(CloudMcpOAuthClient).where(
-                    CloudMcpOAuthClient.issuer == issuer,
-                    CloudMcpOAuthClient.redirect_uri == redirect_uri,
-                    CloudMcpOAuthClient.catalog_entry_id == catalog_entry_id,
-                )
+    client = (
+        await db.execute(
+            select(CloudMcpOAuthClient).where(
+                CloudMcpOAuthClient.issuer == issuer,
+                CloudMcpOAuthClient.redirect_uri == redirect_uri,
+                CloudMcpOAuthClient.catalog_entry_id == catalog_entry_id,
             )
-        ).scalar_one_or_none()
-        return _record(client) if client is not None else None
+        )
+    ).scalar_one_or_none()
+    return _record(client) if client is not None else None
+
+
+async def get_oauth_client_standalone(
+    *,
+    issuer: str,
+    redirect_uri: str,
+    catalog_entry_id: str,
+) -> CloudMcpOAuthClientRecord | None:
+    # Materialization token refreshes run concurrently; keep OAuth client reads
+    # isolated from the request session used to list candidate connections.
+    async with db_engine.async_session_factory() as db:
+        return await get_oauth_client(
+            db,
+            issuer=issuer,
+            redirect_uri=redirect_uri,
+            catalog_entry_id=catalog_entry_id,
+        )
 
 
 async def upsert_oauth_client(
+    db: AsyncSession,
     *,
     issuer: str,
     redirect_uri: str,
@@ -60,59 +79,58 @@ async def upsert_oauth_client(
     registration_client_uri: str | None,
     registration_access_token_ciphertext: str | None,
 ) -> CloudMcpOAuthClientRecord:
-    async with db_engine.async_session_factory() as db:
-        client = (
-            await db.execute(
-                select(CloudMcpOAuthClient).where(
-                    CloudMcpOAuthClient.issuer == issuer,
-                    CloudMcpOAuthClient.redirect_uri == redirect_uri,
-                    CloudMcpOAuthClient.catalog_entry_id == catalog_entry_id,
-                )
-            )
-        ).scalar_one_or_none()
-        now = utcnow()
-        if client is None:
-            client = CloudMcpOAuthClient(
-                issuer=issuer,
-                redirect_uri=redirect_uri,
-                catalog_entry_id=catalog_entry_id,
-                resource=resource,
-                client_id=client_id,
-                client_secret_ciphertext=client_secret_ciphertext,
-                client_secret_expires_at=client_secret_expires_at,
-                token_endpoint_auth_method=token_endpoint_auth_method,
-                registration_client_uri=registration_client_uri,
-                registration_access_token_ciphertext=registration_access_token_ciphertext,
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(client)
-        else:
-            client.resource = resource
-            client.client_id = client_id
-            client.client_secret_ciphertext = client_secret_ciphertext
-            client.client_secret_expires_at = client_secret_expires_at
-            client.token_endpoint_auth_method = token_endpoint_auth_method
-            client.registration_client_uri = registration_client_uri
-            client.registration_access_token_ciphertext = registration_access_token_ciphertext
-            client.updated_at = now
-        await db.commit()
-        await db.refresh(client)
-        return _record(client)
-
-
-async def delete_oauth_client(
-    *,
-    issuer: str,
-    redirect_uri: str,
-    catalog_entry_id: str,
-) -> None:
-    async with db_engine.async_session_factory() as db:
+    client = (
         await db.execute(
-            delete(CloudMcpOAuthClient).where(
+            select(CloudMcpOAuthClient).where(
                 CloudMcpOAuthClient.issuer == issuer,
                 CloudMcpOAuthClient.redirect_uri == redirect_uri,
                 CloudMcpOAuthClient.catalog_entry_id == catalog_entry_id,
             )
         )
-        await db.commit()
+    ).scalar_one_or_none()
+    now = utcnow()
+    if client is None:
+        client = CloudMcpOAuthClient(
+            issuer=issuer,
+            redirect_uri=redirect_uri,
+            catalog_entry_id=catalog_entry_id,
+            resource=resource,
+            client_id=client_id,
+            client_secret_ciphertext=client_secret_ciphertext,
+            client_secret_expires_at=client_secret_expires_at,
+            token_endpoint_auth_method=token_endpoint_auth_method,
+            registration_client_uri=registration_client_uri,
+            registration_access_token_ciphertext=registration_access_token_ciphertext,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(client)
+    else:
+        client.resource = resource
+        client.client_id = client_id
+        client.client_secret_ciphertext = client_secret_ciphertext
+        client.client_secret_expires_at = client_secret_expires_at
+        client.token_endpoint_auth_method = token_endpoint_auth_method
+        client.registration_client_uri = registration_client_uri
+        client.registration_access_token_ciphertext = registration_access_token_ciphertext
+        client.updated_at = now
+    await db.flush()
+    await db.refresh(client)
+    return _record(client)
+
+
+async def delete_oauth_client(
+    db: AsyncSession,
+    *,
+    issuer: str,
+    redirect_uri: str,
+    catalog_entry_id: str,
+) -> None:
+    await db.execute(
+        delete(CloudMcpOAuthClient).where(
+            CloudMcpOAuthClient.issuer == issuer,
+            CloudMcpOAuthClient.redirect_uri == redirect_uri,
+            CloudMcpOAuthClient.catalog_entry_id == catalog_entry_id,
+        )
+    )
+    await db.flush()

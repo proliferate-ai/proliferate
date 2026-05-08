@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import CloudMcpConnection, CloudMcpConnectionAuth
@@ -28,6 +29,7 @@ def _record(auth: CloudMcpConnectionAuth) -> CloudMcpAuthRecord:
 
 
 async def upsert_connection_auth(
+    db: AsyncSession,
     *,
     connection_db_id: UUID,
     auth_kind: str,
@@ -37,65 +39,65 @@ async def upsert_connection_auth(
     token_expires_at: datetime | None = None,
     last_error_code: str | None = None,
 ) -> CloudMcpAuthRecord:
-    async with db_engine.async_session_factory() as db:
-        auth = (
-            await db.execute(
-                select(CloudMcpConnectionAuth).where(
-                    CloudMcpConnectionAuth.connection_db_id == connection_db_id
-                )
+    auth = (
+        await db.execute(
+            select(CloudMcpConnectionAuth).where(
+                CloudMcpConnectionAuth.connection_db_id == connection_db_id
             )
-        ).scalar_one_or_none()
-        now = utcnow()
-        if auth is None:
-            auth = CloudMcpConnectionAuth(
-                connection_db_id=connection_db_id,
-                auth_kind=auth_kind,
-                auth_status=auth_status,
-                payload_ciphertext=payload_ciphertext,
-                payload_format=payload_format,
-                auth_version=1,
-                token_expires_at=token_expires_at,
-                last_error_code=last_error_code,
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(auth)
-        else:
-            auth.auth_kind = auth_kind
-            auth.auth_status = auth_status
-            auth.payload_ciphertext = payload_ciphertext
-            auth.payload_format = payload_format
-            auth.auth_version += 1
-            auth.token_expires_at = token_expires_at
-            auth.last_error_code = last_error_code
-            auth.updated_at = now
-        connection = await db.get(CloudMcpConnection, connection_db_id)
-        if connection is not None:
-            connection.last_synced_at = now
-            connection.updated_at = now
-        await db.commit()
-        await db.refresh(auth)
-        return _record(auth)
+        )
+    ).scalar_one_or_none()
+    now = utcnow()
+    if auth is None:
+        auth = CloudMcpConnectionAuth(
+            connection_db_id=connection_db_id,
+            auth_kind=auth_kind,
+            auth_status=auth_status,
+            payload_ciphertext=payload_ciphertext,
+            payload_format=payload_format,
+            auth_version=1,
+            token_expires_at=token_expires_at,
+            last_error_code=last_error_code,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(auth)
+    else:
+        auth.auth_kind = auth_kind
+        auth.auth_status = auth_status
+        auth.payload_ciphertext = payload_ciphertext
+        auth.payload_format = payload_format
+        auth.auth_version += 1
+        auth.token_expires_at = token_expires_at
+        auth.last_error_code = last_error_code
+        auth.updated_at = now
+    connection = await db.get(CloudMcpConnection, connection_db_id)
+    if connection is not None:
+        connection.last_synced_at = now
+        connection.updated_at = now
+    await db.flush()
+    await db.refresh(auth)
+    return _record(auth)
 
 
 async def load_connection_auth(
+    db: AsyncSession,
     *,
     connection_db_id: UUID,
 ) -> CloudMcpAuthRecord | None:
-    async with db_engine.async_session_factory() as db:
-        auth = (
-            await db.execute(
-                select(CloudMcpConnectionAuth).where(
-                    CloudMcpConnectionAuth.connection_db_id == connection_db_id
-                )
+    auth = (
+        await db.execute(
+            select(CloudMcpConnectionAuth).where(
+                CloudMcpConnectionAuth.connection_db_id == connection_db_id
             )
-        ).scalar_one_or_none()
-        if auth is None:
-            return None
-        return _record(auth)
+        )
+    ).scalar_one_or_none()
+    if auth is None:
+        return None
+    return _record(auth)
 
 
 async def update_connection_auth_if_version(
+    db: AsyncSession,
     *,
     connection_db_id: UUID,
     expected_auth_version: int,
@@ -106,36 +108,36 @@ async def update_connection_auth_if_version(
     token_expires_at: datetime | None = None,
     last_error_code: str | None = None,
 ) -> CloudMcpAuthRecord | None:
-    async with db_engine.async_session_factory() as db:
-        auth = (
-            await db.execute(
-                select(CloudMcpConnectionAuth)
-                .where(CloudMcpConnectionAuth.connection_db_id == connection_db_id)
-                .with_for_update()
-            )
-        ).scalar_one_or_none()
-        if auth is None or auth.auth_version != expected_auth_version:
-            return None
+    auth = (
+        await db.execute(
+            select(CloudMcpConnectionAuth)
+            .where(CloudMcpConnectionAuth.connection_db_id == connection_db_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if auth is None or auth.auth_version != expected_auth_version:
+        return None
 
-        now = utcnow()
-        auth.auth_kind = auth_kind
-        auth.auth_status = auth_status
-        auth.payload_ciphertext = payload_ciphertext
-        auth.payload_format = payload_format
-        auth.auth_version += 1
-        auth.token_expires_at = token_expires_at
-        auth.last_error_code = last_error_code
-        auth.updated_at = now
-        connection = await db.get(CloudMcpConnection, connection_db_id)
-        if connection is not None:
-            connection.last_synced_at = now
-            connection.updated_at = now
-        await db.commit()
-        await db.refresh(auth)
-        return _record(auth)
+    now = utcnow()
+    auth.auth_kind = auth_kind
+    auth.auth_status = auth_status
+    auth.payload_ciphertext = payload_ciphertext
+    auth.payload_format = payload_format
+    auth.auth_version += 1
+    auth.token_expires_at = token_expires_at
+    auth.last_error_code = last_error_code
+    auth.updated_at = now
+    connection = await db.get(CloudMcpConnection, connection_db_id)
+    if connection is not None:
+        connection.last_synced_at = now
+        connection.updated_at = now
+    await db.flush()
+    await db.refresh(auth)
+    return _record(auth)
 
 
 async def mark_connection_auth_status_if_version(
+    db: AsyncSession,
     *,
     connection_db_id: UUID,
     expected_auth_version: int,
@@ -143,21 +145,74 @@ async def mark_connection_auth_status_if_version(
     auth_status: str,
     last_error_code: str | None,
 ) -> CloudMcpAuthRecord | None:
-    async with db_engine.async_session_factory() as db:
-        auth = (
-            await db.execute(
-                select(CloudMcpConnectionAuth)
-                .where(CloudMcpConnectionAuth.connection_db_id == connection_db_id)
-                .with_for_update()
-            )
-        ).scalar_one_or_none()
-        if auth is None or auth.auth_version != expected_auth_version:
-            return None
+    auth = (
+        await db.execute(
+            select(CloudMcpConnectionAuth)
+            .where(CloudMcpConnectionAuth.connection_db_id == connection_db_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if auth is None or auth.auth_version != expected_auth_version:
+        return None
 
-        auth.auth_kind = auth_kind
-        auth.auth_status = auth_status
-        auth.last_error_code = last_error_code
-        auth.updated_at = utcnow()
-        await db.commit()
-        await db.refresh(auth)
-        return _record(auth)
+    auth.auth_kind = auth_kind
+    auth.auth_status = auth_status
+    auth.last_error_code = last_error_code
+    auth.updated_at = utcnow()
+    await db.flush()
+    await db.refresh(auth)
+    return _record(auth)
+
+
+async def load_connection_auth_standalone(
+    *,
+    connection_db_id: UUID,
+) -> CloudMcpAuthRecord | None:
+    # Materialization refresh work runs concurrently; each refresh read/write
+    # gets its own session instead of sharing the request session across tasks.
+    async with db_engine.async_session_factory() as db:
+        return await load_connection_auth(db, connection_db_id=connection_db_id)
+
+
+async def update_connection_auth_if_version_standalone(
+    *,
+    connection_db_id: UUID,
+    expected_auth_version: int,
+    auth_kind: str,
+    auth_status: str,
+    payload_ciphertext: str | None,
+    payload_format: str,
+    token_expires_at: datetime | None = None,
+    last_error_code: str | None = None,
+) -> CloudMcpAuthRecord | None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await update_connection_auth_if_version(
+            db,
+            connection_db_id=connection_db_id,
+            expected_auth_version=expected_auth_version,
+            auth_kind=auth_kind,
+            auth_status=auth_status,
+            payload_ciphertext=payload_ciphertext,
+            payload_format=payload_format,
+            token_expires_at=token_expires_at,
+            last_error_code=last_error_code,
+        )
+
+
+async def mark_connection_auth_status_if_version_standalone(
+    *,
+    connection_db_id: UUID,
+    expected_auth_version: int,
+    auth_kind: str,
+    auth_status: str,
+    last_error_code: str | None,
+) -> CloudMcpAuthRecord | None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await mark_connection_auth_status_if_version(
+            db,
+            connection_db_id=connection_db_id,
+            expected_auth_version=expected_auth_version,
+            auth_kind=auth_kind,
+            auth_status=auth_status,
+            last_error_code=last_error_code,
+        )

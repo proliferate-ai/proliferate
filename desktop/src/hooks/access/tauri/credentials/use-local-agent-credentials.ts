@@ -4,7 +4,7 @@ import {
   useTauriCredentialsActions,
 } from "@/hooks/access/tauri/use-credentials-actions";
 import { credentialProviderForEnvVar } from "@/lib/domain/cloud/runtime-input-sync";
-import { emitRuntimeInputSyncEvent } from "@/hooks/cloud/runtime-input-sync-events";
+import { emitRuntimeInputSyncEvent } from "@/hooks/cloud/lifecycle/runtime-input-sync-events";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 
 const EMPTY_CONFIGURED_ENV_VARS: string[] = [];

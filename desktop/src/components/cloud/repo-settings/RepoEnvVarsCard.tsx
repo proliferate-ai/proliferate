@@ -3,7 +3,7 @@ import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import type { CloudRepoEnvVarRow } from "@/hooks/cloud/use-cloud-repo-config-draft";
+import type { CloudRepoEnvVarRow } from "@/hooks/cloud/ui/use-cloud-repo-config-draft";
 
 interface RepoEnvVarsCardProps {
   rows: CloudRepoEnvVarRow[];

@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { LoginScreen } from "@/components/auth/LoginScreen";
-import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { isProductAuthRequired } from "@/lib/domain/auth/auth-mode";
 import { useAuthStore } from "@/stores/auth/auth-store";
 

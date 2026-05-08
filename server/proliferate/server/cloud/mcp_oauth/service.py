@@ -5,6 +5,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.config import settings
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.connections import (
@@ -82,6 +84,7 @@ def _redirect_uri() -> str:
 
 
 async def _get_or_register_dcr_client(
+    db: AsyncSession,
     *,
     issuer: str,
     redirect_uri: str,
@@ -89,6 +92,7 @@ async def _get_or_register_dcr_client(
     resource: str,
 ) -> CloudMcpOAuthClientRecord:
     cached = await get_oauth_client(
+        db,
         issuer=issuer,
         redirect_uri=redirect_uri,
         catalog_entry_id=catalog_entry_id,
@@ -99,6 +103,7 @@ async def _get_or_register_dcr_client(
     metadata = await discover_authorization_server_metadata(issuer)
     registered = await register_client(metadata, redirect_uri)
     return await upsert_oauth_client(
+        db,
         issuer=issuer,
         redirect_uri=redirect_uri,
         catalog_entry_id=catalog_entry_id,
@@ -119,6 +124,7 @@ async def _get_or_register_dcr_client(
 
 
 async def _get_static_client(
+    db: AsyncSession,
     *,
     entry: CatalogEntry,
     issuer: str,
@@ -132,6 +138,7 @@ async def _get_static_client(
             "This deployment is missing static OAuth client configuration.",
         )
     cached = await get_oauth_client(
+        db,
         issuer=issuer,
         redirect_uri=redirect_uri,
         catalog_entry_id=entry.id,
@@ -139,6 +146,7 @@ async def _get_static_client(
     if cached is not None and _cached_static_client_matches(cached, config, resource):
         return cached
     return await upsert_oauth_client(
+        db,
         issuer=issuer,
         redirect_uri=redirect_uri,
         catalog_entry_id=entry.id,
@@ -173,6 +181,7 @@ def _cached_static_client_matches(
 
 
 async def _get_oauth_client(
+    db: AsyncSession,
     *,
     entry: CatalogEntry,
     issuer: str,
@@ -181,12 +190,14 @@ async def _get_oauth_client(
 ) -> CloudMcpOAuthClientRecord:
     if entry.oauth_client_mode == "static":
         return await _get_static_client(
+            db,
             entry=entry,
             issuer=issuer,
             redirect_uri=redirect_uri,
             resource=resource,
         )
     return await _get_or_register_dcr_client(
+        db,
         issuer=issuer,
         redirect_uri=redirect_uri,
         catalog_entry_id=entry.id,
@@ -195,12 +206,13 @@ async def _get_oauth_client(
 
 
 async def start_cloud_mcp_oauth_flow(
+    db: AsyncSession,
     *,
     user_id: UUID,
     connection_id: str,
 ) -> StartCloudMcpOAuthFlowResponse:
     _cloud_mcp_enabled_or_raise()
-    connection = await get_user_connection(user_id, connection_id)
+    connection = await get_user_connection(db, user_id, connection_id)
     if connection is None:
         raise CloudApiError("not_found", "MCP connection was not found.", status_code=404)
     entry = get_catalog_entry(connection.catalog_entry_id)
@@ -234,6 +246,7 @@ async def start_cloud_mcp_oauth_flow(
         resource = normalize_resource_url(protected.resource or server_url)
         redirect_uri = _redirect_uri()
         client = await _get_oauth_client(
+            db,
             entry=entry,
             issuer=auth_metadata.issuer,
             redirect_uri=redirect_uri,
@@ -258,6 +271,7 @@ async def start_cloud_mcp_oauth_flow(
         ) from exc
 
     flow = await create_oauth_flow_canceling_existing(
+        db,
         connection_db_id=connection.id,
         user_id=user_id,
         state_hash=_state_hash(state),
@@ -277,51 +291,55 @@ async def start_cloud_mcp_oauth_flow(
 
 
 async def get_cloud_mcp_oauth_flow_status(
+    db: AsyncSession,
     *,
     user_id: UUID,
     flow_id: UUID,
 ) -> CloudMcpOAuthFlowStatusResponse:
-    flow = await get_oauth_flow_for_user(user_id=user_id, flow_id=flow_id)
+    flow = await get_oauth_flow_for_user(db, user_id=user_id, flow_id=flow_id)
     if flow is None:
         raise CloudApiError("not_found", "OAuth flow was not found.", status_code=404)
     status = flow
     if flow.status == "active" and flow.expires_at <= datetime.now(UTC):
-        status = await fail_oauth_flow(flow_id=flow.id, failure_code="expired") or flow
+        status = await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired") or flow
     return oauth_flow_status_payload(status, include_authorization_url=status.status == "active")
 
 
 async def cancel_cloud_mcp_oauth_flow(
+    db: AsyncSession,
     *,
     user_id: UUID,
     flow_id: UUID,
 ) -> CloudMcpOAuthFlowStatusResponse:
-    flow = await cancel_oauth_flow_for_user(user_id=user_id, flow_id=flow_id)
+    flow = await cancel_oauth_flow_for_user(db, user_id=user_id, flow_id=flow_id)
     if flow is None:
         raise CloudApiError("not_found", "OAuth flow was not found.", status_code=404)
     return oauth_flow_status_payload(flow, include_authorization_url=False)
 
 
 async def complete_cloud_mcp_oauth_callback(
+    db: AsyncSession,
     *,
     state: str,
     code: str,
 ) -> CloudMcpOAuthCallbackResponse:
     _cloud_mcp_enabled_or_raise()
     hashed = _state_hash(state)
-    flow = await claim_active_oauth_flow_by_state_hash(hashed)
+    flow = await claim_active_oauth_flow_by_state_hash(db, hashed)
     if flow is None:
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
     if flow.expires_at <= datetime.now(UTC):
-        await fail_oauth_flow(flow_id=flow.id, failure_code="expired")
+        await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired")
         return CloudMcpOAuthCallbackResponse(ok=False, status="expired")
     if not flow.token_endpoint or not flow.resource:
-        await fail_oauth_flow(flow_id=flow.id, failure_code="invalid_flow")
+        await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow")
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
-    connection = await get_user_connection_by_db_id(flow.user_id, flow.connection_db_id)
+    connection = await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
     if connection is None:
-        await fail_oauth_flow(flow_id=flow.id, failure_code="invalid_flow")
+        await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow")
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
     oauth_client = await get_oauth_client(
+        db,
         issuer=flow.issuer or "",
         redirect_uri=flow.redirect_uri,
         catalog_entry_id=connection.catalog_entry_id,
@@ -348,14 +366,16 @@ async def complete_cloud_mcp_oauth_callback(
     except McpOAuthProviderError as exc:
         if exc.code == "invalid_client" and flow.issuer:
             await delete_oauth_client(
+                db,
                 issuer=flow.issuer,
                 redirect_uri=flow.redirect_uri,
                 catalog_entry_id=connection.catalog_entry_id if connection else "",
             )
-        await fail_oauth_flow(flow_id=flow.id, failure_code=exc.code)
+        await fail_oauth_flow(db, flow_id=flow.id, failure_code=exc.code)
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
 
     await upsert_connection_auth(
+        db,
         connection_db_id=flow.connection_db_id,
         auth_kind="oauth",
         auth_status="ready",
@@ -375,5 +395,5 @@ async def complete_cloud_mcp_oauth_callback(
         payload_format="oauth-bundle-v1",
         token_expires_at=token.expires_at,
     )
-    await complete_oauth_flow(flow_id=flow.id)
+    await complete_oauth_flow(db, flow_id=flow.id)
     return CloudMcpOAuthCallbackResponse(ok=True, status="completed")
