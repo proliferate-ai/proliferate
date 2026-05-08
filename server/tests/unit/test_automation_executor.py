@@ -35,7 +35,7 @@ from proliferate.server.automations.local_executor_service import (
     MAX_LOCAL_CLAIM_LIMIT,
     _normalize_local_error_code,
 )
-from proliferate.server.automations.worker import _parse_args
+from proliferate.server.automations.worker.main import _parse_args
 
 
 def test_local_executor_service_caps_claims_and_allowlists_error_codes() -> None:
