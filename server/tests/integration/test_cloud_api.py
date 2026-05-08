@@ -496,6 +496,27 @@ class TestCloudCredentials:
 
 class TestCloudMcpConnections:
     @pytest.mark.asyncio
+    async def test_oauth_flow_status_not_found_uses_product_error_handler(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-mcp-oauth-missing@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.get(
+            f"/v1/cloud/mcp/oauth/flows/{uuid.uuid4()}",
+            headers=headers,
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {
+            "detail": {
+                "code": "not_found",
+                "message": "OAuth flow was not found.",
+            },
+        }
+
+    @pytest.mark.asyncio
     async def test_catalog_connection_secret_and_materialization_flow(
         self,
         client: AsyncClient,
