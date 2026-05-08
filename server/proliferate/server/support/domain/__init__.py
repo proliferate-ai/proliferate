@@ -1,0 +1,1 @@
+"""Pure support-domain helpers."""

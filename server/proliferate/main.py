@@ -12,7 +12,6 @@ import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
-from proliferate.errors import ProliferateError
 from proliferate.auth.dependencies import fastapi_users
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.jwt import auth_backend
@@ -22,6 +21,7 @@ from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
+from proliferate.errors import ProliferateError
 from proliferate.integrations.anonymous_telemetry import (
     start_server_anonymous_telemetry_sender,
     stop_server_anonymous_telemetry_sender,
