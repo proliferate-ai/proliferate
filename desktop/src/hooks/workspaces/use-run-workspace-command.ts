@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
-import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
+import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { findReusableRunTerminalId } from "@/lib/domain/terminals/run-terminal";

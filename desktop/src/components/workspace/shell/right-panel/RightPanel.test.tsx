@@ -40,7 +40,7 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock("@/hooks/terminals/use-terminal-actions", () => ({
+vi.mock("@/hooks/terminals/workflows/use-terminal-actions", () => ({
   useTerminalActions: () => terminalActionsMocks,
 }));
 
