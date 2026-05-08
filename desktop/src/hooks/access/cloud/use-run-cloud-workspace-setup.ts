@@ -11,6 +11,10 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { cloudWorkspaceRepoConfigStatusKey } from "@/hooks/access/cloud/query-keys";
 
+// Transitional Wave 1 cache bridge: setup starts through the cloud API but must
+// refresh AnyHarness setup status for the currently selected synthetic cloud
+// workspace. Move that selected-workspace composition to a product cache hook
+// when workspace settings hooks are reorganized.
 export function useRunCloudWorkspaceSetup(workspaceId: string | null) {
   const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);

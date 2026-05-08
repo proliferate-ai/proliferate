@@ -122,7 +122,7 @@ vi.mock("@/hooks/cloud/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
 }));
 
-vi.mock("@/hooks/access/cloud/use-cloud-billing", () => ({
+vi.mock("@/hooks/cloud/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 

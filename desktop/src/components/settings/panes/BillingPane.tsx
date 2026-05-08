@@ -4,7 +4,7 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { CloudBillingSummary } from "@/components/settings/panes/CloudBillingSummary";
 import { OrganizationBillingSection } from "@/components/settings/panes/billing/OrganizationBillingSection";
 import { Button } from "@/components/ui/Button";
-import { useCloudBilling, useCloudBillingActions } from "@/hooks/access/cloud/use-cloud-billing";
+import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
 import { useActiveOrganization } from "@/hooks/organizations/use-active-organization";
 import { useOrganizationMembers } from "@/hooks/organizations/use-organization-members";
 import type { OrganizationMemberResponse } from "@/lib/access/cloud/client";

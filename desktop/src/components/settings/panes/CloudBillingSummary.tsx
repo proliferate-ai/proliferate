@@ -7,7 +7,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import type { BillingPlanInfo } from "@/lib/access/cloud/client";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import type { useCloudBillingActions } from "@/hooks/access/cloud/use-cloud-billing";
+import type { useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
 
 type CloudBillingActions = ReturnType<typeof useCloudBillingActions>;
 
