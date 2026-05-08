@@ -28,6 +28,10 @@ from proliferate.integrations.anyharness.workspace_ops import (
     start_remote_workspace_setup,
     write_remote_workspace_file,
 )
+from proliferate.integrations.anyharness.worktrees import (
+    run_runtime_worktree_retention,
+    update_runtime_worktree_retention_policy,
+)
 
 __all__ = [
     "CloudRuntimeOperationError",
@@ -47,6 +51,8 @@ __all__ = [
     "prompt_runtime_session",
     "read_remote_workspace_file_state",
     "response_preview",
+    "run_runtime_worktree_retention",
     "start_remote_workspace_setup",
+    "update_runtime_worktree_retention_policy",
     "write_remote_workspace_file",
 ]

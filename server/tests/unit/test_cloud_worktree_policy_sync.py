@@ -34,12 +34,12 @@ async def test_sync_policy_can_trigger_deferred_cleanup_without_awaiting(
 
     monkeypatch.setattr(worktree_policy_sync, "get_worktree_retention_policy", _get_policy)
     monkeypatch.setattr(
-        worktree_policy_sync,
+        worktree_policy_sync.anyharness,
         "update_runtime_worktree_retention_policy",
         _update_policy,
     )
     monkeypatch.setattr(
-        worktree_policy_sync,
+        worktree_policy_sync.anyharness,
         "run_runtime_worktree_retention",
         _run_retention,
     )
