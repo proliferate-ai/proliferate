@@ -258,10 +258,16 @@ options applies.
 
 ### 2. Extract pure logic to `domain/<concern>.py`
 
-When part of the service is pure rules — pricing, policy, validation,
-calculation, mapping — move it. The domain file imports nothing from `db/`,
-`integrations/`, or `service.py`. Service imports the pure function, calls
-it, raises on the verdict.
+When part of the service is a meaningful pure rule — pricing, policy,
+validation, calculation, state transition, or mapping — move it. The domain
+file imports nothing from `db/`, `integrations/`, or `service.py`. Service
+imports the pure function, calls it, raises on the verdict.
+
+Do not extract every pure private helper. A tiny one-path helper may stay in
+`service.py` when it only supports one orchestration path and moving it would
+create a one-function domain file. Extract to `domain/` when the rule is
+product policy, reusable, directly testable, or materially clarifies the
+service flow.
 
 ### 3. Promote a subdomain
 
