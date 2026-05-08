@@ -1,9 +1,9 @@
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { AutomationExecutionTarget } from "./automation-records";
 import type {
-  AutomationExecutionTarget,
   AutomationTargetCloudWorkspaceRecord,
   AutomationTargetRepoConfigRecord,
-} from "./records";
+} from "./target-records";
 
 export type { AutomationExecutionTarget };
 

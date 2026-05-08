@@ -3,7 +3,7 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import type {
   AutomationTargetCloudWorkspaceRecord,
   AutomationTargetRepoConfigRecord,
-} from "./records";
+} from "./target-records";
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,

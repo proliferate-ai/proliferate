@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   AutomationRecord,
   AutomationRunRecord,
-} from "./records";
+} from "./automation-records";
 import {
   automationRunStatusLabel,
   buildAutomationRowViewModel,

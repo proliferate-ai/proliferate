@@ -3,7 +3,7 @@ import type {
   AutomationRepoRootRecord,
   AutomationRunClaimRecord,
   AutomationWorkspaceRecord,
-} from "./records";
+} from "./local-executor-records";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,
