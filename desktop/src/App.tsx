@@ -20,6 +20,7 @@ import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-def
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/lifecycle/use-runtime-input-sync-runtime"
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
+import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle"
 import { usePromptOutboxDispatcher } from "@/hooks/chat/use-prompt-outbox-dispatcher"
 import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
@@ -44,7 +45,6 @@ import { PluginsPage } from "@/pages/PluginsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
-import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
@@ -158,6 +158,7 @@ function AppRuntime() {
   useHomeDeferredLaunchRunner()
   useUserPreferencesLifecycle()
   useRepoPreferencesLifecycle()
+  useWorkspaceUiLifecycle()
   usePromptOutboxDispatcher()
   useSessionSelectionLifecycle()
 
@@ -198,8 +199,6 @@ function AppRuntime() {
       }
     }
     systemModeQuery.addEventListener("change", handleSystemModeChange)
-
-    void bootstrapWorkspaceUi()
 
     const authBootstrapStartedAt = startStartupTimer()
     recordAppRendererEvent("app.auth_bootstrap.start")

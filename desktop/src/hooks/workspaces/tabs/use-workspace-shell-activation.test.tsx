@@ -11,8 +11,8 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import {
   WORKSPACE_UI_DEFAULTS,
-  useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "@/lib/domain/preferences/workspace-ui-state";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 
 const hookMocks = vi.hoisted(() => ({

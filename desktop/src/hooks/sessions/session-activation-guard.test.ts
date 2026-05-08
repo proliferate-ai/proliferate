@@ -4,9 +4,9 @@ import {
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import {
-  useWorkspaceUiStore,
   WORKSPACE_UI_DEFAULTS,
-} from "@/stores/preferences/workspace-ui-store";
+} from "@/lib/domain/preferences/workspace-ui-state";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
