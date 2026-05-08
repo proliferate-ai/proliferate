@@ -19,7 +19,6 @@ PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/runtime/session_api.py 1
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/runtime/workspace_operations.py 1 raw protocol client before integration migration
 SERVICE_ORM_IMPORT server/proliferate/server/ai_magic/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/credentials/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/repo_config/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/repos/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
@@ -32,7 +31,6 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_cla
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 12 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 33 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_credentials.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/auth.py 3 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/connections.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/oauth_clients.py 2 transitional store owns transaction commit
@@ -48,7 +46,6 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/organization_invitations.py 3 
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/organizations.py 2 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/users.py 1 transitional store owns transaction commit
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/billing.py 4 transitional store imports product/integration code
-STORE_FORBIDDEN_IMPORT server/proliferate/db/store/cloud_credentials.py 1 transitional store imports product/integration code
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/cloud_mcp/compat.py 1 transitional store imports product/integration code
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/users.py 1 transitional store imports product/integration code
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/anonymous_telemetry.py 1 transitional store opens DB session
@@ -57,7 +54,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_cloud_workspac
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claims.py 13 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 8 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 34 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_credentials.py 3 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_credentials.py 1 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 4 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/connections.py 6 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 3 transitional store opens DB session

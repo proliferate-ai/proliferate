@@ -9,9 +9,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CloudAgentKind
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import CloudCredential
-from proliferate.server.cloud.credentials.models import CloudAgentKind
 from proliferate.utils.crypto import decrypt_json
 from proliferate.utils.time import utcnow
 
@@ -72,13 +72,11 @@ async def sync_cloud_credential_if_changed(
         ):
             active.last_synced_at = now
             active.updated_at = now
-            await db.commit()
             return False
 
     for record in existing:
         if record.payload_format == payload_format and payload_matches(record.payload_ciphertext):
             record.last_synced_at = now
-            await db.commit()
             return False
 
     for record in existing:
@@ -96,7 +94,6 @@ async def sync_cloud_credential_if_changed(
             last_synced_at=now,
         )
     )
-    await db.commit()
     return True
 
 
@@ -121,38 +118,9 @@ async def delete_cloud_credential(
     )
     for record in records:
         record.revoked_at = now
-    await db.commit()
     return bool(records)
 
 
 async def load_cloud_credentials_for_user(user_id: UUID) -> list[CloudCredential]:
     async with db_engine.async_session_factory() as db:
         return await get_user_cloud_credentials(db, user_id)
-
-
-async def persist_cloud_credential_if_changed(
-    user_id: UUID,
-    provider: CloudAgentKind,
-    payload_ciphertext: str,
-    auth_mode: Literal["env", "file"],
-    payload_matches: CloudCredentialPayloadMatches,
-    payload_format: str = "json-v1",
-) -> bool:
-    async with db_engine.async_session_factory() as db:
-        return await sync_cloud_credential_if_changed(
-            db,
-            user_id,
-            provider,
-            payload_ciphertext,
-            auth_mode,
-            payload_matches,
-            payload_format,
-        )
-
-
-async def persist_cloud_credential_delete(
-    user_id: UUID,
-    provider: CloudAgentKind,
-) -> bool:
-    async with db_engine.async_session_factory() as db:
-        return await delete_cloud_credential(db, user_id, provider)
