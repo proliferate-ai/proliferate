@@ -1,10 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   AnyHarnessError,
   type CreateWorktreeWorkspaceResponse,
   type Workspace,
 } from "@anyharness/sdk";
-import { workspaceCollectionsScopeKey } from "./query-keys";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
@@ -20,10 +21,6 @@ import {
 } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "./use-workspaces";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  type WorkspaceCollections,
-  upsertLocalWorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -66,38 +63,24 @@ function isExistingWorkspacePathError(error: unknown): boolean {
 }
 
 export function useWorkspaceActions() {
-  const queryClient = useQueryClient();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const { data: workspaceCollections } = useWorkspaces();
   const primeWorkspaceCollections = (
     workspace: Workspace,
     source: "local_create" | "worktree_create",
   ) => {
-    const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
     const startedAt = startLatencyTimer();
-    let previousLocalCount = 0;
-    let nextLocalCount = 0;
-    let alreadyPresent = false;
-
-    queryClient.setQueriesData<WorkspaceCollections | undefined>(
-      { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-      (collections) => {
-        previousLocalCount = collections?.localWorkspaces.length ?? 0;
-        alreadyPresent = collections?.localWorkspaces.some(
-          (existing) => existing.id === workspace.id,
-        ) ?? false;
-        const nextCollections = upsertLocalWorkspaceCollections(collections, workspace);
-        nextLocalCount = nextCollections?.localWorkspaces.length ?? previousLocalCount;
-        return nextCollections;
-      },
-    );
+    const summary = upsertLocalWorkspace(workspace);
 
     logLatency("workspace.collections.cache_upsert", {
       source,
       workspaceId: workspace.id,
       workspaceKind: workspace.kind,
-      alreadyPresent,
-      previousLocalCount,
-      nextLocalCount,
+      alreadyPresent: summary.alreadyPresent,
+      previousLocalCount: summary.previousLocalCount,
+      nextLocalCount: summary.nextLocalCount,
       elapsedMs: elapsedMs(startedAt),
     });
   };
@@ -113,9 +96,7 @@ export function useWorkspaceActions() {
       workspaceId,
       runtimeUrl,
     });
-    void queryClient.invalidateQueries({
-      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-    }).then(() => {
+    void invalidateWorkspaceCollections().then(() => {
       logLatency("workspace.collections.invalidate.success", {
         source,
         workspaceId,

@@ -15,13 +15,8 @@ QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/cancel-d
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/connection.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/run-workspace-selection.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/use-workspace-selection.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-add-repo.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-local-worktree-settings-target.ts 6 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-selected-cloud-runtime-state.ts 4 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-display-name-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-metadata-sync.ts 4 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-retire-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-worktree-settings-targets.ts 7 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/lib/domain/workspaces/creation/add-repo-workflow.ts 2 query cache ownership before access/cache migration

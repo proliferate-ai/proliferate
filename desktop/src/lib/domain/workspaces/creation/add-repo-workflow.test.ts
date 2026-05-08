@@ -20,26 +20,31 @@ function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
 
 describe("runAddRepoWorkflow", () => {
   it("opens repo setup after registering a new repository", async () => {
-    const queryClient = {
-      setQueriesData: vi.fn(),
-      invalidateQueries: vi.fn().mockResolvedValue(undefined),
-    };
     const ensureRuntimeReady = vi.fn().mockResolvedValue("http://localhost:7007");
     const resolveRepoRootFromPath = vi.fn().mockResolvedValue(makeRepoRoot());
+    const upsertRepoRootInWorkspaceCollections = vi.fn();
+    const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
     const unhideRepoRoot = vi.fn();
     const openRepoSetupModal = vi.fn();
 
     await runAddRepoWorkflow({
       path: "/tmp/proliferate",
-      queryClient,
       ensureRuntimeReady,
       resolveRepoRootFromPath,
+      upsertRepoRootInWorkspaceCollections,
+      invalidateWorkspaceCollections,
       unhideRepoRoot,
       openRepoSetupModal,
-      workspaceCollectionsScopeKey: (runtimeUrl) => ["workspaces", runtimeUrl],
     });
 
     expect(resolveRepoRootFromPath).toHaveBeenCalledWith("/tmp/proliferate");
+    expect(upsertRepoRootInWorkspaceCollections).toHaveBeenCalledWith(
+      "http://localhost:7007",
+      expect.objectContaining({
+      id: "repo-root-1",
+      }),
+    );
+    expect(invalidateWorkspaceCollections).toHaveBeenCalledWith("http://localhost:7007");
     expect(unhideRepoRoot).toHaveBeenCalledWith("repo-root-1");
     expect(openRepoSetupModal).toHaveBeenCalledWith({
       sourceRoot: "/tmp/proliferate",
@@ -48,10 +53,6 @@ describe("runAddRepoWorkflow", () => {
   });
 
   it("reopens repo setup when registration resolves to an existing repo root", async () => {
-    const queryClient = {
-      setQueriesData: vi.fn(),
-      invalidateQueries: vi.fn().mockResolvedValue(undefined),
-    };
     const ensureRuntimeReady = vi.fn().mockResolvedValue("http://localhost:7007");
     const resolveRepoRootFromPath = vi.fn().mockResolvedValue(
       makeRepoRoot({
@@ -61,17 +62,19 @@ describe("runAddRepoWorkflow", () => {
         remoteRepoName: "existing-repo",
       }),
     );
+    const upsertRepoRootInWorkspaceCollections = vi.fn();
+    const invalidateWorkspaceCollections = vi.fn().mockResolvedValue(undefined);
     const unhideRepoRoot = vi.fn();
     const openRepoSetupModal = vi.fn();
 
     await runAddRepoWorkflow({
       path: "/tmp/existing-repo",
-      queryClient,
       ensureRuntimeReady,
       resolveRepoRootFromPath,
+      upsertRepoRootInWorkspaceCollections,
+      invalidateWorkspaceCollections,
       unhideRepoRoot,
       openRepoSetupModal,
-      workspaceCollectionsScopeKey: (runtimeUrl) => ["workspaces", runtimeUrl],
     });
 
     expect(openRepoSetupModal).toHaveBeenCalledWith({

@@ -1,11 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  type WorkspaceCollections,
-  upsertLocalWorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
+import { useMutation } from "@tanstack/react-query";
 import {
   updateWorkspaceDisplayName as updateAnyHarnessWorkspaceDisplayName,
 } from "@/lib/access/anyharness/workspaces";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   getCloudWorkspaceConnection,
@@ -15,7 +13,6 @@ import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces"
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
-import { workspaceCollectionsScopeKey } from "./query-keys";
 import {
   clearCloudDisplayNameBackfillSuppression,
   suppressCloudDisplayNameBackfill,
@@ -35,7 +32,9 @@ interface UpdateWorkspaceDisplayNameInput {
 }
 
 export function useWorkspaceDisplayNameActions() {
-  const queryClient = useQueryClient();
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
 
@@ -91,7 +90,6 @@ export function useWorkspaceDisplayNameActions() {
 
       // Local AnyHarness workspaces: PATCH the runtime, then prime the
       // local-workspace cache so the sidebar updates without a roundtrip.
-      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
       const workspace = await updateAnyHarnessWorkspaceDisplayName(
         { runtimeUrl },
         logicalWorkspace.localWorkspace.id,
@@ -102,10 +100,7 @@ export function useWorkspaceDisplayNameActions() {
         }),
       );
       const storeStartedAt = performance.now();
-      queryClient.setQueriesData<WorkspaceCollections | undefined>(
-        { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-        (collections) => upsertLocalWorkspaceCollections(collections, workspace),
-      );
+      upsertLocalWorkspace(workspace);
       if (operationId) {
         recordMeasurementMetric({
           type: "store",
@@ -117,10 +112,7 @@ export function useWorkspaceDisplayNameActions() {
       }
     },
     onSuccess: () => {
-      const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
-      void queryClient.invalidateQueries({
-        queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-      });
+      void invalidateWorkspaceCollections();
     },
     onError: (error) => {
       captureTelemetryException(error, {
