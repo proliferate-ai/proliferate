@@ -7,15 +7,14 @@ import binascii
 import hashlib
 import hmac
 import secrets
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Literal
 from urllib.parse import urlencode
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import OwnerContext, OwnerSelection, require_org_role
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
@@ -50,25 +49,7 @@ from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.landing import build_landing_html
 from proliferate.utils.time import utcnow
 
-OwnerScope = Literal["personal", "organization"]
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
-
-
-@dataclass(frozen=True)
-class OwnerSelection:
-    owner_scope: OwnerScope = "personal"
-    organization_id: UUID | None = None
-
-
-@dataclass(frozen=True)
-class OwnerContext:
-    owner_scope: OwnerScope
-    actor_user_id: UUID
-    owner_user_id: UUID | None
-    organization_id: UUID | None
-    membership_id: UUID | None
-    membership_role: str | None
-    billing_subject_id: UUID
 
 
 @dataclass(frozen=True)
@@ -211,17 +192,6 @@ def _org_not_found() -> OrganizationServiceError:
         "Organization not found.",
         status_code=404,
     )
-
-
-def require_org_role(context: OwnerContext, roles: Iterable[str]) -> None:
-    if context.owner_scope != "organization" or context.membership_role is None:
-        raise _org_not_found()
-    if context.membership_role not in set(roles):
-        raise OrganizationServiceError(
-            "organization_permission_denied",
-            "You do not have permission to manage this organization.",
-            status_code=403,
-        )
 
 
 async def resolve_owner_context(

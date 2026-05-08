@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import NoReturn
 from uuid import UUID
 
+from proliferate.auth.authorization import OwnerSelection
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     USAGE_SEGMENT_CLOSED_BY_DESTROY,
@@ -95,7 +96,6 @@ from proliferate.server.cloud.workspaces.models import (
 )
 from proliferate.server.organizations.service import (
     OrganizationServiceError,
-    OwnerSelection,
     resolve_owner_context,
 )
 from proliferate.utils.time import duration_ms, utcnow

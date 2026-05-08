@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
+from proliferate.auth.authorization import OwnerSelection
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -28,7 +29,6 @@ from proliferate.server.cloud.workspaces.service import (
     sync_cloud_workspace_credentials,
     sync_cloud_workspace_display_name,
 )
-from proliferate.server.organizations.service import OwnerSelection
 
 router = APIRouter()
 

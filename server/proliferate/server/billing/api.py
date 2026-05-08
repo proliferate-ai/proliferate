@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 
+from proliferate.auth.authorization import OwnerSelection
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.models.auth import User
 from proliferate.server.billing.models import (
@@ -30,7 +31,6 @@ from proliferate.server.billing.service import (
     update_overage_settings,
 )
 from proliferate.server.billing.stripe_webhooks import handle_stripe_webhook
-from proliferate.server.organizations.service import OwnerSelection
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
