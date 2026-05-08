@@ -16,6 +16,12 @@ from proliferate.integrations.anyharness.models import (
     RemoteWorkspaceSetupStart,
     ResolvedRemoteWorkspace,
 )
+from proliferate.integrations.anyharness.sessions import (
+    apply_runtime_reasoning_effort,
+    close_runtime_session,
+    create_runtime_session,
+    prompt_runtime_session,
+)
 from proliferate.integrations.anyharness.workspace_ops import (
     get_remote_terminal_command_run,
     read_remote_workspace_file_state,
@@ -33,8 +39,12 @@ __all__ = [
     "RemoteWorkspaceFileState",
     "RemoteWorkspaceSetupStart",
     "ResolvedRemoteWorkspace",
+    "apply_runtime_reasoning_effort",
     "auth_headers",
+    "close_runtime_session",
+    "create_runtime_session",
     "get_remote_terminal_command_run",
+    "prompt_runtime_session",
     "read_remote_workspace_file_state",
     "response_preview",
     "start_remote_workspace_setup",

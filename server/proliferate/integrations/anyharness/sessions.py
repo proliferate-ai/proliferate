@@ -1,4 +1,4 @@
-"""AnyHarness session helpers for remote cloud runtimes."""
+"""AnyHarness runtime session operations."""
 
 from __future__ import annotations
 
@@ -8,14 +8,13 @@ from typing import Any
 
 import httpx
 
-from proliferate.integrations.anyharness import (
+from proliferate.integrations.anyharness.client import auth_headers, response_preview
+from proliferate.integrations.anyharness.errors import (
     CloudRuntimePromptDeliveryUncertainError,
     CloudRuntimeReconnectError,
     CloudRuntimeRequestRejectedError,
-    RemoteSession,
-    auth_headers,
-    response_preview,
 )
+from proliferate.integrations.anyharness.models import RemoteSession
 
 CONFIG_APPLY_POLL_INTERVAL_SECONDS = 1.0
 CONFIG_APPLY_TIMEOUT_SECONDS = 30.0
