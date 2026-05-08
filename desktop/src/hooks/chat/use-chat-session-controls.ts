@@ -3,7 +3,7 @@ import {
   buildLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls/session-controls";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useActiveSessionConfigState } from "./derived/use-active-chat-session-selectors";

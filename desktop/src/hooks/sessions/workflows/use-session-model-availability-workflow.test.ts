@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   requestSessionModelAvailabilityDecision,
   SessionModelAvailabilityBusyError,
-} from "@/hooks/sessions/use-session-model-availability-workflow";
+} from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import {
   resetSessionModelAvailabilityStore,
   useSessionModelAvailabilityStore,

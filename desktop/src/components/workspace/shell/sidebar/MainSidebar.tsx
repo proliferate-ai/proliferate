@@ -46,7 +46,7 @@ import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
 import { useSidebarRepoGroupState } from "@/hooks/workspaces/facade/use-sidebar-repo-group-state";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/derived/use-workspace-sidebar-state";
-import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
+import { useSessionActivityReconciler } from "@/hooks/sessions/lifecycle/use-session-activity-reconciler";
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";

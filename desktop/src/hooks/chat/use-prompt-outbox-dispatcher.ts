@@ -21,7 +21,7 @@ import {
 } from "@/stores/sessions/session-records";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
+import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 const CONFIG_READY_TIMEOUT_MS = 5_000;

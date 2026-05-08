@@ -5,8 +5,8 @@ import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configure
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
+import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import {
   resolveWorkspaceShellTabFromKey,
   resolveRelativeWorkspaceShellTab,

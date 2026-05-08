@@ -33,7 +33,7 @@ import {
   SessionModelAvailabilityBusyError,
   SessionModelAvailabilityCancelledError,
   SessionModelAvailabilityRoutedToSettingsError,
-} from "@/hooks/sessions/use-session-model-availability-workflow";
+} from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { reconcilePendingConfigChanges } from "@/lib/domain/sessions/pending-config";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import {

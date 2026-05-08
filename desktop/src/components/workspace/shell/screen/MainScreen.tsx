@@ -6,7 +6,7 @@ import { resolveWorkspaceShellSurface } from "@/lib/domain/workspaces/shell/shel
 import { usePersistedLogicalWorkspaceSelection } from "@/hooks/workspaces/use-persisted-logical-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useHotSessionIngest } from "@/hooks/sessions/use-hot-session-ingest";
+import { useHotSessionIngest } from "@/hooks/sessions/lifecycle/use-hot-session-ingest";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
