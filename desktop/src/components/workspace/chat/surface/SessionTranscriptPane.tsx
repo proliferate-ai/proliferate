@@ -10,7 +10,7 @@ import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-a
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useCoworkManagedWorkspaces } from "@/hooks/cowork/use-cowork-managed-workspaces";
+import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
 import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import {
   resolveTranscriptOpenSessionWorkspaceId,

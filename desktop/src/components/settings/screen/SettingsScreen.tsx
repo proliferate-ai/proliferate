@@ -21,7 +21,7 @@ import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsScreenProps {

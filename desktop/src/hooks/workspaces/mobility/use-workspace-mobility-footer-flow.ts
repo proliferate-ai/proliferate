@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
-import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
+import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useMobilityPromptState } from "@/hooks/workspaces/mobility/use-mobility-prompt-state";

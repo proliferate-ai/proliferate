@@ -42,8 +42,8 @@ import {
 import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "@/config/chat-layout";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
-import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
+import { useOpenCoworkArtifact } from "@/hooks/cowork/workflows/use-open-cowork-artifact";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useChatTranscriptSelection } from "@/hooks/chat/use-chat-transcript-selection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";

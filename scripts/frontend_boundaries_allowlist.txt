@@ -13,14 +13,11 @@ DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/files/file-visuals.ts 2 domain im
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/mcp/local-stdio-finalizer.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/telemetry/events.ts 1 domain imports transport or UI types before lib cleanup
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/chat/use-chat-prompt-actions.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/use-cloud-workspace-actions.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/use-create-cloud-workspace.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/use-resync-cloud-repo-file.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/use-runtime-input-sync-runtime.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/use-save-cloud-repo-config.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cowork/use-cowork-artifact-refresh.ts 4 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cowork/use-cowork-session-actions.ts 7 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cowork/use-cowork-thread-workflow.ts 2 query cache ownership before access/cache migration
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts 5 query cache ownership before access/cache migration
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-create-cloud-workspace.ts 5 query cache ownership before access/cache migration
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-resync-cloud-repo-file.ts 5 query cache ownership before access/cache migration
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/lifecycle/use-runtime-input-sync-runtime.ts 2 query cache ownership before access/cache migration
+QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-save-cloud-repo-config.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/session-stream-side-effects.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/use-session-runtime-actions.ts 2 query cache ownership before access/cache migration

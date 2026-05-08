@@ -13,7 +13,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
     from proliferate.auth.models import UserCreate
     from proliferate.auth.users import UserManager
     from proliferate.db.engine import get_async_session
-    from proliferate.db.store.users import get_user_db
+    from proliferate.auth.users import get_user_db
 
     user_id: str | None = None
     async for session in get_async_session():

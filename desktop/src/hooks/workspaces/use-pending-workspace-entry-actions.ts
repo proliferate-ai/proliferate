@@ -5,7 +5,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
+import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";

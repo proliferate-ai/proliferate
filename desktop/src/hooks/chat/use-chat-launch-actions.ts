@@ -3,7 +3,7 @@ import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-sele
 import type { Workspace } from "@anyharness/sdk";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
-import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
+import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";

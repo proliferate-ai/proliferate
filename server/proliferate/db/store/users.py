@@ -1,27 +1,13 @@
 """DB adapter for fastapi-users and user lookup store helpers."""
 
-from collections.abc import AsyncGenerator
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends
-from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from proliferate.db import engine as db_engine
-from proliferate.db.engine import get_async_session
-from proliferate.db.models.auth import (
-    OAuthAccount,
-    User,
-)
-
-
-async def get_user_db(
-    session: Annotated[AsyncSession, Depends(get_async_session)],
-) -> AsyncGenerator[SQLAlchemyUserDatabase[User, OAuthAccount], None]:
-    yield SQLAlchemyUserDatabase(session, User, OAuthAccount)
+from proliferate.db.models.auth import User
 
 
 async def get_user_by_id(
@@ -53,24 +39,22 @@ async def get_user_with_oauth_accounts_by_id(
 
 
 async def update_user_github_profile(
+    db: AsyncSession,
     user_id: UUID,
     *,
     github_login: str,
     avatar_url: str | None,
     display_name: str | None,
 ) -> User | None:
-    async with db_engine.async_session_factory() as db:
-        user = await get_user_by_id(db, user_id)
-        if user is None:
-            return None
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        return None
 
-        user.github_login = github_login
-        user.avatar_url = avatar_url
-        if display_name and not (user.display_name or "").strip():
-            user.display_name = display_name
-        await db.commit()
-        await db.refresh(user)
-        return user
+    user.github_login = github_login
+    user.avatar_url = avatar_url
+    if display_name and not (user.display_name or "").strip():
+        user.display_name = display_name
+    return user
 
 
 async def load_user_by_id(user_id: UUID) -> User | None:

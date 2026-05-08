@@ -10,7 +10,7 @@ const supportState = vi.hoisted(() => ({
   current: null as SupportDialogStateMock | null,
 }));
 
-vi.mock("@/hooks/support/use-support-dialog-state", () => ({
+vi.mock("@/hooks/support/facade/use-support-dialog-state", () => ({
   useSupportDialogState: () => supportState.current,
 }));
 

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
+import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";

@@ -25,7 +25,7 @@ vi.mock("@/lib/access/anyharness/workspaces", () => ({
   listRuntimeWorkspaces: mocks.workspacesList,
 }));
 
-vi.mock("@/hooks/cloud/use-cloud-availability-state", () => ({
+vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
     cloudActive: false,
   }),
