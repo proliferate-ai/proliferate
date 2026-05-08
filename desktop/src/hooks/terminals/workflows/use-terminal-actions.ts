@@ -5,29 +5,16 @@ import {
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
-import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
 import {
   findReusableRunTerminalId,
   RUN_TERMINAL_TITLE,
 } from "@/lib/domain/terminals/run-terminal";
 import {
-  resolveWorkspaceConnection,
-  type AnyHarnessDesktopResolvedConnection,
-} from "@/lib/access/anyharness/resolve-workspace-connection";
-import {
-  adoptTerminalStreamIdentity,
   clearTerminal,
-  createTerminalRuntimeIdentity,
-  ensureConnected,
-  hasActiveHandle,
-  markExited,
-  markReadOnly,
-  sendInput,
-  sendResize,
-  type TerminalStreamIdentity,
-} from "@/lib/workflows/terminals/terminal-stream-registry";
+  clearTerminalIntentionalClose,
+  markTerminalIntentionalClose,
+} from "@/lib/infra/terminals/terminal-stream-registry";
 import {
   closeTerminal,
   createWorkspaceTerminal,
@@ -36,151 +23,24 @@ import {
   runTerminalCommand,
   updateTerminalTitle,
 } from "@/lib/access/anyharness/terminals";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 
-const intentionallyClosingTerminals = new Set<string>();
 type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
-// Owns terminal user actions and stream attachment wiring for a workspace.
-// Does not own terminal rendering or the stream registry's replay/lifecycle internals.
+// Owns terminal record user actions. Does not own terminal rendering or stream lifecycle.
 export function useTerminalActions() {
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const {
     invalidateWorkspaceTerminals,
     setWorkspaceTerminalRecords,
   } = useTerminalCache();
-  const { invalidateCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
-  const { selectedCloudRuntime, getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const {
+    getWorkspaceRuntimeBlockReason,
+    resolveTerminalWorkspaceConnection,
+  } = useTerminalWorkspaceConnection();
   const showToast = useToastStore((state) => state.show);
-  const markUnread = useTerminalStore((state) => state.markUnread);
   const clearTerminalState = useTerminalStore((state) => state.clearTerminalState);
   const bumpConnectionVersion = useTerminalStore((state) => state.bumpConnectionVersion);
-
-  const resolveTerminalWorkspaceConnection = useCallback(async (
-    workspaceId: string,
-  ): Promise<AnyHarnessDesktopResolvedConnection> => {
-    if (
-      selectedCloudRuntime.workspaceId === workspaceId
-      && selectedCloudRuntime.state?.phase === "ready"
-      && selectedCloudRuntime.connectionInfo
-    ) {
-      return {
-        runtimeUrl: selectedCloudRuntime.connectionInfo.runtimeUrl,
-        authToken: selectedCloudRuntime.connectionInfo.accessToken,
-        anyharnessWorkspaceId: selectedCloudRuntime.connectionInfo.anyharnessWorkspaceId ?? "",
-        runtimeGeneration: selectedCloudRuntime.connectionInfo.runtimeGeneration,
-      };
-    }
-
-    return resolveWorkspaceConnection(runtimeUrl, workspaceId);
-  }, [
-    runtimeUrl,
-    selectedCloudRuntime.connectionInfo,
-    selectedCloudRuntime.state?.phase,
-    selectedCloudRuntime.workspaceId,
-  ]);
-
-  const triggerSelectedCloudReconnect = useCallback((workspaceId: string) => {
-    if (
-      selectedCloudRuntime.workspaceId !== workspaceId
-      || selectedCloudRuntime.state?.phase !== "ready"
-    ) {
-      return;
-    }
-
-    const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-    if (!cloudWorkspaceId) {
-      return;
-    }
-
-    void invalidateCloudWorkspaceConnection(cloudWorkspaceId);
-  }, [
-    invalidateCloudWorkspaceConnection,
-    selectedCloudRuntime.state?.phase,
-    selectedCloudRuntime.workspaceId,
-  ]);
-
-  const attachTerminalStream = useCallback(async (
-    terminalId: string,
-    workspaceId: string,
-    workspaceConnection?: Awaited<ReturnType<typeof resolveTerminalWorkspaceConnection>>,
-    options?: { readOnlyReplay?: boolean },
-  ): Promise<TerminalStreamIdentity | null> => {
-    if (intentionallyClosingTerminals.has(terminalId)) {
-      return null;
-    }
-
-    if (getWorkspaceRuntimeBlockReason(workspaceId)) {
-      return null;
-    }
-
-    const resolvedConnection =
-      workspaceConnection ?? await resolveTerminalWorkspaceConnection(workspaceId);
-    const identity: TerminalStreamIdentity = {
-      workspaceId,
-      terminalId,
-      runtimeIdentity: createTerminalRuntimeIdentity({
-        runtimeUrl: resolvedConnection.runtimeUrl,
-        anyharnessWorkspaceId: resolvedConnection.anyharnessWorkspaceId,
-        runtimeGeneration: resolvedConnection.runtimeGeneration,
-      }),
-    };
-    let sawExitEvent = false;
-    const didConnect = ensureConnected({
-      identity,
-      baseUrl: resolvedConnection.runtimeUrl,
-      authToken: resolvedConnection.authToken,
-      readOnly: options?.readOnlyReplay,
-      onOpen: () => {},
-      onData: () => {
-        const state = useTerminalStore.getState();
-        const activeWsId = useSessionSelectionStore.getState().selectedWorkspaceId;
-        const activeTerminalId = activeWsId
-          ? state.activeTerminalByWorkspace[activeWsId]
-          : null;
-        if (activeTerminalId !== terminalId) {
-          markUnread(terminalId);
-        }
-      },
-      onExit: () => {
-        sawExitEvent = true;
-        bumpConnectionVersion(terminalId);
-        void invalidateWorkspaceTerminals(workspaceId);
-      },
-      onError: () => {
-        bumpConnectionVersion(terminalId);
-        if (!options?.readOnlyReplay && !intentionallyClosingTerminals.has(terminalId)) {
-          triggerSelectedCloudReconnect(workspaceId);
-        }
-      },
-      onClose: () => {
-        if (options?.readOnlyReplay && !sawExitEvent) {
-          sawExitEvent = true;
-          markExited(identity, null);
-          bumpConnectionVersion(terminalId);
-          return;
-        }
-        bumpConnectionVersion(terminalId);
-        if (!options?.readOnlyReplay && !intentionallyClosingTerminals.has(terminalId) && !sawExitEvent) {
-          triggerSelectedCloudReconnect(workspaceId);
-        }
-      },
-    });
-    if (didConnect) {
-      bumpConnectionVersion(terminalId);
-    }
-    return identity;
-  }, [
-    bumpConnectionVersion,
-    getWorkspaceRuntimeBlockReason,
-    invalidateWorkspaceTerminals,
-    markUnread,
-    resolveTerminalWorkspaceConnection,
-    triggerSelectedCloudReconnect,
-  ]);
 
   const loadWorkspaceTabs = useCallback(async (workspaceId: string): Promise<TerminalRecord[]> => {
     if (getWorkspaceRuntimeBlockReason(workspaceId)) {
@@ -266,47 +126,6 @@ export function useTerminalActions() {
     setWorkspaceTerminalRecords,
   ]);
 
-  const ensureTabConnection = useCallback(async (
-    terminalId: string,
-    workspaceId: string,
-    status: TerminalRecord["status"],
-  ): Promise<TerminalStreamIdentity | null> => {
-    if (intentionallyClosingTerminals.has(terminalId)) {
-      return null;
-    }
-    if (getWorkspaceRuntimeBlockReason(workspaceId)) {
-      return null;
-    }
-    const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-    const identity: TerminalStreamIdentity = {
-      workspaceId,
-      terminalId,
-      runtimeIdentity: createTerminalRuntimeIdentity({
-        runtimeUrl: connection.runtimeUrl,
-        anyharnessWorkspaceId: connection.anyharnessWorkspaceId,
-        runtimeGeneration: connection.runtimeGeneration,
-      }),
-    };
-    adoptTerminalStreamIdentity(identity);
-    if (status === "exited" || status === "failed") {
-      markReadOnly(identity);
-      if (hasActiveHandle(identity)) {
-        return identity;
-      }
-      return attachTerminalStream(terminalId, workspaceId, connection, {
-        readOnlyReplay: true,
-      });
-    }
-    if (hasActiveHandle(identity)) {
-      return identity;
-    }
-    return attachTerminalStream(terminalId, workspaceId, connection);
-  }, [
-    attachTerminalStream,
-    getWorkspaceRuntimeBlockReason,
-    resolveTerminalWorkspaceConnection,
-  ]);
-
   const clearClosedTerminalState = useCallback((terminalId: string, workspaceId: string) => {
     clearTerminal({ workspaceId, terminalId });
     clearTerminalState(terminalId);
@@ -323,7 +142,7 @@ export function useTerminalActions() {
       return "blocked";
     }
 
-    intentionallyClosingTerminals.add(terminalId);
+    markTerminalIntentionalClose(terminalId);
 
     try {
       const connection = await resolveTerminalWorkspaceConnection(workspaceId);
@@ -337,7 +156,7 @@ export function useTerminalActions() {
       }
       return "failed";
     } finally {
-      intentionallyClosingTerminals.delete(terminalId);
+      clearTerminalIntentionalClose(terminalId);
       await invalidateWorkspaceTerminals(workspaceId);
     }
   }, [
@@ -420,11 +239,8 @@ export function useTerminalActions() {
     loadWorkspaceTabs,
     createTab: createTabForWorkspace,
     createRunTab: createRunTabForWorkspace,
-    ensureTabConnection,
     closeTab,
     resizeTab: resizeTabForWorkspace,
-    sendInput,
-    sendResize,
     renameTab,
     rerunCommand,
   };
