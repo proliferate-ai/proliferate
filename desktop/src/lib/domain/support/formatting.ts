@@ -1,5 +1,5 @@
-import type { SupportMessageContext } from "@/lib/access/cloud/client";
 import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
+import type { SupportMessageContext } from "@/lib/domain/support/types";
 
 export function formatSupportContextLabel(
   context: SupportMessageContext,

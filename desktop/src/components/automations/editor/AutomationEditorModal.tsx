@@ -17,10 +17,10 @@ import type {
 import type { AutomationModeOverride } from "@/lib/domain/automations/mode-selection";
 import type { AutomationTargetSelection } from "@/lib/domain/automations/target-selection";
 import type {
-  AutomationResponse,
-  CreateAutomationRequest,
-  UpdateAutomationRequest,
-} from "@/lib/access/cloud/client";
+  AutomationRecord,
+  CreateAutomationInput,
+  UpdateAutomationInput,
+} from "@/lib/domain/automations/automation-ui-records";
 import {
   defaultAutomationTimezone,
   presetForRrule,
@@ -43,12 +43,12 @@ type SchedulePresetValue = AutomationSchedulePresetOrCustom;
 
 interface AutomationEditorModalProps {
   open: boolean;
-  automation: AutomationResponse | null;
+  automation: AutomationRecord | null;
   busy: boolean;
   onClose: () => void;
   onConfigureCloudTarget: (target: { gitOwner: string; gitRepoName: string }) => void;
-  onCreate: (body: CreateAutomationRequest) => Promise<void>;
-  onUpdate: (automationId: string, body: UpdateAutomationRequest) => Promise<void>;
+  onCreate: (body: CreateAutomationInput) => Promise<void>;
+  onUpdate: (automationId: string, body: UpdateAutomationInput) => Promise<void>;
 }
 
 export function AutomationEditorModal({

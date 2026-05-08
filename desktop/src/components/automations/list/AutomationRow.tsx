@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { MoreHorizontal, Pause, Pencil, Play, Zap } from "@/components/ui/icons";
-import type { AutomationResponse } from "@/lib/access/cloud/client";
+import type { AutomationRecord } from "@/lib/domain/automations/automation-ui-records";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
 
 interface AutomationRowProps {
-  automation: AutomationResponse;
+  automation: AutomationRecord;
   selected: boolean;
   busy: boolean;
   onSelect: () => void;

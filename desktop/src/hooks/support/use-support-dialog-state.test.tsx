@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useSupportDialogState } from "@/hooks/support/use-support-dialog-state";
 import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
-import type { SupportMessageContext } from "@/lib/access/cloud/client";
+import type { SupportMessageContext } from "@/lib/domain/support/types";
 
 const sendSupportMessage = vi.hoisted(() => vi.fn(async () => {}));
 const showToast = vi.hoisted(() => vi.fn());

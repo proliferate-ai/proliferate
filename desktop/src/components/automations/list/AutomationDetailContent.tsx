@@ -1,22 +1,22 @@
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft } from "@/components/ui/icons";
 import type {
-  AutomationResponse,
-  AutomationRunResponse,
-} from "@/lib/access/cloud/client";
+  AutomationRecord,
+  AutomationRunRecord,
+} from "@/lib/domain/automations/automation-ui-records";
 import { AutomationRunTimeline } from "@/components/automations/timeline/AutomationRunTimeline";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 
 interface AutomationDetailContentProps {
-  automation: AutomationResponse | null;
+  automation: AutomationRecord | null;
   loading: boolean;
   error: boolean;
-  runs: AutomationRunResponse[];
+  runs: AutomationRunRecord[];
   runsLoading: boolean;
   pendingCloudWorkspaceId?: string | null;
   onBack: () => void;
   onOpenCloudWorkspace: (cloudWorkspaceId: string) => void;
-  onOpenLocalWorkspace: (run: AutomationRunResponse) => void;
+  onOpenLocalWorkspace: (run: AutomationRunRecord) => void;
 }
 
 export function AutomationDetailContent({
