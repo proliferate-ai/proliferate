@@ -1,4 +1,3 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AnyHarnessError,
@@ -10,6 +9,11 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { getHomeDir } from "@/lib/access/tauri/shell";
+import {
+  createWorkspace,
+  createWorktreeWorkspace,
+  resolveWorkspaceFromPath,
+} from "@/lib/access/anyharness/workspaces";
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
@@ -127,14 +131,14 @@ export function useWorkspaceActions() {
     },
     mutationFn: async (sourceRoot) => {
       const readyRuntimeUrl = await ensureRuntimeReady();
-      const client = getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl });
+      const connection = { runtimeUrl: readyRuntimeUrl };
       const request = {
         path: sourceRoot,
         origin: DESKTOP_ORIGIN,
       };
 
       try {
-        const response = await client.workspaces.create(request);
+        const response = await createWorkspace(connection, request);
         return {
           workspace: response.workspace,
           created: true,
@@ -144,7 +148,7 @@ export function useWorkspaceActions() {
           throw error;
         }
 
-        const response = await client.workspaces.resolveFromPath(request);
+        const response = await resolveWorkspaceFromPath(connection, request);
         return {
           workspace: response.workspace,
           created: false,
@@ -182,7 +186,7 @@ export function useWorkspaceActions() {
     },
     mutationFn: async ({ params, latencyFlowId }) => {
       const readyRuntimeUrl = await ensureRuntimeReady();
-      return getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl }).workspaces.createWorktree({
+      return createWorktreeWorkspace({ runtimeUrl: readyRuntimeUrl }, {
         repoRootId: params.repoRootId,
         targetPath: params.targetPath,
         newBranchName: params.branchName,

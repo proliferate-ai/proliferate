@@ -2,7 +2,6 @@ import {
   anyHarnessModelRegistriesKey,
   anyHarnessSessionsKey,
   anyHarnessWorkspaceSessionLaunchKey,
-  getAnyHarnessClient,
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
 import type { AnyHarnessRequestOptions, ModelRegistry } from "@anyharness/sdk";
@@ -12,6 +11,9 @@ import { useShallow } from "zustand/react/shallow";
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { listModelRegistries } from "@/lib/access/anyharness/model-registries";
+import { listWorkspaceSessions } from "@/lib/access/anyharness/sessions";
+import { getWorkspaceSessionLaunchCatalog } from "@/lib/access/anyharness/workspaces";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
@@ -136,10 +138,7 @@ async function fetchWorkspaceSessionsWithConnection(
       const requestOptions = options?.includeDismissed
         ? { ...timedRequestOptions, includeDismissed: true }
         : timedRequestOptions;
-      return await getAnyHarnessClient(workspaceConnection).sessions.list(
-        workspaceConnection.anyharnessWorkspaceId,
-        requestOptions,
-      );
+      return await listWorkspaceSessions(workspaceConnection, requestOptions);
     },
   );
   return sessions.map((session) => ({
@@ -156,8 +155,8 @@ async function fetchWorkspaceLaunchCatalog(
   const requestOptions = latencyFlowId
     ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
     : undefined;
-  return getAnyHarnessClient(workspaceConnection).workspaces.getSessionLaunchCatalog(
-    workspaceConnection.anyharnessWorkspaceId,
+  return getWorkspaceSessionLaunchCatalog(
+    workspaceConnection,
     signal ? requestOptionsWithSignal(requestOptions, signal) : requestOptions,
   );
 }
@@ -463,9 +462,7 @@ export function useWorkspaceBootstrapActions() {
       }).catch(() => null);
       const modelRegistries = await queryClient.ensureQueryData({
         queryKey: anyHarnessModelRegistriesKey(runtimeUrl),
-        queryFn: ({ signal }) => getAnyHarnessClient(workspaceConnection)
-          .modelRegistries
-          .list({ signal }),
+        queryFn: ({ signal }) => listModelRegistries(workspaceConnection, { signal }),
       }).catch(() => EMPTY_MODEL_REGISTRIES);
 
       logLatency("workspace.select.launch_catalog_loaded", {

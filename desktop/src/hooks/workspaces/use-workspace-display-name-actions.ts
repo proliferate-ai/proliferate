@@ -1,9 +1,11 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
 } from "@/lib/domain/workspaces/cloud/collections";
+import {
+  updateWorkspaceDisplayName as updateAnyHarnessWorkspaceDisplayName,
+} from "@/lib/access/anyharness/workspaces";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   getCloudWorkspaceConnection,
@@ -90,7 +92,8 @@ export function useWorkspaceDisplayNameActions() {
       // Local AnyHarness workspaces: PATCH the runtime, then prime the
       // local-workspace cache so the sidebar updates without a roundtrip.
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
-      const workspace = await getAnyHarnessClient({ runtimeUrl }).workspaces.updateDisplayName(
+      const workspace = await updateAnyHarnessWorkspaceDisplayName(
+        { runtimeUrl },
         logicalWorkspace.localWorkspace.id,
         { displayName },
         getMeasurementRequestOptions({
@@ -151,10 +154,11 @@ async function clearCloudRuntimeWorkspaceDisplayName(input: {
       return;
     }
 
-    await getAnyHarnessClient({
-      runtimeUrl: connectionInfo.runtimeUrl,
-      authToken: connectionInfo.accessToken,
-    }).workspaces.updateDisplayName(
+    await updateAnyHarnessWorkspaceDisplayName(
+      {
+        runtimeUrl: connectionInfo.runtimeUrl,
+        authToken: connectionInfo.accessToken,
+      },
       connectionInfo.anyharnessWorkspaceId,
       { displayName: null },
       getMeasurementRequestOptions({
