@@ -1,7 +1,34 @@
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/access/cloud/client";
 
 export type WorkspaceMobilityDirection = "local_to_cloud" | "cloud_to_local";
+
+export interface WorkspaceMobilityCloudPreflightResponse {
+  canStart: boolean;
+  blockers: string[];
+  excludedPaths: string[];
+  workspace?: {
+    repo?: {
+      branch?: string | null;
+    } | null;
+  } | null;
+}
+
+export interface WorkspaceMobilityHandoffSummary {
+  id: string;
+  direction: string;
+  sourceOwner: string;
+  targetOwner: string;
+  phase: string;
+  requestedBranch: string;
+  requestedBaseSha?: string | null;
+  excludePaths: string[];
+  failureCode?: string | null;
+  failureDetail?: string | null;
+  startedAt: string;
+  heartbeatAt: string;
+  finalizedAt?: string | null;
+  cleanupCompletedAt?: string | null;
+}
 
 export interface WorkspaceMobilityConfirmSnapshot {
   logicalWorkspaceId: string;
@@ -9,7 +36,7 @@ export interface WorkspaceMobilityConfirmSnapshot {
   sourceWorkspaceId: string;
   mobilityWorkspaceId: string;
   sourcePreflight: WorkspaceMobilityPreflightResponse;
-  cloudPreflight: CloudWorkspaceMobilityPreflightResponse;
+  cloudPreflight: WorkspaceMobilityCloudPreflightResponse;
 }
 
 export type WorkspaceMobilityLocationKind =
