@@ -20,7 +20,6 @@ SERVICE_ORM_IMPORT server/proliferate/server/cloud/repos/service.py 1 transition
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/organizations/service.py 1 transitional service imports ORM/auth model
-SERVICE_ORM_IMPORT server/proliferate/server/support/service.py 1 transitional service imports ORM/auth model
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/anonymous_telemetry.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 12 transitional store owns transaction commit

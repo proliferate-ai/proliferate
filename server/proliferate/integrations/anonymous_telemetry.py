@@ -11,9 +11,7 @@ import httpx
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.integrations.sentry import capture_server_sentry_exception
-from proliferate.server.anonymous_telemetry import (
-    service as anonymous_telemetry_service,
-)
+from proliferate.server.anonymous_telemetry import service as anonymous_telemetry_service
 from proliferate.utils.telemetry_mode import (
     get_server_telemetry_mode,
     is_anonymous_telemetry_enabled,
