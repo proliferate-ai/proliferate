@@ -6,144 +6,301 @@ Scope:
 
 - `server/**`
 
-## 1. File Tree
+Use this doc first to understand the server ownership model. Then read the
+focused guide that applies to the code you are changing.
 
-Use this as the default backend shape. Do not create new top-level backend
-folders without a clear ownership reason.
+## Read Order
+
+Always start here.
+
+Guides define reusable engineering standards: where code goes, what each layer
+may own, and which patterns are allowed.
+
+Guides:
+
+- [guides/domains.md](guides/domains.md) for `server/<domain>/` shape, the
+  api/service/models triplet, `domain/` for pure logic, subdomain promotion,
+  and cross-domain coordination.
+- [guides/database.md](guides/database.md) for `db/store/`, `db/models/`,
+  transactions, the ORM → dataclass → Pydantic type pipeline, and DB column
+  conventions.
+- [guides/auth.md](guides/auth.md) for authentication, the
+  `auth/authorization` shared helpers, `<domain>/access.py` resource-access
+  route deps, and `<domain>/domain/policy.py` product rules.
+- [guides/integrations.md](guides/integrations.md) for `integrations/<vendor>/`
+  shapes and adapter conventions.
+- [guides/workers.md](guides/workers.md) for `worker.py`, `reconciler.py`,
+  schedulers, the `worker/` subfolder pattern, and worker-side service
+  decomposition.
+
+Specs (when added) define product/surface contracts: lifecycle invariants,
+edge cases, and focused verification for a specific cross-cutting flow such as
+billing, runtime provisioning, or MCP. None are written yet.
+
+When a change touches `server/artifact-runtime/**`, also read
+[../../server/artifact-runtime/README.md](../../server/artifact-runtime/README.md).
+That README owns the hosted artifact viewer contract, the desktop/runtime
+`postMessage` protocol, and the per-type renderer behavior.
+
+## Target Shape
+
+This is the target architecture. Some existing code is still transitional; new
+code and cleanup work should move toward this shape.
 
 ```text
 server/proliferate/
   main.py
   config.py
+  errors.py
   constants/
+    <area>.py
   utils/
   auth/
+    dependencies.py
+    authorization.py
     desktop/
+    jwt.py
+    oauth.py
+    pkce.py
+    users.py
+    models.py
   db/
+    engine.py
     models/
+      <resource>.py
     store/
+      <resource>.py                   # flat, default
+      <area>/                         # folder when ≥4 related stores cluster
+        <resource>.py
   integrations/
+    <vendor>.py                       # single file (default)
+    <vendor>/                         # folder for multi-concern or polymorphic
+      __init__.py
+      client.py
+      models.py
+      errors.py
+      <concern>.py
   middleware/
   server/
     <domain>/
+      api.py                          # transport
+      service.py                      # orchestration
+      models.py                       # Pydantic transport schemas
+      access.py                       # resource-access route deps (when needed)
+      errors.py                       # domain-specific error types (when needed)
+      domain/                         # pure logic
+        policy.py                     # product rules returning PolicyVerdict
+        <concern>.py
+      worker.py                       # non-HTTP entry point (when applicable)
+      reconciler.py                   # state-drift loop (when applicable)
+      worker/                         # promoted: substantial worker-side logic
+        main.py
+        service.py
+        <concern>.py
+      <subdomain>/                    # promoted: own product concept
+        api.py
+        service.py
+        models.py
+        domain/
 ```
 
-Domain packages are the default product shape under `server/`.
+Do not add new top-level server folders without updating this doc and the
+focused guide that owns the layer.
 
-Smaller domains should usually stay as:
+## Hard Rules
 
-```text
-server/<domain>/
-  api.py
-  models.py
-  service.py
-```
+### Layer law
 
-Larger centralized domains may keep their own nested structure when the domain
-is broad and cohesive. `cloud/` is the main example:
-
-```text
-server/cloud/
-  api.py
-  <shared domain modules>.py
-  <subdomain>/
-    api.py
-    models.py
-    service.py
-```
-
-That is acceptable when the folder still reads as one domain with clear
-internal ownership.
-
-## 2. Non-Negotiable Rules
-
-- Route handlers stay extremely thin.
 - `api.py` is transport only. It parses the request, calls the right service,
-  and returns the response.
+  and returns the response. It must not import `db/store/**`, `AsyncSessionDep`,
+  `get_async_session`, `async_session_factory`, or SQLAlchemy directly. The
+  only ORM model import allowed in handlers is `User` from auth.
 - `service.py` owns business logic, orchestration, invariants, and validation.
-- Database access belongs in `db/store/**` only.
-- `service.py` must not run direct ORM queries or call `db.execute(...)`
-  inline. If a service needs data, add a store function and call that.
+  It may call stores and integrations. It must not import `AsyncSession`,
+  `AsyncSessionDep`, `get_async_session`, `async_session_factory`, or
+  SQLAlchemy directly. It must not run `select(...)`, `insert(...)`,
+  `update(...)`, `delete(...)`, or `db.execute(...)`.
+- All database access lives in `db/store/**`. Stores own query construction
+  and DB execution.
 - `db/models/**` owns ORM table definitions only.
-- `server/<domain>/models.py` owns API request and response models only.
+- `server/<domain>/models.py` owns Pydantic API request and response schemas
+  only. It must not accept ORM objects in payload builder functions; the
+  dataclass intermediate layer is mandatory.
 - Raw third-party SDK and API calls belong behind `integrations/**`.
+- Pure product rules belong in `server/<domain>/domain/<concern>.py`. They
+  must not import React, async, I/O, stores, the query client, or platform
+  APIs. They return data, never `Promise[*]`-equivalent (no async exports).
 - `middleware/**` is only for cross-cutting HTTP request lifecycle concerns.
-- `config.py` owns env-derived runtime settings only.
-- `constants/**` owns shared hardcoded values only.
-- `utils/**` is for truly generic backend helpers that are not owned by one
-  product domain.
-- Prefer composition over inheritance.
-- Keep inheritance shallow and explicit. Do not build deep `Base*` hierarchies
-  for services, Pydantic models, dataclasses, or domain logic.
-- Use Pydantic models for API transport schemas.
-- Route handlers must declare a typed Pydantic return type. Never use
-  `dict[str, Any]`, `list[dict[str, Any]]`, or any other `Any`-bearing type as
-  a route return annotation. ANN401 is enforced by ruff — fix the model, do not
-  suppress the lint rule.
-- Use dataclasses for small internal value objects when a lightweight typed
-  container helps and no framework behavior is needed.
-- Do not use Pydantic models as ORM models or general-purpose domain objects.
-- Map explicitly between ORM models, dataclasses, and Pydantic schemas instead
-  of blurring those layers together.
-- The layered ownership rule for types is: ORM model (persistence) →
-  dataclass (internal domain value) → Pydantic model (wire format). Each layer
-  owns its own type. The mapping between them is explicit and lives at the
-  boundary — typically in `models.py` constructor functions.
-- Pydantic belongs at trust boundaries: HTTP request parsing and response
-  serialization. It does not belong inside service functions as a general
-  container for data that never leaves the backend.
+
+### Type pipeline
+
+- Three layers always distinct: ORM (`db/models/`), dataclass (colocated with
+  owner, typically the store file), Pydantic (`server/<domain>/models.py`).
+- ORM never leaves the store boundary. Store functions return frozen
+  dataclasses, not ORM objects.
+- Pydantic never accepts ORM. Pydantic constructor functions take dataclasses.
+- `@dataclass(frozen=True)` for read-result dataclasses.
+- Use enums on dataclass fields, not strings. Wire-format string mapping
+  happens in the Pydantic constructor.
 - Do not use `model_config = ConfigDict(from_attributes=True)` to map ORM
-  objects directly into Pydantic response models. This collapses the dataclass
-  layer, couples your wire format to ORM column names, and makes independent
-  evolution of the two harder. Map explicitly instead.
-- Prefer `@dataclass(frozen=True)` for dataclasses that represent read results
-  from a store or service. Immutability makes the intent clear and prevents
-  accidental mutation across call sites.
-- Do not create junk-drawer modules such as `helpers.py`, `misc.py`, or
-  catch-all `services/`.
-- Preserve current API shapes and auth behavior unless an explicit change is
-  requested.
-- Delete dead compatibility paths instead of keeping duplicate old and new
-  flows alive.
+  objects directly into Pydantic response models.
 
-### Layer Law
+### Transactions
 
-- `api.py` is transport only and may call `service.py` only.
-- `api.py` must not import `db/store/**`.
-- `api.py` must not import `AsyncSessionDep`, `get_async_session`, or
-  `async_session_factory`.
-- `api.py` must not import SQLAlchemy directly.
-- `api.py` may keep the current auth dependency return type import
-  `from proliferate.db.models.auth import User`; no other ORM model imports are
-  allowed in handlers.
-- `service.py` may call stores and integrations, but may not import SQLAlchemy,
-  `AsyncSession`, `AsyncSessionDep`, `get_async_session`, or
-  `async_session_factory`.
-- Runtime helpers under `server/**` follow the same no-session/no-SQLAlchemy
-  rule as services unless they themselves live under `db/store/**`.
-- Multi-step database transactions belong in store facades under `db/store/**`,
-  not in services.
+- Store functions take `db: AsyncSession` as a parameter. They never commit
+  and never open sessions.
+- HTTP handlers use the request session via `Depends(get_async_session)`. The
+  dep commits on success and rolls back on exception.
+- Workers, reconcilers, and schedulers open a session at the entry point with
+  `async with async_session_factory() as db: async with db.begin(): ...`.
+- For narrower atomicity within a request, services use
+  `async with db.begin_nested():` around the relevant store calls.
+- No `db.commit()` outside session-management code (the FastAPI dep, the
+  worker entry point).
 
-## 3. Ownership Model
+### Authorization
+
+- Authentication (returning `User`) lives in `auth/dependencies.py`.
+- Shared authorization helpers (`require_org_role`, `OwnerContext`,
+  `PolicyVerdict`) live in `auth/authorization.py`.
+- Resource-access route deps (returning the resource or raising 403/404) live
+  in `server/<domain>/access.py`.
+- Product rules (given state, is the action permitted) live in
+  `server/<domain>/domain/policy.py` as pure functions returning
+  `PolicyAllowed | PolicyDenied`.
+- Authorization checks must not appear inline in `api.py` route handler
+  bodies. Use deps.
+- Authorization checks should not appear inline in `service.py` when they
+  could have been route deps (fail-fast wins). Product rules from
+  `domain/policy.py` are called from `service.py`.
+
+### Errors
+
+- A single root `server/proliferate/errors.py` defines the base
+  `ProliferateError` class and shared types (`NotFoundError`,
+  `PermissionDenied`, `Conflict`).
+- Domain-specific errors live in `server/<domain>/errors.py` and inherit from
+  the shared base.
+- Integration errors stay integration-local (`integrations/<vendor>.py` or
+  `integrations/<vendor>/errors.py`).
+- A FastAPI exception handler maps `ProliferateError` subclasses to
+  `HTTPException` with the `code` field as the JSON error code. Services
+  raise domain errors; the handler does HTTP translation.
+- Do not catch `Exception` broadly without re-raising.
+- Do not raise `HTTPException` from `domain/policy.py` or `db/store/`. Only
+  services and api handlers raise HTTP-aware errors.
+
+### Configs and constants
+
+- `config.py` owns env-derived runtime settings only (secrets, URLs,
+  deployment values, feature flags).
+- `constants/<area>.py` owns shared hardcoded policy values: limits, timeouts,
+  retry counts, page sizes, validation bounds, sentinel values, headers.
+- Module-level numeric or string constants in `service.py`, `api.py`, or
+  `db/store/**` files are forbidden unless the value is genuinely file-local
+  with no policy meaning.
+- `localhost` literals outside `config.py` defaults are forbidden.
+
+### File size thresholds
+
+| Layer | Soft (split before) | Hard (split or justify) |
+|---|---|---|
+| `server/<domain>/api.py` | 200 | 400 |
+| `server/<domain>/service.py` | 500 | 800 |
+| `server/<domain>/models.py` | 300 | 500 |
+| `server/<domain>/domain/*.py` | 250 | 500 |
+| `db/store/<resource>.py` | 400 | 700 |
+| `db/models/*.py` | 300 | 500 |
+| `integrations/<vendor>/*.py` | 300 | — |
+
+Soft is a PR-review prompt. Hard requires a justification in the PR
+description (typically a tracking issue + reason it can't split now).
+
+### Naming
+
+- Canonical files (`api.py`, `service.py`, `models.py`, `worker.py`,
+  `reconciler.py`, `scheduler.py`) are never prefixed or suffixed.
+- Domain subdirectory files use descriptive nouns (`pricing.py`, `policy.py`,
+  `validation.py`). No `_service`, `_helper`, or `_utils` suffixes.
+- Subdomain folders use singular product concepts (`subscriptions/`,
+  `seats/`). No "manager"/"handler" suffixes.
+- Store files match the ORM resource name. Flat: prefixed
+  (`cloud_workspaces.py`). Folder: un-prefixed inside (`cloud_mcp/connections.py`).
+- No underscore-prefixed module names at module scope (`_logging.py` is
+  forbidden).
+- Constants use `UPPER_SNAKE_CASE` and live in `constants/<area>.py`.
+
+### Folder hygiene
+
+- Single-file folders are forbidden. If a folder has only one file, inline it.
+- Domain folders answer "what product area?" — not transport (`cloud/`,
+  `api/`, `tauri/` are forbidden as `server/` children; transport stays in
+  `integrations/` or `db/`) and not UI shape.
+- Pick one shape per parent. A folder either has subfolder children
+  consistently or is flat. Mixed shapes are forbidden.
+- New top-level `server/proliferate/` folders require a doc-touching PR with
+  a one-paragraph rationale.
+- No junk-drawer modules: `helpers.py`, `misc.py`, `utils.py` at any
+  domain level. `utils/` at the project root is for truly generic helpers
+  only.
+
+### Cross-domain coordination
+
+- Reads cross via store: a service may import another domain's store to read
+  data.
+- Writes cross via service: a service must go through another domain's public
+  service functions to mutate that domain's resources.
+- Service-to-service imports are limited to public functions. Importing
+  another service's private helpers is forbidden.
+- Cross-domain imports for auth infrastructure use `auth.authorization`,
+  never another domain's `service.py`.
+
+### Forbidden patterns across all layers
+
+- Sibling helper files alongside `service.py` that import `db.models.*` or do
+  service-layer work. Helpers live in `domain/` (pure) or are promoted to a
+  subdomain.
+- Cross-resource transactional writes spread across multiple service calls
+  without a transaction boundary.
+- Pydantic models used as ORM models or general-purpose internal containers.
+- `datetime.utcnow()` anywhere in the codebase. Use
+  `datetime.now(timezone.utc)`.
+- `TIMESTAMP` columns without timezone. Use `TIMESTAMPTZ` everywhere.
+- `is_deleted` boolean columns. Use `deleted_at TIMESTAMPTZ NULL` for soft
+  delete; default to hard delete.
+- Raw integer primary keys for new resources. UUID primary keys with
+  `gen_random_uuid()` defaults.
+- Lazy ORM attribute access reaching past the store boundary.
+
+## Ownership Model
 
 Use the lowest layer that can own the logic cleanly.
 
-| Concern | Owner | Rule of thumb |
-| --- | --- | --- |
-| Route handlers | `server/<domain>/api.py` | Thin request/response transport only. |
-| API request and response models | `server/<domain>/models.py` | Transport-facing schemas only. |
-| Product business logic | `server/<domain>/service.py` | Orchestration, invariants, validation, and coordination across stores and integrations. |
-| Larger centralized domain logic | `server/<large-domain>/**` | Allowed for broad cohesive domains like `cloud/`; keep subpackages inside the domain instead of inventing parallel top-level folders. |
-| ORM schema | `db/models/*.py` | Persisted schema only. |
-| Database reads and writes | `db/store/*.py` | All DB access goes here, including query construction and `db.execute(...)`. |
-| Auth, token, OAuth, PKCE, and auth dependencies | `auth/**` | Auth stays separate from product-domain business logic. |
-| Third-party providers and vendor SDKs | `integrations/**` | Typed adapters only. Small integrations can be one file; larger ones should split into folders. |
-| Cross-cutting request lifecycle behavior | `middleware/**` | Request context, tracing, logging correlation, and other HTTP-wide behavior. |
-| Env-driven runtime configuration | `config.py` | Secrets, URLs, flags, limits, and other deployment-specific values. |
-| Shared hardcoded values | `constants/**` | Stable code-level constants, defaults, and protocol labels. |
-| Shared generic helpers | `utils/**` | Only for helpers that are truly generic across backend domains, such as shared crypto, telemetry, or time helpers. |
-| API transport schemas | Pydantic models in `server/<domain>/models.py` | Validate and serialize request/response shapes at the transport boundary. |
-| Small internal typed value objects | dataclasses in the owning module or domain package | Use for internal structure, not as a substitute for ORM or API schemas. |
+| Concern | Owner | Rule of thumb | Details |
+| --- | --- | --- | --- |
+| Route handlers | `server/<domain>/api.py` | Thin request/response transport only. | [domains.md](guides/domains.md) |
+| API request/response models | `server/<domain>/models.py` | Pydantic transport schemas. Constructor functions take dataclasses, never ORM. | [domains.md](guides/domains.md), [database.md](guides/database.md) |
+| Product business logic | `server/<domain>/service.py` | Orchestration, invariants, validation. Calls stores and integrations. | [domains.md](guides/domains.md) |
+| Pure product rules | `server/<domain>/domain/<concern>.py` | State machines, validators, calculators, planners. No I/O. | [domains.md](guides/domains.md) |
+| Subdomain | `server/<domain>/<subdomain>/` | Promoted product concept with its own api/service/models. | [domains.md](guides/domains.md) |
+| Worker process entry point | `server/<domain>/worker.py` (or `worker/main.py`) | argparse, signals, async loop setup. Calls service. | [workers.md](guides/workers.md) |
+| Reconciliation loop | `server/<domain>/reconciler.py` (or `worker/reconciler.py`) | State-drift loop. Calls service. | [workers.md](guides/workers.md) |
+| Resource-access route deps | `server/<domain>/access.py` | Lookup + access check + return resource. | [auth.md](guides/auth.md) |
+| Product policy rules | `server/<domain>/domain/policy.py` | Pure verdict functions. | [auth.md](guides/auth.md) |
+| Authentication | `auth/dependencies.py` | `get_current_user`, platform-admin checks. | [auth.md](guides/auth.md) |
+| Shared authorization helpers | `auth/authorization.py` | `require_org_role`, `OwnerContext`, `PolicyVerdict`. | [auth.md](guides/auth.md) |
+| ORM schema | `db/models/<resource>.py` | Persisted schema only. | [database.md](guides/database.md) |
+| Database reads/writes | `db/store/<resource>.py` (flat) or `db/store/<area>/<resource>.py` (folder) | One ORM resource per file. Returns frozen dataclasses. Takes `db: AsyncSession`. Never commits. | [database.md](guides/database.md) |
+| Read-result dataclasses | Co-located in the owning store file | `@dataclass(frozen=True)` snapshots returned to services. | [database.md](guides/database.md) |
+| Internal value types | dataclasses in the owning module | Use for typed internal containers, not ORM or API substitutes. | [database.md](guides/database.md) |
+| Third-party providers and SDKs | `integrations/<vendor>.py` (single file) or `integrations/<vendor>/` (folder) | Typed adapters only. | [integrations.md](guides/integrations.md) |
+| Multi-vendor protocol | `integrations/<protocol>/` with `base.py`, `<provider>.py`, `factory.py` | Abstract over vendors implementing the same protocol. | [integrations.md](guides/integrations.md) |
+| Cross-cutting HTTP behavior | `middleware/**` | Request context, tracing, correlation IDs. No product logic. | — |
+| Env-driven runtime configuration | `config.py` | Secrets, URLs, flags, limits that vary by deployment. | this doc |
+| Hardcoded policy values | `constants/<area>.py` | Limits, timeouts, sentinel values, headers. | this doc |
+| Shared base errors | `server/proliferate/errors.py` | `ProliferateError`, `NotFoundError`, `PermissionDenied`, `Conflict`. | this doc |
+| Domain-specific errors | `server/<domain>/errors.py` | Inherit from the shared base. | this doc |
+| Integration-specific errors | `integrations/<vendor>/errors.py` or inline | Stay integration-local. | [integrations.md](guides/integrations.md) |
 
 Persistence rule:
 
@@ -151,74 +308,22 @@ Persistence rule:
 - Stores talk to the database.
 - Handlers and services do not become ad hoc persistence layers.
 
-## 4. Folder Guide
+## Dependency Direction
 
-- `server/<domain>/`
-  - Default home for backend product domains.
-  - Small domains should usually be `api.py`, `models.py`, and `service.py`.
-  - Larger domains like `cloud/` may keep nested subpackages when the domain is
-    broad, centralized, and still clearly owned as one domain.
-
-- `auth/`
-  - Owns authentication, token handling, reusable authorization dependencies,
-    OAuth, PKCE, and desktop auth flow logic.
-  - Do not bury product-domain rules such as billing or workspace lifecycle
-    behavior here.
-
-- `db/models/`
-  - ORM tables only.
-  - Do not put request models, transport serializers, or service logic here.
-
-- `db/store/`
-  - All database operations live here.
-  - If code needs `select(...)`, `insert(...)`, `update(...)`, `delete(...)`, or
-    `db.execute(...)`, it belongs here rather than in a service or handler.
-
-- `server/<domain>/models.py`
-  - Pydantic request and response schemas only.
-  - Keep inheritance shallow. Shared transport bases are fine when they remove
-    obvious duplication, but avoid deep schema hierarchies.
-  - Do not turn these models into ORM or generic domain objects.
-
-- `integrations/`
-  - Owns typed boundaries to third-party systems.
-  - Keep vendor auth, client setup, payload normalization, and provider-specific
-    error handling here.
-  - Split a provider into a folder when one file stops being clear. `slack/`
-    is preferable to one giant `slack.py` once the integration grows.
-
-- `middleware/`
-  - Owns HTTP-wide request lifecycle behavior.
-  - Good examples are request context, tracing, correlation IDs, or shared
-    request instrumentation.
-  - Do not put product business logic or domain-specific permissions here.
-
-- `constants/`
-  - Shared hardcoded values only.
-  - If a value comes from env or deployment settings, it belongs in `config.py`
-    instead.
-
-- `config.py`
-  - Runtime settings only.
-  - Do not turn it into a general global-values bucket for hardcoded constants.
-
-- `utils/`
-  - Shared generic backend helpers only when they are not naturally owned by a
-    domain.
-  - This is the right home for truly generic helpers such as shared crypto,
-    telemetry, or time utilities.
-  - Do not move domain business logic here just because it is reused twice.
-
-- dataclasses
-  - Use for small internal typed containers, parsed values, or normalized
-    results that stay inside the backend.
-  - Prefer explicit construction and mapping over clever inheritance.
-
-- `main.py`
-  - App bootstrap and route registration only.
-  - Keep app construction separate from product behavior and persistence logic.
-
-When a change touches `server/artifact-runtime/**`, also read
-`server/artifact-runtime/README.md`. That README owns the hosted artifact
-viewer contract, the desktop/runtime `postMessage` protocol, and the per-type
-renderer behavior.
+- `api.py` calls `service.py` and depends on access deps from `<domain>/access.py`.
+- `service.py` calls stores in `db/store/**`, integrations in `integrations/**`,
+  pure functions in `<domain>/domain/**`, and other domains' public service
+  functions (writes) or stores (reads).
+- `<domain>/domain/**` is pure: it does not import React-equivalent (FastAPI),
+  `db/store/**`, the query client, integrations, or platform APIs.
+- `db/store/**` calls `db/models/**` and SQLAlchemy. Nothing else may import
+  SQLAlchemy.
+- `db/models/**` is leaf: it does not import services, stores, or integrations.
+- `integrations/<vendor>/**` is leaf: it does not import server domain code.
+  Each vendor folder exposes a public API via `__init__.py`; internals stay
+  vendor-local.
+- `auth/**` may be imported by every layer. Cross-domain authorization helpers
+  always come from `auth.authorization`, never from another domain's
+  `service.py`.
+- Workers (`worker.py`, `reconciler.py`, `worker/`) follow the same dependency
+  direction as api/service. They call services, not stores directly.
