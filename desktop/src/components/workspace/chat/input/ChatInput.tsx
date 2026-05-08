@@ -26,7 +26,7 @@ import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
 import type { PromptAttachmentController } from "@/hooks/chat/use-chat-prompt-attachments";
 import { useComposerSubmitGate } from "@/hooks/chat/use-composer-submit-gate";
-import { usePlanDraftAttachments } from "@/hooks/plans/use-plan-draft-attachments";
+import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";

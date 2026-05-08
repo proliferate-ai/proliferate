@@ -91,6 +91,7 @@ interface ExecutePlanImplementationInput {
   showToast: (message: string) => void;
 }
 
+// Owns proposed-plan card actions. Does not own transcript row rendering or session runtime.
 export function useProposedPlanActions() {
   const queryClient = useQueryClient();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);

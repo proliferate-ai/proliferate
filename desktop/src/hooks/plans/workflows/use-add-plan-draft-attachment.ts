@@ -10,6 +10,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_PLANS: PromptPlanAttachmentPointer[] = [];
 
+// Owns the user action for adding a plan to the composer draft.
 export function useAddPlanDraftAttachment(workspaceUiKey: string | null | undefined) {
   const addPlanAttachment = useChatPlanAttachmentStore((state) => state.addPlanAttachment);
   const showToast = useToastStore((state) => state.show);

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/Input";
 import { AddPlan, ClipboardList, LoaderCircle } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
-import { usePlanPicker } from "@/hooks/plans/use-plan-picker";
+import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";
 import {
   formatPlanAgentKindLabel,
   formatPlanDecisionStateLabel,

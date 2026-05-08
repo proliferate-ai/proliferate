@@ -3,7 +3,7 @@ import type { NormalizedSessionControl } from "@anyharness/sdk";
 import {
   claimPlanImplementationRun,
   executePlanImplementation,
-} from "@/hooks/plans/use-proposed-plan-actions";
+} from "@/hooks/plans/workflows/use-proposed-plan-actions";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import type { StartLatencyFlowInput } from "@/lib/infra/measurement/latency-flow";
