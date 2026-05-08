@@ -1,9 +1,9 @@
 import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
 import {
-  type CloudRepoConfigSummary,
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "@/lib/domain/preferences/user-preferences";
 import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/arrival";

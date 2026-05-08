@@ -13,14 +13,6 @@ COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/list/AutomationLis
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/list/AutomationRow.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/screen/AutomationsScreen.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/timeline/AutomationRunTimeline.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/BillingPane.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/CloudBillingSummary.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/CloudPane.tsx 2 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/GeneralPane.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/OrganizationPane.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/billing/OrganizationBillingSection.tsx 2 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/organization/OrganizationLogo.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/repo/CloudRepoSection.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/support/SupportDialog.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/workspace/files/panel/WorkspaceFilesPanel.tsx 4 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/workspace/open-target/OpenTargetIcon.tsx 1 component owns access/cache before component cleanup
@@ -30,7 +22,6 @@ DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/local-executor.ts 1 d
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/target-selection.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/view-model.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/chat/__fixtures__/playground.ts 1 domain imports transport or UI types before lib cleanup
-DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/credentials.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/runtime-input-sync.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/files/file-visuals.ts 2 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/mcp/local-stdio-finalizer.ts 1 domain imports transport or UI types before lib cleanup

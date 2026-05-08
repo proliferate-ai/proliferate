@@ -6,10 +6,8 @@ import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
 } from "@/lib/domain/automations/target-selection";
-import type {
-  AutomationResponse,
-  CloudRepoConfigSummary,
-} from "@/lib/access/cloud/client";
+import type { AutomationResponse } from "@/lib/access/cloud/client";
+import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
 

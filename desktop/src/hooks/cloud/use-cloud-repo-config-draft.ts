@@ -11,7 +11,7 @@ import {
   type CloudEnvironmentDraft,
   type CloudEnvironmentDraftState,
 } from "@/lib/domain/settings/environment-draft";
-import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
+import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 
 export interface CloudRepoEnvVarRow {
   id: string;
@@ -34,7 +34,7 @@ function buildEnvVarRows(envVars: Record<string, string>): CloudRepoEnvVarRow[] 
 }
 
 interface UseCloudRepoConfigDraftArgs {
-  savedConfig: CloudRepoConfigResponse | null | undefined;
+  savedConfig: CloudRepoConfig | null | undefined;
   localSetupScript: string;
   localRunCommand: string;
   sourceKey: string;
@@ -214,7 +214,7 @@ export function useCloudRepoConfigDraft({
     }));
   }, []);
 
-  const resetFromSavedConfig = useCallback((nextSavedConfig: CloudRepoConfigResponse | null | undefined) => {
+  const resetFromSavedConfig = useCallback((nextSavedConfig: CloudRepoConfig | null | undefined) => {
     const nextState = buildSavedCloudEnvironmentDraftState(nextSavedConfig);
     setState((current) => ({
       ...current,

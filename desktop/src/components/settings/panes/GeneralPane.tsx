@@ -11,11 +11,25 @@ import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIco
 import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/settings/use-available-editors";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
-import type { EditorInfo, OpenTargetIconId } from "@/lib/access/tauri/shell";
 import type { TurnEndSoundId } from "@/lib/domain/preferences/user-preferences";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
-const EMPTY_EDITORS: EditorInfo[] = [];
+type SettingsOpenTargetIconId =
+  | "cursor"
+  | "vscode"
+  | "windsurf"
+  | "zed"
+  | "sublime"
+  | "finder"
+  | "terminal";
+
+interface SettingsEditorInfo {
+  id: string;
+  label: string;
+  iconId?: SettingsOpenTargetIconId;
+}
+
+const EMPTY_EDITORS: SettingsEditorInfo[] = [];
 const FINDER_TARGET = { id: "finder", label: "Finder", iconId: "finder" as const };
 const TERMINAL_TARGET = { id: "terminal", label: "Terminal", iconId: "terminal" as const };
 const BRANCH_PREFIX_OPTIONS = [
@@ -49,7 +63,7 @@ export function GeneralPane() {
   })));
 
   const targets = useMemo(() => {
-    const items: { id: string; label: string; iconId?: OpenTargetIconId }[] = editors.map((editor) => ({
+    const items: { id: string; label: string; iconId?: SettingsOpenTargetIconId }[] = editors.map((editor) => ({
       id: editor.id,
       label: editor.label,
       iconId: editor.iconId,

@@ -1,7 +1,5 @@
-import type {
-  CloudRepoConfigSummary,
-  CloudWorkspaceSummary,
-} from "@/lib/access/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
 export type AutomationExecutionTarget = "cloud" | "local";

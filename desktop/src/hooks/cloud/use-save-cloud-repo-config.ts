@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
 import { saveCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
+import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
@@ -55,7 +55,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const queryClient = useQueryClient();
 
-  return useMutation<CloudRepoConfigResponse, Error, SaveCloudRepoConfigInput>({
+  return useMutation<CloudRepoConfig, Error, SaveCloudRepoConfigInput>({
     meta: {
       telemetryHandled: true,
     },

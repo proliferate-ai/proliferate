@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { BillingUrlResponse } from "@/lib/access/cloud/client";
-import type { CloudOwnerSelection } from "@/lib/access/cloud/billing";
+import type { CloudOwnerSelection } from "@/lib/domain/cloud/billing";
 import {
   useCloudBillingMutations,
   useCloudBillingQuery,

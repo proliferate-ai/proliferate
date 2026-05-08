@@ -5,11 +5,19 @@ import {
   descriptionForStartBlockReason,
   titleForStartBlockReason,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import type { BillingPlanInfo } from "@/lib/access/cloud/client";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import type { useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
+import type { BillingPlanInfo } from "@/lib/domain/cloud/billing";
 
-type CloudBillingActions = ReturnType<typeof useCloudBillingActions>;
+interface CloudBillingActions {
+  createBillingPortal(): Promise<unknown>;
+  createCloudCheckout(): Promise<unknown>;
+  createRefillCheckout(): Promise<unknown>;
+  updateOverageEnabled(input: { enabled: boolean }): Promise<unknown>;
+  creatingBillingPortal: boolean;
+  creatingCloudCheckout: boolean;
+  creatingRefillCheckout: boolean;
+  updatingOverage: boolean;
+}
 
 interface CloudBillingSummaryProps {
   billingPlan: BillingPlanInfo;

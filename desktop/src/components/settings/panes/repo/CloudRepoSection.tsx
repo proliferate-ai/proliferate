@@ -17,12 +17,12 @@ import { useCloudRepoConfigDraft } from "@/hooks/cloud/use-cloud-repo-config-dra
 import { useCloudRepoSetupSuggestions } from "@/hooks/cloud/use-cloud-repo-setup-suggestions";
 import { useResyncCloudRepoFile } from "@/hooks/cloud/use-resync-cloud-repo-file";
 import { useSaveCloudRepoConfig } from "@/hooks/cloud/use-save-cloud-repo-config";
+import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import {
   isCloudRepository,
   type CloudSettingsRepositoryEntry,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
-import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
 interface CloudRepoSectionProps {
@@ -35,7 +35,7 @@ interface CloudRepoSectionProps {
 
 interface CloudRepoSettingsEditorProps {
   repository: CloudSettingsRepositoryEntry;
-  savedConfig: CloudRepoConfigResponse | null | undefined;
+  savedConfig: CloudRepoConfig | null | undefined;
   localSetupScript: string;
   localRunCommand: string;
   suggestedPaths: string[];
