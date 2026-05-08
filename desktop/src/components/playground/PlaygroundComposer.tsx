@@ -23,8 +23,8 @@ import { WorkspaceArrivalAttachedPanelView } from "@/components/workspace/chat/s
 import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
 import { WorkspaceMobilityOverlayView } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
-import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
-import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
+import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
+import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";

@@ -16,10 +16,10 @@ import {
   useActiveSessionPromptCapabilities,
 } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
-import { useChatDockInset } from "@/hooks/chat/use-chat-dock-inset";
+import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
 import { useChatPromptAttachments } from "@/hooks/chat/use-chat-prompt-attachments";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
-import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
+import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
 import { useQueuedPromptEditStatus } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
