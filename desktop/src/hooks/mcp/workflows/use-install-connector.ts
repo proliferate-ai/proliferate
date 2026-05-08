@@ -1,29 +1,25 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ConnectorSettings } from "@/lib/domain/mcp/types";
+import { useMutation } from "@tanstack/react-query";
 import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
-import { cancelLocalOAuthConnectorConnect, installConnector } from "@/lib/workflows/mcp/connector-persistence";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { refreshMcpConnectorsQuery } from "./use-connectors";
+import {
+  cancelPendingLocalOAuthConnectorConnect,
+  type InstallConnectorMutationInput,
+  useInstallConnectorMutation,
+} from "@/hooks/access/mcp/connectors/use-connector-mutations";
 
 export function useInstallConnector() {
-  const queryClient = useQueryClient();
+  const installConnectorMutation = useInstallConnectorMutation();
 
   const mutation = useMutation({
     meta: {
       telemetryHandled: true,
     },
-    mutationFn: async (input: {
-      catalogEntryId: string;
-      secretFields: Record<string, string>;
-      settings?: ConnectorSettings;
-    }) => {
-      return installConnector(input.catalogEntryId, input.secretFields, input.settings);
-    },
-    onSuccess: async (_result, variables) => {
-      await refreshMcpConnectorsQuery(queryClient);
+    mutationFn: (input: InstallConnectorMutationInput) =>
+      installConnectorMutation.mutateAsync(input),
+    onSuccess: (_result, variables) => {
       trackProductEvent("connector_install_succeeded", {
         connector_id: variables.catalogEntryId,
         result: "synced",
@@ -48,6 +44,6 @@ export function useInstallConnector() {
 
   return {
     ...mutation,
-    cancelPendingLocalOAuth: cancelLocalOAuthConnectorConnect,
+    cancelPendingLocalOAuth: cancelPendingLocalOAuthConnectorConnect,
   };
 }

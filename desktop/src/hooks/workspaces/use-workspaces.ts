@@ -1,5 +1,5 @@
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildWorkspaceCollections,
@@ -7,8 +7,8 @@ import {
 } from "@/lib/domain/workspaces/cloud/collections";
 import { listCloudWorkspaces } from "@/lib/access/cloud/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { workspaceCollectionsKey } from "./query-keys";
 import {
   elapsedMs,
   logLatency,
@@ -75,11 +75,13 @@ async function fallbackOnNonAbort<T>(
 }
 
 export function useWorkspaces() {
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { cloudActive } = useCloudAvailabilityState();
   const canQuery = runtimeUrl.trim().length > 0 || cloudActive;
-  const queryKey = workspaceCollectionsKey(runtimeUrl, cloudActive);
+  const {
+    getWorkspaceCollectionsCacheState,
+    queryKey,
+  } = useWorkspaceCollectionsCache({ cloudActive, runtimeUrl });
 
   return useQuery<WorkspaceCollections>({
     queryKey,
@@ -97,7 +99,7 @@ export function useWorkspaces() {
         ],
         maxDurationMs: 30_000,
       });
-      const cacheState = queryClient.getQueryState(queryKey);
+      const cacheState = getWorkspaceCollectionsCacheState();
       if (operationId) {
         recordMeasurementMetric({
           type: "cache",

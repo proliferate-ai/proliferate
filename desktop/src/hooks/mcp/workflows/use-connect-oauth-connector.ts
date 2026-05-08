@@ -1,20 +1,21 @@
 import { useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type { ConnectorSettings } from "@/lib/domain/mcp/types";
 import {
   classifyOAuthCommandTelemetryFailure,
   OAuthConnectorCommandError,
 } from "@/lib/domain/mcp/oauth";
-import { cancelOAuthConnectorConnect } from "@/lib/workflows/mcp/connector-persistence";
-import { reconnectOAuthConnector } from "@/lib/workflows/mcp/connector-persistence";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { refreshMcpConnectorsQuery } from "./use-connectors";
+import {
+  cancelPendingOAuthConnectorConnection,
+  useConnectOAuthConnectorMutation,
+} from "@/hooks/access/mcp/connectors/use-connector-mutations";
 
-export function useReconnectOAuthConnector() {
-  const queryClient = useQueryClient();
+export function useConnectOAuthConnector() {
+  const connectOAuthConnectorMutation = useConnectOAuthConnectorMutation();
   const pendingConnectionIdRef = useRef<string | null>(null);
 
   const mutation = useMutation({
@@ -22,19 +23,22 @@ export function useReconnectOAuthConnector() {
       telemetryHandled: true,
     },
     mutationFn: async (input: {
-      connectionId: string;
       catalogEntryId: string;
       settings?: ConnectorSettings;
     }) => {
-      pendingConnectionIdRef.current = input.connectionId;
-      return reconnectOAuthConnector(input.connectionId, input.settings);
+      const connectionId = crypto.randomUUID();
+      pendingConnectionIdRef.current = connectionId;
+      return connectOAuthConnectorMutation.mutateAsync({
+        catalogEntryId: input.catalogEntryId,
+        connectionId,
+        settings: input.settings,
+      });
     },
-    onSuccess: async (result, variables) => {
+    onSuccess: (result, variables) => {
       if (result.kind === "canceled") {
         return;
       }
-      await refreshMcpConnectorsQuery(queryClient);
-      trackProductEvent("connector_updated", {
+      trackProductEvent("connector_install_succeeded", {
         connector_id: variables.catalogEntryId,
         result: "synced",
       });
@@ -47,14 +51,17 @@ export function useReconnectOAuthConnector() {
           "Couldn't complete OAuth for this connector.",
           false,
         );
+      trackProductEvent("connector_install_failed", {
+        connector_id: variables.catalogEntryId,
+        failure_kind: classifyOAuthCommandTelemetryFailure(oauthError.kind),
+      });
       captureTelemetryException(new Error(`mcp_oauth_${oauthError.kind}`), {
         tags: {
-          action: "reconnect_cloud_oauth_connector",
+          action: "connect_cloud_oauth_connector",
           domain: "mcp_connectors",
         },
         extras: {
           catalogEntryId: variables.catalogEntryId,
-          failureKind: classifyOAuthCommandTelemetryFailure(oauthError.kind),
           retryable: oauthError.retryable,
           oauthFailureKind: oauthError.kind,
         },
@@ -72,7 +79,7 @@ export function useReconnectOAuthConnector() {
       if (!connectionId) {
         return;
       }
-      await cancelOAuthConnectorConnect(connectionId);
+      await cancelPendingOAuthConnectorConnection(connectionId);
     },
   };
 }
