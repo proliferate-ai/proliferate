@@ -11,7 +11,9 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     run_runtime_worktree_retention,
     update_runtime_worktree_retention_policy,
 )
-from proliferate.server.cloud.worktree_policy.service import get_worktree_retention_policy
+from proliferate.server.cloud.worktree_policy.service import (
+    load_worktree_retention_policy_for_runtime as get_worktree_retention_policy,
+)
 
 
 async def _run_deferred_cleanup_background(

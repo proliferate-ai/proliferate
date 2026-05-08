@@ -73,7 +73,7 @@ async def save_cloud_worktree_policy(
             },
         )
     )
-    await db.commit()
+    await db.flush()
     value = await get_cloud_worktree_policy(db, user_id)
     if value is None:
         raise RuntimeError("Cloud worktree retention policy was not persisted.")
@@ -92,7 +92,7 @@ async def persist_cloud_worktree_policy_for_user(
     user_id: UUID,
     max_materialized_worktrees_per_repo: int,
 ) -> CloudWorktreePolicyValue:
-    async with db_engine.async_session_factory() as db:
+    async with db_engine.async_session_factory() as db, db.begin():
         return await save_cloud_worktree_policy(
             db,
             user_id=user_id,
