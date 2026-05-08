@@ -10,6 +10,7 @@ from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mcp_connections.access import McpConnectionManageDependency
 from proliferate.server.cloud.mcp_oauth.models import (
     CloudMcpOAuthFlowStatusResponse,
     StartCloudMcpOAuthFlowResponse,
@@ -30,11 +31,10 @@ router = APIRouter(prefix="/mcp")
     response_model=StartCloudMcpOAuthFlowResponse,
 )
 async def start_cloud_mcp_oauth_flow_endpoint(
-    connection_id: str,
-    user: User = Depends(current_active_user),
+    connection: McpConnectionManageDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> StartCloudMcpOAuthFlowResponse:
-    return await start_cloud_mcp_oauth_flow(db, user_id=user.id, connection_id=connection_id)
+    return await start_cloud_mcp_oauth_flow(db, connection=connection)
 
 
 @router.get("/oauth/flows/{flow_id}", response_model=CloudMcpOAuthFlowStatusResponse)

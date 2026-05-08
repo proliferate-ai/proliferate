@@ -3,11 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from proliferate.config import settings
-
-_SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = {
-    "client_secret_post",
-    "client_secret_basic",
-}
+from proliferate.constants.cloud_mcp import SUPPORTED_STATIC_OAUTH_TOKEN_ENDPOINT_AUTH_METHODS
 
 
 @dataclass(frozen=True)
@@ -26,7 +22,7 @@ def get_static_oauth_client_config(entry_id: str) -> StaticOAuthClientConfig | N
     if not client_id:
         return None
     auth_method = settings.cloud_mcp_slack_token_endpoint_auth_method.strip()
-    if auth_method not in _SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS:
+    if auth_method not in SUPPORTED_STATIC_OAUTH_TOKEN_ENDPOINT_AUTH_METHODS:
         return None
     client_secret = settings.cloud_mcp_slack_client_secret.strip() or None
     if not client_secret:

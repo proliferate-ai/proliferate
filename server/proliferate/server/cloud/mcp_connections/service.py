@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import re
 from contextlib import suppress
 from typing import NoReturn
 from uuid import UUID
@@ -25,19 +23,21 @@ from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import get_catalog_entry
-from proliferate.server.cloud.mcp_catalog.domain.rendering import (
-    parse_settings as catalog_parse_settings,
+from proliferate.server.cloud.mcp_catalog.domain.types import CatalogEntry
+from proliferate.server.cloud.mcp_connections.domain.connection_rules import (
+    McpConnectionRuleViolation,
+    connection_oauth_resource_url,
+    connection_settings_json,
+    generate_server_name,
+    oauth_resource_change_requires_reconnect,
+    parse_connection_settings,
+    reject_local_oauth_account_change,
+    resolve_connection_auth_state,
+    validate_connection_secret_fields,
+    validate_connection_settings,
 )
-from proliferate.server.cloud.mcp_catalog.domain.rendering import (
-    render_oauth_resource_url,
-    validate_secret_fields,
-)
-from proliferate.server.cloud.mcp_catalog.domain.rendering import (
-    validate_settings as catalog_validate_settings,
-)
-from proliferate.server.cloud.mcp_catalog.domain.types import (
-    CatalogConfigurationError,
-    CatalogEntry,
+from proliferate.server.cloud.mcp_connections.domain.connection_rules import (
+    validate_connection_id as validate_connection_id_rule,
 )
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpAuthKind,
@@ -54,11 +54,6 @@ from proliferate.server.cloud.mcp_connections.models import (
 )
 from proliferate.utils.crypto import encrypt_json
 
-_CONNECTION_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
-_SERVER_NAME_CHARS = re.compile(r"[^a-z0-9]+")
-_EDGE_UNDERSCORES = re.compile(r"^_+|_+$")
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
 
 def _invalid_payload(message: str) -> NoReturn:
     raise CloudApiError("invalid_payload", message, status_code=400)
@@ -69,73 +64,47 @@ def _not_found() -> NoReturn:
 
 
 def validate_connection_id(connection_id: str) -> str:
-    cleaned = connection_id.strip()
-    if not _CONNECTION_ID_RE.fullmatch(cleaned):
-        _invalid_payload("MCP connection id must be 1-255 URL-safe characters.")
-    return cleaned
+    try:
+        return validate_connection_id_rule(connection_id)
+    except McpConnectionRuleViolation as exc:
+        _invalid_payload(str(exc))
 
 
-def _normalize_server_name_base(value: str) -> str:
-    normalized = _SERVER_NAME_CHARS.sub("_", value.strip().lower())
-    normalized = _EDGE_UNDERSCORES.sub("", normalized)
-    return (normalized or "mcp")[:40] or "mcp"
-
-
-def _generate_server_name(
-    entry: CatalogEntry,
-    existing_names: set[str],
-    connection_id: str,
-) -> str:
-    base = _normalize_server_name_base(entry.server_name_base)
-    if base not in existing_names:
-        return base
-    return f"{base}_{connection_id.replace('-', '')[:6]}"
-
-
-def _settings_json(settings: dict[str, object]) -> str:
-    return json.dumps(settings, separators=(",", ":"), sort_keys=True)
-
-
-def _parse_settings(raw: str) -> dict[str, object]:
-    return catalog_parse_settings(raw)
-
-
-def _validate_settings(
+def _validate_connection_settings_or_raise(
     entry: CatalogEntry,
     settings: dict[str, object] | None,
 ) -> dict[str, object]:
     try:
-        cleaned = catalog_validate_settings(entry, settings)
-    except CatalogConfigurationError as exc:
+        return validate_connection_settings(entry, settings)
+    except McpConnectionRuleViolation as exc:
         _invalid_payload(str(exc))
-    if entry.id == "gmail" and entry.setup_kind == "local_oauth":
-        raw_email = cleaned.get("userGoogleEmail")
-        if not isinstance(raw_email, str):
-            _invalid_payload("Gmail requires a Google account email.")
-        email = raw_email.strip().lower()
-        if not _EMAIL_RE.fullmatch(email):
-            _invalid_payload("Gmail requires a valid Google account email.")
-        cleaned["userGoogleEmail"] = email
-    return cleaned
 
 
-def _reject_local_oauth_account_change(
+def _validate_secret_fields_or_raise(
+    entry: CatalogEntry,
+    secret_fields: dict[str, str],
+) -> dict[str, str]:
+    try:
+        return validate_connection_secret_fields(entry, secret_fields)
+    except McpConnectionRuleViolation as exc:
+        _invalid_payload(str(exc))
+
+
+def _oauth_resource_url_or_raise(entry: CatalogEntry, settings: dict[str, object]) -> str:
+    try:
+        return connection_oauth_resource_url(entry, settings)
+    except McpConnectionRuleViolation as exc:
+        _invalid_payload(str(exc))
+
+
+def _reject_local_oauth_account_change_or_raise(
     entry: CatalogEntry,
     old_settings: dict[str, object],
     new_settings: dict[str, object],
 ) -> None:
-    if entry.setup_kind != "local_oauth":
-        return
-    old_email = str(old_settings.get("userGoogleEmail", "")).strip().lower()
-    new_email = str(new_settings.get("userGoogleEmail", "")).strip().lower()
-    if old_email and new_email and old_email != new_email:
-        _invalid_payload("Disconnect and reconnect Gmail to change Google accounts.")
-
-
-def _clean_secret_fields(entry: CatalogEntry, secret_fields: dict[str, str]) -> dict[str, str]:
     try:
-        return validate_secret_fields(entry, secret_fields)
-    except CatalogConfigurationError as exc:
+        reject_local_oauth_account_change(entry, old_settings, new_settings)
+    except McpConnectionRuleViolation as exc:
         _invalid_payload(str(exc))
 
 
@@ -143,41 +112,28 @@ def _auth_state(
     record: CloudMcpConnectionRecord,
 ) -> tuple[CloudMcpAuthKind, CloudMcpAuthStatus]:
     entry = get_catalog_entry(record.catalog_entry_id)
-    auth_kind: CloudMcpAuthKind = _connection_auth_kind(entry)
-    if record.auth is None:
-        if record.payload_ciphertext:
-            return auth_kind, "needs_reconnect"
-        return auth_kind, "ready" if auth_kind == "none" else "needs_reconnect"
-    return auth_kind, _connection_auth_status(record.auth.auth_status)
+    state = resolve_connection_auth_state(
+        entry_auth_kind=entry.auth_kind if entry else None,
+        has_auth=record.auth is not None,
+        stored_auth_status=record.auth.auth_status if record.auth else None,
+        has_legacy_payload=bool(record.payload_ciphertext),
+    )
+    return state.auth_kind, state.auth_status
 
 
 def _connection_payload(record: CloudMcpConnectionRecord) -> CloudMcpConnectionResponse:
     auth_kind, auth_status = _auth_state(record)
     entry = get_catalog_entry(record.catalog_entry_id)
-    parsed_settings = _parse_settings(record.settings_json)
+    parsed_settings = parse_connection_settings(record.settings_json)
     if entry is not None:
-        with suppress(CatalogConfigurationError):
-            parsed_settings = catalog_validate_settings(entry, parsed_settings)
+        with suppress(McpConnectionRuleViolation):
+            parsed_settings = validate_connection_settings(entry, parsed_settings)
     return cloud_mcp_connection_payload(
         record,
         parsed_settings,
         auth_kind,
         auth_status,
     )
-
-
-def _connection_auth_kind(entry: CatalogEntry | None) -> CloudMcpAuthKind:
-    if entry is None:
-        return "none"
-    if entry.auth_kind in {"secret", "oauth", "none"}:
-        return entry.auth_kind
-    return "none"
-
-
-def _connection_auth_status(value: str) -> CloudMcpAuthStatus:
-    if value in {"ready", "needs_reconnect", "error"}:
-        return value  # type: ignore[return-value]
-    return "error"
 
 
 async def list_cloud_mcp_connections(
@@ -201,12 +157,12 @@ async def create_cloud_mcp_connection(
         _invalid_payload("Connector catalog entry was not found.")
     if not catalog_entry_is_configured(entry):
         _invalid_payload("Connector catalog entry is not configured for this deployment.")
-    settings = _validate_settings(entry, body.settings)
+    settings = _validate_connection_settings_or_raise(entry, body.settings)
     existing = await list_user_connections(db, user_id)
     if any(record.catalog_entry_id == entry.id for record in existing):
         _invalid_payload(f"{entry.name} is already connected.")
     connection_id = ""
-    server_name = _generate_server_name(
+    server_name = generate_server_name(
         entry,
         {record.server_name for record in existing},
         connection_id,
@@ -217,7 +173,7 @@ async def create_cloud_mcp_connection(
         catalog_entry_id=entry.id,
         catalog_entry_version=entry.version,
         server_name=server_name,
-        settings_json=_settings_json(settings),
+        settings_json=connection_settings_json(settings),
         enabled=body.enabled,
     )
     if entry.auth_kind == "none":
@@ -238,32 +194,32 @@ async def create_cloud_mcp_connection(
 
 async def patch_cloud_mcp_connection(
     db: AsyncSession,
-    user_id: UUID,
-    connection_id: str,
+    existing: CloudMcpConnectionRecord,
     body: PatchCloudMcpConnectionRequest,
 ) -> CloudMcpConnectionResponse:
-    cleaned_connection_id = validate_connection_id(connection_id)
-    existing = await get_user_connection(db, user_id, cleaned_connection_id)
-    if existing is None:
-        _not_found()
     entry = get_catalog_entry(existing.catalog_entry_id)
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")
     settings_json = None
     if body.settings is not None:
-        new_settings = _validate_settings(entry, body.settings)
-        old_settings = _parse_settings(existing.settings_json)
-        _reject_local_oauth_account_change(entry, old_settings, new_settings)
+        new_settings = _validate_connection_settings_or_raise(entry, body.settings)
+        old_settings = parse_connection_settings(existing.settings_json)
+        _reject_local_oauth_account_change_or_raise(entry, old_settings, new_settings)
         if entry.auth_kind == "oauth" and existing.auth and existing.auth.auth_status == "ready":
-            old_resource = _oauth_resource_url(entry, old_settings)
-            new_resource = _oauth_resource_url(entry, new_settings)
-            if old_resource != new_resource:
+            old_resource = _oauth_resource_url_or_raise(entry, old_settings)
+            new_resource = _oauth_resource_url_or_raise(entry, new_settings)
+            if oauth_resource_change_requires_reconnect(
+                auth_kind=entry.auth_kind,
+                auth_status=existing.auth.auth_status,
+                old_resource_url=old_resource,
+                new_resource_url=new_resource,
+            ):
                 _invalid_payload("Reconnect this MCP before changing URL-affecting settings.")
-        settings_json = _settings_json(new_settings)
+        settings_json = connection_settings_json(new_settings)
     record = await patch_user_connection(
         db,
-        user_id=user_id,
-        connection_id=cleaned_connection_id,
+        user_id=existing.user_id,
+        connection_id=existing.connection_id,
         enabled=body.enabled,
         settings_json=settings_json,
         catalog_entry_version=entry.version if settings_json is not None else None,
@@ -275,18 +231,13 @@ async def patch_cloud_mcp_connection(
 
 async def put_cloud_mcp_connection_secret_auth(
     db: AsyncSession,
-    user_id: UUID,
-    connection_id: str,
+    record: CloudMcpConnectionRecord,
     body: PutCloudMcpSecretAuthRequest,
 ) -> CloudMcpConnectionResponse:
-    cleaned_connection_id = validate_connection_id(connection_id)
-    record = await get_user_connection(db, user_id, cleaned_connection_id)
-    if record is None:
-        _not_found()
     entry = get_catalog_entry(record.catalog_entry_id)
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")
-    cleaned = _clean_secret_fields(entry, body.secret_fields)
+    cleaned = _validate_secret_fields_or_raise(entry, body.secret_fields)
     await upsert_connection_auth(
         db,
         connection_db_id=record.id,
@@ -295,7 +246,7 @@ async def put_cloud_mcp_connection_secret_auth(
         payload_ciphertext=encrypt_json({"secretFields": cleaned}),
         payload_format="secret-fields-v1",
     )
-    updated = await get_user_connection(db, user_id, cleaned_connection_id)
+    updated = await get_user_connection(db, record.user_id, record.connection_id)
     if updated is None:
         _not_found()
     return _connection_payload(updated)
@@ -303,10 +254,9 @@ async def put_cloud_mcp_connection_secret_auth(
 
 async def delete_cloud_mcp_connection_for_user(
     db: AsyncSession,
-    user_id: UUID,
-    connection_id: str,
+    connection: CloudMcpConnectionRecord,
 ) -> None:
-    await delete_user_connection(db, user_id, validate_connection_id(connection_id))
+    await delete_user_connection(db, connection.user_id, connection.connection_id)
 
 
 async def list_cloud_mcp_connection_statuses(
@@ -331,9 +281,9 @@ async def sync_cloud_mcp_connection_for_user(
         _invalid_payload("Connector catalog entry was not found.")
     if not entry.cloud_secret_sync:
         _invalid_payload(f"{entry.name} does not support legacy cloud secret sync.")
-    cleaned = _clean_secret_fields(entry, body.secret_fields)
+    cleaned = _validate_secret_fields_or_raise(entry, body.secret_fields)
     existing = await list_user_connections(db, user_id)
-    server_name = _generate_server_name(
+    server_name = generate_server_name(
         entry,
         {
             record.server_name
@@ -351,16 +301,6 @@ async def sync_cloud_mcp_connection_for_user(
         settings_json="{}",
         payload_ciphertext=encrypt_json({"secretFields": cleaned}),
     )
-
-
-def _oauth_resource_url(entry: CatalogEntry, settings: dict[str, object]) -> str:
-    try:
-        return render_oauth_resource_url(
-            entry,
-            settings,
-        )
-    except CatalogConfigurationError as exc:
-        _invalid_payload(str(exc))
 
 
 async def delete_legacy_cloud_mcp_connection_for_user(
