@@ -1,22 +1,26 @@
-import type { QueryClient } from "@tanstack/react-query";
-import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
+import type { GetSetupStatusResponse } from "@anyharness/sdk";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
-export function isWorkspaceSetupActive(
-  queryClient: QueryClient,
-  runtimeUrl: string,
-  workspaceId: string | null,
-): boolean {
+type CachedWorkspaceSetupStatus = GetSetupStatusResponse["status"] | null;
+
+interface WorkspaceSetupActivityInput {
+  workspaceArrivalEvent: WorkspaceArrivalEvent | null;
+  workspaceId: string | null;
+  cachedSetupStatus: CachedWorkspaceSetupStatus;
+}
+
+export function isWorkspaceSetupActive({
+  workspaceArrivalEvent,
+  workspaceId,
+  cachedSetupStatus,
+}: WorkspaceSetupActivityInput): boolean {
   if (!workspaceId) return false;
-  const arrival = useSessionSelectionStore.getState().workspaceArrivalEvent;
+  const arrival = workspaceArrivalEvent;
   if (!arrival || arrival.workspaceId !== workspaceId) return false;
 
-  const cachedStatus = queryClient.getQueryData<{ status?: string }>(
-    anyHarnessWorkspaceSetupStatusKey(runtimeUrl, workspaceId),
-  );
-  const status = cachedStatus?.status ?? arrival.setupScript?.status ?? null;
+  const status = cachedSetupStatus ?? arrival.setupScript?.status ?? null;
   // For async-setup sources the creation endpoint returns setupScript: null
   // and setup runs in the background. Treat a cache miss (no poll result yet)
   // as potentially active so the panel isn't prematurely dismissed before the
@@ -28,21 +32,25 @@ export function isWorkspaceSetupActive(
 }
 
 export function completeChatPromptSubmitSideEffects({
-  queryClient,
-  runtimeUrl,
   workspaceId,
+  workspaceArrivalEvent,
+  getCachedWorkspaceSetupStatus,
   agentKind,
   reuseSession,
   setWorkspaceArrivalEvent,
 }: {
-  queryClient: QueryClient;
-  runtimeUrl: string;
   workspaceId: string;
+  workspaceArrivalEvent: WorkspaceArrivalEvent | null;
+  getCachedWorkspaceSetupStatus: (workspaceId: string) => CachedWorkspaceSetupStatus;
   agentKind: string;
   reuseSession: boolean;
   setWorkspaceArrivalEvent: (event: null) => void;
 }): void {
-  if (!isWorkspaceSetupActive(queryClient, runtimeUrl, workspaceId)) {
+  if (!isWorkspaceSetupActive({
+    workspaceArrivalEvent,
+    workspaceId,
+    cachedSetupStatus: getCachedWorkspaceSetupStatus(workspaceId),
+  })) {
     setWorkspaceArrivalEvent(null);
   }
   trackProductEvent("chat_prompt_submitted", {
