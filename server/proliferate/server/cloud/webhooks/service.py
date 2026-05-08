@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 from datetime import datetime
 from uuid import UUID
 
-from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     PROVIDER_EVENT_KIND_CREATED,
@@ -35,36 +32,25 @@ from proliferate.db.store.cloud_workspaces import (
     load_cloud_workspace_by_id,
     save_sandbox_provider_state,
 )
-from proliferate.integrations.sandbox import get_sandbox_provider
+from proliferate.integrations.sandbox import (
+    E2BWebhookSignatureError,
+    get_sandbox_provider,
+    verify_e2b_webhook_signature,
+)
 from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.webhooks.models import E2BWebhookEvent, E2BWebhookReceipt
 
 
 def _verify_e2b_signature(raw_body: bytes, signature: str | None) -> None:
-    secret = settings.e2b_webhook_signature_secret.strip()
-    if not secret:
+    try:
+        verify_e2b_webhook_signature(raw_body, signature)
+    except E2BWebhookSignatureError as exc:
         raise CloudApiError(
-            "webhook_unavailable",
-            "E2B webhook verification is not configured.",
-            status_code=503,
-        )
-    if not signature:
-        raise CloudApiError(
-            "invalid_webhook_signature",
-            "E2B webhook signature is required.",
-            status_code=401,
-        )
-
-    digest = hashlib.sha256(secret.encode("utf-8") + raw_body).digest()
-    expected = base64.b64encode(digest).decode("utf-8").rstrip("=")
-    legacy_expected = expected.replace("+", "-").replace("/", "_")
-    if signature not in {expected, legacy_expected}:
-        raise CloudApiError(
-            "invalid_webhook_signature",
-            "E2B webhook signature is invalid.",
-            status_code=401,
-        )
+            exc.code,
+            exc.message,
+            status_code=exc.status_code,
+        ) from exc
 
 
 def _provider_event_kind(event_type: str) -> str | None:
