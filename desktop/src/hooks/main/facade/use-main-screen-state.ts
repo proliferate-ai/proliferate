@@ -48,7 +48,7 @@ import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
   type PublishDialogState,
-} from "./publish-dialog-state";
+} from "@/lib/domain/workspaces/creation/publish-dialog-state";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -98,6 +98,8 @@ export interface MainScreenState {
   data: MainScreenDataState;
 }
 
+// Owns the Main screen view-model: local layout state plus selected workspace
+// data needed by the shell. User actions live in main/workflows.
 export function useMainScreenState(): MainScreenState {
   const [rightPanelUserOpenOverride, setRightPanelUserOpenOverride] = useState<{
     materializedWorkspaceId: string;

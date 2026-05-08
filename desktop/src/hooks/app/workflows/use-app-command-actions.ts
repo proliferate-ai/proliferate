@@ -45,6 +45,8 @@ export interface AppCommandActions {
   newCloudWorkspace: AppCommandAction;
 }
 
+// Owns global app command callbacks for shortcuts and the command palette.
+// The hook wires existing workspace/cloud workflows into one command surface.
 export function useAppCommandActions(): AppCommandActions {
   const navigate = useNavigate();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);

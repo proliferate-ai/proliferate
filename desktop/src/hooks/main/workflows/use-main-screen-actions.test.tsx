@@ -9,9 +9,12 @@ import {
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel";
-import { openExternal } from "@/lib/access/tauri/shell";
 import { useMainScreenActions } from "./use-main-screen-actions";
-import type { MainScreenLayoutState } from "./use-main-screen-state";
+import type { MainScreenLayoutState } from "@/hooks/main/facade/use-main-screen-state";
+
+const tauriShellActions = vi.hoisted(() => ({
+  openExternal: vi.fn(async () => undefined),
+}));
 
 vi.mock("@anyharness/sdk-react", () => ({
   useRenameGitBranchMutation: () => ({
@@ -40,8 +43,8 @@ vi.mock("@/stores/toast/toast-store", () => ({
     selector({ show: vi.fn() }),
 }));
 
-vi.mock("@/lib/access/tauri/shell", () => ({
-  openExternal: vi.fn(async () => undefined),
+vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
+  useTauriShellActions: () => tauriShellActions,
 }));
 
 vi.mock("@/lib/access/cloud/workspaces", () => ({
@@ -88,7 +91,7 @@ describe("useMainScreenActions publish actions", () => {
 
     act(() => result.current.handlePublishDialogViewPr(pullRequest()));
 
-    expect(openExternal).toHaveBeenCalledWith("https://github.test/pull/1");
+    expect(tauriShellActions.openExternal).toHaveBeenCalledWith("https://github.test/pull/1");
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
     expect(spies.setRightPanelOpen).not.toHaveBeenCalled();
     expect(spies.requestRightPanelFocus).not.toHaveBeenCalled();

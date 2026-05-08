@@ -10,6 +10,8 @@ interface UseMainScreenShortcutsArgs {
   onToggleRightPanel: () => void;
 }
 
+// Owns Main screen shortcut registration. The callbacks are supplied by the
+// workflow hook so shortcut bindings stay separate from action behavior.
 export function useMainScreenShortcuts({
   canOpenCommandPalette,
   onOpenCommandPalette,

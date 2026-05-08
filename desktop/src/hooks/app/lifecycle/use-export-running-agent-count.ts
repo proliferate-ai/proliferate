@@ -14,6 +14,8 @@ function countBusy(entries: SessionEntries): number {
   ).length;
 }
 
+// Owns exporting the current busy-agent count to the native window layer.
+// It does not own session activity rules or native window primitives.
 export function useExportRunningAgentCount(): void {
   const { setRunningAgentCount } = useTauriWindowActions();
 
