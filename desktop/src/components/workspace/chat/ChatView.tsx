@@ -14,7 +14,7 @@ import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-cha
 import {
   useActiveSessionId,
   useActiveSessionPromptCapabilities,
-} from "@/hooks/chat/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
 import { useChatPromptAttachments } from "@/hooks/chat/ui/use-chat-prompt-attachments";

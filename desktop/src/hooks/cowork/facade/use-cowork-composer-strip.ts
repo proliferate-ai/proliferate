@@ -3,7 +3,7 @@ import type {
   CoworkCodingSessionSummary,
   CoworkManagedWorkspaceSummary,
 } from "@anyharness/sdk";
-import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useActiveSessionId } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

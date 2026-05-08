@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { useActivePendingInteractionState } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatUserInputActions } from "@/hooks/chat/use-chat-user-input-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 

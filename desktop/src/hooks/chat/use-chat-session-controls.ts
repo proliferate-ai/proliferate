@@ -6,7 +6,7 @@ import {
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useActiveSessionConfigState } from "./use-active-chat-session-selectors";
+import { useActiveSessionConfigState } from "./derived/use-active-chat-session-selectors";
 
 const EMPTY_CONTROLS: LiveSessionControlDescriptor[] = [];
 

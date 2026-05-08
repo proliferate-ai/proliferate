@@ -205,6 +205,7 @@ export function useChatTranscriptSelection({
   rootRef,
   getCopyText,
 }: UseChatTranscriptSelectionArgs): void {
+  // Chat-specific selection ownership for semantic transcript copy behavior.
   const getCopyTextRef = useRef(getCopyText);
   const transcriptOwnedRef = useRef(false);
   const allTranscriptSelectedRef = useRef(false);

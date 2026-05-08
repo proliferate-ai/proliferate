@@ -4,7 +4,7 @@ import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/outbox/prompt-
 import {
   useActivePendingPrompts,
   useActiveSessionId,
-} from "@/hooks/chat/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useEditPendingPrompt } from "@/hooks/sessions/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 

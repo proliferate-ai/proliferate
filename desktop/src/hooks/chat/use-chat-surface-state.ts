@@ -8,7 +8,7 @@ import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cl
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
+import { useActiveSessionSurfaceSnapshot } from "./derived/use-active-chat-session-selectors";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
 
 export type ChatSurfaceState =

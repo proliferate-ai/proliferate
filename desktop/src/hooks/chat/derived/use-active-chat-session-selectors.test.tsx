@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   useActivePendingPrompts,
   useActiveTranscriptPaneState,
-} from "@/hooks/chat/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";

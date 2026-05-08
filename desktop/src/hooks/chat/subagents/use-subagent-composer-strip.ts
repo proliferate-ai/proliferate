@@ -4,7 +4,7 @@ import type { ChildSubagentSummary, ParentSubagentLinkSummary } from "@anyharnes
 import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
-} from "@/hooks/chat/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";

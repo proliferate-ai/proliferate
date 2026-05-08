@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
-import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useActiveSessionId } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
