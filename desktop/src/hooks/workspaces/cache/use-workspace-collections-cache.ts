@@ -1,6 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { workspaceCollectionsKey } from "@/hooks/workspaces/query-keys";
+import {
+  getWorkspaceCollectionsFromCache,
+  workspaceCollectionsKey,
+} from "@/hooks/workspaces/query-keys";
 
 export function useWorkspaceCollectionsCache(args: {
   runtimeUrl: string;
@@ -17,7 +20,12 @@ export function useWorkspaceCollectionsCache(args: {
     return queryClient.getQueryState(queryKey);
   }, [queryClient, queryKey]);
 
+  const getWorkspaceCollections = useCallback(() => {
+    return getWorkspaceCollectionsFromCache(queryClient, runtimeUrl);
+  }, [queryClient, runtimeUrl]);
+
   return {
+    getWorkspaceCollections,
     getWorkspaceCollectionsCacheState,
     queryKey,
   };

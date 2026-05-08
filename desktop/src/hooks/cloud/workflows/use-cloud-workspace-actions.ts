@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";
@@ -8,19 +8,16 @@ import {
   startCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@/lib/access/cloud/workspaces";
-import {
-  type WorkspaceCollections,
-  upsertCloudWorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
+import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import {
@@ -42,31 +39,20 @@ function resolveCloudWorkspaceRuntimeId(workspaceId: string): string {
 }
 
 export function useCloudWorkspaceActions() {
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const { syncCloudCredential } = useCloudCredentialActions();
+  const invalidateCloudBillingState = useInvalidateCloudBillingState();
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
+  const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
+  const { clearCachedCloudWorkspaceConnections } = useCloudWorkspaceConnectionCache();
   const clearDeferredLaunchesForWorkspace = useDeferredHomeLaunchStore((state) =>
     state.clearForWorkspace
   );
 
   async function invalidateCloudResources() {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: cloudBillingKey(),
-      }),
-    ]);
-  }
-
-  function primeCloudWorkspace(workspace: CloudWorkspaceDetail) {
-    queryClient.setQueriesData<WorkspaceCollections | undefined>(
-      { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-      (collections) => upsertCloudWorkspaceCollections(collections, workspace),
-    );
+    await invalidateCloudBillingState();
   }
 
   const refreshMutation = useMutation<CloudWorkspaceDetail, Error, string>({
@@ -79,10 +65,8 @@ export function useCloudWorkspaceActions() {
       return workspace;
     },
     onSuccess: async (workspace) => {
-      primeCloudWorkspace(workspace);
-      await queryClient.invalidateQueries({
-        queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-      });
+      upsertCloudWorkspace(workspace);
+      await invalidateWorkspaceCollections();
     },
   });
 
@@ -108,8 +92,8 @@ export function useCloudWorkspaceActions() {
       }
     },
     onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(queryClient, workspace.id);
-      primeCloudWorkspace(workspace);
+      await clearCachedCloudWorkspaceConnections(workspace.id);
+      upsertCloudWorkspace(workspace);
       await invalidateCloudResources();
       const syntheticWorkspaceId = cloudWorkspaceSyntheticId(workspace.id);
       const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
@@ -154,7 +138,7 @@ export function useCloudWorkspaceActions() {
         ? workspaceId.slice("cloud:".length)
         : workspaceId;
       await deleteCloudWorkspace(cloudWorkspaceId);
-      await clearCachedCloudConnections(queryClient, cloudWorkspaceId);
+      await clearCachedCloudWorkspaceConnections(cloudWorkspaceId);
     },
     onSuccess: async (_, workspaceId, context) => {
       const runtimeWorkspaceId = resolveCloudWorkspaceRuntimeId(workspaceId);
@@ -191,7 +175,7 @@ export function useCloudWorkspaceActions() {
       return updateCloudWorkspaceBranch(cloudWorkspaceId, branchName);
     },
     onSuccess: async (workspace) => {
-      primeCloudWorkspace(workspace);
+      upsertCloudWorkspace(workspace);
       await invalidateCloudResources();
     },
   });
