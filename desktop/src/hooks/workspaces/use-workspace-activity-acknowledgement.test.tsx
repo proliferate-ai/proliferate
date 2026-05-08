@@ -5,8 +5,8 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-wor
 import { makeLocalLogicalWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 import {
   WORKSPACE_UI_DEFAULTS,
-  useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
+} from "@/lib/domain/preferences/workspace-ui-state";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceActivityAcknowledgement } from "./use-workspace-activity-acknowledgement";
 
