@@ -1,7 +1,6 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { clearWorkspaceRuntimeState } from "@/hooks/workspaces/selection/clear-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
@@ -16,9 +15,9 @@ import {
 } from "@/lib/access/anyharness/workspaces";
 
 export function useWorkspaceRetireActions() {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const refresh = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
   const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.setSelectedLogicalWorkspaceId,
@@ -26,12 +25,6 @@ export function useWorkspaceRetireActions() {
   const clearFinishSuggestionDismissal = useWorkspaceUiStore(
     (state) => state.clearFinishSuggestionDismissal,
   );
-
-  const refresh = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-    });
-  };
 
   return {
     markDone: async (

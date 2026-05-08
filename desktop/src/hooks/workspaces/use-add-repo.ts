@@ -1,14 +1,14 @@
 import { AnyHarnessError } from "@anyharness/sdk";
 import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/creation/add-repo-workflow";
 import { pickFolder } from "@/lib/access/tauri/shell";
+import { useWorkspaceCollectionsInvalidationActions } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { workspaceCollectionsScopeKey } from "./query-keys";
 import { ensureRuntimeReady } from "./runtime-ready";
 
 function describeAddRepoFailure(error: unknown): string {
@@ -35,7 +35,8 @@ function isRepoEntryBlockedPath(pathname: string): boolean {
 
 export function useAddRepo() {
   const location = useLocation();
-  const queryClient = useQueryClient();
+  const { upsertRepoRootInWorkspaceCollections } = useWorkspaceCollectionsMutationCacheActions();
+  const { invalidateWorkspaceCollectionsForRuntime } = useWorkspaceCollectionsInvalidationActions();
   const resolveRepoRootFromPath = useResolveRepoRootFromPathMutation().mutateAsync;
   const unhideRepoRoot = useWorkspaceUiStore((state) => state.unhideRepoRoot);
   const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
@@ -52,19 +53,27 @@ export function useAddRepo() {
     try {
       await runAddRepoWorkflow({
         path,
-        queryClient,
         ensureRuntimeReady,
         resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
+        upsertRepoRootInWorkspaceCollections,
+        invalidateWorkspaceCollections: invalidateWorkspaceCollectionsForRuntime,
         unhideRepoRoot,
         openRepoSetupModal,
-        workspaceCollectionsScopeKey,
       });
     } catch (error) {
       showToast(describeAddRepoFailure(error));
     } finally {
       setIsAddingRepo(false);
     }
-  }, [canAddRepo, openRepoSetupModal, queryClient, resolveRepoRootFromPath, showToast, unhideRepoRoot]);
+  }, [
+    canAddRepo,
+    invalidateWorkspaceCollectionsForRuntime,
+    openRepoSetupModal,
+    resolveRepoRootFromPath,
+    showToast,
+    unhideRepoRoot,
+    upsertRepoRootInWorkspaceCollections,
+  ]);
 
   const addRepoFromPicker = useCallback(async () => {
     if (!canAddRepo) {

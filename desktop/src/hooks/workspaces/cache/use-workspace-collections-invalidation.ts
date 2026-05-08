@@ -12,3 +12,17 @@ export function useWorkspaceCollectionsInvalidation(runtimeUrl: string) {
     });
   }, [queryClient, runtimeUrl]);
 }
+
+export function useWorkspaceCollectionsInvalidationActions() {
+  const queryClient = useQueryClient();
+
+  const invalidateWorkspaceCollectionsForRuntime = useCallback(async (runtimeUrl: string) => {
+    await queryClient.invalidateQueries({
+      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+    });
+  }, [queryClient]);
+
+  return {
+    invalidateWorkspaceCollectionsForRuntime,
+  };
+}
