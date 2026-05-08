@@ -8,11 +8,26 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation
 from proliferate.db.models.cloud import CloudRepoConfig
+from proliferate.errors import ProliferateError
 from proliferate.server.automations import service as automation_service
 from proliferate.server.automations.models import (
     AutomationScheduleRequest,
     CreateAutomationRequest,
 )
+
+
+def test_automation_service_error_is_product_error() -> None:
+    error = automation_service.AutomationServiceError(
+        "automation_failed",
+        "Automation failed.",
+        status_code=409,
+    )
+
+    assert isinstance(error, ProliferateError)
+    assert error.code == "automation_failed"
+    assert error.message == "Automation failed."
+    assert error.status_code == 409
+    assert str(error) == "Automation failed."
 
 
 @pytest.mark.asyncio
