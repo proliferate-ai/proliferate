@@ -2,11 +2,8 @@
 #
 # Format:
 # RULE_ID path count reason
-ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/lib/workflows/sessions/session-runtime.ts 6 raw AnyHarness client before access migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/chat/use-chat-prompt-actions.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/session-stream-side-effects.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/use-session-runtime-actions.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/cancel-display-queries.ts 1 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/connection.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/run-workspace-selection.ts 2 query cache ownership before access/cache migration

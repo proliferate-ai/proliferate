@@ -10,7 +10,6 @@ import {
   type TranscriptState,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   fetchSessionHistory,
   fetchSessionSummary,
@@ -71,6 +70,7 @@ import {
   useSessionStreamFlushControllerFactory,
   type SessionStreamFlushController,
 } from "@/hooks/sessions/use-session-stream-flush";
+import { useSessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
@@ -105,7 +105,7 @@ const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
 const SESSION_HISTORY_APPLY_MAX_DURATION_MS = 30_000;
 
 export function useSessionRuntimeActions() {
-  const queryClient = useQueryClient();
+  const sessionStreamCache = useSessionStreamCache();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
   const {
@@ -635,7 +635,7 @@ export function useSessionRuntimeActions() {
   }, [applySessionSummary, pluginsInCodingSessionsEnabled]);
 
   const createSessionStreamFlushController = useSessionStreamFlushControllerFactory({
-    queryClient,
+    sessionStreamCache,
     mountSubagentChildSession,
     persistReconciledModePreferences,
     refreshSessionSlotMeta,

@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import {
   beforeEach,
   describe,
@@ -11,6 +10,7 @@ import {
   type SessionEventEnvelope,
 } from "@anyharness/sdk";
 import { applyBatchedStreamSideEffects } from "@/hooks/sessions/session-stream-side-effects";
+import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import type { SessionRelationship } from "@/stores/sessions/session-types";
 
@@ -100,6 +100,25 @@ describe("applyBatchedStreamSideEffects", () => {
     );
   });
 
+  it("delegates stream cache invalidations to the session cache helper", () => {
+    const sessionStreamCache = createTestSessionStreamCache();
+
+    applyBatchedStreamSideEffects({
+      ...baseInput(),
+      sessionStreamCache,
+      envelopes: [
+        turnEnded(2),
+      ],
+    });
+
+    expect(sessionStreamCache.invalidateWorkspaceCollections)
+      .toHaveBeenCalledWith("http://runtime.test");
+    expect(sessionStreamCache.invalidateGitStatus).toHaveBeenCalledWith({
+      runtimeUrl: "http://runtime.test",
+      workspaceId: "workspace-1",
+    });
+  });
+
   it("acknowledges selected activity in the same side-effect pass", () => {
     const acknowledgeWorkspaceActivity = vi.fn((workspaceId: string, timestamp: string) => {
       mocks.effectOrder.push(`ack:${workspaceId}:${timestamp}`);
@@ -161,7 +180,7 @@ function baseInput(overrides?: {
   const sessionRelationship: SessionRelationship | null =
     overrides?.sessionRelationship ?? { kind: "pending" };
   return {
-    queryClient: new QueryClient(),
+    sessionStreamCache: createTestSessionStreamCache(),
     sessionId: "session-1",
     runtimeUrl: "http://runtime.test",
     workspaceId: "workspace-1",
@@ -180,6 +199,16 @@ function baseInput(overrides?: {
     clearActiveSummaryRefreshTimer: vi.fn(),
     scheduleActiveSummaryRefresh: vi.fn(),
     scheduleStartupReadyRefresh: vi.fn(),
+  };
+}
+
+function createTestSessionStreamCache(): SessionStreamCache {
+  return {
+    invalidateWorkspaceCollections: vi.fn(),
+    invalidateSessionSubagents: vi.fn(),
+    invalidateCoworkManagedWorkspaces: vi.fn(),
+    invalidateSessionReviews: vi.fn(),
+    invalidateGitStatus: vi.fn(),
   };
 }
 

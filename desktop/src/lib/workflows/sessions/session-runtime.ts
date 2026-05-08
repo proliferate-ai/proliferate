@@ -1,4 +1,3 @@
-import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import {
   type PendingPromptEntry,
   streamSession,
@@ -27,6 +26,15 @@ import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/access/anyharness/runtime-target";
+import {
+  getSession,
+  listSessionEvents,
+  listWorkspaceSessions,
+  resumeSession as resumeRuntimeSession,
+  type AnyHarnessWorkspaceSessionConnection,
+  type ListSessionsOptions,
+} from "@/lib/access/anyharness/sessions";
+import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/session-mcp-launch";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
@@ -59,8 +67,12 @@ interface SessionStreamCallbacks {
 export type FlushAwareSessionStreamHandle = ManagedSessionStreamHandle;
 
 const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
-function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
-  return { runtimeUrl: baseUrl, authToken };
+function buildConnection(target: RuntimeTarget): AnyHarnessWorkspaceSessionConnection {
+  return {
+    runtimeUrl: target.baseUrl,
+    authToken: target.authToken,
+    anyharnessWorkspaceId: target.anyharnessWorkspaceId,
+  };
 }
 
 async function measureSessionWorkflowStep<T>(
@@ -136,9 +148,9 @@ export function createSessionRuntimeRecordFromSummary(
 export function getWorkspaceClientAndId(
   runtimeUrl: string,
   workspaceId: string,
-): Promise<{ connection: AnyHarnessClientConnection; target: RuntimeTarget }> {
+): Promise<{ connection: AnyHarnessWorkspaceSessionConnection; target: RuntimeTarget }> {
   return resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId).then((target) => ({
-    connection: buildConnection(target.baseUrl, target.authToken),
+    connection: buildConnection(target),
     target,
   }));
 }
@@ -146,19 +158,16 @@ export function getWorkspaceClientAndId(
 export async function fetchWorkspaceSessionSummaries(
   runtimeUrl: string,
   workspaceId: string,
-  options?: Parameters<ReturnType<typeof getAnyHarnessClient>["sessions"]["list"]>[1],
+  options?: ListSessionsOptions,
 ): Promise<Session[]> {
-  const { connection, target } = await getWorkspaceClientAndId(runtimeUrl, workspaceId);
-  return getAnyHarnessClient(connection).sessions.list(
-    target.anyharnessWorkspaceId,
-    options,
-  );
+  const { connection } = await getWorkspaceClientAndId(runtimeUrl, workspaceId);
+  return listWorkspaceSessions(connection, options);
 }
 
 export async function getSessionClientAndWorkspace(
   sessionId: string,
 ): Promise<{
-  connection: AnyHarnessClientConnection;
+  connection: AnyHarnessWorkspaceSessionConnection;
   target: RuntimeTarget;
   workspaceId: string;
   materializedSessionId: string;
@@ -213,7 +222,6 @@ export async function fetchSessionHistory(
         signal,
       ),
     );
-    const client = getAnyHarnessClient(connection);
     const request = getMeasurementRequestOptions({
       operationId: options?.measurementOperationId,
       category: "session.events.list",
@@ -228,7 +236,8 @@ export async function fetchSessionHistory(
       || options?.turnLimit != null
       || !!requestWithTimeout;
 
-    const eventsPromise = client.sessions.listEvents(
+    const eventsPromise = listSessionEvents(
+      connection,
       materializedSessionId,
       hasHistoryOptions
         ? {
@@ -260,7 +269,8 @@ export async function fetchSessionSummary(
     "session.summary.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
   );
-  return getAnyHarnessClient(connection).sessions.get(
+  return getSession(
+    connection,
     materializedSessionId,
     getMeasurementRequestOptions({
       operationId: options?.measurementOperationId,
@@ -284,11 +294,11 @@ export async function resumeSession(
     "session.resume.resolve_target",
     () => getSessionClientAndWorkspace(sessionId),
   );
-  const client = getAnyHarnessClient(connection);
   const workspace = await measureSessionWorkflowStep(
     measurementOperationId,
     "session.resume.workspace_get",
-    () => client.workspaces.get(
+    () => getWorkspace(
+      connection,
       target.anyharnessWorkspaceId,
       getMeasurementRequestOptions({
         operationId: measurementOperationId,
@@ -330,7 +340,8 @@ export async function resumeSession(
     });
   }
   try {
-    return await client.sessions.resume(
+    return await resumeRuntimeSession(
+      connection,
       materializedSessionId,
       {
         mcpServers,
