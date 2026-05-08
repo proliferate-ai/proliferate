@@ -1,9 +1,19 @@
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ReplayRecordingSummary } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
 import { closeSessionStreamHandle } from "@/lib/access/anyharness/session-stream-handles";
+import { closeSession } from "@/lib/access/anyharness/sessions";
+import {
+  advanceReplaySession,
+  createReplaySession as createReplaySessionAccess,
+  getReplayRuntimeHealth,
+  listReplayRecordings,
+} from "@/lib/access/anyharness/replay";
+import {
+  getWorkspace,
+  resolveWorkspaceFromPath,
+} from "@/lib/access/anyharness/workspaces";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
@@ -36,7 +46,7 @@ export interface PlaygroundReplayState {
 
 export function useReplaySession(recordingId: string | null): PlaygroundReplayState {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const client = useMemo(() => getAnyHarnessClient({ runtimeUrl }), [runtimeUrl]);
+  const connection = useMemo(() => ({ runtimeUrl }), [runtimeUrl]);
   const { ensureSessionStreamConnected } = useSessionRuntimeActions();
   const ensureSessionStreamConnectedRef = useRef(ensureSessionStreamConnected);
   const [enabled, setEnabled] = useState(false);
@@ -69,7 +79,7 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
 
     async function loadRecordings() {
       try {
-        const health = await client.runtime.getHealth();
+        const health = await getReplayRuntimeHealth(connection);
         const replayEnabled = health.capabilities?.replay === true;
         if (cancelled) {
           return;
@@ -79,7 +89,7 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
           setRecordings([]);
           return;
         }
-        const response = await client.replay.listRecordings();
+        const response = await listReplayRecordings(connection);
         if (!cancelled) {
           setRecordings(response.recordings);
         }
@@ -101,7 +111,7 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [connection]);
 
   useEffect(() => {
     if (!enabled || !recordingId) {
@@ -120,20 +130,20 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
     async function createReplaySession() {
       try {
         const resolvedWorkspaceId = await resolveReplayWorkspaceId(
-          client,
+          connection,
           useSessionSelectionStore.getState().selectedWorkspaceId,
         );
         if (cancelled) {
           return;
         }
-        const response = await client.replay.createSession({
+        const response = await createReplaySessionAccess(connection, {
           workspaceId: resolvedWorkspaceId,
           recordingId: activeRecordingId,
         });
         const session = response.session;
         createdSessionId = session.id;
         if (cancelled) {
-          cleanupReplaySession(client, session.id);
+          cleanupReplaySession(connection, session.id);
           return;
         }
         putSessionRecord({
@@ -179,11 +189,11 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
     return () => {
       cancelled = true;
       if (createdSessionId) {
-        cleanupReplaySession(client, createdSessionId);
+        cleanupReplaySession(connection, createdSessionId);
       }
     };
   }, [
-    client,
+    connection,
     enabled,
     recordingId,
   ]);
@@ -216,13 +226,13 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
     setIsAdvancing(true);
     setError(null);
     try {
-      await client.replay.advanceSession(sessionId);
+      await advanceReplaySession(connection, sessionId);
     } catch (advanceError) {
       setError(errorMessage(advanceError));
     } finally {
       setIsAdvancing(false);
     }
-  }, [canAdvance, client, sessionId]);
+  }, [canAdvance, connection, sessionId]);
 
   return {
     enabled,
@@ -241,19 +251,19 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
 }
 
 async function resolveReplayWorkspaceId(
-  client: ReturnType<typeof getAnyHarnessClient>,
+  connection: Parameters<typeof getReplayRuntimeHealth>[0],
   selectedWorkspaceId: string | null,
 ): Promise<string> {
   if (selectedWorkspaceId) {
     try {
-      await client.workspaces.get(selectedWorkspaceId);
+      await getWorkspace(connection, selectedWorkspaceId);
       return selectedWorkspaceId;
     } catch {
       // Fall back to the dev replay workspace below.
     }
   }
 
-  const response = await client.workspaces.resolveFromPath({
+  const response = await resolveWorkspaceFromPath(connection, {
     path: PLAYGROUND_REPLAY_WORKSPACE_PATH,
     origin: DESKTOP_ORIGIN,
   });
@@ -261,7 +271,7 @@ async function resolveReplayWorkspaceId(
 }
 
 function cleanupReplaySession(
-  client: ReturnType<typeof getAnyHarnessClient>,
+  connection: Parameters<typeof getReplayRuntimeHealth>[0],
   sessionId: string,
 ): void {
   closeSessionStreamHandle(sessionId);
@@ -270,7 +280,7 @@ function cleanupReplaySession(
   if (state.activeSessionId === sessionId) {
     state.setActiveSessionId(null);
   }
-  void client.sessions.close(sessionId).catch(() => {});
+  void closeSession(connection, sessionId).catch(() => {});
 }
 
 function errorMessage(error: unknown): string {
