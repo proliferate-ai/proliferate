@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from collections import deque
-from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
 
@@ -18,6 +17,7 @@ from proliferate.integrations.anthropic import (
     AnthropicIntegrationError,
     generate_message_text,
 )
+from proliferate.server.ai_magic.errors import AiMagicError
 from proliferate.server.ai_magic.prompts import (
     SESSION_TITLE_SYSTEM_PROMPT,
     build_session_title_user_prompt,
@@ -25,16 +25,6 @@ from proliferate.server.ai_magic.prompts import (
 
 _session_title_windows: dict[str, deque[float]] = {}
 _session_title_windows_lock = Lock()
-
-
-@dataclass(slots=True)
-class AiMagicServiceError(Exception):
-    status_code: int
-    code: str
-    message: str
-
-    def __str__(self) -> str:
-        return self.message
 
 
 def _enforce_session_title_rate_limit(user_id: str) -> None:
@@ -48,7 +38,7 @@ def _enforce_session_title_rate_limit(user_id: str) -> None:
         while window and window[0] <= cutoff:
             window.popleft()
         if len(window) >= request_limit:
-            raise AiMagicServiceError(
+            raise AiMagicError(
                 status_code=429,
                 code="ai_magic_rate_limited",
                 message="Too many AI magic requests. Try again later.",
@@ -70,7 +60,7 @@ def _normalize_title(raw_title: str) -> str:
 async def generate_session_title(user: User, *, prompt_text: str) -> str:
     api_key = settings.anthropic_api_key.strip()
     if not api_key:
-        raise AiMagicServiceError(
+        raise AiMagicError(
             status_code=503,
             code="ai_magic_unavailable",
             message="AI magic is not configured for this environment.",
@@ -78,13 +68,13 @@ async def generate_session_title(user: User, *, prompt_text: str) -> str:
 
     cleaned_prompt = prompt_text.strip()
     if not cleaned_prompt:
-        raise AiMagicServiceError(
+        raise AiMagicError(
             status_code=400,
             code="session_title_prompt_empty",
             message="Prompt text cannot be empty.",
         )
     if len(cleaned_prompt) > SESSION_TITLE_MAX_PROMPT_CHARS:
-        raise AiMagicServiceError(
+        raise AiMagicError(
             status_code=400,
             code="session_title_prompt_too_long",
             message="Prompt text is too long to title.",
@@ -102,7 +92,7 @@ async def generate_session_title(user: User, *, prompt_text: str) -> str:
             temperature=0.2,
         )
     except AnthropicIntegrationError as exc:
-        raise AiMagicServiceError(
+        raise AiMagicError(
             status_code=502,
             code="session_title_generation_failed",
             message="Could not generate a session title right now.",
@@ -110,7 +100,7 @@ async def generate_session_title(user: User, *, prompt_text: str) -> str:
 
     title = _normalize_title(raw_title)
     if not title:
-        raise AiMagicServiceError(
+        raise AiMagicError(
             status_code=502,
             code="session_title_empty",
             message="Generated session title was empty.",
