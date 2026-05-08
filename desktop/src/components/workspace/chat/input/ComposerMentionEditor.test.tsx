@@ -18,7 +18,7 @@ const mentionSearchMock = vi.hoisted(() => ({
   selectedCount: 0,
 }));
 
-vi.mock("@/hooks/chat/use-chat-file-mention-search", () => ({
+vi.mock("@/hooks/chat/ui/use-chat-file-mention-search", () => ({
   useChatFileMentionSearch: ({ onSelect }: { onSelect: (result: FileSearchResult) => void }) => ({
     results: mentionSearchMock.results,
     highlightedIndex: 0,

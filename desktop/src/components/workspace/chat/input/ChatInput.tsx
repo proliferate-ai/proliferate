@@ -24,7 +24,7 @@ import { useChatComposerKeyboard } from "@/hooks/chat/ui/use-chat-composer-keybo
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
-import type { PromptAttachmentController } from "@/hooks/chat/use-chat-prompt-attachments";
+import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt-attachments";
 import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate";
 import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";

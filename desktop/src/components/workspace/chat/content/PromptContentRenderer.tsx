@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { PlanReferenceAttachmentCard } from "@/components/workspace/chat/content/PlanReferenceAttachmentCard";
-import { usePromptAttachmentUrl } from "@/hooks/chat/use-prompt-attachment-url";
+import { usePromptAttachmentUrl } from "@/hooks/access/anyharness/sessions/use-prompt-attachment-url";
 import {
   normalizeContentParts,
   normalizeDraftAttachments,
