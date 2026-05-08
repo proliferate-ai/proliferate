@@ -27,7 +27,6 @@ SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 trans
 SERVICE_ORM_IMPORT server/proliferate/server/organizations/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/support/service.py 1 transitional service imports ORM/auth model
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/anonymous_telemetry.py 1 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/auth.py 3 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 12 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 4 transitional store owns transaction commit
@@ -46,13 +45,10 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspaces.py 16 transit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_worktree_policy.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/organization_invitations.py 3 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/organizations.py 2 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/users.py 1 transitional store owns transaction commit
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/billing.py 4 transitional store imports product/integration code
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/cloud_credentials.py 1 transitional store imports product/integration code
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/cloud_mcp/compat.py 1 transitional store imports product/integration code
-STORE_FORBIDDEN_IMPORT server/proliferate/db/store/users.py 1 transitional store imports product/integration code
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/anonymous_telemetry.py 1 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/auth.py 3 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claims.py 13 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 8 transitional store opens DB session
@@ -71,9 +67,8 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 26 tr
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 2 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 7 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 10 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 4 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 3 transitional store opens DB session
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/anonymous_telemetry.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/auth.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automations.py 1 transitional store imports DB session factory
@@ -92,4 +87,4 @@ STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspaces.py 1 t
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_worktree_policy.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organization_invitations.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organizations.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 2 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 1 transitional store imports DB session factory

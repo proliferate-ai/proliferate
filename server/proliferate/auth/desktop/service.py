@@ -21,6 +21,7 @@ from fastapi_users.router.oauth import (
     CSRF_TOKEN_KEY,
     STATE_TOKEN_AUDIENCE,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.desktop.models import (
     AuthCodeCreated,
@@ -49,11 +50,11 @@ from proliferate.constants.auth import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth import (
-    consume_auth_code_for_state_value,
-    consume_auth_code_value,
-    create_auth_code_for_user,
+    consume_auth_code,
+    consume_auth_code_for_state,
+    create_auth_code,
 )
-from proliferate.db.store.users import load_active_user_by_id, update_user_github_profile
+from proliferate.db.store.users import get_active_user_by_id, update_user_github_profile
 from proliferate.integrations.customerio import (
     identify_customerio_user,
     track_customerio_desktop_authenticated,
@@ -170,8 +171,8 @@ async def mint_desktop_tokens(user: User) -> TokenResponse:
     )
 
 
-async def get_active_user_or_400(user_id: UUID) -> User:
-    user = await load_active_user_by_id(user_id)
+async def get_active_user_or_400(db: AsyncSession, user_id: UUID) -> User:
+    user = await get_active_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -214,6 +215,7 @@ def schedule_customerio_desktop_authenticated_user_sync(user: User) -> None:
 
 
 async def create_desktop_auth_code(
+    db: AsyncSession,
     params: AuthorizeParams,
     user_id: UUID,
 ) -> AuthCodeCreated:
@@ -227,7 +229,8 @@ async def create_desktop_auth_code(
             ),
         )
 
-    auth_code = await create_auth_code_for_user(
+    auth_code = await create_auth_code(
+        db,
         user_id=user_id,
         code_challenge=params.code_challenge,
         code_challenge_method=params.code_challenge_method,
@@ -243,6 +246,7 @@ async def create_desktop_auth_code(
 
 
 async def finish_github_desktop_callback(
+    db: AsyncSession,
     request: Request,
     *,
     code: str | None,
@@ -337,6 +341,7 @@ async def finish_github_desktop_callback(
     try:
         github_profile = await get_github_user_profile(token["access_token"])
         synced_user = await update_user_github_profile(
+            db,
             user.id,
             github_login=github_profile.login,
             avatar_url=github_profile.avatar_url,
@@ -349,7 +354,8 @@ async def finish_github_desktop_callback(
     except Exception:
         logger.exception("Could not persist GitHub profile for desktop auth")
 
-    auth_code = await create_auth_code_for_user(
+    auth_code = await create_auth_code(
+        db,
         user_id=user.id,
         code_challenge=state_data["code_challenge"],
         code_challenge_method=state_data["code_challenge_method"],
@@ -369,6 +375,7 @@ async def finish_github_desktop_callback(
 
 
 async def poll_desktop_auth(
+    db: AsyncSession,
     body: PendingTokenRequest,
 ) -> TokenResponse | PendingTokenResponse:
     code_challenge = build_code_challenge(body.code_verifier)
@@ -378,18 +385,20 @@ async def poll_desktop_auth(
             detail="Invalid code_verifier",
         )
 
-    auth_code = await consume_auth_code_for_state_value(
+    auth_code = await consume_auth_code_for_state(
+        db,
         state=body.state,
         code_challenge=code_challenge,
     )
     if auth_code is None:
         return PendingTokenResponse()
 
-    user = await get_active_user_or_400(auth_code.user_id)
+    user = await get_active_user_or_400(db, auth_code.user_id)
     return await mint_desktop_tokens(user)
 
 
 async def exchange_desktop_token(
+    db: AsyncSession,
     body: TokenRequest,
 ) -> TokenResponse:
     if body.grant_type != "authorization_code":
@@ -398,7 +407,7 @@ async def exchange_desktop_token(
             detail="grant_type must be 'authorization_code'",
         )
 
-    auth_code = await consume_auth_code_value(code=body.code)
+    auth_code = await consume_auth_code(db, code=body.code)
     if auth_code is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -415,11 +424,12 @@ async def exchange_desktop_token(
             detail="PKCE verification failed — code_verifier does not match code_challenge",
         )
 
-    user = await get_active_user_or_400(auth_code.user_id)
+    user = await get_active_user_or_400(db, auth_code.user_id)
     return await mint_desktop_tokens(user)
 
 
 async def refresh_desktop_access_token(
+    db: AsyncSession,
     body: RefreshRequest,
 ) -> TokenResponse:
     if body.grant_type != "refresh_token":
@@ -455,5 +465,5 @@ async def refresh_desktop_access_token(
             detail="Invalid refresh token payload",
         ) from None
 
-    user = await get_active_user_or_400(user_id)
+    user = await get_active_user_or_400(db, user_id)
     return await mint_desktop_tokens(user)
