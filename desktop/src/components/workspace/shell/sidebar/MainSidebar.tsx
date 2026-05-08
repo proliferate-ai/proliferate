@@ -35,8 +35,8 @@ import {
 } from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";

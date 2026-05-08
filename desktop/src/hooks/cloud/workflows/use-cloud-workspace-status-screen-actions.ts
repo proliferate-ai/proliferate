@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
+import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import type { CloudWorkspaceStatusScreenMode } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 
 export function useCloudWorkspaceStatusScreenActions({

@@ -6,8 +6,8 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import {
   getAccountActionDescription,
   getAccountDisplayName,

@@ -17,7 +17,7 @@ import { resyncCloudRepoFileFromLocal } from "@/lib/access/cloud/repo-configs";
 import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildTrackedFilesPayload } from "@/hooks/cloud/use-save-cloud-repo-config";
+import { buildTrackedFilesPayload } from "@/hooks/cloud/workflows/use-save-cloud-repo-config";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
 const clientMocks = vi.hoisted(() => ({
