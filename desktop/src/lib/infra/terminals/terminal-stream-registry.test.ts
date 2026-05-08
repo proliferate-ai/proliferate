@@ -4,10 +4,13 @@ import {
   adoptTerminalStreamIdentity,
   clearForRuntime,
   clearTerminal,
+  clearTerminalIntentionalClose,
   createTerminalRuntimeIdentity,
   ensureConnected,
   getLastDataSeq,
   hasActiveHandle,
+  isTerminalIntentionalClose,
+  markTerminalIntentionalClose,
   markReadOnly,
   resetTerminalStreamRegistryForTests,
   sendInput,
@@ -197,6 +200,17 @@ describe("terminal stream registry", () => {
 
     expect(hasActiveHandle(local)).toBe(false);
     expect(hasActiveHandle(cloud)).toBe(false);
+  });
+
+  it("tracks intentionally closing terminal ids", () => {
+    markTerminalIntentionalClose("terminal-1");
+
+    expect(isTerminalIntentionalClose("terminal-1")).toBe(true);
+    expect(isTerminalIntentionalClose("terminal-2")).toBe(false);
+
+    clearTerminalIntentionalClose("terminal-1");
+
+    expect(isTerminalIntentionalClose("terminal-1")).toBe(false);
   });
 
   it("records runtime gaps without discarding newer local entries", () => {

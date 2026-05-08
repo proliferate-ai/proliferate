@@ -5,8 +5,8 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { connectTerminal } from "@anyharness/sdk";
-import { resetTerminalStreamRegistryForTests } from "@/lib/workflows/terminals/terminal-stream-registry";
-import { useTerminalActions } from "./use-terminal-actions";
+import { resetTerminalStreamRegistryForTests } from "@/lib/infra/terminals/terminal-stream-registry";
+import { useTerminalStreamController } from "./use-terminal-stream-controller";
 
 const mockState = vi.hoisted(() => ({
   token: "token-a",
@@ -128,7 +128,7 @@ vi.mock("@/stores/terminal/terminal-store", () => {
   return { useTerminalStore };
 });
 
-describe("useTerminalActions terminal stream identity", () => {
+describe("useTerminalStreamController terminal stream identity", () => {
   beforeEach(() => {
     resetTerminalStreamRegistryForTests();
     mockState.token = "token-a";
@@ -274,5 +274,5 @@ function renderActions() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useTerminalActions(), { wrapper });
+  return renderHook(() => useTerminalStreamController(), { wrapper });
 }

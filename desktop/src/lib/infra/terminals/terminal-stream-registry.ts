@@ -68,6 +68,7 @@ interface EnsureConnectedOptions {
 }
 
 const registry = new Map<string, TerminalRegistryEntry>();
+const intentionallyClosingTerminalIds = new Set<string>();
 
 export function createTerminalRuntimeIdentity(input: {
   runtimeUrl: string;
@@ -220,6 +221,18 @@ export function clearTerminal(input: {
   }
 }
 
+export function markTerminalIntentionalClose(terminalId: string): void {
+  intentionallyClosingTerminalIds.add(terminalId);
+}
+
+export function clearTerminalIntentionalClose(terminalId: string): void {
+  intentionallyClosingTerminalIds.delete(terminalId);
+}
+
+export function isTerminalIntentionalClose(terminalId: string): boolean {
+  return intentionallyClosingTerminalIds.has(terminalId);
+}
+
 export function clearForRuntime(runtimeIdentity: string): void {
   for (const [key, entry] of registry.entries()) {
     if (entry.identity.runtimeIdentity === runtimeIdentity) {
@@ -241,6 +254,7 @@ export function resetTerminalStreamRegistryForTests(): void {
     activelyCloseHandle(entry);
   }
   registry.clear();
+  intentionallyClosingTerminalIds.clear();
 }
 
 function getOrCreateEntry(identity: TerminalStreamIdentity): TerminalRegistryEntry {
