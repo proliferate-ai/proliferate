@@ -29,9 +29,12 @@ Guides:
   route deps, and `<domain>/domain/policy.py` product rules.
 - [guides/integrations.md](guides/integrations.md) for `integrations/<vendor>/`
   shapes and adapter conventions.
-- [guides/workers.md](guides/workers.md) for `worker.py`, `reconciler.py`,
-  schedulers, the `worker/` subfolder pattern, and worker-side service
-  decomposition.
+- [guides/config.md](guides/config.md) for `config.py`,
+  `constants/<area>.py`, env-derived settings, hardcoded policy values, and
+  file-local constants.
+- [guides/workers.md](guides/workers.md) for the current lightweight
+  background-job conventions: `worker.py`, `reconciler.py`, earned
+  `worker/` subfolders, and worker-side service decomposition.
 
 Specs (when added) define product/surface contracts: lifecycle invariants,
 edge cases, and focused verification for a specific cross-cutting flow such as
@@ -247,10 +250,13 @@ introduce new code in the **old** patterns require a justification.
 - `config.py` owns env-derived runtime settings only (secrets, URLs,
   deployment values, feature flags).
 - `constants/<area>.py` owns shared hardcoded policy values: limits, timeouts,
-  retry counts, page sizes, validation bounds, sentinel values, headers.
+  retry counts, page sizes, validation bounds, sentinel values, headers,
+  default statuses, and protocol labels.
 - Module-level numeric or string constants in `service.py`, `api.py`, or
-  `db/store/**` files are forbidden unless the value is genuinely file-local
-  with no policy meaning.
+  `db/store/**` files are forbidden when they carry product policy. Move them
+  to `constants/<area>.py` or `config.py`. File-local mechanical constants
+  such as SQL aliases, private regex fragments, or query column labels may
+  stay local.
 - `localhost` literals outside `config.py` defaults are forbidden.
 
 ### File size thresholds
@@ -348,8 +354,8 @@ Use the lowest layer that can own the logic cleanly.
 | Third-party providers and SDKs | `integrations/<vendor>.py` (single file) or `integrations/<vendor>/` (folder) | Typed adapters only. | [integrations.md](guides/integrations.md) |
 | Multi-vendor protocol | `integrations/<protocol>/` with `base.py`, `<provider>.py`, `factory.py` | Abstract over vendors implementing the same protocol. | [integrations.md](guides/integrations.md) |
 | Cross-cutting HTTP behavior | `middleware/**` | Request context, tracing, correlation IDs. No product logic. | — |
-| Env-driven runtime configuration | `config.py` | Secrets, URLs, flags, limits that vary by deployment. | this doc |
-| Hardcoded policy values | `constants/<area>.py` | Limits, timeouts, sentinel values, headers. | this doc |
+| Env-driven runtime configuration | `config.py` | Secrets, URLs, flags, limits that vary by deployment. | [config.md](guides/config.md) |
+| Hardcoded policy values | `constants/<area>.py` | Limits, timeouts, sentinel values, headers, protocol labels. | [config.md](guides/config.md) |
 | Shared base errors | `server/proliferate/errors.py` | `ProliferateError`, `NotFoundError`, `PermissionDenied`, `Conflict`. | this doc |
 | Domain-specific errors | `server/<domain>/errors.py` | Inherit from the shared base. | this doc |
 | Integration-specific errors | `integrations/<vendor>/errors.py` or inline | Stay integration-local. | [integrations.md](guides/integrations.md) |

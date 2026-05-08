@@ -1,11 +1,23 @@
 # Workers
 
-Status: authoritative for `worker.py`, `reconciler.py`, scheduler files, the
-`worker/` subfolder pattern, and worker-side service decomposition.
+Status: provisional but authoritative for current background-job cleanup.
 
 Read after `docs/server/README.md`. This guide details how non-HTTP entry
 points are organized, how worker-side logic relates to HTTP-side logic, and
 when a worker subfolder is earned.
+
+This guide is intentionally modest. Proliferate does not yet have a robust
+worker framework, queue abstraction, or broad scheduler system. Do not use this
+guide as permission to invent one. It exists to keep the background jobs we
+already have from mixing entrypoint code, service orchestration, store access,
+and pure logic in the same files.
+
+Default to the simplest shape that keeps ownership clear:
+
+- a thin `worker.py` or `reconciler.py` when one file is enough
+- normal `service.py` functions for orchestration
+- `domain/` for pure computation shared with HTTP paths
+- `worker/` only when worker-only logic has multiple real concerns
 
 ## Ownership
 
@@ -16,7 +28,9 @@ lifecycle. Common shapes:
   with `main()`, argparse, and signal handlers.
 - **Reconciliation loops** — `reconciler.py` periodically compares expected
   vs actual state and fixes drift.
-- **Scheduled jobs** — `scheduler.py` declares cron-style schedules.
+- **Scheduled jobs** — when present, `scheduler.py` declares schedules or the
+  scheduler loop body. Do not add a scheduler layer unless an existing job
+  genuinely needs it.
 - **Queue handlers** — process messages from a queue.
 
 Worker code follows the same layer law as HTTP code:
@@ -66,9 +80,9 @@ server/<domain>/
     <concern>.py
 ```
 
-The trigger: substantial worker-only logic that doesn't naturally fit in
-`service.py`. Multiple files, distinct concerns, hundreds of lines that
-aren't API-facing.
+The trigger: substantial worker-only logic that already does not fit cleanly
+in `service.py`. Multiple files, distinct concerns, and hundreds of lines that
+aren't API-facing. Do not create `worker/` preemptively for a thin loop.
 
 When the worker subfolder is promoted:
 
@@ -221,6 +235,9 @@ they're separate processes, each has its own entry point file in `worker/`.
 - **The worker logic is < 200 lines total.** Keep flat.
 - **There's no real distinction between API-side and worker-side work.** One
   `service.py` is enough.
+- **You are creating the first background path for a domain.** Start with the
+  flat shape unless the first implementation already has multiple executor or
+  reconciliation concerns.
 
 The trigger is *substantial worker-only logic that doesn't naturally fit in
 `service.py`*. Without that, a sibling `worker.py` is enough.
