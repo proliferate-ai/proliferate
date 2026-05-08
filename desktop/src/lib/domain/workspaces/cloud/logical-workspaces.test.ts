@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudMobilityWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildLogicalWorkspaces,

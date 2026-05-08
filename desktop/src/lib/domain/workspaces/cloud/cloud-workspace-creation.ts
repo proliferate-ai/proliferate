@@ -3,7 +3,7 @@ import {
   type CloudRepoConfigSummary,
   type CloudWorkspaceSummary,
   type CreateCloudWorkspaceRequest,
-} from "@/lib/access/cloud/client";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "@/lib/domain/preferences/user-preferences";
 import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/arrival";
