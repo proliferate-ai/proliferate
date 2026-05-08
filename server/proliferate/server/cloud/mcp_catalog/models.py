@@ -4,8 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    CATALOG_VERSION,
+from proliferate.constants.mcp_catalog import CATALOG_VERSION
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     ArgTemplate,
     CatalogEntry,
     CatalogSecretField,

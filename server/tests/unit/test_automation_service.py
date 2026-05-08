@@ -10,6 +10,7 @@ from proliferate.db.models.automations import Automation
 from proliferate.db.models.cloud import CloudRepoConfig
 from proliferate.errors import ProliferateError
 from proliferate.server.automations import service as automation_service
+from proliferate.server.automations.errors import AutomationAgentRequired, AutomationServiceError
 from proliferate.server.automations.models import (
     AutomationScheduleRequest,
     CreateAutomationRequest,
@@ -17,7 +18,7 @@ from proliferate.server.automations.models import (
 
 
 def test_automation_service_error_is_product_error() -> None:
-    error = automation_service.AutomationServiceError(
+    error = AutomationServiceError(
         "automation_failed",
         "Automation failed.",
         status_code=409,
@@ -120,7 +121,7 @@ async def test_resume_cloud_automation_requires_agent_kind(
             )
             await session.commit()
 
-        with pytest.raises(automation_service.AutomationServiceError) as exc:
+        with pytest.raises(AutomationAgentRequired) as exc:
             await automation_service.resume_automation(user_id, automation_id)
 
         assert exc.value.code == "automation_agent_required"
@@ -143,7 +144,7 @@ async def test_create_cloud_automation_requires_agent_kind(
     user_id = uuid.uuid4()
 
     try:
-        with pytest.raises(automation_service.AutomationServiceError) as exc:
+        with pytest.raises(AutomationAgentRequired) as exc:
             await automation_service.create_automation(
                 user_id,
                 CreateAutomationRequest(

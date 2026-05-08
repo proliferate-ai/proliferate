@@ -1,0 +1,66 @@
+"""Shared hardcoded constants for automation definitions and runs."""
+
+from __future__ import annotations
+
+from typing import Final
+
+from dateutil.rrule import DAILY, HOURLY
+
+AUTOMATION_EXECUTION_TARGET_CLOUD: Final = "cloud"
+AUTOMATION_EXECUTION_TARGET_LOCAL: Final = "local"
+SUPPORTED_AUTOMATION_EXECUTION_TARGETS: Final = frozenset(
+    {
+        AUTOMATION_EXECUTION_TARGET_CLOUD,
+        AUTOMATION_EXECUTION_TARGET_LOCAL,
+    }
+)
+
+AUTOMATION_RUN_TRIGGER_MANUAL: Final = "manual"
+AUTOMATION_RUN_TRIGGER_SCHEDULED: Final = "scheduled"
+
+AUTOMATION_RUN_STATUS_QUEUED: Final = "queued"
+AUTOMATION_RUN_STATUS_CLAIMED: Final = "claimed"
+AUTOMATION_RUN_STATUS_CREATING_WORKSPACE: Final = "creating_workspace"
+AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE: Final = "provisioning_workspace"
+AUTOMATION_RUN_STATUS_CREATING_SESSION: Final = "creating_session"
+AUTOMATION_RUN_STATUS_DISPATCHING: Final = "dispatching"
+AUTOMATION_RUN_STATUS_DISPATCHED: Final = "dispatched"
+AUTOMATION_RUN_STATUS_FAILED: Final = "failed"
+AUTOMATION_RUN_STATUS_CANCELLED: Final = "cancelled"
+
+AUTOMATION_EXECUTOR_KIND_CLOUD: Final = "cloud"
+AUTOMATION_EXECUTOR_KIND_DESKTOP: Final = "desktop"
+
+AUTOMATION_SHORT_TEXT_MAX_LENGTH: Final = 255
+AUTOMATION_TITLE_MAX_LENGTH: Final = AUTOMATION_SHORT_TEXT_MAX_LENGTH
+AUTOMATION_REPO_PART_MAX_LENGTH: Final = AUTOMATION_SHORT_TEXT_MAX_LENGTH
+AUTOMATION_OPTIONAL_TEXT_MAX_LENGTH: Final = AUTOMATION_SHORT_TEXT_MAX_LENGTH
+AUTOMATION_EXTERNAL_ID_MAX_LENGTH: Final = AUTOMATION_SHORT_TEXT_MAX_LENGTH
+AUTOMATION_LOCAL_ERROR_CODE_MAX_LENGTH: Final = 64
+
+AUTOMATION_RUN_LIST_DEFAULT_LIMIT: Final = 50
+AUTOMATION_RUN_LIST_MAX_LIMIT: Final = 100
+
+SUPPORTED_AUTOMATION_REASONING_EFFORTS: Final = frozenset(
+    {
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+    }
+)
+
+AUTOMATION_SCHEDULE_ANCHOR_YEAR: Final = 2020
+SUPPORTED_AUTOMATION_RRULE_FREQS: Final = frozenset({HOURLY, DAILY})
+SUPPORTED_AUTOMATION_RRULE_KEYS: Final = frozenset(
+    {
+        "FREQ",
+        "INTERVAL",
+        "BYDAY",
+        "BYHOUR",
+        "BYMINUTE",
+    }
+)
+AUTOMATION_WEEKDAY_LABELS: Final = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")

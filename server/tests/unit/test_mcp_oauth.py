@@ -17,7 +17,7 @@ from proliferate.integrations.mcp_oauth import (
     AuthorizationServerMetadata,
     McpOAuthProviderError,
 )
-from proliferate.server.cloud.mcp_catalog.catalog import (
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogEntry,
     HttpLaunchTemplate,
     StaticUrl,

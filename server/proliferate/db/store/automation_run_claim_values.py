@@ -7,8 +7,7 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from proliferate.db.models.automations import AutomationRun
-from proliferate.db.store.automations import (
+from proliferate.constants.automations import (
     AUTOMATION_RUN_STATUS_CANCELLED,
     AUTOMATION_RUN_STATUS_CLAIMED,
     AUTOMATION_RUN_STATUS_CREATING_SESSION,
@@ -18,6 +17,7 @@ from proliferate.db.store.automations import (
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
 )
+from proliferate.db.models.automations import AutomationRun
 
 AUTOMATION_ERROR_DISPATCH_UNCERTAIN: Final = "dispatch_uncertain"
 AUTOMATION_ERROR_DISPATCH_UNCERTAIN_MESSAGE: Final = (

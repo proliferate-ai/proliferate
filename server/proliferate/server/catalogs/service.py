@@ -4,9 +4,8 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from proliferate.constants.agent_catalog import AGENT_CATALOG_RELATIVE_PATH
 from proliferate.server.catalogs.models import AgentCatalogResponse
-
-AGENT_CATALOG_RELATIVE_PATH = Path("catalogs") / "agents" / "v1" / "catalog.json"
 
 
 def _resolve_catalog_path() -> Path:

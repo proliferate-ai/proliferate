@@ -4,7 +4,8 @@ import json
 import re
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from proliferate.server.cloud.mcp_catalog.types import (
+from proliferate.constants.mcp_catalog import LOCAL_MATERIALIZATION_HTTP_HOSTS
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogConfigurationError,
     CatalogEntry,
     CatalogSettingField,
@@ -285,7 +286,7 @@ def _validate_launch_url(
         and entry.availability == "local_only"
         and entry.auth_kind != "oauth"
         and parsed.scheme == "http"
-        and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        and parsed.hostname in LOCAL_MATERIALIZATION_HTTP_HOSTS
     ):
         return
     raise CatalogConfigurationError("MCP launch URL must use https.")

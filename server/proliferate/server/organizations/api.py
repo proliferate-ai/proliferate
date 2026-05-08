@@ -24,7 +24,6 @@ from proliferate.server.organizations.models import (
     invitation_response,
     member_response,
     membership_response,
-    organization_response,
     organization_with_membership_response,
 )
 from proliferate.server.organizations.service import (
@@ -94,15 +93,15 @@ async def update_organization_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
-    organization = await update_organization(
+    record = await update_organization(
+        db,
         user,
         organization_id,
         name=body.name,
         logo_image=body.logo_image,
         update_logo_image="logo_image" in body.model_fields_set,
     )
-    membership_record = await get_organization(db, user, organization_id)
-    return organization_response(organization, membership_record.membership)
+    return organization_with_membership_response(record)
 
 
 @router.get("/{organization_id}/members", response_model=OrganizationMembersResponse)
