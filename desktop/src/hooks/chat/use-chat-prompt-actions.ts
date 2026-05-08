@@ -1,14 +1,13 @@
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
+import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
@@ -44,13 +43,12 @@ import { completeChatPromptSubmitSideEffects } from "./chat-submit-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
-  const queryClient = useQueryClient();
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
   const {
     cancelActiveSession,
     createSessionWithResolvedConfig,
@@ -197,9 +195,9 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         return true;
       }
       completeChatPromptSubmitSideEffects({
-        queryClient,
-        runtimeUrl,
         workspaceId: selectedWorkspaceId,
+        getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
+        getCachedWorkspaceSetupStatus,
         agentKind: launchSelection?.kind ?? "unknown",
         reuseSession: targetSessionId !== null,
         setWorkspaceArrivalEvent,
@@ -232,14 +230,13 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     configuredLaunch.selection,
     createSessionWithResolvedConfig,
     findOrCreateSession,
+    getCachedWorkspaceSetupStatus,
     hasSlot,
     forceNewSession,
     isDisabled,
     pendingWorkspaceEntry,
     promptActiveSession,
     promptSession,
-    queryClient,
-    runtimeUrl,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     setWorkspaceArrivalEvent,

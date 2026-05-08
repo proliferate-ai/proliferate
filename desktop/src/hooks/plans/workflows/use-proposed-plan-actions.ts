@@ -16,6 +16,7 @@ import {
   useFetchPlanMutation,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
+import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
@@ -99,6 +100,7 @@ export function useProposedPlanActions() {
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
+  const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
   const showToast = useToastStore((state) => state.show);
   const [isImplementingPlan, setIsImplementingPlan] = useState(false);
   const isImplementingPlanRef = useRef(false);
@@ -183,9 +185,9 @@ export function useProposedPlanActions() {
         chatDisabledReason: availability.disabledReason,
         onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) =>
           completeChatPromptSubmitSideEffects({
-            queryClient,
-            runtimeUrl,
             workspaceId,
+            getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
+            getCachedWorkspaceSetupStatus,
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
@@ -200,6 +202,7 @@ export function useProposedPlanActions() {
     promptActiveSession,
     availability.disabledReason,
     availability.isDisabled,
+    getCachedWorkspaceSetupStatus,
     queryClient,
     runtimeUrl,
     setActiveSessionConfigOption,
