@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from proliferate.auth.authorization import OwnerContext
 from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
@@ -13,7 +14,6 @@ from proliferate.constants.billing import (
 from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
-from proliferate.server.organizations.service import OwnerContext
 
 
 def _denied_start_authorization(*, blocked_reason: str) -> SandboxStartAuthorization:

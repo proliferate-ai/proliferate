@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
+from proliferate.auth.authorization import OwnerContext, OwnerSelection, require_org_role
 from proliferate.config import settings
 from proliferate.constants.billing import (
     ACTIVE_SANDBOX_STATUSES,
@@ -78,6 +79,7 @@ from proliferate.db.store.billing import (
     set_overage_policy_for_user,
 )
 from proliferate.db.store.organizations import load_organization_by_billing_subject
+from proliferate.errors import ProliferateError
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.models import (
     BillingOverview,
@@ -105,9 +107,6 @@ from proliferate.server.billing.seats import (
 )
 from proliferate.server.organizations.service import (
     OrganizationServiceError,
-    OwnerContext,
-    OwnerSelection,
-    require_org_role,
     resolve_owner_context,
 )
 
@@ -794,7 +793,7 @@ async def _ensure_stripe_customer_for_owner(
     if context.owner_scope == "organization":
         try:
             require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-        except OrganizationServiceError as error:
+        except ProliferateError as error:
             raise BillingServiceError(
                 error.code,
                 error.message,
@@ -855,7 +854,7 @@ async def create_cloud_checkout_session(
         org_context = await _resolve_billing_owner_context(user, selection)
         try:
             require_org_role(org_context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-        except OrganizationServiceError as error:
+        except ProliferateError as error:
             raise BillingServiceError(
                 error.code,
                 error.message,
@@ -1018,7 +1017,7 @@ async def update_overage_settings(
         context = await _resolve_billing_owner_context(user, selection)
         try:
             require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-        except OrganizationServiceError as error:
+        except ProliferateError as error:
             raise BillingServiceError(
                 error.code,
                 error.message,
