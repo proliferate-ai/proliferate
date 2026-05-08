@@ -66,4 +66,3 @@ async def run_scheduler_loop(
             await asyncio.wait_for(stop_event.wait(), timeout=next_delay)
         except TimeoutError:
             continue
-

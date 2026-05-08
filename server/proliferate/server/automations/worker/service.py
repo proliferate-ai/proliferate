@@ -47,4 +47,3 @@ async def run_scheduler_tick(*, batch_size: int = 100) -> SchedulerTickResult:
         created_runs=created_runs,
         swept_dispatching_runs=swept_dispatching_runs,
     )
-
