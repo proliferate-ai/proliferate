@@ -1,6 +1,6 @@
-import type { CloudMobilityHandoffSummary } from "@/lib/access/cloud/client";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { mobilityStatusCopy } from "@/lib/domain/workspaces/mobility/presentation";
+import type { WorkspaceMobilityHandoffSummary } from "@/lib/domain/workspaces/mobility/types";
 
 export type WorkspaceMobilityUiPhase =
   | "idle"
@@ -15,7 +15,7 @@ export type WorkspaceMobilityUiPhase =
 export interface WorkspaceMobilityStatusModel {
   direction: "local_to_cloud" | "cloud_to_local" | null;
   phase: WorkspaceMobilityUiPhase;
-  activeHandoff: CloudMobilityHandoffSummary | null;
+  activeHandoff: WorkspaceMobilityHandoffSummary | null;
   title: string | null;
   description: string | null;
   isBlocking: boolean;
@@ -60,7 +60,7 @@ function normalizeDirection(
 }
 
 function summarizeActivePhase(
-  handoff: CloudMobilityHandoffSummary,
+  handoff: WorkspaceMobilityHandoffSummary,
 ): Pick<WorkspaceMobilityStatusModel, "phase" | "title" | "description" | "isBlocking" | "isFailure" | "canRetryCleanup"> {
   const direction = normalizeDirection(handoff.direction);
 
@@ -139,7 +139,7 @@ function summarizeActivePhase(
 
 export function resolveWorkspaceMobilityStatusModel(
   logicalWorkspace: LogicalWorkspace | null,
-  handoff: CloudMobilityHandoffSummary | null,
+  handoff: WorkspaceMobilityHandoffSummary | null,
 ): WorkspaceMobilityStatusModel {
   if (handoff) {
     return {

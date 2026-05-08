@@ -4,8 +4,8 @@ import { resolveWorkspaceExecutionSidebarActivityState } from "@/lib/domain/sess
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/workspaces/display/workspace-display";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 
 export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud";
 
@@ -388,7 +388,7 @@ function localWorkspaceCreatedByAutomation(workspace: Workspace): boolean {
     );
 }
 
-function cloudWorkspaceCreatedByAutomation(workspace: CloudWorkspaceSummary): boolean {
+function cloudWorkspaceCreatedByAutomation(workspace: SidebarCloudWorkspaceSummary): boolean {
   return isSystemOrigin(workspace.origin, "cloud");
 }
 

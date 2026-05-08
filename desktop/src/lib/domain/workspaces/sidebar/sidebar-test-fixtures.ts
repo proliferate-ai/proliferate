@@ -1,7 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 import {
   buildSidebarGroupStates,
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
@@ -96,11 +96,11 @@ export function makeCloudWorkspace(args: {
   repoName?: string;
   branch?: string;
   displayName?: string | null;
-  origin?: CloudWorkspaceSummary["origin"];
-  creatorContext?: CloudWorkspaceSummary["creatorContext"];
-  status?: CloudWorkspaceSummary["status"];
+  origin?: SidebarCloudWorkspaceSummary["origin"];
+  creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
+  status?: SidebarCloudWorkspaceSummary["status"];
   updatedAt?: string;
-}): CloudWorkspaceSummary {
+}): SidebarCloudWorkspaceSummary {
   const {
     id,
     repoName = "proliferate",
@@ -206,8 +206,8 @@ export function makeCloudLogicalWorkspace(args: {
   repoKey: string;
   repoName: string;
   branch?: string;
-  origin?: CloudWorkspaceSummary["origin"];
-  creatorContext?: CloudWorkspaceSummary["creatorContext"];
+  origin?: SidebarCloudWorkspaceSummary["origin"];
+  creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {

@@ -1,8 +1,10 @@
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import type { CloudWorkspaceMobilityPreflightResponse } from "@/lib/access/cloud/client";
 import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/presentation";
-import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
-import type { WorkspaceMobilityBlockerCode } from "@/lib/domain/workspaces/mobility/types";
+import type {
+  WorkspaceMobilityBlockerCode,
+  WorkspaceMobilityCloudPreflightResponse,
+  WorkspaceMobilityDirection,
+} from "@/lib/domain/workspaces/mobility/types";
 
 export type WorkspaceMobilityNormalizedBlockerCode =
   | WorkspaceMobilityBlockerCode
@@ -134,7 +136,7 @@ function buildPrimaryBlocker(args: {
 
 export function pickPrimaryMobilityBlocker(args: {
   sourcePreflight: WorkspaceMobilityPreflightResponse | null;
-  cloudPreflight: CloudWorkspaceMobilityPreflightResponse | null;
+  cloudPreflight: WorkspaceMobilityCloudPreflightResponse | null;
   direction: WorkspaceMobilityDirection | null;
   branchName?: string | null;
 }): WorkspaceMobilityPrimaryBlocker | null {

@@ -1,5 +1,4 @@
 import type { SetupScriptExecution } from "@anyharness/sdk";
-import type { CreateCloudWorkspaceRequest } from "@/lib/access/cloud/client";
 import type { CreateWorktreeWorkspaceInput } from "@/lib/domain/workspaces/creation/workspace-creation";
 
 export type PendingWorkspaceSource =
@@ -21,10 +20,21 @@ export interface PendingCoworkRequestInput {
   sourceWorkspaceId?: string | null;
 }
 
+export interface PendingCloudWorkspaceRequestInput {
+  gitProvider: "github";
+  gitOwner: string;
+  gitRepoName: string;
+  baseBranch?: string | null;
+  branchName: string;
+  displayName?: string | null;
+  ownerScope: "personal" | "organization";
+  organizationId?: string | null;
+}
+
 export type PendingWorkspaceRequest =
   | { kind: "local"; sourceRoot: string }
   | { kind: "worktree"; input: CreateWorktreeWorkspaceInput }
-  | { kind: "cloud"; input: CreateCloudWorkspaceRequest }
+  | { kind: "cloud"; input: PendingCloudWorkspaceRequestInput }
   | { kind: "cowork"; input: PendingCoworkRequestInput }
   | { kind: "select-existing"; workspaceId: string };
 

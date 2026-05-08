@@ -12,9 +12,9 @@ import {
   resolveLogicalWorkspaceRecency,
 } from "@/lib/domain/workspaces/sidebar/recency";
 import type {
-  CloudWorkspaceStatus,
-  CloudWorkspaceSummary,
-} from "@/lib/access/cloud/client";
+  SidebarCloudWorkspaceStatus,
+  SidebarCloudWorkspaceSummary,
+} from "./cloud-workspace";
 import {
   humanizeBranchName,
   workspaceCurrentBranchName,
@@ -64,7 +64,7 @@ export interface CloudSidebarWorkspaceEntry {
   id: string;
   cloudWorkspaceId: string;
   repoKey: string;
-  workspace: CloudWorkspaceSummary;
+  workspace: SidebarCloudWorkspaceSummary;
 }
 
 export type SidebarWorkspaceEntry =
@@ -119,7 +119,7 @@ export interface SidebarWorkspaceItemState {
   variant: SidebarWorkspaceVariant;
   statusIndicator: SidebarStatusIndicator | null;
   detailIndicators: SidebarDetailIndicator[];
-  cloudStatus: CloudWorkspaceStatus | null;
+  cloudStatus: SidebarCloudWorkspaceStatus | null;
   lastInteracted: string | null;
   needsReview: boolean;
 }
@@ -148,7 +148,7 @@ interface WorkspaceNeedsReviewInput {
 
 export function buildSidebarWorkspaceEntries(
   localWorkspaces: Workspace[],
-  cloudWorkspaces: CloudWorkspaceSummary[],
+  cloudWorkspaces: SidebarCloudWorkspaceSummary[],
 ): SidebarWorkspaceEntry[] {
   const entries: SidebarWorkspaceEntry[] = [
     ...localWorkspaces.map((workspace) => ({
@@ -447,7 +447,7 @@ export function buildSidebarGroupStates(args: {
               : null,
           ),
           cloudStatus: preferredCloudWorkspace
-            ? preferredCloudWorkspace.status as CloudWorkspaceStatus
+            ? preferredCloudWorkspace.status as SidebarCloudWorkspaceStatus
             : null,
           lastInteracted,
           needsReview,
