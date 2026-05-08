@@ -3,6 +3,8 @@ import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
+// Owns agent seed hydration telemetry emitted from runtime health changes.
+// Does not own runtime health fetching or agent setup behavior.
 export function useTelemetryAgentSeed() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);

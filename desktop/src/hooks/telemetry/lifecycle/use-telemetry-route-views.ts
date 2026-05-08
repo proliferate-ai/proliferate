@@ -1,27 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import type { DesktopTelemetryRoute } from "@/lib/domain/telemetry/events";
+import { resolveDesktopTelemetryRoute } from "@/lib/domain/telemetry/routes";
 import {
   setTelemetryTag,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 
-function routeName(pathname: string): DesktopTelemetryRoute {
-  if (pathname === "/") return "main";
-  if (pathname === "/login") return "login";
-  if (pathname === "/settings") return "settings";
-  if (pathname === "/automations" || pathname.startsWith("/automations/")) {
-    return "automations";
-  }
-  return "unknown";
-}
-
+// Owns route view telemetry tags and events. Does not own route classification rules.
 export function useTelemetryRouteViews() {
   const location = useLocation();
   const previousRouteRef = useRef<DesktopTelemetryRoute | null>(null);
 
   useEffect(() => {
-    const currentRoute = routeName(location.pathname);
+    const currentRoute = resolveDesktopTelemetryRoute(location.pathname);
     if (previousRouteRef.current === currentRoute) return;
     previousRouteRef.current = currentRoute;
 
