@@ -17,7 +17,7 @@ import {
   type ReviewPersonalityPreference,
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
-import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 

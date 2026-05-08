@@ -1,23 +1,24 @@
 import { useEffect, useRef } from "react";
 import {
-  anyHarnessAgentsKey,
-  anyHarnessProviderConfigsKey,
   useRuntimeHealthQuery,
 } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useAgentCatalog } from "./use-agent-catalog";
-import { useAgentInstallationActions } from "./use-agent-installation-actions";
+import { useAgentResourcesCache } from "@/hooks/agents/cache/use-agent-resources-cache";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 
 /**
  * Auto-triggers agent reconciliation on startup when agents need installation,
  * and polls the agent list during reconciliation so the UI reflects progress
  * as each agent installs sequentially.
+ *
+ * Owns the app-mounted agent reconcile lifecycle. Does not own manual install
+ * actions or agent catalog derivation.
  */
 export function useAgentAutoReconcile() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const queryClient = useQueryClient();
+  const { invalidateAgentListResources } = useAgentResourcesCache();
   const {
     agentsNeedingSetup,
     isReconciling,
@@ -103,15 +104,8 @@ export function useAgentAutoReconcile() {
       return;
     }
 
-    void Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentsKey(runtimeUrl),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessProviderConfigsKey(runtimeUrl),
-      }),
-    ]);
-  }, [queryClient, reconcileDataUpdatedAt, reconcileStatus, runtimeUrl]);
+    void invalidateAgentListResources(runtimeUrl);
+  }, [invalidateAgentListResources, reconcileDataUpdatedAt, reconcileStatus, runtimeUrl]);
 
   return { isReconciling };
 }

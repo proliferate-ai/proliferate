@@ -1,17 +1,14 @@
 import { useCallback } from "react";
 import {
-  anyHarnessAgentReconcileStatusKey,
-  anyHarnessAgentsKey,
-  anyHarnessProviderConfigsKey,
   useInstallAgentMutation,
   useReconcileAgentsMutation,
   useRuntimeHealthQuery,
 } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
 } from "@anyharness/sdk";
+import { useAgentResourcesCache } from "@/hooks/agents/cache/use-agent-resources-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 function assertHealthyRuntime(runtimeUrl: string, isHealthy: boolean): void {
@@ -27,9 +24,11 @@ function assertAgentSeedReady(isAgentSeedHydrating: boolean): void {
 }
 
 export function useAgentInstallationActions() {
-  const queryClient = useQueryClient();
+  // Owns manual agent install/reconcile actions. Agent query-cache shape stays
+  // behind the agents cache hook.
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
+  const { invalidateAgentSetupResources } = useAgentResourcesCache();
   const installMutation = useInstallAgentMutation();
   const reconcileMutation = useReconcileAgentsMutation();
 
@@ -39,23 +38,8 @@ export function useAgentInstallationActions() {
   const isAgentSeedHydrating = runtimeHealth?.agentSeed?.status === "hydrating";
 
   const refreshAgentResources = useCallback(async () => {
-    const normalizedRuntimeUrl = runtimeUrl.trim();
-    if (!normalizedRuntimeUrl) {
-      return;
-    }
-
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessProviderConfigsKey(normalizedRuntimeUrl),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentReconcileStatusKey(normalizedRuntimeUrl),
-      }),
-    ]);
-  }, [queryClient, runtimeUrl]);
+    await invalidateAgentSetupResources(runtimeUrl);
+  }, [invalidateAgentSetupResources, runtimeUrl]);
 
   const installAgent = useCallback(
     async (kind: string, request?: InstallAgentRequest) => {

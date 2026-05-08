@@ -12,7 +12,7 @@ import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useAgentInstallationActions } from "@/hooks/agents/use-agent-installation-actions";
+import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

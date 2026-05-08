@@ -21,7 +21,7 @@ const selectionMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@/hooks/agents/use-agent-catalog", () => ({
+vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => selectionMocks.agentCatalog,
 }));
 

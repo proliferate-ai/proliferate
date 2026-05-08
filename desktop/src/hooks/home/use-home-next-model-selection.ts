@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { ModelRegistry } from "@anyharness/sdk";
 import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
-import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import {
   buildHomeNextModelGroups,
   resolveHomeModelAvailabilityState,
