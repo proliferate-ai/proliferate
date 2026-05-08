@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
+import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useAddRepo } from "@/hooks/workspaces/use-add-repo";

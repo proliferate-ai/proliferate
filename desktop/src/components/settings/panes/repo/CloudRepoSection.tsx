@@ -13,10 +13,10 @@ import { RepoSetupScriptCard } from "@/components/cloud/repo-settings/RepoSetupS
 import { RepoTrackedFilesCard } from "@/components/cloud/repo-settings/RepoTrackedFilesCard";
 import { useCloudRepoBranches } from "@/hooks/access/cloud/use-cloud-repo-branches";
 import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
-import { useCloudRepoConfigDraft } from "@/hooks/cloud/use-cloud-repo-config-draft";
-import { useCloudRepoSetupSuggestions } from "@/hooks/cloud/use-cloud-repo-setup-suggestions";
-import { useResyncCloudRepoFile } from "@/hooks/cloud/use-resync-cloud-repo-file";
-import { useSaveCloudRepoConfig } from "@/hooks/cloud/use-save-cloud-repo-config";
+import { useCloudRepoConfigDraft } from "@/hooks/cloud/ui/use-cloud-repo-config-draft";
+import { useCloudRepoSetupSuggestions } from "@/hooks/cloud/derived/use-cloud-repo-setup-suggestions";
+import { useResyncCloudRepoFile } from "@/hooks/cloud/workflows/use-resync-cloud-repo-file";
+import { useSaveCloudRepoConfig } from "@/hooks/cloud/workflows/use-save-cloud-repo-config";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import {
   isCloudRepository,

@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Copy, ExternalLink } from "@/components/ui/icons";
-import { useFilePathNativeContextMenu } from "@/hooks/editor/use-file-path-native-context-menu";
-import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
+import { useFilePathNativeContextMenu } from "@/hooks/editor/ui/use-file-path-native-context-menu";
+import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
 

@@ -20,7 +20,7 @@ async def create_user_and_login(
     *,
     email_prefix: str,
 ) -> AuthSession:
-    from proliferate.db.store.users import get_user_db
+    from proliferate.auth.users import get_user_db
 
     user_id: str | None = None
     async for user_db in get_user_db(db_session):

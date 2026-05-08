@@ -322,10 +322,10 @@ async def test_static_oauth_client_mode_never_calls_dcr(
 ) -> None:
     upserts: list[dict[str, object]] = []
 
-    async def _get_oauth_client(**_kwargs: object) -> None:
+    async def _get_oauth_client(*_args: object, **_kwargs: object) -> None:
         return None
 
-    async def _upsert_oauth_client(**kwargs: object) -> CloudMcpOAuthClientRecord:
+    async def _upsert_oauth_client(*_args: object, **kwargs: object) -> CloudMcpOAuthClientRecord:
         upserts.append(kwargs)
         return _oauth_client_record()
 
@@ -346,6 +346,7 @@ async def test_static_oauth_client_mode_never_calls_dcr(
     )
 
     client = await mcp_oauth_service._get_oauth_client(
+        object(),
         entry=_oauth_entry(),
         issuer="https://slack.com",
         redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
@@ -365,10 +366,16 @@ async def test_static_oauth_client_reuses_matching_cache(
     cached = _oauth_client_record()
     upsert_called = False
 
-    async def _get_oauth_client(**_kwargs: object) -> CloudMcpOAuthClientRecord:
+    async def _get_oauth_client(
+        *_args: object,
+        **_kwargs: object,
+    ) -> CloudMcpOAuthClientRecord:
         return cached
 
-    async def _upsert_oauth_client(**_kwargs: object) -> CloudMcpOAuthClientRecord:
+    async def _upsert_oauth_client(
+        *_args: object,
+        **_kwargs: object,
+    ) -> CloudMcpOAuthClientRecord:
         nonlocal upsert_called
         upsert_called = True
         return cached
@@ -386,6 +393,7 @@ async def test_static_oauth_client_reuses_matching_cache(
     )
 
     client = await mcp_oauth_service._get_oauth_client(
+        object(),
         entry=_oauth_entry(),
         issuer="https://slack.com",
         redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
@@ -408,6 +416,7 @@ async def test_static_oauth_client_missing_config_fails_cleanly(
 
     with pytest.raises(McpOAuthProviderError) as error:
         await mcp_oauth_service._get_oauth_client(
+            object(),
             entry=_oauth_entry(),
             issuer="https://slack.com",
             redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",

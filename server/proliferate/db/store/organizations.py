@@ -113,55 +113,86 @@ async def create_organization_with_creator(
         )
 
 
-async def list_organizations_for_user(user_id: UUID) -> list[OrganizationWithMembershipRecord]:
-    async with db_engine.async_session_factory() as db:
-        return await _list_organizations_for_user(db, user_id)
+async def list_organizations_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[OrganizationWithMembershipRecord]:
+    return await _list_organizations_for_user(db, user_id)
 
 
 async def ensure_default_organization_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     name: str,
     logo_domain: str | None,
 ) -> list[OrganizationWithMembershipRecord]:
     now = utcnow()
-    async with db_engine.async_session_factory() as db, db.begin():
-        await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
-            {"lock_key": f"default-organization:{user_id}"},
-        )
-        records = await _list_organizations_for_user(db, user_id)
-        if records:
-            return records
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"default-organization:{user_id}"},
+    )
+    records = await _list_organizations_for_user(db, user_id)
+    if records:
+        return records
 
-        organization = Organization(
-            name=name,
-            logo_domain=logo_domain,
-            logo_image=None,
-            created_at=now,
-            updated_at=now,
+    organization = Organization(
+        name=name,
+        logo_domain=logo_domain,
+        logo_image=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(organization)
+    await db.flush()
+    membership = OrganizationMembership(
+        organization_id=organization.id,
+        user_id=user_id,
+        role=ORGANIZATION_ROLE_OWNER,
+        status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+        joined_at=now,
+        removed_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(membership)
+    await ensure_organization_billing_subject(db, organization.id)
+    await db.flush()
+    return [
+        OrganizationWithMembershipRecord(
+            organization=organization_record(organization),
+            membership=membership_record(membership),
         )
-        db.add(organization)
-        await db.flush()
-        membership = OrganizationMembership(
-            organization_id=organization.id,
-            user_id=user_id,
-            role=ORGANIZATION_ROLE_OWNER,
-            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-            joined_at=now,
-            removed_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(membership)
-        await ensure_organization_billing_subject(db, organization.id)
-        await db.flush()
-        return [
-            OrganizationWithMembershipRecord(
-                organization=organization_record(organization),
-                membership=membership_record(membership),
+    ]
+
+
+async def get_organization_with_membership(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+) -> OrganizationWithMembershipRecord | None:
+    row = (
+        await db.execute(
+            select(Organization, OrganizationMembership)
+            .join(
+                OrganizationMembership,
+                OrganizationMembership.organization_id == Organization.id,
             )
-        ]
+            .where(
+                Organization.id == organization_id,
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    organization, membership = row
+    return OrganizationWithMembershipRecord(
+        organization=organization_record(organization),
+        membership=membership_record(membership),
+    )
 
 
 async def load_organization_with_membership(
@@ -170,26 +201,10 @@ async def load_organization_with_membership(
     user_id: UUID,
 ) -> OrganizationWithMembershipRecord | None:
     async with db_engine.async_session_factory() as db:
-        row = (
-            await db.execute(
-                select(Organization, OrganizationMembership)
-                .join(
-                    OrganizationMembership,
-                    OrganizationMembership.organization_id == Organization.id,
-                )
-                .where(
-                    Organization.id == organization_id,
-                    OrganizationMembership.user_id == user_id,
-                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                )
-            )
-        ).one_or_none()
-        if row is None:
-            return None
-        organization, membership = row
-        return OrganizationWithMembershipRecord(
-            organization=organization_record(organization),
-            membership=membership_record(membership),
+        return await get_organization_with_membership(
+            db,
+            organization_id=organization_id,
+            user_id=user_id,
         )
 
 

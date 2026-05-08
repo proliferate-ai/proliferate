@@ -2,7 +2,7 @@ import { CloudWorkspaceEnvVarsCard } from "./CloudWorkspaceEnvVarsCard";
 import { CloudWorkspaceSavedScriptCard } from "./CloudWorkspaceSavedScriptCard";
 import { CloudWorkspaceSettingsSummaryCard } from "./CloudWorkspaceSettingsSummaryCard";
 import { CloudWorkspaceTrackedFilesCard } from "./CloudWorkspaceTrackedFilesCard";
-import { useCloudWorkspaceSettingsPanelState } from "@/hooks/cloud/use-cloud-workspace-settings-panel-state";
+import { useCloudWorkspaceSettingsPanelState } from "@/hooks/cloud/facade/use-cloud-workspace-settings-panel-state";
 
 export function CloudWorkspaceSettingsPanel() {
   const state = useCloudWorkspaceSettingsPanelState();

@@ -18,6 +18,7 @@ from fastapi_users.router.oauth import (
     generate_csrf_token,
     generate_state_token,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.desktop.models import (
     AuthCodeCreated,
@@ -52,6 +53,7 @@ from proliferate.constants.auth import (
     GITHUB_OAUTH_SCOPES,
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
+from proliferate.db.engine import get_async_session
 
 router = APIRouter(prefix="/desktop", tags=["desktop-auth"])
 
@@ -69,9 +71,10 @@ router = APIRouter(prefix="/desktop", tags=["desktop-auth"])
 async def create_desktop_auth_code(
     params: AuthorizeParams,
     user_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
 ) -> AuthCodeCreated:
     """Create a short-lived auth code for the desktop PKCE exchange."""
-    return await create_desktop_auth_code_service(params, user_id)
+    return await create_desktop_auth_code_service(db, params, user_id)
 
 
 # ── Browser-based GitHub OAuth for desktop ──
@@ -147,9 +150,11 @@ async def github_desktop_callback(
     error_description: str | None = None,
     desktop_github_csrf: str | None = Cookie(default=None),
     user_manager: UserManager = Depends(get_user_manager),
+    db: AsyncSession = Depends(get_async_session),
 ) -> HTMLResponse:
     """Finish browser GitHub OAuth and stage a desktop PKCE auth code."""
     response = await finish_github_desktop_callback(
+        db,
         request,
         code=code,
         state=state,
@@ -169,9 +174,10 @@ async def github_desktop_callback(
 )
 async def poll_desktop_auth(
     body: PendingTokenRequest,
+    db: AsyncSession = Depends(get_async_session),
 ) -> TokenResponse | JSONResponse:
     """Poll for a browser-completed auth flow and exchange it into desktop tokens."""
-    result = await poll_desktop_auth_service(body)
+    result = await poll_desktop_auth_service(db, body)
     if isinstance(result, PendingTokenResponse):
         return JSONResponse(
             status_code=status.HTTP_202_ACCEPTED,
@@ -186,9 +192,10 @@ async def poll_desktop_auth(
 @router.post("/token", response_model=TokenResponse)
 async def exchange_token(
     body: TokenRequest,
+    db: AsyncSession = Depends(get_async_session),
 ) -> TokenResponse:
     """Exchange an authorization code + PKCE code_verifier for JWT tokens."""
-    return await exchange_desktop_token(body)
+    return await exchange_desktop_token(db, body)
 
 
 # ── Refresh token endpoint ──
@@ -197,6 +204,7 @@ async def exchange_token(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access_token(
     body: RefreshRequest,
+    db: AsyncSession = Depends(get_async_session),
 ) -> TokenResponse:
     """Exchange a refresh token for a new access + refresh token pair."""
-    return await refresh_desktop_access_token(body)
+    return await refresh_desktop_access_token(db, body)

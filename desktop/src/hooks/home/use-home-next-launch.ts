@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
+import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import {

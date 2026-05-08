@@ -6,8 +6,8 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import {
   getAccountActionDescription,
   getAccountDisplayName,
@@ -16,8 +16,8 @@ import {
   getGitHubStatusLabel,
 } from "@/lib/domain/auth/account-profile-presentation";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
-import { useAuthActions } from "@/hooks/auth/use-auth-actions";
-import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
+import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
 import { useAuthStore } from "@/stores/auth/auth-store";

@@ -7,7 +7,7 @@ import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/
 import { useWorkspaceArrivalActions } from "@/hooks/workspaces/use-workspace-arrival-actions";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
 import { usePendingWorkspaceEntryActions } from "@/hooks/workspaces/use-pending-workspace-entry-actions";
-import { useCloudWorkspaceStatusScreenActions } from "@/hooks/cloud/use-cloud-workspace-status-screen-actions";
+import { useCloudWorkspaceStatusScreenActions } from "@/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";

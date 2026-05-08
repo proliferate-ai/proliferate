@@ -260,7 +260,7 @@ class TestDesktopGitHubCustomerIoSync:
         )
         monkeypatch.setattr(
             desktop_service,
-            "create_auth_code_for_user",
+            "create_auth_code",
             create_auth_code_mock,
         )
         _enable_github(monkeypatch, "desktop-github@example.com")

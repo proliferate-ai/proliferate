@@ -14,6 +14,8 @@ from typing import Literal
 from urllib.parse import urlencode
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
@@ -48,6 +50,7 @@ from proliferate.server.organizations.landing import build_landing_html
 from proliferate.utils.time import utcnow
 
 OwnerScope = Literal["personal", "organization"]
+OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
 
 
 class OrganizationServiceError(RuntimeError):
@@ -87,12 +90,8 @@ class InvitationDeliveryResult:
     skipped: bool
 
 
-def normalize_email(email: str) -> str:
-    return normalize_invitation_email(email)
-
-
 def derive_logo_domain_from_email(email: str) -> str | None:
-    domain = normalize_email(email).partition("@")[2]
+    domain = normalize_invitation_email(email).partition("@")[2]
     if not domain or domain in PUBLIC_EMAIL_DOMAINS:
         return None
     return domain
@@ -110,7 +109,7 @@ def _default_organization_name(actor_user: User) -> str:
     display_name = (actor_user.display_name or "").strip()
     if display_name:
         return f"{display_name}'s organization"[:255]
-    local_part = normalize_email(actor_user.email).partition("@")[0]
+    local_part = normalize_invitation_email(actor_user.email).partition("@")[0]
     local_name = local_part.replace(".", " ").replace("-", " ").replace("_", " ").strip()
     if local_name:
         return f"{local_name.title()}'s organization"[:255]
@@ -282,11 +281,12 @@ async def resolve_owner_context(
     )
 
 
-async def list_organizations(actor_user: User) -> list[OrganizationWithMembershipRecord]:
-    records = await organization_store.list_organizations_for_user(actor_user.id)
+async def list_organizations(db: AsyncSession, actor_user: User) -> OrganizationMembershipRecords:
+    records = await organization_store.list_organizations_for_user(db, actor_user.id)
     if records:
         return records
     return await organization_store.ensure_default_organization_for_user(
+        db,
         user_id=actor_user.id,
         name=_default_organization_name(actor_user),
         logo_domain=derive_logo_domain_from_email(actor_user.email),
@@ -294,10 +294,10 @@ async def list_organizations(actor_user: User) -> list[OrganizationWithMembershi
 
 
 async def get_organization(
-    actor_user: User,
-    organization_id: UUID,
+    db: AsyncSession, actor_user: User, organization_id: UUID
 ) -> OrganizationWithMembershipRecord:
-    record = await organization_store.load_organization_with_membership(
+    record = await organization_store.get_organization_with_membership(
+        db,
         organization_id=organization_id,
         user_id=actor_user.id,
     )
@@ -422,7 +422,7 @@ async def create_invitation(
         require_org_role(context, {ORGANIZATION_ROLE_OWNER})
     else:
         require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-    normalized_email = normalize_email(email)
+    normalized_email = normalize_invitation_email(email)
     token = _new_token()
     record = await invitation_store.create_or_rotate_organization_invitation(
         organization_id=organization_id,

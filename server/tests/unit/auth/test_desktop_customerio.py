@@ -69,6 +69,7 @@ def _github_profile() -> SimpleNamespace:
 async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    db = object()
     request = _make_request()
     user = _make_user("desktop-github@example.com", display_name=None)
     synced_user = _make_user("desktop-github@example.com", display_name="The Octocat")
@@ -100,7 +101,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
         AsyncMock(return_value=_github_profile()),
     )
     monkeypatch.setattr(desktop_service, "update_user_github_profile", sync_profile_mock)
-    monkeypatch.setattr(desktop_service, "create_auth_code_for_user", create_auth_code_mock)
+    monkeypatch.setattr(desktop_service, "create_auth_code", create_auth_code_mock)
     monkeypatch.setattr(
         desktop_service,
         "schedule_customerio_desktop_authenticated_user_sync",
@@ -108,6 +109,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     )
 
     response = await desktop_service.finish_github_desktop_callback(
+        db,  # type: ignore[arg-type]
         request,
         code="github-code",
         state="oauth-state",
@@ -121,6 +123,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     assert "proliferate://auth/callback?code=auth-code" in response.body.decode()
     create_auth_code_mock.assert_awaited_once()
     sync_profile_mock.assert_awaited_once_with(
+        db,
         user.id,
         github_login="octocat",
         avatar_url="https://avatars.githubusercontent.com/u/583231?v=4",
@@ -133,6 +136,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
 async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    db = object()
     request = _make_request()
     user = _make_user("linked@example.com", display_name="Linked User")
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
@@ -160,7 +164,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
         AsyncMock(return_value=_github_profile()),
     )
     monkeypatch.setattr(desktop_service, "update_user_github_profile", sync_profile_mock)
-    monkeypatch.setattr(desktop_service, "create_auth_code_for_user", create_auth_code_mock)
+    monkeypatch.setattr(desktop_service, "create_auth_code", create_auth_code_mock)
     monkeypatch.setattr(
         desktop_service,
         "schedule_customerio_desktop_authenticated_user_sync",
@@ -168,6 +172,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     )
 
     response = await desktop_service.finish_github_desktop_callback(
+        db,  # type: ignore[arg-type]
         request,
         code="github-code",
         state="oauth-state",
@@ -186,6 +191,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
 async def test_finish_github_desktop_callback_skips_customerio_when_oauth_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    db = object()
     request = _make_request()
     user_manager = SimpleNamespace(oauth_callback=AsyncMock())
     schedule_mock = Mock()
@@ -206,6 +212,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_oauth_fails(
     )
 
     response = await desktop_service.finish_github_desktop_callback(
+        db,  # type: ignore[arg-type]
         request,
         code="github-code",
         state="oauth-state",
@@ -224,6 +231,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_oauth_fails(
 async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_creation_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    db = object()
     request = _make_request()
     user = _make_user("desktop-github@example.com", display_name=None)
     user_manager = SimpleNamespace(oauth_callback=AsyncMock(return_value=user))
@@ -252,7 +260,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
     monkeypatch.setattr(desktop_service, "update_user_github_profile", sync_profile_mock)
     monkeypatch.setattr(
         desktop_service,
-        "create_auth_code_for_user",
+        "create_auth_code",
         AsyncMock(side_effect=RuntimeError("auth code write failed")),
     )
     monkeypatch.setattr(
@@ -263,6 +271,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
 
     with pytest.raises(RuntimeError, match="auth code write failed"):
         await desktop_service.finish_github_desktop_callback(
+            db,  # type: ignore[arg-type]
             request,
             code="github-code",
             state="oauth-state",

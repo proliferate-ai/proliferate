@@ -1,25 +1,27 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import NoReturn
+from typing import NoReturn, Protocol
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
     CLAUDE_ALLOWED_AUTH_FILES,
     CODEX_ALLOWED_AUTH_FILES,
     GEMINI_ALLOWED_AUTH_FILES,
     SUPPORTED_CLOUD_AGENTS,
+    CloudAgentKind,
 )
-from proliferate.db.models.cloud import CloudCredential
 from proliferate.db.store.cloud_credentials import (
+    delete_cloud_credential,
+    get_user_cloud_credentials,
     load_cloud_credentials_for_user,
-    persist_cloud_credential_delete,
-    persist_cloud_credential_if_changed,
+    sync_cloud_credential_if_changed,
 )
 from proliferate.server.cloud.credentials.models import (
-    CloudAgentKind,
     CloudCredentialAuthMode,
     CredentialStatus,
     CredentialStatusRecord,
@@ -38,6 +40,12 @@ from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 FileContentValidator = Callable[[dict[str, object], str], bool]
 EnvPayloadNormalizer = Callable[[Mapping[str, str]], dict[str, str]]
+
+
+class _CredentialRecordLike(Protocol):
+    provider: str
+    payload_ciphertext: str
+    revoked_at: object | None
 
 
 @dataclass(frozen=True)
@@ -121,10 +129,18 @@ def _normalize_gemini_env_payload(env_vars: Mapping[str, str]) -> dict[str, str]
 
 
 async def list_cloud_credentials(
+    db: AsyncSession,
     user_id: UUID,
 ) -> list[CredentialStatus]:
-    statuses = await load_cloud_credential_statuses(user_id)
+    statuses = await load_cloud_credential_statuses_for_request(db, user_id)
     return [credential_status_payload(status) for status in statuses]
+
+
+async def load_cloud_credential_statuses_for_request(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[CredentialStatusRecord]:
+    return build_credential_statuses(await get_user_cloud_credentials(db, user_id))
 
 
 async def load_cloud_credential_statuses(
@@ -141,7 +157,7 @@ async def load_active_cloud_credential_payloads(
 
 
 def _active_credential_payloads(
-    records: list[CloudCredential],
+    records: Sequence[_CredentialRecordLike],
 ) -> Mapping[str, object]:
     return {
         record.provider: decrypt_json(record.payload_ciphertext)
@@ -213,6 +229,7 @@ def _normalize_file_payload(
 
 
 async def sync_cloud_credential_for_user(
+    db: AsyncSession,
     user_id: UUID,
     provider: CloudAgentKind,
     body: SyncCloudCredentialRequest,
@@ -229,6 +246,7 @@ async def sync_cloud_credential_for_user(
             "envVars": normalized_env_vars,
         }
         return await _persist_cloud_credential_if_changed(
+            db,
             user_id=user_id,
             provider=provider,
             payload=payload,
@@ -242,6 +260,7 @@ async def sync_cloud_credential_for_user(
         "files": normalized_files,
     }
     return await _persist_cloud_credential_if_changed(
+        db,
         user_id=user_id,
         provider=provider,
         payload=payload,
@@ -250,6 +269,7 @@ async def sync_cloud_credential_for_user(
 
 
 async def _persist_cloud_credential_if_changed(
+    db: AsyncSession,
     *,
     user_id: UUID,
     provider: CloudAgentKind,
@@ -257,7 +277,8 @@ async def _persist_cloud_credential_if_changed(
     auth_mode: CloudCredentialAuthMode,
 ) -> bool:
     stored_payload = dict(payload)
-    return await persist_cloud_credential_if_changed(
+    return await sync_cloud_credential_if_changed(
+        db,
         user_id,
         provider,
         encrypt_json(stored_payload),
@@ -267,7 +288,8 @@ async def _persist_cloud_credential_if_changed(
 
 
 async def delete_cloud_credential_for_user(
+    db: AsyncSession,
     user_id: UUID,
     provider: CloudAgentKind,
 ) -> bool:
-    return await persist_cloud_credential_delete(user_id, provider)
+    return await delete_cloud_credential(db, user_id, provider)
