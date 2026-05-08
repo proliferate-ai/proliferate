@@ -16,6 +16,7 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 
+// Owns command-palette tab actions. It does not build palette entries.
 export function useWorkspaceCommandPaletteTabs() {
   const model = useWorkspaceHeaderTabsViewModel();
   const selectedWorkspaceId = model.selectedWorkspaceId;

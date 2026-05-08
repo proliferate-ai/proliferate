@@ -15,6 +15,7 @@ interface UseWorkspaceCommandPaletteFileSearchArgs {
   query: string;
 }
 
+// Owns command-palette-specific file search debouncing and query state.
 export function useWorkspaceCommandPaletteFileSearch({
   open,
   selectedWorkspaceId,

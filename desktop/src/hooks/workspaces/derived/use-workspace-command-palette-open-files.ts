@@ -14,6 +14,7 @@ export interface CommandPaletteOpenFileEntry {
   isActive: boolean;
 }
 
+// Derives open file entries for command-palette rendering from viewer tab state.
 export function useWorkspaceCommandPaletteOpenFiles(
   selectedWorkspaceId: string | null,
 ): CommandPaletteOpenFileEntry[] {
