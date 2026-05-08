@@ -6,7 +6,6 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import (
     CloudMcpConnection,
     CloudMcpConnectionAuth,
@@ -86,52 +85,55 @@ async def _get_connection_orm(
     ).scalar_one_or_none()
 
 
-async def list_user_connections(user_id: UUID) -> list[CloudMcpConnectionRecord]:
-    async with db_engine.async_session_factory() as db:
-        records = list(
-            (
-                await db.execute(
-                    select(CloudMcpConnection)
-                    .where(CloudMcpConnection.user_id == user_id)
-                    .order_by(CloudMcpConnection.updated_at.desc())
-                )
+async def list_user_connections(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[CloudMcpConnectionRecord]:
+    records = list(
+        (
+            await db.execute(
+                select(CloudMcpConnection)
+                .where(CloudMcpConnection.user_id == user_id)
+                .order_by(CloudMcpConnection.updated_at.desc())
             )
-            .scalars()
-            .all()
         )
-        return [await _connection_record(db, record) for record in records]
+        .scalars()
+        .all()
+    )
+    return [await _connection_record(db, record) for record in records]
 
 
 async def get_user_connection(
+    db: AsyncSession,
     user_id: UUID,
     connection_id: str,
 ) -> CloudMcpConnectionRecord | None:
-    async with db_engine.async_session_factory() as db:
-        record = await _get_connection_orm(db, user_id, connection_id)
-        if record is None:
-            return None
-        return await _connection_record(db, record)
+    record = await _get_connection_orm(db, user_id, connection_id)
+    if record is None:
+        return None
+    return await _connection_record(db, record)
 
 
 async def get_user_connection_by_db_id(
+    db: AsyncSession,
     user_id: UUID,
     connection_db_id: UUID,
 ) -> CloudMcpConnectionRecord | None:
-    async with db_engine.async_session_factory() as db:
-        record = (
-            await db.execute(
-                select(CloudMcpConnection).where(
-                    CloudMcpConnection.id == connection_db_id,
-                    CloudMcpConnection.user_id == user_id,
-                )
+    record = (
+        await db.execute(
+            select(CloudMcpConnection).where(
+                CloudMcpConnection.id == connection_db_id,
+                CloudMcpConnection.user_id == user_id,
             )
-        ).scalar_one_or_none()
-        if record is None:
-            return None
-        return await _connection_record(db, record)
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        return None
+    return await _connection_record(db, record)
 
 
 async def upsert_user_connection(
+    db: AsyncSession,
     *,
     user_id: UUID,
     catalog_entry_id: str,
@@ -141,49 +143,49 @@ async def upsert_user_connection(
     connection_id: str | None = None,
     enabled: bool = True,
 ) -> CloudMcpConnectionRecord:
-    async with db_engine.async_session_factory() as db:
-        now = utcnow()
-        connection = (
-            await _get_connection_orm(db, user_id, connection_id)
-            if connection_id is not None
-            else None
+    now = utcnow()
+    connection = (
+        await _get_connection_orm(db, user_id, connection_id)
+        if connection_id is not None
+        else None
+    )
+    if connection is None:
+        connection = CloudMcpConnection(
+            user_id=user_id,
+            org_id=None,
+            connection_id=connection_id or str(uuid.uuid4()),
+            catalog_entry_id=catalog_entry_id,
+            catalog_entry_version=catalog_entry_version,
+            server_name=server_name,
+            enabled=enabled,
+            settings_json=settings_json,
+            config_version=1,
+            payload_ciphertext=None,
+            payload_format="json-v1",
+            created_at=now,
+            updated_at=now,
+            last_synced_at=now,
         )
-        if connection is None:
-            connection = CloudMcpConnection(
-                user_id=user_id,
-                org_id=None,
-                connection_id=connection_id or str(uuid.uuid4()),
-                catalog_entry_id=catalog_entry_id,
-                catalog_entry_version=catalog_entry_version,
-                server_name=server_name,
-                enabled=enabled,
-                settings_json=settings_json,
-                config_version=1,
-                payload_ciphertext=None,
-                payload_format="json-v1",
-                created_at=now,
-                updated_at=now,
-                last_synced_at=now,
-            )
-            db.add(connection)
-            await db.commit()
-            await db.refresh(connection)
-            return await _connection_record(db, connection)
-
-        connection.catalog_entry_id = catalog_entry_id
-        connection.catalog_entry_version = catalog_entry_version
-        connection.server_name = server_name
-        connection.enabled = enabled
-        connection.settings_json = settings_json
-        connection.config_version += 1
-        connection.updated_at = now
-        connection.last_synced_at = now
-        await db.commit()
+        db.add(connection)
+        await db.flush()
         await db.refresh(connection)
         return await _connection_record(db, connection)
 
+    connection.catalog_entry_id = catalog_entry_id
+    connection.catalog_entry_version = catalog_entry_version
+    connection.server_name = server_name
+    connection.enabled = enabled
+    connection.settings_json = settings_json
+    connection.config_version += 1
+    connection.updated_at = now
+    connection.last_synced_at = now
+    await db.flush()
+    await db.refresh(connection)
+    return await _connection_record(db, connection)
+
 
 async def patch_user_connection(
+    db: AsyncSession,
     *,
     user_id: UUID,
     connection_id: str,
@@ -192,44 +194,46 @@ async def patch_user_connection(
     server_name: str | None = None,
     catalog_entry_version: int | None = None,
 ) -> CloudMcpConnectionRecord | None:
-    async with db_engine.async_session_factory() as db:
-        connection = await _get_connection_orm(db, user_id, connection_id)
-        if connection is None:
-            return None
-        changed = False
-        if enabled is not None and connection.enabled != enabled:
-            connection.enabled = enabled
-            changed = True
-        if settings_json is not None and connection.settings_json != settings_json:
-            connection.settings_json = settings_json
-            changed = True
-        if server_name is not None and connection.server_name != server_name:
-            connection.server_name = server_name
-            changed = True
-        if (
-            catalog_entry_version is not None
-            and connection.catalog_entry_version != catalog_entry_version
-        ):
-            connection.catalog_entry_version = catalog_entry_version
-            changed = True
-        if changed:
-            connection.config_version += 1
-            connection.updated_at = utcnow()
-        await db.commit()
-        await db.refresh(connection)
-        return await _connection_record(db, connection)
+    connection = await _get_connection_orm(db, user_id, connection_id)
+    if connection is None:
+        return None
+    changed = False
+    if enabled is not None and connection.enabled != enabled:
+        connection.enabled = enabled
+        changed = True
+    if settings_json is not None and connection.settings_json != settings_json:
+        connection.settings_json = settings_json
+        changed = True
+    if server_name is not None and connection.server_name != server_name:
+        connection.server_name = server_name
+        changed = True
+    if (
+        catalog_entry_version is not None
+        and connection.catalog_entry_version != catalog_entry_version
+    ):
+        connection.catalog_entry_version = catalog_entry_version
+        changed = True
+    if changed:
+        connection.config_version += 1
+        connection.updated_at = utcnow()
+    await db.flush()
+    await db.refresh(connection)
+    return await _connection_record(db, connection)
 
 
-async def delete_user_connection(user_id: UUID, connection_id: str) -> None:
-    async with db_engine.async_session_factory() as db:
-        connection = await _get_connection_orm(db, user_id, connection_id)
-        if connection is None:
-            return
-        await db.execute(
-            delete(CloudMcpOAuthFlow).where(
-                CloudMcpOAuthFlow.connection_db_id == connection.id,
-                CloudMcpOAuthFlow.status == "active",
-            )
+async def delete_user_connection(
+    db: AsyncSession,
+    user_id: UUID,
+    connection_id: str,
+) -> None:
+    connection = await _get_connection_orm(db, user_id, connection_id)
+    if connection is None:
+        return
+    await db.execute(
+        delete(CloudMcpOAuthFlow).where(
+            CloudMcpOAuthFlow.connection_db_id == connection.id,
+            CloudMcpOAuthFlow.status == "active",
         )
-        await db.delete(connection)
-        await db.commit()
+    )
+    await db.delete(connection)
+    await db.flush()

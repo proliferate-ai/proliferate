@@ -31,10 +31,6 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_cla
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 12 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 33 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/auth.py 3 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/connections.py 4 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/oauth_clients.py 2 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp/oauth_flows.py 5 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp_connections.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mobility.py 9 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_repo_config.py 3 transitional store owns transaction commit
@@ -55,10 +51,8 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claims.py 
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 8 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 34 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_credentials.py 1 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 4 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/connections.py 6 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 3 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_flows.py 6 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 3 materialization refresh wrappers open isolated DB sessions
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper opens isolated DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp_connections.py 4 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mobility.py 13 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_repo_config.py 5 transitional store opens DB session
@@ -76,10 +70,8 @@ STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claims.p
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automations.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/billing.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_credentials.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/auth.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/connections.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/oauth_flows.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/auth.py 1 materialization refresh wrappers import DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp_connections.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mobility.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_repo_config.py 1 transitional store imports DB session factory

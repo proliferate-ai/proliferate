@@ -4,8 +4,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.mcp_oauth.models import (
@@ -30,9 +32,10 @@ router = APIRouter(prefix="/mcp")
 async def start_cloud_mcp_oauth_flow_endpoint(
     connection_id: str,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> StartCloudMcpOAuthFlowResponse:
     try:
-        return await start_cloud_mcp_oauth_flow(user_id=user.id, connection_id=connection_id)
+        return await start_cloud_mcp_oauth_flow(db, user_id=user.id, connection_id=connection_id)
     except CloudApiError as error:
         raise_cloud_error(error)
 
@@ -41,9 +44,10 @@ async def start_cloud_mcp_oauth_flow_endpoint(
 async def get_cloud_mcp_oauth_flow_endpoint(
     flow_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
     try:
-        return await get_cloud_mcp_oauth_flow_status(user_id=user.id, flow_id=flow_id)
+        return await get_cloud_mcp_oauth_flow_status(db, user_id=user.id, flow_id=flow_id)
     except CloudApiError as error:
         raise_cloud_error(error)
 
@@ -52,9 +56,10 @@ async def get_cloud_mcp_oauth_flow_endpoint(
 async def cancel_cloud_mcp_oauth_flow_endpoint(
     flow_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
     try:
-        return await cancel_cloud_mcp_oauth_flow(user_id=user.id, flow_id=flow_id)
+        return await cancel_cloud_mcp_oauth_flow(db, user_id=user.id, flow_id=flow_id)
     except CloudApiError as error:
         raise_cloud_error(error)
 
@@ -64,11 +69,12 @@ async def cloud_mcp_oauth_callback_endpoint(
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_async_session),
 ) -> HTMLResponse:
     if error or not code or not state:
         return make_mcp_oauth_callback_page(ok=False)
     try:
-        result = await complete_cloud_mcp_oauth_callback(state=state, code=code)
+        result = await complete_cloud_mcp_oauth_callback(db, state=state, code=code)
     except CloudApiError:
         return make_mcp_oauth_callback_page(ok=False)
     return make_mcp_oauth_callback_page(ok=result.ok)
