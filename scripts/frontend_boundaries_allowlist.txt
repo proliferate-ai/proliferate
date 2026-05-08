@@ -7,7 +7,6 @@ QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/chat/use-chat-prompt-actions.
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/session-stream-side-effects.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/use-session-runtime-actions.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/files/use-workspace-file-actions.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/mobility/reset-workspace-owner-flip-state.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/mobility/use-cloud-to-local-handoff.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/mobility/use-local-to-cloud-handoff.ts 5 query cache ownership before access/cache migration

@@ -1,13 +1,10 @@
 import { useCallback } from "react";
 import { AnyHarnessError } from "@anyharness/sdk";
 import {
-  type AnyHarnessClientConnection,
-  anyHarnessWorkspaceFileKey,
-  anyHarnessWorkspaceFileTreeKey,
   useReadWorkspaceFileQuery,
   useWriteWorkspaceFileMutation,
 } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspaceFilesCache } from "@/hooks/access/anyharness/files/use-workspace-files-cache";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { deriveWorkspaceFileTabSeed } from "@/lib/domain/workspaces/tabs/shell-file-seed";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
@@ -18,25 +15,11 @@ import {
   type FileDiffViewerScope,
   type ViewerTarget,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
-import {
-  listWorkspaceFiles,
-  readWorkspaceFile,
-} from "@/lib/access/anyharness/workspace-file-transport";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-
-function buildConnection(
-  runtimeUrl: string,
-  authToken?: string | null,
-): AnyHarnessClientConnection {
-  return {
-    runtimeUrl,
-    authToken: authToken ?? undefined,
-  };
-}
 
 function directoryPathDepth(dirPath: string): number {
   return dirPath.split("/").filter(Boolean).length;
@@ -49,7 +32,7 @@ function getExpandedDirectoryPaths(treeStateKey: string): string[] {
 }
 
 export function useWorkspaceFileActions() {
-  const queryClient = useQueryClient();
+  const { prefetchWorkspaceDirectory, reloadWorkspaceFile } = useWorkspaceFilesCache();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const prepareWorkspace = useWorkspaceViewerTabsStore((state) => state.prepareWorkspace);
@@ -77,32 +60,6 @@ export function useWorkspaceFileActions() {
     }
     return true;
   }, [getWorkspaceRuntimeBlockReason, showToast]);
-
-  const prefetchDirectory = useCallback(async ({
-    materializedWorkspaceId,
-    anyharnessWorkspaceId,
-    runtimeUrl,
-    authToken,
-    dirPath,
-  }: {
-    materializedWorkspaceId: string;
-    anyharnessWorkspaceId: string;
-    runtimeUrl: string;
-    authToken?: string | null;
-    dirPath: string;
-  }) => {
-    await queryClient.prefetchQuery({
-      queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, materializedWorkspaceId, dirPath),
-      queryFn: async ({ signal }) => {
-        return listWorkspaceFiles(
-          buildConnection(runtimeUrl, authToken),
-          anyharnessWorkspaceId,
-          dirPath,
-          { signal },
-        );
-      },
-    });
-  }, [queryClient]);
 
   const prepareFileWorkspace = useCallback(({
     workspaceUiKey,
@@ -179,7 +136,7 @@ export function useWorkspaceFileActions() {
     if (isCurrent && !isCurrent()) {
       return;
     }
-    await prefetchDirectory({
+    await prefetchWorkspaceDirectory({
       materializedWorkspaceId,
       anyharnessWorkspaceId,
       runtimeUrl,
@@ -191,7 +148,7 @@ export function useWorkspaceFileActions() {
         return;
       }
       try {
-        await prefetchDirectory({
+        await prefetchWorkspaceDirectory({
           materializedWorkspaceId,
           anyharnessWorkspaceId,
           runtimeUrl,
@@ -206,7 +163,7 @@ export function useWorkspaceFileActions() {
     }
   }, [
     assertWorkspaceRuntimeReady,
-    prefetchDirectory,
+    prefetchWorkspaceDirectory,
     removeExpandedDirectory,
   ]);
 
@@ -262,7 +219,7 @@ export function useWorkspaceFileActions() {
     }
     expandDirectory(treeStateKey, dirPath);
     if (assertWorkspaceRuntimeReady(materializedWorkspaceId)) {
-      await prefetchDirectory({
+      await prefetchWorkspaceDirectory({
         materializedWorkspaceId,
         anyharnessWorkspaceId,
         runtimeUrl,
@@ -274,7 +231,7 @@ export function useWorkspaceFileActions() {
     assertWorkspaceRuntimeReady,
     collapseDirectory,
     expandDirectory,
-    prefetchDirectory,
+    prefetchWorkspaceDirectory,
   ]);
 
   const openViewerTarget = useCallback((target: ViewerTarget) => {
@@ -345,22 +302,15 @@ export function useWorkspaceFileActions() {
       return;
     }
 
-    const queryKey = anyHarnessWorkspaceFileKey(runtimeUrl, materializedWorkspaceId, filePath);
-    await queryClient.invalidateQueries({ queryKey, exact: true });
-    const read = await queryClient.fetchQuery({
-      queryKey,
-      queryFn: async ({ signal }) => {
-        return readWorkspaceFile(
-          buildConnection(runtimeUrl, authToken),
-          anyharnessWorkspaceId,
-          filePath,
-          { signal },
-        );
-      },
-      staleTime: 0,
+    const read = await reloadWorkspaceFile({
+      materializedWorkspaceId,
+      anyharnessWorkspaceId,
+      runtimeUrl,
+      authToken,
+      filePath,
     });
     replaceBufferFromRead(filePath, read);
-  }, [queryClient, replaceBufferFromRead]);
+  }, [reloadWorkspaceFile, replaceBufferFromRead]);
 
   return {
     initForWorkspace,
