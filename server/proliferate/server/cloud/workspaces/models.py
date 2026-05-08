@@ -10,10 +10,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus, CloudWorkspaceStatus
-from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
-from proliferate.server.cloud.credentials.models import (
+from proliferate.constants.cloud import (
     CloudAgentKind,
+    CloudRuntimeEnvironmentStatus,
+    CloudWorkspaceStatus,
+)
+from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
+from proliferate.server.cloud.credentials.domain.status import (
     CredentialStatusRecord,
     allowed_agent_kinds,
     ready_agent_kinds,
@@ -237,12 +240,12 @@ def workspace_summary_payload(
         id=str(workspace.id),
         display_name=workspace.display_name,
         repo=_repo_ref(workspace),
-        workspace_status=workspace_status,  # type: ignore[arg-type]
+        workspace_status=workspace_status,
         runtime=WorkspaceRuntimeSummary(
             environment_id=(
                 str(runtime_environment.id) if runtime_environment is not None else None
             ),
-            status=runtime_status,  # type: ignore[arg-type]
+            status=runtime_status,
             generation=(
                 runtime_environment.runtime_generation
                 if runtime_environment is not None

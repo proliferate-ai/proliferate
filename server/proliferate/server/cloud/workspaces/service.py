@@ -61,7 +61,7 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.credentials.models import allowed_agent_kinds
+from proliferate.server.cloud.credentials.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.credentials.service import load_cloud_credential_statuses
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
