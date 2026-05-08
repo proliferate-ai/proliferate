@@ -52,7 +52,6 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
-from proliferate.db.store.organizations import load_active_membership
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
 from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
@@ -85,6 +84,7 @@ from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
     sync_workspace_credentials,
 )
+from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read
 from proliferate.server.cloud.workspaces.models import (
     WorkspaceConnection,
     WorkspaceCreatorContext,
@@ -273,37 +273,6 @@ async def list_cloud_workspaces_for_user(
     return summaries
 
 
-async def _require_cloud_workspace_for_user(
-    user_id: UUID,
-    workspace_id: UUID,
-) -> CloudWorkspace:
-    workspace = await load_cloud_workspace_by_id(workspace_id)
-    if workspace is None:
-        raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    if workspace.owner_scope == "personal":
-        if workspace.owner_user_id != user_id:
-            raise CloudApiError(
-                "workspace_not_found",
-                "Cloud workspace not found.",
-                status_code=404,
-            )
-        return workspace
-    if workspace.owner_scope == "organization" and workspace.organization_id is not None:
-        membership = await load_active_membership(
-            organization_id=workspace.organization_id,
-            user_id=user_id,
-        )
-        if membership is None:
-            raise CloudApiError(
-                "workspace_not_found",
-                "Cloud workspace not found.",
-                status_code=404,
-            )
-        _raise_org_cloud_not_ready()
-    raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return workspace
-
-
 def _prefer_fresher_workspace_state(
     workspace: CloudWorkspace,
     reloaded_workspace: CloudWorkspace | None,
@@ -375,7 +344,7 @@ async def get_cloud_workspace_detail(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     return await _build_workspace_detail(workspace)
 
 
@@ -799,7 +768,7 @@ async def start_cloud_workspace(
     *,
     requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
-    workspace = await _require_cloud_workspace_for_user(user.id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user.id, workspace_id)
     if (
         workspace.status in PROVISIONING_STATUSES
         and workspace.status != CloudWorkspaceStatus.pending.value
@@ -905,7 +874,7 @@ async def sync_cloud_workspace_branch(
             status_code=400,
         )
 
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     workspace.git_branch = cleaned_branch_name
     workspace = await save_workspace(workspace)
     return await _build_workspace_detail(workspace)
@@ -938,7 +907,7 @@ async def sync_cloud_workspace_display_name(
                 status_code=400,
             )
 
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     workspace.display_name = cleaned
     workspace = await save_workspace(workspace)
     return await _build_workspace_detail(workspace)
@@ -948,9 +917,9 @@ async def sync_cloud_workspace_credentials(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     await sync_workspace_credentials(workspace)
-    reloaded_workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    reloaded_workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     return await _build_workspace_detail(reloaded_workspace)
 
 
@@ -958,9 +927,9 @@ async def stop_cloud_workspace(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     await _stop_workspace_runtime(workspace)
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     return await _build_workspace_detail(workspace)
 
 
@@ -968,7 +937,7 @@ async def delete_cloud_workspace(
     user_id: UUID,
     workspace_id: UUID,
 ) -> None:
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     await delete_cloud_workspace_records_for_workspace(workspace)
 
 
@@ -1077,7 +1046,7 @@ async def get_cloud_connection(
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceConnection:
-    workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     try:
         target = await get_workspace_connection(workspace)
     except CloudRuntimeReconnectError as exc:
