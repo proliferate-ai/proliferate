@@ -25,9 +25,9 @@ import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
-import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
+import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
-import { useRuntimeInputSyncSummary } from "@/hooks/cloud/use-runtime-input-sync-summary";
+import { useRuntimeInputSyncSummary } from "@/hooks/cloud/facade/use-runtime-input-sync-summary";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];

@@ -1,4 +1,4 @@
-import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useLocalAutomationClaimPoller } from "./use-local-automation-claim-poller";
 

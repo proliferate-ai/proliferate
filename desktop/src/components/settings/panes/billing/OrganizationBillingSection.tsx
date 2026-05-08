@@ -5,7 +5,7 @@ import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import {
   useCloudBilling,
   useCloudBillingActions,
-} from "@/hooks/cloud/use-cloud-billing";
+} from "@/hooks/cloud/facade/use-cloud-billing";
 import type {
   BillingPlanInfo,
   CloudOwnerSelection,

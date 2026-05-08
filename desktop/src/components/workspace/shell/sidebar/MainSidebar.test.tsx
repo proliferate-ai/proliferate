@@ -118,11 +118,11 @@ vi.mock("@/components/workspace/repo-setup/RepoSetupModal", () => ({
   RepoSetupModal: () => <div data-testid="repo-setup-modal" />,
 }));
 
-vi.mock("@/hooks/cloud/use-cloud-availability-state", () => ({
+vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: false, cloudUnavailable: false }),
 }));
 
-vi.mock("@/hooks/cloud/use-cloud-billing", () => ({
+vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
 

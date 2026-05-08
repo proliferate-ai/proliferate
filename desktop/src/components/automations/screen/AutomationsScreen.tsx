@@ -15,7 +15,7 @@ import {
   useAutomationRuns,
   useAutomations,
 } from "@/hooks/access/cloud/automations/use-automations";
-import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
+import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";

@@ -21,7 +21,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
+import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import {
   captureTelemetryException,

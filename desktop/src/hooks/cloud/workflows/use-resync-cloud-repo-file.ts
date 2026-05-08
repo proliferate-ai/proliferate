@@ -13,7 +13,7 @@ import {
   cloudRepoConfigsKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "@/hooks/access/cloud/query-keys";
-import { emitRuntimeInputSyncEvent } from "./runtime-input-sync-events";
+import { emitRuntimeInputSyncEvent } from "../lifecycle/runtime-input-sync-events";
 
 export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | null) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
