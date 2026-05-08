@@ -2,11 +2,9 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  memo,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
@@ -16,7 +14,6 @@ import {
 } from "@/config/chat-layout";
 import {
   shouldStickToVirtualBottom,
-  type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
@@ -24,11 +21,11 @@ import {
   TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
   type TranscriptVirtualizationMode,
 } from "@/lib/domain/chat/transcript/transcript-virtualization-config";
-import {
-  hashMeasurementScope,
-  isMainThreadMeasurementEnabled,
-} from "@/lib/infra/measurement/debug-measurement";
+import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { FullTranscriptRowList } from "@/components/workspace/chat/transcript/FullTranscriptRowList";
+import {
+  MemoizedVirtualTranscriptRow,
+} from "@/components/workspace/chat/transcript/VirtualTranscriptRow";
 import {
   buildRenderableRows,
   estimateRenderableRowHeight,
@@ -46,16 +43,8 @@ import {
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
 
 const VIRTUALIZER_OVERSCAN = 8;
-const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
-const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY =
-  "proliferate:enableTranscriptVirtualization";
-const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY =
-  "proliferate:disableTranscriptVirtualization";
-
-type TranscriptVirtualRowRenderer = (
-  row: TranscriptVirtualRow,
-  rowIndex: number,
-) => ReactNode;
+const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:enableTranscriptVirtualization";
+const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:disableTranscriptVirtualization";
 
 interface VirtualScrollAnchor {
   key: TranscriptRenderableRow["key"];
@@ -344,9 +333,7 @@ function VirtualizedTranscriptRowList({
       }
       maybeLoadOlderHistory(viewport, "settled");
     });
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
+    return () => { window.cancelAnimationFrame(frame); };
   }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
   useLayoutEffect(() => {
@@ -368,9 +355,7 @@ function VirtualizedTranscriptRowList({
     }
 
     const offsetInfo = virtualizer.getOffsetForIndex(nextIndex, "start");
-    if (!offsetInfo) {
-      return;
-    }
+    if (!offsetInfo) return;
     virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
   }, [renderableRows, rows.length, virtualizer]);
 
@@ -417,88 +402,21 @@ function VirtualizedTranscriptRowList({
     };
   });
 
-  useEffect(() => {
-    if (rows.length === 0) {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      const viewport = scrollRef.current;
-      if (!viewport) {
-        return;
-      }
-
-      const scrollableDistance = viewport.scrollHeight - viewport.clientHeight;
-      if (scrollableDistance < BLANK_VIEWPORT_MIN_SCROLLABLE_PX) {
-        return;
-      }
-
-      const viewportRect = viewport.getBoundingClientRect();
-      const rowElements = Array.from(
-        viewport.querySelectorAll<HTMLElement>("[data-transcript-virtual-row='true']"),
-      );
-      const visibleRowCount = rowElements.filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return rect.bottom > viewportRect.top + 1 && rect.top < viewportRect.bottom - 1;
-      }).length;
-
-      if (visibleRowCount > 0) {
-        return;
-      }
-
-      const firstVirtualItemIndex = firstVirtualItem?.index ?? null;
-      const lastVirtualItemIndex = lastVirtualItem?.index ?? null;
-      const signature = [
-        activeSessionId,
-        rows.length,
-        Math.round(viewport.scrollTop),
-        firstVirtualItemIndex,
-        lastVirtualItemIndex,
-      ].join(":");
-      if (lastBlankReportSignatureRef.current === signature) {
-        return;
-      }
-      lastBlankReportSignatureRef.current = signature;
-
-      if (import.meta.env.DEV && isMainThreadMeasurementEnabled()) {
-        console.error("[transcript-virtualizer] blank viewport detected; falling back to full render", {
-          activeSessionHash: hashMeasurementScope(activeSessionId),
-          selectedWorkspaceHash: selectedWorkspaceId ? hashMeasurementScope(selectedWorkspaceId) : null,
-          rowCount: rows.length,
-          renderableRowCount: renderableRows.length,
-          virtualItemCount: virtualItems.length,
-          firstVirtualItemIndex,
-          lastVirtualItemIndex,
-          firstVirtualStart: firstVirtualItem?.start ?? null,
-          lastVirtualEnd: lastVirtualItem?.end ?? null,
-          scrollTop: Math.round(viewport.scrollTop),
-          clientHeight: viewport.clientHeight,
-          scrollHeight: viewport.scrollHeight,
-          totalContentHeight,
-          topSpacerHeight,
-          bottomSpacerHeight,
-        });
-      }
-
-      onFallback("blank_viewport");
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [
+  useTranscriptVirtualizerBlankFallback({
     activeSessionId,
     bottomSpacerHeight,
     firstVirtualItem,
     lastVirtualItem,
-    renderableRows.length,
-    rows.length,
+    lastBlankReportSignatureRef,
+    onFallback,
+    renderableRowCount: renderableRows.length,
+    rowCount: rows.length,
+    scrollRef,
     selectedWorkspaceId,
     topSpacerHeight,
     totalContentHeight,
-    virtualItems.length,
-    onFallback,
-  ]);
+    virtualItemCount: virtualItems.length,
+  });
 
   return (
     <AutoHideScrollArea
@@ -561,52 +479,17 @@ function VirtualizedTranscriptRowList({
   );
 }
 
-const MemoizedVirtualTranscriptRow = memo(function MemoizedVirtualTranscriptRow({
-  row,
-  rowIndex,
-  virtualIndex,
-  renderRow,
-  measureElement,
-}: {
-  row: TranscriptVirtualRow;
-  rowIndex: number;
-  virtualIndex: number;
-  renderRow: TranscriptVirtualRowRenderer;
-  measureElement: (element: Element | null) => void;
-}) {
-  return (
-    <div
-      ref={measureElement}
-      data-transcript-virtual-row="true"
-      data-index={virtualIndex}
-      className="w-full"
-    >
-      {renderRow(row, rowIndex)}
-    </div>
-  );
-}, (prev, next) =>
-  prev.row === next.row
-  && prev.rowIndex === next.rowIndex
-  && prev.virtualIndex === next.virtualIndex
-  && prev.renderRow === next.renderRow
-  && prev.measureElement === next.measureElement
-);
-
 function readTranscriptVirtualizationMode(): TranscriptVirtualizationMode {
   if (typeof window === "undefined") {
     return "auto";
   }
 
-  const explicitMode = window.localStorage.getItem(
-    TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
-  );
+  const explicitMode = window.localStorage.getItem(TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY);
   if (explicitMode !== null) {
     return parseTranscriptVirtualizationMode(explicitMode);
   }
 
-  if (window.localStorage.getItem(LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY) === "1") {
-    return "off";
-  }
+  if (window.localStorage.getItem(LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY) === "1") return "off";
   if (window.localStorage.getItem(LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY) === "1") {
     return "on";
   }
