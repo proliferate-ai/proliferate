@@ -47,18 +47,18 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => screenMocks.navigate,
 }));
 
-vi.mock("@/hooks/home/use-home-next-state", () => ({
+vi.mock("@/hooks/home/derived/use-home-next-state", () => ({
   useHomeNextState: () => screenMocks.homeNext,
 }));
 
-vi.mock("@/hooks/home/use-home-next-launch", () => ({
+vi.mock("@/hooks/home/workflows/use-home-next-launch", () => ({
   useHomeNextLaunch: () => ({
     isLaunching: false,
     launch: screenMocks.launch,
   }),
 }));
 
-vi.mock("@/hooks/home/use-home-screen", () => ({
+vi.mock("@/hooks/home/facade/use-home-screen", () => ({
   useHomeScreen: () => ({
     actionCards: [],
     isAddingRepo: false,

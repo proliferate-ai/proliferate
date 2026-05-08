@@ -96,6 +96,7 @@ function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
     : "safe";
 }
 
+// Owns the Home Next submit action. Does not own read-only selection state or deferred launch replay.
 export function useHomeNextLaunch() {
   const navigate = useNavigate();
   const [isLaunching, setIsLaunching] = useState(false);

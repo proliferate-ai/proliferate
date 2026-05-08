@@ -13,9 +13,9 @@ import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatCompo
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@/components/ui/Button";
-import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
-import { useHomeNextState } from "@/hooks/home/use-home-next-state";
-import { useHomeScreen } from "@/hooks/home/use-home-screen";
+import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
+import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
+import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
 import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
 import {
   type HomeNextDestination,

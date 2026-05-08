@@ -28,6 +28,7 @@ function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
   return resolveChatLaunchRetryMode(activeIntent?.id === intentId ? activeIntent : null);
 }
 
+// Owns deferred cloud launch consumption. Does not own initial Home launch initiation.
 export function useHomeDeferredLaunchRunner() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const launchesById = useDeferredHomeLaunchStore((state) => state.launches);
