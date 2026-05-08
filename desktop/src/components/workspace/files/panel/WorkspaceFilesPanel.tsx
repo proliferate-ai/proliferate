@@ -1,10 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  anyHarnessWorkspaceFileSearchScopeKey,
-  anyHarnessWorkspaceFilesScopeKey,
-  useSearchWorkspaceFilesQuery,
-} from "@anyharness/sdk-react";
+import { useSearchWorkspaceFilesQuery } from "@anyharness/sdk-react";
 import { FileTreePane } from "./FileTreePane";
 import { FileBrowserToolbar, type FileBrowserScopeFilter } from "./FileBrowserToolbar";
 import { FileCreateDraftRow } from "./FileCreateDraftRow";
@@ -14,6 +9,7 @@ import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { ArrowUpRight, ChevronRight } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFilesRefresh } from "@/hooks/workspaces/files/workflows/use-workspace-files-refresh";
 import { useGitPanelState } from "@/hooks/workspaces/use-git-panel-state";
 import {
   buildChangedFileTree,
@@ -33,9 +29,7 @@ interface WorkspaceFilesPanelProps {
 export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelProps) {
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<FileBrowserScopeFilter>("all");
-  const queryClient = useQueryClient();
   const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
-  const runtimeUrl = useWorkspaceViewerTabsStore((s) => s.runtimeUrl);
   const changesMode = scopeFilter === "all" ? "working_tree_composite" : scopeFilter;
   const changesState = useGitPanelState(changesMode);
   const searchQuery = useSearchWorkspaceFilesQuery({
@@ -45,17 +39,9 @@ export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelPr
     enabled: scopeFilter === "all" && search.trim().length > 0,
   });
   const { openFile, openFileDiff } = useWorkspaceFileActions();
-  const refreshFiles = () => {
-    void Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceFilesScopeKey(runtimeUrl, materializedWorkspaceId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, materializedWorkspaceId),
-      }),
-      changesState.refetch(),
-    ]);
-  };
+  const { refreshFiles } = useWorkspaceFilesRefresh({
+    refetchChanges: changesState.refetch,
+  });
   const changedSections = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return changesState.sections

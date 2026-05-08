@@ -21,17 +21,17 @@ import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type {
-  AutomationResponse,
-  AutomationRunResponse,
-  CreateAutomationRequest,
-  UpdateAutomationRequest,
-} from "@/lib/access/cloud/client";
+  AutomationRecord,
+  AutomationRunRecord,
+  CreateAutomationInput,
+  UpdateAutomationInput,
+} from "@/lib/domain/automations/automation-ui-records";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 
-const EMPTY_AUTOMATIONS: AutomationResponse[] = [];
-const EMPTY_AUTOMATION_RUNS: AutomationRunResponse[] = [];
+const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
+const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];
 
 interface AutomationsScreenProps {
   selectedAutomationId?: string | null;
@@ -44,7 +44,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
   const { refetch: refetchWorkspaces } = useWorkspaces();
-  const [editingAutomation, setEditingAutomation] = useState<AutomationResponse | null>(null);
+  const [editingAutomation, setEditingAutomation] = useState<AutomationRecord | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
 
@@ -76,7 +76,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     setEditorOpen(true);
   };
 
-  const openEdit = (automation: AutomationResponse) => {
+  const openEdit = (automation: AutomationRecord) => {
     setEditingAutomation(automation);
     setEditorOpen(true);
   };
@@ -88,12 +88,12 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   };
 
-  const handleCreate = async (body: CreateAutomationRequest) => {
+  const handleCreate = async (body: CreateAutomationInput) => {
     const created = await actions.createAutomation(body);
     navigate(`/automations/${created.id}`);
   };
 
-  const handleUpdate = async (automationId: string, body: UpdateAutomationRequest) => {
+  const handleUpdate = async (automationId: string, body: UpdateAutomationInput) => {
     await actions.updateAutomation({ automationId, body });
   };
 
@@ -111,7 +111,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     }
   }, [navigate, refreshCloudWorkspace, selectWorkspace, showToast]);
 
-  const handleOpenLocalWorkspace = async (run: AutomationRunResponse) => {
+  const handleOpenLocalWorkspace = async (run: AutomationRunRecord) => {
     if (!run.anyharnessWorkspaceId) {
       return;
     }

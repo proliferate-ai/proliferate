@@ -9,7 +9,7 @@ import {
   formatSupportContextLabel,
   normalizeSupportMessageForSend,
 } from "@/lib/domain/support/formatting";
-import type { SupportMessageContext } from "@/lib/access/cloud/client";
+import type { SupportMessageContext } from "@/lib/domain/support/types";
 import { useTauriDiagnosticsActions } from "@/hooks/access/tauri/use-diagnostics-actions";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useAuthStore } from "@/stores/auth/auth-store";

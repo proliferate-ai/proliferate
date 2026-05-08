@@ -1,8 +1,8 @@
 import { AUTOMATION_RUN_COPY } from "@/copy/automations/automation-copy";
 import type {
-  AutomationResponse,
-  AutomationRunResponse,
-} from "@/lib/access/cloud/client";
+  AutomationRecord,
+  AutomationRunRecord,
+} from "@/lib/domain/automations/automation-ui-records";
 import { formatAutomationTimestamp } from "./schedule";
 
 export interface AutomationRowViewModel {
@@ -30,7 +30,7 @@ function compactStatusMessage(message: string): string {
 }
 
 export function buildAutomationRowViewModel(
-  automation: AutomationResponse,
+  automation: AutomationRecord,
 ): AutomationRowViewModel {
   const paused = !automation.enabled;
   return {
@@ -142,7 +142,7 @@ function formatMonthDay(date: Date, timezone?: string | null): string {
   }).format(date);
 }
 
-export function automationRunStatusLabel(run: AutomationRunResponse): string {
+export function automationRunStatusLabel(run: AutomationRunRecord): string {
   switch (run.status) {
     case "queued":
       return run.executionTarget === "local"
@@ -175,7 +175,7 @@ export function automationRunStatusLabel(run: AutomationRunResponse): string {
   }
 }
 
-export function automationRunTimestampLabel(run: AutomationRunResponse): string {
+export function automationRunTimestampLabel(run: AutomationRunRecord): string {
   if (run.triggerKind === "manual") {
     return `Requested ${formatAutomationTimestamp(run.createdAt)}`;
   }

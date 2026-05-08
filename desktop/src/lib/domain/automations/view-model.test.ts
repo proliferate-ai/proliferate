@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type {
-  AutomationResponse,
-  AutomationRunResponse,
-} from "@/lib/access/cloud/client";
+  AutomationRecord,
+  AutomationRunRecord,
+} from "@/lib/domain/automations/automation-ui-records";
 import {
   automationRunStatusLabel,
   buildAutomationRowViewModel,
@@ -10,7 +10,7 @@ import {
 } from "./view-model";
 import { validateAutomationTimezone } from "./schedule";
 
-function automation(overrides: Partial<AutomationResponse> = {}): AutomationResponse {
+function automation(overrides: Partial<AutomationRecord> = {}): AutomationRecord {
   return {
     id: "automation-1",
     gitOwner: "proliferate-ai",
@@ -37,7 +37,7 @@ function automation(overrides: Partial<AutomationResponse> = {}): AutomationResp
   };
 }
 
-function run(overrides: Partial<AutomationRunResponse> = {}): AutomationRunResponse {
+function run(overrides: Partial<AutomationRunRecord> = {}): AutomationRunRecord {
   return {
     id: "run-1",
     automationId: "automation-1",
@@ -171,7 +171,7 @@ describe("automationRunStatusLabel", () => {
 
   it("keeps unknown statuses visible", () => {
     expect(automationRunStatusLabel(run({
-      status: "bogus" as AutomationRunResponse["status"],
+      status: "bogus" as AutomationRunRecord["status"],
     }))).toBe("Unknown status: bogus");
   });
 });

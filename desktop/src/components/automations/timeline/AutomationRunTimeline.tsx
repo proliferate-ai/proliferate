@@ -1,30 +1,30 @@
 import { memo, type KeyboardEvent } from "react";
-import type { AutomationRunResponse } from "@/lib/access/cloud/client";
+import type { AutomationRunRecord } from "@/lib/domain/automations/automation-ui-records";
 import {
   automationRunStatusLabel,
   automationRunTimestampLabel,
 } from "@/lib/domain/automations/view-model";
 
 interface AutomationRunTimelineProps {
-  runs: AutomationRunResponse[];
+  runs: AutomationRunRecord[];
   loading: boolean;
   pendingCloudWorkspaceId?: string | null;
   openableLocalWorkspaceIds?: ReadonlySet<string>;
   onOpenCloudWorkspace?: (cloudWorkspaceId: string) => void;
-  onOpenLocalWorkspace?: (run: AutomationRunResponse) => void;
+  onOpenLocalWorkspace?: (run: AutomationRunRecord) => void;
 }
 
 interface AutomationRunTimelineRowProps {
-  run: AutomationRunResponse;
+  run: AutomationRunRecord;
   pendingCloudWorkspaceId?: string | null;
   openableLocalWorkspaceIds: ReadonlySet<string>;
   onOpenCloudWorkspace?: (cloudWorkspaceId: string) => void;
-  onOpenLocalWorkspace?: (run: AutomationRunResponse) => void;
+  onOpenLocalWorkspace?: (run: AutomationRunRecord) => void;
 }
 
 const EMPTY_LOCAL_WORKSPACE_IDS = new Set<string>();
 
-function triggerKindLabel(kind: AutomationRunResponse["triggerKind"]): string {
+function triggerKindLabel(kind: AutomationRunRecord["triggerKind"]): string {
   return kind === "manual" ? "Manual" : "Scheduled";
 }
 

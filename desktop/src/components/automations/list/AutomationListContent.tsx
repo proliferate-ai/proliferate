@@ -1,14 +1,14 @@
 import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
-import type { AutomationResponse } from "@/lib/access/cloud/client";
+import type { AutomationRecord } from "@/lib/domain/automations/automation-ui-records";
 import { AutomationRow } from "./AutomationRow";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 
 interface AutomationListContentProps {
-  automations: AutomationResponse[];
+  automations: AutomationRecord[];
   loading: boolean;
   busy: boolean;
   onSelect: (automationId: string) => void;
-  onEdit: (automation: AutomationResponse) => void;
+  onEdit: (automation: AutomationRecord) => void;
   onPause: (automationId: string) => void;
   onResume: (automationId: string) => void;
   onRunNow: (automationId: string) => void;
