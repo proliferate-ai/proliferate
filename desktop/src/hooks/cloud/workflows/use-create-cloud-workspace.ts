@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
@@ -18,7 +18,9 @@ import {
   createPendingWorkspaceAttemptId,
   type PendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/creation/pending-entry";
-import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
+import { useCloudCredentialCache } from "@/hooks/access/cloud/use-cloud-credential-cache";
+import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -26,12 +28,8 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import { workspaceCollectionsScopeKey, getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
-import {
-  type WorkspaceCollections,
-  upsertCloudWorkspaceCollections,
-} from "@/lib/domain/workspaces/cloud/collections";
-import { cloudBillingKey, cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
+import { useWorkspaceCollectionsCache } from "@/hooks/workspaces/cache/use-workspace-collections-cache";
+import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useCloudCredentialActions } from "@/hooks/cloud/workflows/use-cloud-credential-actions";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import {
@@ -75,7 +73,6 @@ function buildRepoTargetFromRequest(
 }
 
 export function useCreateCloudWorkspace() {
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const branchPrefixType = useUserPreferencesStore((state) => state.branchPrefixType);
@@ -83,6 +80,14 @@ export function useCreateCloudWorkspace() {
   const { selectWorkspace } = useWorkspaceSelection();
   const { beginPendingWorkspace, failPendingEntry, finalizeSelection } = useWorkspaceEntryFlow();
   const { syncCloudCredential } = useCloudCredentialActions();
+  const { invalidateCloudCredentials } = useCloudCredentialCache();
+  const invalidateCloudBillingState = useInvalidateCloudBillingState();
+  const { clearCachedCloudWorkspaceConnections } = useCloudWorkspaceConnectionCache();
+  const { getWorkspaceCollections } = useWorkspaceCollectionsCache({
+    runtimeUrl,
+    cloudActive: true,
+  });
+  const { upsertCloudWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
 
   const createMutation = useMutation<CloudWorkspaceDetail, Error, Parameters<typeof createCloudWorkspace>[0]>({
     meta: {
@@ -103,21 +108,11 @@ export function useCreateCloudWorkspace() {
       }
     },
     onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(queryClient, workspace.id);
-      queryClient.setQueriesData<WorkspaceCollections | undefined>(
-        { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-        (collections) => upsertCloudWorkspaceCollections(collections, workspace),
-      );
+      await clearCachedCloudWorkspaceConnections(workspace.id);
+      upsertCloudWorkspace(workspace);
       await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: cloudBillingKey(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: cloudCredentialsKey(),
-        }),
+        invalidateCloudBillingState(),
+        invalidateCloudCredentials(),
       ]);
     },
   });
@@ -133,10 +128,7 @@ export function useCreateCloudWorkspace() {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
     const attemptId = createPendingWorkspaceAttemptId();
-    const cloudWorkspaces = getWorkspaceCollectionsFromCache(
-      queryClient,
-      runtimeUrl,
-    )?.cloudWorkspaces ?? [];
+    const cloudWorkspaces = getWorkspaceCollections()?.cloudWorkspaces ?? [];
     const knownBranchNames = collectKnownCloudBranchNames({
       target: args.target,
       cloudWorkspaces,
@@ -297,8 +289,7 @@ export function useCreateCloudWorkspace() {
     createCloudWorkspaceMutation,
     failPendingEntry,
     finalizeSelection,
-    queryClient,
-    runtimeUrl,
+    getWorkspaceCollections,
     selectWorkspace,
     setPendingWorkspaceEntry,
   ]);

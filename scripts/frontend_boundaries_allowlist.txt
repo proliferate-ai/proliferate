@@ -8,11 +8,6 @@ ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/hooks/workspaces/use-workspace-boot
 ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/hooks/workspaces/use-workspace-display-name-actions.ts 3 raw AnyHarness client before access migration
 ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/lib/workflows/sessions/session-runtime.ts 6 raw AnyHarness client before access migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/chat/use-chat-prompt-actions.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-cloud-workspace-actions.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-create-cloud-workspace.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-resync-cloud-repo-file.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/lifecycle/use-runtime-input-sync-runtime.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/workflows/use-save-cloud-repo-config.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/session-stream-side-effects.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/use-session-runtime-actions.ts 2 query cache ownership before access/cache migration

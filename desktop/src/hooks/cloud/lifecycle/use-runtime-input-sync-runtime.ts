@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   createRuntimeInputSyncQueueState,
   dequeueRuntimeInputSyncDescriptor,
@@ -18,15 +17,11 @@ import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
+import { useCloudCredentialCache } from "@/hooks/access/cloud/use-cloud-credential-cache";
+import { useCloudRepoConfigCache } from "@/hooks/access/cloud/use-cloud-repo-config-cache";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import {
-  cloudCredentialsKey,
-  cloudRepoConfigKey,
-  cloudRepoConfigsKey,
-  isCloudWorkspaceRepoConfigStatusQueryKey,
-} from "@/hooks/access/cloud/query-keys";
 import { syncLocalCloudCredentialToCloud } from "@/lib/access/cloud/credential-sync";
 import { subscribeRuntimeInputSyncEvents } from "./runtime-input-sync-events";
 
@@ -88,7 +83,6 @@ function classifyRuntimeInputSyncFailure(error: unknown): RuntimeInputSyncFailur
 }
 
 export function useRuntimeInputSyncRuntime() {
-  const queryClient = useQueryClient();
   const { listSyncableCloudCredentials } = useTauriCredentialsActions();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
@@ -100,17 +94,15 @@ export function useRuntimeInputSyncRuntime() {
   const queueRef = useRef<RuntimeInputSyncQueueState>(createRuntimeInputSyncQueueState());
   const inFlightRef = useRef(false);
   const runtimeUrlRef = useRef(runtimeUrl);
-  const queryClientRef = useRef(queryClient);
   const keepFreshActiveRef = useRef(false);
   const previousOnlineRef = useRef(online);
+  const { invalidateCloudCredentials } = useCloudCredentialCache();
+  const { invalidateCloudRepoConfigs } = useCloudRepoConfigCache();
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
 
   useEffect(() => {
     runtimeUrlRef.current = runtimeUrl;
   }, [runtimeUrl]);
-
-  useEffect(() => {
-    queryClientRef.current = queryClient;
-  }, [queryClient]);
 
   const keepFreshActive =
     preferencesHydrated && cloudRuntimeInputSyncEnabled && cloudActive && online;
@@ -162,20 +154,12 @@ export function useRuntimeInputSyncRuntime() {
         content,
       },
     );
-    await Promise.all([
-      queryClientRef.current.invalidateQueries({ queryKey: cloudRepoConfigsKey() }),
-      queryClientRef.current.invalidateQueries({
-        queryKey: cloudRepoConfigKey(descriptor.gitOwner, descriptor.gitRepoName),
-      }),
-      queryClientRef.current.invalidateQueries({
-        predicate: (query) => isCloudWorkspaceRepoConfigStatusQueryKey(query.queryKey),
-      }),
-    ]);
+    await invalidateCloudRepoConfigs(descriptor);
     trackProductEvent("cloud_repo_file_resynced", {
       tracked_file_count: response.trackedFiles.length,
       tracked_file_source: file.sourceKind,
     });
-  }, []);
+  }, [invalidateCloudRepoConfigs]);
 
   const processDescriptor = useCallback(async (
     descriptor: RuntimeInputSyncDescriptor,
@@ -184,17 +168,15 @@ export function useRuntimeInputSyncRuntime() {
       case "credential":
         await syncLocalCloudCredentialToCloud(descriptor.provider);
         await Promise.all([
-          queryClientRef.current.invalidateQueries({ queryKey: cloudCredentialsKey() }),
-          queryClientRef.current.invalidateQueries({
-            queryKey: workspaceCollectionsScopeKey(runtimeUrlRef.current),
-          }),
+          invalidateCloudCredentials(),
+          invalidateWorkspaceCollections(),
         ]);
         return;
       case "repo_tracked_file":
         await syncRepoFile(descriptor);
         return;
     }
-  }, [syncRepoFile]);
+  }, [invalidateCloudCredentials, invalidateWorkspaceCollections, syncRepoFile]);
 
   const runQueuedDescriptors = useCallback(async (trigger: RuntimeInputSyncTrigger) => {
     if (

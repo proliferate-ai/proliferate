@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { saveCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
@@ -8,11 +8,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import {
-  cloudRepoConfigKey,
-  cloudRepoConfigsKey,
-  isCloudWorkspaceRepoConfigStatusQueryKey,
-} from "@/hooks/access/cloud/query-keys";
+import { useCloudRepoConfigCache } from "@/hooks/access/cloud/use-cloud-repo-config-cache";
 import { emitRuntimeInputSyncEvent } from "../lifecycle/runtime-input-sync-events";
 
 interface SaveCloudRepoConfigInput {
@@ -53,7 +49,7 @@ export async function buildTrackedFilesPayload(
 
 export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | null) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const queryClient = useQueryClient();
+  const { invalidateCloudRepoConfigs } = useCloudRepoConfigCache();
 
   return useMutation<CloudRepoConfig, Error, SaveCloudRepoConfigInput>({
     meta: {
@@ -89,15 +85,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
         return;
       }
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: cloudRepoConfigsKey() }),
-        queryClient.invalidateQueries({
-          queryKey: cloudRepoConfigKey(repository.gitOwner, repository.gitRepoName),
-        }),
-        queryClient.invalidateQueries({
-          predicate: (query) => isCloudWorkspaceRepoConfigStatusQueryKey(query.queryKey),
-        }),
-      ]);
+      await invalidateCloudRepoConfigs(repository);
 
       trackProductEvent("cloud_repo_config_saved", {
         env_var_count: Object.keys(variables.envVars).length,
