@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { AppCommandActions } from "@/hooks/app/use-app-command-actions";
+import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
 
 const AppCommandActionsContext = createContext<AppCommandActions | null>(null);
 

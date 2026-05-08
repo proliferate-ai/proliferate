@@ -17,9 +17,9 @@ import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarU
 import { IconButton } from "@/components/ui/IconButton";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SplitPanel } from "@/components/ui/icons";
-import { useMainScreenActions } from "@/hooks/main/use-main-screen-actions";
-import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
-import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
+import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
+import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
+import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";

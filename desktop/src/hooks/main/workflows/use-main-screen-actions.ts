@@ -1,11 +1,10 @@
 import { useCallback } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { updateCloudWorkspaceBranch } from "@/lib/access/cloud/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -18,11 +17,11 @@ import {
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
-} from "./use-main-screen-state";
+} from "@/hooks/main/facade/use-main-screen-state";
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
   openPublishDialogState,
-} from "./publish-dialog-state";
+} from "@/lib/domain/workspaces/creation/publish-dialog-state";
 import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow";
 
 interface UseMainScreenActionsArgs {
@@ -30,12 +29,14 @@ interface UseMainScreenActionsArgs {
   existingPr: MainScreenDataState["existingPr"];
 }
 
+// Owns user-action callbacks for the Main workspace shell. It receives layout
+// setters from the facade hook and delegates query cache writes to cache hooks.
 export function useMainScreenActions({
   layout,
   existingPr,
 }: UseMainScreenActionsArgs) {
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const invalidateWorkspaceCollections = useWorkspaceCollectionsInvalidation(runtimeUrl);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -162,13 +163,10 @@ export function useMainScreenActions({
     if (cloudWorkspaceId) {
       await updateCloudWorkspaceBranch(cloudWorkspaceId, newName).catch(() => undefined);
     }
-    await queryClient.invalidateQueries({
-      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-    });
+    await invalidateWorkspaceCollections();
   }, [
-    queryClient,
+    invalidateWorkspaceCollections,
     renameBranchMutation,
-    runtimeUrl,
     getWorkspaceRuntimeBlockReason,
     selectedWorkspaceId,
     showToast,

@@ -1,5 +1,5 @@
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import type { AppCommandActions } from "@/hooks/app/use-app-command-actions";
+import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";
 import { resolveSidebarShortcutDigitTarget } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
@@ -9,6 +9,8 @@ import {
   runUndoCommand,
 } from "@/lib/infra/dom/dom-select-all";
 
+// Owns global app shortcut registration. App command behavior stays in the
+// workflow actions passed by the caller.
 export function useAppShortcuts(actions: AppCommandActions): void {
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();

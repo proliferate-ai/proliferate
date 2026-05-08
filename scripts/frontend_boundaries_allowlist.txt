@@ -21,7 +21,6 @@ QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cloud/use-save-cloud-repo-con
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cowork/use-cowork-artifact-refresh.ts 4 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cowork/use-cowork-session-actions.ts 7 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/cowork/use-cowork-thread-workflow.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/main/use-main-screen-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/session-stream-side-effects.ts 5 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/sessions/use-session-runtime-actions.ts 2 query cache ownership before access/cache migration
