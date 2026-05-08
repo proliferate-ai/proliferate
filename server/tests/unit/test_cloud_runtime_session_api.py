@@ -6,8 +6,8 @@ import httpx
 import pytest
 
 from proliferate.server.cloud.runtime import session_api
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
-from proliferate.server.cloud.runtime.session_api import (
+from proliferate.integrations.anyharness import (
+    CloudRuntimeReconnectError,
     CloudRuntimePromptDeliveryUncertainError,
     CloudRuntimeRequestRejectedError,
 )

@@ -3,54 +3,20 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from uuid import UUID
 
 import httpx
 
+from proliferate.integrations.anyharness import (
+    CloudRuntimeOperationError,
+    RemoteTerminalCommandRun,
+    RemoteWorkspaceFileState,
+    RemoteWorkspaceSetupStart,
+    auth_headers,
+    response_preview,
+)
 from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.utils.time import duration_ms
-
-
-class CloudRuntimeOperationError(RuntimeError):
-    """Raised when a runtime-backed file or setup operation fails."""
-
-
-@dataclass(frozen=True)
-class RemoteWorkspaceFileState:
-    exists: bool
-    version_token: str
-
-
-@dataclass(frozen=True)
-class RemoteWorkspaceSetupStart:
-    terminal_id: str | None
-    command_run_id: str | None
-    status: str
-
-
-@dataclass(frozen=True)
-class RemoteTerminalCommandRun:
-    id: str
-    status: str
-    exit_code: int | None
-    stdout: str | None
-    stderr: str | None
-    combined_output: str | None
-    output_truncated: bool
-
-
-def _auth_headers(access_token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {access_token}"}
-
-
-def _response_preview(text: str, *, max_chars: int = 240) -> str | None:
-    normalized = text.strip()
-    if not normalized:
-        return None
-    if len(normalized) <= max_chars:
-        return normalized
-    return f"{normalized[:max_chars]}..."
 
 
 def _raise_runtime_operation_error(
@@ -59,7 +25,7 @@ def _raise_runtime_operation_error(
 ) -> None:
     raise CloudRuntimeOperationError(
         f"{action} failed with status {response.status_code}: "
-        f"{_response_preview(response.text) or 'no response body'}"
+        f"{response_preview(response.text) or 'no response body'}"
     )
 
 
@@ -75,7 +41,7 @@ async def read_remote_workspace_file_state(
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/files/file",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
             params={"path": relative_path},
         )
     if response.status_code == 404:
@@ -115,7 +81,7 @@ async def write_remote_workspace_file(
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.put(
             f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/files/file",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
             json={
                 "path": relative_path,
                 "content": content,
@@ -148,7 +114,7 @@ async def start_remote_workspace_setup(
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/setup-start",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
             json={"command": command, "baseRef": base_ref},
         )
     if not response.is_success:
@@ -189,7 +155,7 @@ async def get_remote_terminal_command_run(
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             f"{runtime_url}/v1/terminal-command-runs/{command_run_id}",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
         )
     if not response.is_success:
         _raise_runtime_operation_error("Remote command-run read", response)

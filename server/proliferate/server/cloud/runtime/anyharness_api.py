@@ -6,29 +6,20 @@ import asyncio
 import logging
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
 import httpx
 
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
+from proliferate.integrations.anyharness import (
+    CloudRuntimeReconnectError,
+    ResolvedRemoteWorkspace,
+    auth_headers,
+    response_preview,
+)
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.utils.time import duration_ms
-
-
-class CloudRuntimeReconnectError(RuntimeError):
-    """Raised when a persistent sandbox cannot be reused safely."""
-
-
-@dataclass(frozen=True)
-class ResolvedRemoteWorkspace:
-    workspace_id: str
-    repo_root_id: str
-
-
-def _auth_headers(access_token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {access_token}"}
 
 
 def _agent_readiness_summary(agent_summaries: Sequence[dict[str, Any]]) -> str:
@@ -86,15 +77,6 @@ def _agent_install_timeout_seconds(kind: str) -> float:
     return 180.0
 
 
-def _response_preview(text: str, *, max_chars: int = 240) -> str | None:
-    normalized = text.strip()
-    if not normalized:
-        return None
-    if len(normalized) <= max_chars:
-        return normalized
-    return f"{normalized[:max_chars]}..."
-
-
 async def wait_for_runtime_health(
     runtime_url: str,
     *,
@@ -145,7 +127,7 @@ async def wait_for_runtime_health(
                         attempt=attempt,
                         status_code=response.status_code,
                         elapsed_ms=duration_ms(attempt_started),
-                        response_preview=_response_preview(response.text),
+                        response_preview=response_preview(response.text),
                     )
             except httpx.HTTPError as exc:
                 successes = 0
@@ -179,7 +161,7 @@ async def verify_runtime_auth_enforced(
         async with httpx.AsyncClient(timeout=5.0) as client:
             auth_response = await client.get(
                 f"{runtime_url}/v1/agents",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
             )
 
             if not auth_response.is_success:
@@ -190,7 +172,7 @@ async def verify_runtime_auth_enforced(
                     runtime_url=runtime_url,
                     elapsed_ms=duration_ms(verify_started),
                     status_code=auth_response.status_code,
-                    response_preview=_response_preview(auth_response.text),
+                    response_preview=response_preview(auth_response.text),
                 )
                 if auth_response.status_code == 401:
                     raise CloudRuntimeReconnectError(
@@ -223,7 +205,7 @@ async def verify_runtime_auth_enforced(
             runtime_url=runtime_url,
             elapsed_ms=duration_ms(verify_started),
             status_code=unauth_response.status_code,
-            response_preview=_response_preview(unauth_response.text),
+            response_preview=response_preview(unauth_response.text),
         )
         raise CloudRuntimeReconnectError(
             "Runtime did not reject an unauthenticated request during auth verification."
@@ -255,7 +237,7 @@ async def update_runtime_worktree_retention_policy(
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.put(
                 f"{runtime_url}/v1/worktrees/retention-policy",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
                 json={
                     "maxMaterializedWorktreesPerRepo": max_materialized_worktrees_per_repo,
                 },
@@ -290,7 +272,7 @@ async def run_runtime_worktree_retention(
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{runtime_url}/v1/worktrees/retention/run",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
                 json={},
             )
             response.raise_for_status()
@@ -316,7 +298,7 @@ async def _list_remote_agents(
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(
             f"{runtime_url}/v1/agents",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
         )
         response.raise_for_status()
         payload = response.json()
@@ -351,7 +333,7 @@ async def _install_remote_agent(
         async with httpx.AsyncClient(timeout=_agent_install_timeout_seconds(kind)) as client:
             response = await client.post(
                 f"{runtime_url}/v1/agents/{kind}/install",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
                 json={},
             )
             response.raise_for_status()
@@ -479,7 +461,7 @@ async def resolve_remote_workspace(
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             f"{runtime_url}/v1/workspaces/resolve",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
             json={
                 "path": runtime_workdir,
                 "origin": {"kind": "human", "entrypoint": "cloud"},
@@ -547,7 +529,7 @@ async def prepare_remote_mobility_destination(
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{runtime_url}/v1/repo-roots/{repo_root_id}/mobility/prepare-destination",
-            headers=_auth_headers(access_token),
+            headers=auth_headers(access_token),
             json={
                 "requestedBranch": requested_branch,
                 "requestedBaseSha": requested_base_sha,

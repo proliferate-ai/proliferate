@@ -20,6 +20,7 @@ from proliferate.db.store.cloud_repo_config import (
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.organizations import load_active_membership
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
+from proliferate.integrations.anyharness import CloudRuntimeOperationError
 from proliferate.server.billing.service import (
     get_billing_snapshot,
     repo_limit_for_billing_snapshot,
@@ -53,7 +54,6 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
     run_workspace_saved_setup,
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
-from proliferate.server.cloud.runtime.workspace_operations import CloudRuntimeOperationError
 
 
 def _default_repo_config_response() -> CloudRepoConfigResponse:

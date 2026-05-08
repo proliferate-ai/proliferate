@@ -20,10 +20,10 @@ from proliferate.db.store.cloud_workspaces import (
     update_workspace_repo_apply_status_by_id,
     workspace_repo_apply_lock,
 )
+from proliferate.integrations.anyharness import CloudRuntimeOperationError
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.workspace_operations import (
-    CloudRuntimeOperationError,
     read_remote_workspace_file_state,
     start_remote_workspace_setup,
     write_remote_workspace_file,

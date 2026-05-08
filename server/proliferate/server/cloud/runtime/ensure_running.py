@@ -12,6 +12,7 @@ from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_id,
     persist_runtime_reconnect_state_for_workspace,
 )
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import (
     SandboxProvider,
     SandboxProviderKind,
@@ -19,7 +20,6 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
 )
 from proliferate.server.cloud.runtime.anyharness_api import (
-    CloudRuntimeReconnectError,
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
 )

@@ -6,8 +6,8 @@ import httpx
 import pytest
 
 from proliferate.server.cloud.runtime import anyharness_api
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.anyharness_api import (
-    CloudRuntimeReconnectError,
     _install_required_synced_providers,
     _synced_ready_providers,
 )

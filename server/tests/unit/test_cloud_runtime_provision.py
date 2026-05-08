@@ -15,7 +15,7 @@ from proliferate.integrations.sandbox import SandboxProviderKind
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
-from proliferate.server.cloud.runtime.anyharness_api import ResolvedRemoteWorkspace
+from proliferate.integrations.anyharness import ResolvedRemoteWorkspace
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.credentials import (
     ClaudeProvisionCredential,

@@ -41,7 +41,7 @@ from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
 from proliferate.server.cloud.runtime import service as runtime_service
 from proliferate.server.cloud.runtime import credential_freshness as credential_freshness_service
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service

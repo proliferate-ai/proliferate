@@ -4,37 +4,25 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
-from proliferate.server.cloud.runtime.anyharness_api import (
+from proliferate.integrations.anyharness import (
+    CloudRuntimePromptDeliveryUncertainError,
     CloudRuntimeReconnectError,
-    _auth_headers,
-    _response_preview,
+    CloudRuntimeRequestRejectedError,
+    RemoteSession,
+    auth_headers,
+    response_preview,
 )
-
-
-@dataclass(frozen=True)
-class RemoteSession:
-    session_id: str
-
-
-class CloudRuntimeRequestRejectedError(CloudRuntimeReconnectError):
-    """Runtime definitively rejected a session API request."""
-
-
-class CloudRuntimePromptDeliveryUncertainError(CloudRuntimeReconnectError):
-    """Prompt request was sent but the delivery outcome is unknown."""
-
 
 CONFIG_APPLY_POLL_INTERVAL_SECONDS = 1.0
 CONFIG_APPLY_TIMEOUT_SECONDS = 30.0
 
 
 def _safe_runtime_error(action: str, response: httpx.Response) -> CloudRuntimeRequestRejectedError:
-    preview = _response_preview(response.text)
+    preview = response_preview(response.text)
     suffix = f" Response: {preview}" if preview else ""
     return CloudRuntimeRequestRejectedError(
         f"Cloud runtime failed to {action} (status {response.status_code}).{suffix}"
@@ -72,7 +60,7 @@ async def create_runtime_session(
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{runtime_url}/v1/sessions",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
                 json=body,
             )
     except httpx.HTTPError as exc:
@@ -132,7 +120,7 @@ async def apply_runtime_reasoning_effort(
             while time.monotonic() < deadline:
                 live_response = await client.get(
                     f"{runtime_url}/v1/sessions/{session_id}/live-config",
-                    headers=_auth_headers(access_token),
+                    headers=auth_headers(access_token),
                 )
                 if not live_response.is_success:
                     raise _safe_runtime_error("load automation runtime config", live_response)
@@ -167,7 +155,7 @@ async def apply_runtime_reasoning_effort(
                 if not attempted_apply:
                     apply_response = await client.post(
                         f"{runtime_url}/v1/sessions/{session_id}/config-options",
-                        headers=_auth_headers(access_token),
+                        headers=auth_headers(access_token),
                         json={"configId": raw_config_id, "value": reasoning_effort},
                     )
                     if not apply_response.is_success:
@@ -212,7 +200,7 @@ async def prompt_runtime_session(
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{runtime_url}/v1/sessions/{session_id}/prompt",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
                 json={"blocks": [{"type": "text", "text": prompt}]},
             )
     except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
@@ -242,7 +230,7 @@ async def close_runtime_session(
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{runtime_url}/v1/sessions/{session_id}/close",
-                headers=_auth_headers(access_token),
+                headers=auth_headers(access_token),
             )
     except httpx.HTTPError as exc:
         raise CloudRuntimeReconnectError("Failed to close automation runtime session.") from exc

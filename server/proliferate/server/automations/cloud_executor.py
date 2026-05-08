@@ -31,13 +31,15 @@ from proliferate.db.store.automation_run_claims import (
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
+from proliferate.integrations.anyharness import (
+    CloudRuntimePromptDeliveryUncertainError,
+    CloudRuntimeReconnectError,
+    CloudRuntimeRequestRejectedError,
+)
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.service import get_workspace_connection, provision_workspace
 from proliferate.server.cloud.runtime.session_api import (
-    CloudRuntimePromptDeliveryUncertainError,
-    CloudRuntimeRequestRejectedError,
     apply_runtime_reasoning_effort,
     close_runtime_session,
     create_runtime_session,

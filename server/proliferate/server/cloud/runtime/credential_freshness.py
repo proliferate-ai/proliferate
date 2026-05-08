@@ -22,6 +22,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     runtime_environment_credential_apply_lock,
     save_runtime_environment_state,
 )
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import (
     SandboxProvider,
     SandboxRuntimeContext,
@@ -30,7 +31,6 @@ from proliferate.integrations.sandbox import (
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
-    CloudRuntimeReconnectError,
     reconcile_remote_agents,
     verify_runtime_auth_enforced,
     wait_for_runtime_health,

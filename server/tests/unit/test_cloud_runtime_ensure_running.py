@@ -8,7 +8,7 @@ import pytest
 
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.runtime import ensure_running
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 
 
 def _make_workspace(*, runtime_url: str | None = "https://runtime.invalid") -> SimpleNamespace:

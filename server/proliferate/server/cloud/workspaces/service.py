@@ -52,6 +52,7 @@ from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
 from proliferate.db.store.organizations import load_active_membership
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
 from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
 from proliferate.server.billing.service import (
@@ -73,7 +74,6 @@ from proliferate.server.cloud.repos.service import (
 from proliferate.server.cloud.repos.service import (
     get_repo_branches_for_user as get_github_repo_branches,
 )
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.credential_freshness import (
     build_credential_freshness_snapshot,
     build_credential_revision_state,
