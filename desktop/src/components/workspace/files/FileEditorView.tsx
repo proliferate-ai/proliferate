@@ -39,7 +39,7 @@ import {
   useReadWorkspaceFileQuery,
 } from "@anyharness/sdk-react";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useResolvedMode } from "@/hooks/theme/use-theme";
+import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
 import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
 import {

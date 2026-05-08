@@ -1,7 +1,7 @@
 import type {
   AvailableCardModel,
   ConnectedCardModel,
-} from "@/hooks/mcp/use-connectors-catalog-state";
+} from "@/lib/domain/mcp/connector-catalog-view-model";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";
 import { ConnectorStatusChip } from "@/components/plugins/status/ConnectorStatusChip";

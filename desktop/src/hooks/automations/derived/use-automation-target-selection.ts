@@ -6,13 +6,12 @@ import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
 } from "@/lib/domain/automations/target-selection";
-import type { AutomationResponse } from "@/lib/access/cloud/client";
 import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
 
 interface UseAutomationTargetSelectionInput {
-  automation: AutomationResponse | null;
+  automation: AutomationTargetSelection | null;
   selectedTarget: AutomationTargetSelection | null;
   enabled?: boolean;
 }

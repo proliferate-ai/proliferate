@@ -21,7 +21,7 @@ import {
   type ColorMode,
   type ThemePreset,
 } from "@/config/theme";
-import { useColorMode, useThemePreset } from "@/hooks/theme/use-theme";
+import { useColorMode, useThemePreset } from "@/hooks/theme/workflows/use-theme-preferences";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const PRESET_LABELS: Record<ThemePreset, string> = {

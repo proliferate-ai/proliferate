@@ -18,7 +18,7 @@ import {
 } from "@anyharness/sdk-react";
 import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
-import { useReviewActions } from "@/hooks/reviews/use-review-actions";
+import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";

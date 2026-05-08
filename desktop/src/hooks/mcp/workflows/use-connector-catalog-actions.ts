@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useInstalledConnectorActions } from "@/hooks/mcp/use-installed-connector-actions";
+import { useInstalledConnectorActions } from "@/hooks/mcp/workflows/use-installed-connector-actions";
 import { useConnectOAuthConnector } from "@/hooks/mcp/workflows/use-connect-oauth-connector";
 import { useDeleteConnector } from "@/hooks/mcp/workflows/use-delete-connector";
 import { useInstallConnector } from "@/hooks/mcp/workflows/use-install-connector";
@@ -45,6 +45,7 @@ export function useConnectorCatalogActions({
 }: {
   closeModal: () => void;
 }) {
+  // Owns catalog-page connector actions and delete dialog state. Does not own catalog view models.
   const installedConnectorActions = useInstalledConnectorActions();
   const installMutation = useInstallConnector();
   const connectOAuthMutation = useConnectOAuthConnector();

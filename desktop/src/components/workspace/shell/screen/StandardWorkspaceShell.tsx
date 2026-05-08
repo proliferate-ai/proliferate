@@ -20,7 +20,7 @@ import { SplitPanel } from "@/components/ui/icons";
 import { useMainScreenActions } from "@/hooks/main/use-main-screen-actions";
 import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
 import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
-import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
+import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";

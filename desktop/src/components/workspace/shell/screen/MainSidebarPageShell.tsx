@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { IconButton } from "@/components/ui/IconButton";
 import { SplitPanel } from "@/components/ui/icons";
-import { useResize } from "@/hooks/layout/use-resize";
-import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
+import { useResize } from "@/hooks/ui/layout/use-resize";
+import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import {

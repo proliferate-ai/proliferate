@@ -1,5 +1,5 @@
-import { useConnectorCatalogActions } from "@/hooks/mcp/use-connector-catalog-actions";
-import { useConnectorsCatalogState } from "@/hooks/mcp/use-connectors-catalog-state";
+import { useConnectorCatalogActions } from "@/hooks/mcp/workflows/use-connector-catalog-actions";
+import { useConnectorsCatalogState } from "@/hooks/mcp/ui/use-connectors-catalog-state";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";

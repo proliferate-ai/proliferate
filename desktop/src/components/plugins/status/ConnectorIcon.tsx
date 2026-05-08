@@ -13,7 +13,7 @@ import posthogIcon from "@/assets/connector-icons/posthog.svg";
 import renderIcon from "@/assets/connector-icons/render.svg";
 import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
-import { useResolvedMode } from "@/hooks/theme/use-theme";
+import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { selectConnectorIconTileClass } from "@/lib/domain/mcp/connector-icon-tile";
 import {
   Calendar,

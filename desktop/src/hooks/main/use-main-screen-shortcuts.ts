@@ -1,4 +1,4 @@
-import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
+import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

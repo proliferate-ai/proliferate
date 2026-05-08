@@ -1,9 +1,4 @@
 import { useCallback } from "react";
-import type {
-  ReviewKind,
-  StartCodeReviewRequest,
-  StartPlanReviewRequest,
-} from "@anyharness/sdk";
 import {
   useSendReviewFeedbackMutation,
   useStartCodeReviewMutation,
@@ -14,12 +9,9 @@ import {
 } from "@anyharness/sdk-react";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import {
-  buildReviewRequest,
-  createReviewSetupDraft,
-  DEFAULT_REVIEW_MAX_ROUNDS,
-  resolveReviewExecutionModeIdForAgent,
-  resolveReviewPersonaTemplates,
-} from "@/lib/domain/reviews/review-config";
+  buildStartingReview,
+  resolveOneClickReviewRequest,
+} from "@/lib/domain/reviews/review-launch";
 import {
   type ReviewSetupAnchorRect,
   useReviewUiStore,
@@ -30,6 +22,8 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
+// Owns user-triggered review actions for the active session.
+// Does not own review setup dialog form state or active review read models.
 export function useReviewActions() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
@@ -203,63 +197,4 @@ export function useReviewActions() {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-interface ReviewLaunchSessionSlot {
-  agentKind: string;
-  modelId: string | null;
-  modeId: string | null;
-}
-
-function resolveOneClickReviewRequest(args: {
-  kind: ReviewKind;
-  parentSessionId: string;
-  parentSlot: ReviewLaunchSessionSlot;
-  reviewDefaultsByKind: ReturnType<typeof useUserPreferencesStore.getState>["reviewDefaultsByKind"];
-  reviewPersonalitiesByKind: ReturnType<typeof useUserPreferencesStore.getState>["reviewPersonalitiesByKind"];
-}): {
-  request: StartPlanReviewRequest | StartCodeReviewRequest | null;
-  error: string | null;
-} {
-  const parentAgentKind = args.parentSlot.agentKind?.trim() ?? "";
-  const sessionDefaults = {
-    agentKind: parentAgentKind,
-    modelId: args.parentSlot.modelId,
-    modeId: resolveReviewExecutionModeIdForAgent(parentAgentKind, args.parentSlot.modeId),
-  };
-  const personalityTemplates = resolveReviewPersonaTemplates(
-    args.kind,
-    args.reviewPersonalitiesByKind[args.kind] ?? [],
-  );
-  const draft = createReviewSetupDraft({
-    kind: args.kind,
-    sessionDefaults,
-    storedDefaults: args.reviewDefaultsByKind[args.kind],
-    personalityTemplates,
-  });
-  const result = buildReviewRequest(draft, args.parentSessionId);
-  if (!result.request) {
-    return result;
-  }
-  return { request: result.request, error: null };
-}
-
-function buildStartingReview(
-  parentSessionId: string,
-  kind: ReviewKind,
-  request: StartPlanReviewRequest | StartCodeReviewRequest,
-) {
-  return {
-    parentSessionId,
-    kind,
-    maxRounds: request.maxRounds ?? DEFAULT_REVIEW_MAX_ROUNDS,
-    autoIterate: request.autoIterate ?? true,
-    reviewers: request.reviewers.map((reviewer) => ({
-      id: reviewer.personaId,
-      label: reviewer.label,
-      agentKind: reviewer.agentKind,
-      modelId: reviewer.modelId ?? "",
-    })),
-    startedAt: Date.now(),
-  };
 }

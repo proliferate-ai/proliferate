@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useResolvedMode } from "@/hooks/theme/use-theme";
+import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { highlightCode, type HighlightTheme } from "@/lib/infra/editor/highlighting";
 
 export function resolveHighlightTheme(resolvedMode: string): HighlightTheme {

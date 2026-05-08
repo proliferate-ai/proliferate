@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { SUPPORT_EMAIL_ADDRESS } from "@/config/capabilities";
-import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
+import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useSendSupportMessage } from "@/hooks/access/cloud/use-send-support-message";
 import { useSessionDebugActions } from "@/hooks/support/use-session-debug-actions";
 import {

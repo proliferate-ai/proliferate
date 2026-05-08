@@ -1,9 +1,4 @@
 import { useCallback } from "react";
-import { useSyncExternalStore } from "react";
-import {
-  subscribe,
-  getResolvedMode,
-} from "@/config/theme";
 import type { ThemePreset, ColorMode } from "@/config/theme";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
@@ -23,9 +18,4 @@ export function useColorMode(): [ColorMode, (m: ColorMode) => void] {
     setPreference("colorMode", value);
   }, [setPreference]);
   return [mode, set];
-}
-
-export function useResolvedMode(): "dark" | "light" {
-  const mode = useSyncExternalStore(subscribe, getResolvedMode, getResolvedMode);
-  return mode;
 }

@@ -9,12 +9,12 @@ import { AutomationDetailContent } from "@/components/automations/list/Automatio
 import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
 import { AutomationListContent } from "@/components/automations/list/AutomationListContent";
 import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
-import { useAutomationActions } from "@/hooks/automations/use-automation-actions";
+import { useAutomationActions } from "@/hooks/automations/workflows/use-automation-actions";
 import {
   useAutomationDetail,
   useAutomationRuns,
   useAutomations,
-} from "@/hooks/automations/use-automations";
+} from "@/hooks/access/cloud/automations/use-automations";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";

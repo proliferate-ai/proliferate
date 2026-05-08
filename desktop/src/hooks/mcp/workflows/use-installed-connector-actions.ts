@@ -4,6 +4,7 @@ import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useInstalledConnectorActions() {
+  // Owns installed connector row actions and pending toggles. Does not own catalog modal state.
   const showToast = useToastStore((state) => state.show);
   const [pendingConnectionIds, setPendingConnectionIds] = useState<Set<string>>(new Set());
   const toggleMutation = useToggleConnector();

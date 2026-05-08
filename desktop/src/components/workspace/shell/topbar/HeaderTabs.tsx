@@ -21,7 +21,7 @@ import {
   renderChatMenuStatus,
   renderChatTabIcon,
 } from "@/components/workspace/shell/tabs/tab-rendering";
-import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
+import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionForkActions } from "@/hooks/sessions/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";

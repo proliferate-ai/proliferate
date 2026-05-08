@@ -1,4 +1,4 @@
-import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
+import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import type { AppCommandActions } from "@/hooks/app/use-app-command-actions";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";

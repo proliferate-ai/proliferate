@@ -1,5 +1,5 @@
 import { ReviewSetupDialog } from "@/components/workspace/reviews/ReviewSetupDialog";
-import { useReviewSetupDialogState } from "@/hooks/reviews/use-review-setup-dialog-state";
+import { useReviewSetupDialogState } from "@/hooks/reviews/workflows/use-review-setup-dialog-state";
 
 export function ConnectedReviewSetupDialog() {
   const state = useReviewSetupDialogState();
