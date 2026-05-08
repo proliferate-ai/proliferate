@@ -16,6 +16,12 @@ from proliferate.integrations.anyharness.models import (
     RemoteWorkspaceSetupStart,
     ResolvedRemoteWorkspace,
 )
+from proliferate.integrations.anyharness.workspace_ops import (
+    get_remote_terminal_command_run,
+    read_remote_workspace_file_state,
+    start_remote_workspace_setup,
+    write_remote_workspace_file,
+)
 
 __all__ = [
     "CloudRuntimeOperationError",
@@ -28,5 +34,9 @@ __all__ = [
     "RemoteWorkspaceSetupStart",
     "ResolvedRemoteWorkspace",
     "auth_headers",
+    "get_remote_terminal_command_run",
+    "read_remote_workspace_file_state",
     "response_preview",
+    "start_remote_workspace_setup",
+    "write_remote_workspace_file",
 ]

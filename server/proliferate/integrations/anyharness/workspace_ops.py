@@ -1,22 +1,16 @@
-"""Remote AnyHarness workspace file/setup operations."""
+"""Workspace file/setup operations for AnyHarness runtimes."""
 
 from __future__ import annotations
 
-import time
-from uuid import UUID
-
 import httpx
 
-from proliferate.integrations.anyharness import (
-    CloudRuntimeOperationError,
+from proliferate.integrations.anyharness.client import auth_headers, response_preview
+from proliferate.integrations.anyharness.errors import CloudRuntimeOperationError
+from proliferate.integrations.anyharness.models import (
     RemoteTerminalCommandRun,
     RemoteWorkspaceFileState,
     RemoteWorkspaceSetupStart,
-    auth_headers,
-    response_preview,
 )
-from proliferate.server.cloud._logging import log_cloud_event
-from proliferate.utils.time import duration_ms
 
 
 def _raise_runtime_operation_error(
@@ -35,9 +29,7 @@ async def read_remote_workspace_file_state(
     *,
     anyharness_workspace_id: str,
     relative_path: str,
-    workspace_id: UUID | None = None,
 ) -> RemoteWorkspaceFileState:
-    read_started = time.perf_counter()
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/files/file",
@@ -55,15 +47,6 @@ async def read_remote_workspace_file_state(
         raise CloudRuntimeOperationError(
             f"Remote file '{relative_path}' did not return a usable version token."
         )
-
-    log_cloud_event(
-        "cloud runtime file state loaded",
-        workspace_id=workspace_id,
-        runtime_url=runtime_url,
-        remote_workspace_id=anyharness_workspace_id,
-        relative_path=relative_path,
-        elapsed_ms=duration_ms(read_started),
-    )
     return RemoteWorkspaceFileState(exists=True, version_token=version_token)
 
 
@@ -75,9 +58,7 @@ async def write_remote_workspace_file(
     relative_path: str,
     content: str,
     expected_version_token: str,
-    workspace_id: UUID | None = None,
 ) -> None:
-    write_started = time.perf_counter()
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.put(
             f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/files/file",
@@ -91,15 +72,6 @@ async def write_remote_workspace_file(
     if not response.is_success:
         _raise_runtime_operation_error("Remote file write", response)
 
-    log_cloud_event(
-        "cloud runtime file written",
-        workspace_id=workspace_id,
-        runtime_url=runtime_url,
-        remote_workspace_id=anyharness_workspace_id,
-        relative_path=relative_path,
-        elapsed_ms=duration_ms(write_started),
-    )
-
 
 async def start_remote_workspace_setup(
     runtime_url: str,
@@ -108,9 +80,7 @@ async def start_remote_workspace_setup(
     anyharness_workspace_id: str,
     command: str,
     base_ref: str | None,
-    workspace_id: UUID | None = None,
 ) -> RemoteWorkspaceSetupStart:
-    start_started = time.perf_counter()
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/setup-start",
@@ -129,14 +99,6 @@ async def start_remote_workspace_setup(
         terminal_id = None
     if command_run_id is not None and not isinstance(command_run_id, str):
         command_run_id = None
-
-    log_cloud_event(
-        "cloud runtime setup started",
-        workspace_id=workspace_id,
-        runtime_url=runtime_url,
-        remote_workspace_id=anyharness_workspace_id,
-        elapsed_ms=duration_ms(start_started),
-    )
     return RemoteWorkspaceSetupStart(
         terminal_id=terminal_id,
         command_run_id=command_run_id,
@@ -149,9 +111,7 @@ async def get_remote_terminal_command_run(
     access_token: str,
     *,
     command_run_id: str,
-    workspace_id: UUID | None = None,
 ) -> RemoteTerminalCommandRun:
-    read_started = time.perf_counter()
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.get(
             f"{runtime_url}/v1/terminal-command-runs/{command_run_id}",
@@ -165,14 +125,6 @@ async def get_remote_terminal_command_run(
     if not isinstance(run_id, str) or not isinstance(status, str):
         raise CloudRuntimeOperationError("Remote command-run detail was malformed.")
     exit_code = payload.get("exitCode")
-    log_cloud_event(
-        "cloud runtime command-run loaded",
-        workspace_id=workspace_id,
-        runtime_url=runtime_url,
-        command_run_id=command_run_id,
-        status=status,
-        elapsed_ms=duration_ms(read_started),
-    )
     return RemoteTerminalCommandRun(
         id=run_id,
         status=status,

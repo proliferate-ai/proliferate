@@ -16,7 +16,6 @@ MODELS_ORM_IMPORT server/proliferate/server/cloud/workspaces/models.py 1 transit
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/runtime/anyharness_api.py 1 raw protocol client before integration migration
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/runtime/credential_freshness.py 1 raw protocol client before integration migration
 PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/runtime/session_api.py 1 raw protocol client before integration migration
-PRODUCT_RAW_HTTP_IMPORT server/proliferate/server/cloud/runtime/workspace_operations.py 1 raw protocol client before integration migration
 SERVICE_ORM_IMPORT server/proliferate/server/ai_magic/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/repo_config/service.py 1 transitional service imports ORM/auth model
