@@ -30,6 +30,8 @@ export function useRunWorkspaceCommand({
   isRuntimeReady,
   openTerminalPanel,
 }: UseRunWorkspaceCommandArgs) {
+  // Owns the workspace Run command action exposed by the shell chrome. Terminal
+  // record creation remains delegated to terminal workflow hooks.
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
   const { createRunTab } = useTerminalActions();

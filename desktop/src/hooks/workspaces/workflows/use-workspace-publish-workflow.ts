@@ -14,7 +14,7 @@ import {
   type PublishIntent,
   type PublishPullRequestDraft,
 } from "@/lib/domain/workspaces/creation/publish-workflow";
-import { runWorkspacePublishWorkflow } from "./run-workspace-publish-workflow";
+import { runWorkspacePublishWorkflow } from "@/lib/workflows/workspaces/run-workspace-publish-workflow";
 
 export interface UseWorkspacePublishWorkflowOptions {
   workspaceId: string | null;
@@ -31,6 +31,8 @@ export function useWorkspacePublishWorkflow({
   repoDefaultBranch,
   enabled,
 }: UseWorkspacePublishWorkflowOptions) {
+  // Owns publish-dialog draft state plus submit wiring. The ordered Git
+  // operation runner is plain workflow code under lib/workflows.
   const [commitDraft, setCommitDraft] = useState<PublishCommitDraft>({
     summary: "",
     includeUnstaged: false,

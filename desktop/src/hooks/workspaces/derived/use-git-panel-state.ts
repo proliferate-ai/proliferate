@@ -1,4 +1,4 @@
-import type { GitChangedFile, GitDiffFile, RepoRoot, Workspace } from "@anyharness/sdk";
+import type { GitChangedFile, GitDiffFile } from "@anyharness/sdk";
 import {
   useGitBranchDiffFilesQuery,
   useGitStatusQuery,
@@ -7,11 +7,6 @@ import { useMemo } from "react";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
-import {
-  buildLogicalWorkspaces,
-  findLogicalWorkspace,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   buildGitPanelFiles,
   buildGitPanelSections,
@@ -20,21 +15,17 @@ import {
   gitPanelRuntimeBlockWorkspaceId,
   repoRootDefaultBranch,
   resolveGitPanelBaseRef,
-  sourceRootForGitPanel,
   type GitPanelMode,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import { resolveGitPanelWorkspaceContext } from "@/lib/domain/workspaces/changes/git-panel-workspace-context";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
 
-interface GitPanelWorkspaceContext {
-  activeWorkspaceId: string | null;
-  sourceRepoRootPath: string | null;
-  repoRoot: RepoRoot | null;
-}
-
+// Owns read-only Git panel state for changed-file surfaces. Git mutations stay
+// in the component/action hooks that own the user intent.
 export function useGitPanelState(mode: GitPanelMode) {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
@@ -127,71 +118,4 @@ export function useGitPanelState(mode: GitPanelMode) {
       }
     },
   };
-}
-
-function resolveGitPanelWorkspaceContext(
-  workspaceCollections: WorkspaceCollections | undefined,
-  selectedWorkspaceId: string | null,
-  selectedLogicalWorkspaceId: string | null,
-): GitPanelWorkspaceContext {
-  const activeWorkspaceId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
-  if (!workspaceCollections || !activeWorkspaceId) {
-    return {
-      activeWorkspaceId,
-      sourceRepoRootPath: null,
-      repoRoot: null,
-    };
-  }
-
-  if (selectedLogicalWorkspaceId) {
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: workspaceCollections.localWorkspaces,
-      repoRoots: workspaceCollections.repoRoots,
-      cloudWorkspaces: workspaceCollections.cloudWorkspaces,
-      currentSelectionId: selectedWorkspaceId,
-    });
-    const logicalWorkspace = findLogicalWorkspace(logicalWorkspaces, selectedLogicalWorkspaceId);
-    if (logicalWorkspace) {
-      return {
-        activeWorkspaceId,
-        sourceRepoRootPath: sourceRootForGitPanel(
-          logicalWorkspace.sourceRoot,
-          logicalWorkspace.localWorkspace?.path ?? null,
-        ),
-        repoRoot: logicalWorkspace.repoRoot,
-      };
-    }
-  }
-
-  const selectedWorkspace = findWorkspace(workspaceCollections.workspaces, selectedWorkspaceId);
-  const repoRoot = findRepoRoot(workspaceCollections.repoRoots, selectedWorkspace);
-
-  return {
-    activeWorkspaceId,
-    sourceRepoRootPath: sourceRootForGitPanel(
-      selectedWorkspace?.sourceRepoRootPath ?? repoRoot?.path ?? null,
-      selectedWorkspace?.path ?? null,
-    ),
-    repoRoot,
-  };
-}
-
-function findWorkspace(
-  workspaces: readonly Workspace[],
-  workspaceId: string | null,
-): Workspace | null {
-  if (!workspaceId) {
-    return null;
-  }
-  return workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
-}
-
-function findRepoRoot(
-  repoRoots: readonly RepoRoot[],
-  workspace: Workspace | null,
-): RepoRoot | null {
-  if (!workspace?.repoRootId) {
-    return null;
-  }
-  return repoRoots.find((repoRoot) => repoRoot.id === workspace.repoRootId) ?? null;
 }

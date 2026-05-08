@@ -10,7 +10,7 @@ import { ArrowUpRight, ChevronRight } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFilesRefresh } from "@/hooks/workspaces/files/workflows/use-workspace-files-refresh";
-import { useGitPanelState } from "@/hooks/workspaces/use-git-panel-state";
+import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
   buildChangedFileTree,
   type ChangedFileTreeNode,
