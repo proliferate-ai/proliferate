@@ -11,12 +11,7 @@ import httpx
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.integrations.sentry import capture_server_sentry_exception
-from proliferate.server.anonymous_telemetry.service import (
-    AnonymousTelemetryEvent,
-    VersionPayload,
-    load_or_create_local_install_id,
-    record_anonymous_telemetry as record_anonymous_telemetry_with_db,
-)
+from proliferate.server.anonymous_telemetry import service as anonymous_telemetry_service
 from proliferate.utils.telemetry_mode import (
     get_server_telemetry_mode,
     is_anonymous_telemetry_enabled,
@@ -26,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 _VERSION_INTERVAL_SECONDS = 24 * 60 * 60
 _SURFACE = "server"
+
+AnonymousTelemetryEvent = anonymous_telemetry_service.AnonymousTelemetryEvent
+VersionPayload = anonymous_telemetry_service.VersionPayload
+load_or_create_local_install_id = anonymous_telemetry_service.load_or_create_local_install_id
 
 
 def _server_version() -> str:
@@ -72,10 +71,11 @@ async def _post_remote_event(event: AnonymousTelemetryEvent) -> None:
         response.raise_for_status()
 
 
-async def record_anonymous_telemetry(event: AnonymousTelemetryEvent) -> None:
-    async with db_engine.async_session_factory() as db:
-        async with db.begin():
-            await record_anonymous_telemetry_with_db(db, event)
+async def record_anonymous_telemetry(
+    event: AnonymousTelemetryEvent,
+) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await anonymous_telemetry_service.record_anonymous_telemetry(db, event)
 
 
 async def emit_server_anonymous_version() -> None:

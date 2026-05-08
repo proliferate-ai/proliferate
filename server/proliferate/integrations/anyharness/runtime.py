@@ -67,9 +67,7 @@ async def check_runtime_auth_enforcement(
                 headers=auth_headers(access_token),
             )
             unauth_response = (
-                await client.get(f"{runtime_url}/v1/agents")
-                if auth_response.is_success
-                else None
+                await client.get(f"{runtime_url}/v1/agents") if auth_response.is_success else None
             )
     except httpx.HTTPError as exc:
         raise CloudRuntimeReconnectError(
@@ -105,11 +103,7 @@ async def list_runtime_agents(
         raise CloudRuntimeReconnectError("Failed to list cloud runtime agents.") from exc
     if not isinstance(payload, list):
         raise CloudRuntimeReconnectError("Cloud runtime did not return a valid agent list.")
-    return [
-        summary
-        for item in payload
-        if (summary := _parse_agent_summary(item)) is not None
-    ]
+    return [summary for item in payload if (summary := _parse_agent_summary(item)) is not None]
 
 
 async def install_runtime_agent(

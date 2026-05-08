@@ -39,14 +39,14 @@ from proliferate.integrations.anyharness.workspace_ops import (
     start_remote_workspace_setup,
     write_remote_workspace_file,
 )
-from proliferate.integrations.anyharness.worktrees import (
-    run_runtime_worktree_retention,
-    update_runtime_worktree_retention_policy,
-)
 from proliferate.integrations.anyharness.workspaces import (
     list_runtime_workspaces,
     prepare_runtime_mobility_destination,
     resolve_runtime_workspace,
+)
+from proliferate.integrations.anyharness.worktrees import (
+    run_runtime_worktree_retention,
+    update_runtime_worktree_retention_policy,
 )
 
 __all__ = [
