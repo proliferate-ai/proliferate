@@ -14,7 +14,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import {
   useActiveSessionLaunchState,
   useActiveSessionSurfaceSnapshot,
-} from "./use-active-chat-session-selectors";
+} from "./derived/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "./use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
 import {

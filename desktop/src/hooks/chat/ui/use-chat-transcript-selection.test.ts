@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   attachChatTranscriptSelectionListeners,
   createChatTranscriptSelectionHandlers,
-} from "@/hooks/chat/use-chat-transcript-selection";
+} from "@/hooks/chat/ui/use-chat-transcript-selection";
 import {
   EMPTY_TRANSCRIPT_TARGET_FACTS,
   type TranscriptSelectionClampEdge,

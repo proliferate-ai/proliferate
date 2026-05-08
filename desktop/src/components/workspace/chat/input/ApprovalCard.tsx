@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
-import { useActivePendingApproval } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatPermissionActions } from "@/hooks/chat/use-chat-permission-actions";
 import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 

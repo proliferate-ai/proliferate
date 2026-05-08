@@ -34,6 +34,8 @@ const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];
 const EMPTY_PENDING_INTERACTIONS: readonly PendingInteraction[] = [];
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 
+// Owns read-only projections for the active chat session. Action hooks should
+// consume these selectors rather than re-reading session stores ad hoc.
 export interface ActiveLaunchIdentity {
   kind: string;
   modelId: string;

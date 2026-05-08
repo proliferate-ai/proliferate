@@ -4,7 +4,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
+import { useActiveSessionSurfaceSnapshot } from "./derived/use-active-chat-session-selectors";
 
 /**
  * Disambiguates the loading sub-states that feed ChatLoadingHero. The loading

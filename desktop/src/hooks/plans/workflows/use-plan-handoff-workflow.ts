@@ -7,7 +7,7 @@ import type {
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { PLAN_HANDOFF_DEFAULT_PROMPT } from "@/copy/plans/plan-prompts";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
+import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatLaunchCatalog } from "@/hooks/chat/use-chat-launch-catalog";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";

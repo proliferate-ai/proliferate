@@ -18,7 +18,7 @@ import {
   useActiveSessionId,
   useActiveSessionCanCancelState,
   useActiveSessionRunningState,
-} from "@/hooks/chat/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
 import { useChatComposerKeyboard } from "@/hooks/chat/ui/use-chat-composer-keyboard";
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
