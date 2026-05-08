@@ -91,9 +91,7 @@ async def test_cloud_credential_sync_list_and_delete_thread_request_db(
 
     response = await client.get("/v1/cloud/credentials", headers=headers)
     assert response.status_code == 200
-    claude_status = next(
-        item for item in response.json() if item["provider"] == "claude"
-    )
+    claude_status = next(item for item in response.json() if item["provider"] == "claude")
     assert claude_status["synced"] is True
 
     response = await client.put(
@@ -108,14 +106,18 @@ async def test_cloud_credential_sync_list_and_delete_thread_request_db(
     assert response.json() == {"ok": True, "changed": False}
 
     records = (
-        await db_session.execute(
-            select(CloudCredential).where(
-                CloudCredential.user_id == uuid.UUID(tokens["user_id"]),
-                CloudCredential.provider == "claude",
-                CloudCredential.revoked_at.is_(None),
+        (
+            await db_session.execute(
+                select(CloudCredential).where(
+                    CloudCredential.user_id == uuid.UUID(tokens["user_id"]),
+                    CloudCredential.provider == "claude",
+                    CloudCredential.revoked_at.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(records) == 1
 
     response = await client.delete("/v1/cloud/credentials/claude", headers=headers)
@@ -124,9 +126,7 @@ async def test_cloud_credential_sync_list_and_delete_thread_request_db(
 
     response = await client.get("/v1/cloud/credentials", headers=headers)
     assert response.status_code == 200
-    claude_status = next(
-        item for item in response.json() if item["provider"] == "claude"
-    )
+    claude_status = next(item for item in response.json() if item["provider"] == "claude")
     assert claude_status["synced"] is False
 
 
