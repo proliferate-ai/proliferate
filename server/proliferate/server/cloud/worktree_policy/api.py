@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.worktree_policy.models import (
     CloudWorktreeRetentionPolicyRequest,
     CloudWorktreeRetentionPolicyResponse,
@@ -39,11 +38,8 @@ async def put_cloud_worktree_retention_policy_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> CloudWorktreeRetentionPolicyResponse:
-    try:
-        return await set_worktree_retention_policy(
-            db,
-            user.id,
-            max_materialized_worktrees_per_repo=body.max_materialized_worktrees_per_repo,
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await set_worktree_retention_policy(
+        db,
+        user.id,
+        max_materialized_worktrees_per_repo=body.max_materialized_worktrees_per_repo,
+    )
