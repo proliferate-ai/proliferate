@@ -17,7 +17,6 @@ from proliferate.server.cloud.credentials.service import (
     list_cloud_credentials,
     sync_cloud_credential_for_user,
 )
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
 router = APIRouter()
 
@@ -37,10 +36,7 @@ async def sync_cloud_credential_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudCredentialMutationResponse:
-    try:
-        changed = await sync_cloud_credential_for_user(db, user.id, provider, body)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    changed = await sync_cloud_credential_for_user(db, user.id, provider, body)
     return CloudCredentialMutationResponse(changed=changed)
 
 
@@ -50,8 +46,5 @@ async def delete_cloud_credential_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudCredentialMutationResponse:
-    try:
-        changed = await delete_cloud_credential_for_user(db, user.id, provider)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    changed = await delete_cloud_credential_for_user(db, user.id, provider)
     return CloudCredentialMutationResponse(changed=changed)

@@ -128,3 +128,32 @@ async def test_cloud_credential_sync_list_and_delete_thread_request_db(
         item for item in response.json() if item["provider"] == "claude"
     )
     assert claude_status["synced"] is False
+
+
+@pytest.mark.asyncio
+async def test_cloud_credential_sync_invalid_payload_uses_product_error_handler(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="cloud-credential-invalid@example.com",
+    )
+
+    response = await client.put(
+        "/v1/cloud/credentials/claude",
+        headers=_headers(tokens),
+        json={
+            "authMode": "env",
+            "envVars": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": {
+            "code": "invalid_payload",
+            "message": "Claude cloud sync requires at least one env var.",
+        },
+    }
