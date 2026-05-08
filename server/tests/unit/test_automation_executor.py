@@ -9,6 +9,7 @@ from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_DESKTOP,
+    AUTOMATION_LOCAL_CLAIM_MAX_LIMIT,
     AUTOMATION_RUN_STATUS_DISPATCHING,
 )
 from proliferate.db import engine as engine_module
@@ -32,14 +33,13 @@ from proliferate.db.store.automations import (
     create_manual_run_for_user,
 )
 from proliferate.server.automations.local_executor_service import (
-    MAX_LOCAL_CLAIM_LIMIT,
     _normalize_local_error_code,
 )
 from proliferate.server.automations.worker.main import _parse_args
 
 
 def test_local_executor_service_caps_claims_and_allowlists_error_codes() -> None:
-    assert MAX_LOCAL_CLAIM_LIMIT == 1
+    assert AUTOMATION_LOCAL_CLAIM_MAX_LIMIT == 1
     assert _normalize_local_error_code("dispatch_uncertain") == "dispatch_uncertain"
     assert _normalize_local_error_code("local_prompt_send_failed") == "local_prompt_send_failed"
     assert _normalize_local_error_code("raw/path/leak") == "local_unexpected_executor_error"

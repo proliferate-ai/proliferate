@@ -1,4 +1,9 @@
-"""Local automation executor service operations."""
+"""API-facing service for external desktop automation executors.
+
+This module backs request-driven endpoints that let a desktop executor claim,
+heartbeat, and record progress for local automation runs. It is intentionally
+not under ``automations/worker`` because the server is not executing the work.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +14,12 @@ from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_DESKTOP,
     AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
+    AUTOMATION_LOCAL_CLAIM_MAX_LIMIT,
+    AUTOMATION_LOCAL_CLAIM_TTL_SECONDS,
     AUTOMATION_LOCAL_ERROR_CODE_MAX_LENGTH,
+    AUTOMATION_LOCAL_FALLBACK_ERROR_CODE,
+    AUTOMATION_LOCAL_REPOSITORY_IDENTITIES_MAX_LIMIT,
+    AUTOMATION_LOCAL_SHARED_ERROR_CODES,
 )
 from proliferate.db.store.automation_run_claim_values import (
     AUTOMATION_ERROR_MESSAGES,
@@ -42,18 +52,6 @@ from proliferate.server.automations.models import (
 )
 from proliferate.utils.time import utcnow
 
-DEFAULT_LOCAL_CLAIM_TTL_SECONDS = 300.0
-MAX_LOCAL_CLAIM_LIMIT = 1
-MAX_LOCAL_REPOSITORY_IDENTITIES = 200
-LOCAL_FALLBACK_ERROR_CODE = "local_unexpected_executor_error"
-LOCAL_SHARED_ERROR_CODES = frozenset(
-    {
-        "agent_not_configured",
-        "dispatch_uncertain",
-        "stale_claim",
-    }
-)
-
 
 def _normalize_executor_id(value: str) -> str:
     return normalize_required_text(
@@ -64,7 +62,7 @@ def _normalize_executor_id(value: str) -> str:
 
 
 def _local_claim_ttl() -> timedelta:
-    return timedelta(seconds=DEFAULT_LOCAL_CLAIM_TTL_SECONDS)
+    return timedelta(seconds=AUTOMATION_LOCAL_CLAIM_TTL_SECONDS)
 
 
 def _local_mutation_response(
@@ -84,9 +82,9 @@ def _normalize_local_error_code(value: str) -> str:
     )
     if error_code.startswith("local_") and error_code in AUTOMATION_ERROR_MESSAGES:
         return error_code
-    if error_code in LOCAL_SHARED_ERROR_CODES:
+    if error_code in AUTOMATION_LOCAL_SHARED_ERROR_CODES:
         return error_code
-    return LOCAL_FALLBACK_ERROR_CODE
+    return AUTOMATION_LOCAL_FALLBACK_ERROR_CODE
 
 
 async def claim_local_runs(
@@ -94,9 +92,9 @@ async def claim_local_runs(
     body: LocalAutomationClaimRequest,
 ) -> LocalAutomationClaimListResponse:
     executor_id = _normalize_executor_id(body.executor_id)
-    limit = max(1, min(body.limit, MAX_LOCAL_CLAIM_LIMIT))
+    limit = max(1, min(body.limit, AUTOMATION_LOCAL_CLAIM_MAX_LIMIT))
     repositories = []
-    for item in body.available_repositories[:MAX_LOCAL_REPOSITORY_IDENTITIES]:
+    for item in body.available_repositories[:AUTOMATION_LOCAL_REPOSITORY_IDENTITIES_MAX_LIMIT]:
         identity = canonical_repo_identity(item.provider, item.owner, item.name)
         if identity is not None:
             repositories.append(identity)
