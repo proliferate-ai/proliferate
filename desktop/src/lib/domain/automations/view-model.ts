@@ -2,7 +2,7 @@ import { AUTOMATION_RUN_COPY } from "@/copy/automations/automation-copy";
 import type {
   AutomationRecord,
   AutomationRunRecord,
-} from "@/lib/domain/automations/automation-ui-records";
+} from "./records";
 import { formatAutomationTimestamp } from "./schedule";
 
 export interface AutomationRowViewModel {

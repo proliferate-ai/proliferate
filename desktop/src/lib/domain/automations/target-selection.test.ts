@@ -1,24 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
-import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
+import type {
+  AutomationTargetCloudWorkspaceRecord,
+  AutomationTargetRepoConfigRecord,
+} from "./records";
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
 } from "./target-selection";
 
 function repoConfig(
-  overrides: Partial<CloudRepoConfigSummary> & {
+  overrides: Partial<AutomationTargetRepoConfigRecord> & {
     gitOwner: string;
     gitRepoName: string;
   },
-): CloudRepoConfigSummary {
+): AutomationTargetRepoConfigRecord {
   return {
     gitOwner: overrides.gitOwner,
     gitRepoName: overrides.gitRepoName,
     configured: overrides.configured ?? true,
-    configuredAt: overrides.configuredAt ?? "2026-01-01T00:00:00Z",
-    filesVersion: overrides.filesVersion ?? 1,
   };
 }
 
@@ -44,41 +44,14 @@ function localRepository(
 function cloudWorkspace(
   owner: string,
   name: string,
-): CloudWorkspaceSummary {
+): AutomationTargetCloudWorkspaceRecord {
   return {
-    id: `${owner}-${name}-workspace`,
-    displayName: null,
     repo: {
       provider: "github",
       owner,
       name,
-      branch: "main",
-      baseBranch: "main",
     },
-    status: "ready",
-    workspaceStatus: "ready",
-    runtime: {
-      environmentId: "runtime",
-      generation: 1,
-      status: "running",
-      actionBlockKind: null,
-      actionBlockReason: null,
-    },
-    statusDetail: null,
-    lastError: null,
-    templateVersion: null,
-    updatedAt: null,
-    createdAt: null,
-    actionBlockKind: null,
-    actionBlockReason: null,
-    postReadyPhase: "complete",
-    postReadyFilesTotal: 0,
-    postReadyFilesApplied: 0,
-    postReadyStartedAt: null,
-    postReadyCompletedAt: null,
-    repoFilesLastFailedPath: null,
-    origin: null,
-  } as CloudWorkspaceSummary;
+  };
 }
 
 function target(
@@ -121,7 +94,6 @@ describe("buildAutomationTargetState", () => {
         gitOwner: "proliferate-ai",
         gitRepoName: "proliferate",
         configured: false,
-        configuredAt: null,
       })],
       cloudWorkspaces: [],
       repositories: [],
