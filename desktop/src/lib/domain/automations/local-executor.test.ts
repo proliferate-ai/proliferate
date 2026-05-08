@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { LocalAutomationRunClaimResponse } from "@/lib/access/cloud/client";
+import type {
+  AutomationRepoRootRecord,
+  AutomationRunClaimRecord,
+  AutomationWorkspaceRecord,
+} from "./local-executor-records";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,
@@ -10,24 +13,21 @@ import {
   workspaceMatchesAutomationPlan,
 } from "./local-executor";
 
-function repoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
+function repoRoot(overrides: Partial<AutomationRepoRootRecord> = {}): AutomationRepoRootRecord {
   return {
     id: "repo-1",
-    kind: "external",
     path: "/repo",
-    displayName: null,
     remoteProvider: "github",
     remoteOwner: "Proliferate-AI",
     remoteRepoName: "Proliferate",
-    remoteUrl: null,
     defaultBranch: "main",
-    createdAt: "2026-04-20T00:00:00Z",
-    updatedAt: "2026-04-20T00:00:00Z",
     ...overrides,
   };
 }
 
-function workspace(overrides: Partial<Workspace> = {}): Workspace {
+function workspace(
+  overrides: Partial<AutomationWorkspaceRecord> = {},
+): AutomationWorkspaceRecord {
   return {
     id: "workspace-1",
     kind: "local",
@@ -36,36 +36,17 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     displayName: null,
     currentBranch: "main",
     originalBranch: "main",
-    surface: "standard",
-    lifecycleState: "active",
-    cleanupState: "none",
-    origin: null,
-    executionSummary: null,
-    createdAt: "2026-04-20T00:00:00Z",
-    updatedAt: "2026-04-20T00:00:00Z",
     ...overrides,
   };
 }
 
-function claim(overrides: Partial<LocalAutomationRunClaimResponse> = {}): LocalAutomationRunClaimResponse {
+function claim(overrides: Partial<AutomationRunClaimRecord> = {}): AutomationRunClaimRecord {
   return {
     id: "fd253849-c4fe-4ec9-ade6-9dde6533bb64",
-    automationId: "automation-1",
-    status: "claimed",
-    executionTarget: "local",
     titleSnapshot: "Daily Check",
-    promptSnapshot: "Check the repo.",
     gitProviderSnapshot: "github",
     gitOwnerSnapshot: "proliferate-ai",
     gitRepoNameSnapshot: "proliferate",
-    agentKindSnapshot: "codex",
-    modelIdSnapshot: null,
-    modeIdSnapshot: null,
-    reasoningEffortSnapshot: null,
-    claimId: "claim-1",
-    claimExpiresAt: "2026-04-20T00:05:00Z",
-    anyharnessWorkspaceId: null,
-    anyharnessSessionId: null,
     ...overrides,
   };
 }

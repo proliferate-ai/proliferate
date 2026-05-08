@@ -1,8 +1,11 @@
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
-import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import type { AutomationExecutionTarget } from "./automation-records";
+import type {
+  AutomationTargetCloudWorkspaceRecord,
+  AutomationTargetRepoConfigRecord,
+} from "./target-records";
 
-export type AutomationExecutionTarget = "cloud" | "local";
+export type { AutomationExecutionTarget };
 
 export interface AutomationTargetSelection {
   executionTarget: AutomationExecutionTarget;
@@ -55,8 +58,8 @@ export interface AutomationTargetState {
 }
 
 interface BuildAutomationTargetStateInput {
-  repoConfigs: readonly CloudRepoConfigSummary[] | null | undefined;
-  cloudWorkspaces?: readonly CloudWorkspaceSummary[] | null | undefined;
+  repoConfigs: readonly AutomationTargetRepoConfigRecord[] | null | undefined;
+  cloudWorkspaces?: readonly AutomationTargetCloudWorkspaceRecord[] | null | undefined;
   repositories: readonly SettingsRepositoryEntry[] | null | undefined;
   selectedTarget: AutomationTargetSelection | null;
   savedTarget?: AutomationTargetSelection | null;
@@ -140,8 +143,8 @@ export function automationTargetId(target: AutomationTargetSelection): string {
 }
 
 function buildTargetRepoDrafts(input: {
-  repoConfigs: readonly CloudRepoConfigSummary[] | null | undefined;
-  cloudWorkspaces?: readonly CloudWorkspaceSummary[] | null | undefined;
+  repoConfigs: readonly AutomationTargetRepoConfigRecord[] | null | undefined;
+  cloudWorkspaces?: readonly AutomationTargetCloudWorkspaceRecord[] | null | undefined;
   repositories: readonly SettingsRepositoryEntry[] | null | undefined;
   savedTarget?: AutomationTargetSelection | null;
   editRepoIdentity?: AutomationTargetRepoIdentity | null;

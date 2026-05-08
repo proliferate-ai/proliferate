@@ -7,8 +7,6 @@ ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/hooks/workspaces/use-workspace-acti
 ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts 4 raw AnyHarness client before access migration
 ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/hooks/workspaces/use-workspace-display-name-actions.ts 3 raw AnyHarness client before access migration
 ANYHARNESS_CLIENT_OUTSIDE_ACCESS desktop/src/lib/workflows/sessions/session-runtime.ts 6 raw AnyHarness client before access migration
-DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/local-executor.ts 1 domain imports transport or UI types before lib cleanup
-DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/target-selection.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/chat/__fixtures__/playground.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/runtime-input-sync.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/files/file-visuals.ts 2 domain imports transport or UI types before lib cleanup

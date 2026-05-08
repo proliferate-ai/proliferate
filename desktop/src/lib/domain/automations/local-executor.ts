@@ -1,7 +1,8 @@
-import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type {
-  LocalAutomationRunClaimResponse,
-} from "@/lib/access/cloud/client";
+  AutomationRepoRootRecord,
+  AutomationRunClaimRecord,
+  AutomationWorkspaceRecord,
+} from "./local-executor-records";
 
 export interface LocalAutomationRepositoryIdentity {
   provider: string;
@@ -10,8 +11,8 @@ export interface LocalAutomationRepositoryIdentity {
 }
 
 export interface LocalAutomationRepoCandidate {
-  repoRoot: RepoRoot;
-  representativeWorkspace: Workspace | null;
+  repoRoot: AutomationRepoRootRecord;
+  representativeWorkspace: AutomationWorkspaceRecord | null;
   identity: LocalAutomationRepositoryIdentity;
 }
 
@@ -64,10 +65,10 @@ export function automationRepoIdentityKey(identity: LocalAutomationRepositoryIde
 }
 
 export function buildLocalAutomationRepoCandidates(args: {
-  repoRoots: readonly RepoRoot[];
-  workspaces: readonly Workspace[];
+  repoRoots: readonly AutomationRepoRootRecord[];
+  workspaces: readonly AutomationWorkspaceRecord[];
 }): LocalAutomationRepoCandidate[] {
-  const workspacesByRepoRoot = new Map<string, Workspace[]>();
+  const workspacesByRepoRoot = new Map<string, AutomationWorkspaceRecord[]>();
   for (const workspace of args.workspaces) {
     if (!workspace.repoRootId) continue;
     const entries = workspacesByRepoRoot.get(workspace.repoRootId) ?? [];
@@ -106,7 +107,7 @@ export function buildLocalAutomationRepoCandidates(args: {
 export function findCandidateForClaim(
   candidates: readonly LocalAutomationRepoCandidate[],
   claim: Pick<
-    LocalAutomationRunClaimResponse,
+    AutomationRunClaimRecord,
     "gitProviderSnapshot" | "gitOwnerSnapshot" | "gitRepoNameSnapshot"
   >,
 ): LocalAutomationRepoCandidate | null {
@@ -151,7 +152,7 @@ export function shouldUpdateAutomationWorkspaceDisplayName(args: {
 }
 
 export function buildLocalAutomationWorktreePlan(args: {
-  claim: LocalAutomationRunClaimResponse;
+  claim: AutomationRunClaimRecord;
   candidate: LocalAutomationRepoCandidate;
   homeDir: string;
   defaultBranch?: string | null;
@@ -184,11 +185,11 @@ export function buildLocalAutomationWorktreePlan(args: {
 }
 
 export function workspaceMatchesAutomationPlan(args: {
-  workspace: Workspace;
-  repoRoot: RepoRoot | null;
+  workspace: AutomationWorkspaceRecord;
+  repoRoot: AutomationRepoRootRecord | null;
   plan: Pick<LocalAutomationWorktreePlan, "branchName" | "repoRootId">;
   claim: Pick<
-    LocalAutomationRunClaimResponse,
+    AutomationRunClaimRecord,
     "gitProviderSnapshot" | "gitOwnerSnapshot" | "gitRepoNameSnapshot"
   >;
 }): boolean {

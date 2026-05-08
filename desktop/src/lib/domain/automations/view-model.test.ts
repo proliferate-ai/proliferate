@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   AutomationRecord,
   AutomationRunRecord,
-} from "@/lib/domain/automations/automation-ui-records";
+} from "./automation-records";
 import {
   automationRunStatusLabel,
   buildAutomationRowViewModel,
@@ -16,7 +16,6 @@ function automation(overrides: Partial<AutomationRecord> = {}): AutomationRecord
     gitOwner: "proliferate-ai",
     gitRepoName: "proliferate",
     title: "Daily check",
-    prompt: "Check the repo.",
     schedule: {
       rrule: "RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
       timezone: "UTC",
@@ -24,44 +23,19 @@ function automation(overrides: Partial<AutomationRecord> = {}): AutomationRecord
       nextRunAt: "2026-04-20T09:00:00Z",
     },
     executionTarget: "cloud",
-    agentKind: null,
-    modelId: null,
-    modeId: null,
-    reasoningEffort: null,
     enabled: true,
-    pausedAt: null,
-    lastScheduledAt: null,
-    createdAt: "2026-04-20T00:00:00Z",
-    updatedAt: "2026-04-20T00:00:00Z",
     ...overrides,
   };
 }
 
 function run(overrides: Partial<AutomationRunRecord> = {}): AutomationRunRecord {
   return {
-    id: "run-1",
-    automationId: "automation-1",
     triggerKind: "manual",
     scheduledFor: null,
     executionTarget: "cloud",
     status: "queued",
-    titleSnapshot: "Daily check",
-    agentKindSnapshot: "codex",
-    modelIdSnapshot: null,
-    modeIdSnapshot: null,
-    reasoningEffortSnapshot: null,
-    claimExpiresAt: null,
-    dispatchStartedAt: null,
-    dispatchedAt: null,
-    failedAt: null,
-    cloudWorkspaceId: null,
-    anyharnessWorkspaceId: null,
-    anyharnessSessionId: null,
-    cancelledAt: null,
-    lastErrorCode: null,
     lastErrorMessage: null,
     createdAt: "2026-04-20T00:00:00Z",
-    updatedAt: "2026-04-20T00:00:00Z",
     ...overrides,
   };
 }
@@ -78,7 +52,6 @@ describe("buildAutomationRowViewModel", () => {
   it("marks paused automations without implying a next run", () => {
     const view = buildAutomationRowViewModel(automation({
       enabled: false,
-      pausedAt: "2026-04-20T01:00:00Z",
       schedule: {
         rrule: "RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
         timezone: "UTC",
