@@ -2,8 +2,36 @@ import type {
   SessionMcpBindingSummary,
   SessionMcpServer,
 } from "@anyharness/sdk";
-import type { LocalStdioCandidate } from "@/lib/access/cloud/client";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
+
+type LocalStdioTemplateSource =
+  | { kind: "static"; value: string }
+  | { kind: "workspace_path" };
+
+interface LocalStdioArgTemplate {
+  source: LocalStdioTemplateSource;
+}
+
+interface LocalStdioEnvTemplate {
+  name: string;
+  source: Extract<LocalStdioTemplateSource, { kind: "static" }>;
+}
+
+export interface LocalStdioCandidate {
+  connectionId: string;
+  catalogEntryId: string;
+  serverName: string;
+  connectorName: string;
+  setupKind: "none" | "local_oauth";
+  localOauth?: {
+    provider: "google_workspace";
+    userGoogleEmail: string;
+    requiredScope: string;
+  } | null;
+  command: string;
+  args: LocalStdioArgTemplate[];
+  env: LocalStdioEnvTemplate[];
+}
 
 export interface LocalStdioFinalizationContext {
   workspacePath: string | null;

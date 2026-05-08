@@ -1,4 +1,4 @@
-import type { CloudAgentKind } from "@/lib/access/cloud/client";
+import type { CloudAgentKind } from "@/lib/domain/cloud/credentials";
 
 export type RuntimeInputSyncSourceKind =
   | "credential"

@@ -39,6 +39,9 @@ QUERY_CACHE_CALL_RE = re.compile(
     + "|".join(sorted(QUERY_CACHE_METHODS))
     + r")\s*\("
 )
+REACT_IMPORT_RE = re.compile(
+    r"^\s*import(?:\s+type)?(?:\s+[^;]*\s+from)?\s+['\"]react['\"]"
+)
 
 
 @dataclass(frozen=True)
@@ -152,6 +155,7 @@ def check_file(path: Path) -> list[Violation]:
         contains_openapi_client_verb = bool(OPENAPI_CLIENT_VERB_RE.search(line))
         contains_use_query_client = "useQueryClient" in line
         contains_query_cache_call = bool(QUERY_CACHE_CALL_RE.search(line))
+        contains_react_import = bool(REACT_IMPORT_RE.search(line))
         contains_legacy_access = (
             "@/platform/tauri" in line
             or "@/lib/integrations/cloud" in line
@@ -204,8 +208,7 @@ def check_file(path: Path) -> list[Violation]:
             add_if(
                 violations,
                 (
-                    '"react"' in line
-                    or "'react'" in line
+                    contains_react_import
                     or "@tanstack/react-query" in line
                     or "@/hooks/" in line
                     or "@/stores/" in line
@@ -223,8 +226,7 @@ def check_file(path: Path) -> list[Violation]:
             add_if(
                 violations,
                 (
-                    '"react"' in line
-                    or "'react'" in line
+                    contains_react_import
                     or "@tanstack/react-query" in line
                     or "@/components/" in line
                     or "@/hooks/" in line
