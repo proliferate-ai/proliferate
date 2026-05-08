@@ -13,6 +13,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.automations import (
+    AUTOMATION_EXECUTION_TARGET_LOCAL,
+    AUTOMATION_RUN_STATUS_QUEUED,
+    AUTOMATION_RUN_TRIGGER_MANUAL,
+    AUTOMATION_RUN_TRIGGER_SCHEDULED,
+)
 from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
 from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import Automation, AutomationRun
@@ -20,22 +26,6 @@ from proliferate.db.models.cloud import CloudRepoConfig
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
-
-AUTOMATION_EXECUTION_TARGET_CLOUD: Final = "cloud"
-AUTOMATION_EXECUTION_TARGET_LOCAL: Final = "local"
-AUTOMATION_RUN_TRIGGER_MANUAL: Final = "manual"
-AUTOMATION_RUN_TRIGGER_SCHEDULED: Final = "scheduled"
-AUTOMATION_RUN_STATUS_QUEUED: Final = "queued"
-AUTOMATION_RUN_STATUS_CLAIMED: Final = "claimed"
-AUTOMATION_RUN_STATUS_CREATING_WORKSPACE: Final = "creating_workspace"
-AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE: Final = "provisioning_workspace"
-AUTOMATION_RUN_STATUS_CREATING_SESSION: Final = "creating_session"
-AUTOMATION_RUN_STATUS_DISPATCHING: Final = "dispatching"
-AUTOMATION_RUN_STATUS_DISPATCHED: Final = "dispatched"
-AUTOMATION_RUN_STATUS_FAILED: Final = "failed"
-AUTOMATION_RUN_STATUS_CANCELLED: Final = "cancelled"
-AUTOMATION_EXECUTOR_KIND_CLOUD: Final = "cloud"
-AUTOMATION_EXECUTOR_KIND_DESKTOP: Final = "desktop"
 
 _UNSET: Final = object()
 

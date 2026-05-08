@@ -5,6 +5,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from proliferate.constants.automations import (
+    AUTOMATION_EXECUTION_TARGET_CLOUD,
+    AUTOMATION_EXECUTION_TARGET_LOCAL,
+    AUTOMATION_EXECUTOR_KIND_DESKTOP,
+    AUTOMATION_RUN_STATUS_DISPATCHING,
+)
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud import CloudRepoConfig
@@ -23,10 +29,6 @@ from proliferate.db.store.automation_run_claims import (
     sweep_expired_dispatching_runs,
 )
 from proliferate.db.store.automations import (
-    AUTOMATION_EXECUTION_TARGET_CLOUD,
-    AUTOMATION_EXECUTION_TARGET_LOCAL,
-    AUTOMATION_EXECUTOR_KIND_DESKTOP,
-    AUTOMATION_RUN_STATUS_DISPATCHING,
     create_manual_run_for_user,
 )
 from proliferate.server.automations.local_executor_service import (

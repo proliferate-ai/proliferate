@@ -5,6 +5,12 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID
 
+from proliferate.constants.automations import (
+    AUTOMATION_EXECUTION_TARGET_LOCAL,
+    AUTOMATION_EXECUTOR_KIND_DESKTOP,
+    AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
+    AUTOMATION_LOCAL_ERROR_CODE_MAX_LENGTH,
+)
 from proliferate.db.store.automation_run_claim_values import (
     AUTOMATION_ERROR_MESSAGES,
     AutomationRunClaimValue,
@@ -23,10 +29,7 @@ from proliferate.db.store.automation_run_claims import (
     mark_run_failed,
     mark_run_provisioning_workspace,
 )
-from proliferate.db.store.automations import (
-    AUTOMATION_EXECUTION_TARGET_LOCAL,
-    AUTOMATION_EXECUTOR_KIND_DESKTOP,
-)
+from proliferate.server.automations.domain.validation import normalize_required_text
 from proliferate.server.automations.models import (
     LocalAutomationAttachSessionRequest,
     LocalAutomationAttachWorkspaceRequest,
@@ -37,7 +40,6 @@ from proliferate.server.automations.models import (
     LocalAutomationMutationResponse,
     local_claim_payload,
 )
-from proliferate.server.automations.service import _normalize_required_text
 from proliferate.utils.time import utcnow
 
 DEFAULT_LOCAL_CLAIM_TTL_SECONDS = 300.0
@@ -54,7 +56,11 @@ LOCAL_SHARED_ERROR_CODES = frozenset(
 
 
 def _normalize_executor_id(value: str) -> str:
-    return _normalize_required_text(value, field_name="executorId", max_length=255)
+    return normalize_required_text(
+        value,
+        field_name="executorId",
+        max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
+    )
 
 
 def _local_claim_ttl() -> timedelta:
@@ -71,7 +77,11 @@ def _local_mutation_response(
 
 
 def _normalize_local_error_code(value: str) -> str:
-    error_code = _normalize_required_text(value, field_name="errorCode", max_length=64)
+    error_code = normalize_required_text(
+        value,
+        field_name="errorCode",
+        max_length=AUTOMATION_LOCAL_ERROR_CODE_MAX_LENGTH,
+    )
     if error_code.startswith("local_") and error_code in AUTOMATION_ERROR_MESSAGES:
         return error_code
     if error_code in LOCAL_SHARED_ERROR_CODES:
@@ -146,10 +156,10 @@ async def attach_local_run_workspace(
     value = await attach_anyharness_workspace_to_run(
         run_id=run_id,
         claim_id=body.claim_id,
-        anyharness_workspace_id=_normalize_required_text(
+        anyharness_workspace_id=normalize_required_text(
             body.anyharness_workspace_id,
             field_name="anyharnessWorkspaceId",
-            max_length=255,
+            max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
@@ -185,10 +195,10 @@ async def mark_local_run_creating_session(
     value = await mark_run_creating_session(
         run_id=run_id,
         claim_id=body.claim_id,
-        anyharness_workspace_id=_normalize_required_text(
+        anyharness_workspace_id=normalize_required_text(
             body.anyharness_workspace_id,
             field_name="anyharnessWorkspaceId",
-            max_length=255,
+            max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
@@ -207,15 +217,15 @@ async def attach_local_run_session(
     attached = await attach_anyharness_session_to_run(
         run_id=run_id,
         claim_id=body.claim_id,
-        anyharness_workspace_id=_normalize_required_text(
+        anyharness_workspace_id=normalize_required_text(
             body.anyharness_workspace_id,
             field_name="anyharnessWorkspaceId",
-            max_length=255,
+            max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
-        anyharness_session_id=_normalize_required_text(
+        anyharness_session_id=normalize_required_text(
             body.anyharness_session_id,
             field_name="anyharnessSessionId",
-            max_length=255,
+            max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
@@ -251,15 +261,15 @@ async def mark_local_run_dispatched(
     dispatched = await mark_run_dispatched(
         run_id=run_id,
         claim_id=body.claim_id,
-        anyharness_workspace_id=_normalize_required_text(
+        anyharness_workspace_id=normalize_required_text(
             body.anyharness_workspace_id,
             field_name="anyharnessWorkspaceId",
-            max_length=255,
+            max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
-        anyharness_session_id=_normalize_required_text(
+        anyharness_session_id=normalize_required_text(
             body.anyharness_session_id,
             field_name="anyharnessSessionId",
-            max_length=255,
+            max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,

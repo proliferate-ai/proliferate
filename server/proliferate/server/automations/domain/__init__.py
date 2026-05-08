@@ -1,0 +1,1 @@
+"""Pure automation domain rules."""

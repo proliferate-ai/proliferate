@@ -8,20 +8,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
-from proliferate.db.models.automations import AutomationRun
-from proliferate.db.store.automation_run_claim_values import (
-    ACTIVE_CLAIM_STATUSES,
-    AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
-    AUTOMATION_ERROR_AGENT_NOT_CONFIGURED_MESSAGE,
-    AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
-    AUTOMATION_ERROR_DISPATCH_UNCERTAIN_MESSAGE,
-    RECLAIMABLE_STATUSES,
-    AutomationRunClaimValue,
-    LocalAutomationRepoIdentity,
-    claim_value,
-)
-from proliferate.db.store.automations import (
+from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
@@ -34,6 +21,19 @@ from proliferate.db.store.automations import (
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
     AUTOMATION_RUN_STATUS_QUEUED,
+)
+from proliferate.db import engine as db_engine
+from proliferate.db.models.automations import AutomationRun
+from proliferate.db.store.automation_run_claim_values import (
+    ACTIVE_CLAIM_STATUSES,
+    AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
+    AUTOMATION_ERROR_AGENT_NOT_CONFIGURED_MESSAGE,
+    AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
+    AUTOMATION_ERROR_DISPATCH_UNCERTAIN_MESSAGE,
+    RECLAIMABLE_STATUSES,
+    AutomationRunClaimValue,
+    LocalAutomationRepoIdentity,
+    claim_value,
 )
 
 

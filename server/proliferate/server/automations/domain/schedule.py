@@ -8,10 +8,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dateutil.rrule import DAILY, HOURLY, rrule, rruleset, rrulestr
 
-SCHEDULE_ANCHOR_YEAR = 2020
-SUPPORTED_FREQS = {HOURLY, DAILY}
-SUPPORTED_RRULE_KEYS = {"FREQ", "INTERVAL", "BYDAY", "BYHOUR", "BYMINUTE"}
-WEEKDAY_LABELS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+from proliferate.constants.automations import (
+    AUTOMATION_SCHEDULE_ANCHOR_YEAR,
+    AUTOMATION_WEEKDAY_LABELS,
+    SUPPORTED_AUTOMATION_RRULE_FREQS,
+    SUPPORTED_AUTOMATION_RRULE_KEYS,
+)
 
 
 class AutomationScheduleError(ValueError):
@@ -50,13 +52,13 @@ def _reject_unsupported_raw_features(rrule_text: str) -> str:
     if not parts:
         raise AutomationScheduleError("Schedule RRULE is required.")
     keys = {part.split("=", 1)[0] for part in parts if "=" in part}
-    if len(keys) != len(parts) or not keys.issubset(SUPPORTED_RRULE_KEYS):
+    if len(keys) != len(parts) or not keys.issubset(SUPPORTED_AUTOMATION_RRULE_KEYS):
         raise AutomationScheduleError("Schedule RRULE contains an unsupported v1 option.")
     return f"RRULE:{';'.join(parts)}"
 
 
 def _parse_rule(rrule_text: str, timezone: ZoneInfo) -> rrule:
-    dtstart = datetime(SCHEDULE_ANCHOR_YEAR, 1, 1, tzinfo=timezone)
+    dtstart = datetime(AUTOMATION_SCHEDULE_ANCHOR_YEAR, 1, 1, tzinfo=timezone)
     try:
         parsed = rrulestr(rrule_text, dtstart=dtstart)
     except (TypeError, ValueError) as exc:
@@ -65,7 +67,7 @@ def _parse_rule(rrule_text: str, timezone: ZoneInfo) -> rrule:
         raise AutomationScheduleError("Composite schedules are not supported in v1.")
     if not isinstance(parsed, rrule):
         raise AutomationScheduleError("Schedule RRULE is invalid.")
-    if parsed._freq not in SUPPORTED_FREQS:  # noqa: SLF001
+    if parsed._freq not in SUPPORTED_AUTOMATION_RRULE_FREQS:  # noqa: SLF001
         raise AutomationScheduleError("Only hourly and daily schedules are supported in v1.")
     if parsed._interval is None or parsed._interval < 1:  # noqa: SLF001
         raise AutomationScheduleError("Schedule interval must be at least 1.")
@@ -99,7 +101,7 @@ def _summarize_rule(rule: rrule, timezone: str) -> str:
         elif weekdays == (5, 6):
             freq = "Weekends"
         elif weekdays:
-            freq = ", ".join(WEEKDAY_LABELS[weekday] for weekday in weekdays)
+            freq = ", ".join(AUTOMATION_WEEKDAY_LABELS[weekday] for weekday in weekdays)
     if rule_freq == DAILY and len(hours) == 1 and len(minutes) == 1:
         return f"{freq} at {hours[0]:02d}:{minutes[0]:02d}{suffix}"
     if rule_freq == HOURLY and len(minutes) == 1:

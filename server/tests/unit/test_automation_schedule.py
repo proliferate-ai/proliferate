@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from proliferate.server.automations.schedule import (
+from proliferate.server.automations.domain.schedule import (
     AutomationScheduleError,
     latest_due_occurrence,
     next_future_occurrence,
