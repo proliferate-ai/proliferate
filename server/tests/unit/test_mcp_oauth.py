@@ -10,6 +10,9 @@ import pytest
 from proliferate.config import settings
 from proliferate.db.store.cloud_mcp.types import CloudMcpOAuthClientRecord
 from proliferate.integrations import mcp_oauth
+from proliferate.integrations.mcp_oauth import clients as mcp_oauth_clients
+from proliferate.integrations.mcp_oauth import discovery as mcp_oauth_discovery
+from proliferate.integrations.mcp_oauth import tokens as mcp_oauth_tokens
 from proliferate.integrations.mcp_oauth import (
     AuthorizationServerMetadata,
     McpOAuthProviderError,
@@ -28,7 +31,7 @@ from proliferate.utils.crypto import encrypt_text
 
 
 def test_token_request_defaults_dcr_client_secret_to_post_body() -> None:
-    data, auth = mcp_oauth._token_request_auth_options(
+    data, auth = mcp_oauth_tokens._token_request_auth_options(
         {"client_id": "client-id"},
         client_secret="client-secret",
         token_endpoint_auth_method=None,
@@ -42,7 +45,7 @@ def test_token_request_defaults_dcr_client_secret_to_post_body() -> None:
 
 
 def test_token_request_supports_client_secret_basic() -> None:
-    data, auth = mcp_oauth._token_request_auth_options(
+    data, auth = mcp_oauth_tokens._token_request_auth_options(
         {"client_id": "client-id"},
         client_secret="client-secret",
         token_endpoint_auth_method="client_secret_basic",
@@ -83,7 +86,11 @@ async def test_discovery_records_supported_client_auth_methods(
         async def get(self, *_args: object, **_kwargs: object) -> _Response:
             return _Response()
 
-    monkeypatch.setattr(mcp_oauth.httpx, "AsyncClient", lambda **_kwargs: _Client())
+    monkeypatch.setattr(
+        mcp_oauth_discovery.httpx,
+        "AsyncClient",
+        lambda **_kwargs: _Client(),
+    )
 
     metadata = await mcp_oauth.discover_authorization_server_metadata(
         "https://accounts.example.com",
@@ -167,7 +174,7 @@ async def test_register_client_requests_supported_token_auth_method(
     }
 
     monkeypatch.setattr(
-        mcp_oauth.httpx,
+        mcp_oauth_clients.httpx,
         "AsyncClient",
         lambda **_kwargs: _RegisterClient(calls=calls, payload=response_payload),
     )
@@ -186,7 +193,7 @@ def test_register_client_rejects_unsupported_token_auth_methods() -> None:
     metadata = _authorization_metadata(("private_key_jwt",))
 
     with pytest.raises(McpOAuthProviderError) as error:
-        mcp_oauth._registration_token_auth_method(metadata)
+        mcp_oauth_clients._registration_token_auth_method(metadata)
 
     assert error.value.code == "unsupported_client_auth"
 
@@ -214,10 +221,10 @@ async def test_token_request_maps_provider_http_errors(monkeypatch: pytest.Monke
         async def post(self, *_args: object, **_kwargs: object) -> _Response:
             return _Response()
 
-    monkeypatch.setattr(mcp_oauth.httpx, "AsyncClient", lambda **_kwargs: _Client())
+    monkeypatch.setattr(mcp_oauth_tokens.httpx, "AsyncClient", lambda **_kwargs: _Client())
 
     with pytest.raises(McpOAuthProviderError) as error:
-        await mcp_oauth._token_request(
+        await mcp_oauth_tokens._token_request(
             "https://accounts.example.com/token",
             {"client_id": "client-id"},
             client_secret=None,
