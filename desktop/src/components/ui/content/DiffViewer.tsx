@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { SplitDiffViewer } from "@/components/ui/content/diff/SplitDiffViewer";
-import { useResolvedMode } from "@/hooks/theme/use-theme";
+import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
 import type {
   CollapsedContext,

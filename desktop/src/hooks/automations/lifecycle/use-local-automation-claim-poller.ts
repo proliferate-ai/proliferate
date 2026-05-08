@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
   LocalAutomationRunClaimResponse,
 } from "@/lib/access/cloud/client";
-import {
-  attachLocalAutomationRunSession,
-  attachLocalAutomationRunWorkspace,
-  claimLocalAutomationRuns,
-  heartbeatLocalAutomationRun,
-  markLocalAutomationRunCreatingSession,
-  markLocalAutomationRunCreatingWorkspace,
-  markLocalAutomationRunDispatched,
-  markLocalAutomationRunDispatching,
-  markLocalAutomationRunFailed,
-  markLocalAutomationRunProvisioningWorkspace,
-} from "@/lib/access/cloud/automations";
+import { useLocalAutomationRunClaims } from "@/hooks/access/cloud/automations/use-local-automation-run-claims";
+import { useLocalAutomationRuntimeClientFactory } from "@/hooks/access/anyharness/automations/use-local-automation-runtime-client";
+import { useLocalAutomationExecutorCache } from "@/hooks/automations/cache/use-local-automation-executor-cache";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,
@@ -28,11 +18,8 @@ import {
 } from "@/lib/workflows/automations/local-automation-executor";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { createLocalAutomationRuntimeClient } from "@/lib/access/anyharness/automation-client";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { automationRunsKey } from "./query-keys";
 
 const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
 const LOCAL_EXECUTOR_POLL_MS = 10_000;
@@ -57,11 +44,15 @@ async function getLocalExecutorId(): Promise<string> {
   return executorIdPromise;
 }
 
+// Owns the singleton local automation claim loop and heartbeat cleanup.
+// Does not own cloud mutation cache shape or AnyHarness client construction.
 export function useLocalAutomationClaimPoller(args: {
   enabled: boolean;
   runtimeUrl: string;
 }): void {
-  const queryClient = useQueryClient();
+  const runClaims = useLocalAutomationRunClaims();
+  const createRuntimeClient = useLocalAutomationRuntimeClientFactory();
+  const { invalidateAfterLocalAutomationRun } = useLocalAutomationExecutorCache();
   const { getHomeDir } = useTauriShellActions();
   const workspacesQuery = useWorkspaces();
   const activeRef = useRef(false);
@@ -92,7 +83,7 @@ export function useLocalAutomationClaimPoller(args: {
       activeRef.current = true;
       try {
         const executorId = await getLocalExecutorId();
-        const response = await claimLocalAutomationRuns({
+        const response = await runClaims.claimRuns({
           executorId,
           limit: 1,
           availableRepositories: candidates.map((candidate) => candidate.identity),
@@ -105,7 +96,9 @@ export function useLocalAutomationClaimPoller(args: {
             executorId,
             getHomeDir,
             runtimeUrl: args.runtimeUrl,
-            queryClient,
+            runClaims,
+            createRuntimeClient,
+            invalidateAfterLocalAutomationRun,
           });
         }
       } finally {
@@ -134,7 +127,15 @@ export function useLocalAutomationClaimPoller(args: {
         clearTimeout(timer);
       }
     };
-  }, [args.enabled, args.runtimeUrl, candidates, getHomeDir, queryClient]);
+  }, [
+    args.enabled,
+    args.runtimeUrl,
+    candidates,
+    createRuntimeClient,
+    getHomeDir,
+    invalidateAfterLocalAutomationRun,
+    runClaims,
+  ]);
 }
 
 async function processClaim(args: {
@@ -143,7 +144,11 @@ async function processClaim(args: {
   executorId: string;
   getHomeDir: () => Promise<string>;
   runtimeUrl: string;
-  queryClient: QueryClient;
+  runClaims: ReturnType<typeof useLocalAutomationRunClaims>;
+  createRuntimeClient: ReturnType<typeof useLocalAutomationRuntimeClientFactory>;
+  invalidateAfterLocalAutomationRun: ReturnType<
+    typeof useLocalAutomationExecutorCache
+  >["invalidateAfterLocalAutomationRun"];
 }): Promise<void> {
   const candidate = findCandidateForClaim(args.candidates, args.claim);
   if (!candidate) {
@@ -161,13 +166,13 @@ async function processClaim(args: {
     setupScript: repoConfig?.setupScript,
   });
 
-  const heartbeat = startHeartbeat(args.claim, args.executorId);
+  const heartbeat = startHeartbeat(args.claim, args.executorId, args.runClaims.heartbeatRun);
   let claimActive = true;
   const stopOnLostClaim = () => {
     claimActive = false;
   };
   heartbeat.onLostClaim = stopOnLostClaim;
-  const client = createLocalAutomationRuntimeClient({ runtimeUrl: args.runtimeUrl });
+  const client = args.createRuntimeClient({ runtimeUrl: args.runtimeUrl });
   try {
     await executeLocalAutomationRun({
       client,
@@ -176,28 +181,28 @@ async function processClaim(args: {
       plan,
       transitions: {
         markCreatingWorkspace: () =>
-          markLocalAutomationRunCreatingWorkspace(args.claim.id, actionBody(args)),
+          args.runClaims.markCreatingWorkspace(args.claim.id, actionBody(args)),
         attachWorkspace: (anyharnessWorkspaceId) =>
-          attachLocalAutomationRunWorkspace(args.claim.id, {
+          args.runClaims.attachWorkspace(args.claim.id, {
             ...actionBody(args),
             anyharnessWorkspaceId,
           }),
         markProvisioningWorkspace: () =>
-          markLocalAutomationRunProvisioningWorkspace(args.claim.id, actionBody(args)),
+          args.runClaims.markProvisioningWorkspace(args.claim.id, actionBody(args)),
         markCreatingSession: (anyharnessWorkspaceId) =>
-          markLocalAutomationRunCreatingSession(args.claim.id, {
+          args.runClaims.markCreatingSession(args.claim.id, {
             ...actionBody(args),
             anyharnessWorkspaceId,
           }),
         attachSession: (anyharnessWorkspaceId, anyharnessSessionId) =>
-          attachLocalAutomationRunSession(args.claim.id, {
+          args.runClaims.attachSession(args.claim.id, {
             ...actionBody(args),
             anyharnessWorkspaceId,
             anyharnessSessionId,
           }),
-        markDispatching: () => markLocalAutomationRunDispatching(args.claim.id, actionBody(args)),
+        markDispatching: () => args.runClaims.markDispatching(args.claim.id, actionBody(args)),
         markDispatched: (anyharnessWorkspaceId, anyharnessSessionId) =>
-          markLocalAutomationRunDispatched(args.claim.id, {
+          args.runClaims.markDispatched(args.claim.id, {
             ...actionBody(args),
             anyharnessWorkspaceId,
             anyharnessSessionId,
@@ -212,12 +217,10 @@ async function processClaim(args: {
     await failClaim(args, code);
   } finally {
     heartbeat.stop();
-    await Promise.all([
-      args.queryClient.invalidateQueries({ queryKey: automationRunsKey(args.claim.automationId) }),
-      args.queryClient.invalidateQueries({
-        queryKey: workspaceCollectionsScopeKey(args.runtimeUrl),
-      }),
-    ]);
+    await args.invalidateAfterLocalAutomationRun({
+      automationId: args.claim.automationId,
+      runtimeUrl: args.runtimeUrl,
+    });
   }
 }
 
@@ -234,6 +237,7 @@ function actionBody(args: {
 function startHeartbeat(
   claim: LocalAutomationRunClaimResponse,
   executorId: string,
+  heartbeatRun: ReturnType<typeof useLocalAutomationRunClaims>["heartbeatRun"],
 ): { stop: () => void; onLostClaim?: () => void } {
   let consecutiveErrors = 0;
   let stopped = false;
@@ -245,7 +249,7 @@ function startHeartbeat(
   };
   const pulse = async () => {
     try {
-      const response = await heartbeatLocalAutomationRun(claim.id, {
+      const response = await heartbeatRun(claim.id, {
         executorId,
         claimId: claim.claimId,
       });
@@ -272,10 +276,11 @@ async function failClaim(
   args: {
     claim: LocalAutomationRunClaimResponse;
     executorId: string;
+    runClaims: ReturnType<typeof useLocalAutomationRunClaims>;
   },
   errorCode: string,
 ): Promise<void> {
-  await markLocalAutomationRunFailed(args.claim.id, {
+  await args.runClaims.markFailed(args.claim.id, {
     executorId: args.executorId,
     claimId: args.claim.claimId,
     errorCode,

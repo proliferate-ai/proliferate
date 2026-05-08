@@ -9,7 +9,7 @@ import type { SupportMessageContext } from "@/lib/domain/support/types";
 const sendSupportMessage = vi.hoisted(() => vi.fn(async () => {}));
 const showToast = vi.hoisted(() => vi.fn());
 
-vi.mock("@/hooks/capabilities/use-app-capabilities", () => ({
+vi.mock("@/hooks/capabilities/derived/use-app-capabilities", () => ({
   useAppCapabilities: () => ({ supportEnabled: true }),
 }));
 

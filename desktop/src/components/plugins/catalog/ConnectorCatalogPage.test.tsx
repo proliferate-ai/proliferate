@@ -36,7 +36,7 @@ function resetMutation() {
   };
 }
 
-vi.mock("@/hooks/mcp/use-connectors-catalog-state", () => ({
+vi.mock("@/hooks/mcp/ui/use-connectors-catalog-state", () => ({
   useConnectorsCatalogState: () => connectorsCatalogState.state,
 }));
 
@@ -52,7 +52,7 @@ vi.mock("@/hooks/mcp/workflows/use-install-connector", () => ({
   useInstallConnector: () => ({ mutateAsync: vi.fn().mockResolvedValue(undefined) }),
 }));
 
-vi.mock("@/hooks/mcp/use-installed-connector-actions", () => ({
+vi.mock("@/hooks/mcp/workflows/use-installed-connector-actions", () => ({
   useInstalledConnectorActions: () => ({
     isPending: () => false,
     onToggle: vi.fn().mockResolvedValue(undefined),

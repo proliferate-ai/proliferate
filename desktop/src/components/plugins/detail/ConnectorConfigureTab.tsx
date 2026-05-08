@@ -3,7 +3,7 @@ import type {
   ConnectorCardStatus,
   ConnectorConfigureFocus,
   ConnectorSetupVariant,
-} from "@/hooks/mcp/use-connectors-catalog-state";
+} from "@/lib/domain/mcp/connector-catalog-view-model";
 import type {
   ConnectorCatalogEntry,
   ConnectorSettings,

@@ -11,7 +11,7 @@ import {
   type HighlightedToken,
   type HighlightTheme,
 } from "@/lib/infra/editor/highlighting";
-import { useResolvedMode } from "@/hooks/theme/use-theme";
+import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 
 interface DiffHighlightResult {
   parsed: ParsedPatch;

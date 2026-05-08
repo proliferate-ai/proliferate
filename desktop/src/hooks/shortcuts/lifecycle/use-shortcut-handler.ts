@@ -9,6 +9,8 @@ interface UseShortcutHandlerOptions {
   enabled?: boolean;
 }
 
+// Owns registering a mounted shortcut handler while keeping the latest callback.
+// Does not own global shortcut event dispatch.
 export function useShortcutHandler(
   id: ShortcutId,
   handler: ShortcutHandler,

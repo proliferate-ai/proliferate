@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ConnectorModalTab,
   ResolvedConnectorModal,
-} from "@/hooks/mcp/use-connectors-catalog-state";
+} from "@/lib/domain/mcp/connector-catalog-view-model";
 import { validateOAuthConnectorSettings } from "@/lib/domain/mcp/oauth";
 import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
 import {

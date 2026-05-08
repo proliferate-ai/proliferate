@@ -1,4 +1,4 @@
-import type { ConnectorCardStatus } from "@/hooks/mcp/use-connectors-catalog-state";
+import type { ConnectorCardStatus } from "@/lib/domain/mcp/connector-catalog-view-model";
 
 const TONE_CLASSES: Record<ConnectorCardStatus["tone"], string> = {
   neutral:

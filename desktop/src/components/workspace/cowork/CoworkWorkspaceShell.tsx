@@ -7,9 +7,9 @@ import { IconButton } from "@/components/ui/IconButton";
 import { SplitPanel } from "@/components/ui/icons";
 import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";
-import { useResize } from "@/hooks/layout/use-resize";
-import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
-import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
+import { useResize } from "@/hooks/ui/layout/use-resize";
+import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
+import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import {

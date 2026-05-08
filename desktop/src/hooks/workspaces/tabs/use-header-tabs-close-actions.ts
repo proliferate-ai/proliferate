@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
+import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import {
   getWorkspaceShellTabKey,
   isSameWorkspaceShellTab,

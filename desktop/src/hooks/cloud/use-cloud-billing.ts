@@ -7,7 +7,7 @@ import {
   useInvalidateCloudBillingState,
 } from "@/hooks/access/cloud/use-cloud-billing";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
+import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useAuthStore } from "@/stores/auth/auth-store";
 

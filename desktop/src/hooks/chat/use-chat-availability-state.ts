@@ -10,7 +10,7 @@ import {
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
-import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
+import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 
 export interface ChatAvailabilityState extends ChatInputAvailability {
   selectedWorkspaceKind: "cloud" | "local";

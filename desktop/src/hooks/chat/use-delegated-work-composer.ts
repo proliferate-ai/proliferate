@@ -3,8 +3,8 @@ import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
 import { useScheduleSubagentWakeMutation } from "@anyharness/sdk-react";
 import { useCoworkComposerStrip } from "@/hooks/cowork/use-cowork-composer-strip";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
-import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
-import { useReviewActions } from "@/hooks/reviews/use-review-actions";
+import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
+import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import {
   deriveDelegatedWorkSummary,

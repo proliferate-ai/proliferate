@@ -16,7 +16,7 @@ import {
   type MouseEvent,
   type SetStateAction,
 } from "react";
-import { useResize } from "@/hooks/layout/use-resize";
+import { useResize } from "@/hooks/ui/layout/use-resize";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";

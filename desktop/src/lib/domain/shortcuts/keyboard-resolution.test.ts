@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveKeyboardShortcut } from "@/hooks/shortcuts/use-shortcut-dispatcher";
+import { resolveKeyboardShortcut } from "@/lib/domain/shortcuts/keyboard-resolution";
 
 describe("resolveKeyboardShortcut", () => {
   beforeEach(() => {

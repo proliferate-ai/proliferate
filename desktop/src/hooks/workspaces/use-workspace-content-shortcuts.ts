@@ -1,5 +1,5 @@
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
+import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { getFocusZone } from "@/lib/domain/focus-zone";
 import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
 import type { WorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";

@@ -28,6 +28,8 @@ import { useToastStore } from "@/stores/toast/toast-store";
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const EMPTY_PERSONALITY_TEMPLATES: ReviewPersonaTemplate[] = [];
 
+// Owns review setup dialog form state and submit actions.
+// Does not own the rendered dialog component or active review read model.
 export function useReviewSetupDialogState() {
   const navigate = useNavigate();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
