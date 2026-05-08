@@ -1,5 +1,7 @@
-import type { CloudWorkspaceStatus } from "@/lib/access/cloud/client";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type {
+  CloudWorkspaceStatus,
+  CloudWorkspaceSummary,
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   CLOUD_STATUS_ACTION_COPY,
   CLOUD_STATUS_COMPACT_COPY,

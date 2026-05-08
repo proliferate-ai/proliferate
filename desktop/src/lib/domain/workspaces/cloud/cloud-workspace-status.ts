@@ -1,7 +1,7 @@
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
-} from "@/lib/access/cloud/client";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
   "pending",

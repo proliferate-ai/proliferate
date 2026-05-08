@@ -1,7 +1,7 @@
 import type {
   CloudCredentialFreshness,
   CloudWorkspaceStatus,
-} from "@/lib/access/cloud/client";
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export type SelectedCloudRuntimePhase = "ready" | "resuming" | "failed";
 export type SelectedCloudRuntimeVariant = "initial" | "warm";

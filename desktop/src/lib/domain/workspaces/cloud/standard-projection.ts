@@ -1,5 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 export interface StandardRepoProjection {
   repoRoots: RepoRoot[];

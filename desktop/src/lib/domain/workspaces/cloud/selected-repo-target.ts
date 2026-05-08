@@ -1,5 +1,5 @@
 import type { Workspace } from "@anyharness/sdk";
-import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import { isCloudWorkspaceId, parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";

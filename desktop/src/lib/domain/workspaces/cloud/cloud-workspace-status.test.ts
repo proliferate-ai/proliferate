@@ -7,7 +7,10 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { CLOUD_STATUS_COMPACT_COPY } from "@/copy/cloud/cloud-status-copy";
-import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/access/cloud/client";
+import type {
+  CloudWorkspaceStatus,
+  CloudWorkspaceSummary,
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
 function makeCloudWorkspace(
   overrides: Partial<CloudWorkspaceSummary> = {},
