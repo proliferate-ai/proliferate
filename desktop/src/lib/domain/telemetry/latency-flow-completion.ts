@@ -1,19 +1,13 @@
-import { useEffect } from "react";
-import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/use-active-chat-session-selectors";
-import { useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
-import {
-  finishLatencyFlow,
-  type LatencyFlowRecord,
-  type LatencyFlowStage,
-  listActiveLatencyFlows,
+import type {
+  LatencyFlowRecord,
+  LatencyFlowStage,
 } from "@/lib/infra/measurement/latency-flow";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 function isSurfaceReady(modeKind: string): boolean {
   return modeKind !== "no-workspace" && modeKind !== "session-loading";
 }
 
-interface TelemetryLatencyFlowState {
+export interface TelemetryLatencyFlowState {
   activeFlows: LatencyFlowRecord[];
   selectedWorkspaceId: string | null;
   activeSessionId: string | null;
@@ -21,7 +15,7 @@ interface TelemetryLatencyFlowState {
   modeKind: string;
 }
 
-interface LatencyFlowCompletion {
+export interface LatencyFlowCompletion {
   flowId: string;
   stage: Extract<LatencyFlowStage, "optimistic_visible" | "processing_started" | "surface_ready">;
 }
@@ -88,31 +82,4 @@ export function collectTelemetryLatencyFlowCompletions(
   }
 
   return completions;
-}
-
-export function useTelemetryLatencyFlows() {
-  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
-  const { mode } = useChatSurfaceState();
-  const {
-    activeSessionId,
-    sessionViewState,
-  } = useActiveSessionSurfaceSnapshot();
-
-  useEffect(() => {
-    const completions = collectTelemetryLatencyFlowCompletions({
-      activeFlows: listActiveLatencyFlows(),
-      selectedWorkspaceId,
-      activeSessionId,
-      sessionViewState,
-      modeKind: mode.kind,
-    });
-    for (const completion of completions) {
-      finishLatencyFlow(completion.flowId, completion.stage);
-    }
-  }, [
-    activeSessionId,
-    mode.kind,
-    selectedWorkspaceId,
-    sessionViewState,
-  ]);
 }

@@ -6,6 +6,7 @@ import {
 } from "@/lib/integrations/telemetry/client";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
+// Owns runtime connection telemetry tags and events. Does not own runtime connection state.
 export function useTelemetryRuntimeState() {
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const runtimeError = useHarnessConnectionStore((state) => state.error);
