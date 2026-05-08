@@ -9,6 +9,8 @@ import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
+// Owns the read-only arrival banner state for a newly materialized workspace.
+// Actions for this banner live in workspaces/workflows.
 export function useWorkspaceArrivalState(): {
   workspacePath: string | null;
   sourceRepoRootPath: string | null;

@@ -16,7 +16,7 @@ import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDelegatedWorkComposer } from "@/hooks/chat/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/use-active-todo-tracker";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
+import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
 
 export interface ComposerDockSlots {
   outboundSlot: ReactNode | null;

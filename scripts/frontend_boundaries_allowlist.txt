@@ -18,5 +18,4 @@ QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/use-work
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-local-worktree-settings-target.ts 6 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-selected-cloud-runtime-state.ts 4 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts 5 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-metadata-sync.ts 4 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-worktree-settings-targets.ts 7 query cache ownership before access/cache migration

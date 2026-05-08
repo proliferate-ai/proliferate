@@ -1,13 +1,17 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import type {
+  CloudMobilityWorkspaceSummary,
+  CloudWorkspaceDetail,
+} from "@/lib/access/cloud/client";
+import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import {
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
   upsertRepoRootCollections,
 } from "@/lib/domain/workspaces/cloud/collections";
-import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
@@ -73,6 +77,22 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
     queryClient.setQueriesData<WorkspaceCollections | undefined>(
       { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
       (collections) => upsertCloudWorkspaceCollections(collections, workspace),
+    );
+    queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
+      cloudMobilityWorkspacesKey(),
+      (workspaces) => workspaces?.map((candidate) => (
+        candidate.cloudWorkspaceId === workspace.id
+          ? {
+            ...candidate,
+            displayName: workspace.displayName,
+            repo: {
+              ...candidate.repo,
+              branch: workspace.repo.branch,
+            },
+            updatedAt: workspace.updatedAt,
+          }
+          : candidate
+      )),
     );
   }, [queryClient, runtimeUrl]);
 

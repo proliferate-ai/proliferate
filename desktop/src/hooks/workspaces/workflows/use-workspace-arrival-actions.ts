@@ -13,6 +13,8 @@ interface UseWorkspaceArrivalActionsArgs {
   sourceRepoRootPath: string | null;
 }
 
+// Owns user actions for the workspace arrival/status panel.
+// Read-only panel state lives in workspaces/derived.
 export function useWorkspaceArrivalActions({
   workspacePath,
   sourceRepoRootPath,

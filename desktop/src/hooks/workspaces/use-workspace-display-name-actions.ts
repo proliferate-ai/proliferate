@@ -16,7 +16,7 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import {
   clearCloudDisplayNameBackfillSuppression,
   suppressCloudDisplayNameBackfill,
-} from "./cloud-display-name-backfill-suppression";
+} from "@/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 import {
   finishMeasurementOperation,
   getMeasurementRequestOptions,
