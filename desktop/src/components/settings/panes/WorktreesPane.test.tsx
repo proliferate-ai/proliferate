@@ -23,7 +23,7 @@ const toastStoreMocks = vi.hoisted(() => ({
   show: vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/use-worktree-settings-targets", () => ({
+vi.mock("@/hooks/workspaces/facade/use-worktree-settings-targets", () => ({
   useWorktreeSettingsTargets: () => ({
     isDiscovering: false,
     targets: [{
@@ -42,7 +42,7 @@ vi.mock("@/hooks/workspaces/use-worktree-settings-targets", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-worktree-cleanup-policy", () => ({
+vi.mock("@/hooks/workspaces/facade/use-worktree-cleanup-policy", () => ({
   useWorktreeCleanupPolicy: () => ({
     apply: cleanupPolicyMocks.apply,
     applyDisabledReason: null,

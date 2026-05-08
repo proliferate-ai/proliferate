@@ -12,11 +12,10 @@ import {
   EnvironmentSection,
 } from "@/components/ui/EnvironmentLayout";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/use-worktree-cleanup-policy";
+import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
 import {
   useWorktreeSettingsTargets,
-  type WorktreeSettingsTargetState,
-} from "@/hooks/workspaces/use-worktree-settings-targets";
+} from "@/hooks/workspaces/facade/use-worktree-settings-targets";
 import {
   worktreeRetentionRunMessage,
   worktreeSettingsActionFailureMessage,
@@ -24,6 +23,9 @@ import {
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_ROWS: WorktreeInventoryRow[] = [];
+
+type WorktreeSettingsTargetState =
+  ReturnType<typeof useWorktreeSettingsTargets>["targets"][number];
 
 export function WorktreesPane() {
   const settings = useWorktreeSettingsTargets();

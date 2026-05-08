@@ -24,8 +24,8 @@ import { usePromptOutboxDispatcher } from "@/hooks/chat/use-prompt-outbox-dispat
 import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
-import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/use-local-worktree-settings-target"
-import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/use-worktree-cleanup-policy"
+import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
+import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
 import {
   elapsedStartupMs,
   logStartupDebug,
@@ -328,7 +328,7 @@ function WorktreeCleanupPolicySyncGate() {
 
 function WorktreeCleanupPolicySyncMount() {
   const settings = useLocalWorktreeSettingsTarget()
-  useWorktreeCleanupPolicy(settings.targets, settings.syncPolicyToTarget)
+  useWorktreeCleanupPolicySync(settings.targets, settings.syncPolicyToTarget)
   return null
 }
 
