@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
-vi.mock("@/hooks/editor/use-open-in-default-editor", () => ({
+vi.mock("@/hooks/editor/workflows/use-open-in-default-editor", () => ({
   useOpenInDefaultEditor: () => ({
     openInDefaultEditor: vi.fn(),
     copyPath: vi.fn(),
@@ -12,7 +12,7 @@ vi.mock("@/hooks/editor/use-open-in-default-editor", () => ({
   }),
 }));
 
-vi.mock("@/hooks/editor/use-file-path-native-context-menu", () => ({
+vi.mock("@/hooks/editor/ui/use-file-path-native-context-menu", () => ({
   useFilePathNativeContextMenu: () => ({
     onContextMenuCapture: vi.fn(),
   }),
