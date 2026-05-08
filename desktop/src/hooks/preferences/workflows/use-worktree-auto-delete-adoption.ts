@@ -1,12 +1,19 @@
 import { useCallback } from "react";
-import { clearWorktreeAutoDeleteLimitAdoption } from "@/lib/domain/preferences/persisted-metadata";
+import {
+  clearWorktreeAutoDeleteLimitAdoption,
+  selectPersistedUserPreferencesSlice,
+} from "@/lib/domain/preferences/persisted-metadata";
+import { persistUserPreferences } from "@/lib/workflows/preferences/user-preferences-persistence";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 export function useWorktreeAutoDeleteAdoption(): () => Promise<void> {
   return useCallback(async () => {
     const state = useUserPreferencesStore.getState();
-    state.setPersistedMetadata(
-      clearWorktreeAutoDeleteLimitAdoption(state._persistedMetadata),
+    const nextMetadata = clearWorktreeAutoDeleteLimitAdoption(state._persistedMetadata);
+    state.setPersistedMetadata(nextMetadata);
+    await persistUserPreferences(
+      selectPersistedUserPreferencesSlice(useUserPreferencesStore.getState()),
+      nextMetadata,
     );
   }, []);
 }

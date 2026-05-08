@@ -3,6 +3,7 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle";
+import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user-preferences";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
@@ -63,5 +64,34 @@ describe("useUserPreferencesLifecycle", () => {
       expect(persistedRecord.worktreeAutoDeleteLimit).toBeUndefined();
       expect(persistedRecord.worktreeAutoDeleteLimitBackfilled).toBe(true);
     });
+  });
+
+  it("awaits persistence when worktree cleanup adoption metadata is consumed", async () => {
+    const persisted = { ...USER_PREFERENCE_DEFAULTS } as Record<string, unknown>;
+    delete persisted.worktreeAutoDeleteLimit;
+    storeMocks.values.set("user_preferences", persisted);
+
+    renderHook(() => useUserPreferencesLifecycle());
+    const adoption = renderHook(() => useWorktreeAutoDeleteAdoption());
+
+    await waitFor(() => {
+      expect(useUserPreferencesStore.getState()._hydrated).toBe(true);
+    });
+    storeMocks.set.mockClear();
+
+    await act(async () => {
+      await adoption.result.current();
+    });
+
+    expect(storeMocks.set).toHaveBeenCalledWith(
+      "user_preferences",
+      expect.objectContaining({
+        worktreeAutoDeleteLimit: USER_PREFERENCE_DEFAULTS.worktreeAutoDeleteLimit,
+      }),
+    );
+    const persistedRecord = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persistedRecord.worktreeAutoDeleteLimitBackfilled).toBeUndefined();
+    expect(persistedRecord.worktreeAutoDeleteLimit)
+      .toBe(USER_PREFERENCE_DEFAULTS.worktreeAutoDeleteLimit);
   });
 });
