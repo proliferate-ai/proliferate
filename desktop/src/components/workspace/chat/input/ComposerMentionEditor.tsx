@@ -14,7 +14,7 @@ import {
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { useChatFileMentionSearch } from "@/hooks/chat/use-chat-file-mention-search";
-import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
+import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import {
   isComposerMentionSelectKey,
   isRawComposerSubmitKey,

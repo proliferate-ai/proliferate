@@ -28,7 +28,7 @@ const modelSelectorMenuMock = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/hooks/chat/use-model-selector-menu", () => ({
+vi.mock("@/hooks/chat/ui/use-model-selector-menu", () => ({
   useModelSelectorMenu: () => modelSelectorMenuMock.state,
 }));
 

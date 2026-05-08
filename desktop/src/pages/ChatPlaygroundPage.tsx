@@ -8,7 +8,7 @@ import {
   type ScenarioKey,
 } from "@/config/playground";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
-import { useChatDockInset } from "@/hooks/chat/use-chat-dock-inset";
+import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
 import { useReplaySession } from "@/hooks/playground/use-replay-session";
 
 export function ChatPlaygroundPage() {
