@@ -13,8 +13,6 @@ COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/list/AutomationLis
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/list/AutomationRow.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/screen/AutomationsScreen.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/automations/timeline/AutomationRunTimeline.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/cloud/repo-settings/RepoTrackedFilesCard.tsx 1 component owns access/cache before component cleanup
-COMPONENT_FORBIDDEN_ACCESS desktop/src/components/cloud/workspace-settings/CloudWorkspaceTrackedFilesCard.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/BillingPane.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/CloudBillingSummary.tsx 1 component owns access/cache before component cleanup
 COMPONENT_FORBIDDEN_ACCESS desktop/src/components/settings/panes/CloudPane.tsx 2 component owns access/cache before component cleanup

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { CloudRepoFileMetadata } from "@/lib/access/cloud/client";
 import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,
@@ -12,9 +11,13 @@ import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Check, ChevronUpDown, RefreshCw, X } from "@/components/ui/icons";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
 
+interface RepoTrackedFileMetadata {
+  relativePath: string;
+}
+
 interface RepoTrackedFilesCardProps {
   trackedFilePaths: string[];
-  trackedFiles: CloudRepoFileMetadata[];
+  trackedFiles: RepoTrackedFileMetadata[];
   suggestedPaths: string[];
   canSyncTrackedFiles: boolean;
   syncPathInFlight: string | null;
