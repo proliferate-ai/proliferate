@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpConnectionResponse,
     CloudMcpConnectionsResponse,
@@ -36,10 +35,7 @@ async def list_cloud_mcp_connections_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionsResponse:
-    try:
-        return await list_cloud_mcp_connections(db, user.id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await list_cloud_mcp_connections(db, user.id)
 
 
 @router.post("/mcp/connections", response_model=CloudMcpConnectionResponse)
@@ -48,10 +44,7 @@ async def create_cloud_mcp_connection_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
-    try:
-        return await create_cloud_mcp_connection(db, user.id, body)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await create_cloud_mcp_connection(db, user.id, body)
 
 
 @router.patch("/mcp/connections/{connection_id}", response_model=CloudMcpConnectionResponse)
@@ -61,10 +54,7 @@ async def patch_cloud_mcp_connection_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
-    try:
-        return await patch_cloud_mcp_connection(db, user.id, connection_id, body)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await patch_cloud_mcp_connection(db, user.id, connection_id, body)
 
 
 @router.delete("/mcp/connections/{connection_id}", response_model=OkResponse)
@@ -73,10 +63,7 @@ async def delete_cloud_mcp_connection_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OkResponse:
-    try:
-        await delete_cloud_mcp_connection_for_user(db, user.id, connection_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    await delete_cloud_mcp_connection_for_user(db, user.id, connection_id)
     return OkResponse()
 
 
@@ -90,10 +77,7 @@ async def put_cloud_mcp_connection_secret_auth_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
-    try:
-        return await put_cloud_mcp_connection_secret_auth(db, user.id, connection_id, body)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    return await put_cloud_mcp_connection_secret_auth(db, user.id, connection_id, body)
 
 
 @router.get("/mcp-connections/statuses", response_model=list[CloudMcpConnectionSyncStatus])
@@ -111,10 +95,7 @@ async def sync_cloud_mcp_connection_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OkResponse:
-    try:
-        await sync_cloud_mcp_connection_for_user(db, user.id, connection_id, body)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    await sync_cloud_mcp_connection_for_user(db, user.id, connection_id, body)
     return OkResponse()
 
 
@@ -124,8 +105,5 @@ async def delete_legacy_cloud_mcp_connection_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OkResponse:
-    try:
-        await delete_legacy_cloud_mcp_connection_for_user(db, user.id, connection_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
+    await delete_legacy_cloud_mcp_connection_for_user(db, user.id, connection_id)
     return OkResponse()
