@@ -6,16 +6,11 @@ import {
 } from "@anyharness/sdk-react";
 import type { ModelRegistry } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
-import {
-  type WorkspaceCollections,
-  upsertLocalWorkspaceCollections,
-  workspaceFileTreeStateKey,
-} from "@/lib/domain/workspaces/cloud/collections";
+import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildSubmittingPendingWorkspaceEntry,
   createPendingWorkspaceAttemptId,
@@ -28,7 +23,7 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
@@ -68,9 +63,9 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
 export function useCoworkThreadWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const anyHarnessRuntime = useAnyHarnessRuntimeContext();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { upsertLocalWorkspace } = useWorkspaceCollectionsMutationCache(runtimeUrl);
   const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
   );
@@ -215,10 +210,7 @@ export function useCoworkThreadWorkflow() {
 
       const launchedSession = launchDefaults.session;
 
-      queryClient.setQueriesData<WorkspaceCollections | undefined>(
-        { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-        (collections) => upsertLocalWorkspaceCollections(collections, result.workspace),
-      );
+      upsertLocalWorkspace(result.workspace);
       upsertWorkspaceSessionRecord(result.workspace.id, launchedSession);
       putSessionRecord(
         createSessionRecordFromSummary(launchedSession, result.workspace.id, {
@@ -311,13 +303,13 @@ export function useCoworkThreadWorkflow() {
     navigateToWorkspaceShell,
     preferences.coworkWorkspaceDelegationEnabled,
     preferences.defaultLiveSessionControlValuesByAgentKind,
-    queryClient,
     requestComposerFocus,
     runtimeUrl,
     setDraftText,
     activateWorkspace,
     setPendingWorkspaceEntry,
     showToast,
+    upsertLocalWorkspace,
     upsertWorkspaceSessionRecord,
   ]);
 

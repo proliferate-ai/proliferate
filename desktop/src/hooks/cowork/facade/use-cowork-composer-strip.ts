@@ -7,10 +7,10 @@ import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selecto
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useCoworkManagedWorkspaces } from "./use-cowork-managed-workspaces";
-import { useCoworkStatus } from "./use-cowork-status";
-import { useCoworkThreads } from "./use-cowork-threads";
-import { useOpenCoworkCodingSession } from "./use-open-cowork-coding-session";
+import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";
+import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
+import { useCoworkThreads } from "@/hooks/access/anyharness/cowork/use-cowork-threads";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 
 export interface CoworkComposerSessionRow {
   sessionLinkId: string;
