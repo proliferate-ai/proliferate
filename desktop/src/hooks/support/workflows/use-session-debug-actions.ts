@@ -109,6 +109,10 @@ interface BuildLocatorInput {
   owningSlotWorkspaceId: string | null;
 }
 
+/**
+ * Owns support-facing session and workspace debug export actions.
+ * Does not own session runtime lifecycle or replay ingestion.
+ */
 export function useSessionDebugActions() {
   const workspaceContext = useAnyHarnessWorkspaceContext();
   const contextWorkspaceId = workspaceContext.workspaceId;

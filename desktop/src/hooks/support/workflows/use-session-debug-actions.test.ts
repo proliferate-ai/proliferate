@@ -13,7 +13,7 @@ import {
   type SessionDebugActionDependencies,
   type SessionDebugActionState,
   type SessionDebugClient,
-} from "@/hooks/support/use-session-debug-actions";
+} from "@/hooks/support/workflows/use-session-debug-actions";
 
 const now = new Date("2026-04-16T18:30:05.000Z");
 const runtimeUrl = "http://127.0.0.1:7007";

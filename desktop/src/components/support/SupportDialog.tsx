@@ -13,7 +13,7 @@ import {
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
-import { useSupportDialogState } from "@/hooks/support/use-support-dialog-state";
+import { useSupportDialogState } from "@/hooks/support/facade/use-support-dialog-state";
 import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
 import { clampSupportMessage } from "@/lib/domain/support/formatting";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
