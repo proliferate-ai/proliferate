@@ -20,7 +20,7 @@ import {
   agentSetupWorkflowReducer,
   createInitialAgentSetupWorkflowState,
 } from "@/lib/domain/agents/setup-workflow-reducer";
-import { useLocalAgentCredentials } from "@/hooks/agents/cache/use-local-agent-credentials";
+import { useLocalAgentCredentials } from "@/hooks/access/tauri/credentials/use-local-agent-credentials";
 import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

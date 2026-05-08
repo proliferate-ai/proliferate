@@ -3,7 +3,7 @@ import {
   useRuntimeHealthQuery,
 } from "@anyharness/sdk-react";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useAgentResourcesCache } from "@/hooks/agents/cache/use-agent-resources-cache";
+import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 

@@ -8,7 +8,7 @@ import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
 } from "@anyharness/sdk";
-import { useAgentResourcesCache } from "@/hooks/agents/cache/use-agent-resources-cache";
+import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 function assertHealthyRuntime(runtimeUrl: string, isHealthy: boolean): void {
