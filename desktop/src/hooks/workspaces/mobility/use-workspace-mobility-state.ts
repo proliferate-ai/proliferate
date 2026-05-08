@@ -7,7 +7,7 @@ import {
   isWorkspaceMobilityTransitionPhase,
   resolveWorkspaceMobilityStatusModel,
 } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
-import { useCloudMobilityWorkspaceDetail } from "@/hooks/cloud/use-cloud-mobility-workspace-detail";
+import { useCloudMobilityWorkspaceDetail } from "@/hooks/access/cloud/use-cloud-mobility-workspace-detail";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 
 export function useWorkspaceMobilityState() {

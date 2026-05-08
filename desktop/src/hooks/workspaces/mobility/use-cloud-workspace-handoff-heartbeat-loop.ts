@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useCloudWorkspaceHandoffHeartbeatMutation } from "@/hooks/cloud/use-cloud-workspace-handoff-heartbeat-mutation";
+import { useCloudWorkspaceHandoffHeartbeatMutation } from "@/hooks/access/cloud/use-cloud-workspace-handoff-heartbeat-mutation";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 

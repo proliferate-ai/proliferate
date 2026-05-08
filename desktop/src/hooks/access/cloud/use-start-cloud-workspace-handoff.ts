@@ -5,13 +5,13 @@ import type {
 } from "@/lib/access/cloud/client";
 import { startCloudWorkspaceHandoff } from "@/lib/access/cloud/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { useCloudCredentialActions } from "./use-cloud-credential-actions";
+import { useCloudCredentialMutations } from "./use-cloud-credential-mutations";
 
 export function useStartCloudWorkspaceHandoff() {
   const queryClient = useQueryClient();
-  const { syncCloudCredential } = useCloudCredentialActions();
+  const { syncCloudCredential } = useCloudCredentialMutations();
 
   return useMutation<
     CloudMobilityHandoffSummary,

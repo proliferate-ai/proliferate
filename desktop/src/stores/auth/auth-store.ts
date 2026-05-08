@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import type { AuthUser } from "@/lib/domain/auth/auth-user"
-import type { StoredAuthSession } from "@/lib/access/tauri/auth"
+import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session"
 
 export type AuthStatus = "bootstrapping" | "anonymous" | "authenticated"
 

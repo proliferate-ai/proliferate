@@ -38,7 +38,7 @@ describe("useWorkspaceActivityAcknowledgement", () => {
       _hydrated: true,
     });
     useSessionSelectionStore.setState({
-      hydrated: true,
+      _hydrated: true,
       selectedLogicalWorkspaceId: null,
     });
   });

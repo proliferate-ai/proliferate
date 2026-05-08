@@ -7,7 +7,7 @@ export function usePersistedLogicalWorkspaceSelection() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
-  const logicalStoreHydrated = useSessionSelectionStore((state) => state.hydrated);
+  const logicalStoreHydrated = useSessionSelectionStore((state) => state._hydrated);
   const { logicalWorkspaces, isLoading } = useLogicalWorkspaces();
   const { selectWorkspace } = useWorkspaceSelection();
   const attemptedLogicalWorkspaceIdRef = useRef<string | null>(null);

@@ -3,12 +3,9 @@ import {
   type TerminalPurpose,
   type TerminalRecord,
 } from "@anyharness/sdk";
-import {
-  anyHarnessTerminalsKey,
-} from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
+import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
+import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
@@ -48,8 +45,12 @@ const intentionallyClosingTerminals = new Set<string>();
 type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
 export function useTerminalActions() {
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const {
+    invalidateWorkspaceTerminals,
+    setWorkspaceTerminalRecords,
+  } = useTerminalCache();
+  const { invalidateCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const { selectedCloudRuntime, getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const markUnread = useTerminalStore((state) => state.markUnread);
@@ -80,19 +81,6 @@ export function useTerminalActions() {
     selectedCloudRuntime.workspaceId,
   ]);
 
-  const invalidateWorkspaceTerminals = useCallback(async (workspaceId: string) => {
-    await queryClient.invalidateQueries({
-      queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
-    });
-  }, [queryClient, runtimeUrl]);
-
-  const setWorkspaceTerminalRecords = useCallback((
-    workspaceId: string,
-    records: TerminalRecord[],
-  ) => {
-    queryClient.setQueryData(anyHarnessTerminalsKey(runtimeUrl, workspaceId), records);
-  }, [queryClient, runtimeUrl]);
-
   const triggerSelectedCloudReconnect = useCallback((workspaceId: string) => {
     if (
       selectedCloudRuntime.workspaceId !== workspaceId
@@ -106,12 +94,9 @@ export function useTerminalActions() {
       return;
     }
 
-    void queryClient.invalidateQueries({
-      queryKey: cloudWorkspaceConnectionKey(cloudWorkspaceId),
-      exact: true,
-    });
+    void invalidateCloudWorkspaceConnection(cloudWorkspaceId);
   }, [
-    queryClient,
+    invalidateCloudWorkspaceConnection,
     selectedCloudRuntime.state?.phase,
     selectedCloudRuntime.workspaceId,
   ]);

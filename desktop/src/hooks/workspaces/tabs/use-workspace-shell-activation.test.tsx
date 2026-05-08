@@ -67,7 +67,7 @@ beforeEach(() => {
   useSessionDirectoryStore.getState().clearEntries();
   useSessionTranscriptStore.getState().clearEntries();
   useSessionSelectionStore.setState({
-    hydrated: true,
+    _hydrated: true,
     selectedLogicalWorkspaceId: null,
   });
   useWorkspaceUiStore.setState({

@@ -25,7 +25,7 @@ describe("session activation guard", () => {
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
     useSessionSelectionStore.setState({
-      hydrated: true,
+      _hydrated: true,
       selectedLogicalWorkspaceId: null,
     });
     useWorkspaceUiStore.setState({

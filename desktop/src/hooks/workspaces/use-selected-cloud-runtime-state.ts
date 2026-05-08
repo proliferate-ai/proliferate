@@ -12,7 +12,7 @@ import {
   buildSelectedCloudRuntimeViewModel,
   type SelectedCloudRuntimeViewModel,
 } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
-import { useCloudWorkspaceConnection } from "@/hooks/cloud/use-cloud-workspace-connection";
+import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/access/cloud/workspaces";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";

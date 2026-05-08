@@ -1,25 +1,23 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { setConnectorEnabled } from "@/lib/workflows/mcp/connector-persistence";
+import { useMutation } from "@tanstack/react-query";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { mcpConnectorsKey } from "./query-keys";
+import {
+  type ToggleConnectorMutationInput,
+  useToggleConnectorMutation,
+} from "@/hooks/access/mcp/connectors/use-connector-mutations";
 
 export function useToggleConnector() {
-  const queryClient = useQueryClient();
+  const toggleConnectorMutation = useToggleConnectorMutation();
 
   return useMutation({
     meta: {
       telemetryHandled: true,
     },
-    mutationFn: async (input: {
-      connectionId: string;
-      catalogEntryId: string;
-      enabled: boolean;
-    }) => setConnectorEnabled(input.connectionId, input.enabled),
-    onSuccess: async (_result, variables) => {
-      await queryClient.invalidateQueries({ queryKey: mcpConnectorsKey() });
+    mutationFn: (input: ToggleConnectorMutationInput) =>
+      toggleConnectorMutation.mutateAsync(input),
+    onSuccess: (_result, variables) => {
       trackProductEvent("connector_toggled", {
         connector_id: variables.catalogEntryId,
         enabled: variables.enabled,

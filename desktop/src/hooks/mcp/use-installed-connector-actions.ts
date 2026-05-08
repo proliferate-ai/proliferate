@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
+import { useToggleConnector } from "@/hooks/mcp/workflows/use-toggle-connector";
 import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useToggleConnector } from "./use-toggle-connector";
 
 export function useInstalledConnectorActions() {
   const showToast = useToastStore((state) => state.show);

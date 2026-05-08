@@ -1,7 +1,5 @@
-import {
-  isHotPaintGatePendingForWorkspace,
-  useSessionSelectionStore,
-} from "@/stores/sessions/session-selection-store";
+import { isHotPaintGatePendingForWorkspace } from "@/lib/domain/sessions/hot-paint-gate";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useIsHotPaintGatePendingForWorkspace(
   workspaceId: string | null | undefined,

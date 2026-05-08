@@ -1,14 +1,10 @@
 import { create } from "zustand";
+import type { HotPaintGate } from "@/lib/domain/sessions/hot-paint-gate";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   buildPendingWorkspaceUiKey,
-  isPendingWorkspaceUiKey,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
-import type { HotPaintGate } from "@/stores/sessions/session-types";
-
-const LOGICAL_WORKSPACE_SELECTION_KEY = "selected_logical_workspace_id";
 
 interface ActivateWorkspaceOptions {
   logicalWorkspaceId: string | null;
@@ -20,12 +16,11 @@ interface ActivateWorkspaceOptions {
 
 interface ActivateSessionOptions {
   sessionId: string | null;
-  workspaceId?: string | null;
   hotPaintGate?: HotPaintGate | null;
 }
 
 interface SessionSelectionState {
-  hydrated: boolean;
+  _hydrated: boolean;
   pendingWorkspaceEntry: PendingWorkspaceEntry | null;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
@@ -46,13 +41,12 @@ interface SessionSelectionState {
   setActiveSessionId: (sessionId: string | null) => void;
   activateHotSession: (options: ActivateSessionOptions) => void;
   bumpSessionActivationIntentEpoch: (workspaceId: string) => number;
-  setHotPaintGate: (gate: HotPaintGate | null) => void;
   clearHotPaintGate: (nonce: number) => void;
-  markHydrated: (selectedLogicalWorkspaceId: string | null) => void;
+  hydrateSelectedLogicalWorkspaceSelection: (selectedLogicalWorkspaceId: string | null) => void;
 }
 
 export const useSessionSelectionStore = create<SessionSelectionState>((set, get) => ({
-  hydrated: false,
+  _hydrated: false,
   pendingWorkspaceEntry: null,
   selectedLogicalWorkspaceId: null,
   selectedWorkspaceId: null,
@@ -193,49 +187,17 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     return next;
   },
 
-  setHotPaintGate: (hotPaintGate) => set({ hotPaintGate }),
-
   clearHotPaintGate: (nonce) => set((state) => (
     state.hotPaintGate?.nonce === nonce
       ? { hotPaintGate: null }
       : state
   )),
 
-  markHydrated: (selectedLogicalWorkspaceId) => set({
-    hydrated: true,
+  hydrateSelectedLogicalWorkspaceSelection: (selectedLogicalWorkspaceId) => set({
+    _hydrated: true,
     selectedLogicalWorkspaceId,
   }),
 }));
-
-useSessionSelectionStore.subscribe((state, prev) => {
-  if (!state.hydrated || state.selectedLogicalWorkspaceId === prev.selectedLogicalWorkspaceId) {
-    return;
-  }
-
-  if (isPendingWorkspaceUiKey(state.selectedLogicalWorkspaceId)) {
-    return;
-  }
-
-  void persistValue(LOGICAL_WORKSPACE_SELECTION_KEY, state.selectedLogicalWorkspaceId);
-});
-
-export async function bootstrapSessionSelection(): Promise<void> {
-  const selectedLogicalWorkspaceId =
-    (await readPersistedValue<string | null>(LOGICAL_WORKSPACE_SELECTION_KEY))
-    ?? null;
-  useSessionSelectionStore.getState().markHydrated(
-    isPendingWorkspaceUiKey(selectedLogicalWorkspaceId)
-      ? null
-      : selectedLogicalWorkspaceId,
-  );
-}
-
-export function isHotPaintGatePendingForWorkspace(
-  gate: HotPaintGate | null,
-  workspaceId: string | null | undefined,
-): boolean {
-  return !!workspaceId && gate?.workspaceId === workspaceId;
-}
 
 function bumpVersionIfChanged(
   version: number,

@@ -12,7 +12,7 @@ import type {
 } from "@anyharness/sdk";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
+import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";

@@ -4,10 +4,9 @@ import type {
   ConnectorCatalogId,
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
+import { useConnectors } from "@/hooks/access/mcp/connectors/use-connectors";
 import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
-import { trackConnectorConnectClicked } from "@/hooks/mcp/use-install-connector";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useConnectors } from "./use-connectors";
 
 const EMPTY_INSTALLED: InstalledConnectorRecord[] = [];
 const EMPTY_AVAILABLE: readonly ConnectorCatalogEntry[] = [];
@@ -242,7 +241,11 @@ export function useConnectorsCatalogState() {
   }, [available, installed, modal]);
 
   const openConnect = useCallback((entryId: ConnectorCatalogId) => {
-    trackConnectorConnectClicked(entryId);
+    trackProductEvent("connector_connect_clicked", {
+      connector_id: entryId,
+      auth_style: "cloud",
+      availability: "cloud",
+    });
     setModal({ kind: "connect", entryId, tab: "configure" });
   }, []);
 

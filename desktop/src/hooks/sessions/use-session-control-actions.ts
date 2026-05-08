@@ -41,7 +41,7 @@ import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";

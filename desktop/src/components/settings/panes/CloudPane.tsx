@@ -20,7 +20,7 @@ import {
 } from "@/lib/domain/settings/repositories";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
-import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
+import { useCloudCredentials } from "@/hooks/access/cloud/use-cloud-credentials";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useRuntimeInputSyncSummary } from "@/hooks/cloud/use-runtime-input-sync-summary";
 import type {

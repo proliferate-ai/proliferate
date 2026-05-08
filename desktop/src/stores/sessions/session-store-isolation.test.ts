@@ -21,6 +21,7 @@ describe("session split stores", () => {
       activeSessionVersion: 0,
       sessionActivationIntentEpochByWorkspace: {},
       hotPaintGate: null,
+      _hydrated: false,
     });
     useSessionDirectoryStore.getState().clearEntries();
     useSessionTranscriptStore.getState().clearEntries();
@@ -32,7 +33,6 @@ describe("session split stores", () => {
 
     useSessionSelectionStore.getState().activateHotSession({
       sessionId: "session-a",
-      workspaceId: "workspace-a",
       hotPaintGate: {
         kind: "session_hot_switch",
         workspaceId: "workspace-a",

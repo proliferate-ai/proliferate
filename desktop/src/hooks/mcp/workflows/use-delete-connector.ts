@@ -1,23 +1,23 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { deleteConnector } from "@/lib/workflows/mcp/connector-persistence";
+import { useMutation } from "@tanstack/react-query";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { mcpConnectorsKey } from "./query-keys";
+import {
+  type DeleteConnectorMutationInput,
+  useDeleteConnectorMutation,
+} from "@/hooks/access/mcp/connectors/use-connector-mutations";
 
 export function useDeleteConnector() {
-  const queryClient = useQueryClient();
+  const deleteConnectorMutation = useDeleteConnectorMutation();
 
   return useMutation({
     meta: {
       telemetryHandled: true,
     },
-    mutationFn: async (input: { connectionId: string; catalogEntryId: string }) => {
-      await deleteConnector(input.connectionId);
-    },
-    onSuccess: async (_result, variables) => {
-      await queryClient.invalidateQueries({ queryKey: mcpConnectorsKey() });
+    mutationFn: (input: DeleteConnectorMutationInput) =>
+      deleteConnectorMutation.mutateAsync(input),
+    onSuccess: (_result, variables) => {
       trackProductEvent("connector_deleted", {
         connector_id: variables.catalogEntryId,
       });

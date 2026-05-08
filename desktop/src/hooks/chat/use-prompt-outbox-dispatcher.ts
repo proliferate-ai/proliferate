@@ -22,7 +22,7 @@ import {
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 const CONFIG_READY_TIMEOUT_MS = 5_000;
 const ACCEPTED_RUNNING_RECONCILE_DELAYS_MS = [250, 1_000, 2_500, 5_000, 10_000] as const;

@@ -1,10 +1,8 @@
 import {
-  anyHarnessSessionsKey,
   useDismissSessionMutation,
   useRestoreDismissedSessionMutation,
 } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@anyharness/sdk";
 import {
   resolveStatusFromExecutionSummary,
@@ -19,7 +17,7 @@ import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstr
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import {
   elapsedMs,
@@ -140,7 +138,6 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
 }
 
 export function useSessionSelectionActions() {
-  const queryClient = useQueryClient();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const cleanupDismissedSession = useDismissedSessionCleanup();
@@ -148,6 +145,8 @@ export function useSessionSelectionActions() {
     activateSession,
   } = useSessionRuntimeActions();
   const {
+    getWorkspaceSessionCacheSnapshot,
+    setWorkspaceSessions,
     upsertWorkspaceSessionRecord,
   } = useWorkspaceSessionCache();
   const dismissSessionMutation = useDismissSessionMutation();
@@ -164,22 +163,24 @@ export function useSessionSelectionActions() {
 
     const runtimeUrl = await ensureRuntimeReadyForSessions();
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
-    const queryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
-    const cacheState = queryClient.getQueryState(queryKey);
+    const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId, { runtimeUrl });
     if (options?.measurementOperationId) {
       recordMeasurementMetric({
         type: "cache",
         category: "session.list",
         operationId: options.measurementOperationId,
-        decision: cacheState?.dataUpdatedAt
-          ? cacheState.isInvalidated ? "stale" : "hit"
+        decision: cacheSnapshot.dataUpdatedAt
+          ? cacheSnapshot.isInvalidated ? "stale" : "hit"
           : "miss",
         source: "react_query",
       });
     }
-    const cachedSessions = queryClient.getQueryData<WorkspaceSession[]>(queryKey);
-    if (cachedSessions && cacheState?.dataUpdatedAt && !cacheState.isInvalidated) {
-      return cachedSessions;
+    if (
+      cacheSnapshot.sessions
+      && cacheSnapshot.dataUpdatedAt
+      && !cacheSnapshot.isInvalidated
+    ) {
+      return cacheSnapshot.sessions;
     }
 
     // Do not join a possibly hung automatic query for the same selected
@@ -196,9 +197,13 @@ export function useSessionSelectionActions() {
         }
         : undefined,
     );
-    queryClient.setQueryData(queryKey, sessions);
+    setWorkspaceSessions(workspaceId, () => sessions, { runtimeUrl });
     return sessions;
-  }, [getWorkspaceRuntimeBlockReason, queryClient]);
+  }, [
+    getWorkspaceRuntimeBlockReason,
+    getWorkspaceSessionCacheSnapshot,
+    setWorkspaceSessions,
+  ]);
 
   const selectSession = useCallback(async (
     sessionId: string,
@@ -305,7 +310,6 @@ export function useSessionSelectionActions() {
           ? commitHotActiveSession(sessionId, guard, hotPaintGate)
           : (useSessionSelectionStore.getState().activateHotSession({
             sessionId,
-            workspaceId: existingSlot.workspaceId!,
             hotPaintGate,
           }), null);
         if (commitOutcome?.result === "stale") {

@@ -1,25 +1,9 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  CloudAgentKind,
-  CloudCredentialMutationResponse,
-} from "@/lib/access/cloud/client";
+import { useCallback } from "react";
+import type { CloudAgentKind } from "@/lib/access/cloud/client";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import {
-  deleteCloudCredential,
-} from "@/lib/access/cloud/credentials";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useToastStore } from "@/stores/toast/toast-store";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import {
-  cloudCredentialsKey,
-  isCloudWorkspaceConnectionQueryKey,
-} from "@/hooks/access/cloud/query-keys";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
-import { syncLocalCloudCredentialToCloud } from "./cloud-credential-sync";
+import { useCloudCredentialMutations } from "@/hooks/access/cloud/use-cloud-credential-mutations";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 function describeCloudCredentialActionFailure(
   action: "sync" | "clear",
@@ -37,98 +21,33 @@ function describeCloudCredentialActionFailure(
 }
 
 export function useCloudCredentialActions() {
-  const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const credentialMutations = useCloudCredentialMutations();
   const showToast = useToastStore((state) => state.show);
 
-  const syncMutation = useMutation<
-    CloudCredentialMutationResponse,
-    Error,
-    CloudAgentKind
-  >({
-    meta: {
-      telemetryHandled: true,
-    },
-    mutationFn: async (provider) => {
-      return await syncLocalCloudCredentialToCloud(provider);
-    },
-    onSuccess: async (result, provider) => {
-      const invalidations: Promise<unknown>[] = [
-        queryClient.invalidateQueries({ queryKey: cloudCredentialsKey() }),
-      ];
-      if (result.changed) {
-        invalidations.push(
-          queryClient.invalidateQueries({
-            queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-          }),
-          queryClient.invalidateQueries({
-            predicate: (query) => isCloudWorkspaceConnectionQueryKey(query.queryKey),
-          }),
-        );
-      }
-      await Promise.all(invalidations);
-      trackProductEvent("cloud_credential_synced", {
-        provider,
-      });
-    },
-    onError: (error, provider) => {
-      showToast(describeCloudCredentialActionFailure("sync", provider, error));
-      captureTelemetryException(error, {
-        tags: {
-          action: "sync_cloud_credential",
-          domain: "cloud_credential",
-          provider,
-        },
-      });
-    },
-  });
+  const syncCloudCredential = useCallback(async (provider: CloudAgentKind) => {
+    try {
+      return await credentialMutations.syncCloudCredential(provider);
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      showToast(describeCloudCredentialActionFailure("sync", provider, normalizedError));
+      throw error;
+    }
+  }, [credentialMutations.syncCloudCredential, showToast]);
 
-  const deleteMutation = useMutation<
-    CloudCredentialMutationResponse,
-    Error,
-    CloudAgentKind
-  >({
-    meta: {
-      telemetryHandled: true,
-    },
-    mutationFn: async (provider) => {
-      return await deleteCloudCredential(provider);
-    },
-    onSuccess: async (result, provider) => {
-      const invalidations: Promise<unknown>[] = [
-        queryClient.invalidateQueries({ queryKey: cloudCredentialsKey() }),
-      ];
-      if (result.changed) {
-        invalidations.push(
-          queryClient.invalidateQueries({
-            queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-          }),
-          queryClient.invalidateQueries({
-            predicate: (query) => isCloudWorkspaceConnectionQueryKey(query.queryKey),
-          }),
-        );
-      }
-      await Promise.all(invalidations);
-      trackProductEvent("cloud_credential_deleted", {
-        provider,
-      });
-    },
-    onError: (error, provider) => {
-      showToast(describeCloudCredentialActionFailure("clear", provider, error));
-      captureTelemetryException(error, {
-        tags: {
-          action: "delete_cloud_credential",
-          domain: "cloud_credential",
-          provider,
-        },
-      });
-    },
-  });
+  const deleteCloudCredential = useCallback(async (provider: CloudAgentKind) => {
+    try {
+      return await credentialMutations.deleteCloudCredential(provider);
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      showToast(describeCloudCredentialActionFailure("clear", provider, normalizedError));
+      throw error;
+    }
+  }, [credentialMutations.deleteCloudCredential, showToast]);
 
   return {
-    syncCloudCredential: syncMutation.mutateAsync,
-    isSyncingCloudCredential: syncMutation.isPending,
-    deleteCloudCredential: deleteMutation.mutateAsync,
-    isDeletingCloudCredential: deleteMutation.isPending,
+    syncCloudCredential,
+    isSyncingCloudCredential: credentialMutations.isSyncingCloudCredential,
+    deleteCloudCredential,
+    isDeletingCloudCredential: credentialMutations.isDeletingCloudCredential,
   };
 }
