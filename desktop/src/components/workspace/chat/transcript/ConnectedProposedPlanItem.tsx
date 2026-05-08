@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { TranscriptItem } from "@anyharness/sdk";
 import { ProposedPlanCard } from "@/components/workspace/chat/transcript/ProposedPlanCard";
-import { useProposedPlanActions } from "@/hooks/plans/use-proposed-plan-actions";
+import { useProposedPlanActions } from "@/hooks/plans/workflows/use-proposed-plan-actions";
 import {
   planAttachmentId,
   type PromptPlanAttachmentDescriptor,

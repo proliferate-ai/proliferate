@@ -5,7 +5,7 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
-import { usePlanHandoffDialogState } from "@/hooks/plans/use-plan-handoff-dialog-state";
+import { usePlanHandoffDialogState } from "@/hooks/plans/ui/use-plan-handoff-dialog-state";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";

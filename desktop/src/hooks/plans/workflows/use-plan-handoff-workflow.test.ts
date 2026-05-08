@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executePlanHandoff } from "@/hooks/plans/use-plan-handoff-workflow";
+import { executePlanHandoff } from "@/hooks/plans/workflows/use-plan-handoff-workflow";
 
 describe("executePlanHandoff", () => {
   it("applies pre-prompt config changes before sending the first prompt", async () => {

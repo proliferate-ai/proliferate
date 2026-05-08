@@ -37,6 +37,7 @@ import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
+// Owns the plan handoff dialog form and submit workflow wiring. Does not own session runtime.
 export function usePlanHandoffWorkflow({
   plan,
   onCompleted,

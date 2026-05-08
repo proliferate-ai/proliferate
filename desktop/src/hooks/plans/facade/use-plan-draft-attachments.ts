@@ -10,11 +10,12 @@ import {
   type PromptPlanAttachmentPointer,
 } from "@/lib/domain/chat/composer/prompt-content";
 import { dedupePlanReferenceBlocks } from "@/lib/domain/chat/composer/prompt-input";
-import { useAddPlanDraftAttachment } from "@/hooks/plans/use-add-plan-draft-attachment";
+import { useAddPlanDraftAttachment } from "@/hooks/plans/workflows/use-add-plan-draft-attachment";
 import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
 
 const EMPTY_PLANS: PromptPlanAttachmentPointer[] = [];
 
+// Owns the composer-facing plan attachment surface. Does not own plan picker UI.
 export function usePlanDraftAttachments({
   workspaceUiKey,
   sdkWorkspaceId,

@@ -9,10 +9,11 @@ import {
   planAttachmentDescriptorFromDetail,
 } from "@/lib/domain/chat/composer/prompt-content";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useAddPlanDraftAttachment } from "@/hooks/plans/use-add-plan-draft-attachment";
+import { useAddPlanDraftAttachment } from "@/hooks/plans/workflows/use-add-plan-draft-attachment";
 
 const EMPTY_PLANS: ProposedPlanSummary[] = [];
 
+// Owns the plan picker popover state and attach flow. Does not own composer draft rendering.
 export function usePlanPicker(options: {
   workspaceUiKey: string | null;
   sdkWorkspaceId: string | null;
