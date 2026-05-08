@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud.mcp_connections.access import McpConnectionManageDependency
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpConnectionResponse,
     CloudMcpConnectionsResponse,
@@ -49,21 +50,19 @@ async def create_cloud_mcp_connection_endpoint(
 
 @router.patch("/mcp/connections/{connection_id}", response_model=CloudMcpConnectionResponse)
 async def patch_cloud_mcp_connection_endpoint(
-    connection_id: str,
     body: PatchCloudMcpConnectionRequest,
-    user: User = Depends(current_active_user),
+    connection: McpConnectionManageDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
-    return await patch_cloud_mcp_connection(db, user.id, connection_id, body)
+    return await patch_cloud_mcp_connection(db, connection, body)
 
 
 @router.delete("/mcp/connections/{connection_id}", response_model=OkResponse)
 async def delete_cloud_mcp_connection_endpoint(
-    connection_id: str,
-    user: User = Depends(current_active_user),
+    connection: McpConnectionManageDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> OkResponse:
-    await delete_cloud_mcp_connection_for_user(db, user.id, connection_id)
+    await delete_cloud_mcp_connection_for_user(db, connection)
     return OkResponse()
 
 
@@ -72,12 +71,11 @@ async def delete_cloud_mcp_connection_endpoint(
     response_model=CloudMcpConnectionResponse,
 )
 async def put_cloud_mcp_connection_secret_auth_endpoint(
-    connection_id: str,
     body: PutCloudMcpSecretAuthRequest,
-    user: User = Depends(current_active_user),
+    connection: McpConnectionManageDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
-    return await put_cloud_mcp_connection_secret_auth(db, user.id, connection_id, body)
+    return await put_cloud_mcp_connection_secret_auth(db, connection, body)
 
 
 @router.get("/mcp-connections/statuses", response_model=list[CloudMcpConnectionSyncStatus])

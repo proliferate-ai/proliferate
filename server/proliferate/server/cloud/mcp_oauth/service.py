@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import hashlib
-import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.cloud_mcp import CLOUD_MCP_OAUTH_FLOW_TTL
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.connections import (
-    get_user_connection,
     get_user_connection_by_db_id,
 )
 from proliferate.db.store.cloud_mcp.oauth_clients import (
@@ -26,7 +24,10 @@ from proliferate.db.store.cloud_mcp.oauth_flows import (
     fail_oauth_flow,
     get_oauth_flow_for_user,
 )
-from proliferate.db.store.cloud_mcp.types import CloudMcpOAuthClientRecord
+from proliferate.db.store.cloud_mcp.types import (
+    CloudMcpConnectionRecord,
+    CloudMcpOAuthClientRecord,
+)
 from proliferate.integrations.mcp_oauth import (
     McpOAuthProviderError,
     build_authorization_url,
@@ -47,6 +48,18 @@ from proliferate.server.cloud.mcp_catalog.catalog import (
     render_oauth_resource_url,
     validate_settings,
 )
+from proliferate.server.cloud.mcp_oauth.domain.flow_rules import (
+    build_oauth_auth_payload,
+    oauth_flow_is_expired,
+    oauth_redirect_uri,
+    oauth_requested_scopes_json,
+    oauth_state_hash,
+    oauth_status_includes_authorization_url,
+    should_drop_cached_oauth_client_on_token_error,
+)
+from proliferate.server.cloud.mcp_oauth.domain.static_client_rules import (
+    cached_static_client_matches,
+)
 from proliferate.server.cloud.mcp_oauth.models import (
     CloudMcpOAuthCallbackResponse,
     CloudMcpOAuthFlowStatusResponse,
@@ -55,12 +68,9 @@ from proliferate.server.cloud.mcp_oauth.models import (
     oauth_flow_status_payload,
 )
 from proliferate.server.cloud.mcp_oauth.static_clients import (
-    StaticOAuthClientConfig,
     get_static_oauth_client_config,
 )
 from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
-
-OAUTH_FLOW_TTL = timedelta(minutes=10)
 
 
 def _cloud_mcp_enabled_or_raise() -> None:
@@ -68,19 +78,11 @@ def _cloud_mcp_enabled_or_raise() -> None:
         raise CloudApiError("cloud_mcp_disabled", "Cloud MCP is disabled.", status_code=403)
 
 
-def _state_hash(state: str) -> str:
-    return hashlib.sha256(state.encode("utf-8")).hexdigest()
-
-
-def _callback_base_url() -> str:
-    base = settings.cloud_mcp_oauth_callback_base_url.strip() or settings.api_base_url.strip()
-    if not base:
-        base = "http://localhost:8000"
-    return base.rstrip("/")
-
-
 def _redirect_uri() -> str:
-    return f"{_callback_base_url()}/v1/cloud/mcp/oauth/callback"
+    return oauth_redirect_uri(
+        configured_callback_base_url=settings.cloud_mcp_oauth_callback_base_url,
+        api_base_url=settings.api_base_url,
+    )
 
 
 async def _get_or_register_dcr_client(
@@ -143,8 +145,27 @@ async def _get_static_client(
         redirect_uri=redirect_uri,
         catalog_entry_id=entry.id,
     )
-    if cached is not None and _cached_static_client_matches(cached, config, resource):
-        return cached
+    if cached is not None:
+        cached_secret = (
+            decrypt_text(cached.client_secret_ciphertext)
+            if cached.client_secret_ciphertext
+            else None
+        )
+        if cached_static_client_matches(
+            cached_resource=cached.resource,
+            cached_client_id=cached.client_id,
+            cached_client_secret=cached_secret,
+            cached_token_endpoint_auth_method=cached.token_endpoint_auth_method,
+            cached_registration_client_uri=cached.registration_client_uri,
+            cached_registration_access_token_ciphertext=(
+                cached.registration_access_token_ciphertext
+            ),
+            configured_resource=resource,
+            configured_client_id=config.client_id,
+            configured_client_secret=config.client_secret,
+            configured_token_endpoint_auth_method=config.token_endpoint_auth_method,
+        ):
+            return cached
     return await upsert_oauth_client(
         db,
         issuer=issuer,
@@ -159,24 +180,6 @@ async def _get_static_client(
         token_endpoint_auth_method=config.token_endpoint_auth_method,
         registration_client_uri=None,
         registration_access_token_ciphertext=None,
-    )
-
-
-def _cached_static_client_matches(
-    cached: CloudMcpOAuthClientRecord,
-    config: StaticOAuthClientConfig,
-    resource: str,
-) -> bool:
-    cached_secret = (
-        decrypt_text(cached.client_secret_ciphertext) if cached.client_secret_ciphertext else None
-    )
-    return (
-        cached.resource == resource
-        and cached.client_id == config.client_id
-        and cached_secret == config.client_secret
-        and cached.token_endpoint_auth_method == config.token_endpoint_auth_method
-        and cached.registration_client_uri is None
-        and cached.registration_access_token_ciphertext is None
     )
 
 
@@ -208,13 +211,9 @@ async def _get_oauth_client(
 async def start_cloud_mcp_oauth_flow(
     db: AsyncSession,
     *,
-    user_id: UUID,
-    connection_id: str,
+    connection: CloudMcpConnectionRecord,
 ) -> StartCloudMcpOAuthFlowResponse:
     _cloud_mcp_enabled_or_raise()
-    connection = await get_user_connection(db, user_id, connection_id)
-    if connection is None:
-        raise CloudApiError("not_found", "MCP connection was not found.", status_code=404)
     entry = get_catalog_entry(connection.catalog_entry_id)
     if entry is None or entry.auth_kind != "oauth":
         raise CloudApiError(
@@ -273,19 +272,17 @@ async def start_cloud_mcp_oauth_flow(
     flow = await create_oauth_flow_canceling_existing(
         db,
         connection_db_id=connection.id,
-        user_id=user_id,
-        state_hash=_state_hash(state),
+        user_id=connection.user_id,
+        state_hash=oauth_state_hash(state),
         code_verifier_ciphertext=encrypt_text(verifier),
         issuer=auth_metadata.issuer,
         resource=resource,
         client_id=client.client_id,
         token_endpoint=auth_metadata.token_endpoint,
-        requested_scopes=json.dumps(
-            protected.challenged_scope.split() if protected.challenged_scope else []
-        ),
+        requested_scopes=oauth_requested_scopes_json(protected.challenged_scope),
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
-        expires_at=datetime.now(UTC) + OAUTH_FLOW_TTL,
+        expires_at=datetime.now(UTC) + CLOUD_MCP_OAUTH_FLOW_TTL,
     )
     return oauth_flow_start_payload(flow)
 
@@ -300,9 +297,15 @@ async def get_cloud_mcp_oauth_flow_status(
     if flow is None:
         raise CloudApiError("not_found", "OAuth flow was not found.", status_code=404)
     status = flow
-    if flow.status == "active" and flow.expires_at <= datetime.now(UTC):
+    if flow.status == "active" and oauth_flow_is_expired(
+        expires_at=flow.expires_at,
+        now=datetime.now(UTC),
+    ):
         status = await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired") or flow
-    return oauth_flow_status_payload(status, include_authorization_url=status.status == "active")
+    return oauth_flow_status_payload(
+        status,
+        include_authorization_url=oauth_status_includes_authorization_url(status.status),
+    )
 
 
 async def cancel_cloud_mcp_oauth_flow(
@@ -324,11 +327,11 @@ async def complete_cloud_mcp_oauth_callback(
     code: str,
 ) -> CloudMcpOAuthCallbackResponse:
     _cloud_mcp_enabled_or_raise()
-    hashed = _state_hash(state)
+    hashed = oauth_state_hash(state)
     flow = await claim_active_oauth_flow_by_state_hash(db, hashed)
     if flow is None:
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
-    if flow.expires_at <= datetime.now(UTC):
+    if oauth_flow_is_expired(expires_at=flow.expires_at, now=datetime.now(UTC)):
         await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired")
         return CloudMcpOAuthCallbackResponse(ok=False, status="expired")
     if not flow.token_endpoint or not flow.resource:
@@ -364,7 +367,7 @@ async def complete_cloud_mcp_oauth_callback(
             ),
         )
     except McpOAuthProviderError as exc:
-        if exc.code == "invalid_client" and flow.issuer:
+        if should_drop_cached_oauth_client_on_token_error(exc.code) and flow.issuer:
             await delete_oauth_client(
                 db,
                 issuer=flow.issuer,
@@ -380,17 +383,17 @@ async def complete_cloud_mcp_oauth_callback(
         auth_kind="oauth",
         auth_status="ready",
         payload_ciphertext=encrypt_json(
-            {
-                "issuer": flow.issuer,
-                "resource": flow.resource,
-                "clientId": flow.client_id,
-                "accessToken": token.access_token,
-                "refreshToken": token.refresh_token,
-                "expiresAt": token.expires_at.isoformat() if token.expires_at else None,
-                "scopes": list(token.scopes),
-                "tokenEndpoint": flow.token_endpoint,
-                "redirectUri": flow.redirect_uri,
-            }
+            build_oauth_auth_payload(
+                issuer=flow.issuer,
+                resource=flow.resource,
+                client_id=flow.client_id,
+                access_token=token.access_token,
+                refresh_token=token.refresh_token,
+                expires_at=token.expires_at,
+                scopes=token.scopes,
+                token_endpoint=flow.token_endpoint,
+                redirect_uri=flow.redirect_uri,
+            )
         ),
         payload_format="oauth-bundle-v1",
         token_expires_at=token.expires_at,
