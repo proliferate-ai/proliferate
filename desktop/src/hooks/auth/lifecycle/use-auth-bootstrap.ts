@@ -4,6 +4,7 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { bootstrapAuth } from "@/lib/integrations/auth/orchestration";
 
+// Owns app-mounted auth bootstrap wiring. Does not own sign-in/sign-out actions.
 export function useAuthBootstrap() {
   useEffect(() => {
     registerCurrentAuthSessionProvider(() => useAuthStore.getState().session);

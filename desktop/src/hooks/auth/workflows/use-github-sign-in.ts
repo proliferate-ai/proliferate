@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
+import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
-import { useAuthActions } from "@/hooks/auth/use-auth-actions";
+import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UseGitHubSignInResult {
@@ -15,6 +15,7 @@ export interface UseGitHubSignInResult {
   clearError: () => void;
 }
 
+// Owns GitHub sign-in form state and submit callback. Does not own auth availability access.
 export function useGitHubSignIn(): UseGitHubSignInResult {
   const { signInWithGitHub } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();
