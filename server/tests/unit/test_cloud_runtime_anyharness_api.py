@@ -1,70 +1,37 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-
-import httpx
 import pytest
 
+from proliferate.integrations.anyharness import (
+    CloudRuntimeReconnectError,
+    RemoteAgentSummary,
+    ResolvedRemoteWorkspace,
+    RuntimeAuthProbe,
+)
 from proliferate.server.cloud.runtime import anyharness_api
-from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.anyharness_api import (
     _install_required_synced_providers,
     _synced_ready_providers,
 )
 
 
-class _FakeAsyncClient:
-    def __init__(self, responses: Sequence[httpx.Response] | Exception) -> None:
-        self._responses = responses
-        self._index = 0
-
-    async def __aenter__(self) -> _FakeAsyncClient:
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb) -> None:
-        return None
-
-    async def get(self, _url: str, **_kwargs: object) -> httpx.Response:
-        if isinstance(self._responses, Exception):
-            raise self._responses
-        response = self._responses[self._index]
-        self._index += 1
-        return response
-
-    async def post(self, _url: str, **_kwargs: object) -> httpx.Response:
-        return await self.get(_url, **_kwargs)
-
-
-def _response(
-    status_code: int,
-    *,
-    json: object | None = None,
-    text: str | None = None,
-    method: str = "POST",
-    url: str = "https://runtime.invalid/v1/workspaces/resolve",
-) -> httpx.Response:
-    kwargs: dict[str, object] = {"request": httpx.Request(method, url)}
-    if json is not None:
-        kwargs["json"] = json
-    if text is not None:
-        kwargs["text"] = text
-    return httpx.Response(status_code, **kwargs)
-
-
 @pytest.mark.asyncio
 async def test_verify_runtime_auth_enforced_accepts_authenticated_and_rejects_unauthenticated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _FakeAsyncClient(
-        [
-            httpx.Response(200, text="[]"),
-            httpx.Response(401, text='{"detail":"unauthorized"}'),
-        ]
-    )
+    async def _check_runtime_auth_enforcement(*_args, **_kwargs) -> RuntimeAuthProbe:
+        return RuntimeAuthProbe(
+            authenticated_success=True,
+            authenticated_status_code=200,
+            authenticated_response_preview=None,
+            unauthenticated_status_code=401,
+            unauthenticated_response_preview='{"detail":"unauthorized"}',
+        )
+
     monkeypatch.setattr(
-        anyharness_api.httpx,
-        "AsyncClient",
-        lambda **_kwargs: client,
+        anyharness_api.anyharness,
+        "check_runtime_auth_enforcement",
+        _check_runtime_auth_enforcement,
     )
 
     await anyharness_api.verify_runtime_auth_enforced(
@@ -77,11 +44,19 @@ async def test_verify_runtime_auth_enforced_accepts_authenticated_and_rejects_un
 async def test_verify_runtime_auth_enforced_raises_when_bearer_token_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _FakeAsyncClient([httpx.Response(401, text="nope")])
+    async def _check_runtime_auth_enforcement(*_args, **_kwargs) -> RuntimeAuthProbe:
+        return RuntimeAuthProbe(
+            authenticated_success=False,
+            authenticated_status_code=401,
+            authenticated_response_preview="nope",
+            unauthenticated_status_code=None,
+            unauthenticated_response_preview=None,
+        )
+
     monkeypatch.setattr(
-        anyharness_api.httpx,
-        "AsyncClient",
-        lambda **_kwargs: client,
+        anyharness_api.anyharness,
+        "check_runtime_auth_enforcement",
+        _check_runtime_auth_enforcement,
     )
 
     with pytest.raises(CloudRuntimeReconnectError, match="stored bearer token"):
@@ -95,16 +70,19 @@ async def test_verify_runtime_auth_enforced_raises_when_bearer_token_is_rejected
 async def test_verify_runtime_auth_enforced_raises_when_runtime_accepts_unauthenticated_requests(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _FakeAsyncClient(
-        [
-            httpx.Response(200, text="[]"),
-            httpx.Response(200, text="[]"),
-        ]
-    )
+    async def _check_runtime_auth_enforcement(*_args, **_kwargs) -> RuntimeAuthProbe:
+        return RuntimeAuthProbe(
+            authenticated_success=True,
+            authenticated_status_code=200,
+            authenticated_response_preview=None,
+            unauthenticated_status_code=200,
+            unauthenticated_response_preview="[]",
+        )
+
     monkeypatch.setattr(
-        anyharness_api.httpx,
-        "AsyncClient",
-        lambda **_kwargs: client,
+        anyharness_api.anyharness,
+        "check_runtime_auth_enforcement",
+        _check_runtime_auth_enforcement,
     )
 
     with pytest.raises(CloudRuntimeReconnectError, match="did not reject"):
@@ -118,12 +96,13 @@ async def test_verify_runtime_auth_enforced_raises_when_runtime_accepts_unauthen
 async def test_verify_runtime_auth_enforced_raises_when_probe_request_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    request = httpx.Request("GET", "https://runtime.invalid/v1/agents")
-    client = _FakeAsyncClient(httpx.ConnectError("boom", request=request))
+    async def _check_runtime_auth_enforcement(*_args, **_kwargs) -> RuntimeAuthProbe:
+        raise CloudRuntimeReconnectError("boom")
+
     monkeypatch.setattr(
-        anyharness_api.httpx,
-        "AsyncClient",
-        lambda **_kwargs: client,
+        anyharness_api.anyharness,
+        "check_runtime_auth_enforcement",
+        _check_runtime_auth_enforcement,
     )
 
     with pytest.raises(CloudRuntimeReconnectError, match="Failed to verify bearer authentication"):
@@ -140,16 +119,16 @@ async def test_reconcile_remote_agents_skips_install_when_synced_agents_are_alre
     list_calls: list[str] = []
     install_calls: list[str] = []
 
-    async def _list_remote_agents(*_args: object, **_kwargs: object) -> list[dict[str, str]]:
+    async def _list_remote_agents(*_args: object, **_kwargs: object) -> list[RemoteAgentSummary]:
         list_calls.append("list")
         return [
-            {"kind": "claude", "readiness": "ready"},
-            {"kind": "codex", "readiness": "ready"},
+            RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
+            RemoteAgentSummary(kind="codex", readiness="ready", credential_state=None),
         ]
 
-    async def _install_remote_agent(*_args: object, **_kwargs: object) -> dict[str, str]:
+    async def _install_remote_agent(*_args: object, **_kwargs: object) -> RemoteAgentSummary:
         install_calls.append("install")
-        return {"kind": "claude", "readiness": "ready"}
+        return RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None)
 
     monkeypatch.setattr(anyharness_api, "_list_remote_agents", _list_remote_agents)
     monkeypatch.setattr(anyharness_api, "_install_remote_agent", _install_remote_agent)
@@ -171,19 +150,27 @@ async def test_reconcile_remote_agents_installs_only_install_required_synced_age
 ) -> None:
     list_responses = [
         [
-            {"kind": "claude", "readiness": "ready"},
-            {"kind": "codex", "readiness": "install_required"},
-            {"kind": "gemini", "readiness": "credentials_required"},
+            RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
+            RemoteAgentSummary(kind="codex", readiness="install_required", credential_state=None),
+            RemoteAgentSummary(
+                kind="gemini",
+                readiness="credentials_required",
+                credential_state=None,
+            ),
         ],
         [
-            {"kind": "claude", "readiness": "ready"},
-            {"kind": "codex", "readiness": "ready"},
-            {"kind": "gemini", "readiness": "credentials_required"},
+            RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
+            RemoteAgentSummary(kind="codex", readiness="ready", credential_state=None),
+            RemoteAgentSummary(
+                kind="gemini",
+                readiness="credentials_required",
+                credential_state=None,
+            ),
         ],
     ]
     install_calls: list[str] = []
 
-    async def _list_remote_agents(*_args: object, **_kwargs: object) -> list[dict[str, str]]:
+    async def _list_remote_agents(*_args: object, **_kwargs: object) -> list[RemoteAgentSummary]:
         return list_responses.pop(0)
 
     async def _install_remote_agent(
@@ -192,10 +179,10 @@ async def test_reconcile_remote_agents_installs_only_install_required_synced_age
         kind: str,
         *,
         workspace_id: object | None = None,
-    ) -> dict[str, str]:
+    ) -> RemoteAgentSummary:
         del workspace_id
         install_calls.append(kind)
-        return {"kind": kind, "readiness": "ready"}
+        return RemoteAgentSummary(kind=kind, readiness="ready", credential_state=None)
 
     monkeypatch.setattr(anyharness_api, "_list_remote_agents", _list_remote_agents)
     monkeypatch.setattr(anyharness_api, "_install_remote_agent", _install_remote_agent)
@@ -213,8 +200,12 @@ async def test_reconcile_remote_agents_installs_only_install_required_synced_age
 def test_install_required_synced_providers_includes_gemini() -> None:
     providers = _install_required_synced_providers(
         [
-            {"kind": "claude", "readiness": "ready"},
-            {"kind": "gemini", "readiness": "install_required"},
+            RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
+            RemoteAgentSummary(
+                kind="gemini",
+                readiness="install_required",
+                credential_state=None,
+            ),
         ],
         ["claude", "gemini"],
     )
@@ -225,9 +216,9 @@ def test_install_required_synced_providers_includes_gemini() -> None:
 def test_synced_ready_providers_includes_gemini() -> None:
     providers = _synced_ready_providers(
         [
-            {"kind": "claude", "readiness": "ready"},
-            {"kind": "gemini", "readiness": "ready"},
-            {"kind": "codex", "readiness": "install_required"},
+            RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None),
+            RemoteAgentSummary(kind="gemini", readiness="ready", credential_state=None),
+            RemoteAgentSummary(kind="codex", readiness="install_required", credential_state=None),
         ],
         ["claude", "codex", "gemini"],
     )
@@ -239,18 +230,14 @@ def test_synced_ready_providers_includes_gemini() -> None:
 async def test_resolve_remote_workspace_accepts_current_contract_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _FakeAsyncClient(
-        [
-            _response(
-                200,
-                json={
-                    "repoRoot": {"id": "repo-1"},
-                    "workspace": {"id": "workspace-123"},
-                },
-            )
-        ]
+    async def _resolve_runtime_workspace(*_args, **_kwargs) -> ResolvedRemoteWorkspace:
+        return ResolvedRemoteWorkspace(workspace_id="workspace-123", repo_root_id="repo-1")
+
+    monkeypatch.setattr(
+        anyharness_api.anyharness,
+        "resolve_runtime_workspace",
+        _resolve_runtime_workspace,
     )
-    monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
 
     workspace = await anyharness_api.resolve_remote_workspace(
         "https://runtime.invalid",
@@ -260,33 +247,3 @@ async def test_resolve_remote_workspace_accepts_current_contract_shape(
 
     assert workspace.workspace_id == "workspace-123"
     assert workspace.repo_root_id == "repo-1"
-
-
-@pytest.mark.asyncio
-async def test_resolve_remote_workspace_raises_when_response_json_is_invalid(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient([_response(200, text="{not-json}")])
-    monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
-
-    with pytest.raises(CloudRuntimeReconnectError, match="returned invalid JSON"):
-        await anyharness_api.resolve_remote_workspace(
-            "https://runtime.invalid",
-            "runtime-token",
-            runtime_workdir="/workspace",
-        )
-
-
-@pytest.mark.asyncio
-async def test_resolve_remote_workspace_raises_when_workspace_id_is_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    client = _FakeAsyncClient([_response(200, json={"workspace": {}})])
-    monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
-
-    with pytest.raises(CloudRuntimeReconnectError, match="valid AnyHarness workspace id"):
-        await anyharness_api.resolve_remote_workspace(
-            "https://runtime.invalid",
-            "runtime-token",
-            runtime_workdir="/workspace",
-        )

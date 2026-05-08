@@ -10,8 +10,6 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-import httpx
-
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, CloudRuntimeEnvironmentStatus
 from proliferate.db.models.cloud import CloudCredential, CloudRuntimeEnvironment
 from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
@@ -22,7 +20,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     runtime_environment_credential_apply_lock,
     save_runtime_environment_state,
 )
-from proliferate.integrations.anyharness import CloudRuntimeReconnectError
+from proliferate.integrations.anyharness import CloudRuntimeReconnectError, list_runtime_workspaces
 from proliferate.integrations.sandbox import (
     SandboxProvider,
     SandboxRuntimeContext,
@@ -252,27 +250,12 @@ async def _runtime_has_live_sessions(
     *,
     workspace_id: UUID,
 ) -> bool:
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            f"{runtime_url}/v1/workspaces",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        response.raise_for_status()
-        payload = response.json()
-    if not isinstance(payload, list):
-        raise CloudRuntimeReconnectError("Cloud runtime did not return a valid workspace list.")
-    for item in payload:
-        if not isinstance(item, dict):
-            continue
-        summary = item.get("executionSummary")
-        if not isinstance(summary, dict):
-            continue
-        live_count = summary.get("liveSessionCount")
-        if isinstance(live_count, int) and live_count > 0:
+    for remote_workspace in await list_runtime_workspaces(runtime_url, access_token):
+        if remote_workspace.live_session_count > 0:
             log_cloud_event(
                 "cloud runtime credential relaunch blocked by live session",
                 workspace_id=workspace_id,
-                runtime_workspace_id=item.get("id"),
+                runtime_workspace_id=remote_workspace.workspace_id,
             )
             return True
     return False

@@ -10,11 +10,22 @@ from proliferate.integrations.anyharness.errors import (
     CloudRuntimeRequestRejectedError,
 )
 from proliferate.integrations.anyharness.models import (
+    RemoteAgentInstallResult,
+    RemoteAgentSummary,
     RemoteSession,
     RemoteTerminalCommandRun,
     RemoteWorkspaceFileState,
     RemoteWorkspaceSetupStart,
+    RemoteWorkspaceSummary,
     ResolvedRemoteWorkspace,
+    RuntimeAuthProbe,
+    RuntimeHealthProbe,
+)
+from proliferate.integrations.anyharness.runtime import (
+    check_runtime_auth_enforcement,
+    install_runtime_agent,
+    list_runtime_agents,
+    probe_runtime_health,
 )
 from proliferate.integrations.anyharness.sessions import (
     apply_runtime_reasoning_effort,
@@ -32,24 +43,41 @@ from proliferate.integrations.anyharness.worktrees import (
     run_runtime_worktree_retention,
     update_runtime_worktree_retention_policy,
 )
+from proliferate.integrations.anyharness.workspaces import (
+    list_runtime_workspaces,
+    prepare_runtime_mobility_destination,
+    resolve_runtime_workspace,
+)
 
 __all__ = [
     "CloudRuntimeOperationError",
     "CloudRuntimePromptDeliveryUncertainError",
     "CloudRuntimeReconnectError",
     "CloudRuntimeRequestRejectedError",
+    "RemoteAgentInstallResult",
+    "RemoteAgentSummary",
     "RemoteSession",
     "RemoteTerminalCommandRun",
     "RemoteWorkspaceFileState",
     "RemoteWorkspaceSetupStart",
+    "RemoteWorkspaceSummary",
     "ResolvedRemoteWorkspace",
+    "RuntimeAuthProbe",
+    "RuntimeHealthProbe",
     "apply_runtime_reasoning_effort",
     "auth_headers",
+    "check_runtime_auth_enforcement",
     "close_runtime_session",
     "create_runtime_session",
     "get_remote_terminal_command_run",
+    "install_runtime_agent",
+    "list_runtime_agents",
+    "list_runtime_workspaces",
+    "prepare_runtime_mobility_destination",
+    "probe_runtime_health",
     "prompt_runtime_session",
     "read_remote_workspace_file_state",
+    "resolve_runtime_workspace",
     "response_preview",
     "run_runtime_worktree_retention",
     "start_remote_workspace_setup",

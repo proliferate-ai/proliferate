@@ -6,61 +6,53 @@ import asyncio
 import logging
 import time
 from collections.abc import Sequence
-from typing import Any
 from uuid import UUID
 
-import httpx
-
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
+from proliferate.integrations import anyharness
 from proliferate.integrations.anyharness import (
     CloudRuntimeReconnectError,
+    RemoteAgentSummary,
     ResolvedRemoteWorkspace,
-    auth_headers,
-    response_preview,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.utils.time import duration_ms
 
 
-def _agent_readiness_summary(agent_summaries: Sequence[dict[str, Any]]) -> str:
+def _agent_readiness_summary(agent_summaries: Sequence[RemoteAgentSummary]) -> str:
     parts: list[str] = []
     for item in agent_summaries:
-        kind = item.get("kind")
-        readiness = item.get("readiness")
-        if isinstance(kind, str):
-            parts.append(f"{kind}:{readiness}")
+        parts.append(f"{item.kind}:{item.readiness}")
     return ",".join(parts) or "none"
 
 
-def _ready_cloud_agents_from_summaries(agent_summaries: Sequence[dict[str, Any]]) -> list[str]:
+def _ready_cloud_agents_from_summaries(
+    agent_summaries: Sequence[RemoteAgentSummary],
+) -> list[str]:
     ready: list[str] = []
     for item in agent_summaries:
-        kind = item.get("kind")
-        readiness = item.get("readiness")
-        if kind in SUPPORTED_CLOUD_AGENTS and readiness == "ready":
-            ready.append(kind)
+        if item.kind in SUPPORTED_CLOUD_AGENTS and item.readiness == "ready":
+            ready.append(item.kind)
     return sorted(set(ready))
 
 
 def _install_required_synced_providers(
-    agent_summaries: Sequence[dict[str, Any]],
+    agent_summaries: Sequence[RemoteAgentSummary],
     synced_providers: Sequence[str],
 ) -> list[str]:
-    summaries_by_kind = {
-        item.get("kind"): item for item in agent_summaries if isinstance(item.get("kind"), str)
-    }
+    summaries_by_kind = {item.kind: item for item in agent_summaries}
     install_required: list[str] = []
     for provider in synced_providers:
         if provider not in SUPPORTED_CLOUD_AGENTS:
             continue
         summary = summaries_by_kind.get(provider)
-        if summary is None or summary.get("readiness") == "install_required":
+        if summary is None or summary.readiness == "install_required":
             install_required.append(provider)
     return install_required
 
 
 def _synced_ready_providers(
-    agent_summaries: Sequence[dict[str, Any]],
+    agent_summaries: Sequence[RemoteAgentSummary],
     synced_providers: Sequence[str],
 ) -> list[str]:
     ready = set(_ready_cloud_agents_from_summaries(agent_summaries))
@@ -69,12 +61,6 @@ def _synced_ready_providers(
         for provider in synced_providers
         if provider in SUPPORTED_CLOUD_AGENTS and provider in ready
     )
-
-
-def _agent_install_timeout_seconds(kind: str) -> float:
-    if kind == "codex":
-        return 1800.0
-    return 180.0
 
 
 async def wait_for_runtime_health(
@@ -93,55 +79,54 @@ async def wait_for_runtime_health(
         required_successes=required_successes,
         max_attempts=total_attempts,
     )
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        for attempt in range(1, total_attempts + 1):
-            attempt_started = time.perf_counter()
-            try:
-                response = await client.get(f"{runtime_url}/health")
-                if response.is_success:
-                    successes += 1
+    for attempt in range(1, total_attempts + 1):
+        attempt_started = time.perf_counter()
+        try:
+            probe = await anyharness.probe_runtime_health(runtime_url)
+            if probe.is_success:
+                successes += 1
+                log_cloud_event(
+                    "cloud runtime health probe succeeded",
+                    workspace_id=workspace_id,
+                    runtime_url=runtime_url,
+                    attempt=attempt,
+                    consecutive_successes=successes,
+                    elapsed_ms=duration_ms(attempt_started),
+                )
+                if successes >= required_successes:
                     log_cloud_event(
-                        "cloud runtime health probe succeeded",
+                        "cloud runtime health wait finished",
                         workspace_id=workspace_id,
                         runtime_url=runtime_url,
-                        attempt=attempt,
-                        consecutive_successes=successes,
-                        elapsed_ms=duration_ms(attempt_started),
+                        attempts=attempt,
+                        required_successes=required_successes,
                     )
-                    if successes >= required_successes:
-                        log_cloud_event(
-                            "cloud runtime health wait finished",
-                            workspace_id=workspace_id,
-                            runtime_url=runtime_url,
-                            attempts=attempt,
-                            required_successes=required_successes,
-                        )
-                        return
-                else:
-                    successes = 0
-                    log_cloud_event(
-                        "cloud runtime health probe returned non-success",
-                        level=logging.WARNING,
-                        workspace_id=workspace_id,
-                        runtime_url=runtime_url,
-                        attempt=attempt,
-                        status_code=response.status_code,
-                        elapsed_ms=duration_ms(attempt_started),
-                        response_preview=response_preview(response.text),
-                    )
-            except httpx.HTTPError as exc:
+                    return
+            else:
                 successes = 0
                 log_cloud_event(
-                    "cloud runtime health probe failed",
+                    "cloud runtime health probe returned non-success",
                     level=logging.WARNING,
                     workspace_id=workspace_id,
                     runtime_url=runtime_url,
                     attempt=attempt,
+                    status_code=probe.status_code,
                     elapsed_ms=duration_ms(attempt_started),
-                    error=format_exception_message(exc),
-                    error_type=exc.__class__.__name__,
+                    response_preview=probe.response_preview,
                 )
-            await asyncio.sleep(delay_seconds)
+        except CloudRuntimeReconnectError as exc:
+            successes = 0
+            log_cloud_event(
+                "cloud runtime health probe failed",
+                level=logging.WARNING,
+                workspace_id=workspace_id,
+                runtime_url=runtime_url,
+                attempt=attempt,
+                elapsed_ms=duration_ms(attempt_started),
+                error=format_exception_message(exc),
+                error_type=exc.__class__.__name__,
+            )
+        await asyncio.sleep(delay_seconds)
     raise CloudRuntimeReconnectError("AnyHarness did not become healthy in the cloud sandbox.")
 
 
@@ -158,32 +143,8 @@ async def verify_runtime_auth_enforced(
         runtime_url=runtime_url,
     )
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            auth_response = await client.get(
-                f"{runtime_url}/v1/agents",
-                headers=auth_headers(access_token),
-            )
-
-            if not auth_response.is_success:
-                log_cloud_event(
-                    "cloud runtime auth verification rejected bearer token",
-                    level=logging.WARNING,
-                    workspace_id=workspace_id,
-                    runtime_url=runtime_url,
-                    elapsed_ms=duration_ms(verify_started),
-                    status_code=auth_response.status_code,
-                    response_preview=response_preview(auth_response.text),
-                )
-                if auth_response.status_code == 401:
-                    raise CloudRuntimeReconnectError(
-                        "Runtime rejected the stored bearer token during auth verification."
-                    )
-                raise CloudRuntimeReconnectError(
-                    "Runtime failed authenticated auth verification in the cloud sandbox."
-                )
-
-            unauth_response = await client.get(f"{runtime_url}/v1/agents")
-    except httpx.HTTPError as exc:
+        probe = await anyharness.check_runtime_auth_enforcement(runtime_url, access_token)
+    except CloudRuntimeReconnectError as exc:
         log_cloud_event(
             "cloud runtime auth verification failed",
             level=logging.WARNING,
@@ -197,15 +158,33 @@ async def verify_runtime_auth_enforced(
             "Failed to verify bearer authentication on the cloud runtime."
         ) from exc
 
-    if unauth_response.status_code != 401:
+    if not probe.authenticated_success:
+        log_cloud_event(
+            "cloud runtime auth verification rejected bearer token",
+            level=logging.WARNING,
+            workspace_id=workspace_id,
+            runtime_url=runtime_url,
+            elapsed_ms=duration_ms(verify_started),
+            status_code=probe.authenticated_status_code,
+            response_preview=probe.authenticated_response_preview,
+        )
+        if probe.authenticated_status_code == 401:
+            raise CloudRuntimeReconnectError(
+                "Runtime rejected the stored bearer token during auth verification."
+            )
+        raise CloudRuntimeReconnectError(
+            "Runtime failed authenticated auth verification in the cloud sandbox."
+        )
+
+    if probe.unauthenticated_status_code != 401:
         log_cloud_event(
             "cloud runtime auth verification accepted unauthenticated request",
             level=logging.WARNING,
             workspace_id=workspace_id,
             runtime_url=runtime_url,
             elapsed_ms=duration_ms(verify_started),
-            status_code=unauth_response.status_code,
-            response_preview=response_preview(unauth_response.text),
+            status_code=probe.unauthenticated_status_code,
+            response_preview=probe.unauthenticated_response_preview,
         )
         raise CloudRuntimeReconnectError(
             "Runtime did not reject an unauthenticated request during auth verification."
@@ -224,18 +203,9 @@ async def _list_remote_agents(
     access_token: str,
     *,
     workspace_id: UUID | None = None,
-) -> list[dict[str, Any]]:
+) -> list[RemoteAgentSummary]:
     list_started = time.perf_counter()
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(
-            f"{runtime_url}/v1/agents",
-            headers=auth_headers(access_token),
-        )
-        response.raise_for_status()
-        payload = response.json()
-    if not isinstance(payload, list):
-        raise CloudRuntimeReconnectError("Cloud runtime did not return a valid agent list.")
-    agent_summaries = [item for item in payload if isinstance(item, dict)]
+    agent_summaries = await anyharness.list_runtime_agents(runtime_url, access_token)
     log_cloud_event(
         "cloud runtime agent list loaded",
         workspace_id=workspace_id,
@@ -252,7 +222,7 @@ async def _install_remote_agent(
     kind: str,
     *,
     workspace_id: UUID | None = None,
-) -> dict[str, Any]:
+) -> RemoteAgentSummary:
     install_started = time.perf_counter()
     log_cloud_event(
         "cloud runtime agent install started",
@@ -260,33 +230,7 @@ async def _install_remote_agent(
         runtime_url=runtime_url,
         agent=kind,
     )
-    try:
-        async with httpx.AsyncClient(timeout=_agent_install_timeout_seconds(kind)) as client:
-            response = await client.post(
-                f"{runtime_url}/v1/agents/{kind}/install",
-                headers=auth_headers(access_token),
-                json={},
-            )
-            response.raise_for_status()
-            payload = response.json()
-    except httpx.ReadTimeout as exc:
-        raise CloudRuntimeReconnectError(
-            f"Timed out while preparing cloud agent '{kind}'."
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise CloudRuntimeReconnectError(f"Failed to prepare cloud agent '{kind}': {exc}") from exc
-
-    if not isinstance(payload, dict):
-        raise CloudRuntimeReconnectError(
-            f"Cloud runtime returned an invalid install response for agent '{kind}'."
-        )
-
-    agent_summary = payload.get("agent")
-    already_installed = payload.get("alreadyInstalled")
-    if not isinstance(agent_summary, dict):
-        raise CloudRuntimeReconnectError(
-            f"Cloud runtime did not return agent status after installing '{kind}'."
-        )
+    install_result = await anyharness.install_runtime_agent(runtime_url, access_token, kind)
 
     log_cloud_event(
         "cloud runtime agent install finished",
@@ -294,11 +238,11 @@ async def _install_remote_agent(
         runtime_url=runtime_url,
         agent=kind,
         elapsed_ms=duration_ms(install_started),
-        already_installed=already_installed,
-        readiness=agent_summary.get("readiness"),
-        credential_state=agent_summary.get("credentialState"),
+        already_installed=install_result.already_installed,
+        readiness=install_result.agent.readiness,
+        credential_state=install_result.agent.credential_state,
     )
-    return agent_summary
+    return install_result.agent
 
 
 async def get_runtime_ready_agent_kinds(
@@ -342,7 +286,7 @@ async def reconcile_remote_agents(
         install_required=",".join(providers_to_install) or "none",
         agents=_agent_readiness_summary(initial_summaries),
     )
-    install_summaries: list[dict[str, Any]] = []
+    install_summaries: list[RemoteAgentSummary] = []
     for provider in providers_to_install:
         install_summaries.append(
             await _install_remote_agent(
@@ -352,7 +296,7 @@ async def reconcile_remote_agents(
                 workspace_id=workspace_id,
             )
         )
-    dict_summaries = (
+    agent_summaries = (
         await _list_remote_agents(
             runtime_url,
             access_token,
@@ -361,14 +305,14 @@ async def reconcile_remote_agents(
         if providers_to_install
         else initial_summaries
     )
-    ready_agent_kinds = _ready_cloud_agents_from_summaries(dict_summaries)
+    ready_agent_kinds = _ready_cloud_agents_from_summaries(agent_summaries)
     log_cloud_event(
         "cloud runtime reconcile finished",
         workspace_id=workspace_id,
         runtime_url=runtime_url,
         elapsed_ms=duration_ms(reconcile_started),
         ready_agents=",".join(ready_agent_kinds) or "none",
-        agents=_agent_readiness_summary(dict_summaries),
+        agents=_agent_readiness_summary(agent_summaries),
         prepared_agents=_agent_readiness_summary(install_summaries),
         ready_from_template=",".join(providers_ready_from_template) or "none",
         install_required=",".join(providers_to_install) or "none",
@@ -389,60 +333,20 @@ async def resolve_remote_workspace(
     workspace_id: UUID | None = None,
 ) -> ResolvedRemoteWorkspace:
     resolve_started = time.perf_counter()
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(
-            f"{runtime_url}/v1/workspaces/resolve",
-            headers=auth_headers(access_token),
-            json={
-                "path": runtime_workdir,
-                "origin": {"kind": "human", "entrypoint": "cloud"},
-            },
-        )
-        response.raise_for_status()
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise CloudRuntimeReconnectError(
-                "Cloud runtime returned invalid JSON when resolving the AnyHarness workspace."
-            ) from exc
-
-    if not isinstance(payload, dict):
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid AnyHarness workspace id."
-        )
-
-    workspace = payload.get("workspace")
-    if not isinstance(workspace, dict):
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid AnyHarness workspace id."
-        )
-
-    remote_workspace_id = workspace.get("id")
-    if not isinstance(remote_workspace_id, str) or not remote_workspace_id:
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid AnyHarness workspace id."
-        )
-    remote_repo_root_id = workspace.get("repoRootId")
-    if not isinstance(remote_repo_root_id, str) or not remote_repo_root_id:
-        repo_root = payload.get("repoRoot")
-        if isinstance(repo_root, dict):
-            remote_repo_root_id = repo_root.get("id")
-    if not isinstance(remote_repo_root_id, str) or not remote_repo_root_id:
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid AnyHarness repo root id."
-        )
+    remote_workspace = await anyharness.resolve_runtime_workspace(
+        runtime_url,
+        access_token,
+        runtime_workdir=runtime_workdir,
+    )
     log_cloud_event(
         "cloud runtime workspace resolved",
         workspace_id=workspace_id,
         runtime_url=runtime_url,
         elapsed_ms=duration_ms(resolve_started),
-        remote_workspace_id=remote_workspace_id,
-        remote_repo_root_id=remote_repo_root_id,
+        remote_workspace_id=remote_workspace.workspace_id,
+        remote_repo_root_id=remote_workspace.repo_root_id,
     )
-    return ResolvedRemoteWorkspace(
-        workspace_id=remote_workspace_id,
-        repo_root_id=remote_repo_root_id,
-    )
+    return remote_workspace
 
 
 async def prepare_remote_mobility_destination(
@@ -457,50 +361,22 @@ async def prepare_remote_mobility_destination(
     workspace_id: UUID | None = None,
 ) -> ResolvedRemoteWorkspace:
     prepare_started = time.perf_counter()
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"{runtime_url}/v1/repo-roots/{repo_root_id}/mobility/prepare-destination",
-            headers=auth_headers(access_token),
-            json={
-                "requestedBranch": requested_branch,
-                "requestedBaseSha": requested_base_sha,
-                "destinationId": destination_id,
-                "preferredWorkspaceName": preferred_workspace_name,
-            },
-        )
-        response.raise_for_status()
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise CloudRuntimeReconnectError(
-                "Cloud runtime returned invalid JSON when preparing a worktree destination."
-            ) from exc
-
-    if not isinstance(payload, dict) or not isinstance(payload.get("workspace"), dict):
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid prepared workspace."
-        )
-    workspace = payload["workspace"]
-    remote_workspace_id = workspace.get("id")
-    remote_repo_root_id = workspace.get("repoRootId")
-    if not isinstance(remote_workspace_id, str) or not remote_workspace_id:
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid prepared workspace id."
-        )
-    if not isinstance(remote_repo_root_id, str) or not remote_repo_root_id:
-        raise CloudRuntimeReconnectError(
-            "Cloud runtime did not return a valid prepared repo root id."
-        )
+    remote_workspace = await anyharness.prepare_runtime_mobility_destination(
+        runtime_url,
+        access_token,
+        repo_root_id=repo_root_id,
+        requested_branch=requested_branch,
+        requested_base_sha=requested_base_sha,
+        destination_id=destination_id,
+        preferred_workspace_name=preferred_workspace_name,
+    )
     log_cloud_event(
         "cloud runtime worktree destination prepared",
         workspace_id=workspace_id,
         runtime_url=runtime_url,
         elapsed_ms=duration_ms(prepare_started),
-        remote_workspace_id=remote_workspace_id,
-        remote_repo_root_id=remote_repo_root_id,
+        remote_workspace_id=remote_workspace.workspace_id,
+        remote_repo_root_id=remote_workspace.repo_root_id,
         destination_id=destination_id,
     )
-    return ResolvedRemoteWorkspace(
-        workspace_id=remote_workspace_id,
-        repo_root_id=remote_repo_root_id,
-    )
+    return remote_workspace
