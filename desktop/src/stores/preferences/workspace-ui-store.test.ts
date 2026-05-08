@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   migrateWorkspaceUiState,
   WORKSPACE_UI_DEFAULTS,
-  useWorkspaceUiStore,
-} from "./workspace-ui-store";
+} from "@/lib/domain/preferences/workspace-ui-state";
+import { useWorkspaceUiStore } from "./workspace-ui-store";
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 

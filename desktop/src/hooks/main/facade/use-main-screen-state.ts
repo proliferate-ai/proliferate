@@ -23,10 +23,10 @@ import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { shouldMountWorkspaceShell } from "@/lib/domain/chat/surface/chat-surface";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
-  useWorkspaceUiStore,
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/stores/preferences/workspace-ui-store";
+} from "@/lib/domain/preferences/workspace-ui-state";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,

@@ -13,10 +13,10 @@ import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transpare
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import {
-  useWorkspaceUiStore,
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/stores/preferences/workspace-ui-store";
+} from "@/lib/domain/preferences/workspace-ui-state";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
