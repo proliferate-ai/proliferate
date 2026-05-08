@@ -8,6 +8,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 
 from proliferate.auth.dependencies import current_active_user
+from proliferate.constants.automations import (
+    AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
+    AUTOMATION_RUN_LIST_MAX_LIMIT,
+)
 from proliferate.db.models.auth import User
 from proliferate.server.automations.local_executor_service import (
     attach_local_run_session,
@@ -225,7 +229,9 @@ async def run_automation_now_endpoint(
 @router.get("/{automation_id}/runs", response_model=AutomationRunListResponse)
 async def list_automation_runs_endpoint(
     automation_id: UUID,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    limit: Annotated[int, Query(ge=1, le=AUTOMATION_RUN_LIST_MAX_LIMIT)] = (
+        AUTOMATION_RUN_LIST_DEFAULT_LIMIT
+    ),
     user: User = Depends(current_active_user),
 ) -> AutomationRunListResponse:
     return await list_automation_runs(user.id, automation_id, limit=limit)
