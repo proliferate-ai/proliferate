@@ -14,21 +14,23 @@ import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { describeCloudCredentialStatus } from "@/lib/domain/cloud/credentials";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import {
+  type CloudAgentKind,
+  type CloudCredentialStatus,
+  isCloudAgentKind,
+  useCloudCredentials,
+} from "@/hooks/access/cloud/use-cloud-credentials";
+import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
-import { useCloudCredentials } from "@/hooks/access/cloud/use-cloud-credentials";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
+import {
+  type CloudRepoConfigSummary,
+  useCloudRepoConfigs,
+} from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useRuntimeInputSyncSummary } from "@/hooks/cloud/use-runtime-input-sync-summary";
-import type {
-  CloudAgentKind,
-  CloudCredentialStatus,
-  CloudRepoConfigSummary,
-} from "@/lib/access/cloud/client";
-import { isCloudAgentKind } from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];

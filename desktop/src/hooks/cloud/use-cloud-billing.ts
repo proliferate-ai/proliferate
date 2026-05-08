@@ -11,6 +11,9 @@ import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
+export type { BillingPlanInfo } from "@/lib/access/cloud/client";
+export type { CloudOwnerSelection } from "@/lib/access/cloud/billing";
+
 function billingOwnerKey(owner?: CloudOwnerSelection) {
   return {
     ownerScope: owner?.ownerScope ?? "personal",

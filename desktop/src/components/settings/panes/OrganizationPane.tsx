@@ -22,14 +22,16 @@ import {
 } from "@/components/settings/panes/organization/OrganizationLogo";
 import { useActiveOrganization } from "@/hooks/organizations/use-active-organization";
 import { useOrganizationActions } from "@/hooks/organizations/use-organization-actions";
-import { useOrganizationInvitations } from "@/hooks/organizations/use-organization-invitations";
-import { useOrganizationMembers } from "@/hooks/organizations/use-organization-members";
+import {
+  type OrganizationInvitationResponse,
+  useOrganizationInvitations,
+} from "@/hooks/organizations/use-organization-invitations";
+import {
+  type OrganizationMemberResponse,
+  useOrganizationMembers,
+} from "@/hooks/organizations/use-organization-members";
+import type { OrganizationResponse } from "@/hooks/organizations/use-organizations";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import type {
-  OrganizationInvitationResponse,
-  OrganizationMemberResponse,
-  OrganizationResponse,
-} from "@/lib/access/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_MEMBERS: OrganizationMemberResponse[] = [];

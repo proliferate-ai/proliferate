@@ -3,6 +3,8 @@ import type { CloudRepoConfigsListResponse } from "@/lib/access/cloud/client";
 import { listCloudRepoConfigs } from "@/lib/access/cloud/repo-configs";
 import { cloudRepoConfigsKey } from "./query-keys";
 
+export type { CloudRepoConfigSummary } from "@/lib/access/cloud/client";
+
 export function useCloudRepoConfigs(enabled = true) {
   return useQuery<CloudRepoConfigsListResponse>({
     queryKey: cloudRepoConfigsKey(),

@@ -6,6 +6,9 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
 
+export type { CloudAgentKind, CloudCredentialStatus } from "@/lib/access/cloud/client";
+export { isCloudAgentKind } from "@/lib/access/cloud/client";
+
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
 
 export function useCloudCredentials() {

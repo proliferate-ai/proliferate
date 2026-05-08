@@ -3,6 +3,8 @@ import type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
 import { getCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
 import { cloudRepoConfigKey } from "./query-keys";
 
+export type { CloudRepoConfigResponse } from "@/lib/access/cloud/client";
+
 export function useCloudRepoConfig(
   gitOwner: string | null | undefined,
   gitRepoName: string | null | undefined,

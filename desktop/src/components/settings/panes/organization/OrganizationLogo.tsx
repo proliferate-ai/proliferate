@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
-import type {
-  OrganizationMemberResponse,
-  OrganizationResponse,
-} from "@/lib/access/cloud/client";
+import type { OrganizationMemberResponse } from "@/hooks/organizations/use-organization-members";
+import type { OrganizationResponse } from "@/hooks/organizations/use-organizations";
 
 export function OrganizationLogo({
   organization,
