@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
-import { buildLaunchControlDescriptors } from "./use-chat-model-selector-state";
+import { buildLaunchControlDescriptors } from "./launch-control-descriptors";
 
 function control(
   key: WorkspaceSessionLaunchControl["key"],
@@ -50,7 +50,7 @@ describe("buildLaunchControlDescriptors", () => {
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
-      onActiveSessionSelect: null,
+      onSelect: () => {},
     });
 
     expect(controls.map((candidate) => candidate.key)).toEqual(["effort", "fast_mode"]);
@@ -92,7 +92,7 @@ describe("buildLaunchControlDescriptors", () => {
         defaultLiveSessionControlValuesByAgentKind: {},
       },
       pendingConfigChanges: null,
-      onActiveSessionSelect: null,
+      onSelect: () => {},
     });
 
     expect(controls).toMatchObject([
@@ -104,5 +104,43 @@ describe("buildLaunchControlDescriptors", () => {
         isEnabled: false,
       },
     ]);
+  });
+
+  it("passes normalized control key and raw config id to selection handlers", () => {
+    const selections: Array<{
+      agentKind: string;
+      controlKey: string;
+      rawConfigId: string;
+      value: string;
+    }> = [];
+    const controls = buildLaunchControlDescriptors({
+      selection: { kind: "codex", modelId: "gpt-5.5" },
+      launchAgents: [
+        {
+          kind: "codex",
+          launchControls: [
+            control("access_mode", "Mode", "medium"),
+          ],
+          models: [{ id: "gpt-5.5" }],
+        },
+      ],
+      preferences: {
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+      pendingConfigChanges: null,
+      onSelect: (agentKind, controlKey, rawConfigId, value) => {
+        selections.push({ agentKind, controlKey, rawConfigId, value });
+      },
+    });
+
+    controls[0]?.onSelect("high");
+
+    expect(selections).toEqual([{
+      agentKind: "codex",
+      controlKey: "mode",
+      rawConfigId: "access_mode",
+      value: "high",
+    }]);
   });
 });
