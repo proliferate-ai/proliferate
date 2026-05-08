@@ -27,8 +27,12 @@ from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_c
 from proliferate.server.cloud.mcp_catalog.catalog import get_catalog_entry
 from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     parse_settings as catalog_parse_settings,
+)
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     render_oauth_resource_url,
     validate_secret_fields,
+)
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     validate_settings as catalog_validate_settings,
 )
 from proliferate.server.cloud.mcp_catalog.domain.types import (

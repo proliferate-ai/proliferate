@@ -22,7 +22,6 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     UrlVariant,
 )
 
-
 BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
     CatalogEntry(
         id="github",
