@@ -28,6 +28,7 @@ from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     bootstrap_cloud_repo_config_for_user,
 )
+from proliferate.server.automations.errors import AutomationServiceError
 from proliferate.server.automations.models import (
     AutomationListResponse,
     AutomationResponse,
@@ -53,14 +54,6 @@ from proliferate.utils.time import utcnow
 MAX_RUN_LIST_LIMIT = 100
 DEFAULT_RUN_LIST_LIMIT = 50
 _REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
-
-
-class AutomationServiceError(RuntimeError):
-    def __init__(self, code: str, message: str, *, status_code: int) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status_code = status_code
 
 
 @dataclass(frozen=True)

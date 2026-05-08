@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated, NoReturn
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.models.auth import User
@@ -37,7 +37,6 @@ from proliferate.server.automations.models import (
     UpdateAutomationRequest,
 )
 from proliferate.server.automations.service import (
-    AutomationServiceError,
     create_automation,
     get_automation,
     list_automation_runs,
@@ -51,21 +50,11 @@ from proliferate.server.automations.service import (
 router = APIRouter(prefix="/automations", tags=["automations"])
 
 
-def _raise_automation_error(error: AutomationServiceError) -> NoReturn:
-    raise HTTPException(
-        status_code=error.status_code,
-        detail={"code": error.code, "message": error.message},
-    )
-
-
 @router.get("", response_model=AutomationListResponse)
 async def list_automations_endpoint(
     user: User = Depends(current_active_user),
 ) -> AutomationListResponse:
-    try:
-        return await list_automations(user.id)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await list_automations(user.id)
 
 
 @router.post("", response_model=AutomationResponse)
@@ -73,10 +62,7 @@ async def create_automation_endpoint(
     body: CreateAutomationRequest,
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    try:
-        return await create_automation(user.id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await create_automation(user.id, body)
 
 
 @router.post("/executor/local/claims", response_model=LocalAutomationClaimListResponse)
@@ -84,10 +70,7 @@ async def claim_local_runs_endpoint(
     body: LocalAutomationClaimRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationClaimListResponse:
-    try:
-        return await claim_local_runs(user.id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await claim_local_runs(user.id, body)
 
 
 @router.post(
@@ -99,10 +82,7 @@ async def heartbeat_local_run_endpoint(
     body: LocalAutomationClaimActionRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await heartbeat_local_run(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await heartbeat_local_run(user.id, run_id, body)
 
 
 @router.post(
@@ -114,10 +94,7 @@ async def mark_local_run_creating_workspace_endpoint(
     body: LocalAutomationClaimActionRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await mark_local_run_creating_workspace(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await mark_local_run_creating_workspace(user.id, run_id, body)
 
 
 @router.post(
@@ -129,10 +106,7 @@ async def attach_local_run_workspace_endpoint(
     body: LocalAutomationAttachWorkspaceRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await attach_local_run_workspace(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await attach_local_run_workspace(user.id, run_id, body)
 
 
 @router.post(
@@ -144,10 +118,7 @@ async def mark_local_run_provisioning_workspace_endpoint(
     body: LocalAutomationClaimActionRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await mark_local_run_provisioning_workspace(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await mark_local_run_provisioning_workspace(user.id, run_id, body)
 
 
 @router.post(
@@ -159,10 +130,7 @@ async def mark_local_run_creating_session_endpoint(
     body: LocalAutomationAttachWorkspaceRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await mark_local_run_creating_session(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await mark_local_run_creating_session(user.id, run_id, body)
 
 
 @router.post(
@@ -174,10 +142,7 @@ async def attach_local_run_session_endpoint(
     body: LocalAutomationAttachSessionRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await attach_local_run_session(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await attach_local_run_session(user.id, run_id, body)
 
 
 @router.post(
@@ -189,10 +154,7 @@ async def mark_local_run_dispatching_endpoint(
     body: LocalAutomationClaimActionRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await mark_local_run_dispatching(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await mark_local_run_dispatching(user.id, run_id, body)
 
 
 @router.post(
@@ -204,10 +166,7 @@ async def mark_local_run_dispatched_endpoint(
     body: LocalAutomationAttachSessionRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await mark_local_run_dispatched(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await mark_local_run_dispatched(user.id, run_id, body)
 
 
 @router.post(
@@ -219,10 +178,7 @@ async def mark_local_run_failed_endpoint(
     body: LocalAutomationFailRequest,
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    try:
-        return await mark_local_run_failed(user.id, run_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await mark_local_run_failed(user.id, run_id, body)
 
 
 @router.get("/{automation_id}", response_model=AutomationResponse)
@@ -230,10 +186,7 @@ async def get_automation_endpoint(
     automation_id: UUID,
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    try:
-        return await get_automation(user.id, automation_id)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await get_automation(user.id, automation_id)
 
 
 @router.patch("/{automation_id}", response_model=AutomationResponse)
@@ -242,10 +195,7 @@ async def update_automation_endpoint(
     body: UpdateAutomationRequest,
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    try:
-        return await update_automation(user.id, automation_id, body)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await update_automation(user.id, automation_id, body)
 
 
 @router.post("/{automation_id}/pause", response_model=AutomationResponse)
@@ -253,10 +203,7 @@ async def pause_automation_endpoint(
     automation_id: UUID,
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    try:
-        return await pause_automation(user.id, automation_id)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await pause_automation(user.id, automation_id)
 
 
 @router.post("/{automation_id}/resume", response_model=AutomationResponse)
@@ -264,10 +211,7 @@ async def resume_automation_endpoint(
     automation_id: UUID,
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    try:
-        return await resume_automation(user.id, automation_id)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await resume_automation(user.id, automation_id)
 
 
 @router.post("/{automation_id}/run-now", response_model=AutomationRunResponse)
@@ -275,10 +219,7 @@ async def run_automation_now_endpoint(
     automation_id: UUID,
     user: User = Depends(current_active_user),
 ) -> AutomationRunResponse:
-    try:
-        return await run_automation_now(user.id, automation_id)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await run_automation_now(user.id, automation_id)
 
 
 @router.get("/{automation_id}/runs", response_model=AutomationRunListResponse)
@@ -287,7 +228,4 @@ async def list_automation_runs_endpoint(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     user: User = Depends(current_active_user),
 ) -> AutomationRunListResponse:
-    try:
-        return await list_automation_runs(user.id, automation_id, limit=limit)
-    except AutomationServiceError as error:
-        _raise_automation_error(error)
+    return await list_automation_runs(user.id, automation_id, limit=limit)
