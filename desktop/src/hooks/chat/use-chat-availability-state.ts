@@ -9,7 +9,7 @@ import {
 } from "@/lib/domain/chat/composer/chat-input";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
+import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 
 export interface ChatAvailabilityState extends ChatInputAvailability {

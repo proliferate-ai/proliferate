@@ -7,7 +7,7 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
-import { useChatLaunchCatalog } from "./use-chat-launch-catalog";
+import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
 
 const EMPTY_PROVIDER_CONFIGS: ProviderConfig[] = [];
 

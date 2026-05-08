@@ -16,7 +16,7 @@ import {
   useActiveSessionSurfaceSnapshot,
 } from "./derived/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "./use-chat-availability-state";
-import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
+import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,

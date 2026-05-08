@@ -4,7 +4,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useChatLaunchCatalog } from "./use-chat-launch-catalog";
+import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
 
 const mocks = vi.hoisted(() => ({
   useEffectiveAgentCatalogQuery: vi.fn(),

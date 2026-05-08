@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
+import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
