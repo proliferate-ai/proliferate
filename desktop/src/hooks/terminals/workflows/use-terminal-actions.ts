@@ -44,6 +44,8 @@ import { useTerminalStore } from "@/stores/terminal/terminal-store";
 const intentionallyClosingTerminals = new Set<string>();
 type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
+// Owns terminal user actions and stream attachment wiring for a workspace.
+// Does not own terminal rendering or the stream registry's replay/lifecycle internals.
 export function useTerminalActions() {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const {

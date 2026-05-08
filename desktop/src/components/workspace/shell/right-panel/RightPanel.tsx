@@ -16,7 +16,7 @@ import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/Workspac
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
-import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
+import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import {
   RIGHT_PANEL_BROWSER_TAB_LIMIT,
   availableRightPanelTools,

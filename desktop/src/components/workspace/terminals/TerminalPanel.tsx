@@ -27,7 +27,7 @@ import {
   type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "@/lib/workflows/terminals/terminal-stream-registry";
-import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
+import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useToastStore } from "@/stores/toast/toast-store";

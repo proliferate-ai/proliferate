@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/use-terminal-tab-native-context-menu";
+import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
   Check,
   Pencil,
