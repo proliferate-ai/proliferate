@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Protocol
 from urllib.parse import urlencode
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import OwnerContext, OwnerSelection, require_org_role
+from proliferate.auth.authorization import (
+    OwnerContext,
+    OwnerSelection,
+    PolicyDenied,
+    PolicyVerdict,
+    require_org_role,
+)
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_SUBJECT_KIND_PERSONAL
 from proliferate.constants.organizations import (
@@ -22,16 +27,8 @@ from proliferate.constants.organizations import (
     ORGANIZATION_INVITE_HANDOFF_EXPIRES_MINUTES,
     ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN,
     ORGANIZATION_INVITE_TOKEN_DOMAIN,
-    ORGANIZATION_LOGO_IMAGE_MAX_BYTES,
-    ORGANIZATION_LOGO_IMAGE_MIME_TYPES,
-    ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
-    ORGANIZATION_ROLE_ADMIN,
-    ORGANIZATION_ROLE_OWNER,
-    ORGANIZATION_ROLES,
-    PUBLIC_EMAIL_DOMAINS,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.billing import get_or_create_stripe_customer_state_for_user
@@ -40,11 +37,26 @@ from proliferate.db.store.organization_records import (
     InvitationRecord,
     MemberRecord,
     MembershipRecord,
-    OrganizationRecord,
     OrganizationWithMembershipRecord,
     normalize_invitation_email,
 )
 from proliferate.integrations import resend
+from proliferate.server.organizations.domain.policy import (
+    can_modify_membership,
+    can_modify_owner_memberships,
+    is_membership_update_status,
+    is_organization_role,
+    organization_admin_roles,
+    required_roles_for_invitation_role,
+)
+from proliferate.server.organizations.domain.profile import (
+    OrganizationProfileIssue,
+    clean_organization_name,
+    default_organization_name,
+    derive_logo_domain_from_email,
+    organization_name_issue,
+    sanitize_logo_image,
+)
 from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.landing import build_landing_html
 from proliferate.utils.time import utcnow
@@ -64,89 +76,50 @@ class InvitationDeliveryResult:
     skipped: bool
 
 
-def derive_logo_domain_from_email(email: str) -> str | None:
-    domain = normalize_invitation_email(email).partition("@")[2]
-    if not domain or domain in PUBLIC_EMAIL_DOMAINS:
-        return None
-    return domain
+class OrganizationActor(Protocol):
+    id: UUID
+    email: str
+    display_name: str | None
 
 
-def _domain_display_name(domain: str) -> str:
-    label = domain.split(".", 1)[0].replace("-", " ").replace("_", " ").strip()
-    return label.title() if label else "Organization"
+def _default_organization_name(actor_user: OrganizationActor) -> str:
+    return default_organization_name(
+        email=actor_user.email,
+        display_name=actor_user.display_name,
+    )
 
 
-def _default_organization_name(actor_user: User) -> str:
-    logo_domain = derive_logo_domain_from_email(actor_user.email)
-    if logo_domain:
-        return _domain_display_name(logo_domain)[:255]
-    display_name = (actor_user.display_name or "").strip()
-    if display_name:
-        return f"{display_name}'s organization"[:255]
-    local_part = normalize_invitation_email(actor_user.email).partition("@")[0]
-    local_name = local_part.replace(".", " ").replace("-", " ").replace("_", " ").strip()
-    if local_name:
-        return f"{local_name.title()}'s organization"[:255]
-    return "Personal organization"
-
-
-def sanitize_logo_image(value: str | None) -> str | None:
-    if value is None:
-        return None
-    image = value.strip()
-    if not image:
-        return None
-    header, separator, payload = image.partition(",")
-    if separator != "," or not header.startswith("data:") or ";base64" not in header:
+def _raise_organization_issue(issue: OrganizationProfileIssue | None) -> None:
+    if issue is not None:
         raise OrganizationServiceError(
-            "invalid_organization_logo_image",
-            "Organization image must be a base64 encoded image upload.",
-            status_code=400,
+            issue.code,
+            issue.message,
+            status_code=issue.status_code,
         )
-    mime_type = header.removeprefix("data:").split(";", 1)[0].lower()
-    if mime_type not in ORGANIZATION_LOGO_IMAGE_MIME_TYPES:
+
+
+def _raise_if_denied(verdict: PolicyVerdict) -> None:
+    if isinstance(verdict, PolicyDenied):
         raise OrganizationServiceError(
-            "invalid_organization_logo_image",
-            "Organization image must be PNG, JPEG, WebP, or GIF.",
-            status_code=400,
+            verdict.code,
+            verdict.message,
+            status_code=verdict.status_code,
         )
-    try:
-        raw = base64.b64decode(payload, validate=True)
-    except binascii.Error as exc:
-        raise OrganizationServiceError(
-            "invalid_organization_logo_image",
-            "Organization image could not be read.",
-            status_code=400,
-        ) from exc
-    if len(raw) > ORGANIZATION_LOGO_IMAGE_MAX_BYTES:
-        raise OrganizationServiceError(
-            "organization_logo_image_too_large",
-            "Organization image must be 256 KB or smaller.",
-            status_code=400,
-        )
-    encoded = base64.b64encode(raw).decode("ascii")
-    return f"data:{mime_type};base64,{encoded}"
 
 
 def _clean_organization_name(name: str) -> str:
-    cleaned = name.strip()
-    if not cleaned:
-        raise OrganizationServiceError(
-            "invalid_organization_name",
-            "Organization name is required.",
-            status_code=400,
-        )
-    if len(cleaned) > 255:
-        raise OrganizationServiceError(
-            "invalid_organization_name",
-            "Organization name cannot exceed 255 characters.",
-            status_code=400,
-        )
-    return cleaned
+    _raise_organization_issue(organization_name_issue(name))
+    return clean_organization_name(name)
+
+
+def _sanitize_logo_image(value: str | None) -> str | None:
+    result = sanitize_logo_image(value)
+    _raise_organization_issue(result.issue)
+    return result.logo_image
 
 
 def _require_role(role: str) -> str:
-    if role not in ORGANIZATION_ROLES:
+    if not is_organization_role(role):
         raise OrganizationServiceError(
             "invalid_role",
             "Invalid organization role.",
@@ -195,7 +168,7 @@ def _org_not_found() -> OrganizationServiceError:
 
 
 async def resolve_owner_context(
-    actor_user: User,
+    actor_user: OrganizationActor,
     owner_selection: OwnerSelection | None = None,
 ) -> OwnerContext:
     selection = owner_selection or OwnerSelection()
@@ -244,7 +217,10 @@ async def resolve_owner_context(
     )
 
 
-async def list_organizations(db: AsyncSession, actor_user: User) -> OrganizationMembershipRecords:
+async def list_organizations(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+) -> OrganizationMembershipRecords:
     records = await organization_store.list_organizations_for_user(db, actor_user.id)
     if records:
         return records
@@ -257,7 +233,9 @@ async def list_organizations(db: AsyncSession, actor_user: User) -> Organization
 
 
 async def get_organization(
-    db: AsyncSession, actor_user: User, organization_id: UUID
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    organization_id: UUID,
 ) -> OrganizationWithMembershipRecord:
     record = await organization_store.get_organization_with_membership(
         db,
@@ -270,30 +248,37 @@ async def get_organization(
 
 
 async def update_organization(
-    actor_user: User,
+    db: AsyncSession,
+    actor_user: OrganizationActor,
     organization_id: UUID,
     *,
     name: str | None,
     logo_image: str | None,
     update_logo_image: bool,
-) -> OrganizationRecord:
+) -> OrganizationWithMembershipRecord:
     context = await resolve_owner_context(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
-    require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+    require_org_role(context, organization_admin_roles())
     updated = await organization_store.update_organization_settings(
         organization_id=organization_id,
         name=_clean_organization_name(name) if name is not None else None,
-        logo_image=sanitize_logo_image(logo_image) if update_logo_image else None,
+        logo_image=_sanitize_logo_image(logo_image) if update_logo_image else None,
         update_logo_image=update_logo_image,
     )
     if updated is None:
         raise _org_not_found()
-    return updated
+    return OrganizationWithMembershipRecord(
+        organization=updated,
+        membership=(await get_organization(db, actor_user, organization_id)).membership,
+    )
 
 
-async def list_members(actor_user: User, organization_id: UUID) -> list[MemberRecord]:
+async def list_members(
+    actor_user: OrganizationActor,
+    organization_id: UUID,
+) -> list[MemberRecord]:
     await resolve_owner_context(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
@@ -302,7 +287,7 @@ async def list_members(actor_user: User, organization_id: UUID) -> list[MemberRe
 
 
 async def update_membership(
-    actor_user: User,
+    actor_user: OrganizationActor,
     organization_id: UUID,
     membership_id: UUID,
     *,
@@ -313,20 +298,12 @@ async def update_membership(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
-    require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-    if context.membership_id == membership_id:
-        raise OrganizationServiceError(
-            "cannot_modify_own_membership",
-            "You cannot modify your own organization membership.",
-            status_code=403,
-        )
-    can_modify_owner = context.membership_role == ORGANIZATION_ROLE_OWNER
+    require_org_role(context, organization_admin_roles())
+    _raise_if_denied(can_modify_membership(context, membership_id))
+    can_modify_owner = can_modify_owner_memberships(context)
     if role is not None:
         _require_role(role)
-    if status is not None and status not in {
-        ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-        ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
-    }:
+    if status is not None and not is_membership_update_status(status):
         raise OrganizationServiceError(
             "invalid_membership_status",
             "Invalid membership status.",
@@ -357,7 +334,7 @@ async def update_membership(
 
 
 async def remove_membership(
-    actor_user: User,
+    actor_user: OrganizationActor,
     organization_id: UUID,
     membership_id: UUID,
 ) -> MembershipRecord:
@@ -371,7 +348,7 @@ async def remove_membership(
 
 
 async def create_invitation(
-    actor_user: User,
+    actor_user: OrganizationActor,
     organization_id: UUID,
     *,
     email: str,
@@ -381,10 +358,7 @@ async def create_invitation(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
-    if role == ORGANIZATION_ROLE_OWNER:
-        require_org_role(context, {ORGANIZATION_ROLE_OWNER})
-    else:
-        require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+    require_org_role(context, required_roles_for_invitation_role(role))
     normalized_email = normalize_invitation_email(email)
     token = _new_token()
     record = await invitation_store.create_or_rotate_organization_invitation(
@@ -415,7 +389,7 @@ async def create_invitation(
 
 
 async def resend_invitation(
-    actor_user: User,
+    actor_user: OrganizationActor,
     organization_id: UUID,
     invitation_id: UUID,
 ) -> OrganizationInvitationEmailResult:
@@ -423,7 +397,7 @@ async def resend_invitation(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
-    require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+    require_org_role(context, organization_admin_roles())
     token = _new_token()
     record = await invitation_store.rotate_organization_invitation(
         organization_id=organization_id,
@@ -457,7 +431,7 @@ async def resend_invitation(
 async def _send_invitation_email(
     record: InvitationCreateRecord,
     token: str,
-    actor_user: User,
+    actor_user: OrganizationActor,
 ) -> InvitationDeliveryResult:
     invite_url = _invitation_landing_url(token)
     try:
@@ -487,7 +461,10 @@ def _invitation_landing_url(token: str) -> str:
     return f"{base_url}{path}?{query}"
 
 
-async def list_invitations(actor_user: User, organization_id: UUID) -> list[InvitationRecord]:
+async def list_invitations(
+    actor_user: OrganizationActor,
+    organization_id: UUID,
+) -> list[InvitationRecord]:
     await resolve_owner_context(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
@@ -496,7 +473,7 @@ async def list_invitations(actor_user: User, organization_id: UUID) -> list[Invi
 
 
 async def revoke_invitation(
-    actor_user: User,
+    actor_user: OrganizationActor,
     organization_id: UUID,
     invitation_id: UUID,
 ) -> InvitationRecord:
@@ -504,7 +481,7 @@ async def revoke_invitation(
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
-    require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+    require_org_role(context, organization_admin_roles())
     invitation = await invitation_store.revoke_organization_invitation(
         organization_id=organization_id,
         invitation_id=invitation_id,
@@ -537,7 +514,7 @@ async def create_invitation_landing_handoff(raw_token: str) -> str:
 
 
 async def accept_invitation(
-    actor_user: User,
+    actor_user: OrganizationActor,
     invite_handoff: str,
 ) -> OrganizationWithMembershipRecord:
     accepted, error = await invitation_store.accept_invitation_handoff(

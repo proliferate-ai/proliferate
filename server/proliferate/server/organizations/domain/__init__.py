@@ -1,0 +1,1 @@
+"""Pure organization-domain rules."""
