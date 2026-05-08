@@ -2,28 +2,23 @@ import {
   memo,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type Dispatch,
-  type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useNavigate } from "react-router-dom";
-import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
-import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
-import { GitPanel } from "@/components/workspace/git/GitPanel";
-import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
-import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
+import { RightPanelContent } from "@/components/workspace/shell/right-panel/RightPanelContent";
+import { RightPanelHeaderTabs } from "@/components/workspace/shell/right-panel/RightPanelHeaderTabs";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
+import { useRightPanelHeaderEntries } from "@/hooks/workspaces/derived/use-right-panel-header-entries";
+import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-root-focus";
+import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
 import {
   RIGHT_PANEL_BROWSER_TAB_LIMIT,
-  availableRightPanelTools,
-  canCreateRightPanelBrowserTab,
   createBrowserTabInRightPanelState,
   createRightPanelBrowserTabId,
-  parseRightPanelHeaderEntryKey,
   reconcileRightPanelWorkspaceState,
   removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
@@ -38,9 +33,6 @@ import {
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel";
 import {
-  orderBrowserTabs,
-  orderTerminals,
-  resolvePrimaryDigitShortcutIndex,
   rightPanelStateEqual,
 } from "@/lib/domain/workspaces/shell/right-panel-view";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
@@ -50,35 +42,9 @@ import {
   rightPanelNewTabMenuDefaultFromEvent,
   type RightPanelNewTabMenuDefault,
 } from "@/lib/infra/right-panel-new-tab-menu";
-import {
-  RightPanelHeaderTabs,
-  type HeaderEntry,
-} from "@/components/workspace/shell/right-panel/RightPanelHeaderTabs";
-import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
+import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 
 const EMPTY_TERMINALS: never[] = [];
-
-function shouldPreservePointerFocus(target: EventTarget): boolean {
-  if (!(target instanceof Element)) {
-    return true;
-  }
-
-  return Boolean(target.closest(
-    [
-      "a",
-      "button",
-      "input",
-      "select",
-      "textarea",
-      "iframe",
-      "[contenteditable='true']",
-      "[role='button']",
-      "[tabindex]:not([tabindex='-1'])",
-      "[data-focus-zone='terminal']",
-      "[data-focus-zone='browser']",
-    ].join(","),
-  ));
-}
 
 interface TerminalActivationRequest {
   token: number;
@@ -128,7 +94,6 @@ export const RightPanel = memo(function RightPanel({
   }>({ token: 0, defaultKind: "terminal" });
   const rootRef = useRef<HTMLDivElement>(null);
   const handledActivationRequestRef = useRef<string | null>(null);
-  const handledFocusRequestRef = useRef(0);
   // One-shot per mounted shell: users who close the starter terminal should not
   // get a replacement every time they revisit the workspace in the same session.
   const autoTerminalWorkspaceIdsRef = useRef(new Set<string>());
@@ -138,97 +103,27 @@ export const RightPanel = memo(function RightPanel({
     enabled: Boolean(workspaceId && shouldRenderContent),
   });
   const terminals = terminalsQuery.data ?? EMPTY_TERMINALS;
-  const terminalIdsInHeader = useMemo(
-    () => new Set(terminalIdsFromHeaderOrder(state.headerOrder)),
-    [state.headerOrder],
-  );
-  const visibleTerminals = useMemo(
-    () => terminals.filter((terminal) =>
-      terminal.purpose !== "setup" || terminalIdsInHeader.has(terminal.id)
-    ),
-    [terminalIdsInHeader, terminals],
-  );
-  const terminalById = useMemo(
-    () => new Map(visibleTerminals.map((terminal) => [terminal.id, terminal])),
-    [visibleTerminals],
-  );
-  const orderedTerminals = useMemo(
-    () => orderTerminals(visibleTerminals, state.headerOrder),
-    [state.headerOrder, visibleTerminals],
-  );
-  const activeEntry = useMemo(
-    () => parseRightPanelHeaderEntryKey(state.activeEntryKey),
-    [state.activeEntryKey],
-  );
-  const activeTool = activeEntry?.kind === "tool" ? activeEntry.tool : null;
-  const activeTerminalId = activeEntry?.kind === "terminal" ? activeEntry.terminalId : null;
-  const activeBrowserId = activeEntry?.kind === "browser" ? activeEntry.browserId : null;
+  const {
+    activeTool,
+    activeTerminalId,
+    activeBrowserId,
+    visibleTerminals,
+    orderedTerminals,
+    browserTabs,
+    canCreateBrowserTab,
+    headerEntries,
+  } = useRightPanelHeaderEntries({
+    state,
+    terminals,
+    isCloudWorkspaceSelected,
+  });
   const terminalActivationRequestToken = terminalActivationRequest?.workspaceId === workspaceId
     ? terminalActivationRequest.token
     : 0;
-  const browserTabs = useMemo(
-    () => orderBrowserTabs(state.browserTabsById, state.headerOrder),
-    [state.browserTabsById, state.headerOrder],
-  );
-  const canCreateBrowserTab = canCreateRightPanelBrowserTab(state);
-
-  const headerEntries = useMemo<HeaderEntry[]>(() => {
-    const entries: HeaderEntry[] = [];
-    const seenKeys = new Set<RightPanelHeaderEntryKey>();
-    const availableToolSet = new Set(availableRightPanelTools(isCloudWorkspaceSelected));
-
-    for (const key of state.headerOrder) {
-      const entry = parseRightPanelHeaderEntryKey(key);
-      if (!entry || seenKeys.has(key)) {
-        continue;
-      }
-      if (entry.kind === "tool" && availableToolSet.has(entry.tool)) {
-        entries.push({ kind: "tool", key, tool: entry.tool });
-        seenKeys.add(key);
-      }
-      if (entry.kind === "terminal") {
-        entries.push({
-          kind: "terminal",
-          key,
-          terminalId: entry.terminalId,
-          terminal: terminalById.get(entry.terminalId) ?? null,
-        });
-        seenKeys.add(key);
-      }
-      if (entry.kind === "browser") {
-        const tab = state.browserTabsById[entry.browserId];
-        if (tab) {
-          entries.push({ kind: "browser", key, tab });
-          seenKeys.add(key);
-        }
-      }
-    }
-
-    return entries;
-  }, [isCloudWorkspaceSelected, state.browserTabsById, state.headerOrder, terminalById]);
-
-  const updateState = useCallback(
-    (value: SetStateAction<RightPanelWorkspaceState>) => {
-      onStateChange((previous) => {
-        const current = reconcileRightPanelWorkspaceState(previous, {
-          isCloudWorkspaceSelected,
-        });
-        const next = typeof value === "function"
-          ? (value as (previousValue: RightPanelWorkspaceState) => RightPanelWorkspaceState)(
-              current,
-            )
-          : value;
-        const reconciledNext = reconcileRightPanelWorkspaceState(next, {
-          isCloudWorkspaceSelected,
-        });
-        if (!rightPanelStateEqual(current, reconciledNext)) {
-          return reconciledNext;
-        }
-        return rightPanelStateEqual(previous, current) ? previous : current;
-      });
-    },
-    [isCloudWorkspaceSelected, onStateChange],
-  );
+  const updateState = useRightPanelStateUpdater({
+    isCloudWorkspaceSelected,
+    onStateChange,
+  });
 
   useEffect(() => {
     const next = reconcileRightPanelWorkspaceState(state, {
@@ -420,7 +315,7 @@ export const RightPanel = memo(function RightPanel({
   }, [updateState]);
 
   const activateHeaderEntry = useCallback(
-    (entry: HeaderEntry) => {
+    (entry: RightPanelHeaderEntry) => {
       if (entry.kind === "tool") {
         activateTool(entry.tool);
         return;
@@ -434,54 +329,13 @@ export const RightPanel = memo(function RightPanel({
     [activateTool, selectBrowser, selectTerminal],
   );
 
-  const handleRootPointerDownCapture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (shouldPreservePointerFocus(event.target)) {
-      return;
-    }
-
-    rootRef.current?.focus({ preventScroll: true });
-  }, []);
-
-  useEffect(() => {
-    if (
-      !isOpen
-      || focusRequestToken <= 0
-      || handledFocusRequestRef.current === focusRequestToken
-    ) {
-      return;
-    }
-
-    handledFocusRequestRef.current = focusRequestToken;
-    rootRef.current?.focus({ preventScroll: true });
-  }, [focusRequestToken, isOpen]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const shortcutIndex = resolvePrimaryDigitShortcutIndex(event);
-      if (shortcutIndex === null) {
-        return;
-      }
-
-      const root = rootRef.current;
-      const activeElement = document.activeElement;
-      if (!root || !(activeElement instanceof Element) || !root.contains(activeElement)) {
-        return;
-      }
-
-      const entry = headerEntries[shortcutIndex];
-      if (!entry) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      activateHeaderEntry(entry);
-    };
-
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [activateHeaderEntry, headerEntries]);
+  const handleRootPointerDownCapture = useRightPanelRootFocus({
+    rootRef,
+    isOpen,
+    focusRequestToken,
+    headerEntries,
+    onActivateHeaderEntry: activateHeaderEntry,
+  });
 
   const handleCloseTerminal = useCallback(
     (terminalId: string) => {
@@ -606,67 +460,33 @@ export const RightPanel = memo(function RightPanel({
         onOpenRepoSettings={() => navigate(repoSettingsHref)}
       />
 
-      <div
-        data-panel="true"
-        id="workspace-side-panel"
-        className="relative min-h-0 flex-1 overflow-hidden"
-      >
-        {!shouldRenderContent ? (
-          <RightPanelPlaceholder activeEntryKey={state.activeEntryKey} />
-        ) : (
-          <>
-            {activeTool === "files" && (
-              <div className="absolute inset-0">
-                <WorkspaceFilesPanel showHeader={false} />
-              </div>
-            )}
-            {activeTool === "settings" && (
-              <div className="absolute inset-0">
-                <CloudWorkspaceSettingsPanel />
-              </div>
-            )}
-            {activeTool === "git" && (
-              <div className="absolute inset-0">
-                <GitPanel />
-              </div>
-            )}
-            {shouldMountBrowserPanel && (
-              <div className={activeBrowserId ? "absolute inset-0" : "hidden"}>
-                <WorkspaceBrowserPanel
-                  workspaceId={workspaceId}
-                  tabs={browserTabs}
-                  activeBrowserId={activeBrowserId}
-                  isVisible={isOpen && activeBrowserId !== null}
-                  nativeOverlaysHidden={nativeOverlaysHidden}
-                  onUpdateUrl={handleUpdateBrowserUrl}
-                />
-              </div>
-            )}
-            {shouldMountTerminalPanel && (
-              <div className={activeTerminalId ? "absolute inset-0" : "hidden"}>
-                <TerminalPanel
-                  workspaceId={workspaceId}
-                  terminals={orderedTerminals}
-                  activeTerminalId={activeTerminalId}
-                  isVisible={activeTerminalId !== null}
-                  isRuntimeReady={isWorkspaceReady}
-                  canConnect={terminalsQuery.isSuccess}
-                  isLoading={terminalsQuery.isLoading && !terminalsQuery.data}
-                  errorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}
-                  focusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
-                  unreadByTerminal={unreadByTerminal}
-                  onNewTerminal={() => {
-                    void createTerminal({ activate: true });
-                  }}
-                  onSelectTerminal={selectTerminal}
-                  onCloseTerminal={handleCloseTerminal}
-                  onRenameTerminal={handleRenameTerminal}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <RightPanelContent
+        workspaceId={workspaceId}
+        activeEntryKey={state.activeEntryKey}
+        activeTool={activeTool}
+        activeBrowserId={activeBrowserId}
+        activeTerminalId={activeTerminalId}
+        browserTabs={browserTabs}
+        orderedTerminals={orderedTerminals}
+        shouldRenderContent={shouldRenderContent}
+        shouldMountBrowserPanel={shouldMountBrowserPanel}
+        shouldMountTerminalPanel={shouldMountTerminalPanel}
+        isOpen={isOpen}
+        isWorkspaceReady={isWorkspaceReady}
+        canConnectTerminals={terminalsQuery.isSuccess}
+        isLoadingTerminals={terminalsQuery.isLoading && !terminalsQuery.data}
+        terminalListErrorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}
+        terminalFocusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
+        unreadByTerminal={unreadByTerminal}
+        nativeOverlaysHidden={nativeOverlaysHidden}
+        onUpdateBrowserUrl={handleUpdateBrowserUrl}
+        onNewTerminal={() => {
+          void createTerminal({ activate: true });
+        }}
+        onSelectTerminal={selectTerminal}
+        onCloseTerminal={handleCloseTerminal}
+        onRenameTerminal={handleRenameTerminal}
+      />
     </div>
   );
 });
