@@ -13,7 +13,7 @@ from proliferate.integrations.sentry import (
     flush_server_sentry,
     init_server_sentry,
 )
-from proliferate.server.automations.cloud_executor import (
+from proliferate.server.automations.worker.cloud_executor import (
     CloudExecutorConfig,
     build_cloud_executor_config,
     run_cloud_executor_loop,
