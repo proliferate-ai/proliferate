@@ -70,7 +70,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_run
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 26 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 2 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 7 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 10 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 8 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 4 transitional store opens DB session
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/anonymous_telemetry.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/auth.py 1 transitional store imports DB session factory

@@ -5,8 +5,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.organizations.models import (
     OrganizationInvitationAcceptRequest,
@@ -82,8 +84,9 @@ async def accept_organization_invitation_endpoint(
 @router.get("", response_model=OrganizationListResponse)
 async def list_organizations_endpoint(
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationListResponse:
-    records = await list_organizations(user)
+    records = await list_organizations(db, user)
     return OrganizationListResponse(
         organizations=[organization_with_membership_response(record) for record in records],
     )
@@ -93,9 +96,10 @@ async def list_organizations_endpoint(
 async def get_organization_endpoint(
     organization_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
     try:
-        record = await get_organization(user, organization_id)
+        record = await get_organization(db, user, organization_id)
     except OrganizationServiceError as error:
         _raise_organization_error(error)
     return organization_with_membership_response(record)
@@ -106,6 +110,7 @@ async def update_organization_endpoint(
     organization_id: UUID,
     body: OrganizationUpdateRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
     try:
         organization = await update_organization(
@@ -115,7 +120,7 @@ async def update_organization_endpoint(
             logo_image=body.logo_image,
             update_logo_image="logo_image" in body.model_fields_set,
         )
-        membership_record = await get_organization(user, organization_id)
+        membership_record = await get_organization(db, user, organization_id)
     except OrganizationServiceError as error:
         _raise_organization_error(error)
     return organization_response(organization, membership_record.membership)
