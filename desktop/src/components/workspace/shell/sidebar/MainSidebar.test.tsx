@@ -166,7 +166,7 @@ vi.mock("@/hooks/workspaces/use-workspace-display-name-actions", () => ({
   useWorkspaceDisplayNameActions: () => ({ updateWorkspaceDisplayName: vi.fn() }),
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-sidebar-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/use-workspace-sidebar-actions", () => ({
   useWorkspaceSidebarActions: () => ({
     handleAddRepo: vi.fn(),
     handleCreateCloudWorkspace: vi.fn(),
@@ -182,7 +182,7 @@ vi.mock("@/hooks/workspaces/use-workspace-sidebar-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-sidebar-repo-group-state", () => ({
+vi.mock("@/hooks/workspaces/facade/use-sidebar-repo-group-state", () => ({
   useSidebarRepoGroupState: () => ({
     allRepoKeys: [],
     allRepoGroupsCollapsed: false,
@@ -195,7 +195,7 @@ vi.mock("@/hooks/workspaces/use-sidebar-repo-group-state", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-sidebar-state", () => ({
+vi.mock("@/hooks/workspaces/derived/use-workspace-sidebar-state", () => ({
   useWorkspaceSidebarState: () => ({
     groups: [],
     selectedWorkspaceId: null,

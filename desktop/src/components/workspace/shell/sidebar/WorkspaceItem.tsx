@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/use-workspace-sidebar-native-context-menu";
+import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,

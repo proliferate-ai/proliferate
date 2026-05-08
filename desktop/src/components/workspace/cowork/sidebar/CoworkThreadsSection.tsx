@@ -5,7 +5,7 @@ import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-sta
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useCoworkThreads } from "@/hooks/access/anyharness/cowork/use-cowork-threads";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
-import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/use-workspace-sidebar-activities";
+import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
