@@ -6,8 +6,6 @@ import {
 } from "@/lib/infra/measurement/debug-latency";
 import { ensureRuntimeReady } from "@/hooks/workspaces/runtime-ready";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
-import { getCloudWorkspaceConnection } from "@/lib/access/cloud/workspaces";
 import type {
   ReadyCloudReadinessResult,
   WorkspaceConnectionResult,
@@ -33,22 +31,12 @@ export async function resolveSelectionConnection(
   const connectionStartedAt = startLatencyTimer();
   const workspaceConnection = cloudReadiness.kind === "local"
     ? await resolveWorkspaceConnection(desktopRuntimeUrl, context.workspaceId)
-    : await deps.queryClient.invalidateQueries({
-      queryKey: cloudWorkspaceConnectionKey(cloudReadiness.cloudWorkspaceId),
-      exact: true,
-      refetchType: "none",
-    }).then(async () => {
-      const connection = await getCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId);
-      deps.queryClient.setQueryData(
-        cloudWorkspaceConnectionKey(cloudReadiness.cloudWorkspaceId),
-        connection,
-      );
-      return {
+    : await deps.cache.refreshCloudWorkspaceConnection(cloudReadiness.cloudWorkspaceId)
+      .then((connection) => ({
         runtimeUrl: connection.runtimeUrl,
-        authToken: connection.accessToken,
+        authToken: connection.accessToken ?? undefined,
         anyharnessWorkspaceId: connection.anyharnessWorkspaceId ?? "",
-      };
-    });
+      }));
   logLatency("workspace.select.connection_resolved", {
     workspaceId: context.workspaceId,
     anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,

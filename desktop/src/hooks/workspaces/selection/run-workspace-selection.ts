@@ -14,11 +14,8 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
-import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
@@ -51,14 +48,7 @@ async function invalidateCloudWorkspaceStartState(
   deps: WorkspaceSelectionDeps,
   runtimeUrl: string,
 ): Promise<void> {
-  await Promise.all([
-    deps.queryClient.invalidateQueries({
-      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-    }),
-    deps.queryClient.invalidateQueries({
-      queryKey: cloudBillingKey(),
-    }),
-  ]);
+  await deps.cache.invalidateCloudWorkspaceStartState(runtimeUrl);
 }
 
 async function resolveCloudSelectionConnection(
@@ -130,8 +120,7 @@ export async function runWorkspaceSelection(
         request.options,
         cachedSessionId,
       );
-      cancelPreviousWorkspaceDisplayQueries({
-        queryClient: deps.queryClient,
+      deps.cache.cancelPreviousWorkspaceDisplayQueries({
         runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
         previousWorkspaceIds: [
           previousSelection.selectedLogicalWorkspaceId,
@@ -221,8 +210,7 @@ export async function runWorkspaceSelection(
     request.options,
     cachedSessionId,
   );
-  cancelPreviousWorkspaceDisplayQueries({
-    queryClient: deps.queryClient,
+  deps.cache.cancelPreviousWorkspaceDisplayQueries({
     runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
     previousWorkspaceIds: [
       previousSelection.selectedLogicalWorkspaceId,

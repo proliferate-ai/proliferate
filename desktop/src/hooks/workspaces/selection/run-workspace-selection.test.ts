@@ -14,6 +14,7 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-wor
 import { runWorkspaceSelection } from "./run-workspace-selection";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
+import type { WorkspaceSelectionDeps } from "./types";
 
 vi.mock("./cloud-readiness", () => ({
   resolveCloudWorkspaceReadiness: vi.fn(),
@@ -87,7 +88,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
-      queryClient: {} as never,
+      cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
@@ -109,7 +110,7 @@ describe("runWorkspaceSelection", () => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockReset();
 
     await expect(runWorkspaceSelection({
-      queryClient: {} as never,
+      cache: selectionCache(),
       logicalWorkspaces: [
         ...logicalWorkspaces,
         {
@@ -159,9 +160,7 @@ describe("runWorkspaceSelection", () => {
       status: "queued",
     } as never);
     const bootstrapWorkspace = vi.fn();
-    const queryClient = {
-      invalidateQueries: vi.fn().mockResolvedValue(undefined),
-    };
+    const cache = selectionCache();
     const flowId = startLatencyFlow({
       flowKind: "workspace_switch",
       source: "sidebar",
@@ -169,7 +168,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
-      queryClient: queryClient as never,
+      cache,
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
@@ -184,7 +183,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     expect(startCloudWorkspace).toHaveBeenCalledWith("cloud-1");
-    expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(cache.invalidateCloudWorkspaceStartState).toHaveBeenCalledTimes(1);
     expect(bootstrapWorkspace).not.toHaveBeenCalled();
     expect(listActiveLatencyFlows()).toEqual([]);
   });
@@ -205,7 +204,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
-      queryClient: {} as never,
+      cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
@@ -233,7 +232,7 @@ describe("runWorkspaceSelection", () => {
     });
 
     await runWorkspaceSelection({
-      queryClient: {} as never,
+      cache: selectionCache(),
       logicalWorkspaces,
       rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
@@ -251,6 +250,14 @@ describe("runWorkspaceSelection", () => {
     expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-explicit");
   });
 });
+
+function selectionCache(): WorkspaceSelectionDeps["cache"] {
+  return {
+    cancelPreviousWorkspaceDisplayQueries: vi.fn(),
+    invalidateCloudWorkspaceStartState: vi.fn().mockResolvedValue(undefined),
+    refreshCloudWorkspaceConnection: vi.fn(),
+  };
+}
 
 function setSelectedWorkspace(
   workspaceId: string,

@@ -1,13 +1,9 @@
 import { useCallback } from "react";
-import { type CoworkStatus } from "@anyharness/sdk";
-import { anyHarnessCoworkStatusKey } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/use-workspace-bootstrap-actions";
-import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
+import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
+import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
-import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
-import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -23,7 +19,12 @@ function removeWorkspaceSessionRecordsForWorkspace(workspaceId: string): void {
 }
 
 export function useWorkspaceSelection() {
-  const queryClient = useQueryClient();
+  const {
+    cancelPreviousWorkspaceDisplayQueries,
+    getWorkspaceSelectionSnapshot,
+    invalidateCloudWorkspaceStartState,
+  } = useWorkspaceSelectionCache();
+  const { refreshCloudWorkspaceConnection } = useCloudWorkspaceConnectionCache();
   const setSelectedWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const clearSelection = useSessionSelectionStore((state) => state.clearSelection);
   const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
@@ -43,13 +44,11 @@ export function useWorkspaceSelection() {
       },
     ) => {
       const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl;
-      const workspaceCollections = getWorkspaceCollectionsFromCache(queryClient, runtimeUrl);
-      const cloudMobilityWorkspaces = queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
-        cloudMobilityWorkspacesKey(),
-      );
-      const coworkStatus = queryClient.getQueryData<CoworkStatus>(
-        anyHarnessCoworkStatusKey(runtimeUrl),
-      );
+      const {
+        cloudMobilityWorkspaces,
+        coworkStatus,
+        workspaceCollections,
+      } = getWorkspaceSelectionSnapshot(runtimeUrl);
       const standardProjection = workspaceCollections
         ? buildStandardRepoProjection({
           repoRoots: workspaceCollections.repoRoots,
@@ -68,7 +67,11 @@ export function useWorkspaceSelection() {
         })
         : [];
       const deps = {
-        queryClient,
+        cache: {
+          cancelPreviousWorkspaceDisplayQueries,
+          invalidateCloudWorkspaceStartState,
+          refreshCloudWorkspaceConnection,
+        },
         logicalWorkspaces,
         rawWorkspaces: workspaceCollections?.localWorkspaces ?? [],
         setSelectedLogicalWorkspaceId,
@@ -98,9 +101,12 @@ export function useWorkspaceSelection() {
       });
     }, [
       bootstrapWorkspace,
+      cancelPreviousWorkspaceDisplayQueries,
       clearSelection,
-      queryClient,
+      getWorkspaceSelectionSnapshot,
+      invalidateCloudWorkspaceStartState,
       reconcileHotWorkspace,
+      refreshCloudWorkspaceConnection,
       setSelectedLogicalWorkspaceId,
       setSelectedWorkspace,
     ]),

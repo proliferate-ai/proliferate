@@ -1,7 +1,6 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
-import type { QueryClient } from "@tanstack/react-query";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 
 export interface WorkspaceSelectionOptions {
@@ -26,9 +25,21 @@ export interface WorkspaceSelectionContext {
 }
 
 export interface WorkspaceSelectionDeps {
-  queryClient: QueryClient;
   logicalWorkspaces: LogicalWorkspace[];
   rawWorkspaces: Workspace[];
+  cache: {
+    cancelPreviousWorkspaceDisplayQueries: (input: {
+      runtimeUrl: string;
+      previousWorkspaceIds: readonly (string | null | undefined)[];
+      nextWorkspaceIds: readonly (string | null | undefined)[];
+    }) => void;
+    invalidateCloudWorkspaceStartState: (runtimeUrl: string) => Promise<void>;
+    refreshCloudWorkspaceConnection: (cloudWorkspaceId: string) => Promise<{
+      runtimeUrl: string;
+      accessToken?: string | null;
+      anyharnessWorkspaceId?: string | null;
+    }>;
+  };
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
   setSelectedWorkspace: (
     id: string,

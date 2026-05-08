@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type {
   CloudConnectionInfo,
   CloudWorkspaceStatus,
@@ -12,11 +12,10 @@ import {
   buildSelectedCloudRuntimeViewModel,
   type SelectedCloudRuntimeViewModel,
 } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
+import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/access/cloud/workspaces";
-import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
-import { cloudBillingKey } from "@/hooks/access/cloud/query-keys";
+import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import { useIsHotPaintGatePendingForWorkspace } from "./use-hot-paint-gate";
@@ -30,7 +29,12 @@ export interface SelectedCloudRuntimeState {
 }
 
 export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
-  const queryClient = useQueryClient();
+  const {
+    clearCachedCloudWorkspaceConnections,
+  } = useCloudWorkspaceConnectionCache();
+  const {
+    invalidateCloudWorkspaceStartState,
+  } = useWorkspaceSelectionCache();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -46,15 +50,8 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     },
     mutationFn: async (workspaceId: string) => startCloudWorkspaceRequest(workspaceId),
     onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(queryClient, workspace.id);
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: cloudBillingKey(),
-        }),
-      ]);
+      await clearCachedCloudWorkspaceConnections(workspace.id);
+      await invalidateCloudWorkspaceStartState(runtimeUrl);
       trackProductEvent("cloud_workspace_started", {
         workspace_kind: "cloud",
         status: workspace.status,
