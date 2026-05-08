@@ -2,4 +2,3 @@
 #
 # Format:
 # RULE_ID path count reason
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
