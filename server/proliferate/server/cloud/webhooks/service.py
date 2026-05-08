@@ -41,15 +41,22 @@ from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.webhooks.models import E2BWebhookEvent, E2BWebhookReceipt
 
+_E2B_WEBHOOK_ERROR_RESPONSE = {
+    "unconfigured": ("webhook_unavailable", 503),
+    "missing_signature": ("invalid_webhook_signature", 401),
+    "invalid_signature": ("invalid_webhook_signature", 401),
+}
+
 
 def _verify_e2b_signature(raw_body: bytes, signature: str | None) -> None:
     try:
         verify_e2b_webhook_signature(raw_body, signature)
     except E2BWebhookSignatureError as exc:
+        code, status_code = _E2B_WEBHOOK_ERROR_RESPONSE[exc.reason]
         raise CloudApiError(
-            exc.code,
+            code,
             exc.message,
-            status_code=exc.status_code,
+            status_code=status_code,
         ) from exc
 
 

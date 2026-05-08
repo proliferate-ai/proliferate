@@ -31,28 +31,25 @@ def test_verify_e2b_webhook_signature_accepts_legacy_url_safe_signature(monkeypa
 
 
 @pytest.mark.parametrize(
-    ("secret", "signature", "expected_code", "expected_message", "expected_status"),
+    ("secret", "signature", "expected_reason", "expected_message"),
     [
         (
             "",
             "signature",
-            "webhook_unavailable",
+            "unconfigured",
             "E2B webhook verification is not configured.",
-            503,
         ),
         (
             "test-secret",
             None,
-            "invalid_webhook_signature",
+            "missing_signature",
             "E2B webhook signature is required.",
-            401,
         ),
         (
             "test-secret",
             "bad-signature",
-            "invalid_webhook_signature",
+            "invalid_signature",
             "E2B webhook signature is invalid.",
-            401,
         ),
     ],
 )
@@ -60,15 +57,13 @@ def test_verify_e2b_webhook_signature_reports_failures(
     monkeypatch,
     secret: str,
     signature: str | None,
-    expected_code: str,
+    expected_reason: str,
     expected_message: str,
-    expected_status: int,
 ) -> None:
     monkeypatch.setattr(settings, "e2b_webhook_signature_secret", secret)
 
     with pytest.raises(E2BWebhookSignatureError) as exc_info:
         verify_e2b_webhook_signature(b"{}", signature)
 
-    assert exc_info.value.code == expected_code
+    assert exc_info.value.reason == expected_reason
     assert exc_info.value.message == expected_message
-    assert exc_info.value.status_code == expected_status
