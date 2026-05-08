@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +28,6 @@ from proliferate.server.organizations.models import (
     organization_with_membership_response,
 )
 from proliferate.server.organizations.service import (
-    OrganizationServiceError,
     accept_invitation,
     create_invitation,
     create_invitation_landing_handoff,
@@ -47,23 +45,13 @@ from proliferate.server.organizations.service import (
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 
-def _raise_organization_error(error: OrganizationServiceError) -> NoReturn:
-    raise HTTPException(
-        status_code=error.status_code,
-        detail={"code": error.code, "message": error.message},
-    ) from error
-
-
 @router.get(
     "/invitations/landing",
     response_class=HTMLResponse,
     include_in_schema=False,
 )
 async def organization_invitation_landing(token: str) -> HTMLResponse:
-    try:
-        html = await create_invitation_landing_handoff(token)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    html = await create_invitation_landing_handoff(token)
     return HTMLResponse(html)
 
 
@@ -72,10 +60,7 @@ async def accept_organization_invitation_endpoint(
     body: OrganizationInvitationAcceptRequest,
     user: User = Depends(current_active_user),
 ) -> OrganizationInvitationAcceptResponse:
-    try:
-        record = await accept_invitation(user, body.invite_handoff)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    record = await accept_invitation(user, body.invite_handoff)
     return OrganizationInvitationAcceptResponse(
         organization=organization_with_membership_response(record),
     )
@@ -98,10 +83,7 @@ async def get_organization_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
-    try:
-        record = await get_organization(db, user, organization_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    record = await get_organization(db, user, organization_id)
     return organization_with_membership_response(record)
 
 
@@ -112,17 +94,14 @@ async def update_organization_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationResponse:
-    try:
-        organization = await update_organization(
-            user,
-            organization_id,
-            name=body.name,
-            logo_image=body.logo_image,
-            update_logo_image="logo_image" in body.model_fields_set,
-        )
-        membership_record = await get_organization(db, user, organization_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    organization = await update_organization(
+        user,
+        organization_id,
+        name=body.name,
+        logo_image=body.logo_image,
+        update_logo_image="logo_image" in body.model_fields_set,
+    )
+    membership_record = await get_organization(db, user, organization_id)
     return organization_response(organization, membership_record.membership)
 
 
@@ -131,10 +110,7 @@ async def list_organization_members_endpoint(
     organization_id: UUID,
     user: User = Depends(current_active_user),
 ) -> OrganizationMembersResponse:
-    try:
-        members = await list_members(user, organization_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    members = await list_members(user, organization_id)
     return OrganizationMembersResponse(members=[member_response(member) for member in members])
 
 
@@ -148,16 +124,13 @@ async def update_organization_membership_endpoint(
     body: OrganizationMembershipUpdateRequest,
     user: User = Depends(current_active_user),
 ) -> OrganizationMembershipResponse:
-    try:
-        membership = await update_membership(
-            user,
-            organization_id,
-            membership_id,
-            role=body.role,
-            status=body.status,
-        )
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    membership = await update_membership(
+        user,
+        organization_id,
+        membership_id,
+        role=body.role,
+        status=body.status,
+    )
     return membership_response(membership)
 
 
@@ -170,10 +143,7 @@ async def remove_organization_membership_endpoint(
     membership_id: UUID,
     user: User = Depends(current_active_user),
 ) -> OrganizationMembershipResponse:
-    try:
-        membership = await remove_membership(user, organization_id, membership_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    membership = await remove_membership(user, organization_id, membership_id)
     return membership_response(membership)
 
 
@@ -182,10 +152,7 @@ async def list_organization_invitations_endpoint(
     organization_id: UUID,
     user: User = Depends(current_active_user),
 ) -> OrganizationInvitationsResponse:
-    try:
-        invitations = await list_invitations(user, organization_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    invitations = await list_invitations(user, organization_id)
     return OrganizationInvitationsResponse(
         invitations=[invitation_response(invitation) for invitation in invitations],
     )
@@ -201,15 +168,12 @@ async def create_organization_invitation_endpoint(
     body: OrganizationInviteRequest,
     user: User = Depends(current_active_user),
 ) -> OrganizationInvitationResponse:
-    try:
-        result = await create_invitation(
-            user,
-            organization_id,
-            email=str(body.email),
-            role=body.role,
-        )
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    result = await create_invitation(
+        user,
+        organization_id,
+        email=str(body.email),
+        role=body.role,
+    )
     return invitation_response(result.invitation)
 
 
@@ -222,10 +186,7 @@ async def resend_organization_invitation_endpoint(
     invitation_id: UUID,
     user: User = Depends(current_active_user),
 ) -> OrganizationInvitationResponse:
-    try:
-        result = await resend_invitation(user, organization_id, invitation_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    result = await resend_invitation(user, organization_id, invitation_id)
     return invitation_response(result.invitation)
 
 
@@ -238,8 +199,5 @@ async def revoke_organization_invitation_endpoint(
     invitation_id: UUID,
     user: User = Depends(current_active_user),
 ) -> OrganizationInvitationResponse:
-    try:
-        invitation = await revoke_invitation(user, organization_id, invitation_id)
-    except OrganizationServiceError as error:
-        _raise_organization_error(error)
+    invitation = await revoke_invitation(user, organization_id, invitation_id)
     return invitation_response(invitation)
