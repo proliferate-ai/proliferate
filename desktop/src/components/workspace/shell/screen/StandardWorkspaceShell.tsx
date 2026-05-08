@@ -25,7 +25,7 @@ import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
-import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
+import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/use-workspace-activity-acknowledgement";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";

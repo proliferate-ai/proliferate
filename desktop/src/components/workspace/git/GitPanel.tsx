@@ -11,7 +11,7 @@ import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useGitPanelState } from "@/hooks/workspaces/use-git-panel-state";
+import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
   GIT_PANEL_MODE_OPTIONS,
   gitPanelEmptyMessage,

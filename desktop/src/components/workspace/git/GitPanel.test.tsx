@@ -24,7 +24,7 @@ vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-git-panel-state", () => ({
+vi.mock("@/hooks/workspaces/derived/use-git-panel-state", () => ({
   useGitPanelState: () => ({
     activeWorkspaceId: "workspace-1",
     baseRef: "main",

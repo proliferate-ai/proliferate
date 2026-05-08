@@ -8,7 +8,7 @@ import { ModalShell } from "@/components/ui/ModalShell";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
 import { GitHub } from "@/components/ui/icons";
-import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/use-workspace-publish-workflow";
+import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
 
 interface PublishDialogProps {
   open: boolean;

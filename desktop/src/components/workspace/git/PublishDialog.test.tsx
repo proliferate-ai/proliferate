@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   workflow: null as ReturnType<typeof buildWorkflow> | null,
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-publish-workflow", () => ({
+vi.mock("@/hooks/workspaces/workflows/use-workspace-publish-workflow", () => ({
   useWorkspacePublishWorkflow: () => mocks.workflow!,
 }));
 
