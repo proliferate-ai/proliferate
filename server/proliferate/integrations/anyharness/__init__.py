@@ -16,6 +16,10 @@ from proliferate.integrations.anyharness.models import (
     RemoteWorkspaceSetupStart,
     ResolvedRemoteWorkspace,
 )
+from proliferate.integrations.anyharness.worktrees import (
+    run_runtime_worktree_retention,
+    update_runtime_worktree_retention_policy,
+)
 
 __all__ = [
     "CloudRuntimeOperationError",
@@ -29,4 +33,6 @@ __all__ = [
     "ResolvedRemoteWorkspace",
     "auth_headers",
     "response_preview",
+    "run_runtime_worktree_retention",
+    "update_runtime_worktree_retention_policy",
 ]

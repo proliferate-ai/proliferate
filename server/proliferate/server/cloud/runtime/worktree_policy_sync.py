@@ -4,16 +4,64 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from uuid import UUID
 
+from proliferate.integrations import anyharness
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.runtime.anyharness_api import (
-    run_runtime_worktree_retention,
-    update_runtime_worktree_retention_policy,
-)
 from proliferate.server.cloud.worktree_policy.service import (
     load_worktree_retention_policy_for_runtime as get_worktree_retention_policy,
 )
+from proliferate.utils.time import duration_ms
+
+
+async def update_runtime_worktree_retention_policy(
+    runtime_url: str,
+    access_token: str,
+    *,
+    max_materialized_worktrees_per_repo: int,
+    workspace_id: UUID | None = None,
+) -> None:
+    sync_started = time.perf_counter()
+    log_cloud_event(
+        "cloud runtime worktree policy sync started",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        max_materialized_worktrees_per_repo=max_materialized_worktrees_per_repo,
+    )
+    await anyharness.update_runtime_worktree_retention_policy(
+        runtime_url,
+        access_token,
+        max_materialized_worktrees_per_repo=max_materialized_worktrees_per_repo,
+    )
+    log_cloud_event(
+        "cloud runtime worktree policy sync finished",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        max_materialized_worktrees_per_repo=max_materialized_worktrees_per_repo,
+        elapsed_ms=duration_ms(sync_started),
+    )
+
+
+async def run_runtime_worktree_retention(
+    runtime_url: str,
+    access_token: str,
+    *,
+    workspace_id: UUID | None = None,
+) -> None:
+    run_started = time.perf_counter()
+    log_cloud_event(
+        "cloud runtime deferred worktree retention run started",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+    )
+    await anyharness.run_runtime_worktree_retention(runtime_url, access_token)
+    log_cloud_event(
+        "cloud runtime deferred worktree retention run finished",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        elapsed_ms=duration_ms(run_started),
+    )
 
 
 async def _run_deferred_cleanup_background(
