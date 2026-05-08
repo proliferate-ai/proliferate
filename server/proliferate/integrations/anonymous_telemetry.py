@@ -17,14 +17,15 @@ from proliferate.utils.telemetry_mode import (
     is_anonymous_telemetry_enabled,
 )
 
+AnonymousTelemetryEvent = anonymous_telemetry_service.AnonymousTelemetryEvent
+VersionPayload = anonymous_telemetry_service.VersionPayload
+load_or_create_local_install_id = anonymous_telemetry_service.load_or_create_local_install_id
+record_anonymous_telemetry_with_db = anonymous_telemetry_service.record_anonymous_telemetry
+
 logger = logging.getLogger(__name__)
 
 _VERSION_INTERVAL_SECONDS = 24 * 60 * 60
 _SURFACE = "server"
-
-AnonymousTelemetryEvent = anonymous_telemetry_service.AnonymousTelemetryEvent
-VersionPayload = anonymous_telemetry_service.VersionPayload
-load_or_create_local_install_id = anonymous_telemetry_service.load_or_create_local_install_id
 
 
 def _server_version() -> str:
@@ -52,7 +53,9 @@ async def _build_server_event() -> AnonymousTelemetryEvent:
     )
 
 
-async def _post_remote_event(event: AnonymousTelemetryEvent) -> None:
+async def _post_remote_event(
+    event: AnonymousTelemetryEvent,
+) -> None:
     async with httpx.AsyncClient(timeout=5.0) as client:
         response = await client.post(
             settings.anonymous_telemetry_endpoint,
@@ -75,7 +78,7 @@ async def record_anonymous_telemetry(
     event: AnonymousTelemetryEvent,
 ) -> None:
     async with db_engine.async_session_factory() as db, db.begin():
-        await anonymous_telemetry_service.record_anonymous_telemetry(db, event)
+        await record_anonymous_telemetry_with_db(db, event)
 
 
 async def emit_server_anonymous_version() -> None:
