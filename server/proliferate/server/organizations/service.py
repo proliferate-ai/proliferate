@@ -46,19 +46,12 @@ from proliferate.db.store.organization_records import (
     normalize_invitation_email,
 )
 from proliferate.integrations import resend
+from proliferate.server.organizations.errors import OrganizationServiceError
 from proliferate.server.organizations.landing import build_landing_html
 from proliferate.utils.time import utcnow
 
 OwnerScope = Literal["personal", "organization"]
 OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
-
-
-class OrganizationServiceError(RuntimeError):
-    def __init__(self, code: str, message: str, *, status_code: int) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status_code = status_code
 
 
 @dataclass(frozen=True)
