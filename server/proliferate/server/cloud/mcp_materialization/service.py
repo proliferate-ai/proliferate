@@ -6,14 +6,16 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.config import settings
 from proliferate.db.store.cloud_mcp.auth import (
-    load_connection_auth,
-    mark_connection_auth_status_if_version,
-    update_connection_auth_if_version,
+    load_connection_auth_standalone,
+    mark_connection_auth_status_if_version_standalone,
+    update_connection_auth_if_version_standalone,
 )
 from proliferate.db.store.cloud_mcp.connections import list_user_connections
-from proliferate.db.store.cloud_mcp.oauth_clients import get_oauth_client
+from proliferate.db.store.cloud_mcp.oauth_clients import get_oauth_client_standalone
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.integrations.mcp_oauth import McpOAuthProviderError, refresh_token
 from proliferate.server.cloud.errors import CloudApiError
@@ -121,12 +123,13 @@ def _summary(
 
 
 async def materialize_cloud_mcp_servers(
+    db: AsyncSession,
     *,
     user_id: UUID,
     body: MaterializeCloudMcpRequest,
 ) -> MaterializeCloudMcpResponse:
     _cloud_mcp_enabled_or_raise()
-    records = await list_user_connections(user_id)
+    records = await list_user_connections(db, user_id)
     requested = set(body.connection_ids or [])
     if requested:
         records = [record for record in records if record.connection_id in requested]
@@ -557,7 +560,7 @@ async def _oauth_refresh_lock(connection_db_id: UUID) -> asyncio.Lock:
 async def _ready_oauth_access_token_locked(
     record: CloudMcpConnectionRecord,
 ) -> str | None:
-    auth = await load_connection_auth(connection_db_id=record.id)
+    auth = await load_connection_auth_standalone(connection_db_id=record.id)
     if auth is None:
         auth = record.auth
     if auth is None or auth.auth_status != "ready" or not auth.payload_ciphertext:
@@ -584,7 +587,7 @@ async def _ready_oauth_access_token_locked(
         and isinstance(resource, str)
         and resource
     ):
-        marked = await mark_connection_auth_status_if_version(
+        marked = await mark_connection_auth_status_if_version_standalone(
             connection_db_id=record.id,
             expected_auth_version=auth.auth_version,
             auth_kind="oauth",
@@ -597,7 +600,7 @@ async def _ready_oauth_access_token_locked(
     issuer = payload.get("issuer")
     redirect_uri = payload.get("redirectUri") or _oauth_redirect_uri()
     oauth_client = (
-        await get_oauth_client(
+        await get_oauth_client_standalone(
             issuer=issuer,
             redirect_uri=redirect_uri,
             catalog_entry_id=record.catalog_entry_id,
@@ -622,7 +625,7 @@ async def _ready_oauth_access_token_locked(
             ),
         )
     except McpOAuthProviderError as exc:
-        marked = await mark_connection_auth_status_if_version(
+        marked = await mark_connection_auth_status_if_version_standalone(
             connection_db_id=record.id,
             expected_auth_version=auth.auth_version,
             auth_kind="oauth",
@@ -639,7 +642,7 @@ async def _ready_oauth_access_token_locked(
         "expiresAt": refreshed.expires_at.isoformat() if refreshed.expires_at else None,
         "scopes": list(refreshed.scopes) or payload.get("scopes") or [],
     }
-    updated = await update_connection_auth_if_version(
+    updated = await update_connection_auth_if_version_standalone(
         connection_db_id=record.id,
         expected_auth_version=auth.auth_version,
         auth_kind="oauth",
@@ -654,7 +657,7 @@ async def _ready_oauth_access_token_locked(
 
 
 async def _latest_ready_oauth_access_token(record: CloudMcpConnectionRecord) -> str | None:
-    auth = await load_connection_auth(connection_db_id=record.id)
+    auth = await load_connection_auth_standalone(connection_db_id=record.id)
     if auth is None:
         return None
     return _ready_access_token_from_auth(auth)
