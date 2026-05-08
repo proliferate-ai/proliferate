@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -20,15 +21,15 @@ from proliferate.db.store.cloud_workspaces import (
     update_workspace_repo_apply_status_by_id,
     workspace_repo_apply_lock,
 )
-from proliferate.integrations.anyharness import CloudRuntimeOperationError
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.workspace_operations import (
+from proliferate.integrations.anyharness import (
+    CloudRuntimeOperationError,
     read_remote_workspace_file_state,
     start_remote_workspace_setup,
     write_remote_workspace_file,
 )
-from proliferate.utils.time import utcnow
+from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.utils.time import duration_ms, utcnow
 
 
 class WorkspaceRepoApplyBusyError(RuntimeError):
@@ -130,13 +131,20 @@ async def _start_workspace_setup_monitor(
         status_detail="Starting repo setup",
     )
     try:
+        setup_started = time.perf_counter()
         started = await start_remote_workspace_setup(
             runtime.runtime_url,
             runtime.access_token,
             anyharness_workspace_id=runtime.anyharness_workspace_id,
             command=setup_script,
             base_ref=workspace.git_base_branch,
+        )
+        log_cloud_event(
+            "cloud runtime setup started",
             workspace_id=workspace.id,
+            runtime_url=runtime.runtime_url,
+            remote_workspace_id=runtime.anyharness_workspace_id,
+            elapsed_ms=duration_ms(setup_started),
         )
         if not started.command_run_id:
             raise CloudRuntimeOperationError("Remote setup start did not return a commandRunId.")
@@ -191,13 +199,22 @@ async def _apply_repo_files(
 
     for index, tracked_file in enumerate(repo_config.tracked_files, start=1):
         try:
+            read_started = time.perf_counter()
             remote_state = await read_remote_workspace_file_state(
                 runtime.runtime_url,
                 runtime.access_token,
                 anyharness_workspace_id=runtime.anyharness_workspace_id,
                 relative_path=tracked_file.relative_path,
-                workspace_id=workspace.id,
             )
+            log_cloud_event(
+                "cloud runtime file state loaded",
+                workspace_id=workspace.id,
+                runtime_url=runtime.runtime_url,
+                remote_workspace_id=runtime.anyharness_workspace_id,
+                relative_path=tracked_file.relative_path,
+                elapsed_ms=duration_ms(read_started),
+            )
+            write_started = time.perf_counter()
             await write_remote_workspace_file(
                 runtime.runtime_url,
                 runtime.access_token,
@@ -205,7 +222,14 @@ async def _apply_repo_files(
                 relative_path=tracked_file.relative_path,
                 content=tracked_file.content,
                 expected_version_token=remote_state.version_token,
+            )
+            log_cloud_event(
+                "cloud runtime file written",
                 workspace_id=workspace.id,
+                runtime_url=runtime.runtime_url,
+                remote_workspace_id=runtime.anyharness_workspace_id,
+                relative_path=tracked_file.relative_path,
+                elapsed_ms=duration_ms(write_started),
             )
         except Exception as exc:
             error_message = format_exception_message(exc)

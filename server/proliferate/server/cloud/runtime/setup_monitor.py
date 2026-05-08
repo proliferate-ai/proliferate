@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
+import time
 from uuid import UUID, uuid4
 
 from proliferate.db.store.cloud_workspace_setup_runs import (
@@ -15,10 +16,10 @@ from proliferate.db.store.cloud_workspace_setup_runs import (
     release_setup_run_claim,
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
+from proliferate.integrations.anyharness import get_remote_terminal_command_run
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.service import get_workspace_connection
-from proliferate.server.cloud.runtime.workspace_operations import get_remote_terminal_command_run
-from proliferate.utils.time import utcnow
+from proliferate.utils.time import duration_ms, utcnow
 
 _SETUP_MONITOR_POLL_SECONDS = 5
 _SETUP_MONITOR_OWNER = f"{socket.gethostname()}:{uuid4()}"
@@ -104,11 +105,19 @@ async def _poll_setup_run(setup_run_id: UUID) -> None:
         )
         return
 
+    read_started = time.perf_counter()
     detail = await get_remote_terminal_command_run(
         target.runtime_url,
         target.access_token,
         command_run_id=setup_run.command_run_id,
+    )
+    log_cloud_event(
+        "cloud runtime command-run loaded",
         workspace_id=workspace.id,
+        runtime_url=target.runtime_url,
+        command_run_id=setup_run.command_run_id,
+        status=detail.status,
+        elapsed_ms=duration_ms(read_started),
     )
 
     if detail.status in {"queued", "running"}:
