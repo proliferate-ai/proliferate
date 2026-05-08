@@ -5,8 +5,8 @@ import { CloudBillingSummary } from "@/components/settings/panes/CloudBillingSum
 import { OrganizationBillingSection } from "@/components/settings/panes/billing/OrganizationBillingSection";
 import { Button } from "@/components/ui/Button";
 import { useCloudBilling, useCloudBillingActions } from "@/hooks/cloud/use-cloud-billing";
-import { useActiveOrganization } from "@/hooks/organizations/use-active-organization";
-import { useOrganizationMembers } from "@/hooks/organizations/use-organization-members";
+import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_MEMBERS = [] as const;

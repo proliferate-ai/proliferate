@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
-import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositories";
+import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import {
   buildAutomationTargetState,

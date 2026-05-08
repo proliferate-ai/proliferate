@@ -14,7 +14,7 @@ import { Monitor } from "@/components/ui/icons";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
-import { useRepositorySettings } from "@/hooks/settings/use-repository-settings";
+import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
 import {
   isSetupHintEnabled,
   toggleSetupHint,

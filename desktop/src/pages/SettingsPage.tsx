@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { SettingsScreen } from "@/components/settings/screen/SettingsScreen";
-import { useSettingsNavigation } from "@/hooks/settings/use-settings-navigation";
-import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositories";
+import { useSettingsRepositories } from "@/hooks/settings/derived/use-settings-repositories";
+import { useSettingsNavigation } from "@/hooks/settings/workflows/use-settings-navigation";
 
 export function SettingsPage() {
   const navigate = useNavigate();
