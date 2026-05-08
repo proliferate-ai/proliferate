@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useWorkspaceCommandPaletteFileSearch } from "@/hooks/workspaces/use-workspace-command-palette-file-search";
-import { useWorkspaceCommandPaletteOpenFiles } from "@/hooks/workspaces/use-workspace-command-palette-open-files";
-import { useWorkspaceCommandPaletteTabs } from "@/hooks/workspaces/use-workspace-command-palette-tabs";
+import { useWorkspaceCommandPaletteFileSearch } from "@/hooks/workspaces/ui/use-workspace-command-palette-file-search";
+import { useWorkspaceCommandPaletteOpenFiles } from "@/hooks/workspaces/derived/use-workspace-command-palette-open-files";
+import { useWorkspaceCommandPaletteTabs } from "@/hooks/workspaces/workflows/use-workspace-command-palette-tabs";
 import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";
 import {
   commandPaletteCommandValue,
@@ -41,6 +41,8 @@ interface UseWorkspaceCommandPaletteArgs {
   onToggleRightPanel: () => void;
 }
 
+// Owns the command palette view-model for the workspace shell.
+// Search mechanics, open-file state, and tab actions live in narrower hooks.
 export function useWorkspaceCommandPalette({
   open,
   query,
