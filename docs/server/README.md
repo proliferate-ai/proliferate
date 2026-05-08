@@ -372,8 +372,9 @@ Persistence rule:
   SQLAlchemy.
 - `db/models/**` is leaf: it does not import services, stores, or integrations.
 - `integrations/<vendor>/**` is leaf: it does not import server domain code.
-  Each vendor folder exposes a public API via `__init__.py`; internals stay
-  vendor-local.
+  Each vendor folder exposes a public API via `__init__.py`; this is the
+  explicit Python integration-package exception to the repo-wide no-barrel
+  rule. Internals stay vendor-local.
 - `auth/**` may be imported by every layer. Cross-domain authorization helpers
   always come from `auth.authorization`, never from another domain's
   `service.py`.

@@ -23,8 +23,10 @@ Worker code follows the same layer law as HTTP code:
 
 - Worker entry points call services. They don't run business logic
   themselves.
-- Workers don't import ORM directly. They call store functions.
-- Workers don't construct vendor clients. They call integrations.
+- Worker entry points and reconciliation loops don't import ORM directly.
+  They call services; worker-facing services call store functions.
+- Worker entry points don't construct vendor clients. Worker services or
+  executors call integrations through their public API.
 
 ## Folder Shape
 
@@ -107,7 +109,7 @@ Allowed:
 
 - The reconciliation loop structure (`while True: await pass()`).
 - Loop lifecycle: `start_*_reconciler`, `stop_*_reconciler`.
-- Calls to service or store functions.
+- Calls to service functions.
 - A pass function that does one round of reconciliation.
 
 Banned:
@@ -296,9 +298,11 @@ because all the executor and scheduling work has moved into `worker/`.
   Promote to `worker/` once you have the pattern.
 - The `_service` suffix on any worker-adjacent file. Files are `worker.py`,
   `reconciler.py`, `<name>_executor.py`, never `*_service.py`.
-- ORM imports in any worker file. Workers call store functions.
-- Direct vendor client construction in worker code. Workers call
-  integrations.
+- ORM imports in worker entry points, reconcilers, schedulers, or executors.
+  They call services; worker-facing services call store functions.
+- Direct vendor client construction in worker entry points, reconcilers, or
+  schedulers. Worker services or executors call integrations through their
+  public API.
 - Two `service.py` files at the same level. Either parent or `worker/`, not
   both at the same nesting.
 - A worker subfolder with only `main.py`. Promote when there's substantial

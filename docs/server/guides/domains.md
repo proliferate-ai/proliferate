@@ -419,7 +419,7 @@ cloud/runtime/
   api.py
   service.py                              ← cross-cutting only
   models.py                               ← shared types
-  
+
   provisioning/                           ← subdomain
     service.py                            ← was provision.py (further decomposed)
     models.py                             ← provision input/result types

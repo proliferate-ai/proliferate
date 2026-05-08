@@ -75,6 +75,8 @@ or any set of features that don't fit cleanly in one file.
 - `<concern>.py` — distinct features: `webhooks.py`, `oauth.py`,
   `notifications.py`.
 - `__init__.py` — exports the public API. Internals stay vendor-local.
+  This is the explicit Python-package exception to the repo-wide no-barrel
+  rule; use it only for integration package public APIs.
 
 Example (today): `slack/` with `webhooks.py` + `errors.py`.
 
@@ -147,6 +149,11 @@ For single-file integrations, the public API is whatever the file exports
 
 For folder integrations, the public API is what `__init__.py` exports.
 Everything else stays vendor-local.
+
+This `__init__.py` export surface is intentional for integration packages:
+services import the vendor API from one stable package boundary while
+integration internals remain private. Do not use this pattern as a general
+convenience re-export elsewhere in the server tree.
 
 ```python
 # integrations/stripe/__init__.py
