@@ -4,9 +4,3 @@
 # RULE_ID path count reason
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/chat/use-chat-prompt-actions.ts 2 query cache ownership before access/cache migration
 QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/plans/workflows/use-proposed-plan-actions.ts 3 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/cancel-display-queries.ts 1 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/connection.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/run-workspace-selection.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/selection/use-workspace-selection.ts 2 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-selected-cloud-runtime-state.ts 4 query cache ownership before access/cache migration
-QUERY_CLIENT_OUTSIDE_CACHE_OWNER desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts 5 query cache ownership before access/cache migration

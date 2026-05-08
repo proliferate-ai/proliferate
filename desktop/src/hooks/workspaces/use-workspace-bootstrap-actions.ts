@@ -1,23 +1,15 @@
-import {
-  anyHarnessModelRegistriesKey,
-  anyHarnessSessionsKey,
-  anyHarnessWorkspaceSessionLaunchKey,
-  type AnyHarnessResolvedConnection,
-} from "@anyharness/sdk-react";
-import type { AnyHarnessRequestOptions, ModelRegistry } from "@anyharness/sdk";
+import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import type { ModelRegistry } from "@anyharness/sdk";
 import { useCallback, useRef } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
+import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
+import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { listModelRegistries } from "@/lib/access/anyharness/model-registries";
-import { listWorkspaceSessions } from "@/lib/access/anyharness/sessions";
-import { getWorkspaceSessionLaunchCatalog } from "@/lib/access/anyharness/workspaces";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
-import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
@@ -83,121 +75,14 @@ const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
 
-function requestOptionsWithSignal(
-  requestOptions: AnyHarnessRequestOptions | undefined,
-  signal: AbortSignal,
-): AnyHarnessRequestOptions {
-  return {
-    ...requestOptions,
-    signal: requestOptions?.signal ?? signal,
-  };
-}
-
-async function withAbortTimeout<T>(
-  timeoutMs: number | undefined,
-  run: (signal: AbortSignal | null) => Promise<T>,
-): Promise<T> {
-  if (!timeoutMs || timeoutMs <= 0) {
-    return await run(null);
-  }
-
-  const controller = new AbortController();
-  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = globalThis.setTimeout(() => {
-      reject(new Error(`Timed out after ${timeoutMs}ms`));
-      controller.abort();
-    }, timeoutMs);
-  });
-  const runPromise = run(controller.signal);
-  runPromise.catch(() => undefined);
-  try {
-    return await Promise.race([runPromise, timeoutPromise]);
-  } finally {
-    if (timeoutId !== null) {
-      globalThis.clearTimeout(timeoutId);
-    }
-  }
-}
-
-async function fetchWorkspaceSessionsWithConnection(
-  workspaceConnection: AnyHarnessResolvedConnection,
-  workspaceId: string,
-  options?: {
-    includeDismissed?: boolean;
-    requestOptions?: AnyHarnessRequestOptions;
-    timeoutMs?: number;
-  },
-): Promise<WorkspaceSession[]> {
-  const sessions = await withAbortTimeout(
-    options?.timeoutMs,
-    async (signal) => {
-      const timedRequestOptions = signal
-        ? requestOptionsWithSignal(options?.requestOptions, signal)
-        : options?.requestOptions;
-      const requestOptions = options?.includeDismissed
-        ? { ...timedRequestOptions, includeDismissed: true }
-        : timedRequestOptions;
-      return await listWorkspaceSessions(workspaceConnection, requestOptions);
-    },
-  );
-  return sessions.map((session) => ({
-    ...session,
-    workspaceId,
-  }));
-}
-
-async function fetchWorkspaceLaunchCatalog(
-  workspaceConnection: AnyHarnessResolvedConnection,
-  latencyFlowId?: string | null,
-  signal?: AbortSignal,
-) {
-  const requestOptions = latencyFlowId
-    ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
-    : undefined;
-  return getWorkspaceSessionLaunchCatalog(
-    workspaceConnection,
-    signal ? requestOptionsWithSignal(requestOptions, signal) : requestOptions,
-  );
-}
-
-async function loadWorkflowWorkspaceSessions(input: {
-  queryClient: QueryClient;
-  queryKey: readonly unknown[];
-  workspaceConnection: AnyHarnessResolvedConnection;
-  workspaceId: string;
-  requestOptions?: AnyHarnessRequestOptions;
-  forceRefresh?: boolean;
-  timeoutMs?: number;
-}): Promise<WorkspaceSession[]> {
-  const cacheState = input.queryClient.getQueryState(input.queryKey);
-  const cachedSessions = input.queryClient.getQueryData<WorkspaceSession[]>(input.queryKey);
-  if (
-    !input.forceRefresh
-    && cachedSessions
-    && cacheState?.dataUpdatedAt
-    && !cacheState.isInvalidated
-  ) {
-    return cachedSessions;
-  }
-
-  // Bootstrap/reconcile own workspace activation. Fetch directly instead of
-  // joining a possibly hung automatic session-list query triggered by
-  // selectedWorkspaceId subscribers, then seed React Query for those surfaces.
-  const sessions = await fetchWorkspaceSessionsWithConnection(
-    input.workspaceConnection,
-    input.workspaceId,
-    {
-      requestOptions: input.requestOptions,
-      timeoutMs: input.timeoutMs,
-    },
-  );
-  input.queryClient.setQueryData(input.queryKey, sessions);
-  return sessions;
-}
-
 export function useWorkspaceBootstrapActions() {
-  const queryClient = useQueryClient();
+  const {
+    ensureModelRegistries,
+    ensureWorkspaceLaunchCatalog,
+    fetchWorkspaceSessions,
+    getWorkspaceSessionsCacheDecision,
+    loadWorkspaceSessions,
+  } = useWorkspaceBootstrapCache();
   const workspaceCollections = useWorkspaces().data;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
@@ -319,60 +204,55 @@ export function useWorkspaceBootstrapActions() {
       })
       : () => undefined;
     try {
-    const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
-    const workspace = workspaces.find((entry) => entry.id === workspaceId);
-    const treeStateKey = workspace
-      ? workspaceFileTreeStateKey(workspace)
-      : workspaceId;
-    const sessionsStartedAt = startLatencyTimer();
-    const initWorkspaceStartedAt = startLatencyTimer();
-    const fileWorkspaceArgs = {
-      workspaceUiKey: logicalWorkspaceId ?? workspaceId,
-      materializedWorkspaceId: workspaceId,
-      anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
-      runtimeUrl: workspaceConnection.runtimeUrl,
-      treeStateKey,
-      authToken: workspaceConnection.authToken ?? undefined,
-    };
-    prepareFileWorkspace(fileWorkspaceArgs);
-    recordMeasurementWorkflowStep({
-      operationId: measurementOperationId,
-      step: "workspace.bootstrap.file_tree_init",
-      startedAt: initWorkspaceStartedAt,
-    });
-    scheduleDeferredFileTreePrefetch({
-      workspaceId,
-      materializedWorkspaceId: workspaceId,
-      anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
-      runtimeUrl: workspaceConnection.runtimeUrl,
-      treeStateKey,
-      authToken: workspaceConnection.authToken ?? undefined,
-      measurementOperationId,
-      startedAt: initWorkspaceStartedAt,
-      isCurrent,
-    });
-    let sessionsLoadFailed = false;
-    const sessionsQueryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
-    if (measurementOperationId) {
-      const sessionsCacheState = queryClient.getQueryState(sessionsQueryKey);
-      recordMeasurementMetric({
-        type: "cache",
-        category: "session.list",
+      const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+      const workspace = workspaces.find((entry) => entry.id === workspaceId);
+      const treeStateKey = workspace
+        ? workspaceFileTreeStateKey(workspace)
+        : workspaceId;
+      const sessionsStartedAt = startLatencyTimer();
+      const initWorkspaceStartedAt = startLatencyTimer();
+      const fileWorkspaceArgs = {
+        workspaceUiKey: logicalWorkspaceId ?? workspaceId,
+        materializedWorkspaceId: workspaceId,
+        anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+        runtimeUrl: workspaceConnection.runtimeUrl,
+        treeStateKey,
+        authToken: workspaceConnection.authToken ?? undefined,
+      };
+      prepareFileWorkspace(fileWorkspaceArgs);
+      recordMeasurementWorkflowStep({
         operationId: measurementOperationId,
-        decision: sessionsCacheState?.dataUpdatedAt
-          ? sessionsCacheState.isInvalidated ? "stale" : "hit"
-          : "miss",
-        source: "react_query",
+        step: "workspace.bootstrap.file_tree_init",
+        startedAt: initWorkspaceStartedAt,
       });
-    }
-    const sessionRequestOptions = getMeasurementRequestOptions({
-      operationId: measurementOperationId,
-      category: "session.list",
-      headers: getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined,
-    });
-    const sessions = await loadWorkflowWorkspaceSessions({
-        queryClient,
-        queryKey: sessionsQueryKey,
+      scheduleDeferredFileTreePrefetch({
+        workspaceId,
+        materializedWorkspaceId: workspaceId,
+        anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
+        runtimeUrl: workspaceConnection.runtimeUrl,
+        treeStateKey,
+        authToken: workspaceConnection.authToken ?? undefined,
+        measurementOperationId,
+        startedAt: initWorkspaceStartedAt,
+        isCurrent,
+      });
+      let sessionsLoadFailed = false;
+      if (measurementOperationId) {
+        recordMeasurementMetric({
+          type: "cache",
+          category: "session.list",
+          operationId: measurementOperationId,
+          decision: getWorkspaceSessionsCacheDecision(runtimeUrl, workspaceId),
+          source: "react_query",
+        });
+      }
+      const sessionRequestOptions = getMeasurementRequestOptions({
+        operationId: measurementOperationId,
+        category: "session.list",
+        headers: getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined,
+      });
+      const sessions = await loadWorkspaceSessions({
+        runtimeUrl,
         workspaceConnection,
         workspaceId,
         requestOptions: sessionRequestOptions ?? undefined,
@@ -415,15 +295,13 @@ export function useWorkspaceBootstrapActions() {
         clearLastViewedSession(logicalWorkspaceId);
       }
       const dismissedCheckStartedAt = startLatencyTimer();
-      const sessionsIncludingDismissed = await fetchWorkspaceSessionsWithConnection(
+      const sessionsIncludingDismissed = await fetchWorkspaceSessions({
         workspaceConnection,
         workspaceId,
-        {
-          includeDismissed: true,
-          requestOptions: sessionRequestOptions,
-          timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
-        },
-      ).catch(() => sessions);
+        includeDismissed: true,
+        requestOptions: sessionRequestOptions,
+        timeoutMs: WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS,
+      }).catch(() => sessions);
       const hasDismissedSessions = hasHiddenDismissedWorkspaceSessions(
         sessions,
         sessionsIncludingDismissed,
@@ -452,17 +330,16 @@ export function useWorkspaceBootstrapActions() {
       }
 
       const launchCatalogStartedAt = startLatencyTimer();
-      const launchCatalog = await queryClient.ensureQueryData({
-        queryKey: anyHarnessWorkspaceSessionLaunchKey(workspaceConnection.runtimeUrl, workspaceId),
-        queryFn: ({ signal }) => fetchWorkspaceLaunchCatalog(
-          workspaceConnection,
-          latencyFlowId,
-          signal,
-        ),
+      const launchCatalog = await ensureWorkspaceLaunchCatalog({
+        workspaceConnection,
+        workspaceId,
+        requestOptions: latencyFlowId
+          ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
+          : undefined,
       }).catch(() => null);
-      const modelRegistries = await queryClient.ensureQueryData({
-        queryKey: anyHarnessModelRegistriesKey(runtimeUrl),
-        queryFn: ({ signal }) => listModelRegistries(workspaceConnection, { signal }),
+      const modelRegistries = await ensureModelRegistries({
+        runtimeUrl,
+        workspaceConnection,
       }).catch(() => EMPTY_MODEL_REGISTRIES);
 
       logLatency("workspace.select.launch_catalog_loaded", {
@@ -616,9 +493,13 @@ export function useWorkspaceBootstrapActions() {
     createEmptySessionWithResolvedConfig,
     prepareFileWorkspace,
     preferences,
-    queryClient,
+    ensureModelRegistries,
+    ensureWorkspaceLaunchCatalog,
+    fetchWorkspaceSessions,
+    getWorkspaceSessionsCacheDecision,
     scheduleDeferredFileTreePrefetch,
     selectSession,
+    loadWorkspaceSessions,
     workspaceCollections,
   ]);
 
@@ -688,10 +569,8 @@ export function useWorkspaceBootstrapActions() {
           headers: requestHeaders,
         });
         const sessionsStartedAt = startLatencyTimer();
-        const sessionsQueryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
-        const sessions = await loadWorkflowWorkspaceSessions({
-          queryClient,
-          queryKey: sessionsQueryKey,
+        const sessions = await loadWorkspaceSessions({
+          runtimeUrl,
           workspaceConnection,
           workspaceId,
           requestOptions: sessionRequestOptions ?? undefined,
@@ -817,8 +696,8 @@ export function useWorkspaceBootstrapActions() {
       }
     }, [
       cancelDeferredFileTreePrefetch,
+      loadWorkspaceSessions,
       prepareFileWorkspace,
-      queryClient,
       rehydrateSessionSlotFromHistory,
       scheduleDeferredFileTreePrefetch,
       workspaceCollections,

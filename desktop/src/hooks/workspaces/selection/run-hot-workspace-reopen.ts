@@ -24,7 +24,6 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
-import { cancelPreviousWorkspaceDisplayQueries } from "./cancel-display-queries";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
 import { runWorkspaceSelection } from "./run-workspace-selection";
@@ -95,8 +94,7 @@ export function runHotWorkspaceReopen(
   });
 
   const nonce = useSessionSelectionStore.getState().workspaceSelectionNonce + 1;
-  cancelPreviousWorkspaceDisplayQueries({
-    queryClient: deps.queryClient,
+  deps.cache.cancelPreviousWorkspaceDisplayQueries({
     runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
     previousWorkspaceIds: [state.selectedLogicalWorkspaceId, state.selectedWorkspaceId],
     nextWorkspaceIds: [logicalWorkspace?.id ?? null, resolvedWorkspaceId],

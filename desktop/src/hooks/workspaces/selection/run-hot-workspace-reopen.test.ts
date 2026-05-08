@@ -117,7 +117,11 @@ describe("runHotWorkspaceReopen", () => {
 
 function depsForHotReopen(): WorkspaceSelectionDeps {
   return {
-    queryClient: {} as never,
+    cache: {
+      cancelPreviousWorkspaceDisplayQueries: vi.fn(),
+      invalidateCloudWorkspaceStartState: vi.fn().mockResolvedValue(undefined),
+      refreshCloudWorkspaceConnection: vi.fn(),
+    },
     logicalWorkspaces: [],
     rawWorkspaces: [{ id: "workspace-1" } as never, { id: "workspace-2" } as never],
     setSelectedLogicalWorkspaceId: vi.fn(),
