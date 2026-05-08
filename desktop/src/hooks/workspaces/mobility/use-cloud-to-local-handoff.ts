@@ -6,10 +6,8 @@ import {
   useUpdateWorkspaceMobilityRuntimeStateMutation,
   useWorkspaceMobilityPreflightQuery,
 } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useCloudWorkspaceHandoffPreflight } from "@/hooks/access/cloud/use-cloud-workspace-handoff-preflight";
 import { useCompleteCloudWorkspaceHandoffCleanup } from "@/hooks/access/cloud/use-complete-cloud-workspace-handoff-cleanup";
 import { useEnsureCloudMobilityWorkspace } from "@/hooks/access/cloud/use-ensure-cloud-mobility-workspace";
@@ -18,7 +16,7 @@ import { useFinalizeCloudWorkspaceHandoff } from "@/hooks/access/cloud/use-final
 import { useStartCloudWorkspaceHandoff } from "@/hooks/access/cloud/use-start-cloud-workspace-handoff";
 import { useUpdateCloudWorkspaceHandoffPhase } from "@/hooks/access/cloud/use-update-cloud-workspace-handoff-phase";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { resetWorkspaceOwnerFlipState } from "@/hooks/workspaces/mobility/reset-workspace-owner-flip-state";
+import { useWorkspaceMobilityCache } from "@/hooks/workspaces/cache/use-workspace-mobility-cache";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -61,7 +59,6 @@ export function useCloudToLocalHandoff(args: {
   cloudMaterializationId: string | null;
   mobilityWorkspaceId: string | null;
 }) {
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setConfirmSnapshot = useWorkspaceMobilityUiStore((state) => state.setConfirmSnapshot);
   const clearConfirmSnapshot = useWorkspaceMobilityUiStore((state) => state.clearConfirmSnapshot);
@@ -69,6 +66,8 @@ export function useCloudToLocalHandoff(args: {
   const clearMcpNotice = useWorkspaceMobilityUiStore((state) => state.clearMcpNotice);
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
+  const { clearWorkspaceOwnerFlipCache, invalidateWorkspaceCollections } =
+    useWorkspaceMobilityCache(runtimeUrl);
   const ensureMobilityWorkspace = useEnsureCloudMobilityWorkspace();
   const cloudPreflight = useCloudWorkspaceHandoffPreflight();
   const startHandoff = useStartCloudWorkspaceHandoff();
@@ -333,19 +332,15 @@ export function useCloudToLocalHandoff(args: {
       });
       finalized = true;
 
-      await resetWorkspaceOwnerFlipState({
-        queryClient,
-        runtimeUrl,
+      await clearWorkspaceOwnerFlipCache({
         logicalWorkspaceId: snapshot.logicalWorkspaceId,
         previousWorkspaceId: snapshot.sourceWorkspaceId,
         previousCloudWorkspaceId: args.logicalWorkspace?.cloudWorkspace?.id
           ?? args.logicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
           ?? null,
-        clearWorkspaceRuntimeState,
       });
-      await queryClient.invalidateQueries({
-        queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-      });
+      clearWorkspaceRuntimeState(snapshot.sourceWorkspaceId);
+      await invalidateWorkspaceCollections();
       await selectWorkspace(snapshot.logicalWorkspaceId, { force: true });
 
       try {
@@ -356,9 +351,7 @@ export function useCloudToLocalHandoff(args: {
           mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
           handoffOpId,
         });
-        await queryClient.invalidateQueries({
-          queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-        });
+        await invalidateWorkspaceCollections();
         cleanupCompleted = true;
       } catch (cleanupError) {
         await failHandoff.mutateAsync({
@@ -407,9 +400,7 @@ export function useCloudToLocalHandoff(args: {
       }
 
       if (failureRecovery.shouldRefreshWorkspaceSelection) {
-        await queryClient.invalidateQueries({
-          queryKey: workspaceCollectionsScopeKey(runtimeUrl),
-        });
+        await invalidateWorkspaceCollections();
         await selectWorkspace(snapshot.logicalWorkspaceId, { force: true }).catch(() => undefined);
       }
 
@@ -423,15 +414,15 @@ export function useCloudToLocalHandoff(args: {
     cleanupWorkspace,
     clearConfirmSnapshot,
     clearMcpNotice,
+    clearWorkspaceOwnerFlipCache,
     clearWorkspaceRuntimeState,
     completeCleanup,
     exportArchive,
     failHandoff,
     finalizeHandoff,
+    invalidateWorkspaceCollections,
     installArchive,
     prepareDestination,
-    queryClient,
-    runtimeUrl,
     selectWorkspace,
     showMcpNotice,
     showToast,
