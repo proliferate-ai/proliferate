@@ -32,10 +32,14 @@ describe("resolveChatInputAvailability", () => {
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+      mobility: null,
+      hasBusyReview: false,
     })).toEqual({
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind: "local",
     });
   });
 
@@ -52,10 +56,93 @@ describe("resolveChatInputAvailability", () => {
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+      mobility: null,
+      hasBusyReview: false,
     })).toEqual({
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind: "local",
+    });
+  });
+
+  it("keeps pending workspace creation enabled until setup fails", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: null,
+      isCloudWorkspaceSelected: false,
+      connectionState: "starting",
+      selectedCloudWorkspaceStatus: null,
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: null,
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: null,
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: false,
+      configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: {
+        source: "cloud-created",
+        stage: "awaiting-cloud-ready",
+      },
+      mobility: null,
+      hasBusyReview: false,
+    })).toEqual({
+      isDisabled: false,
+      disabledReason: null,
+      areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind: "cloud",
+    });
+  });
+
+  it("lets mobility handoff override normal availability", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: "workspace-1",
+      isCloudWorkspaceSelected: false,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: null,
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: null,
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "session-1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: true,
+      configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+      mobility: {
+        handoffActive: true,
+        statusDescription: "Moving workspace.",
+        selectedEffectiveOwner: "cloud",
+      },
+      hasBusyReview: false,
+    })).toEqual({
+      isDisabled: true,
+      disabledReason: "Moving workspace.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: "cloud",
+    });
+  });
+
+  it("lets active review automation override normal availability", () => {
+    expect(resolveChatInputAvailability({
+      selectedWorkspaceId: "workspace-1",
+      isCloudWorkspaceSelected: false,
+      connectionState: "healthy",
+      selectedCloudWorkspaceStatus: null,
+      selectedCloudWorkspaceActionBlockReason: null,
+      selectedCloudRuntimePhase: null,
+      selectedCloudRuntimeActionBlockReason: null,
+      activeSessionId: "session-1",
+      isConfiguredLaunchLoading: false,
+      hasReadyConfiguredLaunch: true,
+      configuredLaunchDisabledReason: null,
+      pendingWorkspaceEntry: null,
+      mobility: null,
+      hasBusyReview: true,
+    })).toEqual({
+      isDisabled: true,
+      disabledReason: "Review automation is running.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: "local",
     });
   });
 });

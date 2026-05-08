@@ -1,5 +1,5 @@
 import { CHAT_PRE_MESSAGE_LABELS } from "@/copy/chat/chat-copy";
-import { useChatReadyContext } from "@/hooks/chat/use-chat-ready-context";
+import { useChatReadyContext } from "@/hooks/chat/derived/use-chat-ready-context";
 import { formatChatReadyContextLine } from "@/lib/domain/chat/surface/chat-ready-context";
 
 /**

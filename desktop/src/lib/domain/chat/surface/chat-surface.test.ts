@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
+  resolveChatSurfaceState,
   resolveLaunchIntentSurfaceOverride,
   shouldMountWorkspaceShell,
   shouldKeepBootstrappedWorkspaceLoading,
   shouldShowStructuralRepoWorkspaceStatus,
+  type ResolveChatSurfaceStateInput,
 } from "@/lib/domain/chat/surface/chat-surface";
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
@@ -18,6 +20,30 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
     cleanupState: "none",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function surfaceInput(
+  overrides: Partial<ResolveChatSurfaceStateInput> = {},
+): ResolveChatSurfaceStateInput {
+  return {
+    selectedWorkspaceId: "workspace-1",
+    hasPendingWorkspaceEntry: false,
+    activeLaunchIntentId: null,
+    launchIntentSessionId: null,
+    selectedLocalWorkspace: null,
+    isArrivalWorkspace: false,
+    shouldShowSelectedCloudWorkspaceStatus: false,
+    shouldPreserveVisibleCloudContent: false,
+    shellRenderScope: null,
+    activeSessionId: "session-1",
+    hasContent: true,
+    hasSlot: true,
+    transcriptHydrated: true,
+    isEmpty: false,
+    isRunning: false,
+    streamConnectionState: "open",
     ...overrides,
   };
 }
@@ -118,5 +144,43 @@ describe("chat surface", () => {
       activeSessionId: "previous-session",
       hasVisibleSessionContent: true,
     })).toEqual({ kind: "session-transcript", sessionId: "previous-session" });
+  });
+
+  it("resolves no workspace when nothing is selected or launching", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: null,
+      activeSessionId: null,
+      hasContent: false,
+    }))).toEqual({ kind: "no-workspace" });
+  });
+
+  it("scopes chat shell render surfaces away from the active transcript", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      shellRenderScope: { kind: "chat-shell" },
+    }))).toEqual({ kind: "session-empty", sessionId: null });
+  });
+
+  it("shows pending session switching for pending session render surfaces", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      shellRenderScope: { kind: "chat-session-pending", sessionId: "session-2" },
+    }))).toEqual({ kind: "session-switching", sessionId: "session-2" });
+  });
+
+  it("keeps existing content visible during an unhydrated loading window", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      hasSlot: true,
+      transcriptHydrated: false,
+      streamConnectionState: "connecting",
+      hasContent: true,
+    }))).toEqual({ kind: "session-transcript", sessionId: "session-1" });
+  });
+
+  it("shows session hydrating before content arrives", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      hasSlot: true,
+      transcriptHydrated: false,
+      streamConnectionState: "connecting",
+      hasContent: false,
+    }))).toEqual({ kind: "session-hydrating", sessionId: "session-1" });
   });
 });

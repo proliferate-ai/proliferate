@@ -10,12 +10,12 @@ import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspac
 import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
 import { TranscriptSwitchingPlaceholder } from "@/components/workspace/chat/surface/TranscriptSwitchingPlaceholder";
 import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
-import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
+import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/derived/use-chat-surface-state";
 import {
   useActiveSessionId,
   useActiveSessionPromptCapabilities,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
+import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
 import { useChatPromptAttachments } from "@/hooks/chat/ui/use-chat-prompt-attachments";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";

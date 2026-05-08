@@ -5,17 +5,17 @@ import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cl
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   resolveChatInputAvailability,
-  type ChatInputAvailability,
+  type ChatInputAvailabilityState,
 } from "@/lib/domain/chat/composer/chat-input";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 
-export interface ChatAvailabilityState extends ChatInputAvailability {
-  selectedWorkspaceKind: "cloud" | "local";
-}
+export type ChatAvailabilityState = ChatInputAvailabilityState;
 
+// Owns read-only composer availability state. All disabling rules live in the
+// pure chat-input resolver; this hook only gathers React state.
 export function useChatAvailabilityState(options?: {
   activeSessionId?: string | null;
 }): ChatAvailabilityState {
@@ -49,12 +49,24 @@ export function useChatAvailabilityState(options?: {
     isConfiguredLaunchLoading: configuredLaunch.isLoading,
     hasReadyConfiguredLaunch: configuredLaunch.isReady,
     configuredLaunchDisabledReason: configuredLaunch.disabledReason,
+    pendingWorkspaceEntry,
+    mobility: {
+      handoffActive: mobility.handoffActive,
+      statusDescription: mobility.status.description ?? null,
+      selectedEffectiveOwner: mobility.selectedLogicalWorkspace?.effectiveOwner ?? null,
+    },
+    hasBusyReview: activeReviewRun.hasBusyReview,
   }), [
     activeSessionId,
+    activeReviewRun.hasBusyReview,
     connectionState,
     configuredLaunch.disabledReason,
     configuredLaunch.isLoading,
     configuredLaunch.isReady,
+    mobility.handoffActive,
+    mobility.selectedLogicalWorkspace?.effectiveOwner,
+    mobility.status.description,
+    pendingWorkspaceEntry,
     selectedCloudRuntime.state?.actionBlockReason,
     selectedCloudRuntime.state?.phase,
     selectedCloudWorkspace?.actionBlockReason,
@@ -62,59 +74,5 @@ export function useChatAvailabilityState(options?: {
     selectedWorkspaceId,
     selectedCloudWorkspaceId,
   ]);
-
-  if (pendingWorkspaceEntry) {
-    if (pendingWorkspaceEntry.stage !== "failed") {
-      return {
-        isDisabled: false,
-        disabledReason: null,
-        areRuntimeControlsDisabled: false,
-        selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
-      };
-    }
-
-    const disabledReason = pendingWorkspaceEntry.stage === "failed"
-      ? "Resolve workspace setup before starting chat."
-      : pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
-        ? "Cloud workspace is still preparing."
-        : pendingWorkspaceEntry.source === "worktree-created"
-          ? "Creating worktree..."
-          : pendingWorkspaceEntry.source === "cloud-created"
-            ? "Creating cloud workspace..."
-            : pendingWorkspaceEntry.source === "cowork-created"
-              ? "Starting cowork thread..."
-              : "Creating workspace...";
-
-    return {
-      isDisabled: true,
-      disabledReason,
-      areRuntimeControlsDisabled: true,
-      selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
-    };
-  }
-
-  if (mobility.handoffActive) {
-    return {
-      isDisabled: true,
-      disabledReason: mobility.status.description ?? "Workspace mobility is in progress.",
-      areRuntimeControlsDisabled: true,
-      selectedWorkspaceKind: mobility.selectedLogicalWorkspace?.effectiveOwner === "cloud"
-        ? "cloud"
-        : "local",
-    };
-  }
-
-  if (activeReviewRun.hasBusyReview) {
-    return {
-      isDisabled: true,
-      disabledReason: "Review automation is running.",
-      areRuntimeControlsDisabled: true,
-      selectedWorkspaceKind: selectedCloudWorkspaceId !== null ? "cloud" : "local",
-    };
-  }
-
-  return {
-    ...availability,
-    selectedWorkspaceKind: selectedCloudWorkspaceId !== null ? "cloud" : "local",
-  };
+  return availability;
 }
