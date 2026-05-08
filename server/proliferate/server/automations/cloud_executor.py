@@ -35,16 +35,14 @@ from proliferate.integrations.anyharness import (
     CloudRuntimePromptDeliveryUncertainError,
     CloudRuntimeReconnectError,
     CloudRuntimeRequestRejectedError,
-)
-from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
-from proliferate.server.cloud.runtime.service import get_workspace_connection, provision_workspace
-from proliferate.server.cloud.runtime.session_api import (
     apply_runtime_reasoning_effort,
     close_runtime_session,
     create_runtime_session,
     prompt_runtime_session,
 )
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
+from proliferate.server.cloud.runtime.service import get_workspace_connection, provision_workspace
 from proliferate.server.cloud.workspaces.service import create_cloud_workspace_for_automation_run
 from proliferate.utils.time import utcnow
 

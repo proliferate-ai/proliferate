@@ -16,6 +16,12 @@ from proliferate.integrations.anyharness.models import (
     RemoteWorkspaceSetupStart,
     ResolvedRemoteWorkspace,
 )
+from proliferate.integrations.anyharness.sessions import (
+    apply_runtime_reasoning_effort,
+    close_runtime_session,
+    create_runtime_session,
+    prompt_runtime_session,
+)
 
 __all__ = [
     "CloudRuntimeOperationError",
@@ -27,6 +33,10 @@ __all__ = [
     "RemoteWorkspaceFileState",
     "RemoteWorkspaceSetupStart",
     "ResolvedRemoteWorkspace",
+    "apply_runtime_reasoning_effort",
     "auth_headers",
+    "close_runtime_session",
+    "create_runtime_session",
+    "prompt_runtime_session",
     "response_preview",
 ]

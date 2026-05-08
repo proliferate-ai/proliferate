@@ -5,11 +5,12 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-from proliferate.server.cloud.runtime import session_api
 from proliferate.integrations.anyharness import (
+    apply_runtime_reasoning_effort,
     CloudRuntimeReconnectError,
     CloudRuntimePromptDeliveryUncertainError,
     CloudRuntimeRequestRejectedError,
+    prompt_runtime_session,
 )
 
 
@@ -60,13 +61,13 @@ async def test_prompt_connect_error_is_definitive_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        session_api.httpx,
+        httpx,
         "AsyncClient",
         _client_factory(httpx.ConnectError("connect failed")),
     )
 
     with pytest.raises(CloudRuntimeReconnectError) as exc_info:
-        await session_api.prompt_runtime_session(
+        await prompt_runtime_session(
             "https://runtime.example",
             "token",
             session_id="session-1",
@@ -81,13 +82,13 @@ async def test_prompt_read_timeout_is_delivery_uncertain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        session_api.httpx,
+        httpx,
         "AsyncClient",
         _client_factory(httpx.ReadTimeout("read timed out")),
     )
 
     with pytest.raises(CloudRuntimePromptDeliveryUncertainError):
-        await session_api.prompt_runtime_session(
+        await prompt_runtime_session(
             "https://runtime.example",
             "token",
             session_id="session-1",
@@ -100,13 +101,13 @@ async def test_prompt_5xx_response_is_delivery_uncertain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        session_api.httpx,
+        httpx,
         "AsyncClient",
         _client_factory(httpx.Response(502, request=httpx.Request("POST", "https://runtime"))),
     )
 
     with pytest.raises(CloudRuntimePromptDeliveryUncertainError):
-        await session_api.prompt_runtime_session(
+        await prompt_runtime_session(
             "https://runtime.example",
             "token",
             session_id="session-1",
@@ -119,13 +120,13 @@ async def test_prompt_4xx_response_is_request_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        session_api.httpx,
+        httpx,
         "AsyncClient",
         _client_factory(httpx.Response(400, request=httpx.Request("POST", "https://runtime"))),
     )
 
     with pytest.raises(CloudRuntimeRequestRejectedError):
-        await session_api.prompt_runtime_session(
+        await prompt_runtime_session(
             "https://runtime.example",
             "token",
             session_id="session-1",
@@ -155,9 +156,9 @@ async def test_apply_runtime_reasoning_effort_sets_effort(
             _response({"applyState": "applied"}, method="POST"),
         ]
     )
-    monkeypatch.setattr(session_api.httpx, "AsyncClient", lambda **_kwargs: client)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: client)
 
-    await session_api.apply_runtime_reasoning_effort(
+    await apply_runtime_reasoning_effort(
         "https://runtime.example",
         "token",
         session_id="session-1",
@@ -202,10 +203,10 @@ async def test_apply_runtime_reasoning_effort_rejects_unsupported_effort(
             ),
         ]
     )
-    monkeypatch.setattr(session_api.httpx, "AsyncClient", lambda **_kwargs: client)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: client)
 
     with pytest.raises(CloudRuntimeRequestRejectedError):
-        await session_api.apply_runtime_reasoning_effort(
+        await apply_runtime_reasoning_effort(
             "https://runtime.example",
             "token",
             session_id="session-1",
