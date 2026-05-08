@@ -24,18 +24,16 @@ from proliferate.db.store.cloud_mcp.connections import (
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    CatalogConfigurationError,
-    CatalogEntry,
-    get_catalog_entry,
+from proliferate.server.cloud.mcp_catalog.catalog import get_catalog_entry
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
+    parse_settings as catalog_parse_settings,
     render_oauth_resource_url,
     validate_secret_fields,
-)
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    parse_settings as catalog_parse_settings,
-)
-from proliferate.server.cloud.mcp_catalog.catalog import (
     validate_settings as catalog_validate_settings,
+)
+from proliferate.server.cloud.mcp_catalog.domain.types import (
+    CatalogConfigurationError,
+    CatalogEntry,
 )
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpAuthKind,

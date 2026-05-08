@@ -1,29 +1,18 @@
 from __future__ import annotations
 
 from proliferate.config import settings
-from proliferate.server.cloud.mcp_catalog.builders import (
-    _bearer,
-    _secret_field,
-    _secret_query,
-    _setting_option,
+from proliferate.constants.mcp_catalog import GOOGLE_WORKSPACE_MCP_PACKAGE
+from proliferate.server.cloud.mcp_catalog.domain.builders import (
+    bearer_header,
+    secret_field,
+    secret_query,
+    setting_option,
 )
-from proliferate.server.cloud.mcp_catalog.hosted_connectors import HOSTED_CONNECTOR_CATALOG
-from proliferate.server.cloud.mcp_catalog.renderer import (
-    connector_supports_target,
-    normalize_settings,
-    parse_settings,
-    render_http_launch,
-    render_oauth_resource_url,
-    validate_secret_fields,
-    validate_settings,
-)
-from proliferate.server.cloud.mcp_catalog.types import (
+from proliferate.server.cloud.mcp_catalog.domain.hosted_connectors import HOSTED_CONNECTOR_CATALOG
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     ArgTemplate,
-    CatalogConfigurationError,
     CatalogEntry,
-    CatalogSecretField,
     CatalogSettingField,
-    CatalogSettingOption,
     EnvTemplate,
     HeaderTemplate,
     HttpLaunchTemplate,
@@ -32,36 +21,6 @@ from proliferate.server.cloud.mcp_catalog.types import (
     UrlBySetting,
     UrlVariant,
 )
-
-CATALOG_VERSION = "2026-04-30.1"
-GOOGLE_WORKSPACE_MCP_PACKAGE = "workspace-mcp==1.20.1"
-
-__all__ = [
-    "ArgTemplate",
-    "CATALOG_VERSION",
-    "CONNECTOR_CATALOG",
-    "CatalogConfigurationError",
-    "CatalogEntry",
-    "CatalogSecretField",
-    "CatalogSettingField",
-    "CatalogSettingOption",
-    "EnvTemplate",
-    "HeaderTemplate",
-    "HttpLaunchTemplate",
-    "QueryTemplate",
-    "StaticUrl",
-    "UrlBySetting",
-    "UrlVariant",
-    "get_catalog_entry",
-    "build_connector_catalog",
-    "connector_supports_target",
-    "normalize_settings",
-    "parse_settings",
-    "render_http_launch",
-    "render_oauth_resource_url",
-    "validate_secret_fields",
-    "validate_settings",
-]
 
 
 BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
@@ -85,12 +44,12 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://api.githubcopilot.com/mcp/"),
             display_url="https://api.githubcopilot.com/mcp/",
-            headers=(_bearer("personal_access_token"),),
+            headers=(bearer_header("personal_access_token"),),
         ),
         server_name_base="github",
         icon_id="github",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "personal_access_token",
                 "Personal access token",
                 "github_pat_...",
@@ -126,12 +85,12 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.context7.com/mcp"),
             display_url="https://mcp.context7.com/mcp",
-            headers=(_bearer("api_key"),),
+            headers=(bearer_header("api_key"),),
         ),
         server_name_base="context7",
         icon_id="context7",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "api_key",
                 "API key",
                 "ctx7sk-...",
@@ -163,12 +122,12 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.exa.ai/mcp"),
             display_url="https://mcp.exa.ai/mcp",
-            query=(_secret_query("exaApiKey", "api_key"),),
+            query=(secret_query("exaApiKey", "api_key"),),
         ),
         server_name_base="exa",
         icon_id="exa",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "api_key",
                 "API key",
                 "Paste your Exa API key",
@@ -199,12 +158,12 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.tavily.com/mcp"),
             display_url="https://mcp.tavily.com/mcp",
-            headers=(_bearer("api_key"),),
+            headers=(bearer_header("api_key"),),
         ),
         server_name_base="tavily",
         icon_id="tavily",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "api_key",
                 "API key",
                 "tvly-...",
@@ -242,7 +201,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             ),
             display_url="https://mcp.posthog.com/mcp",
             headers=(
-                _bearer("apiKey"),
+                bearer_header("apiKey"),
                 HeaderTemplate(
                     "x-posthog-organization-id",
                     "{settings.organizationId}",
@@ -258,7 +217,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         server_name_base="posthog",
         icon_id="posthog",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "apiKey",
                 "Project API key",
                 "phx_...",
@@ -276,8 +235,8 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
                 helper_text="Choose the PostHog region that hosts your project.",
                 default_value="us",
                 options=(
-                    _setting_option("us", "US"),
-                    _setting_option("eu", "EU"),
+                    setting_option("us", "US"),
+                    setting_option("eu", "EU"),
                 ),
                 affects_url=True,
             ),

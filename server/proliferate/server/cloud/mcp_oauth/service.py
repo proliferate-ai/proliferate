@@ -39,13 +39,15 @@ from proliferate.integrations.mcp_oauth import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    CatalogConfigurationError,
-    CatalogEntry,
-    get_catalog_entry,
+from proliferate.server.cloud.mcp_catalog.catalog import get_catalog_entry
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     parse_settings,
     render_oauth_resource_url,
     validate_settings,
+)
+from proliferate.server.cloud.mcp_catalog.domain.types import (
+    CatalogConfigurationError,
+    CatalogEntry,
 )
 from proliferate.server.cloud.mcp_oauth.models import (
     CloudMcpOAuthCallbackResponse,

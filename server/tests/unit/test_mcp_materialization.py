@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
-from proliferate.server.cloud.mcp_catalog.catalog import (
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     ArgTemplate,
     CatalogEntry,
     CatalogSecretField,
