@@ -13,6 +13,7 @@ import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
+// Owns the Home screen facade consumed by the component. Does not own Home Next launch flow.
 export function useHomeScreen() {
   const navigate = useNavigate();
   const { addRepoFromPicker, isAddingRepo } = useAddRepo();

@@ -5,9 +5,9 @@ import {
   type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
 } from "@/lib/domain/home/home-next-launch";
-import { useHomeNextModelSelection } from "@/hooks/home/use-home-next-model-selection";
-import { useHomeNextModeSelection } from "@/hooks/home/use-home-next-mode-selection";
-import { useHomeNextRepositorySelection } from "@/hooks/home/use-home-next-repository-selection";
+import { useHomeNextModelSelection } from "@/hooks/home/derived/use-home-next-model-selection";
+import { useHomeNextModeSelection } from "@/hooks/home/derived/use-home-next-mode-selection";
+import { useHomeNextRepositorySelection } from "@/hooks/home/derived/use-home-next-repository-selection";
 
 interface UseHomeNextStateArgs {
   destination: HomeNextDestination;
@@ -18,6 +18,7 @@ interface UseHomeNextStateArgs {
   modeOverrideId: string | null;
 }
 
+// Owns read-only Home Next launch state composition. Does not own launch actions.
 export function useHomeNextState({
   destination,
   repositorySelection,
