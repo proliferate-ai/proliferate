@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 _VERSION_INTERVAL_SECONDS = 24 * 60 * 60
 _SURFACE = "server"
 
+AnonymousTelemetryEvent = anonymous_telemetry_service.AnonymousTelemetryEvent
+VersionPayload = anonymous_telemetry_service.VersionPayload
+load_or_create_local_install_id = anonymous_telemetry_service.load_or_create_local_install_id
+
 
 def _server_version() -> str:
     try:
@@ -30,17 +34,17 @@ def _server_version() -> str:
         return "0.1.0"
 
 
-def _version_payload() -> anonymous_telemetry_service.VersionPayload:
-    return anonymous_telemetry_service.VersionPayload(
+def _version_payload() -> VersionPayload:
+    return VersionPayload(
         app_version=_server_version(),
         platform=platform.system().lower() or "unknown",
         arch=platform.machine().lower() or "unknown",
     )
 
 
-async def _build_server_event() -> anonymous_telemetry_service.AnonymousTelemetryEvent:
-    return anonymous_telemetry_service.AnonymousTelemetryEvent(
-        install_uuid=await anonymous_telemetry_service.load_or_create_local_install_id(_SURFACE),
+async def _build_server_event() -> AnonymousTelemetryEvent:
+    return AnonymousTelemetryEvent(
+        install_uuid=await load_or_create_local_install_id(_SURFACE),
         surface=_SURFACE,
         telemetry_mode=get_server_telemetry_mode(),
         record_type="VERSION",
@@ -48,7 +52,7 @@ async def _build_server_event() -> anonymous_telemetry_service.AnonymousTelemetr
     )
 
 
-async def _post_remote_event(event: anonymous_telemetry_service.AnonymousTelemetryEvent) -> None:
+async def _post_remote_event(event: AnonymousTelemetryEvent) -> None:
     async with httpx.AsyncClient(timeout=5.0) as client:
         response = await client.post(
             settings.anonymous_telemetry_endpoint,
@@ -68,7 +72,7 @@ async def _post_remote_event(event: anonymous_telemetry_service.AnonymousTelemet
 
 
 async def record_anonymous_telemetry(
-    event: anonymous_telemetry_service.AnonymousTelemetryEvent,
+    event: AnonymousTelemetryEvent,
 ) -> None:
     async with db_engine.async_session_factory() as db, db.begin():
         await anonymous_telemetry_service.record_anonymous_telemetry(db, event)
