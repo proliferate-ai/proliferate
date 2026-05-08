@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -15,8 +14,14 @@ from proliferate.db.models.anonymous_telemetry import (
 )
 from proliferate.utils.time import utcnow
 
-if TYPE_CHECKING:
-    from proliferate.server.anonymous_telemetry.service import AnonymousTelemetryEvent
+
+@dataclass(frozen=True)
+class AnonymousTelemetryEventInsert:
+    install_uuid: UUID
+    surface: str
+    telemetry_mode: str
+    record_type: str
+    payload_json: dict[str, object]
 
 
 async def _load_install_row(
@@ -35,9 +40,9 @@ async def _load_install_row(
     ).scalar_one_or_none()
 
 
-async def _record_anonymous_telemetry_event(
+async def record_anonymous_telemetry_event(
     db: AsyncSession,
-    event: AnonymousTelemetryEvent,
+    event: AnonymousTelemetryEventInsert,
 ) -> None:
     now = utcnow()
     install_row = await _load_install_row(
@@ -60,9 +65,9 @@ async def _record_anonymous_telemetry_event(
         install_row.last_seen_at = now
 
     if event.record_type == "VERSION":
-        install_row.last_app_version = event.payload.app_version
-        install_row.last_platform = event.payload.platform
-        install_row.last_arch = event.payload.arch
+        install_row.last_app_version = str(event.payload_json["app_version"])
+        install_row.last_platform = str(event.payload_json["platform"])
+        install_row.last_arch = str(event.payload_json["arch"])
 
     db.add(
         AnonymousTelemetryEventRecord(
@@ -71,18 +76,10 @@ async def _record_anonymous_telemetry_event(
             surface=event.surface,
             telemetry_mode=event.telemetry_mode,
             record_type=event.record_type,
-            payload_json=asdict(event.payload),
+            payload_json=event.payload_json,
             received_at=now,
         )
     )
-    await db.commit()
-
-
-async def record_anonymous_telemetry_event(
-    event: AnonymousTelemetryEvent,
-) -> None:
-    async with db_engine.async_session_factory() as db:
-        await _record_anonymous_telemetry_event(db, event)
 
 
 async def _load_or_create_local_install_id(

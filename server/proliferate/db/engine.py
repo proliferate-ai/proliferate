@@ -12,7 +12,12 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 AsyncSessionDep = Annotated[AsyncSession, Depends(get_async_session)]

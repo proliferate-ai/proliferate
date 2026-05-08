@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from proliferate.config import settings
+from proliferate.integrations.slack.errors import SlackWebhookError
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -133,3 +134,72 @@ class TestSupportApi:
 
         assert response.status_code == 503
         assert response.json()["detail"]["code"] == "support_unavailable"
+        assert (
+            response.json()["detail"]["message"]
+            == "Support messaging is not configured for this environment."
+        )
+
+    @pytest.mark.asyncio
+    async def test_support_message_returns_400_when_message_is_empty(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-empty@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(
+            settings,
+            "support_slack_webhook_url",
+            "https://hooks.slack.test/services/example",
+        )
+
+        response = await client.post(
+            "/v1/support/messages",
+            headers=headers,
+            json={"message": "   "},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == {
+            "code": "support_message_empty",
+            "message": "Support message cannot be empty.",
+        }
+
+    @pytest.mark.asyncio
+    async def test_support_message_returns_502_when_delivery_fails(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-failed@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(
+            settings,
+            "support_slack_webhook_url",
+            "https://hooks.slack.test/services/example",
+        )
+
+        async def fake_post_incoming_webhook(
+            *,
+            webhook_url: str,
+            text: str,
+            blocks: list[dict[str, object]] | None = None,
+        ) -> None:
+            raise SlackWebhookError("boom")
+
+        monkeypatch.setattr(
+            "proliferate.server.support.service.post_incoming_webhook",
+            fake_post_incoming_webhook,
+        )
+
+        response = await client.post(
+            "/v1/support/messages",
+            headers=headers,
+            json={"message": "Need help."},
+        )
+
+        assert response.status_code == 502
+        assert response.json()["detail"] == {
+            "code": "support_delivery_failed",
+            "message": "Support message could not be delivered.",
+        }

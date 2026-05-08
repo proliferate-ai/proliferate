@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Literal
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.db.store.anonymous_telemetry import (
+    AnonymousTelemetryEventInsert,
     load_or_create_local_install_id as load_or_create_local_install_id_store,
 )
 from proliferate.db.store.anonymous_telemetry import (
@@ -60,9 +63,19 @@ class AnonymousTelemetryEvent:
 
 
 async def record_anonymous_telemetry(
+    db: AsyncSession,
     event: AnonymousTelemetryEvent,
 ) -> None:
-    await record_anonymous_telemetry_event(event)
+    await record_anonymous_telemetry_event(
+        db,
+        AnonymousTelemetryEventInsert(
+            install_uuid=event.install_uuid,
+            surface=event.surface,
+            telemetry_mode=event.telemetry_mode,
+            record_type=event.record_type,
+            payload_json=asdict(event.payload),
+        ),
+    )
 
 
 async def load_or_create_local_install_id(surface: TelemetrySurface) -> UUID:

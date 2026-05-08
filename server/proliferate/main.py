@@ -3,14 +3,16 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
+from proliferate.errors import ProliferateError
 from proliferate.auth.dependencies import fastapi_users
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.jwt import auth_backend
@@ -90,6 +92,21 @@ def _validate_e2b_template_configuration() -> None:
     )
 
 
+async def _proliferate_error_handler(
+    _request: Request,
+    error: ProliferateError,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=error.status_code,
+        content={
+            "detail": {
+                "code": error.code,
+                "message": error.message,
+            }
+        },
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _validate_cloud_billing_configuration()
@@ -141,6 +158,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestTelemetryMiddleware)
     app.add_middleware(RequestContextMiddleware)
+    app.add_exception_handler(ProliferateError, _proliferate_error_handler)
 
     # ── Auth: users/me (read-only profile) ──
     app.include_router(

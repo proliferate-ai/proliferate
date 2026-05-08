@@ -1,22 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from proliferate.config import settings
 from proliferate.db.models.auth import User
 from proliferate.integrations.slack.errors import SlackWebhookError
 from proliferate.integrations.slack.webhooks import post_incoming_webhook
 from proliferate.middleware.request_context import get_request_id
-
-
-@dataclass(slots=True)
-class SupportServiceError(Exception):
-    status_code: int
-    code: str
-    message: str
-
-    def __str__(self) -> str:
-        return self.message
+from proliferate.server.support.errors import (
+    SupportDeliveryFailed,
+    SupportMessageEmpty,
+    SupportUnavailable,
+)
 
 
 def _escape_slack_text(value: str) -> str:
@@ -38,19 +31,11 @@ async def send_support_message(
 ) -> None:
     webhook_url = settings.support_slack_webhook_url.strip()
     if not webhook_url:
-        raise SupportServiceError(
-            status_code=503,
-            code="support_unavailable",
-            message="Support messaging is not configured for this environment.",
-        )
+        raise SupportUnavailable()
 
     cleaned_message = message.strip()
     if not cleaned_message:
-        raise SupportServiceError(
-            status_code=400,
-            code="support_message_empty",
-            message="Support message cannot be empty.",
-        )
+        raise SupportMessageEmpty()
 
     payload_context = context or {}
     sender_name = user.display_name or user.email
@@ -112,8 +97,4 @@ async def send_support_message(
             blocks=blocks,
         )
     except SlackWebhookError as exc:
-        raise SupportServiceError(
-            status_code=502,
-            code="support_delivery_failed",
-            message="Support message could not be delivered.",
-        ) from exc
+        raise SupportDeliveryFailed() from exc
