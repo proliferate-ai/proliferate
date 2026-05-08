@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.anonymous_telemetry import (
     AnonymousTelemetryEventInsert,
-    load_or_create_local_install_id as load_or_create_local_install_id_store,
+    record_anonymous_telemetry_event,
 )
 from proliferate.db.store.anonymous_telemetry import (
-    record_anonymous_telemetry_event,
+    load_or_create_local_install_id as load_or_create_local_install_id_store,
 )
 
 type TelemetrySurface = Literal["desktop", "server"]

@@ -25,10 +25,7 @@ def build_mrkdwn_message_blocks(
         blocks.append(
             {
                 "type": "section",
-                "fields": [
-                    _mrkdwn_field(field)
-                    for field in fields[:SLACK_SECTION_FIELD_LIMIT]
-                ],
+                "fields": [_mrkdwn_field(field) for field in fields[:SLACK_SECTION_FIELD_LIMIT]],
             }
         )
     return blocks

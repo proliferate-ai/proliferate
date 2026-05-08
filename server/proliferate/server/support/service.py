@@ -44,10 +44,7 @@ async def send_support_message(
     blocks = build_mrkdwn_message_blocks(
         title="*New support message*",
         body=plan.message,
-        fields=tuple(
-            SlackMessageField(field.label, field.value)
-            for field in plan.fields
-        ),
+        fields=tuple(SlackMessageField(field.label, field.value) for field in plan.fields),
     )
 
     try:

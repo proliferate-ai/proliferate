@@ -52,7 +52,4 @@ def test_build_support_message_plan_uses_location_without_workspace_name() -> No
         context={"workspace_location": "local"},
     )
 
-    assert ("Workspace", "local") in [
-        (field.label, field.value)
-        for field in plan.fields
-    ]
+    assert ("Workspace", "local") in [(field.label, field.value) for field in plan.fields]

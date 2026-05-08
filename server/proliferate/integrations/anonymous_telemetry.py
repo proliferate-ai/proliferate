@@ -11,12 +11,7 @@ import httpx
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.integrations.sentry import capture_server_sentry_exception
-from proliferate.server.anonymous_telemetry.service import (
-    AnonymousTelemetryEvent,
-    VersionPayload,
-    load_or_create_local_install_id,
-    record_anonymous_telemetry as record_anonymous_telemetry_with_db,
-)
+from proliferate.server.anonymous_telemetry import service as anonymous_telemetry_service
 from proliferate.utils.telemetry_mode import (
     get_server_telemetry_mode,
     is_anonymous_telemetry_enabled,
@@ -35,17 +30,17 @@ def _server_version() -> str:
         return "0.1.0"
 
 
-def _version_payload() -> VersionPayload:
-    return VersionPayload(
+def _version_payload() -> anonymous_telemetry_service.VersionPayload:
+    return anonymous_telemetry_service.VersionPayload(
         app_version=_server_version(),
         platform=platform.system().lower() or "unknown",
         arch=platform.machine().lower() or "unknown",
     )
 
 
-async def _build_server_event() -> AnonymousTelemetryEvent:
-    return AnonymousTelemetryEvent(
-        install_uuid=await load_or_create_local_install_id(_SURFACE),
+async def _build_server_event() -> anonymous_telemetry_service.AnonymousTelemetryEvent:
+    return anonymous_telemetry_service.AnonymousTelemetryEvent(
+        install_uuid=await anonymous_telemetry_service.load_or_create_local_install_id(_SURFACE),
         surface=_SURFACE,
         telemetry_mode=get_server_telemetry_mode(),
         record_type="VERSION",
@@ -53,7 +48,7 @@ async def _build_server_event() -> AnonymousTelemetryEvent:
     )
 
 
-async def _post_remote_event(event: AnonymousTelemetryEvent) -> None:
+async def _post_remote_event(event: anonymous_telemetry_service.AnonymousTelemetryEvent) -> None:
     async with httpx.AsyncClient(timeout=5.0) as client:
         response = await client.post(
             settings.anonymous_telemetry_endpoint,
@@ -72,10 +67,11 @@ async def _post_remote_event(event: AnonymousTelemetryEvent) -> None:
         response.raise_for_status()
 
 
-async def record_anonymous_telemetry(event: AnonymousTelemetryEvent) -> None:
-    async with db_engine.async_session_factory() as db:
-        async with db.begin():
-            await record_anonymous_telemetry_with_db(db, event)
+async def record_anonymous_telemetry(
+    event: anonymous_telemetry_service.AnonymousTelemetryEvent,
+) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await anonymous_telemetry_service.record_anonymous_telemetry(db, event)
 
 
 async def emit_server_anonymous_version() -> None:
