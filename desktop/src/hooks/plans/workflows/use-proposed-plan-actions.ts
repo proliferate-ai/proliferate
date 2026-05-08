@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from "react";
-import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   AnyHarnessError,
   type ContentPart,
@@ -7,11 +6,8 @@ import {
   type PlanDecisionResponse,
   type PromptInputBlock,
   type ProposedPlanDetail,
-  type ProposedPlanSummary,
 } from "@anyharness/sdk";
 import {
-  anyHarnessPlanKey,
-  anyHarnessPlansKey,
   useApprovePlanMutation,
   useFetchPlanMutation,
   useRejectPlanMutation,
@@ -19,6 +15,7 @@ import {
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
+import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
@@ -94,7 +91,6 @@ interface ExecutePlanImplementationInput {
 
 // Owns proposed-plan card actions. Does not own transcript row rendering or session runtime.
 export function useProposedPlanActions() {
-  const queryClient = useQueryClient();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
@@ -112,11 +108,17 @@ export function useProposedPlanActions() {
   const { promptActiveSession, setActiveSessionConfigOption } = useSessionActions();
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
+  const {
+    patchPlanDecisionQueries,
+  } = useProposedPlanCache({
+    runtimeUrl,
+    selectedWorkspaceId,
+  });
 
   const applyPlanDecision = useCallback((plan: ProposedPlanDetail) => {
-    patchCachedPlanQueries(queryClient, runtimeUrl, selectedWorkspaceId, plan);
+    patchPlanDecisionQueries(plan);
     patchCachedPlanTranscripts(plan);
-  }, [queryClient, runtimeUrl, selectedWorkspaceId]);
+  }, [patchPlanDecisionQueries]);
 
   const refreshAndApplyPlanDecision = useCallback(async (planId: string) => {
     const plan = await fetchPlanMutation.mutateAsync({
@@ -186,7 +188,8 @@ export function useProposedPlanActions() {
         onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) =>
           completeChatPromptSubmitSideEffects({
             workspaceId,
-            getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
+            getWorkspaceArrivalEvent: () =>
+              useSessionSelectionStore.getState().workspaceArrivalEvent,
             getCachedWorkspaceSetupStatus,
             agentKind,
             reuseSession,
@@ -203,8 +206,6 @@ export function useProposedPlanActions() {
     availability.disabledReason,
     availability.isDisabled,
     getCachedWorkspaceSetupStatus,
-    queryClient,
-    runtimeUrl,
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,
@@ -270,24 +271,6 @@ async function runPlanDecisionMutation({
     const message = error instanceof Error ? error.message : String(error);
     showToast(`${failurePrefix}: ${message}`);
   }
-}
-
-function patchCachedPlanQueries(
-  queryClient: QueryClient,
-  runtimeUrl: string | null,
-  workspaceId: string | null,
-  plan: ProposedPlanDetail,
-): void {
-  queryClient.setQueryData(
-    anyHarnessPlanKey(runtimeUrl, workspaceId, plan.id),
-    plan,
-  );
-  queryClient.setQueryData<ProposedPlanSummary[]>(
-    anyHarnessPlansKey(runtimeUrl, workspaceId),
-    (plans) => plans?.map((cachedPlan) => (
-      cachedPlan.id === plan.id ? { ...cachedPlan, ...plan } : cachedPlan
-    )),
-  );
 }
 
 function patchCachedPlanTranscripts(plan: ProposedPlanDetail): void {
