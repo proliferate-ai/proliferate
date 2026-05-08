@@ -361,7 +361,7 @@ async def save_cloud_repo_config(
         existing.updated_at = now
         existing.last_synced_at = now
 
-    await db.commit()
+    await db.flush()
     return await get_cloud_repo_config(
         db,
         user_id=user_id,
@@ -415,7 +415,7 @@ async def save_cloud_repo_file(
             record.files_version += 1
 
     record.updated_at = now
-    await db.commit()
+    await db.flush()
     return await get_cloud_repo_config(
         db,
         user_id=user_id,
@@ -449,18 +449,13 @@ async def bootstrap_cloud_repo_config(
     record.configured = True
     record.configured_at = now
     record.updated_at = now
-    await db.commit()
+    await db.flush()
     return await get_cloud_repo_config(
         db,
         user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
     )  # type: ignore[return-value]
-
-
-async def list_cloud_repo_configs_for_user(user_id: UUID) -> list[CloudRepoConfigSummaryValue]:
-    async with db_engine.async_session_factory() as db:
-        return await list_cloud_repo_configs(db, user_id)
 
 
 async def load_cloud_repo_config_for_user(
@@ -478,54 +473,6 @@ async def load_cloud_repo_config_for_user(
         )
 
 
-async def persist_cloud_repo_config(
-    *,
-    user_id: UUID,
-    git_owner: str,
-    git_repo_name: str,
-    configured: bool,
-    cloud_repo_limit: int | None,
-    default_branch: str | None,
-    env_vars: dict[str, str],
-    setup_script: str,
-    run_command: str,
-    files: list[CloudRepoFileInput],
-) -> CloudRepoConfigValue:
-    async with db_engine.async_session_factory() as db:
-        return await save_cloud_repo_config(
-            db,
-            user_id=user_id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            configured=configured,
-            cloud_repo_limit=cloud_repo_limit,
-            default_branch=default_branch,
-            env_vars=env_vars,
-            setup_script=setup_script,
-            run_command=run_command,
-            files=files,
-        )
-
-
-async def persist_cloud_repo_file(
-    *,
-    user_id: UUID,
-    git_owner: str,
-    git_repo_name: str,
-    relative_path: str,
-    content: str,
-) -> CloudRepoConfigValue:
-    async with db_engine.async_session_factory() as db:
-        return await save_cloud_repo_file(
-            db,
-            user_id=user_id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            relative_path=relative_path,
-            content=content,
-        )
-
-
 async def bootstrap_cloud_repo_config_for_user(
     *,
     user_id: UUID,
@@ -533,7 +480,7 @@ async def bootstrap_cloud_repo_config_for_user(
     git_repo_name: str,
     cloud_repo_limit: int | None,
 ) -> CloudRepoConfigValue:
-    async with db_engine.async_session_factory() as db:
+    async with db_engine.async_session_factory() as db, db.begin():
         return await bootstrap_cloud_repo_config(
             db,
             user_id=user_id,
