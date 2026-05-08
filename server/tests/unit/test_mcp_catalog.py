@@ -1,8 +1,15 @@
 import pytest
 
 from proliferate.config import settings
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    CONNECTOR_CATALOG,
+from proliferate.server.cloud.mcp_catalog import service as catalog_service
+from proliferate.server.cloud.mcp_catalog.catalog import CONNECTOR_CATALOG, get_catalog_entry
+from proliferate.server.cloud.mcp_catalog.domain.availability import catalog_entry_is_available
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
+    parse_settings,
+    render_http_launch,
+    validate_settings,
+)
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     ArgTemplate,
     CatalogConfigurationError,
     CatalogEntry,
@@ -11,12 +18,7 @@ from proliferate.server.cloud.mcp_catalog.catalog import (
     EnvTemplate,
     HttpLaunchTemplate,
     StaticUrl,
-    get_catalog_entry,
-    parse_settings,
-    render_http_launch,
-    validate_settings,
 )
-from proliferate.server.cloud.mcp_catalog import service as catalog_service
 
 
 def test_posthog_url_variant_and_optional_templates() -> None:
@@ -183,6 +185,17 @@ def test_static_oauth_catalog_entries_are_hidden_until_enabled_and_configured(
     assert slack.auth_kind == "oauth"
     assert slack.oauth_client_mode == "static"
     assert slack.url == "https://mcp.slack.com/mcp"
+
+
+def test_catalog_entry_availability_policy_for_static_oauth() -> None:
+    slack = get_catalog_entry("slack")
+    github = get_catalog_entry("github")
+    assert slack is not None
+    assert github is not None
+
+    assert not catalog_entry_is_available(slack, has_static_oauth_client_config=False)
+    assert catalog_entry_is_available(slack, has_static_oauth_client_config=True)
+    assert catalog_entry_is_available(github, has_static_oauth_client_config=False)
 
 
 def test_catalog_entry_invariants() -> None:

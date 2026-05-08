@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from proliferate.server.cloud.mcp_catalog.builders import _bearer, _secret_field
-from proliferate.server.cloud.mcp_catalog.types import (
+from proliferate.server.cloud.mcp_catalog.domain.builders import bearer_header, secret_field
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogEntry,
     HeaderTemplate,
     HttpLaunchTemplate,
@@ -80,12 +80,12 @@ HOSTED_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.render.com/mcp"),
             display_url="https://mcp.render.com/mcp",
-            headers=(_bearer("api_key"),),
+            headers=(bearer_header("api_key"),),
         ),
         server_name_base="render",
         icon_id="render",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "api_key",
                 "API key",
                 "rnd_...",
@@ -118,14 +118,14 @@ HOSTED_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             url=StaticUrl("https://mcp.neon.tech/mcp"),
             display_url="https://mcp.neon.tech/mcp",
             headers=(
-                _bearer("api_key"),
+                bearer_header("api_key"),
                 HeaderTemplate("x-read-only", "true"),
             ),
         ),
         server_name_base="neon",
         icon_id="neon",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "api_key",
                 "API key",
                 "Paste your Neon API key",
@@ -156,12 +156,12 @@ HOSTED_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://huggingface.co/mcp"),
             display_url="https://huggingface.co/mcp",
-            headers=(_bearer("hf_token"),),
+            headers=(bearer_header("hf_token"),),
         ),
         server_name_base="huggingface",
         icon_id="huggingface",
         secret_fields=(
-            _secret_field(
+            secret_field(
                 "hf_token",
                 "Access token",
                 "hf_...",

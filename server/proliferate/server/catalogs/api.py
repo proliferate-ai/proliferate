@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response
 
+from proliferate.constants.agent_catalog import AGENT_CATALOG_CACHE_CONTROL
+from proliferate.server.catalogs.domain.schema import agent_catalog_schema_version_is_supported
 from proliferate.server.catalogs.models import AgentCatalogResponse
 from proliferate.server.catalogs.service import read_agent_catalog
 
@@ -21,7 +23,7 @@ async def get_agent_catalog(
     if_none_match: str | None = Header(default=None),
     schema_version: int | None = Query(default=None, alias="schemaVersion"),
 ) -> AgentCatalogResponse | Response:
-    if schema_version not in (None, 1):
+    if not agent_catalog_schema_version_is_supported(schema_version):
         raise HTTPException(
             status_code=400,
             detail="Unsupported agent catalog schemaVersion.",
@@ -29,7 +31,7 @@ async def get_agent_catalog(
 
     catalog = read_agent_catalog()
     headers = {
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
+        "Cache-Control": AGENT_CATALOG_CACHE_CONTROL,
         "ETag": catalog.etag,
     }
     if if_none_match == catalog.etag:

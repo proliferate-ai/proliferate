@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.mcp_catalog import CATALOG_VERSION
 from proliferate.db.store.cloud_mcp.auth import (
     load_connection_auth_standalone,
     mark_connection_auth_status_if_version_standalone,
@@ -20,18 +21,19 @@ from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpCon
 from proliferate.integrations.mcp_oauth import McpOAuthProviderError, refresh_token
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
-from proliferate.server.cloud.mcp_catalog.catalog import (
-    CATALOG_VERSION,
-    ArgTemplate,
-    CatalogConfigurationError,
-    CatalogEntry,
-    EnvTemplate,
+from proliferate.server.cloud.mcp_catalog.catalog import get_catalog_entry
+from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     connector_supports_target,
-    get_catalog_entry,
     parse_settings,
     render_http_launch,
     validate_secret_fields,
     validate_settings,
+)
+from proliferate.server.cloud.mcp_catalog.domain.types import (
+    ArgTemplate,
+    CatalogConfigurationError,
+    CatalogEntry,
+    EnvTemplate,
 )
 from proliferate.server.cloud.mcp_materialization.models import (
     CloudMcpMaterializationWarningModel,

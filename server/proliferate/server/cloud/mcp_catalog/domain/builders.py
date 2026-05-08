@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from proliferate.server.cloud.mcp_catalog.types import (
+from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogSecretField,
     CatalogSettingOption,
     HeaderTemplate,
@@ -8,7 +8,7 @@ from proliferate.server.cloud.mcp_catalog.types import (
 )
 
 
-def _secret_field(
+def secret_field(
     id: str,
     label: str,
     placeholder: str,
@@ -26,13 +26,13 @@ def _secret_field(
     )
 
 
-def _setting_option(value: str, label: str) -> CatalogSettingOption:
+def setting_option(value: str, label: str) -> CatalogSettingOption:
     return CatalogSettingOption(value=value, label=label)
 
 
-def _bearer(secret_field_id: str) -> HeaderTemplate:
+def bearer_header(secret_field_id: str) -> HeaderTemplate:
     return HeaderTemplate("Authorization", f"Bearer {{secret.{secret_field_id}}}")
 
 
-def _secret_query(parameter_name: str, secret_field_id: str) -> QueryTemplate:
+def secret_query(parameter_name: str, secret_field_id: str) -> QueryTemplate:
     return QueryTemplate(parameter_name, f"{{secret.{secret_field_id}}}")

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from proliferate.server.catalogs.api import router
+from proliferate.server.catalogs.domain.schema import agent_catalog_schema_version_is_supported
 from proliferate.server.catalogs.service import CATALOG_PATH, read_agent_catalog
 
 
@@ -38,6 +39,12 @@ def test_agent_catalog_rejects_unsupported_schema_version() -> None:
     response = client.get("/v1/catalogs/agents?schemaVersion=2")
 
     assert response.status_code == 400
+
+
+def test_agent_catalog_schema_version_policy() -> None:
+    assert agent_catalog_schema_version_is_supported(None)
+    assert agent_catalog_schema_version_is_supported(1)
+    assert not agent_catalog_schema_version_is_supported(2)
 
 
 def test_agent_catalog_file_is_available_from_source_checkout() -> None:
