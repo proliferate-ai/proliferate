@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
+import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { logStartupDebug } from "@/lib/infra/measurement/debug-startup";
 import { useAuthStore } from "@/stores/auth/auth-store";

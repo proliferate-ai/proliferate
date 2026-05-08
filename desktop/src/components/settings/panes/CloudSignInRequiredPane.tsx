@@ -3,7 +3,7 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
-import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 
 export function CloudSignInRequiredPane() {
   const {

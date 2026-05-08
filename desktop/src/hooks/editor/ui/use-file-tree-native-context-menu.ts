@@ -19,6 +19,7 @@ export function useFileTreeNativeContextMenu({
   onRename?: () => void;
   onDelete?: () => void;
 }) {
+  // Product-specific native context menu wiring for the workspace file tree.
   return useNativeContextMenu(() =>
     buildFileTreeNativeContextMenuItems({
       targets,

@@ -166,7 +166,7 @@ Runtime config, not env:
 - Bundled agent seed telemetry:
   - trigger: desktop observes runtime health reporting seed status
   - code path:
-    - `desktop/src/hooks/telemetry/use-telemetry-agent-seed.ts`
+    - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-agent-seed.ts`
     - `desktop/src/lib/domain/telemetry/events.ts`
     - `desktop/src/lib/domain/telemetry/anonymous-events.ts`
   - sends product events only with low-cardinality fields:

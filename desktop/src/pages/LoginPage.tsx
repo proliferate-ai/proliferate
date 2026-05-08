@@ -1,4 +1,4 @@
-import { useLoginPage } from "@/hooks/auth/use-login-page";
+import { useLoginPage } from "@/hooks/auth/facade/use-login-page";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 
 export function LoginPage() {

@@ -6,6 +6,7 @@ import {
 } from "@/lib/integrations/telemetry/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
+// Owns telemetry user identity and auth-status tags. Does not own auth state.
 export function useTelemetryAuthIdentity() {
   const authStatus = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);

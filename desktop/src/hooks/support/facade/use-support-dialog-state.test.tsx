@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useSupportDialogState } from "@/hooks/support/use-support-dialog-state";
+import { useSupportDialogState } from "@/hooks/support/facade/use-support-dialog-state";
 import { SUPPORT_MESSAGE_MAX_LENGTH } from "@/lib/domain/support/constants";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
 
@@ -20,7 +20,7 @@ vi.mock("@/hooks/access/cloud/use-send-support-message", () => ({
   }),
 }));
 
-vi.mock("@/hooks/support/use-session-debug-actions", () => ({
+vi.mock("@/hooks/support/workflows/use-session-debug-actions", () => ({
   useSessionDebugActions: () => ({
     canCopyInvestigationJson: false,
     canExportActiveSessionJson: false,
