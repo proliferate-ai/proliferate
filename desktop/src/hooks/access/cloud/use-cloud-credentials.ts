@@ -1,13 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CloudCredentialStatus } from "@/lib/access/cloud/client";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { listCloudCredentialStatuses } from "@/lib/access/cloud/credentials";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";
-
-export type { CloudAgentKind, CloudCredentialStatus } from "@/lib/access/cloud/client";
-export { isCloudAgentKind } from "@/lib/access/cloud/client";
+import type { CloudCredentialStatus } from "@/lib/domain/cloud/credentials";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
 

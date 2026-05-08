@@ -3,8 +3,6 @@ import { listOrganizations } from "@/lib/access/cloud/organizations";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { organizationsListKey } from "./query-keys";
 
-export type { OrganizationResponse } from "@/lib/access/cloud/client";
-
 export function useOrganizations() {
   const { cloudActive } = useCloudAvailabilityState();
 

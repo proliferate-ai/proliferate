@@ -1,7 +1,15 @@
-import type {
-  CloudAgentKind,
-  CloudCredentialStatus,
-} from "@/lib/access/cloud/client";
+export type CloudAgentKind = "claude" | "codex" | "gemini";
+
+export function isCloudAgentKind(value: string): value is CloudAgentKind {
+  return value === "claude" || value === "codex" || value === "gemini";
+}
+
+export interface CloudCredentialStatus {
+  provider: string;
+  localDetected: boolean;
+  synced: boolean;
+  authMode?: string | null;
+}
 
 export function describeCloudCredentialStatus(
   provider: CloudAgentKind,

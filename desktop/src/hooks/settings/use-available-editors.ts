@@ -6,8 +6,6 @@ import {
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { availableEditorsKey } from "./query-keys";
 
-export type { EditorInfo, OpenTargetIconId } from "@/hooks/access/tauri/use-shell-actions";
-
 const EMPTY_EDITORS: EditorInfo[] = [];
 
 export function useAvailableEditors() {

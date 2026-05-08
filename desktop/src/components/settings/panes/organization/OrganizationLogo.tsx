@@ -1,12 +1,21 @@
 import type { ReactNode } from "react";
-import type { OrganizationMemberResponse } from "@/hooks/organizations/use-organization-members";
-import type { OrganizationResponse } from "@/hooks/organizations/use-organizations";
+
+interface OrganizationLogoRecord {
+  name: string;
+  logoDomain?: string | null;
+}
+
+interface OrganizationAvatarMember {
+  displayName?: string | null;
+  email: string;
+  avatarUrl?: string | null;
+}
 
 export function OrganizationLogo({
   organization,
   logoImage,
 }: {
-  organization: OrganizationResponse;
+  organization: OrganizationLogoRecord;
   logoImage?: string | null;
 }) {
   const initials = organization.name.trim().slice(0, 2).toUpperCase() || "OR";
@@ -32,7 +41,7 @@ export function OrganizationLogo({
   );
 }
 
-export function Avatar({ member }: { member: OrganizationMemberResponse }) {
+export function Avatar({ member }: { member: OrganizationAvatarMember }) {
   const initials = (member.displayName || member.email).trim().slice(0, 2).toUpperCase();
   if (member.avatarUrl) {
     return (

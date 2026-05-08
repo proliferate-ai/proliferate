@@ -22,7 +22,6 @@ DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/local-executor.ts 1 d
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/target-selection.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/automations/view-model.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/chat/__fixtures__/playground.ts 1 domain imports transport or UI types before lib cleanup
-DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/credentials.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/runtime-input-sync.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/files/file-visuals.ts 2 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/mcp/local-stdio-finalizer.ts 1 domain imports transport or UI types before lib cleanup

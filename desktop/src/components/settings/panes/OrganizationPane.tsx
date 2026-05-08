@@ -22,20 +22,40 @@ import {
 } from "@/components/settings/panes/organization/OrganizationLogo";
 import { useActiveOrganization } from "@/hooks/organizations/use-active-organization";
 import { useOrganizationActions } from "@/hooks/organizations/use-organization-actions";
-import {
-  type OrganizationInvitationResponse,
-  useOrganizationInvitations,
-} from "@/hooks/organizations/use-organization-invitations";
-import {
-  type OrganizationMemberResponse,
-  useOrganizationMembers,
-} from "@/hooks/organizations/use-organization-members";
-import type { OrganizationResponse } from "@/hooks/organizations/use-organizations";
+import { useOrganizationInvitations } from "@/hooks/organizations/use-organization-invitations";
+import { useOrganizationMembers } from "@/hooks/organizations/use-organization-members";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
-const EMPTY_MEMBERS: OrganizationMemberResponse[] = [];
-const EMPTY_INVITATIONS: OrganizationInvitationResponse[] = [];
+type OrganizationRole = "owner" | "admin" | "member";
+
+interface OrganizationRecord {
+  id: string;
+  name: string;
+  logoImage?: string | null;
+  logoDomain?: string | null;
+}
+
+interface OrganizationMemberRecord {
+  membershipId: string;
+  userId: string;
+  role: OrganizationRole;
+  status: string;
+  displayName?: string | null;
+  email: string;
+  avatarUrl?: string | null;
+}
+
+interface OrganizationInvitationRecord {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  deliveryStatus: string;
+}
+
+const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
+const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 const ORGANIZATION_LOGO_IMAGE_MAX_BYTES = 256 * 1024;
 const ORGANIZATION_LOGO_IMAGE_TYPES = new Set([
   "image/gif",
@@ -388,7 +408,7 @@ function OrganizationSettingsCard({
   onLogoImageFile,
   onSubmit,
 }: {
-  organization: OrganizationResponse;
+  organization: OrganizationRecord;
   settingsName: string;
   settingsLogoImage: string | null;
   logoImageError: string | null;
@@ -486,12 +506,12 @@ function MemberRow({
   onRoleChange,
   onRemove,
 }: {
-  member: OrganizationMemberResponse;
+  member: OrganizationMemberRecord;
   canManage: boolean;
   canManageOwners: boolean;
   currentUserId: string | null;
   updating: boolean;
-  onRoleChange: (role: "owner" | "admin" | "member") => void;
+  onRoleChange: (role: OrganizationRole) => void;
   onRemove: () => void;
 }) {
   const isCurrentUser = member.userId === currentUserId;
@@ -511,7 +531,7 @@ function MemberRow({
       <Select
         value={member.role}
         disabled={roleDisabled || updating}
-        onChange={(event) => onRoleChange(event.currentTarget.value as "owner" | "admin" | "member")}
+        onChange={(event) => onRoleChange(event.currentTarget.value as OrganizationRole)}
         aria-label={`Role for ${member.email}`}
         className="w-28"
       >
@@ -541,7 +561,7 @@ function InvitationRow({
   onResend,
   onRevoke,
 }: {
-  invitation: OrganizationInvitationResponse;
+  invitation: OrganizationInvitationRecord;
   canManage: boolean;
   working: boolean;
   onResend: () => void;
