@@ -27,6 +27,9 @@ Guides:
 - [guides/auth.md](guides/auth.md) for authentication, the
   `auth/authorization` shared helpers, `<domain>/access.py` resource-access
   route deps, and `<domain>/domain/policy.py` product rules.
+- [guides/errors.md](guides/errors.md) for shared product errors,
+  domain-specific errors, integration-error translation, and global HTTP
+  exception mapping.
 - [guides/integrations.md](guides/integrations.md) for `integrations/<vendor>/`
   shapes and adapter conventions.
 - [guides/config.md](guides/config.md) for `config.py`,
@@ -121,10 +124,10 @@ Files named in the target shape that **do not yet exist** (or are partial):
 - `server/proliferate/errors.py` — the shared base for `ProliferateError`,
   `NotFoundError`, `PermissionDenied`, `Conflict`. Today error types are
   scattered or per-domain only.
-- `auth/authorization.py` — `require_org_role`, `OwnerContext`,
-  `PolicyVerdict` are currently in `server/organizations/service.py`; they
-  migrate to a dedicated module so domains stop cross-importing from
-  organizations.
+- `auth/authorization.py` — shared authorization context and policy verdict
+  helpers. Today some shared authorization helpers live inside product-domain
+  services; they migrate to a dedicated auth module so domains stop
+  cross-importing for authorization infrastructure.
 - `server/<domain>/access.py` — resource-access route deps. Most domains
   don't have one today; access checks happen inline in services.
 - `server/<domain>/domain/policy.py` — pure product-rule verdicts. Today
@@ -138,20 +141,18 @@ Patterns that **need migration**:
   `db: AsyncSession = Depends(get_async_session)`, services accept and
   thread `db`, stores never open sessions or commit. See
   [guides/database.md](guides/database.md).
-- **Vendor clients in product code.** `server/cloud/runtime/anyharness_api.py`,
-  `session_api.py`, and `workspace_operations.py` are the AnyHarness HTTP
-  client living inside the product domain. Target: move to
-  `integrations/anyharness/`.
-- **Sibling helper files importing ORM.** `billing/reconciler.py`,
-  `billing/stripe_webhooks.py`, several `cloud/runtime/*.py` files import
-  from `db.models` and do service-layer work. Target: see
+- **Protocol clients in product code.** Some raw HTTP/SDK clients still live
+  inside product domains. Target: move protocol access behind
+  `integrations/**`; product domains orchestrate results.
+- **Sibling helper files importing ORM.** Some domain-adjacent helper files do
+  service-layer or store-layer work while sitting outside the canonical
+  `api.py` / `service.py` / `models.py` / `domain/` shape. Target: see
   [guides/domains.md](guides/domains.md) on service decomposition.
-- **God files.** `db/store/billing.py` (2746 lines), `cloud/workspaces/service.py`
-  (1135), `cloud/runtime/provision.py` (1082), and others need
-  decomposition under the rules in the relevant guide.
-- **Pydantic constructors accepting ORM.** Currently in
-  `cloud/repo_config/models.py` and `cloud/workspaces/models.py`. Target:
-  every constructor takes a dataclass.
+- **God files.** Some stores, services, runtime flows, and workers are large
+  coupled modules that need staged decomposition under the relevant guide.
+  Treat these as senior-review migrations, not first-wave cleanup.
+- **Pydantic constructors accepting ORM.** Some response constructors still
+  accept ORM objects. Target: every constructor takes a dataclass.
 
 Cleanup work should preserve current behavior, then incrementally move to
 the target shape. New code should follow the rules below. PRs that
@@ -230,6 +231,8 @@ introduce new code in the **old** patterns require a justification.
   `domain/policy.py` are called from `service.py`.
 
 ### Errors
+
+See [guides/errors.md](guides/errors.md) for the detailed error model.
 
 - A single root `server/proliferate/errors.py` defines the base
   `ProliferateError` class and shared types (`NotFoundError`,
@@ -356,8 +359,8 @@ Use the lowest layer that can own the logic cleanly.
 | Cross-cutting HTTP behavior | `middleware/**` | Request context, tracing, correlation IDs. No product logic. | — |
 | Env-driven runtime configuration | `config.py` | Secrets, URLs, flags, limits that vary by deployment. | [config.md](guides/config.md) |
 | Hardcoded policy values | `constants/<area>.py` | Limits, timeouts, sentinel values, headers, protocol labels. | [config.md](guides/config.md) |
-| Shared base errors | `server/proliferate/errors.py` | `ProliferateError`, `NotFoundError`, `PermissionDenied`, `Conflict`. | this doc |
-| Domain-specific errors | `server/<domain>/errors.py` | Inherit from the shared base. | this doc |
+| Shared base errors | `server/proliferate/errors.py` | `ProliferateError`, `NotFoundError`, `PermissionDenied`, `Conflict`. | [errors.md](guides/errors.md) |
+| Domain-specific errors | `server/<domain>/errors.py` | Inherit from the shared base. | [errors.md](guides/errors.md) |
 | Integration-specific errors | `integrations/<vendor>/errors.py` or inline | Stay integration-local. | [integrations.md](guides/integrations.md) |
 
 Persistence rule:

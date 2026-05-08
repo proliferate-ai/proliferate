@@ -160,9 +160,15 @@ Banned:
 
 ### `<executor>.py` (in `worker/`)
 
-Alternative implementations of "do the worker's work." Two implementations
-of the same conceptual job (e.g., cloud vs local) live as siblings in
-`worker/`.
+Alternative implementations of "do the worker's work" that run inside the
+server-side worker process. Two implementations of the same conceptual job
+live as siblings in `worker/` only when both are worker-process
+implementations.
+
+An HTTP service used by an external executor to claim work, heartbeat, or
+record progress is not a `worker/` executor. It is API-facing service code,
+even if the caller is a worker process outside the server. Keep that surface
+near `api.py` / parent `service.py` unless it earns its own subdomain.
 
 Allowed:
 
@@ -242,67 +248,66 @@ they're separate processes, each has its own entry point file in `worker/`.
 The trigger is *substantial worker-only logic that doesn't naturally fit in
 `service.py`*. Without that, a sibling `worker.py` is enough.
 
-## Worked Example: Automations
+## Representative Promoted Shape
 
-The automations domain has substantial worker-side work — multiple
-executors, scheduler logic, distinct from API-side CRUD on automation
-definitions. It's the canonical case for the `worker/` subfolder pattern.
+A domain earns `worker/` when worker-side work has multiple real concerns:
+process entry, scheduler loop, worker-facing orchestration, and one or more
+server-side executors. The promoted shape should separate API-facing
+operations from worker-process operations.
 
 ### Today (transitional)
 
 ```text
-server/automations/
+server/<domain>/
   api.py
-  service.py
+  service.py                    # API-facing service
   models.py
-  worker.py                    # entry point
-  schedule.py                  # MISNAMED — actually pure RRULE parsing logic
-  cloud_executor.py            # executor implementation
-  local_executor_service.py    # executor implementation (with bad _service suffix)
+  worker.py                     # process entry point
+  schedule.py                   # pure recurrence logic in the wrong layer
+  cloud_executor.py             # worker-process executor implementation
+  <external_executor_surface>.py # API-facing surface for an external executor
 ```
 
 Issues:
 
-- `schedule.py` is pure parsing logic. Belongs in `domain/`, not at the
-  worker-shaped layer.
-- `local_executor_service.py` has the `_service` suffix that's forbidden
-  outside `service.py`.
-- All worker-side concerns (executors, scheduler logic) sit alongside the
-  API-side service.py with no organizational separation.
+- Pure parsing logic belongs in `domain/`, not at the worker-shaped layer.
+- Worker-process executors and scheduler logic sit alongside API-facing
+  service code with no organizational separation.
+- API-facing services for external executors must not be mistaken for
+  server-side worker executors.
 
 ### Target
 
 ```text
-server/automations/
-  api.py                        # API routes: CRUD on automation definitions
-  service.py                    # API-facing service: CRUD logic
-  models.py                     # Pydantic API schemas
-  domain/                       # pure logic shared between API and worker
-    recurrence.py               # RRULE parsing (was schedule.py)
-    policy.py                   # scheduling rules, can-run rules
-  worker/                       # worker surface
-    main.py                     # process entry: argparse, signals, async loop
-    service.py                  # worker-facing service: pick due, dispatch, record
-    scheduler.py                # scheduler loop body
-    cloud_executor.py
-    local_executor.py           # was local_executor_service.py
+server/<domain>/
+  api.py                         # API routes
+  service.py                     # API-facing service
+  models.py                      # Pydantic API schemas
+  <external_executor_surface>.py # API-facing external-executor surface
+  domain/                        # pure logic shared by API and worker
+    recurrence.py
+    policy.py
+  worker/                        # server-side worker process surface
+    main.py                      # process entry: argparse, signals, async loop
+    service.py                   # pick due, dispatch, record failures
+    scheduler.py                 # scheduler loop body
+    cloud_executor.py            # server-side executor implementation
 ```
 
 What lives where:
 
-- `domain/recurrence.py` is pure: RRULE parsing, occurrence math, no I/O.
-  Used by both worker (to find due automations) and API (to validate user
-  input or render schedule descriptions).
-- `worker/scheduler.py` is the loop body that calls
-  `domain/recurrence.py` to find what's due, then dispatches via
-  `worker/service.py`.
+- `domain/recurrence.py` is pure parsing and occurrence math, no I/O. Used by
+  both worker and API paths.
+- `worker/scheduler.py` is the loop body that finds due work, then dispatches
+  via `worker/service.py`.
 - `worker/service.py` orchestrates the worker side: pick next due, dispatch
   to executor, record result, handle failures.
-- `worker/cloud_executor.py` and `worker/local_executor.py` are the two
-  alternative implementations of "run an automation."
+- `worker/<executor>.py` files are server-side implementations of work.
+- API-facing external-executor services remain outside `worker/` because they
+  are request-driven surfaces, not worker-process implementation code.
 
-The parent `service.py` shrinks to just CRUD on automation definitions,
-because all the executor and scheduling work has moved into `worker/`.
+The parent `service.py` remains API-facing. Worker-process concerns move into
+`worker/`; external-executor HTTP surfaces stay API-facing.
 
 ## Forbidden Patterns
 
@@ -310,9 +315,8 @@ because all the executor and scheduling work has moved into `worker/`.
   (`worker.py`, `scheduler.py`, `reconciler.py`). That's `domain/` work.
 - Substantial business logic inside `worker.py`'s loop body. The body calls
   `service.py`.
-- Multiple "executor" or "runner" sibling files at the parent domain level
-  (`automations/cloud_executor.py` + `automations/local_executor.py`).
-  Promote to `worker/` once you have the pattern.
+- Multiple server-side "executor" or "runner" sibling files at the parent
+  domain level. Promote to `worker/` once you have the pattern.
 - The `_service` suffix on any worker-adjacent file. Files are `worker.py`,
   `reconciler.py`, `<name>_executor.py`, never `*_service.py`.
 - ORM imports in worker entry points, reconcilers, schedulers, or executors.

@@ -63,6 +63,8 @@ Put it here when the value is:
   default policy
 - a protocol label, header name, sentinel value, or status string
 - meaningful enough that changing it is a product decision
+- part of an API-visible contract, even if only one parser or service uses it
+  today
 
 Examples:
 
@@ -92,7 +94,10 @@ Rules:
 ## File-Local Constants
 
 File-local constants are allowed only when they are mechanical implementation
-details with no broader product meaning.
+details with no broader product meaning. Do not keep a value local just
+because it has one caller; if changing it changes product behavior, API
+behavior, billing behavior, security behavior, or runtime protocol behavior,
+put it in `constants/<area>.py` or `config.py`.
 
 Allowed examples:
 
@@ -100,6 +105,7 @@ Allowed examples:
 _OWNER_ALIAS = "owner"
 _CURSOR_SEPARATOR = ":"
 _EMAIL_RE = re.compile(...)
+_DATEUTIL_ANCHOR_YEAR = 2020
 ```
 
 These values may stay in the file that owns the implementation.
@@ -111,6 +117,7 @@ MAX_WORKSPACES_PER_ORG = 10
 DEFAULT_AUTOMATION_TIMEOUT_SECONDS = 600
 RETRY_COUNT = 5
 SUPPORTED_RUNTIME_VERSION = "..."
+SUPPORTED_PROTOCOL_OPTIONS = {"mode", "interval", "timeout"}
 ```
 
 Those carry product or protocol policy and belong in `constants/<area>.py` or
@@ -123,7 +130,7 @@ Ask these in order:
 1. **Can an operator change it by env/deployment?** Put it in `config.py`.
 2. **Does changing it alter product/protocol behavior?** Put it in
    `constants/<area>.py`.
-3. **Is it only a private implementation detail in one file?** Keep it
+3. **Is it only a private mechanical detail in one file?** Keep it
    file-local.
 
 If unsure, prefer `constants/<area>.py` over scattering the value inline.

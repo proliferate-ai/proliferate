@@ -80,6 +80,13 @@ or any set of features that don't fit cleanly in one file.
 
 Example (today): `slack/` with `webhooks.py` + `errors.py`.
 
+Concern files should be coarse and meaningful. Do not mechanically mirror
+every endpoint, REST resource, or SDK method into its own file. Start with the
+operational seams that product code naturally cares about: auth, webhooks,
+OAuth, sessions, provisioning, file operations, notifications, etc. Split
+further only when a concern file grows large, has a distinct consumer set, or
+contains multiple independent policies.
+
 ### Shape 3: Folder, polymorphic
 
 ```text
@@ -120,6 +127,8 @@ Shape can change over time:
   webhooks, OAuth, etc.).
 - Single-provider folder → polymorphic folder when a second vendor is added
   for the same protocol.
+- Coarse concern file → narrower concern files only after the narrower split
+  earns its place. Avoid endpoint-per-file structures by default.
 
 ## What Goes Inside an Integration
 
@@ -245,8 +254,9 @@ service owns "what to do when the event arrives."
 
 - Single-file folders (e.g., `integrations/billing/stripe.py` as the only
   file). Flatten or add real content.
-- Vendor-specific code in product domains (`server/cloud/runtime/anyharness_api.py`
-  is the canonical violation — it belongs in `integrations/anyharness/`).
+- External protocol/client code in product domains. Product domains may
+  orchestrate results, but raw HTTP/SDK protocol access belongs behind the
+  owning integration boundary.
 - Cross-vendor imports (`integrations/stripe/` importing from
   `integrations/anthropic/`). Integrations are independent.
 - Imports from `server/<domain>/**` inside an integration. Integrations don't
