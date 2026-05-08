@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { replaySessionHistory } from "@/lib/domain/sessions/stream/stream-state";
@@ -17,6 +16,7 @@ import {
   createSessionStreamFlushController,
   type SessionStreamFlushScheduler,
 } from "@/hooks/sessions/use-session-stream-flush";
+import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 
 const originalPatchTranscriptEntry = useSessionTranscriptStore.getState().patchEntry;
 
@@ -243,7 +243,7 @@ function createTestController(options?: {
   refreshSessionSlotMeta?: () => Promise<void>;
 }) {
   return createSessionStreamFlushController({
-    queryClient: new QueryClient(),
+    sessionStreamCache: createTestSessionStreamCache(),
     mountSubagentChildSession: vi.fn(),
     persistReconciledModePreferences: vi.fn(),
     refreshSessionSlotMeta: options?.refreshSessionSlotMeta ?? vi.fn(),
@@ -259,6 +259,16 @@ function createTestController(options?: {
     scheduleActiveSummaryRefresh: options?.scheduleActiveSummaryRefresh ?? vi.fn(),
     scheduleStartupReadyRefresh: vi.fn(),
   });
+}
+
+function createTestSessionStreamCache(): SessionStreamCache {
+  return {
+    invalidateWorkspaceCollections: vi.fn(),
+    invalidateSessionSubagents: vi.fn(),
+    invalidateCoworkManagedWorkspaces: vi.fn(),
+    invalidateSessionReviews: vi.fn(),
+    invalidateGitStatus: vi.fn(),
+  };
 }
 
 function createManualScheduler() {

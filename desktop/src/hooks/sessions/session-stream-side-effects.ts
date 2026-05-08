@@ -1,17 +1,9 @@
-import {
-  anyHarnessCoworkManagedWorkspacesKey,
-  anyHarnessGitStatusKey,
-  anyHarnessSessionReviewsKey,
-  anyHarnessSessionSubagentsKey,
-} from "@anyharness/sdk-react";
-import type { QueryClient } from "@tanstack/react-query";
 import type {
   SessionEventEnvelope,
   SessionLiveConfigSnapshot,
   ToolCallItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import {
   getAuthoritativeConfigValue,
   hasQueuedPendingConfigChanges,
@@ -36,6 +28,7 @@ import {
   schedulePendingConfigRollbackCheck,
 } from "@/hooks/sessions/session-runtime-pending-config";
 import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 
 export interface ReconciledStreamConfigIntent {
   liveConfig: SessionLiveConfigSnapshot;
@@ -53,7 +46,7 @@ type OrderedStreamSideEffect =
   };
 
 export function applyBatchedStreamSideEffects(input: {
-  queryClient: QueryClient;
+  sessionStreamCache: SessionStreamCache;
   sessionId: string;
   runtimeUrl: string;
   workspaceId: string | null;
@@ -238,46 +231,36 @@ export function applyBatchedStreamSideEffects(input: {
   }
 
   if (shouldInvalidateWorkspaceCollections) {
-    void input.queryClient.invalidateQueries({
-      queryKey: workspaceCollectionsScopeKey(input.runtimeUrl),
-    });
+    input.sessionStreamCache.invalidateWorkspaceCollections(input.runtimeUrl);
   }
   if (lastActivityTimestamp && input.workspaceId) {
     trackWorkspaceInteraction(input.workspaceId, lastActivityTimestamp);
     input.acknowledgeWorkspaceActivity?.(input.workspaceId, lastActivityTimestamp);
   }
   if (shouldInvalidateSessionSubagents) {
-    void input.queryClient.invalidateQueries({
-      queryKey: anyHarnessSessionSubagentsKey(
-        input.runtimeUrl,
-        input.workspaceId,
-        input.sessionId,
-      ),
+    input.sessionStreamCache.invalidateSessionSubagents({
+      runtimeUrl: input.runtimeUrl,
+      workspaceId: input.workspaceId,
+      sessionId: input.sessionId,
     });
   }
   if (shouldInvalidateCowork) {
-    void input.queryClient.invalidateQueries({
-      queryKey: anyHarnessCoworkManagedWorkspacesKey(
-        input.runtimeUrl,
-        input.sessionId,
-      ),
+    input.sessionStreamCache.invalidateCoworkManagedWorkspaces({
+      runtimeUrl: input.runtimeUrl,
+      sessionId: input.sessionId,
     });
   }
   for (const parentSessionId of reviewParentSessionIds) {
-    void input.queryClient.invalidateQueries({
-      queryKey: anyHarnessSessionReviewsKey(
-        input.runtimeUrl,
-        input.workspaceId,
-        parentSessionId,
-      ),
+    input.sessionStreamCache.invalidateSessionReviews({
+      runtimeUrl: input.runtimeUrl,
+      workspaceId: input.workspaceId,
+      parentSessionId,
     });
   }
   if (shouldInvalidateGitStatus && input.workspaceId) {
-    void input.queryClient.invalidateQueries({
-      queryKey: anyHarnessGitStatusKey(
-        input.runtimeUrl,
-        input.workspaceId,
-      ),
+    input.sessionStreamCache.invalidateGitStatus({
+      runtimeUrl: input.runtimeUrl,
+      workspaceId: input.workspaceId,
     });
   }
 

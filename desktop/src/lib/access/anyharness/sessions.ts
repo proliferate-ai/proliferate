@@ -13,7 +13,11 @@ import {
 
 type SessionConnection = AnyHarnessClientConnection | AnyHarnessResolvedConnection;
 type AnyHarnessClient = ReturnType<typeof getAnyHarnessClient>;
-type ListSessionsOptions = Parameters<AnyHarnessClient["sessions"]["list"]>[1];
+export type AnyHarnessSessionConnection = SessionConnection;
+export type AnyHarnessWorkspaceSessionConnection = AnyHarnessResolvedConnection;
+export type ListSessionsOptions = Parameters<AnyHarnessClient["sessions"]["list"]>[1];
+export type ListSessionEventsOptions =
+  Parameters<AnyHarnessClient["sessions"]["listEvents"]>[1];
 type RestoreDismissedSessionOptions =
   Parameters<AnyHarnessClient["sessions"]["restoreDismissed"]>[1];
 type UpdateSessionTitleOptions =
@@ -21,6 +25,8 @@ type UpdateSessionTitleOptions =
 type GetSessionOptions = Parameters<AnyHarnessClient["sessions"]["get"]>[1];
 type PromptSessionOptions = Parameters<AnyHarnessClient["sessions"]["prompt"]>[2];
 type CreateSessionOptions = Parameters<AnyHarnessClient["sessions"]["create"]>[1];
+type ResumeSessionRequest = Parameters<AnyHarnessClient["sessions"]["resume"]>[1];
+type ResumeSessionOptions = Parameters<AnyHarnessClient["sessions"]["resume"]>[2];
 type GetSubagentsOptions = Parameters<AnyHarnessClient["sessions"]["getSubagents"]>[1];
 
 export function listWorkspaceSessions(
@@ -49,6 +55,14 @@ export function getSession(
   return getAnyHarnessClient(connection).sessions.get(sessionId, options);
 }
 
+export function listSessionEvents(
+  connection: SessionConnection,
+  sessionId: string,
+  options?: ListSessionEventsOptions,
+) {
+  return getAnyHarnessClient(connection).sessions.listEvents(sessionId, options);
+}
+
 export function fetchPromptAttachment(
   connection: SessionConnection,
   sessionId: string,
@@ -67,6 +81,15 @@ export function promptSession(
   options?: PromptSessionOptions,
 ) {
   return getAnyHarnessClient(connection).sessions.prompt(sessionId, request, options);
+}
+
+export function resumeSession(
+  connection: SessionConnection,
+  sessionId: string,
+  request: ResumeSessionRequest,
+  options?: ResumeSessionOptions,
+) {
+  return getAnyHarnessClient(connection).sessions.resume(sessionId, request, options);
 }
 
 export function setSessionConfigOption(

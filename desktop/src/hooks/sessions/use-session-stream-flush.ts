@@ -1,4 +1,3 @@
-import type { QueryClient } from "@tanstack/react-query";
 import type {
   SessionEventEnvelope,
   TranscriptState,
@@ -35,6 +34,7 @@ import {
   applyBatchedStreamSideEffects,
   type ReconciledStreamConfigIntent,
 } from "@/hooks/sessions/session-stream-side-effects";
+import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
@@ -71,7 +71,7 @@ export interface SessionStreamFlushController {
 }
 
 interface SessionStreamFlushFactoryDeps {
-  queryClient: QueryClient;
+  sessionStreamCache: SessionStreamCache;
   mountSubagentChildSession: (input: {
     childSessionId: string;
     label: string | null;
@@ -165,7 +165,7 @@ export const animationFrameSessionStreamFlushScheduler: SessionStreamFlushSchedu
 };
 
 export function useSessionStreamFlushControllerFactory({
-  queryClient,
+  sessionStreamCache,
   mountSubagentChildSession,
   persistReconciledModePreferences,
   refreshSessionSlotMeta,
@@ -175,7 +175,7 @@ export function useSessionStreamFlushControllerFactory({
   return useCallback((options: SessionStreamFlushControllerOptions) =>
     createSessionStreamFlushController({
       ...options,
-      queryClient,
+      sessionStreamCache,
       mountSubagentChildSession,
       persistReconciledModePreferences,
       refreshSessionSlotMeta,
@@ -184,9 +184,9 @@ export function useSessionStreamFlushControllerFactory({
     }), [
     mountSubagentChildSession,
     persistReconciledModePreferences,
-    queryClient,
     refreshSessionSlotMeta,
     scheduler,
+    sessionStreamCache,
     showToast,
   ]);
 }
