@@ -16,14 +16,14 @@ import {
   type AgentReconcileState,
 } from "@/lib/domain/agents/status-presentation";
 import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
-import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useAgentInstallationActions } from "./use-agent-installation-actions";
-import { useLocalAgentCredentials } from "./use-local-agent-credentials";
 import {
   agentSetupWorkflowReducer,
   createInitialAgentSetupWorkflowState,
-} from "./agent-setup-workflow-reducer";
+} from "@/lib/domain/agents/setup-workflow-reducer";
+import { useLocalAgentCredentials } from "@/hooks/access/tauri/credentials/use-local-agent-credentials";
+import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
+import { useAgentCredentialsStore } from "@/stores/agents/agent-credentials-store";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 interface UseAgentSetupWorkflowArgs {
   agent: AgentSummary;
@@ -51,6 +51,8 @@ export function useAgentSetupWorkflow({
   reconcileState = "idle",
   reconcileResult,
 }: UseAgentSetupWorkflowArgs) {
+  // Owns the agent setup modal workflow and local credential form state. Does
+  // not own catalog derivation or automatic reconcile lifecycle.
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const restartRequired = useAgentCredentialsStore((state) => state.restartRequired);

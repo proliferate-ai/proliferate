@@ -3,7 +3,7 @@ import { useProviderConfigsQuery } from "@anyharness/sdk-react";
 import type { ProviderConfig } from "@anyharness/sdk";
 import { useShallow } from "zustand/react/shallow";
 import { AGENT_READINESS_LABELS } from "@/lib/domain/agents/readiness-presentation";
-import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";

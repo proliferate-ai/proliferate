@@ -6,7 +6,7 @@ import {
   useStartPlanReviewMutation,
 } from "@anyharness/sdk-react";
 import { useNavigate } from "react-router-dom";
-import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";
 import {
   buildReviewRequest,

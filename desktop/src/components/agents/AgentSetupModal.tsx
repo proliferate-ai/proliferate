@@ -2,7 +2,7 @@ import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import { useId } from "react";
 import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import { type AgentReconcileState } from "@/lib/domain/agents/status-presentation";
-import { useAgentSetupWorkflow } from "@/hooks/agents/use-agent-setup-workflow";
+import { useAgentSetupWorkflow } from "@/hooks/agents/workflows/use-agent-setup-workflow";
 import { ProviderIcon } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";

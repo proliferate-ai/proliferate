@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { getPendingSessionConfigChange } from "@/lib/domain/sessions/pending-config";
 import {

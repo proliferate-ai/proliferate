@@ -19,9 +19,9 @@ import {
   type AgentReconcileState,
   type AgentStatusDisplay,
 } from "@/lib/domain/agents/status-presentation";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { useAgentCatalog } from "./use-agent-catalog";
-import { useAgentInstallationActions } from "./use-agent-installation-actions";
 
 export interface AgentsPaneRowState {
   agent: AgentSummary;
@@ -62,6 +62,8 @@ interface AgentsPaneState {
 }
 
 export function useAgentsPaneState(): AgentsPaneState {
+  // Owns the Agents settings pane facade: row model composition, local
+  // selection state, and pane-level action wiring.
   const { connectionState, runtimeError } = useHarnessConnectionStore(useShallow((state) => ({
     connectionState: state.connectionState,
     runtimeError: state.error,
