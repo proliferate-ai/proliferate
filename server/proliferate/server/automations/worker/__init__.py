@@ -1,0 +1,2 @@
+"""Automation worker process package."""
+

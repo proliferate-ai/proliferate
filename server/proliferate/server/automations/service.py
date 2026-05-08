@@ -2,22 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 from uuid import UUID
 
 from proliferate.constants.automations import (
     AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
 )
-from proliferate.db.store.automation_run_claims import (
-    sweep_expired_dispatching_runs,
-)
 from proliferate.db.store.automations import (
-    AutomationScheduleAdvance,
-    AutomationScheduleFields,
     AutomationValue,
     create_automation_for_user,
-    create_due_scheduled_runs_batch,
     create_manual_run_for_user,
     list_automations_for_user,
     list_runs_for_automation_for_user,
@@ -29,7 +21,6 @@ from proliferate.db.store.cloud_repo_config import (
     bootstrap_cloud_repo_config_for_user,
 )
 from proliferate.server.automations.domain.schedule import (
-    due_and_next_occurrences,
     next_future_occurrence,
 )
 from proliferate.server.automations.domain.validation import (
@@ -66,12 +57,6 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.utils.time import utcnow
-
-
-@dataclass(frozen=True)
-class SchedulerTickResult:
-    created_runs: int
-    swept_dispatching_runs: int = 0
 
 
 async def _ensure_repo_config_id(
@@ -277,32 +262,6 @@ async def list_automation_runs(
     if values is None:
         raise AutomationNotFound()
     return AutomationRunListResponse(runs=[automation_run_payload(value) for value in values])
-
-
-def _resolve_due_schedule(
-    fields: AutomationScheduleFields,
-    now: datetime,
-) -> AutomationScheduleAdvance:
-    """Create the latest due slot at or before now, then advance to the first future slot."""
-    scheduled_for, next_run_at = due_and_next_occurrences(
-        rrule_text=fields.schedule_rrule,
-        timezone=fields.schedule_timezone,
-        now=now,
-    )
-    return AutomationScheduleAdvance(scheduled_for=scheduled_for, next_run_at=next_run_at)
-
-
-async def run_scheduler_tick(*, batch_size: int = 100) -> SchedulerTickResult:
-    swept_dispatching_runs = await sweep_expired_dispatching_runs(now=utcnow())
-    created_runs = await create_due_scheduled_runs_batch(
-        now=utcnow(),
-        limit=max(1, batch_size),
-        schedule_advance_resolver=_resolve_due_schedule,
-    )
-    return SchedulerTickResult(
-        created_runs=created_runs,
-        swept_dispatching_runs=swept_dispatching_runs,
-    )
 
 
 def automation_for_tests(value: AutomationValue) -> AutomationResponse:
