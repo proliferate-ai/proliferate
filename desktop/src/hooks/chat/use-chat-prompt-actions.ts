@@ -45,7 +45,6 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
-  const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
@@ -197,7 +196,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       }
       completeChatPromptSubmitSideEffects({
         workspaceId: selectedWorkspaceId,
-        workspaceArrivalEvent,
+        getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
         getCachedWorkspaceSetupStatus,
         agentKind: launchSelection?.kind ?? "unknown",
         reuseSession: targetSessionId !== null,
@@ -243,7 +242,6 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     setWorkspaceArrivalEvent,
     showToast,
     scopedLaunchIdentity,
-    workspaceArrivalEvent,
   ]);
 
   const handleCancel = useCallback(() => {

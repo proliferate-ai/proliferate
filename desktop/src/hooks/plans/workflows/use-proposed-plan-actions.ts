@@ -100,7 +100,6 @@ export function useProposedPlanActions() {
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
-  const workspaceArrivalEvent = useSessionSelectionStore((state) => state.workspaceArrivalEvent);
   const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
   const showToast = useToastStore((state) => state.show);
   const [isImplementingPlan, setIsImplementingPlan] = useState(false);
@@ -187,7 +186,7 @@ export function useProposedPlanActions() {
         onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) =>
           completeChatPromptSubmitSideEffects({
             workspaceId,
-            workspaceArrivalEvent,
+            getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
             getCachedWorkspaceSetupStatus,
             agentKind,
             reuseSession,
@@ -209,7 +208,6 @@ export function useProposedPlanActions() {
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,
     showToast,
-    workspaceArrivalEvent,
   ]);
 
   return {

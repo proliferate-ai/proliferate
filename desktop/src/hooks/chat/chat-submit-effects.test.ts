@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { isWorkspaceSetupActive } from "./chat-submit-effects";
+import {
+  completeChatPromptSubmitSideEffects,
+  isWorkspaceSetupActive,
+} from "./chat-submit-effects";
+
+vi.mock("@/lib/integrations/telemetry/client", () => ({
+  trackProductEvent: vi.fn(),
+}));
 
 function arrival(
   overrides: Partial<WorkspaceArrivalEvent> = {},
@@ -64,5 +71,37 @@ describe("isWorkspaceSetupActive", () => {
       workspaceId: "workspace-1",
       cachedSetupStatus: "succeeded",
     })).toBe(false);
+  });
+});
+
+describe("completeChatPromptSubmitSideEffects", () => {
+  it("reads the current workspace arrival event when completion runs", () => {
+    let currentArrival: WorkspaceArrivalEvent | null = arrival({
+      setupScript: {
+        status: "running",
+      } as WorkspaceArrivalEvent["setupScript"],
+    });
+    const setWorkspaceArrivalEvent = vi.fn();
+
+    completeChatPromptSubmitSideEffects({
+      workspaceId: "workspace-1",
+      getWorkspaceArrivalEvent: () => currentArrival,
+      getCachedWorkspaceSetupStatus: () => null,
+      agentKind: "test-agent",
+      reuseSession: false,
+      setWorkspaceArrivalEvent,
+    });
+    expect(setWorkspaceArrivalEvent).not.toHaveBeenCalled();
+
+    currentArrival = null;
+    completeChatPromptSubmitSideEffects({
+      workspaceId: "workspace-1",
+      getWorkspaceArrivalEvent: () => currentArrival,
+      getCachedWorkspaceSetupStatus: () => null,
+      agentKind: "test-agent",
+      reuseSession: false,
+      setWorkspaceArrivalEvent,
+    });
+    expect(setWorkspaceArrivalEvent).toHaveBeenCalledWith(null);
   });
 });

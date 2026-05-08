@@ -33,21 +33,21 @@ export function isWorkspaceSetupActive({
 
 export function completeChatPromptSubmitSideEffects({
   workspaceId,
-  workspaceArrivalEvent,
+  getWorkspaceArrivalEvent,
   getCachedWorkspaceSetupStatus,
   agentKind,
   reuseSession,
   setWorkspaceArrivalEvent,
 }: {
   workspaceId: string;
-  workspaceArrivalEvent: WorkspaceArrivalEvent | null;
+  getWorkspaceArrivalEvent: () => WorkspaceArrivalEvent | null;
   getCachedWorkspaceSetupStatus: (workspaceId: string) => CachedWorkspaceSetupStatus;
   agentKind: string;
   reuseSession: boolean;
   setWorkspaceArrivalEvent: (event: null) => void;
 }): void {
   if (!isWorkspaceSetupActive({
-    workspaceArrivalEvent,
+    workspaceArrivalEvent: getWorkspaceArrivalEvent(),
     workspaceId,
     cachedSetupStatus: getCachedWorkspaceSetupStatus(workspaceId),
   })) {
