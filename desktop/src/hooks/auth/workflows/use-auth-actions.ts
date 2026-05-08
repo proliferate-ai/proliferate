@@ -11,6 +11,7 @@ import {
 } from "@/lib/integrations/auth/orchestration";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 
+// Owns user-triggered auth actions and their telemetry. Does not own auth bootstrap.
 export function useAuthActions() {
   return {
     signInWithGitHub: useCallback(async (options?: GitHubDesktopSignInOptions) => {
