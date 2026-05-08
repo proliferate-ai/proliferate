@@ -21,7 +21,8 @@ async def send_support_message_endpoint(
     user: User = Depends(current_active_user),
 ) -> SupportMessageResponse:
     await send_support_message(
-        user,
+        sender_email=user.email,
+        sender_display_name=user.display_name,
         message=body.message,
         context=body.context.model_dump(exclude_none=True) if body.context else None,
     )
