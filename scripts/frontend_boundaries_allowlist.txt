@@ -35,7 +35,6 @@ DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/chat/__fixtures__/playground.ts 1
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/credentials.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/cloud/runtime-input-sync.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/files/file-visuals.ts 2 domain imports transport or UI types before lib cleanup
-DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/mcp/local-stdio-finalizer.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/support/formatting.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/telemetry/events.ts 1 domain imports transport or UI types before lib cleanup
 DOMAIN_FORBIDDEN_IMPORT desktop/src/lib/domain/workspaces/cloud/cloud-runtime-state.ts 1 domain imports transport or UI types before lib cleanup
