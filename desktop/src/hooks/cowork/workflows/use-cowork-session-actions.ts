@@ -1,22 +1,21 @@
 import {
-  anyHarnessCoworkManagedWorkspacesKey,
-  anyHarnessCoworkStatusKey,
-  anyHarnessCoworkThreadsKey,
   useDismissSessionMutation,
   useUpdateSessionTitleMutation,
 } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { useCoworkCache } from "@/hooks/access/anyharness/cowork/use-cowork-cache";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export function useCoworkSessionActions() {
-  const runtimeUrl = useHarnessConnectionStore((s) => s.runtimeUrl);
-  const queryClient = useQueryClient();
   const { applySessionSummary } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const {
+    invalidateCoworkManagedWorkspaces,
+    invalidateCoworkStatus,
+    invalidateCoworkThreads,
+  } = useCoworkCache();
   const cleanupDismissedSession = useDismissedSessionCleanup();
   const dismissSessionMutation = useDismissSessionMutation();
   const updateSessionTitleMutation = useUpdateSessionTitleMutation();
@@ -37,18 +36,18 @@ export function useCoworkSessionActions() {
     });
     applySessionSummary(sessionId, session, workspaceId);
     upsertWorkspaceSessionRecord(workspaceId, session);
-    await queryClient.invalidateQueries({ queryKey: anyHarnessCoworkThreadsKey(runtimeUrl) });
+    await invalidateCoworkThreads();
     return session;
-  }, [applySessionSummary, queryClient, runtimeUrl, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
+  }, [applySessionSummary, invalidateCoworkThreads, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
 
   const archiveThread = useCallback(async (sessionId: string, workspaceId: string) => {
     await dismissSessionMutation.mutateAsync({ workspaceId, sessionId });
     cleanupDismissedSession(sessionId, workspaceId);
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: anyHarnessCoworkThreadsKey(runtimeUrl) }),
-      queryClient.invalidateQueries({ queryKey: anyHarnessCoworkStatusKey(runtimeUrl) }),
+      invalidateCoworkThreads(),
+      invalidateCoworkStatus(),
     ]);
-  }, [cleanupDismissedSession, dismissSessionMutation, queryClient, runtimeUrl]);
+  }, [cleanupDismissedSession, dismissSessionMutation, invalidateCoworkStatus, invalidateCoworkThreads]);
 
   const renameCodingSession = useCallback(async (input: {
     sessionId: string;
@@ -67,11 +66,14 @@ export function useCoworkSessionActions() {
     });
     applySessionSummary(input.sessionId, session, input.workspaceId);
     upsertWorkspaceSessionRecord(input.workspaceId, session);
-    await queryClient.invalidateQueries({
-      queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, input.parentSessionId),
-    });
+    await invalidateCoworkManagedWorkspaces(input.parentSessionId);
     return session;
-  }, [applySessionSummary, queryClient, runtimeUrl, updateSessionTitleMutation, upsertWorkspaceSessionRecord]);
+  }, [
+    applySessionSummary,
+    invalidateCoworkManagedWorkspaces,
+    updateSessionTitleMutation,
+    upsertWorkspaceSessionRecord,
+  ]);
 
   const archiveCodingSession = useCallback(async (input: {
     sessionId: string;
@@ -83,10 +85,8 @@ export function useCoworkSessionActions() {
       sessionId: input.sessionId,
     });
     cleanupDismissedSession(input.sessionId, input.workspaceId);
-    await queryClient.invalidateQueries({
-      queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, input.parentSessionId),
-    });
-  }, [cleanupDismissedSession, dismissSessionMutation, queryClient, runtimeUrl]);
+    await invalidateCoworkManagedWorkspaces(input.parentSessionId);
+  }, [cleanupDismissedSession, dismissSessionMutation, invalidateCoworkManagedWorkspaces]);
 
   return { renameThread, archiveThread, renameCodingSession, archiveCodingSession };
 }

@@ -1,23 +1,19 @@
-import {
-  anyHarnessCoworkArtifactKey,
-  anyHarnessCoworkManifestKey,
-} from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
+import { useCoworkCache } from "@/hooks/access/anyharness/cowork/use-cowork-cache";
 import {
   offTurnEnd,
   onTurnEnd,
   type TurnEndCallback,
 } from "@/lib/infra/events/turn-end-events";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 
+// Owns artifact refresh triggers for a mounted Cowork artifacts surface.
+// AnyHarness query-cache shape stays in the Cowork access cache hook.
 export function useCoworkArtifactRefresh(
   workspaceId: string | null | undefined,
   artifactId: string | null | undefined,
 ) {
-  const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { invalidateCoworkArtifact, invalidateCoworkArtifactManifest } = useCoworkCache();
   const artifactIdRef = useRef<string | null | undefined>(artifactId);
   artifactIdRef.current = artifactId;
 
@@ -26,17 +22,13 @@ export function useCoworkArtifactRefresh(
       return;
     }
 
-    await queryClient.invalidateQueries({
-      queryKey: anyHarnessCoworkManifestKey(runtimeUrl, workspaceId),
-    });
+    await invalidateCoworkArtifactManifest(workspaceId);
 
     const currentArtifactId = artifactIdRef.current;
     if (currentArtifactId) {
-      await queryClient.invalidateQueries({
-        queryKey: anyHarnessCoworkArtifactKey(runtimeUrl, workspaceId, currentArtifactId),
-      });
+      await invalidateCoworkArtifact(workspaceId, currentArtifactId);
     }
-  }, [queryClient, runtimeUrl, workspaceId]);
+  }, [invalidateCoworkArtifact, invalidateCoworkArtifactManifest, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId) {

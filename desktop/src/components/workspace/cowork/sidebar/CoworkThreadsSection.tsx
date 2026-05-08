@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { BrailleSweepBadge, CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
 import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
-import { useCoworkStatus } from "@/hooks/cowork/use-cowork-status";
-import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
-import { useCoworkThreads } from "@/hooks/cowork/use-cowork-threads";
-import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
+import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
+import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
+import { useCoworkThreads } from "@/hooks/access/anyharness/cowork/use-cowork-threads";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSidebarActivityStates } from "@/hooks/workspaces/use-workspace-sidebar-activities";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";

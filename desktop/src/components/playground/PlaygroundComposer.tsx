@@ -49,7 +49,7 @@ import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-
 import type {
   CoworkComposerStripSummary,
   CoworkComposerWorkspaceRow,
-} from "@/hooks/cowork/use-cowork-composer-strip";
+} from "@/hooks/cowork/facade/use-cowork-composer-strip";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import {
