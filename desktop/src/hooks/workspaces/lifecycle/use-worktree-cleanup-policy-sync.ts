@@ -1,64 +1,53 @@
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCloudWorktreeRetentionPolicy, usePutCloudWorktreeRetentionPolicy } from "@/hooks/access/cloud/use-cloud-worktree-retention-policy";
+import {
+  useCloudWorktreeRetentionPolicy,
+  usePutCloudWorktreeRetentionPolicy,
+} from "@/hooks/access/cloud/use-cloud-worktree-retention-policy";
+import { useWorktreeRetentionPolicy } from "@/hooks/access/anyharness/worktrees/use-worktree-retention-policy";
 import { useHasPendingWorktreeAutoDeleteAdoption } from "@/hooks/preferences/derived/use-pending-worktree-auto-delete-adoption";
 import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
-  WORKTREE_AUTO_DELETE_LIMIT_MAX,
-  WORKTREE_AUTO_DELETE_LIMIT_MIN,
 } from "@/lib/domain/preferences/user-preferences";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import type {
-  WorktreeSettingsTarget,
-  WorktreeSettingsTargetState,
-} from "./use-worktree-settings-targets";
-import { getWorktreeRetentionPolicy } from "@/lib/access/anyharness/worktrees";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const seededCloudPolicyRuntimeKeys = new Set<string>();
 const syncedPolicyKeys = new Set<string>();
 const deferredRunKeys = new Set<string>();
 
-type SyncPolicyToTarget = (
+export type SyncPolicyToTarget = (
   target: WorktreeSettingsTarget,
   maxMaterializedWorktreesPerRepo: number,
   options?: { runDeferredCleanup?: boolean },
 ) => Promise<void>;
 
-export interface WorktreeCleanupPolicyState {
-  value: number;
-  draftValue: string;
-  setDraftValue: (value: string) => void;
-  parsedDraft: number;
-  canApply: boolean;
-  applyDisabledReason: string | null;
+export interface WorktreeCleanupPolicySyncTargetState {
+  target: WorktreeSettingsTarget;
+}
+
+export interface WorktreeCleanupPolicySyncState {
+  effectiveValue: number;
+  resolvedValue: number | null;
+  cloudLoading: boolean;
+  cloudPolicyUnavailable: boolean;
+  clearStatusMessage: () => void;
   statusMessage: string | null;
-  isApplying: boolean;
-  apply: () => Promise<void>;
 }
 
-function parseLimit(value: string): number {
-  return Number.parseInt(value, 10);
-}
-
-function validLimit(value: number): boolean {
-  return Number.isInteger(value)
-    && value >= WORKTREE_AUTO_DELETE_LIMIT_MIN
-    && value <= WORKTREE_AUTO_DELETE_LIMIT_MAX;
-}
-
-export function useWorktreeCleanupPolicy(
-  targets: WorktreeSettingsTargetState[],
+// Owns background adoption/synchronization for the global worktree cleanup policy.
+// The settings pane facade owns user-edit draft state and the explicit Apply action.
+export function useWorktreeCleanupPolicySync(
+  targets: WorktreeCleanupPolicySyncTargetState[],
   syncPolicyToTarget: SyncPolicyToTarget,
-): WorktreeCleanupPolicyState {
+): WorktreeCleanupPolicySyncState {
   const authStatus = useAuthStore((state) => state.status);
   const preferenceValue = useUserPreferencesStore((state) => state.worktreeAutoDeleteLimit);
   const setPreference = useUserPreferencesStore((state) => state.set);
   const preferencesHydrated = useUserPreferencesStore((state) => state._hydrated);
   const adoptionPending = useHasPendingWorktreeAutoDeleteAdoption();
   const markWorktreeAutoDeleteLimitAdopted = useWorktreeAutoDeleteAdoption();
-  const [draftValue, setDraftValue] = useState("");
   const [localErrorMessage, setLocalErrorMessage] = useState<string | null>(null);
   const cloudPolicy = useCloudWorktreeRetentionPolicy();
   const putCloudPolicy = usePutCloudWorktreeRetentionPolicy();
@@ -66,20 +55,8 @@ export function useWorktreeCleanupPolicy(
 
   const localTarget = targets.find((targetState) => targetState.target.location === "local")
     ?.target ?? null;
-  const localPolicyQuery = useQuery({
-    queryKey: [
-      "worktree-settings",
-      "local-retention-policy",
-      localTarget?.runtimeUrl ?? "",
-    ] as const,
-    queryFn: async () => {
-      if (!localTarget) {
-        throw new Error("Local runtime is unavailable.");
-      }
-      return getWorktreeRetentionPolicy({ runtimeUrl: localTarget.runtimeUrl });
-    },
-    enabled: preferencesHydrated && adoptionPending && localTarget !== null,
-    retry: 1,
+  const localPolicyQuery = useWorktreeRetentionPolicy(localTarget, {
+    enabled: preferencesHydrated && adoptionPending,
   });
 
   const resolvedValue = useMemo(() => {
@@ -210,60 +187,25 @@ export function useWorktreeCleanupPolicy(
     targets,
   ]);
 
-  const parsedDraft = parseLimit(draftValue || String(effectiveValue));
   const cloudLoading = authStatus === "authenticated"
     && cloudPolicy.isLoading
     && cloudPolicy.data === undefined;
-  const canApply = !cloudLoading && validLimit(parsedDraft);
-  const applyDisabledReason = cloudLoading
-    ? "Loading cloud policy."
-    : validLimit(parsedDraft)
-      ? null
-      : `Enter a value from ${WORKTREE_AUTO_DELETE_LIMIT_MIN} to ${WORKTREE_AUTO_DELETE_LIMIT_MAX}.`;
-
-  const apply = useCallback(async () => {
-    if (!validLimit(parsedDraft)) {
-      throw new Error(
-        `Enter a value from ${WORKTREE_AUTO_DELETE_LIMIT_MIN} to ${WORKTREE_AUTO_DELETE_LIMIT_MAX}.`,
-      );
-    }
-    if (authStatus === "authenticated" && !cloudPolicy.isError) {
-      if (cloudLoading) {
-        throw new Error("Cloud policy is still loading.");
-      }
-      await putCloudPolicyAsync({
-        maxMaterializedWorktreesPerRepo: parsedDraft,
-      });
-    }
-    setPreference("worktreeAutoDeleteLimit", parsedDraft);
-    await markWorktreeAutoDeleteLimitAdopted();
-    setDraftValue("");
-    setLocalErrorMessage(null);
-  }, [
-    authStatus,
-    cloudLoading,
-    cloudPolicy.isError,
-    parsedDraft,
-    markWorktreeAutoDeleteLimitAdopted,
-    putCloudPolicyAsync,
-    setPreference,
-  ]);
-
+  const cloudPolicyUnavailable = authStatus === "authenticated" && cloudPolicy.isError;
   const statusMessage = localErrorMessage
     ?? (adoptionPending ? "Waiting for existing runtime policy." : null)
-    ?? (authStatus === "authenticated" && cloudPolicy.isError
+    ?? (cloudPolicyUnavailable
       ? "Cloud policy is unavailable; using local fallback."
       : null);
+  const clearStatusMessage = useCallback(() => {
+    setLocalErrorMessage(null);
+  }, []);
 
   return {
-    value: effectiveValue,
-    draftValue: draftValue || String(effectiveValue),
-    setDraftValue,
-    parsedDraft,
-    canApply,
-    applyDisabledReason,
+    effectiveValue,
+    resolvedValue,
+    cloudLoading,
+    cloudPolicyUnavailable,
+    clearStatusMessage,
     statusMessage,
-    isApplying: putCloudPolicy.isPending,
-    apply,
   };
 }
