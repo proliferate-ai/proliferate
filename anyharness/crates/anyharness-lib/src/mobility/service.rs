@@ -6,7 +6,7 @@ use std::time::Instant;
 use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
-use crate::agents::portability::{
+use crate::domains::agents::portability::{
     collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
     validate_session_agent_artifacts,
 };

@@ -12,12 +12,12 @@ use axum::{
 };
 
 use super::error::ApiError;
-use crate::agents::model::{
+use crate::app::AppState;
+use crate::domains::agents::model::{
     ModelCatalogStatus, ModelLaunchRemediationKind, ModelLaunchRemediationMetadata,
     ModelRegistryMetadata, ModelRegistryModelMetadata, SessionDefaultControlKey,
     SessionDefaultControlMetadata, SessionDefaultControlValueMetadata,
 };
-use crate::app::AppState;
 
 #[utoipa::path(
     get,

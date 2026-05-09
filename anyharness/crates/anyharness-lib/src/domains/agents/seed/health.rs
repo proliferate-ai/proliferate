@@ -3,7 +3,7 @@ use anyharness_contract::v1::{
     AgentSeedSource, AgentSeedStatus,
 };
 
-use crate::agents::model::Platform;
+use crate::domains::agents::model::Platform;
 
 use super::types::{AgentSeedArtifactOwner, AgentSeedState};
 

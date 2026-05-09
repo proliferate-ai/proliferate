@@ -581,7 +581,7 @@ fn parse_node_version(raw: &str) -> Option<NodeVersion> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::registry::built_in_registry;
+    use crate::domains::agents::registry::built_in_registry;
 
     #[test]
     fn parses_node_versions() {

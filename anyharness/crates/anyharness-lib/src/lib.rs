@@ -1,9 +1,9 @@
 pub mod acp;
 pub mod adapters;
-pub mod agents;
 pub mod api;
 pub mod app;
 pub mod cowork;
+pub mod domains;
 pub mod integrations;
 pub mod mobility;
 pub mod origin;
