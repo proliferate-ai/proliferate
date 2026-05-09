@@ -19,7 +19,7 @@ import {
   renderChatTabIcon,
 } from "@/components/workspace/shell/tabs/tab-rendering";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
@@ -70,7 +70,7 @@ export function HeaderTabs() {
   });
   const tabGroupActions = useTabGroupActions();
   const tabActions = useWorkspaceTabActions(viewModel);
-  const { dismissSession } = useSessionActions();
+  const { dismissSession } = useSessionDismissActions();
   const { updateSessionTitle } = useSessionTitleActions();
   const showToast = useToastStore((state) => state.show);
   const {

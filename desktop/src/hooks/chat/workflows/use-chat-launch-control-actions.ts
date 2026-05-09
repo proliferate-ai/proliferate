@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
@@ -8,7 +8,7 @@ export function useChatLaunchControlActions({
 }: {
   activeLaunchAgentKind: string | null;
 }) {
-  const { setActiveSessionConfigOption } = useSessionActions();
+  const { setActiveSessionConfigOption } = useSessionConfigActions();
 
   // Active sessions try live config first; default launch controls write
   // preferences directly. Failed live updates fall back to persisted defaults.

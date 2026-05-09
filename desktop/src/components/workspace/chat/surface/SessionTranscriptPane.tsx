@@ -6,7 +6,7 @@ import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/ui/use-plan-handoff-dialog-state";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
@@ -38,7 +38,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   const handoff = usePlanHandoffDialogState();
   const { activateChatTab } = useWorkspaceShellActivation();
   const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
-  const { rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
+  const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { data: workspaceCollections } = useWorkspaces();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();

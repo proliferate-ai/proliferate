@@ -5,7 +5,7 @@ import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configure
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import {
   resolveWorkspaceShellTabFromKey,
@@ -54,9 +54,7 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
 
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
-  const {
-    createEmptySessionWithResolvedConfig,
-  } = useSessionActions();
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
 
   const orderedTabs = headerTabs.orderedTabs;
   const activeTab = headerTabs.activeShellTab;

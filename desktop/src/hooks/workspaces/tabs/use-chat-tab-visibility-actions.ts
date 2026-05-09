@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionRestoreActions } from "@/hooks/sessions/workflows/use-session-restore-actions";
 import {
   collectGroupIds,
   resolveFallbackAfterHidingChatTabs,
@@ -58,7 +58,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     (state) => state.recentlyHiddenChatSessionIdsByWorkspace,
   );
   const showToast = useToastStore((state) => state.show);
-  const { restoreLastDismissedSession } = useSessionActions();
+  const { restoreLastDismissedSession } = useSessionRestoreActions();
   const { activateChatShell, activateChatTab } = useWorkspaceShellActivation();
 
   const selectSessionId = useCallback((sessionId: string, source: string) => {

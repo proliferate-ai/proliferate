@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import {
   isSessionModelAvailabilityCancelled,
   isSessionModelAvailabilityRoutedToSettings,
@@ -112,7 +112,7 @@ export function useHomeNextLaunch() {
     useChatLaunchIntentStore((state) => state.markSendAttemptedIfActive);
   const { createThreadFromSelection } = useCoworkThreadWorkflow();
   const { promptSession } = useSessionPromptWorkflow();
-  const { createSessionWithResolvedConfig } = useSessionActions();
+  const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const {
     createLocalWorkspaceAndEnterWithResult,
     createWorktreeAndEnterWithResult,
