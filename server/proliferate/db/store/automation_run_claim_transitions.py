@@ -19,6 +19,7 @@ from proliferate.constants.automations import (
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
 )
+from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import AutomationRun
 from proliferate.db.store.automation_run_claim_values import (
     AutomationRunClaimValue,
@@ -28,7 +29,6 @@ from proliferate.db.store.automation_run_claims import (
     ClaimActivePredicate,
     ClaimTransitionRule,
     clear_claim_metadata,
-    db_engine,
     load_claimed_run_for_update,
 )
 
