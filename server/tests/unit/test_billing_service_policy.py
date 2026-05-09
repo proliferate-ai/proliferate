@@ -9,8 +9,12 @@ from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
     BILLING_MODE_OFF,
+    BILLING_PRICE_CLASS_LEGACY_CLOUD,
+    BILLING_PRICE_CLASS_PRO,
+    BILLING_PRICE_CLASS_UNKNOWN,
 )
 from proliferate.server.billing.models import BillingSnapshot
+from proliferate.server.billing.pricing import classify_monthly_price_id
 from proliferate.server.billing.service import repo_limit_for_billing_snapshot
 
 
@@ -79,3 +83,27 @@ def test_repo_limit_is_disabled_when_billing_mode_is_off() -> None:
         )
         is None
     )
+
+
+def test_price_classification_distinguishes_pro_legacy_and_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_legacy_alias")
+    monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "price_legacy")
+
+    assert classify_monthly_price_id("price_pro") == BILLING_PRICE_CLASS_PRO
+    assert classify_monthly_price_id("price_legacy") == BILLING_PRICE_CLASS_LEGACY_CLOUD
+    assert classify_monthly_price_id("price_legacy_alias") == BILLING_PRICE_CLASS_UNKNOWN
+    assert classify_monthly_price_id("price_unknown") == BILLING_PRICE_CLASS_UNKNOWN
+    assert classify_monthly_price_id(None) == BILLING_PRICE_CLASS_UNKNOWN
+
+
+def test_price_classification_treats_cloud_monthly_as_pro_alias_without_legacy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "")
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud_alias")
+    monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
+
+    assert classify_monthly_price_id("price_cloud_alias") == BILLING_PRICE_CLASS_PRO

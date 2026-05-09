@@ -40,6 +40,31 @@ async def test_billing_reconciler_loop_captures_recovered_failures(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_pass_skips_work_when_lock_is_already_owned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    async def _with_lock(_callback):
+        calls.append("lock")
+        return False, None
+
+    async def _run_billing_accounting_pass() -> None:
+        calls.append("accounting")
+
+    monkeypatch.setattr(reconciler, "with_billing_reconciler_lock", _with_lock)
+    monkeypatch.setattr(
+        reconciler,
+        "run_billing_accounting_pass",
+        _run_billing_accounting_pass,
+    )
+
+    await reconciler.run_billing_reconcile_pass()
+
+    assert calls == ["lock"]
+
+
+@pytest.mark.asyncio
 async def test_reconcile_segment_confirms_missing_list_state_before_marking_paused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
