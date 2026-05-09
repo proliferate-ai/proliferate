@@ -4,7 +4,7 @@ import type { ScenarioKey } from "@/config/playground";
 import {
   CLAUDE_PLAN_LONG,
   CLAUDE_PLAN_SHORT,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/plan-transcript-fixtures";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
 
 export function renderPlaygroundPlanTranscript(scenario: ScenarioKey): ReactNode | null {

@@ -7,7 +7,11 @@ import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopo
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Check, ProviderIcon, Sparkles } from "@/components/ui/icons";
+import {
+  Check,
+  Sparkles,
+} from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 
 interface AutomationModelPickerProps {
   groups: AutomationModelGroup[];

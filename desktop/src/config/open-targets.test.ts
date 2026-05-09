@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { FileIcon } from "@/components/ui/icons";
 import {
   CursorIcon,
-  FileIcon,
   FinderIcon,
   TerminalAppIcon,
   VSCodeIcon,
   WindsurfIcon,
   ZedIcon,
-} from "@/components/ui/icons";
+} from "@/components/ui/app-icons";
 import {
   OPEN_TARGET_FALLBACK_ICON,
   OPEN_TARGET_ICON_DEFINITIONS,

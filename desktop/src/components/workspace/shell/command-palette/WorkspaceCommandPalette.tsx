@@ -8,9 +8,7 @@ import {
   useCommandPaletteClose,
 } from "@/components/ui/CommandPalette";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import {
-  CommandPaletteGlyph,
-} from "@/components/ui/icons";
+import { CommandPaletteGlyph } from "@/components/ui/command-palette-icons";
 import { useWorkspaceCommandPalette } from "@/hooks/workspaces/facade/use-workspace-command-palette";
 import type {
   CommandPaletteEntry,

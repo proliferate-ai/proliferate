@@ -6,7 +6,7 @@ import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { ProviderIcon } from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
