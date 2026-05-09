@@ -3,14 +3,14 @@ import { createElement, isValidElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "./playground";
+import { renderDelegationSlot } from "@/components/playground/PlaygroundComposerDelegation";
+import { renderMobilityOverlayPreview } from "@/components/playground/PlaygroundComposerMobility";
 import {
   renderActiveSlot,
   renderAttachedSlot,
-  renderComposerSurfaceForScenario,
-  renderDelegationSlot,
-  renderMobilityOverlayPreview,
   renderOutboundSlot,
-} from "@/components/playground/PlaygroundComposer";
+} from "@/components/playground/PlaygroundComposerSlots";
+import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
 import {
   FILE_MENTION_SEARCH_RESULTS,
   PLAYGROUND_REVIEW_COMPOSER_STATES,
