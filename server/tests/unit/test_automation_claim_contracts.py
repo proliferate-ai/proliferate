@@ -13,7 +13,6 @@ from proliferate.constants.automations import (
     AUTOMATION_RUN_STATUS_CREATING_SESSION,
     AUTOMATION_RUN_STATUS_CREATING_WORKSPACE,
     AUTOMATION_RUN_STATUS_DISPATCHED,
-    AUTOMATION_RUN_STATUS_DISPATCHING,
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
 )
@@ -359,7 +358,11 @@ async def test_cloud_executor_claims_only_cloud_target_runs_globally(
             user_id=first_user_id,
             executor_id="desktop-executor",
             available_repositories=[
-                LocalAutomationRepoIdentity(provider="github", owner="proliferate-ai", name="local")
+                LocalAutomationRepoIdentity(
+                    provider="github",
+                    owner="proliferate-ai",
+                    name="local",
+                )
             ],
             claim_ttl=timedelta(minutes=5),
             limit=10,
