@@ -18,5 +18,5 @@ async def generate_session_title_endpoint(
     body: GenerateSessionTitleRequest,
     user: User = Depends(current_active_user),
 ) -> GenerateSessionTitleResponse:
-    title = await generate_session_title(user, prompt_text=body.prompt_text)
+    title = await generate_session_title(user.id, prompt_text=body.prompt_text)
     return GenerateSessionTitleResponse(title=title)

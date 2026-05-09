@@ -4,6 +4,7 @@ import re
 from collections import deque
 from threading import Lock
 from time import monotonic
+from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.ai_magic import (
@@ -12,7 +13,6 @@ from proliferate.constants.ai_magic import (
     SESSION_TITLE_RATE_LIMIT_REQUESTS,
     SESSION_TITLE_RATE_LIMIT_WINDOW_SECONDS,
 )
-from proliferate.db.models.auth import User
 from proliferate.integrations.anthropic import (
     AnthropicIntegrationError,
     generate_message_text,
@@ -57,7 +57,7 @@ def _normalize_title(raw_title: str) -> str:
     return title
 
 
-async def generate_session_title(user: User, *, prompt_text: str) -> str:
+async def generate_session_title(user_id: UUID, *, prompt_text: str) -> str:
     api_key = settings.anthropic_api_key.strip()
     if not api_key:
         raise AiMagicError(
@@ -80,7 +80,7 @@ async def generate_session_title(user: User, *, prompt_text: str) -> str:
             message="Prompt text is too long to title.",
         )
 
-    _enforce_session_title_rate_limit(str(user.id))
+    _enforce_session_title_rate_limit(str(user_id))
 
     try:
         raw_title = await generate_message_text(
