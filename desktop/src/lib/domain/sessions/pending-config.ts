@@ -36,6 +36,47 @@ export function getPendingSessionConfigChange(
   return pendingConfigChanges[rawConfigId] ?? null;
 }
 
+export function withPendingConfigChange(
+  pendingConfigChanges: PendingSessionConfigChanges,
+  pendingChange: PendingSessionConfigChange,
+): PendingSessionConfigChanges {
+  return {
+    ...pendingConfigChanges,
+    [pendingChange.rawConfigId]: pendingChange,
+  };
+}
+
+export function withoutPendingConfigChange(
+  pendingConfigChanges: PendingSessionConfigChanges,
+  rawConfigId: string,
+): PendingSessionConfigChanges {
+  if (!pendingConfigChanges[rawConfigId]) {
+    return pendingConfigChanges;
+  }
+
+  const { [rawConfigId]: _removed, ...rest } = pendingConfigChanges;
+  return rest;
+}
+
+export function withoutPendingConfigChanges(
+  pendingConfigChanges: PendingSessionConfigChanges,
+  rawConfigIds: readonly string[],
+): PendingSessionConfigChanges {
+  if (rawConfigIds.length === 0) {
+    return pendingConfigChanges;
+  }
+
+  let nextPendingConfigChanges = pendingConfigChanges;
+  for (const rawConfigId of rawConfigIds) {
+    nextPendingConfigChanges = withoutPendingConfigChange(
+      nextPendingConfigChanges,
+      rawConfigId,
+    );
+  }
+
+  return nextPendingConfigChanges;
+}
+
 export function resolveDisplayedSessionControlState(
   control: NormalizedSessionControl,
   pendingConfigChanges: PendingSessionConfigChanges | null | undefined,
