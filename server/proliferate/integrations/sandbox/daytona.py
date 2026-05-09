@@ -36,7 +36,7 @@ from proliferate.integrations.sandbox.base import (
     SandboxProviderKind,
     SandboxRuntimeContext,
 )
-from proliferate.server.billing.models import utcnow
+from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.cloud.daytona")
 
