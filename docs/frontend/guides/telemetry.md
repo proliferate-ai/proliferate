@@ -11,8 +11,9 @@ session replay, and telemetry-related provider and hook ownership.
 - `hooks/**` owns UI-facing telemetry side effects.
 - `components/**` render and should not import telemetry helpers directly,
   except explicit error boundaries.
-- `lib/integrations/telemetry/**` owns transport mechanics for both vendor and
-  anonymous telemetry, not product workflow decisions.
+- `lib/integrations/telemetry/**` is the first-class transport home for both
+  vendor and anonymous telemetry, not product workflow decisions. This is an
+  intentional integration boundary, not a transitional `lib/access/**` target.
 - `lib/domain/telemetry/**` owns typed event catalogs, safe enums, and pure
   telemetry helpers.
 - Keep one telemetry tree and one `TelemetryProvider`. Anonymous telemetry is a

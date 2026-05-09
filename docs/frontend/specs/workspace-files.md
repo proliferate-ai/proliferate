@@ -24,7 +24,7 @@ The durable right-panel tool id remains `git`; “Changes” is a display label.
 ## Viewer Targets
 
 Center tabs use `ViewerTarget`, owned by
-`desktop/src/lib/domain/workspaces/viewer-target.ts`.
+`desktop/src/lib/domain/workspaces/viewer/viewer-target.ts`.
 
 Supported targets:
 
