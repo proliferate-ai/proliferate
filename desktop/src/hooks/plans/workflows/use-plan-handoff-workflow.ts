@@ -12,9 +12,9 @@ import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catal
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
-import type { SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
+import type { SessionActivationOutcome } from "@/hooks/sessions/workflows/session-activation-guard";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";

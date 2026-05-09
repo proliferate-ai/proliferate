@@ -3,7 +3,7 @@ import type {
   PromptInputBlock,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import type {
   LaunchPromptInput,
   SessionControlDeps,
@@ -15,7 +15,7 @@ import {
 } from "@/lib/domain/sessions/activity";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
+import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import {
   getSessionRecords,
 } from "@/stores/sessions/session-records";

@@ -16,7 +16,7 @@ import {
   getWorkspaceSessionRecords,
   removeSessionRecord,
 } from "@/stores/sessions/session-records";
-import { invalidateSessionActivationIntent } from "@/hooks/sessions/session-activation-guard";
+import { invalidateSessionActivationIntent } from "@/hooks/sessions/workflows/session-activation-guard";
 import {
   writeChatShellIntentForEmptySurface,
   writeChatShellIntentForSession,

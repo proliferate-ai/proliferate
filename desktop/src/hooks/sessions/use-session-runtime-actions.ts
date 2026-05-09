@@ -36,12 +36,12 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import {
   isCurrentStreamHandle,
   shouldReconnectStream,
-} from "@/hooks/sessions/session-runtime-helpers";
+} from "@/hooks/sessions/lifecycle/session-runtime-helpers";
 import { useLinkedSessionMounting } from "@/hooks/chat/subagents/use-linked-session-mounting";
 import {
   useSessionStreamFlushControllerFactory,
   type SessionStreamFlushController,
-} from "@/hooks/sessions/use-session-stream-flush";
+} from "@/hooks/sessions/lifecycle/use-session-stream-flush";
 import { useSessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";

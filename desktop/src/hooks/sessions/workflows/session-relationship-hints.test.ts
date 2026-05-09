@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   recordLinkedChildRelationshipHint,
   recordSubagentChildRelationshipHint,
-} from "@/hooks/sessions/session-relationship-hints";
+} from "@/hooks/sessions/workflows/session-relationship-hints";
 import {
   createEmptySessionRecord,
   putSessionRecord,

@@ -10,12 +10,12 @@ import {
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/session-runtime-pending-config";
+import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/lifecycle/session-runtime-pending-config";
 import {
   animationFrameSessionStreamFlushScheduler,
   createSessionStreamFlushController,
   type SessionStreamFlushScheduler,
-} from "@/hooks/sessions/use-session-stream-flush";
+} from "@/hooks/sessions/lifecycle/use-session-stream-flush";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 
 const originalPatchTranscriptEntry = useSessionTranscriptStore.getState().patchEntry;

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   persistDefaultSessionModePreference,
   shouldPersistDefaultSessionModePreference,
-} from "@/hooks/sessions/session-mode-preferences";
+} from "@/hooks/sessions/workflows/session-mode-preferences";
 import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 

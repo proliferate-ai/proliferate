@@ -9,7 +9,7 @@ import {
   createTranscriptState,
   type SessionEventEnvelope,
 } from "@anyharness/sdk";
-import { applyBatchedStreamSideEffects } from "@/hooks/sessions/session-stream-side-effects";
+import { applyBatchedStreamSideEffects } from "@/hooks/sessions/lifecycle/session-stream-side-effects";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
@@ -32,7 +32,7 @@ vi.mock("@/lib/infra/events/turn-end-events", () => ({
   notifyUserFacingTurnEnd: mocks.notifyUserFacingTurnEnd,
 }));
 
-vi.mock("@/hooks/sessions/session-runtime-pending-config", () => ({
+vi.mock("@/hooks/sessions/lifecycle/session-runtime-pending-config", () => ({
   clearPendingConfigRollbackCheck: mocks.clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck: mocks.schedulePendingConfigRollbackCheck,
 }));
