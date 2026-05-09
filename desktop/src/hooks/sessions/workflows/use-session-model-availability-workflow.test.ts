@@ -6,8 +6,8 @@ import {
 import {
   resetSessionModelAvailabilityStore,
   useSessionModelAvailabilityStore,
-  type PausedSessionModelAvailability,
 } from "@/stores/sessions/model-availability-store";
+import type { PausedSessionModelAvailability } from "@/lib/domain/sessions/creation/model-availability";
 
 const PAUSED_LAUNCH: PausedSessionModelAvailability = {
   id: "session-1:gpt-5.5:gpt-5.4",

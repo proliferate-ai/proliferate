@@ -10,6 +10,16 @@ import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/sessi
 import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
 import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
+import {
+  mergeLiveDefaultLaunchControls,
+  pickLiveDefaultLaunchControls,
+} from "@/lib/domain/sessions/creation/launch-controls";
+import {
+  buildPausedModelAvailability,
+  hasImmediateLaunchModelMismatch,
+} from "@/lib/domain/sessions/creation/model-availability";
+import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
@@ -68,12 +78,9 @@ import {
 import {
   buildLatencyRequestOptions,
   buildModelAvailabilityRetryOptions,
-  buildPausedModelAvailability,
-  hasImmediateLaunchModelMismatch,
   materializeSessionRecord,
   removeSessionRecordAndClearSelection,
   reportConnectorLaunchWarnings,
-  resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
 import {
   inFlightSessionCreatesByWorkspace,
@@ -723,69 +730,12 @@ export function useSessionCreationActions() {
   };
 }
 
-function pickLiveDefaultLaunchControls(
-  values: Record<string, string> | undefined,
-): Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>> {
-  if (!values) {
-    return {};
-  }
-  return Object.fromEntries(
-    Object.entries(values).filter(([key, value]) =>
-      (
-        key === "collaboration_mode"
-        || key === "reasoning"
-        || key === "effort"
-        || key === "fast_mode"
-      )
-      && value.trim().length > 0
-    ),
-  ) as Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>>;
-}
-
 function pendingConfigValuesForSession(sessionId: string): Record<string, string> {
   const pendingConfigChanges = getSessionRecord(sessionId)?.pendingConfigChanges ?? {};
   return Object.fromEntries(
     Object.values(pendingConfigChanges)
       .map((change) => [change.rawConfigId, change.value] as const),
   );
-}
-
-function mergeLiveDefaultLaunchControls({
-  defaults,
-  agentKind,
-  values,
-}: {
-  defaults: Record<string, Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>>>;
-  agentKind: string;
-  values: Record<string, string>;
-}): Record<string, Partial<Record<"collaboration_mode" | "reasoning" | "effort" | "fast_mode", string>>> {
-  const liveControls = pickLiveDefaultLaunchControls(values);
-  if (Object.keys(liveControls).length === 0) {
-    return defaults;
-  }
-
-  return {
-    ...defaults,
-    [agentKind]: {
-      ...(defaults[agentKind] ?? {}),
-      ...liveControls,
-    },
-  };
-}
-
-function findCompatibleExistingSession({
-  sessions,
-  agentKind,
-  modelId,
-}: {
-  sessions: readonly Session[];
-  agentKind: string;
-  modelId: string;
-}): Session | null {
-  return sessions.find((session) =>
-    session.agentKind === agentKind
-    && (!session.modelId || session.modelId === modelId)
-  ) ?? null;
 }
 
 function materializedRecordFromExistingSession({

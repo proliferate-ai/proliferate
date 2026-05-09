@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import type { Session } from "@anyharness/sdk";
+import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
+
+function session(overrides: Partial<Session>): Session {
+  return {
+    id: "session-1",
+    workspaceId: "workspace-1",
+    agentKind: "codex",
+    modelId: "gpt-5.4",
+    status: "idle",
+    createdAt: "2026-04-28T00:00:00.000Z",
+    updatedAt: "2026-04-28T00:00:00.000Z",
+    ...overrides,
+  } as Session;
+}
+
+describe("findCompatibleExistingSession", () => {
+  it("matches sessions with the requested agent and model", () => {
+    const matched = session({ id: "match", modelId: "gpt-5.5" });
+
+    expect(findCompatibleExistingSession({
+      sessions: [
+        session({ id: "wrong-agent", agentKind: "claude", modelId: "gpt-5.5" }),
+        matched,
+      ],
+      agentKind: "codex",
+      modelId: "gpt-5.5",
+    })).toBe(matched);
+  });
+
+  it("treats missing model ids as compatible", () => {
+    const matched = session({ id: "match", modelId: null });
+
+    expect(findCompatibleExistingSession({
+      sessions: [matched],
+      agentKind: "codex",
+      modelId: "gpt-5.5",
+    })).toBe(matched);
+  });
+
+  it("returns null when no session matches", () => {
+    expect(findCompatibleExistingSession({
+      sessions: [session({ id: "wrong-model", modelId: "gpt-5.4" })],
+      agentKind: "codex",
+      modelId: "gpt-5.5",
+    })).toBeNull();
+  });
+});

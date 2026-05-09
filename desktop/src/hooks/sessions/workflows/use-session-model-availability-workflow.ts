@@ -1,12 +1,11 @@
 import { useCallback } from "react";
 import {
-  type PausedSessionModelAvailability,
   type SessionModelAvailabilityDecision,
   useSessionModelAvailabilityStore,
 } from "@/stores/sessions/model-availability-store";
+import type { PausedSessionModelAvailability } from "@/lib/domain/sessions/creation/model-availability";
 
 export type {
-  PausedSessionModelAvailability,
   SessionModelAvailabilityDecision,
   SessionModelAvailabilityDecisionKind,
 } from "@/stores/sessions/model-availability-store";
