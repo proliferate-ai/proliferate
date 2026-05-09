@@ -12,7 +12,6 @@ import {
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
@@ -27,12 +26,14 @@ import {
   resolvePlanImplementationTargetCheck,
   type PlanImplementationHarnessState,
 } from "@/lib/domain/plans/implementation-target";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -208,7 +209,7 @@ function usePlanImplementationActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }),
+          }, { trackProductEvent }),
         showToast,
       });
     })().finally(() => {

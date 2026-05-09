@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyPromptDispatchFailure } from "@/hooks/chat/use-prompt-outbox-dispatcher";
+import { classifyPromptDispatchFailure } from "./prompt-dispatch-failure";
 
 describe("classifyPromptDispatchFailure", () => {
   it("treats pre-request failures as not sent", () => {
@@ -17,10 +17,26 @@ describe("classifyPromptDispatchFailure", () => {
       });
   });
 
+  it("reads nested status fields from chained errors", () => {
+    expect(classifyPromptDispatchFailure({
+      cause: {
+        response: { status: 422 },
+      },
+    }, true)).toMatchObject({
+      deliveryState: "failed_before_dispatch",
+    });
+  });
+
   it("treats opaque post-request failures as awaiting confirmation", () => {
     expect(classifyPromptDispatchFailure(new Error("NetworkError"), true))
       .toMatchObject({
         deliveryState: "unknown_after_dispatch",
       });
+  });
+
+  it("uses fallback copy for non-error values", () => {
+    expect(classifyPromptDispatchFailure(null, false)).toMatchObject({
+      message: "Prompt delivery failed.",
+    });
   });
 });

@@ -1,6 +1,10 @@
 import { useCallback } from "react";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
+import {
+  canCancelPromptOutboxEntryLocally,
+  canDismissPromptOutboxEntry,
+  canRetryPromptOutboxEntry,
+} from "@/lib/domain/chat/outbox/prompt-outbox-actions";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
@@ -10,7 +14,7 @@ export function usePromptOutboxActions() {
   const retryPrompt = useCallback((clientPromptId: string) => {
     const store = usePromptOutboxStore.getState();
     const entry = store.entriesByPromptId[clientPromptId];
-    if (!entry || !canRetryEntry(entry)) {
+    if (!entry || !canRetryPromptOutboxEntry(entry)) {
       return;
     }
     const retryPromptId = createPromptId();
@@ -62,7 +66,7 @@ export function usePromptOutboxActions() {
   const dismissPrompt = useCallback((clientPromptId: string) => {
     const store = usePromptOutboxStore.getState();
     const entry = store.entriesByPromptId[clientPromptId];
-    if (!entry || !canDismissEntry(entry)) {
+    if (!entry || !canDismissPromptOutboxEntry(entry)) {
       return;
     }
     store.removeEntry(clientPromptId);
@@ -71,7 +75,7 @@ export function usePromptOutboxActions() {
   const cancelBeforeDispatch = useCallback((clientPromptId: string) => {
     const store = usePromptOutboxStore.getState();
     const entry = store.entriesByPromptId[clientPromptId];
-    if (!entry || !canCancelLocally(entry)) {
+    if (!entry || !canCancelPromptOutboxEntryLocally(entry)) {
       return;
     }
     store.removeEntry(clientPromptId);
@@ -82,18 +86,4 @@ export function usePromptOutboxActions() {
     dismissPrompt,
     cancelBeforeDispatch,
   };
-}
-
-function canRetryEntry(entry: PromptOutboxEntry): boolean {
-  return entry.deliveryState === "failed_before_dispatch";
-}
-
-function canDismissEntry(entry: PromptOutboxEntry): boolean {
-  return entry.deliveryState === "failed_before_dispatch"
-    || entry.deliveryState === "unknown_after_dispatch";
-}
-
-function canCancelLocally(entry: PromptOutboxEntry): boolean {
-  return entry.deliveryState === "waiting_for_session"
-    || entry.deliveryState === "preparing";
 }

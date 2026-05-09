@@ -22,7 +22,7 @@ import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availabi
 import { useChatComposerKeyboard } from "@/hooks/chat/ui/use-chat-composer-keyboard";
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/facade/use-chat-model-selector-state";
-import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
+import { useChatPromptActions } from "@/hooks/chat/workflows/use-chat-prompt-actions";
 import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt-attachments";
 import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate";
 import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
