@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ProliferateIcon } from "@/components/ui/icons";
+import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import {
   offUserFacingTurnEnd,
   onUserFacingTurnEnd,

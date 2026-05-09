@@ -4,11 +4,11 @@ import type {
   CoworkManagedWorkspaceSummary,
 } from "@anyharness/sdk";
 import {
-  AgentGlyph,
   BrailleSweepBadge,
   ChevronDown,
   ChevronRight,
 } from "@/components/ui/icons";
+import { AgentGlyph } from "@/components/ui/provider-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";

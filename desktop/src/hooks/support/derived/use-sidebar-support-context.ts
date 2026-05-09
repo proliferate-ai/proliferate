@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export function useSidebarSupportContext() {

@@ -15,7 +15,8 @@ legal mode values:
 - The HTTP create-session request takes an opaque `mode_id` string
   (`anyharness/crates/anyharness-contract/src/v1/sessions.rs:64`,
   `sessions.rs:104`) and the runtime passes it through to the ACP binary
-  (`anyharness/crates/anyharness-lib/src/sessions/runtime.rs:208-243`).
+  (`anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs`,
+  `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`).
 - At session start the ACP binary returns its own `SessionModeState`, which
   the session actor stores as `LegacyModeState`
   (`anyharness/crates/anyharness-lib/src/acp/session_actor.rs:286-374`).

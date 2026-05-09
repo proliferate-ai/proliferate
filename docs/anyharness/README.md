@@ -378,8 +378,7 @@ Known transitional issues:
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
 - Core session files are too large and mix multiple roles:
-  `acp/session_actor.rs`, `acp/event_sink.rs`, `sessions/runtime.rs`, and
-  `sessions/store.rs`.
+  `acp/session_actor.rs`, `acp/event_sink.rs`, and `sessions/store.rs`.
 - Product MCP servers duplicate JSON-RPC helpers and capability-token logic.
   Common protocol/auth scaffolding should move to `integrations/mcp/`; product
   tool semantics stay with their owning domain.

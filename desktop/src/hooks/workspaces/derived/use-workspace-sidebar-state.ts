@@ -13,11 +13,11 @@ import type {
   SidebarEmptyState,
   SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
 import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/derived/use-workspace-finish-suggestions";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   type HomeActionId,

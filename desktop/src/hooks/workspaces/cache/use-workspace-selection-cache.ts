@@ -11,7 +11,7 @@ import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collect
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsScopeKey,
-} from "@/hooks/workspaces/query-keys";
+} from "@/hooks/workspaces/cache/query-keys";
 
 export interface WorkspaceSelectionCacheSnapshot {
   workspaceCollections: WorkspaceCollections | undefined;

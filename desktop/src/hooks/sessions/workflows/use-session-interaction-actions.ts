@@ -12,7 +12,7 @@ import {
   useRevealMcpElicitationUrlMutation,
 } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";

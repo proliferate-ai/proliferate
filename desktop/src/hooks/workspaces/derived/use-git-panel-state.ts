@@ -4,9 +4,9 @@ import {
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { useMemo } from "react";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import {
   buildGitPanelFiles,
   buildGitPanelSections,

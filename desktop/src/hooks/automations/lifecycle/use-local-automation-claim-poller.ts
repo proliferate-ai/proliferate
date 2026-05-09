@@ -19,7 +19,7 @@ import {
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 
 const AUTOMATION_LOCAL_EXECUTOR_ID_KEY = "automationLocalExecutorId";
 const LOCAL_EXECUTOR_POLL_MS = 10_000;

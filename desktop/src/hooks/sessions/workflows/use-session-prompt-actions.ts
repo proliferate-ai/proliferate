@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import type { ActiveSessionPromptOptions } from "@/hooks/sessions/workflows/session-control-contract";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   getSessionRecord,
   isPendingSessionId,

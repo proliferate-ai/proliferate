@@ -62,9 +62,16 @@ count-based debt in `scripts/anyharness_boundaries_allowlist.txt`; new
 violations, increased counts, and stale allowlist entries fail the check.
 
 When a cleanup removes an allowlisted violation, reduce or delete that
-allowlist entry in the same change. The Phase 6 session-runtime split should
-revisit transitional session-runtime and live-runtime allowances and shrink the
-allowlist where ownership has moved to the documented target shape.
+allowlist entry in the same change. Completed splits should tighten any
+transitional allowances that no longer match the documented target shape.
+
+## Old Path Ratchets
+
+After a split lands, block the old flat file path from coming back. The
+repo-shape CI job runs `scripts/check_anyharness_old_paths.py` for completed
+AnyHarness splits. Add paths to that check only after the owning migration has
+landed on `main`, then keep the old path blocked instead of relying on review
+to catch resurrected flat files.
 
 ## Review Questions
 

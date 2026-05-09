@@ -4,7 +4,7 @@ import {
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls/session-controls";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useActiveSessionConfigState } from "./derived/use-active-chat-session-selectors";
 

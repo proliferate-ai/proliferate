@@ -4,7 +4,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useCoworkCache } from "@/hooks/access/anyharness/cowork/use-cowork-cache";
-import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
+import { useDismissedSessionCleanup } from "@/hooks/sessions/workflows/use-dismissed-session-cleanup";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 

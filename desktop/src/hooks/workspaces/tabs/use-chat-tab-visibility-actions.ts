@@ -16,7 +16,7 @@ import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { recordLinkedChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
+import { recordLinkedChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 
 interface ChatTabVisibilityContext {
   workspaceUiKey?: string | null;

@@ -6,7 +6,7 @@ import {
   isSessionActivationCurrent,
   type SessionActivationGuard,
   type SessionActivationOutcome,
-} from "@/hooks/sessions/session-activation-guard";
+} from "@/hooks/sessions/workflows/session-activation-guard";
 import {
   chatShellWorkspaceIntentKey,
   chatWorkspaceShellTabKey,
@@ -18,7 +18,7 @@ import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
+import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,

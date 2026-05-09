@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import {
   updateCloudWorkspaceBranch,
@@ -27,7 +27,7 @@ import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 

@@ -12,9 +12,9 @@ import {
   Check,
   ChevronDown,
   Plus,
-  ProviderIcon,
   Search,
 } from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 import { useModelSelectorMenu } from "@/hooks/chat/ui/use-model-selector-menu";
 import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 import { ComposerControlButton } from "./ComposerControlButton";

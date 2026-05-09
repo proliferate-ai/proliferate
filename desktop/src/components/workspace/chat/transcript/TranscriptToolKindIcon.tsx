@@ -4,10 +4,10 @@ import {
   FilePlus,
   FileText,
   FolderList,
-  ProliferateIcon,
   Settings,
   Terminal,
 } from "@/components/ui/icons";
+import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import type { ToolDisplayIconKey } from "@/lib/domain/chat/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {

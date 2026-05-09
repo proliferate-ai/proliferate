@@ -3,7 +3,7 @@ import { useCallback, useMemo } from "react";
 import {
   getWorkspaceCollectionsFromCache,
   workspaceCollectionsKey,
-} from "@/hooks/workspaces/query-keys";
+} from "@/hooks/workspaces/cache/query-keys";
 
 export function useWorkspaceCollectionsCache(args: {
   runtimeUrl: string;

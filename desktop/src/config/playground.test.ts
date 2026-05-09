@@ -9,11 +9,11 @@ import { renderActiveSlot } from "@/components/playground/composer-slots/Playgro
 import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
 import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
+import { FILE_MENTION_SEARCH_RESULTS } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import {
-  FILE_MENTION_SEARCH_RESULTS,
   PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
 import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/composer/file-mention-links";
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [

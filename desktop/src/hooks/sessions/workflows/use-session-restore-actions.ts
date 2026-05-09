@@ -6,7 +6,7 @@ import {
   buildLatencyRequestOptions,
   ensureRuntimeReadyForSessions,
 } from "@/hooks/sessions/workflows/session-selection-runtime";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   elapsedMs,
   logLatency,

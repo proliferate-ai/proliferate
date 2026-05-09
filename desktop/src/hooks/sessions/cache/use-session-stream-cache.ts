@@ -6,7 +6,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 
 export interface SessionStreamCache {
   invalidateWorkspaceCollections(runtimeUrl: string): void;

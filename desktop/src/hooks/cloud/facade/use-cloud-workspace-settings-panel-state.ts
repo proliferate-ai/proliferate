@@ -7,7 +7,7 @@ import { useCloudWorkspaceRepoConfigStatus } from "@/hooks/access/cloud/use-clou
 import { useResyncCloudWorkspaceCredentials } from "@/hooks/access/cloud/use-resync-cloud-workspace-credentials";
 import { useResyncCloudWorkspaceFiles } from "@/hooks/access/cloud/use-resync-cloud-workspace-files";
 import { useRunCloudWorkspaceSetup } from "@/hooks/access/cloud/use-run-cloud-workspace-setup";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildCloudWorkspacePostReadyLabel,
@@ -16,7 +16,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-settings";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 
 const EMPTY_ENV_VAR_KEYS: string[] = [];
 const EMPTY_TRACKED_FILES: CloudRepoFileMetadata[] = [];

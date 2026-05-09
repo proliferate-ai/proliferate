@@ -31,7 +31,7 @@ import {
 import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { useTranscriptRowModel } from "@/hooks/chat/derived/use-transcript-row-model";
-import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";
+import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
 import {
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,

@@ -14,7 +14,7 @@ The sessions area has two layers:
   - `anyharness/crates/anyharness-lib/src/sessions/service.rs`
   - `anyharness/crates/anyharness-lib/src/sessions/links/**`
 - live orchestration bridge
-  - `anyharness/crates/anyharness-lib/src/sessions/runtime.rs`
+  - `anyharness/crates/anyharness-lib/src/sessions/runtime/**`
 
 The durable layer owns:
 
@@ -340,7 +340,7 @@ merging live events.
 ### Create and Start
 
 `SessionRuntime::create_and_start_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/runtime.rs`)
+(`anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs`)
 is the eager live-start path.
 
 It:
@@ -358,7 +358,7 @@ This is the bridge from durable session creation into live ACP execution.
 ### Resume
 
 `ensure_live_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/runtime.rs`)
+(`anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`)
 is the idempotent cold-start path for an existing session.
 
 It:

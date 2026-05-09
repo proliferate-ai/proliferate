@@ -6,10 +6,12 @@ import {
   Copy,
   FileText,
   FolderList,
+} from "@/components/ui/icons";
+import {
   GmailBrandIcon,
   MailAppIcon,
   OutlookBrandIcon,
-} from "@/components/ui/icons";
+} from "@/components/ui/app-icons";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";

@@ -8,7 +8,7 @@ import {
   isSessionModelAvailabilityCancelled,
   isSessionModelAvailabilityRoutedToSettings,
 } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import type {
