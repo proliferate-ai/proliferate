@@ -62,6 +62,17 @@ export interface ReviewPersonalityPreference {
 
 export type StoredReviewPersonalitiesByKind = Record<ReviewKind, ReviewPersonalityPreference[]>;
 
+export function createStoredReviewKindDefaults(): StoredReviewKindDefaults {
+  return {
+    maxRounds: DEFAULT_REVIEW_MAX_ROUNDS,
+    autoIterate: true,
+    agentKind: "",
+    modelId: "",
+    modeId: "",
+    reviewers: { mode: "inherit" },
+  };
+}
+
 const PLAN_REVIEW_PERSONAS: ReviewPersonaTemplate[] = [
   {
     id: "plan-skeptic",
@@ -221,6 +232,69 @@ export function createReviewSetupDraft(args: {
         };
       }),
   };
+}
+
+export function resolveReviewDefaultReviewerRows(args: {
+  kind: ReviewKind;
+  defaults: StoredReviewKindDefaults;
+  personalityTemplates: ReviewPersonaTemplate[];
+}): ReviewSetupReviewerDraft[] {
+  if (args.defaults.reviewers.mode === "custom") {
+    return args.defaults.reviewers.items;
+  }
+
+  const builtInTemplates = args.personalityTemplates.filter((template) =>
+    isBuiltInReviewPersonaId(args.kind, template.id)
+  );
+  const sourceTemplates = builtInTemplates.length > 0
+    ? builtInTemplates
+    : args.personalityTemplates;
+  return sourceTemplates.slice(0, 2).map((template) => ({
+    id: template.id,
+    label: template.label,
+    prompt: template.prompt,
+    agentKind: args.defaults.agentKind,
+    modelId: args.defaults.modelId,
+    modeId: args.defaults.modeId,
+  }));
+}
+
+export function nextAvailableReviewPersonaTemplate(
+  personalityTemplates: ReviewPersonaTemplate[],
+  reviewers: ReviewSetupReviewerDraft[],
+): ReviewPersonaTemplate | null {
+  return personalityTemplates.find((template) => (
+    !reviewers.some((reviewer) => (
+      findReviewPersonaTemplateForReviewer([template], reviewer.id) !== null
+    ))
+  )) ?? personalityTemplates[0] ?? null;
+}
+
+export function reviewerMatchesReviewPersonaTemplate(
+  reviewer: ReviewSetupReviewerDraft,
+  template: ReviewPersonaTemplate,
+  reviewers: ReviewSetupReviewerDraft[],
+  reviewerIndex: number,
+): boolean {
+  return nextReviewReviewerId(template.id, reviewers, reviewerIndex) === reviewer.id
+    && reviewer.label === template.label
+    && reviewer.prompt === template.prompt;
+}
+
+export function reviewerPersonalityLabel(
+  personalityTemplates: ReviewPersonaTemplate[],
+  reviewer: ReviewSetupReviewerDraft,
+): string {
+  const exact = personalityTemplates.find((template) =>
+    findReviewPersonaTemplateForReviewer([template], reviewer.id)
+    && reviewer.label === template.label
+    && reviewer.prompt === template.prompt
+  );
+  if (exact) {
+    return exact.label;
+  }
+  const base = findReviewPersonaTemplateForReviewer(personalityTemplates, reviewer.id);
+  return base ? `${base.label} edited` : reviewer.label || "Choose personality";
 }
 
 function resolveStoredReviewers(
