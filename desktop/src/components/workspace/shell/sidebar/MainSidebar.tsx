@@ -4,35 +4,17 @@ import { useShallow } from "zustand/react/shallow";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
-import { SidebarRowSurface } from "./SidebarRowSurface";
-import { SidebarActionButton } from "./SidebarActionButton";
-import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
+import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
+import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import {
-  isDefaultSidebarWorkspaceTypes,
-  type SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+import { isDefaultSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar";
 import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   titleForStartBlockReason,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import {
-  Archive,
-  Calendar,
-  Check,
-  CollapseAll,
-  ExpandAll,
-  Filter,
-  FolderPlusFilled,
-  Grid,
-  Home,
-  CircleQuestion,
-} from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
@@ -51,15 +33,6 @@ import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
-
-const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
-  label: string;
-  variant: SidebarWorkspaceVariant;
-}> = [
-  { label: "Local", variant: "local" },
-  { label: "Worktrees", variant: "worktree" },
-  { label: "Cloud", variant: "cloud" },
-];
 
 export function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
@@ -182,59 +155,16 @@ export function MainSidebar() {
         />
       )}
       <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
-        {/* Top actions */}
-        <div className="px-2">
-          <div className="flex flex-col gap-px">
-            <SidebarRowSurface
-              active={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-              onPress={actions.handleGoHome}
-              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
-            >
-              <div className="flex w-4 shrink-0 items-center justify-center">
-                <Home className="size-3" />
-              </div>
-              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-                <span className="truncate">Home</span>
-              </div>
-            </SidebarRowSurface>
-            <SidebarRowSurface
-              active={isOnPlugins}
-              onPress={actions.handleGoPlugins}
-              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
-            >
-              <div className="flex w-4 shrink-0 items-center justify-center">
-                <Grid className="size-4" />
-              </div>
-              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-                <span className="truncate">Plugins</span>
-              </div>
-            </SidebarRowSurface>
-            <SidebarRowSurface
-              active={isOnAutomations}
-              onPress={actions.handleGoAutomations}
-              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
-            >
-              <div className="flex w-4 shrink-0 items-center justify-center">
-                <Calendar className="size-4" />
-              </div>
-              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-                <span className="truncate">Automations</span>
-              </div>
-            </SidebarRowSurface>
-            <SidebarRowSurface
-              active={supportOpen}
-              onPress={() => setSupportOpen(true)}
-              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
-            >
-              <div className="flex w-4 shrink-0 items-center justify-center">
-                <CircleQuestion className="size-4" />
-              </div>
-              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-                <span className="truncate">Support</span>
-              </div>
-            </SidebarRowSurface>
-          </div>
-        </div>
+        <SidebarPrimaryNavigation
+          homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
+          pluginsActive={isOnPlugins}
+          automationsActive={isOnAutomations}
+          supportActive={supportOpen}
+          onGoHome={actions.handleGoHome}
+          onGoPlugins={actions.handleGoPlugins}
+          onGoAutomations={actions.handleGoAutomations}
+          onOpenSupport={() => setSupportOpen(true)}
+        />
 
         <div className="relative overflow-hidden flex-1 w-full min-w-0 min-h-0">
           <AutoHideScrollArea
@@ -248,78 +178,17 @@ export function MainSidebar() {
               onRetryCleanup={actions.handleRetryWorkspaceCleanup}
             />
 
-            {/* Repositories heading — text left-aligned with the row icon column (8px row-pl inside the 8px viewport gutter). */}
-            <div className="text-foreground/50 text-base opacity-75 pl-2 pt-3 pb-1">
-              <div className="flex items-center justify-between gap-2">
-                <span>Repositories</span>
-                <div className="flex shrink-0 items-center gap-1">
-                  {allRepoKeys.length > 0 && (
-                    <SidebarActionButton
-                      onClick={handleToggleAllRepoGroups}
-                      title={allRepoGroupsCollapsed ? "Expand all repositories" : "Collapse all repositories"}
-                      variant="section"
-                    >
-                      {allRepoGroupsCollapsed ? (
-                        <ExpandAll className="size-3" />
-                      ) : (
-                        <CollapseAll className="size-3" />
-                      )}
-                    </SidebarActionButton>
-                  )}
-                  <PopoverButton
-                    trigger={
-                      <SidebarActionButton
-                        title="Filter workspaces"
-                        active={filtersActive}
-                        variant="section"
-                      >
-                        <Filter className="size-3" />
-                      </SidebarActionButton>
-                    }
-                  >
-                    {() => (
-                      <>
-                        <PopoverMenuItem
-                          onClick={() => {
-                            setShowArchived(!showArchived);
-                          }}
-                          variant="sidebar"
-                          icon={<Archive className="size-3.5 text-muted-foreground" />}
-                          label="Archived workspaces"
-                          trailing={showArchived ? <Check className="size-3.5 text-foreground/60" /> : null}
-                        />
-                        <div className="my-1 h-px bg-border" />
-                        {SIDEBAR_WORKSPACE_TYPE_OPTIONS.map(({ label, variant }) => {
-                          const selected = workspaceTypes.includes(variant);
-                          const disabled = selected && workspaceTypes.length === 1;
-
-                          return (
-                            <PopoverMenuItem
-                              key={variant}
-                              onClick={() => {
-                                toggleSidebarWorkspaceType(variant);
-                              }}
-                              disabled={disabled}
-                              variant="sidebar"
-                              icon={<SidebarWorkspaceVariantIcon variant={variant} className="size-3.5 text-muted-foreground" />}
-                              label={label}
-                              trailing={selected ? <Check className="size-3.5 text-foreground/60" /> : null}
-                            />
-                          );
-                        })}
-                      </>
-                    )}
-                  </PopoverButton>
-                  <SidebarActionButton
-                    onClick={actions.handleAddRepo}
-                    title="Add repository"
-                    variant="section"
-                  >
-                    <FolderPlusFilled className="size-3" />
-                  </SidebarActionButton>
-                </div>
-              </div>
-            </div>
+            <SidebarRepositoriesHeader
+              hasRepoGroups={allRepoKeys.length > 0}
+              allRepoGroupsCollapsed={allRepoGroupsCollapsed}
+              filtersActive={filtersActive}
+              showArchived={showArchived}
+              workspaceTypes={workspaceTypes}
+              onToggleAllRepoGroups={handleToggleAllRepoGroups}
+              onToggleShowArchived={() => setShowArchived(!showArchived)}
+              onToggleWorkspaceType={toggleSidebarWorkspaceType}
+              onAddRepo={actions.handleAddRepo}
+            />
 
             <SidebarWorkspaceContent
               emptyState={emptyState}

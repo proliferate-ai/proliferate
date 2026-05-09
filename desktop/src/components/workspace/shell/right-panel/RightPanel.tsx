@@ -9,8 +9,7 @@ import {
 } from "react";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useNavigate } from "react-router-dom";
-import { RightPanelContent } from "@/components/workspace/shell/right-panel/RightPanelContent";
-import { RightPanelHeaderTabs } from "@/components/workspace/shell/right-panel/RightPanelHeaderTabs";
+import { RightPanelFrame } from "@/components/workspace/shell/right-panel/RightPanelFrame";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useRightPanelHeaderEntries } from "@/hooks/workspaces/derived/use-right-panel-header-entries";
 import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-root-focus";
@@ -430,63 +429,44 @@ export const RightPanel = memo(function RightPanel({
   const shouldMountBrowserPanel = browserTabs.length > 0;
 
   return (
-    <div
-      ref={rootRef}
-      data-right-panel-root="true"
-      data-group="true"
-      tabIndex={-1}
+    <RightPanelFrame
+      rootRef={rootRef}
       onPointerDownCapture={handleRootPointerDownCapture}
-      className="relative flex h-full flex-col overflow-hidden rounded-tl-lg border-l border-t border-sidebar-border bg-sidebar-background outline-none"
-    >
-      <RightPanelHeaderTabs
-        entries={headerEntries}
-        activeEntryKey={state.activeEntryKey}
-        unreadByTerminal={unreadByTerminal}
-        isWorkspaceReady={isWorkspaceReady}
-        canCreateBrowserTab={canCreateBrowserTab}
-        newTabMenuRequestToken={newTabMenuRequest.token}
-        newTabMenuDefaultKind={newTabMenuRequest.defaultKind}
-        onActivateTool={activateTool}
-        onSelectTerminal={selectTerminal}
-        onSelectBrowser={selectBrowser}
-        onCloseTerminal={handleCloseTerminal}
-        onCloseBrowser={handleCloseBrowser}
-        onRenameTerminal={handleRenameTerminal}
-        onCreateTerminal={() => {
-          void createTerminal({ activate: true });
-        }}
-        onCreateBrowser={handleCreateBrowser}
-        onReorderHeaderEntry={handleReorderHeaderEntry}
-        onOpenRepoSettings={() => navigate(repoSettingsHref)}
-      />
-
-      <RightPanelContent
-        workspaceId={workspaceId}
-        activeEntryKey={state.activeEntryKey}
-        activeTool={activeTool}
-        activeBrowserId={activeBrowserId}
-        activeTerminalId={activeTerminalId}
-        browserTabs={browserTabs}
-        orderedTerminals={orderedTerminals}
-        shouldRenderContent={shouldRenderContent}
-        shouldMountBrowserPanel={shouldMountBrowserPanel}
-        shouldMountTerminalPanel={shouldMountTerminalPanel}
-        isOpen={isOpen}
-        isWorkspaceReady={isWorkspaceReady}
-        canConnectTerminals={terminalsQuery.isSuccess}
-        isLoadingTerminals={terminalsQuery.isLoading && !terminalsQuery.data}
-        terminalListErrorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}
-        terminalFocusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
-        unreadByTerminal={unreadByTerminal}
-        nativeOverlaysHidden={nativeOverlaysHidden}
-        onUpdateBrowserUrl={handleUpdateBrowserUrl}
-        onNewTerminal={() => {
-          void createTerminal({ activate: true });
-        }}
-        onSelectTerminal={selectTerminal}
-        onCloseTerminal={handleCloseTerminal}
-        onRenameTerminal={handleRenameTerminal}
-      />
-    </div>
+      workspaceId={workspaceId}
+      activeEntryKey={state.activeEntryKey}
+      activeTool={activeTool}
+      activeBrowserId={activeBrowserId}
+      activeTerminalId={activeTerminalId}
+      entries={headerEntries}
+      unreadByTerminal={unreadByTerminal}
+      browserTabs={browserTabs}
+      orderedTerminals={orderedTerminals}
+      isOpen={isOpen}
+      isWorkspaceReady={isWorkspaceReady}
+      shouldRenderContent={shouldRenderContent}
+      shouldMountBrowserPanel={shouldMountBrowserPanel}
+      shouldMountTerminalPanel={shouldMountTerminalPanel}
+      canCreateBrowserTab={canCreateBrowserTab}
+      canConnectTerminals={terminalsQuery.isSuccess}
+      isLoadingTerminals={terminalsQuery.isLoading && !terminalsQuery.data}
+      terminalListErrorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}
+      terminalFocusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
+      newTabMenuRequestToken={newTabMenuRequest.token}
+      newTabMenuDefaultKind={newTabMenuRequest.defaultKind}
+      nativeOverlaysHidden={nativeOverlaysHidden}
+      onActivateTool={activateTool}
+      onSelectTerminal={selectTerminal}
+      onSelectBrowser={selectBrowser}
+      onCloseTerminal={handleCloseTerminal}
+      onCloseBrowser={handleCloseBrowser}
+      onRenameTerminal={handleRenameTerminal}
+      onCreateTerminal={() => {
+        void createTerminal({ activate: true });
+      }}
+      onCreateBrowser={handleCreateBrowser}
+      onOpenRepoSettings={() => navigate(repoSettingsHref)}
+      onReorderHeaderEntry={handleReorderHeaderEntry}
+      onUpdateBrowserUrl={handleUpdateBrowserUrl}
+    />
   );
 });
