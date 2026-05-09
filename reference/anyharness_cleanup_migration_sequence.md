@@ -1,7 +1,8 @@
 # AnyHarness Cleanup Migration Sequence
 
 Status: current migration tracker after the completed AnyHarness cleanup
-phases and the Phase 10a docs reality pass.
+phases and the Phase 10a docs, ratchet, focused-test, and boundary-rails
+passes.
 
 Authoritative docs:
 
@@ -18,7 +19,7 @@ planned or manual cleanup only.
 
 | Phase | Status | Reality |
 | --- | --- | --- |
-| 0 | Complete | Repo-shape rails and allowlist discipline were established before the structural passes. |
+| 0 | Complete | Repo-shape rails and allowlist discipline are established, including CI-enforced AnyHarness boundary checks. |
 | 1 | Complete | Local file/git/hosting/process capabilities are under `adapters/**`; shared MCP helpers are under `integrations/mcp/**`; provider CLI mechanics are under `integrations/agent_cli/**`. |
 | 2 | Complete | Product-domain cleanup landed for the completed lanes. Agents, cowork, reviews, plans, and mobility live under `domains/**`. Core sessions, workspaces, repo roots, and terminals remain transitional until Phase 9. |
 | 3 | Complete | Product MCP servers follow feature-owned `mcp_server/**` modules and use shared `integrations/mcp/**` helpers where common protocol/auth scaffolding has landed. |
@@ -28,8 +29,8 @@ planned or manual cleanup only.
 | 7 | Complete | `SessionEventSink` is split under `acp/event_sink/**`, while the final `live/sessions/event_sink/**` topology remains future work. |
 | 8 | Deferred/manual | The `SessionActor` loop rewrite remains deferred until a dedicated actor spec exists. Current actor implementation stays in `acp/session_actor.rs`. |
 | 9 | Remaining | Final topology/naming moves remain: live session manager/client/broker naming, `sessions/**` to `domains/sessions/**`, `workspaces/**` to `domains/workspaces/**`, terminal live topology, and related import cleanup. |
-| 10 | Remaining | Ratchet tightening, allowlist shrinkage, and additional tests remain after the implementation phases settle. |
-| 10a | Complete | Docs describe completed Phases 1-7, while keeping Phase 8 actor work, Phase 9 final topology, and Phase 10 ratchet tightening deferred. |
+| 10 | Remaining | Further ratchet tightening, allowlist shrinkage, and additional tests remain after the implementation phases settle. |
+| 10a | Complete | Docs describe completed Phases 1-7, old-path ratchets block retired split files, focused invariant tests landed, and boundary rails run in CI. Phase 8 actor work and Phase 9 final topology stay deferred/manual. |
 
 ## North Star
 
@@ -294,14 +295,21 @@ Acceptance:
 
 Status: remaining.
 
+Already landed through Phase 10a:
+
+- Old-path ratchets block retired flat files for completed session/runtime
+  splits from being reintroduced.
+- Focused invariant tests cover session MCP assembly behavior and event-sink
+  publish/normalization behavior.
+- AnyHarness boundary rails run in CI with count-based allowlist discipline for
+  current transitional debt.
+
 Work:
 
-- Shrink boundary allowlists.
+- Shrink boundary allowlists beyond the current seeded counts.
 - Shrink file-size allowlists.
 - Add or strengthen tests around:
-  - session MCP assembly
   - prompt input to ACP blocks
-  - event sink publish paths
   - actor prompt queue invariants
   - product MCP endpoint compatibility
 - Update docs when implementation differs from the initial target.
@@ -310,6 +318,29 @@ Acceptance:
 
 - New target-shape code is CI-enforced.
 - Remaining exceptions are documented with owner and reason.
+
+## Phase 10a: Docs Reality Lane
+
+Status: complete.
+
+Landed reality:
+
+- Authoritative docs and the migration reference now describe the current
+  split runtime shape: session MCP bindings, session store, session runtime,
+  and ACP event sink are split, while their public caller-facing types remain
+  stable.
+- The old-path ratchet is wired into the repo-shape CI lane for completed
+  splits, so retired flat implementation files stay retired.
+- Focused invariant coverage landed for session MCP assembly and event-sink
+  behavior.
+- AnyHarness boundary rails and the seeded allowlist landed in CI; new
+  violations, increased counts, and stale allowlist rows fail the check.
+
+Still deferred:
+
+- `SessionActor` spec and loop rewrite.
+- Final Phase 9 topology and naming moves.
+- Further Phase 10 allowlist shrinkage and expanded focused coverage.
 
 ## Explicitly Leave For Later
 
