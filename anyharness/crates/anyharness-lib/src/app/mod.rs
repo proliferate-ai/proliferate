@@ -35,7 +35,7 @@ use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
 use crate::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::sessions::subagents::mcp_auth::SubagentMcpAuth;
+use crate::sessions::subagents::mcp_server::auth::SubagentMcpAuth;
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
 use crate::sessions::workspace_naming::hooks::WorkspaceNamingSessionHooks;
