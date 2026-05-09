@@ -24,7 +24,7 @@ import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,
 } from "@/hooks/sessions/session-runtime-pending-config";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 
 export function applyBatchedStreamSideEffects(input: {

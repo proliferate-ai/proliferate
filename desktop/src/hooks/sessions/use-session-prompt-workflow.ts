@@ -8,9 +8,9 @@ import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
-  type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
-import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/infra/measurement/prompt-submit-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   getSessionRecord,

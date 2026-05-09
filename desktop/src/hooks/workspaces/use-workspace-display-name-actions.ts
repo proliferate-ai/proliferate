@@ -19,11 +19,11 @@ import {
 } from "@/hooks/workspaces/lifecycle/cloud-display-name-backfill-suppression";
 import {
   finishMeasurementOperation,
-  getMeasurementRequestOptions,
-  type MeasurementOperationId,
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */

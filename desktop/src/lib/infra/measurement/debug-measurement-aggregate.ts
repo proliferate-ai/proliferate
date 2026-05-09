@@ -1,10 +1,10 @@
 import type {
   DurationAggregate,
-  MeasurementAggregateSnapshot,
-  MeasurementMetricInput,
   MeasurementOperationAggregate,
   MeasurementOperationRecord,
-} from "./debug-measurement-types";
+} from "./debug-measurement-registry-types";
+import type { MeasurementMetricInput } from "./debug-measurement-metric-types";
+import type { MeasurementAggregateSnapshot } from "./debug-measurement-report-types";
 import { now, round } from "./debug-measurement-utils";
 
 export function aggregateSnapshot(a: MeasurementOperationAggregate): MeasurementAggregateSnapshot {
@@ -171,7 +171,8 @@ function applyStreamBreakdown(
   aggregate: MeasurementOperationAggregate,
   input: Extract<MeasurementMetricInput, { type: "stream" }>,
 ): void {
-  const breakdown = getOrCreate(aggregate.streamBreakdowns, input.phase, () => ({
+  const breakdown = getOrCreate(aggregate.streamBreakdowns, `${input.category}:${input.phase}`, () => ({
+    category: input.category,
     phase: input.phase,
     count: 0,
     totalMs: 0,

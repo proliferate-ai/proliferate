@@ -13,7 +13,7 @@ import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt
 import {
   sessionSlotBelongsToWorkspace,
 } from "@/lib/domain/sessions/activity";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
 import {

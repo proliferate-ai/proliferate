@@ -24,6 +24,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
@@ -166,6 +167,7 @@ export function useSessionSelectionWorkflowActions({
             ],
             linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
             maxDurationMs: 2500,
+            summaryBudget: HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
           });
         const gateState = useSessionSelectionStore.getState();
         const previousHotOperationId = gateState.hotPaintGate?.operationId ?? null;

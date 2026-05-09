@@ -22,12 +22,12 @@ import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
   finishMeasurementOperation,
-  getMeasurementRequestOptions,
-  hashMeasurementScope,
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
 
 const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;

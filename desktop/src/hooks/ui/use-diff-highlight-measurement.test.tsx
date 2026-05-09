@@ -4,10 +4,10 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   finishMeasurementOperation,
-  getDebugMeasurementDump,
   resetDebugMeasurementForTest,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
 import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
 
 const SECRET_PATCH = [

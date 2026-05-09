@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
-import {
-  isDebugMeasurementEnabled,
-  recordMeasurementDiagnostic,
-} from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
+import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 
 type DebugValueMap = Record<string, unknown>;
 

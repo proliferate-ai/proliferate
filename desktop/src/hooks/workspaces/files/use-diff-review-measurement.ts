@@ -8,14 +8,16 @@ import type { AnyHarnessTimingCategory } from "@anyharness/sdk";
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
-  getMeasurementRequestOptions,
-  hashMeasurementScope,
-  isDebugMeasurementEnabled,
   onMeasurementOperationFinish,
   recordMeasurementMetric,
   startMeasurementOperation,
-  type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import {
+  hashMeasurementScope,
+  isDebugMeasurementEnabled,
+} from "@/lib/infra/measurement/debug-measurement-env";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 const DIFF_REVIEW_IDLE_TIMEOUT_MS = 1_000;
 const DIFF_REVIEW_MAX_DURATION_MS = 6_000;
