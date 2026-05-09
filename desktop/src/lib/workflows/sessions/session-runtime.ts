@@ -47,7 +47,8 @@ import {
   requireMaterializedSessionId,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionRelationship, SessionRuntimeRecord } from "@/stores/sessions/session-types";
+import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
+import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import {
   closeSessionStreamHandle,
   flushAllSessionStreamHandles,

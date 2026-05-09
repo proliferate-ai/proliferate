@@ -6,10 +6,8 @@ import {
   type SessionViewState,
 } from "@/lib/domain/sessions/activity";
 import type { ChatVisibilityCandidate } from "@/lib/domain/workspaces/tabs/visibility";
-import {
-  activitySnapshotFromDirectoryEntry,
-} from "@/stores/sessions/session-directory-store";
-import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
+import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
 
 export type KnownHeaderSession =
   | { kind: "slot"; slot: SessionDirectoryEntry; session?: Session }

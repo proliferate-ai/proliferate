@@ -40,7 +40,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/stores/sessions/session-types";
+} from "@/lib/domain/sessions/directory/relationship";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 
 interface UseSessionSelectionWorkflowActionsOptions {

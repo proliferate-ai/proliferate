@@ -9,22 +9,18 @@ import {
 } from "@anyharness/sdk";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
+import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
 import {
-  activityFromTranscript,
   createDirectoryEntry,
-  useSessionDirectoryStore,
-} from "@/stores/sessions/session-directory-store";
-import {
-  useSessionTranscriptStore,
-} from "@/stores/sessions/session-transcript-store";
+  DEFAULT_SESSION_ACTION_CAPABILITIES,
+  type SessionDirectoryEntry,
+} from "@/lib/domain/sessions/directory/directory-entry";
+import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import type {
-  SessionDirectoryEntry,
-  SessionRelationship,
   SessionRuntimeRecord,
   SessionTranscriptEntry,
-} from "@/stores/sessions/session-types";
-import {
-  DEFAULT_SESSION_ACTION_CAPABILITIES,
 } from "@/stores/sessions/session-types";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 

@@ -32,7 +32,7 @@ import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
+import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 

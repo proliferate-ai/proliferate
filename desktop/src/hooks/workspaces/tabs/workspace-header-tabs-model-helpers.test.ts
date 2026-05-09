@@ -6,7 +6,7 @@ import {
   getKnownSessionId,
   getKnownSessionViewState,
 } from "@/hooks/workspaces/tabs/workspace-header-tabs-model-helpers";
-import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
+import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
 
 function idleSlot(canFork: boolean): SessionDirectoryEntry {
   return {
