@@ -139,6 +139,83 @@ async def test_ensure_workspace_runtime_ready_rotates_to_fresh_endpoint_without_
 
 
 @pytest.mark.asyncio
+async def test_ensure_environment_runtime_ready_rotates_url_without_generation_increment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    environment = SimpleNamespace(
+        id=uuid4(),
+        active_sandbox_id=uuid4(),
+        runtime_url="https://expired.invalid",
+    )
+    sandbox_record = SimpleNamespace(
+        provider="e2b",
+        external_sandbox_id="sandbox-123",
+    )
+    saved: list[dict[str, object]] = []
+
+    class _Provider:
+        async def connect_running_sandbox(
+            self,
+            sandbox_id: str,
+            *,
+            timeout_seconds: int | None = None,
+        ) -> object:
+            assert sandbox_id == "sandbox-123"
+            assert timeout_seconds is None
+            return object()
+
+        async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
+            return ProviderSandboxState(
+                external_sandbox_id=sandbox_id,
+                state="running",
+                started_at=None,
+                end_at=None,
+                observed_at=datetime.now(UTC),
+                metadata={},
+            )
+
+        async def resolve_runtime_endpoint(self, _sandbox: object) -> SimpleNamespace:
+            return SimpleNamespace(runtime_url="https://fresh.invalid")
+
+        async def resolve_runtime_context(self, _sandbox: object) -> SimpleNamespace:
+            raise AssertionError("URL rotation should not relaunch the runtime")
+
+    async def _wait(runtime_url: str, **_kwargs: object) -> None:
+        if runtime_url == environment.runtime_url:
+            raise CloudRuntimeReconnectError("expired")
+
+    async def _verify(runtime_url: str, access_token: str, **_kwargs: object) -> None:
+        assert runtime_url == "https://fresh.invalid"
+        assert access_token == "runtime-token"
+
+    async def _load_cloud_sandbox_by_id(_sandbox_id: object) -> object:
+        return sandbox_record
+
+    async def _save_runtime_environment_state(_environment_id: object, **kwargs: object) -> None:
+        saved.append(kwargs)
+
+    monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
+    monkeypatch.setattr(ensure_running, "verify_runtime_auth_enforced", _verify)
+    monkeypatch.setattr(ensure_running, "load_cloud_sandbox_by_id", _load_cloud_sandbox_by_id)
+    monkeypatch.setattr(ensure_running, "get_sandbox_provider", lambda _kind: _Provider())
+    monkeypatch.setattr(
+        ensure_running,
+        "save_runtime_environment_state",
+        _save_runtime_environment_state,
+    )
+
+    runtime_url = await ensure_running.ensure_environment_runtime_ready(
+        environment,
+        workspace_id=uuid4(),
+        allow_launcher_restart=True,
+        access_token="runtime-token",
+    )
+
+    assert runtime_url == "https://fresh.invalid"
+    assert saved == [{"runtime_url": "https://fresh.invalid"}]
+
+
+@pytest.mark.asyncio
 async def test_ensure_workspace_runtime_ready_resumes_paused_sandbox(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

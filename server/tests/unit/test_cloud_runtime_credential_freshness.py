@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -304,3 +305,226 @@ async def test_file_only_apply_reconciles_remote_agents(monkeypatch: pytest.Monk
     assert reconciles == [
         ("https://runtime.invalid", "runtime-token", ("codex",)),
     ]
+
+
+@pytest.mark.asyncio
+async def test_process_refresh_refuses_restart_when_runtime_has_live_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    env_record = _credential(
+        user_id,
+        provider="claude",
+        auth_mode="env",
+        payload={
+            "provider": "claude",
+            "authMode": "env",
+            "envVars": {"ANTHROPIC_API_KEY": "key"},
+        },
+    )
+    revisions = build_credential_revision_state([env_record])
+    environment = _environment(user_id)
+    environment.runtime_url = "https://runtime.invalid"
+    environment.runtime_token_ciphertext = encrypt_text("runtime-token")
+    environment.anyharness_data_key_ciphertext = encrypt_text("data-key")
+    environment.credential_files_applied_revision = revisions.files_revision
+    environment.credential_process_applied_revision = "credential-process:v1:old"
+
+    @asynccontextmanager
+    async def _lock(_runtime_environment_id):
+        yield
+
+    async def _load_environment(_runtime_environment_id):
+        return environment
+
+    async def _load_credentials(_user_id):
+        return [env_record]
+
+    async def _connect_runtime_sandbox(_environment):
+        return (
+            SimpleNamespace(),
+            object(),
+            SandboxRuntimeContext(
+                home_dir="/home/user",
+                runtime_workdir="/home/user/workspace",
+                runtime_binary_path="/home/user/anyharness",
+                base_env={},
+            ),
+        )
+
+    async def _load_runtime_credentials_context(_environment):
+        return "runtime-token", "data-key", {}
+
+    async def _runtime_has_live_sessions(*_args, **_kwargs):
+        return True
+
+    async def _unexpected_relaunch(*_args, **_kwargs):
+        raise AssertionError("live sessions must block process credential restart")
+
+    monkeypatch.setattr(
+        credential_freshness,
+        "runtime_environment_credential_apply_lock",
+        _lock,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "load_runtime_environment_by_id",
+        _load_environment,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "load_cloud_credentials_for_user",
+        _load_credentials,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "_connect_runtime_sandbox",
+        _connect_runtime_sandbox,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "_load_runtime_credentials_context",
+        _load_runtime_credentials_context,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "_runtime_has_live_sessions",
+        _runtime_has_live_sessions,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "_relaunch_runtime_with_credentials",
+        _unexpected_relaunch,
+    )
+
+    snapshot = await ensure_runtime_environment_credentials_current(
+        environment.id,
+        workspace_id=uuid4(),
+        allow_process_restart=True,
+    )
+
+    assert snapshot.status == "restart_required"
+    assert snapshot.requires_restart is True
+
+
+@pytest.mark.asyncio
+async def test_credential_apply_is_serialized_per_runtime_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    file_record = _credential(
+        user_id,
+        provider="codex",
+        auth_mode="file",
+        payload={
+            "provider": "codex",
+            "authMode": "file",
+            "files": {".codex/auth.json": '{"access_token":"opaque"}'},
+        },
+    )
+    revisions = build_credential_revision_state([file_record])
+    environment = _environment(user_id)
+    environment.runtime_url = "https://runtime.invalid"
+    environment.runtime_token_ciphertext = encrypt_text("runtime-token")
+    environment.credential_files_applied_revision = "credential-files:v1:old"
+    environment.credential_process_applied_revision = revisions.process_revision
+    apply_lock = asyncio.Lock()
+    active_applies = 0
+    max_active_applies = 0
+    writes = 0
+
+    @asynccontextmanager
+    async def _lock(_runtime_environment_id):
+        nonlocal active_applies, max_active_applies
+        async with apply_lock:
+            active_applies += 1
+            max_active_applies = max(max_active_applies, active_applies)
+            try:
+                yield
+            finally:
+                active_applies -= 1
+
+    async def _load_environment(_runtime_environment_id):
+        return environment
+
+    async def _load_credentials(_user_id):
+        return [file_record]
+
+    async def _connect_runtime_sandbox(_environment):
+        return (
+            SimpleNamespace(),
+            object(),
+            SandboxRuntimeContext(
+                home_dir="/home/user",
+                runtime_workdir="/home/user/workspace",
+                runtime_binary_path="/home/user/anyharness",
+                base_env={},
+            ),
+        )
+
+    async def _write_credential_files(*_args, **_kwargs):
+        nonlocal writes
+        writes += 1
+        await asyncio.sleep(0)
+
+    async def _save_runtime_environment_state(_environment_id, **kwargs):
+        for key, value in kwargs.items():
+            setattr(environment, key, value)
+        return environment
+
+    async def _reconcile_remote_agents(*_args, **_kwargs):
+        return ["codex"]
+
+    monkeypatch.setattr(
+        credential_freshness,
+        "runtime_environment_credential_apply_lock",
+        _lock,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "load_runtime_environment_by_id",
+        _load_environment,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "load_cloud_credentials_for_user",
+        _load_credentials,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "_connect_runtime_sandbox",
+        _connect_runtime_sandbox,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "write_credential_files",
+        _write_credential_files,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "save_runtime_environment_state",
+        _save_runtime_environment_state,
+    )
+    monkeypatch.setattr(
+        credential_freshness,
+        "reconcile_remote_agents",
+        _reconcile_remote_agents,
+    )
+
+    first, second = await asyncio.gather(
+        ensure_runtime_environment_credentials_current(
+            environment.id,
+            workspace_id=uuid4(),
+            allow_process_restart=True,
+        ),
+        ensure_runtime_environment_credentials_current(
+            environment.id,
+            workspace_id=uuid4(),
+            allow_process_restart=True,
+        ),
+    )
+
+    assert first.status == "current"
+    assert second.status == "current"
+    assert writes == 1
+    assert max_active_applies == 1
