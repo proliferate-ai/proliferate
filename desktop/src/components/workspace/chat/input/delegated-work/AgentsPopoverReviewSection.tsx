@@ -2,7 +2,7 @@ import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { RefreshCw, StopSquare, X } from "@/components/ui/icons";
 import { FileText } from "@/components/ui/file-icons";
-import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/facade/use-delegated-work-composer";
 import {
   latestReviewRound,
   reviewAssignmentStatusLabel,

@@ -9,7 +9,7 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useActiveSessionLaunchState } from "./derived/use-active-chat-session-selectors";
+import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
