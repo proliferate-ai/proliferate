@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { useUpdaterStore, loadLastCheckedAt } from "@/stores/updater/updater-store";
-import { persistValue } from "@/lib/infra/persistence/preferences-persistence";
+import { useUpdaterStore } from "@/stores/updater/updater-store";
+import {
+  persistValue,
+  readPersistedValue,
+} from "@/lib/infra/persistence/preferences-persistence";
 import type { UpdaterPhase } from "@/stores/updater/updater-store";
 import {
   checkForUpdate,
@@ -17,6 +20,7 @@ import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const CHECK_INTERVAL_MS = 21_600_000; // 6 hours
 const UPDATER_METADATA_KEY = "updater_metadata";
+const LEGACY_LAST_CHECKED_KEY = "updater_lastCheckedAt";
 const DEV_UPDATER_MOCK_KEY = "proliferate.dev.updaterMock";
 const DEV_UPDATER_MOCK_EVENT = "proliferate:dev-updater-mock";
 const DEV_UPDATER_MOCK_VERSION = "0.1.3";
@@ -200,6 +204,16 @@ function startDevUpdaterMockDownload(): void {
 
 async function persistUpdaterMetadata(metadata: UpdaterMetadata): Promise<void> {
   await persistValue(UPDATER_METADATA_KEY, metadata);
+}
+
+async function loadLastCheckedAt(): Promise<string | null> {
+  const metadata = await readPersistedValue<{ lastCheckedAt?: string | null }>(
+    UPDATER_METADATA_KEY,
+  );
+  if (metadata?.lastCheckedAt) {
+    return metadata.lastCheckedAt;
+  }
+  return (await readPersistedValue<string>(LEGACY_LAST_CHECKED_KEY)) ?? null;
 }
 
 async function runUpdateCheck(): Promise<void> {

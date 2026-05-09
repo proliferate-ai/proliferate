@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { readPersistedValue } from "@/lib/infra/persistence/preferences-persistence";
 
 export type UpdaterPhase =
   | "idle"
@@ -75,11 +74,3 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
       _updateHandle: null,
     }),
 }));
-
-export async function loadLastCheckedAt(): Promise<string | null> {
-  const metadata = await readPersistedValue<{ lastCheckedAt?: string | null }>("updater_metadata");
-  if (metadata?.lastCheckedAt) {
-    return metadata.lastCheckedAt;
-  }
-  return (await readPersistedValue<string>("updater_lastCheckedAt")) ?? null;
-}
