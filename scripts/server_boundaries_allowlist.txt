@@ -38,9 +38,9 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_runtime_environment
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_runs.py 5 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 26 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 2 transitional invitation create/rotate commit before email delivery
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 2 intentional create/rotate transaction commits before external email delivery
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 4 transitional wrappers used by deferred billing/cloud callers
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 3 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 1 deferred runtime/mobility/worker callers still use isolated OAuth-account user load
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/anonymous_telemetry.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claims.py 1 transitional store imports DB session factory
@@ -54,6 +54,6 @@ STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_runtime_environme
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspace_setup_runs.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspaces.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organization_invitations.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organization_invitations.py 1 intentional create/rotate transaction commits before external email delivery
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organizations.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 1 deferred runtime/mobility/worker callers still use isolated OAuth-account user load

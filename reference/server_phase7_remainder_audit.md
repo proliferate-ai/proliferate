@@ -47,8 +47,8 @@ missed cleanup from systems that need Phase 8 design before implementation.
 | `server/proliferate/db/store/cloud_mcp/oauth_clients.py` | store opens session | Intentional isolated wrapper | Same materialization/OAuth refresh boundary. |
 | `server/proliferate/db/store/cloud_repo_config.py` | store opens session | Intentional isolated wrapper | Remaining reads serve deferred runtime/workspace flows. |
 | `server/proliferate/db/store/cloud_worktree_policy.py` | store opens session | Intentional isolated wrapper | Remaining policy read serves deferred runtime policy sync. |
-| `server/proliferate/db/store/organization_invitations.py` | store opens session | Small follow-up | Convert create/rotate paths only after pinning transaction timing around email delivery. |
-| `server/proliferate/db/store/users.py` | store opens session | Small follow-up | Thread request/session dependencies through auth/desktop user callers. |
+| `server/proliferate/db/store/organization_invitations.py` | store opens session | Intentional isolated wrapper | Create/rotate must commit the invitation before external email delivery; replace only with an explicit delivery checkpoint or outbox design. |
+| `server/proliferate/db/store/users.py` | store opens session | Intentional isolated wrapper | Unused wrappers are removed; the remaining OAuth-account user load serves deferred runtime, mobility, and worker callers. |
 
 ## File-Size Debt
 
@@ -80,7 +80,6 @@ These are not blockers for Phase 7 completion. Assign them only with narrow
 path ownership and behavior-preserving goals.
 
 - `server/proliferate/server/organizations/service.py`
-- `server/proliferate/db/store/organization_invitations.py`
 - `server/proliferate/auth/desktop/service.py`
 - `server/proliferate/integrations/sandbox/daytona.py`
 - `server/proliferate/integrations/sandbox/e2b.py`
@@ -105,6 +104,8 @@ only when the deferred caller owning the transaction boundary migrates.
 - `server/proliferate/db/store/cloud_mcp/oauth_clients.py`
 - `server/proliferate/db/store/cloud_worktree_policy.py`
 - `server/proliferate/db/store/organizations.py`
+- `server/proliferate/db/store/organization_invitations.py`
+- `server/proliferate/db/store/users.py`
 
 ## Phase 7 Result
 
