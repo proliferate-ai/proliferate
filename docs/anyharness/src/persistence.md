@@ -15,7 +15,7 @@ It owns:
 - exposing the shared `Db` handle used by stores
 
 It does not own domain-specific SQL. That stays in the owning domain store such
-as `sessions/store.rs` or `workspaces/store.rs`.
+as `sessions/store/**` or `workspaces/store.rs`.
 
 ## Core Models
 
@@ -75,12 +75,12 @@ Persistence should be thought of as a two-layer boundary:
 
 - `persistence/**`
   - DB bootstrap and shared DB access
-- domain `store.rs`
+- domain `store.rs` or `store/**`
   - actual SQL for that domain
 
 That means:
 
-- `sessions/store.rs` owns session/event/config SQL
+- `sessions/store/**` owns session/event/config SQL
 - `workspaces/store.rs` owns workspace SQL
 - `persistence/**` does not become a giant shared query bucket
 

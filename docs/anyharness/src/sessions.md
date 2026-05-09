@@ -4,14 +4,20 @@
 validation, event persistence, live-config persistence, and the runtime-level
 orchestration that bridges durable sessions into live ACP execution.
 
+This is a legacy subsystem doc updated for current implementation paths.
+Session MCP binding assembly lives under `sessions/mcp_bindings/**`, and the
+session store is split under `sessions/store/**`. `sessions/runtime.rs` remains
+the current runtime implementation until the runtime split lands.
+
 ## Core Concepts
 
 The sessions area has two layers:
 
 - durable session domain
   - `anyharness/crates/anyharness-lib/src/sessions/model.rs`
-  - `anyharness/crates/anyharness-lib/src/sessions/store.rs`
+  - `anyharness/crates/anyharness-lib/src/sessions/store/**`
   - `anyharness/crates/anyharness-lib/src/sessions/service.rs`
+  - `anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/**`
   - `anyharness/crates/anyharness-lib/src/sessions/links/**`
 - live orchestration bridge
   - `anyharness/crates/anyharness-lib/src/sessions/runtime/**`
@@ -336,6 +342,9 @@ SSE replay and history endpoints read from these durable records first before
 merging live events.
 
 ## Runtime Flow
+
+`sessions/runtime.rs` is still the current implementation on this base. Treat
+a split `sessions/runtime/**` layout as in progress/planned, not completed.
 
 ### Create and Start
 

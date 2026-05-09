@@ -2,6 +2,10 @@
 
 `anyharness-lib/src/acp/**` owns live ACP-backed session execution.
 
+This is a legacy subsystem doc updated for current implementation paths. The
+event sink is already split under `acp/event_sink/**`; the actor remains in
+`acp/session_actor.rs` and its rewrite is deferred/manual.
+
 ## Core Concepts
 
 The ACP runtime starts after the session domain has already decided that a
@@ -92,7 +96,7 @@ It does not own the actor loop. It translates ACP protocol callbacks into:
 - internal notification messages
 - normalized runtime events through the event sink
 
-### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/acp/event_sink.rs`)
+### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/acp/event_sink/**`)
 
 `SessionEventSink` is the canonical normalization layer from ACP updates into
 AnyHarness `SessionEventEnvelope`.

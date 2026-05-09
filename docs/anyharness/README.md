@@ -284,9 +284,9 @@ which guide to read and where the code belongs.
 | Git status/diff/branch operations and git command parsing | `anyharness-lib/src/adapters/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal/PTTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
-| MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp.rs` | `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
+| MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp_bindings/**` | current `sessions/mcp_bindings/**`; final `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
 | Product MCP tool servers for cowork, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
-| Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | scattered MCP helpers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
+| Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [src/cowork-artifacts.md](src/cowork-artifacts.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
 | Latency tracing, request measurement, diagnostic ids | `api/http/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
@@ -372,19 +372,35 @@ current api/http/latency.rs -> target observability/latency.rs
 
 Known transitional issues:
 
+- Phase 1 topology moves are present: local file/git/hosting/process
+  capabilities live under `adapters/**`, shared MCP helpers live under
+  `integrations/mcp/**`, and provider CLI mechanics live under
+  `integrations/agent_cli/**`.
+- Product domain cleanup is partially present: agents, cowork, reviews, plans,
+  and mobility live under `domains/**`; sessions, workspaces, repo roots, and
+  terminals still use transitional top-level paths until the final topology
+  rename phase.
+- Session MCP assembly is split under `sessions/mcp_bindings/**`, including
+  `assembly.rs`. The final `domains/sessions/**` path is still a target.
+- `SessionRuntime` is split under `sessions/runtime/**`. The public
+  `SessionRuntime` type remains the API-facing use-case surface.
+- `SessionStore` is split under `sessions/store/**`. The public `SessionStore`
+  type remains the caller-facing store surface.
+- `SessionEventSink` is split under `acp/event_sink/**`. It has not moved to
+  final `live/sessions/event_sink/**` topology yet.
 - Some runtime/domain modules import `crate::api::http::latency`; latency
   helpers should move to `observability/`.
 - Contract request/response types leak below `api/`. Contract event payloads
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
-- Core session files are too large and mix multiple roles:
-  `acp/session_actor.rs`, `acp/event_sink.rs`, and `sessions/store.rs`.
-- Product MCP servers duplicate JSON-RPC helpers and capability-token logic.
-  Common protocol/auth scaffolding should move to `integrations/mcp/`; product
-  tool semantics stay with their owning domain.
-- Agent/provider CLI mechanics are mixed with agent catalog/readiness logic.
-  Provider-specific process/install/probe behavior should move toward
-  `integrations/agent_cli/`.
+- Core live/session cleanup still remaining is centered on
+  `acp/session_actor.rs`; the actor loop rewrite is deferred/manual.
+- Some product MCP endpoint scaffolding may still be feature-local. Common
+  protocol/auth scaffolding should use `integrations/mcp/`; product tool
+  semantics stay with their owning domain.
+- Some agent/provider CLI mechanics may still be mixed with agent
+  catalog/readiness logic. Provider-specific process/install/probe behavior
+  should move toward `integrations/agent_cli/`.
 
 Cleanup work should preserve behavior, then move code to the target owner.
 Do not leave duplicate old and new code paths after a migration.
