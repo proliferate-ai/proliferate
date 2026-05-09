@@ -177,16 +177,29 @@ async def load_active_membership(
     user_id: UUID,
 ) -> MembershipRecord | None:
     async with db_engine.async_session_factory() as db:
-        membership = (
-            await db.execute(
-                select(OrganizationMembership).where(
-                    OrganizationMembership.organization_id == organization_id,
-                    OrganizationMembership.user_id == user_id,
-                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                )
+        return await get_active_membership(
+            db,
+            organization_id=organization_id,
+            user_id=user_id,
+        )
+
+
+async def get_active_membership(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+) -> MembershipRecord | None:
+    membership = (
+        await db.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
             )
-        ).scalar_one_or_none()
-        return membership_record(membership) if membership is not None else None
+        )
+    ).scalar_one_or_none()
+    return membership_record(membership) if membership is not None else None
 
 
 async def update_organization_settings(

@@ -144,6 +144,28 @@ async def get_existing_cloud_workspace(
     ).scalar_one_or_none()
 
 
+async def update_workspace_branch(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+    branch_name: str,
+) -> CloudWorkspace:
+    workspace.git_branch = branch_name
+    workspace.updated_at = utcnow()
+    await db.flush()
+    return workspace
+
+
+async def update_workspace_display_name(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+    display_name: str | None,
+) -> CloudWorkspace:
+    workspace.display_name = display_name
+    workspace.updated_at = utcnow()
+    await db.flush()
+    return workspace
+
+
 async def create_cloud_workspace_record(
     db: AsyncSession,
     *,
@@ -759,40 +781,6 @@ async def save_workspace(
     async with db_engine.async_session_factory() as db:
         merged = await db.merge(workspace)
         return await persist_workspace_record(db, merged)
-
-
-async def save_workspace_branch_for_user(
-    *,
-    user_id: UUID,
-    workspace_id: UUID,
-    branch_name: str,
-) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        workspace = await get_cloud_workspace_for_user(db, user_id, workspace_id)
-        if workspace is None:
-            return None
-        workspace.git_branch = branch_name
-        workspace.updated_at = utcnow()
-        await db.commit()
-        await db.refresh(workspace)
-        return workspace
-
-
-async def save_workspace_display_name_for_user(
-    *,
-    user_id: UUID,
-    workspace_id: UUID,
-    display_name: str | None,
-) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        workspace = await get_cloud_workspace_for_user(db, user_id, workspace_id)
-        if workspace is None:
-            return None
-        workspace.display_name = display_name
-        workspace.updated_at = utcnow()
-        await db.commit()
-        await db.refresh(workspace)
-        return workspace
 
 
 async def reserve_and_attach_sandbox_for_workspace(
