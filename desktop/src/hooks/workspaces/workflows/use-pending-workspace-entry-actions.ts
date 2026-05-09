@@ -8,7 +8,7 @@ import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pen
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import {
   buildSettingsRepositoryEntries,
 } from "@/lib/domain/settings/repositories";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useSettingsRepositories() {

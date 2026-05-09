@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useRenameGitBranchMutation } from "@anyharness/sdk-react";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { updateCloudWorkspaceBranch } from "@/lib/access/cloud/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";

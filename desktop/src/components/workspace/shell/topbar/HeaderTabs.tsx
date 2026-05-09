@@ -29,7 +29,7 @@ import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-o
 import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
+import { useWorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 import { useHeaderTabsUrgentHighlight } from "@/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";

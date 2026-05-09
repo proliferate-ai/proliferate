@@ -22,7 +22,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-runtime-block", () => ({
+vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: vi.fn(() => null),
   }),

@@ -41,7 +41,7 @@ import type {
   SessionChildRelationship,
   SessionRelationship,
 } from "@/lib/domain/sessions/directory/relationship";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 
 interface UseSessionSelectionWorkflowActionsOptions {
   activateSession: (sessionId: string) => void;

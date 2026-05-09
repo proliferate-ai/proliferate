@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/workflows/use-dismissed-session-cleanup";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

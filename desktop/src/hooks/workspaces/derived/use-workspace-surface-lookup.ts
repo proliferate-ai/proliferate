@@ -1,6 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
 import { useCallback, useMemo } from "react";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 

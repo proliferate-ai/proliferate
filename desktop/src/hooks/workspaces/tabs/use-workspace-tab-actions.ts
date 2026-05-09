@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
+import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/tabs/use-close-active-workspace-tab";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";

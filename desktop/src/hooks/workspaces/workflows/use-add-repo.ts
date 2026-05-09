@@ -9,7 +9,7 @@ import { useWorkspaceCollectionsMutationCacheActions } from "@/hooks/workspaces/
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { ensureRuntimeReady } from "./runtime-ready";
+import { ensureRuntimeReady } from "@/hooks/workspaces/runtime-ready";
 
 function describeAddRepoFailure(error: unknown): string {
   if (error instanceof AnyHarnessError) {

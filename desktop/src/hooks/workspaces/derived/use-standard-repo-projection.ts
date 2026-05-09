@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import type { CloudWorkspaceSummary } from "@/lib/access/cloud/client";
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
-import { useWorkspaces } from "./use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [];
 const EMPTY_WORKSPACES: Workspace[] = [];

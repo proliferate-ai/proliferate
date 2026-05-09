@@ -2,7 +2,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { getFocusZone } from "@/lib/domain/focus-zone";
 import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
-import type { WorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
+import type { WorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 
 type WorkspaceContentShortcutActions = Pick<
   WorkspaceTabActions,

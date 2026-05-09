@@ -15,7 +15,7 @@ import {
   cloudCredentialsKey,
   isCloudWorkspaceConnectionQueryKey,
 } from "@/hooks/access/cloud/query-keys";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 
 async function invalidateCloudCredentialState(
   input: {

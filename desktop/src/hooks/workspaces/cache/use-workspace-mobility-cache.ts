@@ -2,7 +2,7 @@ import { anyHarnessWorkspaceQueryKeyRoots } from "@anyharness/sdk-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 
 interface ClearWorkspaceOwnerFlipCacheInput {
   logicalWorkspaceId: string;

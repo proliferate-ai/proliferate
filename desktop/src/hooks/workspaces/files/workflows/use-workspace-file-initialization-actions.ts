@@ -4,7 +4,7 @@ import {
   useAnyHarnessWorkspaceContext,
 } from "@anyharness/sdk-react";
 import { useWorkspaceFilesCache } from "@/hooks/access/anyharness/files/use-workspace-files-cache";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import type { WorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { deriveWorkspaceFileTabSeed } from "@/lib/domain/workspaces/tabs/shell-file-seed";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
