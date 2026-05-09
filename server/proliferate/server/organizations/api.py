@@ -49,8 +49,11 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-async def organization_invitation_landing(token: str) -> HTMLResponse:
-    html = await create_invitation_landing_handoff(token)
+async def organization_invitation_landing(
+    token: str,
+    db: AsyncSession = Depends(get_async_session),
+) -> HTMLResponse:
+    html = await create_invitation_landing_handoff(db, token)
     return HTMLResponse(html)
 
 
@@ -58,8 +61,9 @@ async def organization_invitation_landing(token: str) -> HTMLResponse:
 async def accept_organization_invitation_endpoint(
     body: OrganizationInvitationAcceptRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationAcceptResponse:
-    record = await accept_invitation(user, body.invite_handoff)
+    record = await accept_invitation(db, user, body.invite_handoff)
     return OrganizationInvitationAcceptResponse(
         organization=organization_with_membership_response(record),
     )
@@ -108,8 +112,9 @@ async def update_organization_endpoint(
 async def list_organization_members_endpoint(
     organization_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationMembersResponse:
-    members = await list_members(user, organization_id)
+    members = await list_members(db, user, organization_id)
     return OrganizationMembersResponse(members=[member_response(member) for member in members])
 
 
@@ -122,8 +127,10 @@ async def update_organization_membership_endpoint(
     membership_id: UUID,
     body: OrganizationMembershipUpdateRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationMembershipResponse:
     membership = await update_membership(
+        db,
         user,
         organization_id,
         membership_id,
@@ -141,8 +148,9 @@ async def remove_organization_membership_endpoint(
     organization_id: UUID,
     membership_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationMembershipResponse:
-    membership = await remove_membership(user, organization_id, membership_id)
+    membership = await remove_membership(db, user, organization_id, membership_id)
     return membership_response(membership)
 
 
@@ -150,8 +158,9 @@ async def remove_organization_membership_endpoint(
 async def list_organization_invitations_endpoint(
     organization_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationsResponse:
-    invitations = await list_invitations(user, organization_id)
+    invitations = await list_invitations(db, user, organization_id)
     return OrganizationInvitationsResponse(
         invitations=[invitation_response(invitation) for invitation in invitations],
     )
@@ -166,8 +175,10 @@ async def create_organization_invitation_endpoint(
     organization_id: UUID,
     body: OrganizationInviteRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
     result = await create_invitation(
+        db,
         user,
         organization_id,
         email=str(body.email),
@@ -184,8 +195,9 @@ async def resend_organization_invitation_endpoint(
     organization_id: UUID,
     invitation_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
-    result = await resend_invitation(user, organization_id, invitation_id)
+    result = await resend_invitation(db, user, organization_id, invitation_id)
     return invitation_response(result.invitation)
 
 
@@ -197,6 +209,7 @@ async def revoke_organization_invitation_endpoint(
     organization_id: UUID,
     invitation_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OrganizationInvitationResponse:
-    invitation = await revoke_invitation(user, organization_id, invitation_id)
+    invitation = await revoke_invitation(db, user, organization_id, invitation_id)
     return invitation_response(invitation)
