@@ -1,8 +1,7 @@
 pub mod artifacts;
 pub mod delegation;
 pub mod manifest;
-pub mod mcp;
-pub mod mcp_auth;
+pub mod mcp_server;
 pub mod model;
 pub mod runtime;
 pub mod service;

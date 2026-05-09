@@ -6,7 +6,7 @@ use anyharness_contract::v1::{
 };
 use uuid::Uuid;
 
-use super::mcp_auth::SubagentMcpAuth;
+use super::mcp_server::auth::SubagentMcpAuth;
 use super::model::SubagentCompletionRecord;
 use super::service::SubagentService;
 use crate::acp::manager::AcpManager;

@@ -17,7 +17,7 @@ use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract_with_summary;
 use crate::app::AppState;
 use crate::domains::cowork::manifest::CoworkArtifactError;
-use crate::domains::cowork::mcp::handle_json_rpc;
+use crate::domains::cowork::mcp_server::server::handle_json_rpc;
 use crate::domains::cowork::model::CoworkRootRecord;
 use crate::domains::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;

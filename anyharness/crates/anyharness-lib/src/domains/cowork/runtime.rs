@@ -16,7 +16,7 @@ use super::delegation::model::{
     CreateCodingSessionInput, CreateCodingWorkspaceInput, SendCodingMessageInput,
 };
 use super::delegation::service::{CoworkDelegationError, CoworkDelegationService};
-use super::mcp_auth::CoworkMcpAuth;
+use super::mcp_server::auth::CoworkMcpAuth;
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
 use crate::acp::manager::AcpManager;

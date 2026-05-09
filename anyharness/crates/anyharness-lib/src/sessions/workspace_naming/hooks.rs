@@ -4,7 +4,7 @@ use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, Sessio
 use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
 use crate::sessions::store::SessionStore;
 use crate::sessions::workspace_naming::eligibility;
-use crate::sessions::workspace_naming::mcp_auth::WorkspaceNamingMcpAuth;
+use crate::sessions::workspace_naming::mcp_server::auth::WorkspaceNamingMcpAuth;
 
 #[derive(Clone)]
 pub struct WorkspaceNamingSessionHooks {
@@ -107,7 +107,7 @@ mod tests {
     use crate::sessions::extensions::{SessionExtension, SessionLaunchContext};
     use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
     use crate::sessions::store::SessionStore;
-    use crate::sessions::workspace_naming::mcp_auth::WorkspaceNamingMcpAuth;
+    use crate::sessions::workspace_naming::mcp_server::auth::WorkspaceNamingMcpAuth;
     use crate::workspaces::model::WorkspaceRecord;
     use crate::workspaces::store::WorkspaceStore;
 

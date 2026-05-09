@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::sessions::workspace_naming::mcp::handle_json_rpc;
+use crate::sessions::workspace_naming::mcp_server::server::handle_json_rpc;
 
 pub async fn get_workspace_naming_mcp_endpoint(
     State(_state): State<AppState>,
