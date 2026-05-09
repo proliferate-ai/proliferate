@@ -8,7 +8,7 @@ import { useHasPendingWorktreeAutoDeleteAdoption } from "@/hooks/preferences/der
 import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/worktree-auto-delete";
 import type { WorktreeSettingsTarget } from "@/lib/domain/workspaces/worktrees/worktree-settings-target";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";

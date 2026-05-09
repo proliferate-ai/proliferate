@@ -11,7 +11,7 @@ import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIco
 import { APP_ROUTES } from "@/config/app-routes";
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
-import type { TurnEndSoundId } from "@/lib/domain/preferences/user-preferences";
+import type { TurnEndSoundId } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 type SettingsOpenTargetIconId =

@@ -7,10 +7,12 @@ import {
 } from "@/lib/domain/preferences/persisted-metadata";
 import {
   migrateUserPreferences,
+} from "@/lib/domain/preferences/user/migration";
+import {
   PERSISTED_RECORD_BACKFILL,
   USER_PREFERENCE_DEFAULTS,
   type UserPreferences,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/model";
 import {
   loadUserPreferences,
   persistUserPreferences,

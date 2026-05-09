@@ -9,7 +9,7 @@ import {
 import {
   WORKTREE_AUTO_DELETE_LIMIT_MAX,
   WORKTREE_AUTO_DELETE_LIMIT_MIN,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/worktree-auto-delete";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 

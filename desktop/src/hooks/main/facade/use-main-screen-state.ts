@@ -25,7 +25,7 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cl
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import {

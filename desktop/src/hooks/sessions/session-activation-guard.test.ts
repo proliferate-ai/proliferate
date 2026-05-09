@@ -5,7 +5,7 @@ import {
 } from "@/stores/sessions/session-records";
 import {
   WORKSPACE_UI_DEFAULTS,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/model";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

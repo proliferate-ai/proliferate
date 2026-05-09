@@ -8,7 +8,7 @@ import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-co
 import type {
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/session-defaults";
 
 export type SessionDefaultControlMetadata =
   NonNullable<ModelRegistryModel["sessionDefaultControls"]>[number];

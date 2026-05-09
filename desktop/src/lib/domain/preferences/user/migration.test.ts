@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { migrateUserPreferences } from "@/lib/domain/preferences/user/migration";
+import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import {
-  getForwardCompatibleUserPreferenceExtras,
-  hasDeprecatedUserPreferenceKeys,
-  migrateUserPreferences,
-  pickLegacyUserPreferencesInput,
-  USER_PREFERENCE_DEFAULTS,
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/worktree-auto-delete";
 
-describe("user preferences", () => {
+describe("user preference migration", () => {
   it("migrates legacy model and powers preferences into the current shape", () => {
     const result = migrateUserPreferences({
       defaultChatAgentKind: " claude ",
@@ -89,27 +86,5 @@ describe("user preferences", () => {
     expect(result.preferences.uiFontSizeId).toBe("default");
     expect(result.preferences.readableCodeFontSizeId).toBe("default");
     expect(USER_PREFERENCE_DEFAULTS.transparentChromeEnabled).toBe(false);
-  });
-
-  it("splits known legacy input from forward-compatible extras", () => {
-    const persisted = {
-      themePreset: "mono",
-      defaultChatModelId: "gpt-5",
-      powersInCodingSessionsEnabled: false,
-      onboardingCompletedVersion: 2,
-      futureBoolean: true,
-      futureNested: { enabled: true },
-    };
-
-    expect(pickLegacyUserPreferencesInput(persisted)).toEqual({
-      themePreset: "mono",
-      defaultChatModelId: "gpt-5",
-      powersInCodingSessionsEnabled: false,
-    });
-    expect(getForwardCompatibleUserPreferenceExtras(persisted)).toEqual({
-      futureBoolean: true,
-      futureNested: { enabled: true },
-    });
-    expect(hasDeprecatedUserPreferenceKeys(persisted)).toBe(true);
   });
 });

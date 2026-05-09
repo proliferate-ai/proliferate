@@ -4,7 +4,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle";
 import { useWorktreeAutoDeleteAdoption } from "@/hooks/preferences/workflows/use-worktree-auto-delete-adoption";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user-preferences";
+import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const storeMocks = vi.hoisted(() => {

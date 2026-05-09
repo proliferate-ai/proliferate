@@ -4,7 +4,7 @@ import type {
   ProviderConfig,
   WorkspaceSessionLaunchAgent,
 } from "@anyharness/sdk";
-import type { UserPreferences } from "@/lib/domain/preferences/user-preferences";
+import type { UserPreferences } from "@/lib/domain/preferences/user/model";
 import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,

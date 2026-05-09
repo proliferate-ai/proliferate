@@ -21,10 +21,10 @@ import {
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
-  clampWorkspaceSidebarWidth,
   WORKSPACE_UI_DEFAULTS,
   type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/model";
+import { clampWorkspaceSidebarWidth } from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { createWorkspaceUiChatTabActions } from "@/stores/preferences/workspace-ui-chat-tab-actions";
 import { createWorkspaceUiShellActions } from "@/stores/preferences/workspace-ui-shell-actions";
 

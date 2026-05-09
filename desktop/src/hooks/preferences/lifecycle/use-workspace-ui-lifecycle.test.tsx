@@ -7,7 +7,7 @@ import {
   WORKSPACE_UI_DEFAULTS,
   WORKSPACE_UI_MIGRATION_VERSION,
   type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/model";
 import {
   useWorkspaceUiStore,
   type WorkspaceUiState,
