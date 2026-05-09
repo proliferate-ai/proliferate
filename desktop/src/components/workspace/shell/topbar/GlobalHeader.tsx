@@ -14,10 +14,8 @@ import {
   type OpenTarget,
   useTauriShellActions,
 } from "@/hooks/access/tauri/use-shell-actions";
-import {
-  Play,
-  SplitPanel,
-} from "@/components/ui/icons";
+import { Play } from "@/components/ui/icons";
+import { SplitPanel } from "@/components/ui/workspace-icons";
 import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";

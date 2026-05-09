@@ -1,14 +1,7 @@
 import type { ComponentType } from "react";
 import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/presentation";
-import {
-  CircleQuestion,
-  EditModeFilled,
-  MessageSquareFilled,
-  PlanningIcon,
-  ReadModeFilled,
-  ShieldCheckFilled,
-  Zap,
-} from "@/components/ui/icons";
+import { CircleQuestion } from "@/components/ui/icons";
+import { EditModeFilled, MessageSquareFilled, PlanningIcon, ReadModeFilled, ShieldCheckFilled, Zap } from "@/components/ui/session-icons";
 
 interface SessionControlIconProps {
   icon: SessionControlIconKey | null | undefined;

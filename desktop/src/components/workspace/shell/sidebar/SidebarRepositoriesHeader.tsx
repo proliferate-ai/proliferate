@@ -1,11 +1,6 @@
-import {
-  Archive,
-  Check,
-  CollapseAll,
-  ExpandAll,
-  Filter,
-  FolderPlusFilled,
-} from "@/components/ui/icons";
+import { Archive, Check } from "@/components/ui/icons";
+import { FolderPlusFilled } from "@/components/ui/file-icons";
+import { CollapseAll, ExpandAll, Filter } from "@/components/ui/workspace-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";

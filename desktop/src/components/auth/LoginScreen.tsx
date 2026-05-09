@@ -1,5 +1,6 @@
 import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
-import { ArrowRight, GitHub } from "@/components/ui/icons";
+import { ArrowRight } from "@/components/ui/icons";
+import { GitHub } from "@/components/ui/git-icons";
 import { Button } from "@/components/ui/Button";
 import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
 

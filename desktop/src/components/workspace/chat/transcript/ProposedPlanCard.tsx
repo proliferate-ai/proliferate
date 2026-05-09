@@ -1,14 +1,9 @@
 import { Button } from "@/components/ui/Button";
 import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
-import {
-  Check,
-  FileText,
-  ArrowRight,
-  Shield,
-  Settings,
-  X,
-} from "@/components/ui/icons";
+import { Check, ArrowRight, Settings, X } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
+import { Shield } from "@/components/ui/session-icons";
 
 type ProposedPlanDecisionState =
   | "pending"

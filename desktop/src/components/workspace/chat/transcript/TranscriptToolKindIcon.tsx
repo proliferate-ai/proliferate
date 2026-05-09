@@ -1,12 +1,5 @@
-import {
-  ClipboardList,
-  FilePen,
-  FilePlus,
-  FileText,
-  FolderList,
-  Settings,
-  Terminal,
-} from "@/components/ui/icons";
+import { ClipboardList, Settings, Terminal } from "@/components/ui/icons";
+import { FilePen, FilePlus, FileText, FolderList } from "@/components/ui/file-icons";
 import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import type { ToolDisplayIconKey } from "@/lib/domain/chat/tools/tool-call-display";
 

@@ -26,7 +26,8 @@ import {
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { Clock, Folder, Settings } from "@/components/ui/icons";
+import { Clock, Settings } from "@/components/ui/icons";
+import { Folder } from "@/components/ui/file-icons";
 import type { HomeActionId } from "@/lib/domain/home/home-screen";
 
 function resolveActionIcon(actionId: HomeActionId) {

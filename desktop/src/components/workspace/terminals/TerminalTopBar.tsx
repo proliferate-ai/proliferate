@@ -4,14 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import {
-  Check,
-  ChevronDown,
-  Pencil,
-  Plus,
-  Terminal as TerminalIcon,
-  X,
-} from "@/components/ui/icons";
+import { Check, ChevronDown, Pencil, Plus, Terminal as TerminalIcon, X } from "@/components/ui/icons";
 
 interface TerminalTopBarProps {
   terminals: readonly TerminalRecord[];

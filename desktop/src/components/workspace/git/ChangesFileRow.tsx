@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/Button";
 import { FileChangeStats } from "@/components/ui/content/FileDiffCard";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { ArrowUpRight, Check, FileText, Plus } from "@/components/ui/icons";
+import { ArrowUpRight, Check, Plus } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type {
   GitPanelFile,

@@ -1,5 +1,8 @@
 import { type ReactNode, useState } from "react";
-import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
+import { ChevronRight, Plus, Settings, Trash } from "@/components/ui/icons";
+import { Folder, FolderFilled } from "@/components/ui/file-icons";
+import { GitBranchIcon } from "@/components/ui/git-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";

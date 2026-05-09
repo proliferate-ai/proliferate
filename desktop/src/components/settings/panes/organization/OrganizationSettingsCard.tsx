@@ -5,7 +5,7 @@ import {
 } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { CloudUpload } from "@/components/ui/icons";
+import { CloudUpload } from "@/components/ui/workspace-icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import {

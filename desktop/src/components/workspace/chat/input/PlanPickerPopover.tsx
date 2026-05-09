@@ -1,7 +1,8 @@
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { AddPlan, ClipboardList, LoaderCircle } from "@/components/ui/icons";
+import { ClipboardList, LoaderCircle } from "@/components/ui/icons";
+import { AddPlan } from "@/components/ui/session-icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";

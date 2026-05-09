@@ -3,11 +3,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
-import {
-  Globe,
-  Plus,
-  Terminal as TerminalIcon,
-} from "@/components/ui/icons";
+import { Globe, Plus, Terminal as TerminalIcon } from "@/components/ui/icons";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
 
 interface RightPanelNewTabMenuProps {

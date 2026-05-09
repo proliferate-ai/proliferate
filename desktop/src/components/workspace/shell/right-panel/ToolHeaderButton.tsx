@@ -1,12 +1,10 @@
 import type { ComponentType } from "react";
 import { Button } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
-import {
-  CloudIcon,
-  FileIcon,
-  GitBranchIcon,
-  type IconProps,
-} from "@/components/ui/icons";
+import type { IconProps } from "@/components/ui/icons";
+import { FileIcon } from "@/components/ui/file-icons";
+import { GitBranchIcon } from "@/components/ui/git-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import type { RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel-model";
 
 const HEADER_STABLE_TAB_CLASS = "ui-tab-system-tab";

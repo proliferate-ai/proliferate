@@ -15,7 +15,7 @@ import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { FilePlus, FolderPlus } from "@/components/ui/icons";
+import { FilePlus, FolderPlus } from "@/components/ui/file-icons";
 import {
   type OpenTarget,
   useTauriShellActions,

@@ -1,5 +1,5 @@
 import type { CoworkArtifactSummary } from "@anyharness/sdk";
-import { FileText } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
 import { resolveCoworkArtifactTitle } from "@/lib/domain/cowork/artifacts";
 

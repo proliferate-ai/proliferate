@@ -2,15 +2,10 @@ import { AnimatedSwapText } from "@/components/ui/AnimatedSwapText";
 import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
 import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-workspace-mobility-footer-flow";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import {
-  ChevronDown,
-  CloudIcon,
-  Copy,
-  Folder,
-  FolderOpen,
-  GitBranch,
-  LoaderCircle,
-} from "@/components/ui/icons";
+import { ChevronDown, Copy, LoaderCircle } from "@/components/ui/icons";
+import { Folder, FolderOpen } from "@/components/ui/file-icons";
+import { GitBranch } from "@/components/ui/git-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
 

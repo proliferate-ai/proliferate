@@ -1,13 +1,8 @@
 import { Button } from "@/components/ui/Button";
-import {
-  ArrowRight,
-  BrailleSweepBadge,
-  CircleAlert,
-  CloudIcon,
-  FolderOpen,
-  GitBranch,
-  GitCommit,
-} from "@/components/ui/icons";
+import { ArrowRight, BrailleSweepBadge, CircleAlert } from "@/components/ui/icons";
+import { FolderOpen } from "@/components/ui/file-icons";
+import { GitBranch, GitCommit } from "@/components/ui/git-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";

@@ -9,11 +9,8 @@ import {
 } from "@/lib/domain/reviews/review-config";
 import { Button } from "@/components/ui/Button";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
-import {
-  Brain,
-  Pencil,
-  X,
-} from "@/components/ui/icons";
+import { Pencil, X } from "@/components/ui/icons";
+import { Brain } from "@/components/ui/session-icons";
 import { ReviewModelSettingsMenu } from "./ReviewSetupHarnessControls";
 
 interface ReviewSetupReviewerListProps {

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
-import { ChevronRight, Folder } from "@/components/ui/icons";
+import { ChevronRight } from "@/components/ui/icons";
+import { Folder } from "@/components/ui/file-icons";
 import {
   EnvironmentPanel,
   EnvironmentPanelRow,

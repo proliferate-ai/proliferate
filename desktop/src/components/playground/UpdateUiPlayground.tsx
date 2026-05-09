@@ -2,14 +2,7 @@ import type { ComponentType } from "react";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import {
-  ArrowUp,
-  Check,
-  CircleAlert,
-  LoaderCircle,
-  RefreshCw,
-  type IconProps,
-} from "@/components/ui/icons";
+import { ArrowUp, Check, CircleAlert, LoaderCircle, RefreshCw, type IconProps } from "@/components/ui/icons";
 import {
   UPDATE_PREVIEW_STATES,
   type UpdatePreviewPhase,

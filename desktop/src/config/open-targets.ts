@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { FileIcon } from "@/components/ui/icons";
+import { FileIcon } from "@/components/ui/file-icons";
 import {
   CursorIcon,
   FinderIcon,

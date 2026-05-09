@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  Calendar,
-  CircleQuestion,
-  Grid,
-  Home,
-} from "@/components/ui/icons";
+import { Calendar, CircleQuestion } from "@/components/ui/icons";
+import { Grid, Home } from "@/components/ui/workspace-icons";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
 
 interface SidebarPrimaryNavigationProps {

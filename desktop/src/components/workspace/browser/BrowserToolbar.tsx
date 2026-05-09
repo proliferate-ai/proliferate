@@ -2,12 +2,7 @@ import type { FormEvent } from "react";
 import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Tooltip } from "@/components/ui/Tooltip";
-import {
-  ArrowRight,
-  ExternalLink,
-  Globe,
-  RefreshCw,
-} from "@/components/ui/icons";
+import { ArrowRight, ExternalLink, Globe, RefreshCw } from "@/components/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { FrameStatus } from "./BrowserPanelTypes";

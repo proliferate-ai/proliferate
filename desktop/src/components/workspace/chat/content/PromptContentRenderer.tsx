@@ -1,6 +1,8 @@
 import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { FileIcon, Link2, LoaderCircle, X } from "@/components/ui/icons";
+import { LoaderCircle, X } from "@/components/ui/icons";
+import { FileIcon } from "@/components/ui/file-icons";
+import { Link2 } from "@/components/ui/session-icons";
 import { Button } from "@/components/ui/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";

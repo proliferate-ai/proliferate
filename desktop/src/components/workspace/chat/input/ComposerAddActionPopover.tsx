@@ -2,14 +2,9 @@ import { useState, type MouseEvent, type ReactNode } from "react";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Button } from "@/components/ui/Button";
-import {
-  ArrowLeft,
-  ClipboardList,
-  FilePlus,
-  GitPullRequest,
-  Plus,
-  Settings,
-} from "@/components/ui/icons";
+import { ArrowLeft, ClipboardList, Plus, Settings } from "@/components/ui/icons";
+import { FilePlus } from "@/components/ui/file-icons";
+import { GitPullRequest } from "@/components/ui/git-icons";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { ComposerPopoverSurface } from "./ComposerPopoverSurface";
 import { PlanPickerContentBody } from "./PlanPickerPopover";

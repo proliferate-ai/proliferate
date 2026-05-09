@@ -16,7 +16,7 @@ import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@/components/ui/IconButton";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { SplitPanel } from "@/components/ui/icons";
+import { SplitPanel } from "@/components/ui/workspace-icons";
 import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
