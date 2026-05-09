@@ -28,7 +28,11 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   createEmptySessionRecord,
+  findClientSessionIdByMaterializedSessionId,
+  getMaterializedSessionId,
   getSessionRecord,
+  getSessionRecords,
+  isPendingSessionId,
   patchSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
@@ -49,7 +53,14 @@ import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-wo
 import {
   createPendingSessionId,
   pruneInactiveSessionStreams,
+  type FlushAwareSessionStreamHandle,
+  type SessionStreamPruningDeps,
 } from "@/lib/workflows/sessions/session-runtime";
+import {
+  closeSessionStreamHandle,
+  flushAllSessionStreamHandles,
+  getSessionStreamHandle,
+} from "@/lib/access/anyharness/session-stream-handles";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
@@ -119,6 +130,28 @@ interface CreateEmptySessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
 }
+
+const sessionStreamPruningDeps: SessionStreamPruningDeps = {
+  getSessionRecords,
+  getSessionStreamHandle: (sessionId: string) =>
+    getSessionStreamHandle(sessionId) as FlushAwareSessionStreamHandle | null,
+  closeSessionStreamHandle: (
+    sessionId: string,
+    handle: FlushAwareSessionStreamHandle,
+  ) => {
+    closeSessionStreamHandle(sessionId, handle);
+  },
+  flushAllSessionStreamHandles,
+  getMaterializedSessionId,
+  findClientSessionIdByMaterializedSessionId,
+  patchSessionStreamConnectionState: (
+    clientSessionId: string,
+    streamConnectionState,
+  ) => {
+    patchSessionRecord(clientSessionId, { streamConnectionState });
+  },
+  isPendingSessionId,
+};
 
 async function ensureRuntimeReadyForSessions(): Promise<string> {
   const state = useHarnessConnectionStore.getState();
@@ -317,7 +350,7 @@ export function useSessionCreationActions() {
       }).rolledBack;
     };
     writeOwnedShellIntent(pendingSessionId);
-    pruneInactiveSessionStreams();
+    pruneInactiveSessionStreams(sessionStreamPruningDeps);
     if (shouldEnqueueInitialPrompt) {
       await promptSession({
         sessionId: pendingSessionId,

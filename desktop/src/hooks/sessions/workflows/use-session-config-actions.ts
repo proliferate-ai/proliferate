@@ -16,13 +16,13 @@ import {
 } from "@/lib/domain/sessions/pending-config";
 import {
   getSessionRecord,
+  isPendingSessionId,
   patchSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   getSessionClientAndWorkspace,
-  isPendingSessionId,
 } from "@/lib/workflows/sessions/session-runtime";
 
 let nextPendingConfigMutationId = 0;
