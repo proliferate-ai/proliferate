@@ -18,10 +18,15 @@ from proliferate.integrations.github import (
     list_branches,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repos.domain.github_credentials import (
+    CloudRepoGitHubCredentials,
+)
 from proliferate.server.cloud.repos.service import (
     _require_github_access_token,
+    build_cloud_repo_credentials_for_user,
     get_cloud_repo_branches,
     get_linked_github_account,
+    get_repo_branches_for_credentials,
     get_repo_branches_for_user,
 )
 
@@ -59,15 +64,35 @@ class TestGetLinkedGithubAccount:
 
 class TestRequireGithubAccessToken:
     def test_returns_token_when_present(self) -> None:
-        user = _make_user(github_token="gh-token")
-        assert _require_github_access_token(user, "msg") == "gh-token"
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token="gh-token",
+        )
+        assert _require_github_access_token(credentials, "msg") == "gh-token"
 
     def test_raises_cloud_error_when_missing(self) -> None:
-        user = _make_user()
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token=None,
+        )
         with pytest.raises(CloudApiError) as exc_info:
-            _require_github_access_token(user, "connect first")
+            _require_github_access_token(credentials, "connect first")
         assert exc_info.value.code == "github_link_required"
         assert exc_info.value.status_code == 400
+
+
+class TestBuildCloudRepoCredentialsForUser:
+    def test_returns_user_id_and_token(self) -> None:
+        user = _make_user(github_token="gh-token")
+        credentials = build_cloud_repo_credentials_for_user(user)
+        assert credentials.user_id == user.id
+        assert credentials.access_token == "gh-token"
+
+    def test_returns_none_token_when_unlinked(self) -> None:
+        user = _make_user()
+        credentials = build_cloud_repo_credentials_for_user(user)
+        assert credentials.user_id == user.id
+        assert credentials.access_token is None
 
 
 class TestGetRepoBranchesForUser:
@@ -163,10 +188,37 @@ class TestGetRepoBranchesForUser:
         assert exc_info.value.code == "github_link_required"
 
 
+class TestGetRepoBranchesForCredentials:
+    @pytest.mark.asyncio
+    async def test_delegates_to_integration_adapter(self) -> None:
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token="gh-token",
+        )
+        branches = GitHubRepoBranches(default_branch="main", branches=["main", "dev"])
+
+        with patch(
+            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            new_callable=AsyncMock,
+            return_value=branches,
+        ) as mock:
+            result = await get_repo_branches_for_credentials(
+                credentials,
+                git_owner="acme",
+                git_repo_name="rocket",
+                missing_access_message="msg",
+            )
+            mock.assert_awaited_once_with("gh-token", "acme", "rocket")
+            assert result is branches
+
+
 class TestGetCloudRepoBranches:
     @pytest.mark.asyncio
     async def test_shapes_response_for_api(self) -> None:
-        user = _make_user(github_token="gh-token")
+        credentials = CloudRepoGitHubCredentials(
+            user_id=uuid.uuid4(),
+            access_token="gh-token",
+        )
         branches = GitHubRepoBranches(
             default_branch="main",
             branches=["main", "release", "stable"],
@@ -178,7 +230,7 @@ class TestGetCloudRepoBranches:
             return_value=branches,
         ):
             result = await get_cloud_repo_branches(
-                user,
+                credentials,
                 git_owner="acme",
                 git_repo_name="rocket",
             )
