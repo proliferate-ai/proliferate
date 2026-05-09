@@ -1,0 +1,1 @@
+"""Pure billing domain rules."""

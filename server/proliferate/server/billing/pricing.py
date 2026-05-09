@@ -8,13 +8,36 @@ classification for already-synced price ids.
 from __future__ import annotations
 
 from proliferate.config import settings
-from proliferate.constants.billing import (
-    BILLING_PRICE_CLASS_LEGACY_CLOUD,
-    BILLING_PRICE_CLASS_PRO,
-    BILLING_PRICE_CLASS_UNKNOWN,
+from proliferate.server.billing.domain.pricing import (
+    BillingPriceClass,
+    BillingPriceIds,
+    effective_legacy_cloud_monthly_price_id,
+    effective_managed_cloud_meter_event_name,
+    effective_managed_cloud_meter_id,
+    effective_managed_cloud_overage_price_id,
+    effective_pro_monthly_price_id,
+)
+from proliferate.server.billing.domain.pricing import (
+    classify_monthly_price_id as classify_monthly_price_id_for_config,
+)
+from proliferate.server.billing.domain.pricing import (
+    price_class_is_paid as price_class_is_paid_for_config,
 )
 
-BillingPriceClass = str
+
+def billing_price_ids_from_settings() -> BillingPriceIds:
+    return BillingPriceIds(
+        cloud_monthly_price_id=settings.stripe_cloud_monthly_price_id,
+        pro_monthly_price_id=settings.stripe_pro_monthly_price_id,
+        legacy_cloud_monthly_price_id=settings.stripe_legacy_cloud_monthly_price_id,
+        sandbox_overage_price_id=settings.stripe_sandbox_overage_price_id,
+        managed_cloud_overage_price_id=settings.stripe_managed_cloud_overage_price_id,
+        managed_cloud_overage_meter_id=settings.stripe_managed_cloud_overage_meter_id,
+        sandbox_meter_id=settings.stripe_sandbox_meter_id,
+        managed_cloud_overage_meter_event_name=(
+            settings.stripe_managed_cloud_overage_meter_event_name
+        ),
+    )
 
 
 def configured_pro_monthly_price_id() -> str:
@@ -24,45 +47,31 @@ def configured_pro_monthly_price_id() -> str:
     when there is no explicit Pro price and no legacy $200 price configured.
     """
 
-    explicit = settings.stripe_pro_monthly_price_id.strip()
-    if explicit:
-        return explicit
-    legacy = settings.stripe_legacy_cloud_monthly_price_id.strip()
-    if legacy:
-        return ""
-    return settings.stripe_cloud_monthly_price_id.strip()
+    return effective_pro_monthly_price_id(billing_price_ids_from_settings())
 
 
 def configured_legacy_cloud_monthly_price_id() -> str:
-    return settings.stripe_legacy_cloud_monthly_price_id.strip()
+    return effective_legacy_cloud_monthly_price_id(billing_price_ids_from_settings())
 
 
 def configured_managed_cloud_overage_price_id() -> str:
-    return settings.stripe_managed_cloud_overage_price_id.strip()
+    return effective_managed_cloud_overage_price_id(billing_price_ids_from_settings())
 
 
 def configured_managed_cloud_meter_id() -> str:
-    return (
-        settings.stripe_managed_cloud_overage_meter_id.strip()
-        or settings.stripe_sandbox_meter_id.strip()
-    )
+    return effective_managed_cloud_meter_id(billing_price_ids_from_settings())
 
 
 def configured_managed_cloud_meter_event_name() -> str:
-    return settings.stripe_managed_cloud_overage_meter_event_name.strip()
+    return effective_managed_cloud_meter_event_name(billing_price_ids_from_settings())
 
 
 def classify_monthly_price_id(price_id: str | None) -> BillingPriceClass:
-    if not price_id:
-        return BILLING_PRICE_CLASS_UNKNOWN
-    legacy_price_id = configured_legacy_cloud_monthly_price_id()
-    if legacy_price_id and price_id == legacy_price_id:
-        return BILLING_PRICE_CLASS_LEGACY_CLOUD
-    pro_price_id = configured_pro_monthly_price_id()
-    if pro_price_id and price_id == pro_price_id:
-        return BILLING_PRICE_CLASS_PRO
-    return BILLING_PRICE_CLASS_UNKNOWN
+    return classify_monthly_price_id_for_config(
+        price_id,
+        price_ids=billing_price_ids_from_settings(),
+    )
 
 
 def price_class_is_paid(price_class: BillingPriceClass) -> bool:
-    return price_class in {BILLING_PRICE_CLASS_PRO, BILLING_PRICE_CLASS_LEGACY_CLOUD}
+    return price_class_is_paid_for_config(price_class)

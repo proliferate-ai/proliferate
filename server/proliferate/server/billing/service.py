@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID
 
 from proliferate.auth.authorization import OwnerContext, OwnerSelection, require_org_role
@@ -14,36 +13,24 @@ from proliferate.constants.billing import (
     ACTIVE_SANDBOX_STATUSES,
     BILLING_DECISION_AUTHORIZE_START,
     BILLING_DECISION_OVERAGE_EXPORT,
-    BILLING_HOLD_KIND_ADMIN_HOLD,
-    BILLING_HOLD_KIND_EXTERNAL_BILLING_HOLD,
-    BILLING_HOLD_KIND_PAYMENT_FAILED,
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
     BILLING_MODE_OFF,
     BILLING_PLAN_FREE,
     BILLING_PLAN_PRO,
-    BILLING_PRICE_CLASS_LEGACY_CLOUD,
-    BILLING_PRICE_CLASS_PRO,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
-    MONTHLY_CLOUD_GRANT_TYPE,
     PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT,
     PRO_OVERAGE_CAP_CENTS_PER_SEAT_MAX,
     PRO_OVERAGE_PRICE_PER_HOUR_CENTS,
-    PRO_PERIOD_GRANT_TYPE,
     PRO_SEAT_PRORATION_GRANT_TYPE,
-    REFILL_10H_GRANT_TYPE,
-    UNLIMITED_CLOUD_ENTITLEMENT,
-    WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
     WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
-    WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
     WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
-    WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.models.auth import User
@@ -81,6 +68,23 @@ from proliferate.db.store.billing import (
 from proliferate.db.store.organizations import load_organization_by_billing_subject
 from proliferate.errors import ProliferateError
 from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.server.billing.domain.accounting import (
+    stripe_status_is_terminal,
+    terminal_meter_event_error,
+    usage_export_identifier,
+)
+from proliferate.server.billing.domain.plans import (
+    BillingPlanRuleConfig,
+    UnlimitedCloudHoursState,
+    active_hold_reason,
+    authorization_message,
+    compute_unlimited_cloud_hours_state,
+    grant_applies_to_paid_state,
+    grant_is_active,
+    repo_limit_for_billing_state,
+    subscription_in_rollover_grace,
+    subscription_is_pro,
+)
 from proliferate.server.billing.models import (
     BillingOverview,
     BillingServiceError,
@@ -96,7 +100,7 @@ from proliferate.server.billing.models import (
 )
 from proliferate.server.billing.policy import free_v2_policy, pro_policy, unlimited_numeric_policy
 from proliferate.server.billing.pricing import (
-    classify_monthly_price_id,
+    billing_price_ids_from_settings,
     configured_managed_cloud_meter_event_name,
     configured_managed_cloud_overage_price_id,
     configured_pro_monthly_price_id,
@@ -110,78 +114,19 @@ from proliferate.server.organizations.service import (
     resolve_owner_context,
 )
 
-_ACTIVE_HOLD_REASONS: dict[str, str] = {
-    BILLING_HOLD_KIND_PAYMENT_FAILED: WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
-    BILLING_HOLD_KIND_ADMIN_HOLD: WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
-    BILLING_HOLD_KIND_EXTERNAL_BILLING_HOLD: WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
-}
-
-_HEALTHY_STRIPE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
-_PERIOD_ROLLOVER_GRACE_SECONDS = 24 * 60 * 60
-_STRIPE_METER_EVENT_MAX_PAST_SECONDS = 35 * 24 * 60 * 60
-_STRIPE_METER_EVENT_MAX_FUTURE_SECONDS = 5 * 60
-
 logger = logging.getLogger("proliferate.billing.service")
 
 
-@dataclass(frozen=True)
-class UnlimitedCloudHoursState:
-    subscription: BillingSubscription | None
-    manual_entitlement: BillingEntitlement | None
-    has_unlimited_cloud_hours: bool
-    unlimited_window_start: datetime | None
-    legacy_cloud_subscription: bool
-
-
-def _grant_is_active(grant: BillingGrant, now: datetime) -> bool:
-    effective_at = coerce_utc(grant.effective_at) or now
-    expires_at = coerce_utc(grant.expires_at)
-    return effective_at <= now and (expires_at is None or expires_at > now)
-
-
-def _entitlement_is_active(entitlement: BillingEntitlement, now: datetime) -> bool:
-    effective_at = coerce_utc(entitlement.effective_at) or now
-    expires_at = coerce_utc(entitlement.expires_at)
-    return effective_at <= now and (expires_at is None or expires_at > now)
-
-
-def _active_unlimited_cloud_entitlement(
-    entitlements: list[BillingEntitlement],
-    now: datetime,
-) -> BillingEntitlement | None:
-    active_entitlements = [
-        entitlement
-        for entitlement in entitlements
-        if (
-            entitlement.kind == UNLIMITED_CLOUD_ENTITLEMENT
-            and _entitlement_is_active(entitlement, now)
-        )
-    ]
-    if not active_entitlements:
-        return None
-    # Earliest active entitlement gives the accounting split the widest
-    # unlimited window and avoids finite accounting in the middle of entitlement coverage.
-    return min(
-        active_entitlements,
-        key=lambda entitlement: (
-            coerce_utc(entitlement.effective_at) or now,
-            coerce_utc(entitlement.created_at) or now,
-        ),
+def _billing_plan_rule_config() -> BillingPlanRuleConfig:
+    return BillingPlanRuleConfig(
+        pro_billing_enabled=settings.pro_billing_enabled,
+        cloud_monthly_price_id=settings.stripe_cloud_monthly_price_id,
+        price_ids=billing_price_ids_from_settings(),
     )
 
 
-def _subscription_unlimited_window_start(
-    subscription: BillingSubscription,
-    now: datetime,
-) -> datetime | None:
-    # Local creation time is stable across Stripe renewals; current_period_start rolls monthly.
-    created_at = coerce_utc(subscription.created_at)
-    if created_at is not None and created_at <= now:
-        return created_at
-    period_start = coerce_utc(subscription.current_period_start)
-    if period_start is not None and period_start <= now:
-        return period_start
-    return None
+def _grant_is_active(grant: BillingGrant, now: datetime) -> bool:
+    return grant_is_active(grant, now)
 
 
 def _compute_unlimited_cloud_hours_state(
@@ -190,141 +135,47 @@ def _compute_unlimited_cloud_hours_state(
     entitlements: list[BillingEntitlement],
     now: datetime,
 ) -> UnlimitedCloudHoursState:
-    subscription = _latest_healthy_cloud_subscription(subscriptions, now)
-    manual_entitlement = _active_unlimited_cloud_entitlement(entitlements, now)
-    legacy_cloud_subscription = subscription is not None and (
-        not settings.pro_billing_enabled or _subscription_is_legacy_cloud(subscription)
-    )
-    unlimited_boundaries = [
-        boundary
-        for boundary in (
-            (
-                _subscription_unlimited_window_start(subscription, now)
-                if legacy_cloud_subscription
-                else None
-            ),
-            (
-                coerce_utc(manual_entitlement.effective_at)
-                if manual_entitlement is not None
-                else None
-            ),
-        )
-        if boundary is not None and boundary <= now
-    ]
-    return UnlimitedCloudHoursState(
-        subscription=subscription,
-        manual_entitlement=manual_entitlement,
-        has_unlimited_cloud_hours=legacy_cloud_subscription or manual_entitlement is not None,
-        unlimited_window_start=min(unlimited_boundaries) if unlimited_boundaries else None,
-        legacy_cloud_subscription=legacy_cloud_subscription,
+    return compute_unlimited_cloud_hours_state(
+        subscriptions=subscriptions,
+        entitlements=entitlements,
+        now=now,
+        config=_billing_plan_rule_config(),
     )
 
 
 def _hold_reason(holds: list[BillingHold]) -> str | None:
-    for hold in holds:
-        reason = _ACTIVE_HOLD_REASONS.get(hold.kind)
-        if reason is not None:
-            return reason
-    return None
-
-
-def _subscription_is_cloud(subscription: BillingSubscription) -> bool:
-    if not settings.pro_billing_enabled:
-        configured_price_id = settings.stripe_cloud_monthly_price_id
-        return (
-            bool(configured_price_id)
-            and subscription.cloud_monthly_price_id == configured_price_id
-        )
-    return classify_monthly_price_id(subscription.cloud_monthly_price_id) in {
-        BILLING_PRICE_CLASS_PRO,
-        BILLING_PRICE_CLASS_LEGACY_CLOUD,
-    }
+    return active_hold_reason(holds)
 
 
 def _subscription_is_pro(subscription: BillingSubscription) -> bool:
-    return (
-        classify_monthly_price_id(subscription.cloud_monthly_price_id) == BILLING_PRICE_CLASS_PRO
-    )
-
-
-def _subscription_is_legacy_cloud(subscription: BillingSubscription) -> bool:
-    if not settings.pro_billing_enabled:
-        return False
-    return (
-        classify_monthly_price_id(subscription.cloud_monthly_price_id)
-        == BILLING_PRICE_CLASS_LEGACY_CLOUD
-    )
-
-
-def _subscription_is_healthy(subscription: BillingSubscription, now: datetime) -> bool:
-    if subscription.status not in _HEALTHY_STRIPE_SUBSCRIPTION_STATUSES:
-        return False
-    period_end = coerce_utc(subscription.current_period_end)
-    if period_end is None:
-        return True
-    grace_end = period_end.timestamp() + _PERIOD_ROLLOVER_GRACE_SECONDS
-    return now.timestamp() <= grace_end
+    return subscription_is_pro(subscription, config=_billing_plan_rule_config())
 
 
 def _subscription_in_rollover_grace(
     subscription: BillingSubscription | None,
     now: datetime,
 ) -> bool:
-    if subscription is None or subscription.status not in _HEALTHY_STRIPE_SUBSCRIPTION_STATUSES:
-        return False
-    period_end = coerce_utc(subscription.current_period_end)
-    if period_end is None or now <= period_end:
-        return False
-    grace_end = period_end.timestamp() + _PERIOD_ROLLOVER_GRACE_SECONDS
-    return now.timestamp() <= grace_end
-
-
-def _latest_healthy_cloud_subscription(
-    subscriptions: list[BillingSubscription],
-    now: datetime,
-) -> BillingSubscription | None:
-    healthy = [
-        subscription
-        for subscription in subscriptions
-        if _subscription_is_cloud(subscription) and _subscription_is_healthy(subscription, now)
-    ]
-    if not healthy:
-        return None
-    return max(
-        healthy,
-        key=lambda subscription: (
-            coerce_utc(subscription.current_period_end) or datetime.min.replace(tzinfo=UTC),
-            coerce_utc(subscription.updated_at) or datetime.min.replace(tzinfo=UTC),
-        ),
-    )
+    return subscription_in_rollover_grace(subscription, now)
 
 
 def repo_limit_for_billing_snapshot(snapshot: BillingSnapshot) -> int | None:
-    if snapshot.billing_mode == BILLING_MODE_OFF:
-        return None
-    if settings.pro_billing_enabled:
-        return snapshot.repo_environment_limit
-    if snapshot.is_paid_cloud or snapshot.has_unlimited_cloud_hours:
-        return settings.cloud_paid_repo_limit
-    return settings.cloud_free_repo_limit
+    return repo_limit_for_billing_state(
+        billing_mode=snapshot.billing_mode,
+        pro_billing_enabled=settings.pro_billing_enabled,
+        is_paid_cloud=snapshot.is_paid_cloud,
+        has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
+        repo_environment_limit=snapshot.repo_environment_limit,
+        paid_cloud_repo_limit=settings.cloud_paid_repo_limit,
+        free_cloud_repo_limit=settings.cloud_free_repo_limit,
+    )
 
 
 def _grant_applies_to_paid_state(grant: BillingGrant, *, is_paid_cloud: bool) -> bool:
-    if settings.pro_billing_enabled and is_paid_cloud:
-        return grant.grant_type in {
-            PRO_PERIOD_GRANT_TYPE,
-            PRO_SEAT_PRORATION_GRANT_TYPE,
-            REFILL_10H_GRANT_TYPE,
-        }
-    if settings.pro_billing_enabled:
-        return grant.grant_type in {FREE_TRIAL_V2_GRANT_TYPE, REFILL_10H_GRANT_TYPE}
-    if is_paid_cloud:
-        return grant.grant_type in {
-            MONTHLY_CLOUD_GRANT_TYPE,
-            FREE_INCLUDED_GRANT_TYPE,
-            REFILL_10H_GRANT_TYPE,
-        }
-    return grant.grant_type in {FREE_INCLUDED_GRANT_TYPE, REFILL_10H_GRANT_TYPE}
+    return grant_applies_to_paid_state(
+        grant.grant_type,
+        is_paid_cloud=is_paid_cloud,
+        pro_billing_enabled=settings.pro_billing_enabled,
+    )
 
 
 def _segment_seconds(segment: UsageSegment, now: datetime) -> float:
@@ -528,24 +379,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
 
 
 def _authorization_message(reason: str | None) -> str | None:
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
-        return (
-            "Sandbox limit reached. Archive or delete another cloud workspace before "
-            "starting a new one."
-        )
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
-        return "Cloud usage is paused because your included sandbox hours are exhausted."
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED:
-        return "Cloud usage is paused because included managed cloud hours are exhausted."
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED:
-        return "Cloud usage is paused because the managed cloud overage cap is exhausted."
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED:
-        return "Cloud usage is paused because billing needs attention."
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD:
-        return "Cloud usage is paused for this account."
-    if reason == WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD:
-        return "Cloud usage is paused because billing needs attention."
-    return None
+    return authorization_message(reason)
 
 
 async def authorize_sandbox_start(
@@ -1206,7 +1040,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
 
 
 def _stripe_error_is_terminal(error: stripe_billing.StripeBillingError) -> bool:
-    return 400 <= error.status_code < 500 and error.status_code != 429
+    return stripe_status_is_terminal(error.status_code)
 
 
 async def send_pending_usage_exports(*, limit: int = 100) -> None:
@@ -1241,7 +1075,7 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
             if legacy_seconds_export
             else max(1, int(export.meter_quantity_cents or 0))
         )
-        identifier = f"usage_export:{export.id}"
+        identifier = usage_export_identifier(export.id)
         try:
             meter_kwargs = {
                 "event_name": (
@@ -1289,12 +1123,7 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
 
 
 def _terminal_export_error(accounted_until: datetime, *, now: datetime) -> str | None:
-    event_time = coerce_utc(accounted_until) or now
-    if (now - event_time).total_seconds() > _STRIPE_METER_EVENT_MAX_PAST_SECONDS:
-        return "Stripe meter events cannot be created for usage older than 35 days."
-    if (event_time - now).total_seconds() > _STRIPE_METER_EVENT_MAX_FUTURE_SECONDS:
-        return "Stripe meter events cannot be created more than 5 minutes in the future."
-    return None
+    return terminal_meter_event_error(accounted_until, now=now)
 
 
 async def _record_usage_export_decision(*, billing_subject_id: UUID, reason: str) -> None:

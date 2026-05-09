@@ -13,9 +13,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_PRICE_CLASS_LEGACY_CLOUD,
     BILLING_PRICE_CLASS_PRO,
-    PRO_INCLUDED_MANAGED_CLOUD_HOURS_PER_SEAT,
     PRO_PERIOD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
@@ -36,19 +34,52 @@ from proliferate.db.store.billing import (
     upsert_stripe_subscription_record,
 )
 from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.server.billing.domain.accounting import stripe_status_is_terminal
+from proliferate.server.billing.domain.pricing import (
+    monthly_subscription_price_ids,
+    overage_subscription_price_ids,
+)
+from proliferate.server.billing.domain.seats import pro_period_grant_hours
+from proliferate.server.billing.domain.webhooks import (
+    datetime_from_timestamp as _datetime_from_timestamp,
+)
+from proliferate.server.billing.domain.webhooks import (
+    event_object as _event_object,
+)
+from proliferate.server.billing.domain.webhooks import (
+    id_from_expandable as _id_from_expandable,
+)
+from proliferate.server.billing.domain.webhooks import (
+    invoice_subscription_id as _invoice_subscription_id,
+)
+from proliferate.server.billing.domain.webhooks import (
+    line_is_cloud_subscription as classify_cloud_subscription_line,
+)
+from proliferate.server.billing.domain.webhooks import (
+    line_items_from_object as _line_items_from_object,
+)
+from proliferate.server.billing.domain.webhooks import (
+    metadata as _metadata,
+)
+from proliferate.server.billing.domain.webhooks import (
+    subscription_item_details as parse_subscription_item_details,
+)
+from proliferate.server.billing.domain.webhooks import (
+    subscription_parent_metadata as _subscription_parent_metadata,
+)
+from proliferate.server.billing.domain.webhooks import (
+    subscription_period as _subscription_period,
+)
 from proliferate.server.billing.models import BillingServiceError, StripeWebhookAck
 from proliferate.server.billing.pricing import (
+    billing_price_ids_from_settings,
     classify_monthly_price_id,
-    configured_legacy_cloud_monthly_price_id,
-    configured_managed_cloud_overage_price_id,
-    configured_pro_monthly_price_id,
 )
 from proliferate.server.billing.seats import pro_period_grant_source_ref
 
 STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300
 STRIPE_PROVIDER = "stripe"
 PAYMENT_HOLD_SOURCE = "stripe_webhook"
-LOCAL_TEST_CLOUD_PRICE_LOOKUP_KEY = "proliferate_pro_monthly_test"
 
 
 @dataclass(frozen=True)
@@ -129,117 +160,12 @@ async def _dispatch_stripe_event(event: dict[str, Any]) -> None:
         await _handle_invoice_payment_failed(stripe_object)
 
 
-def _event_object(event: dict[str, Any]) -> dict[str, Any]:
-    data = event.get("data")
-    if not isinstance(data, dict):
-        return {}
-    stripe_object = data.get("object")
-    return stripe_object if isinstance(stripe_object, dict) else {}
-
-
-def _metadata(stripe_object: dict[str, Any]) -> dict[str, str]:
-    metadata = stripe_object.get("metadata")
-    if not isinstance(metadata, dict):
-        return {}
-    return {key: value for key, value in metadata.items() if isinstance(value, str)}
-
-
-def _subscription_parent_metadata(stripe_object: dict[str, Any]) -> dict[str, str]:
-    parent = stripe_object.get("parent")
-    if not isinstance(parent, dict):
-        return {}
-    subscription_details = parent.get("subscription_details")
-    if not isinstance(subscription_details, dict):
-        return {}
-    metadata = subscription_details.get("metadata")
-    if not isinstance(metadata, dict):
-        return {}
-    return {key: value for key, value in metadata.items() if isinstance(value, str)}
-
-
-def _datetime_from_timestamp(value: object) -> datetime | None:
-    if not isinstance(value, int | float):
-        return None
-    return datetime.fromtimestamp(value, tz=UTC)
-
-
-def _id_from_expandable(value: object) -> str | None:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict) and isinstance(value.get("id"), str):
-        return value["id"]
-    return None
-
-
-def _price_matches(line: dict[str, Any], *, price_id: str, lookup_key: str | None = None) -> bool:
-    if _line_price_id(line) == price_id:
-        return True
-    price = line.get("price")
-    if not isinstance(price, dict):
-        return False
-    return bool(lookup_key and price.get("lookup_key") == lookup_key)
-
-
-def _line_price_id(line: dict[str, Any]) -> str | None:
-    price = line.get("price")
-    if isinstance(price, dict) and isinstance(price.get("id"), str):
-        return price["id"]
-    pricing = line.get("pricing")
-    if not isinstance(pricing, dict):
-        return None
-    price_details = pricing.get("price_details")
-    if isinstance(price_details, dict) and isinstance(price_details.get("price"), str):
-        return price_details["price"]
-    return None
-
-
-def _line_items_from_object(stripe_object: dict[str, Any]) -> list[dict[str, Any]]:
-    lines = stripe_object.get("lines")
-    if isinstance(lines, dict) and isinstance(lines.get("data"), list):
-        return [line for line in lines["data"] if isinstance(line, dict)]
-    return []
-
-
-def _line_subscription_id(line: dict[str, Any]) -> str | None:
-    parent = line.get("parent")
-    if not isinstance(parent, dict):
-        return None
-    subscription_item_details = parent.get("subscription_item_details")
-    if not isinstance(subscription_item_details, dict):
-        return None
-    subscription_id = subscription_item_details.get("subscription")
-    return subscription_id if isinstance(subscription_id, str) else None
-
-
-def _invoice_subscription_id(invoice: dict[str, Any], lines: list[dict[str, Any]]) -> str | None:
-    subscription_id = _id_from_expandable(invoice.get("subscription"))
-    if subscription_id is not None:
-        return subscription_id
-    parent = invoice.get("parent")
-    if isinstance(parent, dict):
-        subscription_details = parent.get("subscription_details")
-        if isinstance(subscription_details, dict):
-            subscription_id = _id_from_expandable(subscription_details.get("subscription"))
-            if subscription_id is not None:
-                return subscription_id
-    for line in lines:
-        subscription_id = _line_subscription_id(line)
-        if subscription_id is not None:
-            return subscription_id
-    return None
-
-
 def _line_is_cloud_subscription(line: dict[str, Any]) -> bool:
-    price_id = _line_price_id(line)
-    if settings.pro_billing_enabled:
-        return classify_monthly_price_id(price_id) in {
-            BILLING_PRICE_CLASS_PRO,
-            BILLING_PRICE_CLASS_LEGACY_CLOUD,
-        }
-    return _price_matches(
+    return classify_cloud_subscription_line(
         line,
-        price_id=settings.stripe_cloud_monthly_price_id,
-        lookup_key=LOCAL_TEST_CLOUD_PRICE_LOOKUP_KEY,
+        pro_billing_enabled=settings.pro_billing_enabled,
+        cloud_monthly_price_id=settings.stripe_cloud_monthly_price_id,
+        price_ids=billing_price_ids_from_settings(),
     )
 
 
@@ -355,7 +281,7 @@ async def _reconcile_initial_org_subscription_seats(
         await mark_seat_adjustment_failed(
             adjustment_id=adjustment.id,
             error=error.message,
-            terminal=400 <= error.status_code < 500 and error.status_code != 429,
+            terminal=stripe_status_is_terminal(error.status_code),
         )
         raise
     except Exception as error:
@@ -371,80 +297,19 @@ async def _reconcile_initial_org_subscription_seats(
 def _subscription_item_details(
     subscription: dict[str, Any],
 ) -> tuple[str | None, str | None, str | None, str | None, int | None]:
-    items = subscription.get("items")
-    data = items.get("data") if isinstance(items, dict) else None
-    monthly_item_id: str | None = None
-    metered_item_id: str | None = None
-    monthly_price_id: str | None = None
-    overage_price_id: str | None = None
-    seat_quantity: int | None = None
-    if not isinstance(data, list):
-        return monthly_item_id, metered_item_id, monthly_price_id, overage_price_id, seat_quantity
-    pro_price_id = configured_pro_monthly_price_id()
-    legacy_price_id = configured_legacy_cloud_monthly_price_id()
-    monthly_price_ids = {
-        price_id
-        for price_id in (
-            settings.stripe_cloud_monthly_price_id,
-            pro_price_id,
-            legacy_price_id,
-        )
-        if price_id
-    }
-    overage_configured_price_id = configured_managed_cloud_overage_price_id()
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        item_id = item.get("id") if isinstance(item.get("id"), str) else None
-        price = item.get("price")
-        if not isinstance(price, dict):
-            continue
-        price_id = price.get("id") if isinstance(price.get("id"), str) else None
-        if price_id in monthly_price_ids:
-            monthly_item_id = item_id
-            monthly_price_id = price_id
-            quantity = item.get("quantity")
-            seat_quantity = int(quantity) if isinstance(quantity, int | float) else None
-        if price_id in {settings.stripe_sandbox_overage_price_id, overage_configured_price_id}:
-            metered_item_id = item_id
-            overage_price_id = price_id
-    return monthly_item_id, metered_item_id, monthly_price_id, overage_price_id, seat_quantity
-
-
-def _subscription_period(
-    subscription: dict[str, Any],
-    *,
-    monthly_item_id: str | None,
-    metered_item_id: str | None,
-) -> tuple[datetime | None, datetime | None]:
-    top_level_start = _datetime_from_timestamp(subscription.get("current_period_start"))
-    top_level_end = _datetime_from_timestamp(subscription.get("current_period_end"))
-    if top_level_start is not None and top_level_end is not None:
-        return top_level_start, top_level_end
-
-    items = subscription.get("items")
-    data = items.get("data") if isinstance(items, dict) else None
-    if not isinstance(data, list):
-        return None, None
-
-    preferred_item_ids = [item_id for item_id in (monthly_item_id, metered_item_id) if item_id]
-    for preferred_item_id in preferred_item_ids:
-        for item in data:
-            if not isinstance(item, dict) or item.get("id") != preferred_item_id:
-                continue
-            return (
-                _datetime_from_timestamp(item.get("current_period_start")),
-                _datetime_from_timestamp(item.get("current_period_end")),
-            )
-
-    for item in data:
-        if not isinstance(item, dict):
-            continue
-        return (
-            _datetime_from_timestamp(item.get("current_period_start")),
-            _datetime_from_timestamp(item.get("current_period_end")),
-        )
-    return None, None
+    price_ids = billing_price_ids_from_settings()
+    details = parse_subscription_item_details(
+        subscription,
+        monthly_price_ids=monthly_subscription_price_ids(price_ids),
+        overage_price_ids=overage_subscription_price_ids(price_ids),
+    )
+    return (
+        details.monthly_item_id,
+        details.metered_item_id,
+        details.monthly_price_id,
+        details.overage_price_id,
+        details.seat_quantity,
+    )
 
 
 async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
@@ -482,9 +347,8 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
             user_id=subject.user_id,
             billing_subject_id=subject.id,
             grant_type=PRO_PERIOD_GRANT_TYPE,
-            hours_granted=(
-                max(subscription_record.seat_quantity or 1, 1)
-                * PRO_INCLUDED_MANAGED_CLOUD_HOURS_PER_SEAT
+            hours_granted=pro_period_grant_hours(
+                seat_quantity=subscription_record.seat_quantity,
             ),
             effective_at=subscription_record.current_period_start,
             expires_at=subscription_record.current_period_end,
