@@ -171,7 +171,7 @@ Flow:
    by manual dispatch.
 2. It validates:
    - repo shape checks, including max source file length, frontend layer
-     boundaries, and server layer boundaries
+     boundaries, server layer boundaries, and AnyHarness layer boundaries
    - the Rust workspace with `cargo check` and `cargo test`
    - `@anyharness/sdk` generation and build
    - the desktop frontend build
