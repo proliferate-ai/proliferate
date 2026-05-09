@@ -1,8 +1,9 @@
-import type {
-  CreateTerminalRequest,
-  ResizeTerminalRequest,
-  StartTerminalCommandRequest,
-  UpdateTerminalTitleRequest,
+import {
+  AnyHarnessError,
+  type CreateTerminalRequest,
+  type ResizeTerminalRequest,
+  type StartTerminalCommandRequest,
+  type UpdateTerminalTitleRequest,
 } from "@anyharness/sdk";
 import {
   getAnyHarnessClient,
@@ -49,4 +50,9 @@ export function runTerminalCommand(
   request: StartTerminalCommandRequest,
 ) {
   return getAnyHarnessClient(connection).terminals.runCommand(terminalId, request);
+}
+
+export function isMissingTerminalError(error: unknown): boolean {
+  return error instanceof AnyHarnessError
+    && (error.problem.status === 404 || error.problem.code === "TERMINAL_NOT_FOUND");
 }
