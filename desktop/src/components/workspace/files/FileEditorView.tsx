@@ -3,17 +3,14 @@ import {
   useMemo,
   useState,
 } from "react";
-import Editor from "@monaco-editor/react";
-import { Button } from "@/components/ui/Button";
+import { FileEditorContent } from "./FileEditorContent";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import {
   useGitBranchDiffFilesQuery,
   useGitStatusQuery,
   useReadWorkspaceFileQuery,
 } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
-import { FileDiffPane } from "@/components/workspace/files/viewer/FileDiffPane";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useFileEditorCommands } from "@/hooks/workspaces/files/ui/use-file-editor-commands";
@@ -26,16 +23,11 @@ import {
   resolveActiveDiffOption,
   type FileDiffTarget,
 } from "@/lib/domain/workspaces/viewer/file-diff-options";
-import { inferWorkspaceFileLanguage } from "@/lib/domain/workspaces/viewer/file-language";
 import {
   defaultFileViewerMode,
   type FileDiffViewerScope,
   type ViewerTargetKey,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
-import {
-  THEME_NAME_LIGHT,
-  THEME_NAME_DARK,
-} from "@/lib/infra/editor/monaco-theme";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
@@ -200,83 +192,25 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       onReload={() => void reloadFile(filePath)}
       onSave={() => void saveFile(filePath)}
     >
-      <div
-        ref={viewerContentRef}
-        onPointerDownCapture={handleContentPointerDownCapture}
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      >
-        {effectiveMode === "diff" && activeDiffTarget ? (
-          <FileDiffPane
-            workspaceId={materializedWorkspaceId}
-            target={activeDiffTarget}
-            layout={diffLayout}
-          />
-        ) : !read ? (
-          <div className="flex items-center justify-center h-full">
-            <LoadingState message="Loading file" subtext={filePath.split("/").pop()} />
-          </div>
-        ) : read.tooLarge ? (
-          <CenterMessage message={`${filePath} is too large to edit`} />
-        ) : !read.isText ? (
-          <CenterMessage message={`${filePath} is a binary file and cannot be edited`} />
-        ) : effectiveMode === "rendered" && canShowMarkdownPreview ? (
-          <div className="h-full overflow-auto px-8 py-6">
-            <MarkdownRenderer content={buffer?.localContent ?? read.content ?? ""} />
-          </div>
-        ) : (
-          <Editor
-            height="100%"
-            language={inferWorkspaceFileLanguage(filePath)}
-            value={buffer?.localContent ?? read.content ?? ""}
-            onChange={(value) => {
-              if (value !== undefined) {
-                updateBuffer(filePath, value);
-              }
-            }}
-            beforeMount={handleBeforeMount}
-            onMount={handleEditorMount}
-            theme={resolvedMode === "dark" ? THEME_NAME_DARK : THEME_NAME_LIGHT}
-            options={{
-              minimap: { enabled: false },
-              fontSize: readableCodeScale.monacoFontSize,
-              lineHeight: readableCodeScale.monacoLineHeight,
-              fontFamily: "'Geist Mono', monospace",
-              fontLigatures: false,
-              padding: { top: 0 },
-              scrollBeyondLastLine: false,
-              wordWrap: "on",
-              automaticLayout: true,
-              tabSize: 2,
-              renderLineHighlight: "line",
-              lineNumbersMinChars: 7,
-              glyphMargin: false,
-              folding: true,
-              foldingHighlight: false,
-              overviewRulerLanes: 0,
-              hideCursorInOverviewRuler: true,
-              scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6, useShadows: false },
-              renderWhitespace: "none",
-            }}
-          />
-        )}
-      </div>
-
-      {buffer?.saveState === "conflict" && (
-        <div className="flex items-center justify-between px-3 py-2 bg-destructive/10 border-t border-destructive/20 shrink-0">
-          <span className="text-xs text-destructive">
-            File changed on disk. Your local changes are preserved.
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => reloadFile(filePath)}
-            className="ml-2 h-auto shrink-0 bg-transparent p-0 text-xs text-destructive hover:bg-transparent hover:underline"
-          >
-            Reload from disk
-          </Button>
-        </div>
-      )}
+      <FileEditorContent
+        filePath={filePath}
+        workspaceId={materializedWorkspaceId}
+        effectiveMode={effectiveMode}
+        read={read}
+        buffer={buffer}
+        activeDiffTarget={activeDiffTarget}
+        diffLayout={diffLayout}
+        canShowMarkdownPreview={canShowMarkdownPreview}
+        resolvedMode={resolvedMode}
+        monacoFontSize={readableCodeScale.monacoFontSize}
+        monacoLineHeight={readableCodeScale.monacoLineHeight}
+        viewerContentRef={viewerContentRef}
+        onContentPointerDownCapture={handleContentPointerDownCapture}
+        onUpdateBuffer={updateBuffer}
+        onReloadFile={reloadFile}
+        onBeforeMount={handleBeforeMount}
+        onEditorMount={handleEditorMount}
+      />
     </FileViewerFrame>
   );
 }
