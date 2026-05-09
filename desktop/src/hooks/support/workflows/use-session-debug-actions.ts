@@ -14,15 +14,19 @@ import type {
 import { useEffect, useMemo, useState } from "react";
 import {
   buildSessionDebugExport,
-  buildSessionDebugLocator,
-  sessionLocatorFromSession,
-  suggestSessionDebugFileName,
   type SessionDebugError,
   type SessionDebugExportedSession,
+} from "@/lib/domain/support/session-debug/export-models";
+import { suggestSessionDebugFileName } from "@/lib/domain/support/session-debug/file-name";
+import {
+  buildSessionDebugLocator,
   type SessionDebugLocator,
-  type SessionDebugLocatorSession,
   type SessionDebugRuntimeLocation,
-} from "@/lib/domain/support/session-debug";
+} from "@/lib/domain/support/session-debug/locator";
+import {
+  sessionLocatorFromSession,
+  type SessionDebugLocatorSession,
+} from "@/lib/domain/support/session-debug/session-summary";
 import { useTauriDiagnosticsActions } from "@/hooks/access/tauri/use-diagnostics-actions";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
