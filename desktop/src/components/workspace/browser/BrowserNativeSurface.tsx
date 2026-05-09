@@ -5,7 +5,7 @@ import {
   type RefObject,
 } from "react";
 import { useTauriBrowserWebviewActions } from "@/hooks/access/tauri/use-browser-webview-actions";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { BrowserUnavailableOverlay } from "./BrowserFallbackStates";
 import type { FrameStatus } from "./BrowserPanelTypes";
 

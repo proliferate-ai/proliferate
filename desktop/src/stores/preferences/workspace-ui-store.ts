@@ -3,18 +3,18 @@ import { create } from "zustand";
 import type { ManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
   toggleSidebarWorkspaceTypeSelection,
-  type SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
   clampRightPanelWidth,
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
   normalizeRightPanelDurableState,
-  reconcileRightPanelWorkspaceState,
   type RightPanelDurableState,
   type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
 import {
   type WorkspaceShellIntentKey,

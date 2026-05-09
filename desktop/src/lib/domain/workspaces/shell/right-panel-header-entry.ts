@@ -1,10 +1,10 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import {
-  browserTabTitle,
   type RightPanelBrowserTab,
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { browserTabTitle } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 
 export type RightPanelHeaderEntry =
   | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }

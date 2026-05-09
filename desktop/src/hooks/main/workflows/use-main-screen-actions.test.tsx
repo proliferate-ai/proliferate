@@ -8,7 +8,7 @@ import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import {
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
 import { useMainScreenActions } from "./use-main-screen-actions";
 import type { MainScreenLayoutState } from "@/hooks/main/facade/use-main-screen-state";
 

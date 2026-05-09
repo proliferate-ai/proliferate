@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "@/lib/domain/workspaces/sidebar/sidebar";
+import { SIDEBAR_REPO_GROUP_ITEM_LIMIT } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   resolveSidebarShortcutDigitTarget,
   visibleSidebarShortcutTargetIds,

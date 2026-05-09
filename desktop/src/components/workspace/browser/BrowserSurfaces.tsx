@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { BrowserFrame } from "./BrowserFrame";
 import { BrowserNativeSurface } from "./BrowserNativeSurface";
 import type { FrameStatus } from "./BrowserPanelTypes";

@@ -1,5 +1,5 @@
 import { useCallback, type PointerEvent, type ReactNode } from "react";
-import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel-model";
 
 interface RightPanelHeaderEntryDropZoneProps {
   entryKey: RightPanelHeaderEntryKey;

@@ -5,8 +5,11 @@ import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
 import type { TerminalRecord } from "@anyharness/sdk";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
-import type { RightPanelActiveEntryKey, RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel";
+import type {
+  RightPanelActiveEntryKey,
+  RightPanelBrowserTab,
+  RightPanelTool,
+} from "@/lib/domain/workspaces/shell/right-panel-model";
 
 interface RightPanelContentProps {
   workspaceId: string | null;

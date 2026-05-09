@@ -2,8 +2,8 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildLogicalWorkspaces,
-  findLogicalWorkspace,
 } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { sourceRootForGitPanel } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 export interface GitPanelWorkspaceContext {

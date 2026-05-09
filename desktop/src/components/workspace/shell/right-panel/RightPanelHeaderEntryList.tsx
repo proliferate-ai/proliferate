@@ -11,7 +11,7 @@ import {
 import type {
   RightPanelHeaderEntryKey,
   RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
 
 interface RightPanelHeaderEntryListProps {
   entries: readonly RightPanelHeaderEntry[];

@@ -1,7 +1,7 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 
 export interface WorkspaceSelectionOptions {
   force?: boolean;

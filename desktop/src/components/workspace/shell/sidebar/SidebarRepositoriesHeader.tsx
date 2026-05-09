@@ -10,7 +10,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar";
+import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   label: string;

@@ -2,7 +2,7 @@ import type { Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import { resolveWorkspaceExecutionSidebarActivityState } from "@/lib/domain/sessions/activity";
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { automationWorkspaceDefaultDisplayNameFromBranch } from "@/lib/domain/workspaces/display/workspace-display";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";

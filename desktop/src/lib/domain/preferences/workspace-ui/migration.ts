@@ -1,4 +1,4 @@
-import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar";
+import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import {
   isStringArrayRecord,
   isStringRecord,

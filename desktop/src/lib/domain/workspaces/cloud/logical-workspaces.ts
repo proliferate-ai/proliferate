@@ -7,151 +7,33 @@ import {
   humanizeBranchName,
   workspaceCurrentBranchName,
 } from "@/lib/domain/workspaces/creation/branch-naming";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   cloudWorkspaceGroupKey,
   localWorkspaceGroupKey,
 } from "@/lib/domain/workspaces/cloud/collections";
+import {
+  buildPathLogicalWorkspaceId,
+  buildRemoteLogicalWorkspaceId,
+  buildRepoRootLogicalWorkspaceId,
+  normalizeLogicalWorkspaceBranchKey,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+import {
+  resolvePreferredLogicalWorkspaceMaterialization,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-
-function encodeLogicalSegment(value: string): string {
-  return encodeURIComponent(value);
-}
-
-function decodeLogicalSegment(value: string): string {
-  return decodeURIComponent(value);
-}
-
-function normalizeBranchKey(value: string | null | undefined): string {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : "HEAD";
-}
-
-export type LogicalWorkspaceIdKind = "remote" | "repo-root" | "path";
-
-export interface ParsedLogicalWorkspaceId {
-  kind: LogicalWorkspaceIdKind;
-  segments: string[];
-}
-
-export interface LogicalWorkspace {
-  id: string;
-  repoKey: string;
-  sourceRoot: string;
-  repoRoot: RepoRoot | null;
-  provider: string | null;
-  owner: string | null;
-  repoName: string | null;
-  branchKey: string;
-  displayName: string;
-  localWorkspace: Workspace | null;
-  cloudWorkspace: CloudWorkspaceSummary | null;
-  mobilityWorkspace: CloudMobilityWorkspaceSummary | null;
-  preferredMaterializationId: string | null;
-  effectiveOwner: "local" | "cloud";
-  lifecycle:
-    | "local_active"
-    | "moving_to_cloud"
-    | "cloud_active"
-    | "moving_to_local"
-    | "handoff_failed"
-    | "cleanup_failed"
-    | "cloud_lost";
-  updatedAt: string;
-}
-
-export function buildRemoteLogicalWorkspaceId(
-  provider: string,
-  owner: string,
-  repo: string,
-  branchKey: string,
-): string {
-  return [
-    "remote",
-    encodeLogicalSegment(provider),
-    encodeLogicalSegment(owner),
-    encodeLogicalSegment(repo),
-    encodeLogicalSegment(branchKey),
-  ].join(":");
-}
-
-export function buildRepoRootLogicalWorkspaceId(
-  repoRootId: string,
-  branchKey: string,
-): string {
-  return [
-    "repo-root",
-    encodeLogicalSegment(repoRootId),
-    encodeLogicalSegment(branchKey),
-  ].join(":");
-}
-
-export function buildPathLogicalWorkspaceId(
-  path: string,
-  branchKey: string,
-): string {
-  return [
-    "path",
-    encodeLogicalSegment(path),
-    encodeLogicalSegment(branchKey),
-  ].join(":");
-}
-
-export function parseLogicalWorkspaceId(
-  logicalWorkspaceId: string | null | undefined,
-): ParsedLogicalWorkspaceId | null {
-  if (!logicalWorkspaceId) {
-    return null;
-  }
-
-  const [kind, ...encodedSegments] = logicalWorkspaceId.split(":");
-  if (kind !== "remote" && kind !== "repo-root" && kind !== "path") {
-    return null;
-  }
-
-  return {
-    kind,
-    segments: encodedSegments.map(decodeLogicalSegment),
-  };
-}
-
-export function replaceLogicalWorkspaceBranch(
-  logicalWorkspaceId: string | null | undefined,
-  branchKey: string,
-): string | null {
-  const parsed = parseLogicalWorkspaceId(logicalWorkspaceId);
-  if (!parsed) {
-    return null;
-  }
-
-  const nextBranchKey = normalizeBranchKey(branchKey);
-  if (parsed.kind === "remote" && parsed.segments.length === 4) {
-    const [provider, owner, repo] = parsed.segments;
-    return buildRemoteLogicalWorkspaceId(provider!, owner!, repo!, nextBranchKey);
-  }
-
-  if (parsed.kind === "repo-root" && parsed.segments.length === 2) {
-    return buildRepoRootLogicalWorkspaceId(parsed.segments[0]!, nextBranchKey);
-  }
-
-  if (parsed.kind === "path" && parsed.segments.length === 2) {
-    return buildPathLogicalWorkspaceId(parsed.segments[0]!, nextBranchKey);
-  }
-
-  return null;
-}
 
 function workspaceBranchKey(workspace: Workspace): string {
   const originalBranch = workspace.originalBranch?.trim();
   if (originalBranch) {
-    return normalizeBranchKey(originalBranch);
+    return normalizeLogicalWorkspaceBranchKey(originalBranch);
   }
 
-  return normalizeBranchKey(workspaceCurrentBranchName(workspace));
+  return normalizeLogicalWorkspaceBranchKey(workspaceCurrentBranchName(workspace));
 }
 
 function cloudBranchKey(workspace: CloudWorkspaceSummary): string {
-  return normalizeBranchKey(workspace.repo.branch);
+  return normalizeLogicalWorkspaceBranchKey(workspace.repo.branch);
 }
 
 function buildLogicalWorkspaceIdForLocalWorkspace(workspace: Workspace): string {
@@ -207,50 +89,6 @@ function mobilityDefaultDisplayName(workspace: CloudMobilityWorkspaceSummary): s
   return workspace.repo.branch?.trim()
     ? humanizeBranchName(workspace.repo.branch)
     : workspace.repo.name;
-}
-
-function preferredMaterializationId(
-  localWorkspace: Workspace | null,
-  cloudWorkspace: CloudWorkspaceSummary | null,
-  mobilityWorkspace: CloudMobilityWorkspaceSummary | null,
-  currentSelectionId: string | null,
-  effectiveOwnerHint: "local" | "cloud" | null,
-): { workspaceId: string | null; owner: "local" | "cloud" } {
-  const cloudId = cloudWorkspace
-    ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
-    : mobilityWorkspace?.cloudWorkspaceId
-      ? cloudWorkspaceSyntheticId(mobilityWorkspace.cloudWorkspaceId)
-      : null;
-
-  if (effectiveOwnerHint === "local" && localWorkspace) {
-    return { workspaceId: localWorkspace.id, owner: "local" };
-  }
-
-  if (effectiveOwnerHint === "cloud" && cloudId) {
-    return {
-      workspaceId: cloudId,
-      owner: "cloud",
-    };
-  }
-
-  if (localWorkspace && currentSelectionId === localWorkspace.id) {
-    return { workspaceId: localWorkspace.id, owner: "local" };
-  }
-
-  if (cloudId) {
-    if (currentSelectionId === cloudId) {
-      return { workspaceId: cloudId, owner: "cloud" };
-    }
-  }
-
-  if (localWorkspace) {
-    return { workspaceId: localWorkspace.id, owner: "local" };
-  }
-
-  return {
-    workspaceId: cloudId,
-    owner: "cloud",
-  };
 }
 
 function latestUpdatedAt(
@@ -366,7 +204,7 @@ export function buildLogicalWorkspaces(args: {
       workspace.repo.provider,
       workspace.repo.owner,
       workspace.repo.name,
-      normalizeBranchKey(workspace.repo.branch),
+      normalizeLogicalWorkspaceBranchKey(workspace.repo.branch),
     );
     const current = byId.get(logicalId);
     if (!current) {
@@ -383,7 +221,7 @@ export function buildLogicalWorkspaces(args: {
 
   return Array.from(byId.entries())
     .map(([id, entry]) => {
-      const materialization = preferredMaterializationId(
+      const materialization = resolvePreferredLogicalWorkspaceMaterialization(
         entry.localWorkspace,
         entry.cloudWorkspace,
         entry.mobilityWorkspace,
@@ -452,7 +290,7 @@ export function buildLogicalWorkspaces(args: {
           : entry.cloudWorkspace
             ? cloudBranchKey(entry.cloudWorkspace)
             : entry.mobilityWorkspace
-              ? normalizeBranchKey(entry.mobilityWorkspace.repo.branch)
+              ? normalizeLogicalWorkspaceBranchKey(entry.mobilityWorkspace.repo.branch)
               : "HEAD",
         displayName,
         localWorkspace: entry.localWorkspace,
@@ -474,96 +312,4 @@ export function buildLogicalWorkspaces(args: {
       } satisfies LogicalWorkspace;
     })
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-}
-
-export function logicalWorkspaceMatchesId(
-  workspace: LogicalWorkspace,
-  candidateId: string | null | undefined,
-): boolean {
-  if (!candidateId) {
-    return false;
-  }
-
-  return candidateId === workspace.id
-    || candidateId === workspace.localWorkspace?.id
-    || candidateId === logicalWorkspaceCloudMaterializationId(workspace);
-}
-
-export function logicalWorkspaceRelatedIds(
-  workspace: Pick<
-    LogicalWorkspace,
-    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
-  >,
-): string[] {
-  const ids: string[] = [];
-  const pushId = (id: string | null | undefined) => {
-    if (id && !ids.includes(id)) {
-      ids.push(id);
-    }
-  };
-
-  pushId(workspace.id);
-  pushId(workspace.localWorkspace?.id);
-  pushId(logicalWorkspaceCloudMaterializationId(workspace));
-  pushId(workspace.preferredMaterializationId);
-  return ids;
-}
-
-export function latestLogicalWorkspaceTimestamp(
-  timestamps: Record<string, string>,
-  workspace: Pick<
-    LogicalWorkspace,
-    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
-  >,
-): string | null {
-  let latestTimestamp: string | null = null;
-  for (const id of logicalWorkspaceRelatedIds(workspace)) {
-    const timestamp = timestamps[id];
-    if (!timestamp) {
-      continue;
-    }
-    if (!latestTimestamp || new Date(timestamp).getTime() > new Date(latestTimestamp).getTime()) {
-      latestTimestamp = timestamp;
-    }
-  }
-  return latestTimestamp;
-}
-
-export function findLogicalWorkspace(
-  workspaces: readonly LogicalWorkspace[],
-  candidateId: string | null | undefined,
-): LogicalWorkspace | null {
-  if (!candidateId) {
-    return null;
-  }
-
-  return workspaces.find((workspace) => logicalWorkspaceMatchesId(workspace, candidateId)) ?? null;
-}
-
-export function resolveLogicalWorkspaceMaterializationId(
-  workspace: LogicalWorkspace,
-  currentSelectionId?: string | null,
-): string | null {
-  const selected = preferredMaterializationId(
-    workspace.localWorkspace,
-    workspace.cloudWorkspace,
-    workspace.mobilityWorkspace,
-    currentSelectionId ?? null,
-    workspace.mobilityWorkspace?.owner === "local" || workspace.mobilityWorkspace?.owner === "cloud"
-      ? workspace.mobilityWorkspace.owner
-      : null,
-  );
-  return selected.workspaceId;
-}
-
-export function logicalWorkspaceCloudMaterializationId(
-  workspace: Pick<LogicalWorkspace, "cloudWorkspace" | "mobilityWorkspace">,
-): string | null {
-  if (workspace.cloudWorkspace) {
-    return cloudWorkspaceSyntheticId(workspace.cloudWorkspace.id);
-  }
-  if (workspace.mobilityWorkspace?.cloudWorkspaceId) {
-    return cloudWorkspaceSyntheticId(workspace.mobilityWorkspace.cloudWorkspaceId);
-  }
-  return null;
 }

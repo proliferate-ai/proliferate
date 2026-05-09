@@ -5,7 +5,7 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar";
+import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";

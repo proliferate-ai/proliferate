@@ -3,7 +3,6 @@ import {
   availableRightPanelTools,
   isRightPanelTool,
   normalizeRightPanelDurableState,
-  normalizeRightPanelMaterializedState,
   parseRightPanelHeaderEntryKey,
   rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
@@ -14,7 +13,8 @@ import {
   type RightPanelHeaderEntryKey,
   type RightPanelMaterializedState,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { normalizeRightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-state";
 
 export function migrateLegacyRightPanelWorkspaceState(args: {
   state: unknown;
