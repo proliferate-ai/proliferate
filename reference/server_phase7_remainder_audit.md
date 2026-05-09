@@ -8,6 +8,8 @@ implementation lanes.
 
 The goal is not to declare the server clean. The goal is to separate ordinary
 missed cleanup from systems that need Phase 8 design before implementation.
+Cleanup PRs should remove fixed rows from the active classifications and note
+the resolved follow-up below.
 
 ## Classification Key
 
@@ -26,8 +28,6 @@ missed cleanup from systems that need Phase 8 design before implementation.
 |---|---|---|---|
 | `server/proliferate/integrations/anonymous_telemetry.py` | integration imports product/db | Small follow-up | Move persistence and product decisions out of the integration; keep the integration as transport/payload code. |
 | `server/proliferate/integrations/billing/stripe.py` | integration imports product | Phase 8 deferred | Handle with the billing/Stripe redesign so integration types and billing product types are separated deliberately. |
-| `server/proliferate/integrations/sandbox/daytona.py` | integration imports product | Small follow-up | Move product-facing runtime input types to neutral integration models or service adapters. |
-| `server/proliferate/integrations/sandbox/e2b.py` | integration imports product | Small follow-up | Same as Daytona; keep provider code protocol-only. |
 | `server/proliferate/server/ai_magic/service.py` | service imports ORM/auth model | Small follow-up | Pass user IDs or small snapshots instead of auth ORM objects. |
 | `server/proliferate/server/billing/service.py` | service imports ORM/auth model | Phase 8 deferred | Billing service remains coupled to accounting, subscription, webhook, and usage semantics. |
 | `server/proliferate/server/cloud/repos/service.py` | service imports ORM/auth model | Small follow-up | Replace auth/ORM coupling with explicit user or owner snapshots. |
@@ -82,8 +82,6 @@ path ownership and behavior-preserving goals.
 - `server/proliferate/server/organizations/service.py`
 - `server/proliferate/db/store/organization_invitations.py`
 - `server/proliferate/auth/desktop/service.py`
-- `server/proliferate/integrations/sandbox/daytona.py`
-- `server/proliferate/integrations/sandbox/e2b.py`
 - `server/proliferate/server/cloud/mcp_oauth/service.py`
 - `server/proliferate/server/cloud/mcp_connections/service.py`
 - `server/proliferate/server/cloud/mcp_catalog/catalog.py`
@@ -105,6 +103,15 @@ only when the deferred caller owning the transaction boundary migrates.
 - `server/proliferate/db/store/cloud_mcp/oauth_clients.py`
 - `server/proliferate/db/store/cloud_worktree_policy.py`
 - `server/proliferate/db/store/organizations.py`
+
+## Resolved Follow-ups After Phase 7K
+
+- `server/proliferate/integrations/sandbox/daytona.py`
+- `server/proliferate/integrations/sandbox/e2b.py`
+
+  Removed the product-domain timestamp import from the provider integrations.
+  Both providers now use `proliferate.utils.time.utcnow`, so their
+  `INTEGRATION_PRODUCT_IMPORT` allowlist entries were deleted.
 
 ## Phase 7 Result
 
