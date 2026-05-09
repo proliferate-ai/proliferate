@@ -35,7 +35,6 @@ anyharness/sdk-react/src/hooks/sessions.ts
 desktop/src/components/ui/icons.tsx
 desktop/src/hooks/sessions/use-session-creation-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
-desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/lib/domain/chat/__fixtures__/playground.ts
 desktop/src/lib/infra/measurement/debug-measurement.ts

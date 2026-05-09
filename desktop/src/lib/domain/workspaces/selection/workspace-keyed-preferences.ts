@@ -48,3 +48,20 @@ export function resolveWithWorkspaceFallback<T>(
 export function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
+
+export function shouldWriteStringArrayPreference(
+  record: Record<string, string[]>,
+  key: string,
+  value: readonly string[],
+): boolean {
+  const hasCurrent = Object.prototype.hasOwnProperty.call(record, key);
+  return !hasCurrent || !sameStringArray(record[key] ?? [], value);
+}
+
+export function shouldWriteReferencePreference<T>(
+  record: Record<string, T>,
+  key: string,
+  value: T,
+): boolean {
+  return !Object.prototype.hasOwnProperty.call(record, key) || record[key] !== value;
+}
