@@ -26,6 +26,9 @@ jobs:
       - name: Check max source file length
         run: python3 scripts/check_max_lines.py
 
+      - name: Check AnyHarness old flat paths
+        run: python3 scripts/check_anyharness_old_paths.py
+
       - name: Check frontend layer boundaries
         run: python3 scripts/check_frontend_boundaries.py
 

@@ -54,6 +54,14 @@ integrations/mcp/json_rpc.rs
 - When splitting god files, split by responsibility, not by arbitrary line
   ranges.
 
+## Old Path Ratchets
+
+After a split lands, block the old flat file path from coming back. The
+repo-shape CI job runs `scripts/check_anyharness_old_paths.py` for completed
+AnyHarness splits. Add paths to that check only after the owning migration has
+landed on `main`, then keep the old path blocked instead of relying on review
+to catch resurrected flat files.
+
 ## Review Questions
 
 Ask these in PR review:
