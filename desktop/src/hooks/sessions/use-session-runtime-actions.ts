@@ -3,6 +3,10 @@ import {
   replaySessionHistory,
 } from "@/lib/domain/sessions/stream/stream-state";
 import {
+  mergeFetchedHistoryWithExistingEvents,
+  mergeFetchedHistoryWithNewerEvents,
+} from "@/lib/domain/sessions/history/history-event-merge";
+import {
   createTranscriptState,
   type Session,
   type SessionEventEnvelope,
@@ -29,6 +33,7 @@ import {
   type MeasurementOperationKind,
   type MeasurementSurface,
 } from "@/lib/infra/measurement/debug-measurement";
+import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { markLatencyFlowLiveAttached } from "@/lib/infra/measurement/latency-flow";
 import {
@@ -1127,25 +1132,6 @@ function isSessionHistoryTimeoutAbort(error: unknown): boolean {
     && error.message === "Session history request timed out";
 }
 
-function mergeFetchedHistoryWithNewerEvents(
-  fetchedEvents: SessionEventEnvelope[],
-  currentEvents: SessionEventEnvelope[],
-): SessionEventEnvelope[] {
-  const fetchedLastSeq = fetchedEvents.length > 0
-    ? fetchedEvents[fetchedEvents.length - 1]?.seq ?? 0
-    : 0;
-  if (fetchedLastSeq <= 0) {
-    return fetchedEvents;
-  }
-
-  const newerEvents = currentEvents.filter((event) => event.seq > fetchedLastSeq);
-  if (newerEvents.length === 0) {
-    return fetchedEvents;
-  }
-
-  return [...fetchedEvents, ...newerEvents].sort((a, b) => a.seq - b.seq);
-}
-
 function resolveHistoryApplyOperationKind(input: {
   afterSeq?: number;
   beforeSeq?: number;
@@ -1211,12 +1197,6 @@ function applyHistoryStateToStores(
   });
 }
 
-function uniqueMeasurementOperationIds(
-  operationIds: readonly (MeasurementOperationId | null | undefined)[],
-): MeasurementOperationId[] {
-  return [...new Set(operationIds.filter((id): id is MeasurementOperationId => !!id))];
-}
-
 function createFlushAwareSessionStreamHandle(
   handle: SessionStreamHandle,
   streamFlushController: SessionStreamFlushController,
@@ -1267,23 +1247,4 @@ function recordHistoryStateCounts(
     target: isBefore ? "session.history.items_before" : "session.history.items_after",
     count: Object.keys(transcript.itemsById).length,
   });
-}
-
-function mergeFetchedHistoryWithExistingEvents(
-  fetchedEvents: SessionEventEnvelope[],
-  currentEvents: SessionEventEnvelope[],
-): SessionEventEnvelope[] {
-  if (fetchedEvents.length === 0) {
-    return currentEvents;
-  }
-
-  const eventsBySeq = new Map<number, SessionEventEnvelope>();
-  for (const event of currentEvents) {
-    eventsBySeq.set(event.seq, event);
-  }
-  for (const event of fetchedEvents) {
-    eventsBySeq.set(event.seq, event);
-  }
-
-  return Array.from(eventsBySeq.values()).sort((a, b) => a.seq - b.seq);
 }
