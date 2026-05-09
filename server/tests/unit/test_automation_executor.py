@@ -499,7 +499,8 @@ async def test_expired_dispatching_run_is_swept_to_failed(
             record.claim_expires_at = now - timedelta(seconds=1)
             await session.commit()
 
-        swept = await sweep_expired_dispatching_runs(now=now)
+        async with engine_module.async_session_factory() as session, session.begin():
+            swept = await sweep_expired_dispatching_runs(db=session, now=now)
 
         async with engine_module.async_session_factory() as session:
             record = (
@@ -558,7 +559,8 @@ async def test_expired_dispatching_sweep_is_bounded_and_ordered(
             second_record.claim_expires_at = now - timedelta(minutes=1)
             await session.commit()
 
-        swept = await sweep_expired_dispatching_runs(now=now, limit=1)
+        async with engine_module.async_session_factory() as session, session.begin():
+            swept = await sweep_expired_dispatching_runs(db=session, now=now, limit=1)
 
         async with engine_module.async_session_factory() as session:
             first_record = await session.get(AutomationRun, first_claim.id)
