@@ -16,13 +16,23 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import (
     SandboxProvider,
-    SandboxProviderKind,
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
 from proliferate.server.cloud.runtime.anyharness_api import (
     verify_runtime_auth_enforced,
     wait_for_runtime_health,
+)
+from proliferate.server.cloud.runtime.domain.reconnect_policy import (
+    SandboxReconnectAction,
+    endpoint_health_wait_config,
+    reconnect_action_for_sandbox_state,
+    restart_health_wait_config,
+    should_persist_rotated_runtime_url,
+)
+from proliferate.server.cloud.runtime.domain.runtime_state import (
+    runtime_endpoint_rotated_update,
+    runtime_process_relaunched_update,
 )
 from proliferate.server.cloud.runtime.sandbox_exec import (
     build_detached_runtime_launch_command,
@@ -34,16 +44,6 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     runtime_launcher_path,
 )
 
-_DEFAULT_ENDPOINT_HEALTH_ATTEMPTS = 4
-_DEFAULT_ENDPOINT_HEALTH_DELAY_SECONDS = 0.5
-_DEFAULT_RESTART_HEALTH_ATTEMPTS = 12
-_DEFAULT_RESTART_HEALTH_DELAY_SECONDS = 0.5
-_DAYTONA_ENDPOINT_HEALTH_ATTEMPTS = 30
-_DAYTONA_ENDPOINT_HEALTH_DELAY_SECONDS = 1.0
-_DAYTONA_RESTART_HEALTH_ATTEMPTS = 45
-_DAYTONA_RESTART_HEALTH_DELAY_SECONDS = 1.0
-_RUNNING_SANDBOX_STATES = frozenset({"running", "started"})
-_RESUMABLE_SANDBOX_STATES = frozenset({"paused", "stopped"})
 _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV = "ANYHARNESS_DEFER_STARTUP_RETENTION"
 
 
@@ -123,22 +123,6 @@ async def _relaunch_runtime(
         raise CloudRuntimeReconnectError(f"Cloud runtime relaunch failed: {stderr.strip()[:400]}")
 
 
-def _is_daytona_provider(provider_kind: str | SandboxProviderKind) -> bool:
-    return provider_kind == SandboxProviderKind.daytona or provider_kind == "daytona"
-
-
-def _endpoint_health_wait_config(provider_kind: str | SandboxProviderKind) -> tuple[int, float]:
-    if _is_daytona_provider(provider_kind):
-        return _DAYTONA_ENDPOINT_HEALTH_ATTEMPTS, _DAYTONA_ENDPOINT_HEALTH_DELAY_SECONDS
-    return _DEFAULT_ENDPOINT_HEALTH_ATTEMPTS, _DEFAULT_ENDPOINT_HEALTH_DELAY_SECONDS
-
-
-def _restart_health_wait_config(provider_kind: str | SandboxProviderKind) -> tuple[int, float]:
-    if _is_daytona_provider(provider_kind):
-        return _DAYTONA_RESTART_HEALTH_ATTEMPTS, _DAYTONA_RESTART_HEALTH_DELAY_SECONDS
-    return _DEFAULT_RESTART_HEALTH_ATTEMPTS, _DEFAULT_RESTART_HEALTH_DELAY_SECONDS
-
-
 async def _runtime_is_ready(
     runtime_url: str,
     *,
@@ -170,8 +154,8 @@ async def _connect_or_resume_sandbox(
     sandbox_id: str,
     sandbox_state: str,
 ) -> object:
-    normalized_state = sandbox_state.strip().lower()
-    if normalized_state in _RUNNING_SANDBOX_STATES:
+    reconnect_action = reconnect_action_for_sandbox_state(sandbox_state)
+    if reconnect_action == SandboxReconnectAction.connect:
         try:
             return await provider.connect_running_sandbox(
                 sandbox_id,
@@ -180,7 +164,7 @@ async def _connect_or_resume_sandbox(
         except Exception as exc:
             raise CloudRuntimeReconnectError("Failed to reconnect to the cloud sandbox.") from exc
 
-    if normalized_state in _RESUMABLE_SANDBOX_STATES:
+    if reconnect_action == SandboxReconnectAction.resume:
         try:
             return await provider.resume_sandbox(
                 sandbox_id,
@@ -233,17 +217,17 @@ async def ensure_workspace_runtime_ready(
     # Daytona preview URLs are signed and may rotate even while the same
     # sandbox and AnyHarness process remain healthy. Probe the fresh endpoint
     # before deciding that the runtime itself needs a restart.
-    endpoint_probe_attempts, endpoint_probe_delay_seconds = _endpoint_health_wait_config(
+    endpoint_probe = endpoint_health_wait_config(
         sandbox_record.provider,
     )
     if await _runtime_is_ready(
         endpoint.runtime_url,
         workspace_id=workspace.id,
         access_token=access_token,
-        total_attempts=endpoint_probe_attempts,
-        delay_seconds=endpoint_probe_delay_seconds,
+        total_attempts=endpoint_probe.total_attempts,
+        delay_seconds=endpoint_probe.delay_seconds,
     ):
-        if endpoint.runtime_url != workspace.runtime_url:
+        if should_persist_rotated_runtime_url(workspace.runtime_url, endpoint.runtime_url):
             await persist_runtime_reconnect_state_for_workspace(
                 workspace,
                 sandbox_record,
@@ -266,7 +250,7 @@ async def ensure_workspace_runtime_ready(
         workspace.id,
     )
     await _relaunch_runtime(provider, sandbox, runtime_context, workspace.id)
-    restart_probe_attempts, restart_probe_delay_seconds = _restart_health_wait_config(
+    restart_probe = restart_health_wait_config(
         sandbox_record.provider,
     )
     try:
@@ -274,8 +258,8 @@ async def ensure_workspace_runtime_ready(
             endpoint.runtime_url,
             workspace_id=workspace.id,
             required_successes=1,
-            total_attempts=restart_probe_attempts,
-            delay_seconds=restart_probe_delay_seconds,
+            total_attempts=restart_probe.total_attempts,
+            delay_seconds=restart_probe.delay_seconds,
         )
     except CloudRuntimeReconnectError:
         debug_report = await collect_runtime_debug_report(
@@ -343,20 +327,20 @@ async def ensure_environment_runtime_ready(
     )
 
     endpoint = await provider.resolve_runtime_endpoint(sandbox)
-    endpoint_probe_attempts, endpoint_probe_delay_seconds = _endpoint_health_wait_config(
+    endpoint_probe = endpoint_health_wait_config(
         sandbox_record.provider,
     )
     if await _runtime_is_ready(
         endpoint.runtime_url,
         workspace_id=workspace_id,
         access_token=access_token,
-        total_attempts=endpoint_probe_attempts,
-        delay_seconds=endpoint_probe_delay_seconds,
+        total_attempts=endpoint_probe.total_attempts,
+        delay_seconds=endpoint_probe.delay_seconds,
     ):
-        if endpoint.runtime_url != environment.runtime_url:
+        if should_persist_rotated_runtime_url(environment.runtime_url, endpoint.runtime_url):
             await save_runtime_environment_state(
                 environment.id,
-                runtime_url=endpoint.runtime_url,
+                **runtime_endpoint_rotated_update(endpoint.runtime_url),
             )
         return endpoint.runtime_url
 
@@ -371,7 +355,7 @@ async def ensure_environment_runtime_ready(
         workspace_id,
     )
     await _relaunch_runtime(provider, sandbox, runtime_context, workspace_id)
-    restart_probe_attempts, restart_probe_delay_seconds = _restart_health_wait_config(
+    restart_probe = restart_health_wait_config(
         sandbox_record.provider,
     )
     try:
@@ -379,8 +363,8 @@ async def ensure_environment_runtime_ready(
             endpoint.runtime_url,
             workspace_id=workspace_id,
             required_successes=1,
-            total_attempts=restart_probe_attempts,
-            delay_seconds=restart_probe_delay_seconds,
+            total_attempts=restart_probe.total_attempts,
+            delay_seconds=restart_probe.delay_seconds,
         )
     except CloudRuntimeReconnectError:
         debug_report = await collect_runtime_debug_report(
@@ -402,7 +386,6 @@ async def ensure_environment_runtime_ready(
     )
     await save_runtime_environment_state(
         environment.id,
-        runtime_url=endpoint.runtime_url,
-        increment_runtime_generation=True,
+        **runtime_process_relaunched_update(endpoint.runtime_url),
     )
     return endpoint.runtime_url
