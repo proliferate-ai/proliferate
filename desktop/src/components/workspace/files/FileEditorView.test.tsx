@@ -70,6 +70,14 @@ vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
   }),
 }));
 
+vi.mock("@/hooks/workspaces/files/derived/use-workspace-file-context", () => ({
+  useWorkspaceFileContext: () => ({
+    workspaceUiKey: "workspace-1",
+    materializedWorkspaceId: "workspace-1",
+    treeStateKey: "workspace-1",
+  }),
+}));
+
 vi.mock("@anyharness/sdk-react", () => ({
   useReadWorkspaceFileQuery: (options: unknown) => readWorkspaceFileQuery(options),
   useGitStatusQuery: (options: unknown) => gitStatusQuery(options),

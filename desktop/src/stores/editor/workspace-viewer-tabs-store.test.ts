@@ -23,9 +23,6 @@ describe("workspace viewer tabs store", () => {
     useWorkspaceViewerTabsStore.getState().prepareWorkspace({
       workspaceUiKey: "workspace-ui",
       materializedWorkspaceId: "workspace",
-      anyharnessWorkspaceId: "workspace",
-      runtimeUrl: "http://runtime",
-      treeStateKey: "tree",
       initialOpenTargets: [fileTarget, diffTarget, allChangesTarget],
       initialActiveTargetKey: viewerTargetKey(diffTarget),
     });
@@ -56,9 +53,6 @@ describe("workspace viewer tabs store", () => {
     useWorkspaceViewerTabsStore.getState().prepareWorkspace({
       workspaceUiKey: "workspace-ui",
       materializedWorkspaceId: "workspace",
-      anyharnessWorkspaceId: "workspace",
-      runtimeUrl: "http://runtime",
-      treeStateKey: "tree",
       initialOpenTargets: [readmeTarget, deletedTarget],
       initialActiveTargetKey: viewerTargetKey(deletedTarget),
     });

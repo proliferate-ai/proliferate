@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useWorkspaceFilesQuery } from "@anyharness/sdk-react";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
@@ -34,19 +34,15 @@ import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measur
 function FileTreePaneInner() {
   useDebugRenderCount("file-tree");
   const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
-  const workspaceUiKey = useWorkspaceViewerTabsStore((s) => s.workspaceUiKey);
-  const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
-  const anyharnessWorkspaceId = useWorkspaceViewerTabsStore((s) => s.anyharnessWorkspaceId);
-  const runtimeUrl = useWorkspaceViewerTabsStore((s) => s.runtimeUrl);
-  const authToken = useWorkspaceViewerTabsStore((s) => s.authToken);
-  const treeStateKey = useWorkspaceViewerTabsStore((s) => s.treeStateKey);
+  const fileContext = useWorkspaceFileContext();
+  const { workspaceUiKey, materializedWorkspaceId, treeStateKey } = fileContext;
   const { listOpenTargets } = useTauriShellActions();
   const selectedDirectory = useWorkspaceFileTreeUiStore(
     (s) => treeStateKey ? s.selectedDirectoryByTreeKey[treeStateKey] ?? "" : "",
   );
   const startCreateDraft = useWorkspaceFileTreeUiStore((s) => s.startCreateDraft);
   const expandDirectory = useWorkspaceFileTreeUiStore((s) => s.expandDirectory);
-  const { initForWorkspace } = useWorkspaceFileActions();
+  const { initForWorkspace } = useWorkspaceFileActions(fileContext);
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const rootQuery = useWorkspaceFilesQuery({
     workspaceId: materializedWorkspaceId,
@@ -141,12 +137,9 @@ function FileTreePaneInner() {
 
   const rootEntries = rootQuery.data?.entries;
   useDebugValueChange("file_tree.inputs", "pane_refs", {
-    anyharnessWorkspaceId,
-    authToken,
     materializedWorkspaceId,
     rootEntries,
     rootQueryStatus: rootQuery.status,
-    runtimeUrl,
     selectedDirectory,
     targets,
     treeStateKey,
@@ -171,20 +164,7 @@ function FileTreePaneInner() {
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() =>
-            workspaceUiKey
-            && materializedWorkspaceId
-            && anyharnessWorkspaceId
-            && runtimeUrl
-            && treeStateKey
-            && initForWorkspace({
-              workspaceUiKey,
-              materializedWorkspaceId,
-              anyharnessWorkspaceId,
-              runtimeUrl,
-              treeStateKey,
-              authToken,
-            })}
+          onClick={() => void initForWorkspace()}
           className="h-7 px-2 text-xs"
         >
           Retry
