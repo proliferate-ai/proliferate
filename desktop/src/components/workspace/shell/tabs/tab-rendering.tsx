@@ -3,8 +3,8 @@ import {
   BrailleSweepBadge,
   CircleAlert,
   MessageSquare,
-  ProviderIcon,
 } from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 import type {
   HeaderChatMenuEntry,
   HeaderChatTabEntry,

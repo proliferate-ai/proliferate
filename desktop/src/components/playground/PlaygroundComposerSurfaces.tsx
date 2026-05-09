@@ -17,7 +17,7 @@ import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-sessio
 import {
   FILE_MENTION_SEARCH_RESULTS,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
 
 export function renderComposerSurfaceForScenario(scenario: ScenarioKey): ReactNode {

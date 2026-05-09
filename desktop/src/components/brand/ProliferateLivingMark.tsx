@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { ProliferateIcon, ProliferateIconResolve } from "@/components/ui/icons";
+import {
+  ProliferateIcon,
+  ProliferateIconResolve,
+} from "@/components/ui/proliferate-icons";
 import {
   BRAILLE_SWEEP_FRAMES,
   BRAILLE_SWEEP_FRAME_INTERVAL_MS,

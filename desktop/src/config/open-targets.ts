@@ -1,13 +1,13 @@
 import type { ComponentType } from "react";
+import { FileIcon } from "@/components/ui/icons";
 import {
   CursorIcon,
-  FileIcon,
   FinderIcon,
   TerminalAppIcon,
   VSCodeIcon,
   WindsurfIcon,
   ZedIcon,
-} from "@/components/ui/icons";
+} from "@/components/ui/app-icons";
 import type { OpenTargetIconId } from "@/lib/access/tauri/shell";
 
 export interface OpenTargetIconDefinition {

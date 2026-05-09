@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "@/lib/domain/chat/__fixtures__/playground";
+import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 
 describe("TurnDiffPanel", () => {
