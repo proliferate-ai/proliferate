@@ -158,19 +158,6 @@ async def get_organization_with_membership(
     )
 
 
-async def load_organization_with_membership(
-    *,
-    organization_id: UUID,
-    user_id: UUID,
-) -> OrganizationWithMembershipRecord | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_organization_with_membership(
-            db,
-            organization_id=organization_id,
-            user_id=user_id,
-        )
-
-
 async def load_active_membership(
     *,
     organization_id: UUID,
