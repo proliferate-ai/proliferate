@@ -14,7 +14,7 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_cla
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claim_transitions.py 6 transitional automation claim transitions own transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 3 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 1 worker scheduler batch owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 33 transitional store owns transaction commit
+STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 29 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mobility.py 6 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_runtime_environments.py 3 phase 8 runtime lifecycle wrappers own deliberate checkpoint transactions
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspace_setup_runs.py 4 transitional store owns transaction commit
@@ -25,7 +25,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_cloud_workspac
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claim_transitions.py 6 transitional automation claim transitions open DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claims.py 4 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 2 worker/cloud workspace helper still opens isolated DB sessions
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 34 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 29 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 3 materialization refresh wrappers open isolated DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper opens isolated DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mobility.py 9 transitional store opens DB session
@@ -35,7 +35,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_run
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 24 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 2 intentional create/rotate transaction commits before external email delivery
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 4 transitional wrappers used by deferred billing/cloud callers
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 3 transitional wrappers used by deferred organization/cloud callers
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 1 deferred runtime/mobility/worker callers still use isolated OAuth-account user load
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claim_transitions.py 1 transitional automation claim transitions import DB session factory

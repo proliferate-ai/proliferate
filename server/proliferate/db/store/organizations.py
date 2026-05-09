@@ -306,17 +306,17 @@ async def ensure_organization_billing_subject_id(organization_id: UUID) -> UUID:
 
 
 async def load_organization_by_billing_subject(
+    db: AsyncSession,
     billing_subject_id: UUID,
 ) -> OrganizationRecord | None:
-    async with db_engine.async_session_factory() as db:
-        row = (
-            await db.execute(
-                select(Organization)
-                .join(BillingSubject, BillingSubject.organization_id == Organization.id)
-                .where(
-                    BillingSubject.id == billing_subject_id,
-                    BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
-                )
+    row = (
+        await db.execute(
+            select(Organization)
+            .join(BillingSubject, BillingSubject.organization_id == Organization.id)
+            .where(
+                BillingSubject.id == billing_subject_id,
+                BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
             )
-        ).scalar_one_or_none()
-        return organization_record(row) if row is not None else None
+        )
+    ).scalar_one_or_none()
+    return organization_record(row) if row is not None else None
