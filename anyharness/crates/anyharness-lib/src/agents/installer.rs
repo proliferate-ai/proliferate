@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::acp_registry::{self, ResolvedRegistryDistribution};
 use super::install_lock::AgentInstallLock;
 use super::model::*;
 use super::registry::built_in_registry;
 use super::resolver::artifact_root;
 use super::seed;
+use crate::integrations::agent_cli::acp_registry::{self, ResolvedRegistryDistribution};
+use crate::integrations::agent_cli::executable::{is_valid_executable, make_executable};
+use crate::integrations::agent_cli::launcher::{generate_launcher_script, LauncherError};
 use uuid::Uuid;
 
 const CURL_CONNECT_TIMEOUT: &str = "10";
@@ -47,6 +49,18 @@ pub enum InstallError {
     RegistryFailed(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+}
+
+impl From<LauncherError> for InstallError {
+    fn from(error: LauncherError) -> Self {
+        match error {
+            LauncherError::Io(error) => Self::Io(error),
+            LauncherError::PathJoin(error) => Self::CommandFailed {
+                program: "launcher".into(),
+                message: error.to_string(),
+            },
+        }
+    }
 }
 
 pub fn install_agent(
@@ -1051,55 +1065,6 @@ fn install_agent_process_fallback(
 }
 
 // ---------------------------------------------------------------------------
-// Launcher script generation
-// ---------------------------------------------------------------------------
-
-fn generate_launcher_script(
-    launcher_path: &Path,
-    exec_path: &Path,
-    extra_args: &[String],
-    env: &HashMap<String, String>,
-    path_prefixes: &[PathBuf],
-) -> Result<(), InstallError> {
-    let mut script = String::from("#!/bin/sh\nset -e\n");
-
-    if !path_prefixes.is_empty() {
-        let joined =
-            std::env::join_paths(path_prefixes).map_err(|e| InstallError::CommandFailed {
-                program: "launcher".into(),
-                message: e.to_string(),
-            })?;
-        script.push_str(&format!(
-            "export PATH='{}':\"$PATH\"\n",
-            shell_escape(&joined.to_string_lossy())
-        ));
-    }
-
-    for (key, value) in env {
-        script.push_str(&format!("export {}='{}'\n", key, shell_escape(value)));
-    }
-
-    script.push_str(&format!("exec \"{}\"", exec_path.display()));
-    for arg in extra_args {
-        script.push(' ');
-        script.push_str(&shell_escape(arg));
-    }
-    script.push_str(" \"$@\"\n");
-
-    std::fs::write(launcher_path, script)?;
-    make_executable(launcher_path)?;
-    Ok(())
-}
-
-fn shell_escape(s: &str) -> String {
-    if s.contains(|c: char| c.is_whitespace() || c == '\'' || c == '"' || c == '\\') {
-        format!("'{}'", s.replace('\'', "'\\''"))
-    } else {
-        s.to_string()
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Download / extraction helpers (with timeouts)
 // ---------------------------------------------------------------------------
 
@@ -1228,36 +1193,6 @@ fn find_binary_in_dir(dir: &Path, name: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-/// Check whether a path points to a valid, executable file (not a partial download).
-pub(crate) fn is_valid_executable(path: &Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        match std::fs::metadata(path) {
-            Ok(meta) if meta.is_file() => meta.permissions().mode() & 0o111 != 0,
-            _ => false,
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        path.is_file()
-    }
-}
-
-#[cfg(unix)]
-fn make_executable(path: &Path) -> Result<(), InstallError> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut perms = std::fs::metadata(path)?.permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(path, perms)?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn make_executable(_path: &Path) -> Result<(), InstallError> {
-    Ok(())
 }
 
 #[cfg(test)]
