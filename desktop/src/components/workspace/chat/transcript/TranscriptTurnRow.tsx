@@ -10,7 +10,7 @@ import {
   TurnShell,
   resolveTurnTrailingStatus,
 } from "./TranscriptTurnChrome";
-import { TurnItemSequence } from "./TranscriptTree";
+import { TurnItemSequence } from "./TurnItemSequence";
 import {
   findTailAssistantProseRootId,
   getAssistantProseContent,
