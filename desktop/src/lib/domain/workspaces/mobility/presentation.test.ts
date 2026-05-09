@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import {
+  getMobilityOverlayTitle,
+  mobilityActionableCopy,
+  mobilityBlockerCopy,
+  mobilityBranchSyncLoadingCopy,
+  mobilityDetailCopyLabel,
+  mobilityLocationLabel,
+  mobilityReconnectCopy,
+  mobilityStatusCopy,
+} from "@/lib/domain/workspaces/mobility/presentation";
+
+describe("workspace mobility presentation", () => {
+  it("maps workspace locations to labels, detail labels, and primary actions", () => {
+    expect(mobilityLocationLabel("local_workspace")).toBe("Local workspace");
+    expect(mobilityLocationLabel("local_worktree")).toBe("Local worktree");
+    expect(mobilityLocationLabel("cloud_workspace")).toBe("Cloud workspace");
+
+    expect(mobilityDetailCopyLabel("local_workspace")).toBe("Path");
+    expect(mobilityDetailCopyLabel("cloud_workspace")).toBe("Repository");
+
+    expect(mobilityActionableCopy("local_workspace")).toEqual({
+      headline: "Move to cloud",
+      body: "Move this local workspace to a cloud runtime.",
+      actionLabel: "Move to cloud",
+      direction: "local_to_cloud",
+    });
+    expect(mobilityActionableCopy("local_worktree")).toEqual({
+      headline: "Move to cloud",
+      body: "Move this local worktree to a cloud runtime.",
+      actionLabel: "Move to cloud",
+      direction: "local_to_cloud",
+    });
+    expect(mobilityActionableCopy("cloud_workspace")).toEqual({
+      headline: "Bring back local",
+      body: "Move this workspace from cloud back to your local machine.",
+      actionLabel: "Bring back local",
+      direction: "cloud_to_local",
+    });
+  });
+
+  it("maps mobility phases and directions to status copy and overlay titles", () => {
+    expect(mobilityStatusCopy("provisioning", "local_to_cloud")).toEqual({
+      title: "Preparing cloud workspace",
+      description: "Starting this branch in the cloud.",
+    });
+    expect(mobilityStatusCopy("provisioning", "cloud_to_local")).toEqual({
+      title: "Preparing local workspace",
+      description: "Preparing this branch on your machine.",
+    });
+    expect(mobilityStatusCopy("transferring", "local_to_cloud")).toEqual({
+      title: "Syncing workspace",
+      description: "Moving workspace state to the new runtime.",
+    });
+    expect(mobilityStatusCopy("success", "local_to_cloud")).toEqual({
+      title: "Now in cloud",
+      description: "This workspace has moved to the cloud.",
+    });
+    expect(mobilityStatusCopy("success", "cloud_to_local")).toEqual({
+      title: "Now local",
+      description: "This workspace has moved back to your local machine.",
+    });
+    expect(mobilityStatusCopy("failed", "local_to_cloud")).toEqual({
+      title: "Move did not finish",
+      description: "The workspace stayed where it was.",
+    });
+
+    expect(getMobilityOverlayTitle("local_to_cloud", "finalizing")).toBe("Moving to cloud");
+    expect(getMobilityOverlayTitle("cloud_to_local", "cleanup_pending")).toBe("Bringing back local");
+    expect(getMobilityOverlayTitle("local_to_cloud", "cleanup_failed")).toBe("Cleanup needs retry");
+  });
+
+  it("maps reconnection and branch-sync states to copy", () => {
+    expect(mobilityReconnectCopy("local_to_cloud")).toBe("Reconnect any MCP tools you need in cloud.");
+    expect(mobilityReconnectCopy("cloud_to_local")).toBe(
+      "Reconnect any MCP tools you need in this local environment.",
+    );
+    expect(mobilityBranchSyncLoadingCopy()).toEqual({
+      headline: "Checking local branch sync",
+      body: "Comparing your local branch with GitHub.",
+    });
+  });
+
+  it("maps blocker codes to actionable copy", () => {
+    expect(mobilityBlockerCopy({
+      code: "branch_not_published",
+      direction: "local_to_cloud",
+      branchName: "feature/test-gap",
+    })).toEqual({
+      headline: "Can't move this workspace to cloud yet",
+      body: "This branch isn't on GitHub yet.",
+      helper: "Publish `feature/test-gap` before moving to cloud.",
+      actionLabel: "Publish branch",
+    });
+
+    expect(mobilityBlockerCopy({
+      code: "cloud_repo_access",
+      direction: "cloud_to_local",
+    })).toEqual({
+      headline: "Can't bring this workspace back local yet",
+      body: "GitHub access for this repo is not authorized.",
+      helper: "You can be signed in while Proliferate is still missing access to this repository or organization.",
+      actionLabel: "Manage GitHub access",
+    });
+
+    expect(mobilityBlockerCopy({
+      code: "unknown",
+      direction: "local_to_cloud",
+      rawMessage: "Runtime owner changed.",
+    })).toEqual({
+      headline: "Can't move this workspace to cloud yet",
+      body: "Runtime owner changed.",
+      helper: "Resolve the issue and try again.",
+      actionLabel: "Got it",
+    });
+  });
+});
