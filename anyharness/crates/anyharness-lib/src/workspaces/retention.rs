@@ -71,8 +71,7 @@ impl WorkspaceRetentionService {
         runtime_home: std::path::PathBuf,
     ) -> Self {
         let enabled = std::env::var_os("ANYHARNESS_DISABLE_WORKTREE_RETENTION").is_none();
-        let defer_startup_pass =
-            std::env::var_os(ANYHARNESS_DEFER_STARTUP_RETENTION_ENV).is_some();
+        let defer_startup_pass = std::env::var_os(ANYHARNESS_DEFER_STARTUP_RETENTION_ENV).is_some();
         Self {
             workspace_runtime,
             workspace_store,

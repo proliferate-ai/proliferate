@@ -1,6 +1,6 @@
 # Files
 
-`anyharness-lib/src/files/**` owns safe workspace-relative file browsing and
+`anyharness-lib/src/adapters/files/**` owns safe workspace-relative file browsing and
 file entry operations.
 
 ## Core Concepts
@@ -23,9 +23,9 @@ It does not own editor state, watchers, or workspace identity.
 
 Core model and service files:
 
-- `anyharness/crates/anyharness-lib/src/files/types.rs`
-- `anyharness/crates/anyharness-lib/src/files/service.rs`
-- `anyharness/crates/anyharness-lib/src/files/safety.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/files/types.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/files/service.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`
 
 The files types are transport-friendly internal results:
 
@@ -46,7 +46,7 @@ full contract layer.
 ### Path Safety
 
 Every operation begins with `resolve_safe_path(...)`
-(`anyharness/crates/anyharness-lib/src/files/safety.rs`).
+(`anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`).
 
 That path-safety layer rejects:
 
@@ -61,7 +61,7 @@ This is the main security boundary for the files subsystem.
 ### Listing
 
 `WorkspaceFilesService::list_entries(...)`
-(`anyharness/crates/anyharness-lib/src/files/service.rs`):
+(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`):
 
 1. resolves a safe directory path
 2. reads directory entries
@@ -73,7 +73,7 @@ This is the main security boundary for the files subsystem.
 ### Reading
 
 `read_file(...)`
-(`anyharness/crates/anyharness-lib/src/files/service.rs`):
+(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`):
 
 1. resolves a safe file path
 2. verifies the target exists and is not a directory
@@ -87,7 +87,7 @@ This is the main security boundary for the files subsystem.
 ### Writing
 
 `write_file(...)`
-(`anyharness/crates/anyharness-lib/src/files/service.rs`):
+(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`):
 
 1. resolves a safe path
 2. rejects directory targets
@@ -99,7 +99,7 @@ This is the main security boundary for the files subsystem.
 ### Creating
 
 `create_entry(...)`
-(`anyharness/crates/anyharness-lib/src/files/service.rs`) is create-only.
+(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`) is create-only.
 It is exposed as `POST /v1/workspaces/{workspace_id}/files/entries`; the
 existing `PUT /files/file` write surface keeps its compatibility upsert
 behavior.

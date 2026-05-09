@@ -171,7 +171,7 @@ impl RetirePreflightChecker {
             let workspace_id_for_task = workspace.id.clone();
             let workspace_path = workspace.path.clone();
             let status = tokio::task::spawn_blocking(move || {
-                crate::git::GitService::status(
+                crate::adapters::git::GitService::status(
                     &workspace_id_for_task,
                     std::path::Path::new(&workspace_path),
                 )
@@ -200,7 +200,7 @@ impl RetirePreflightChecker {
                 });
             }
             if mode != RetirePreflightMode::Purge
-                && status.operation != crate::git::types::GitOperation::None
+                && status.operation != crate::adapters::git::types::GitOperation::None
             {
                 blockers.push(WorkspaceRetireBlocker {
                     code: WorkspaceRetireBlockerCode::ActiveGitOperation,
@@ -223,7 +223,7 @@ impl RetirePreflightChecker {
                         let remote_ref = remote_ref.clone();
                         let workspace_path = workspace_path.clone();
                         move || {
-                            crate::git::GitService::head_is_ancestor_of(
+                            crate::adapters::git::GitService::head_is_ancestor_of(
                                 std::path::Path::new(&workspace_path),
                                 &remote_ref,
                             )
@@ -241,7 +241,7 @@ impl RetirePreflightChecker {
                         merged_into_base = tokio::task::spawn_blocking({
                             let local_ref = local_ref.clone();
                             move || {
-                                crate::git::GitService::head_is_ancestor_of(
+                                crate::adapters::git::GitService::head_is_ancestor_of(
                                     std::path::Path::new(&workspace_path),
                                     &local_ref,
                                 )
@@ -260,7 +260,7 @@ impl RetirePreflightChecker {
                     base_oid = tokio::task::spawn_blocking({
                         let base = base.to_string();
                         move || {
-                            crate::git::GitService::resolve_ref_oid(
+                            crate::adapters::git::GitService::resolve_ref_oid(
                                 std::path::Path::new(&workspace_path),
                                 &base,
                             )
@@ -522,20 +522,24 @@ pub fn workspace_access_retire_blocker(error: WorkspaceAccessError) -> Workspace
 }
 
 fn git_operation_to_contract(
-    operation: crate::git::types::GitOperation,
+    operation: crate::adapters::git::types::GitOperation,
 ) -> anyharness_contract::v1::git::GitOperation {
     match operation {
-        crate::git::types::GitOperation::Merge => anyharness_contract::v1::git::GitOperation::Merge,
-        crate::git::types::GitOperation::Rebase => {
+        crate::adapters::git::types::GitOperation::Merge => {
+            anyharness_contract::v1::git::GitOperation::Merge
+        }
+        crate::adapters::git::types::GitOperation::Rebase => {
             anyharness_contract::v1::git::GitOperation::Rebase
         }
-        crate::git::types::GitOperation::CherryPick => {
+        crate::adapters::git::types::GitOperation::CherryPick => {
             anyharness_contract::v1::git::GitOperation::CherryPick
         }
-        crate::git::types::GitOperation::Revert => {
+        crate::adapters::git::types::GitOperation::Revert => {
             anyharness_contract::v1::git::GitOperation::Revert
         }
-        crate::git::types::GitOperation::None => anyharness_contract::v1::git::GitOperation::None,
+        crate::adapters::git::types::GitOperation::None => {
+            anyharness_contract::v1::git::GitOperation::None
+        }
     }
 }
 

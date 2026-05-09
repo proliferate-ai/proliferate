@@ -18,7 +18,7 @@ use super::types::{
     CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
     SetWorkspaceDisplayNameError,
 };
-use crate::git::service::GitService;
+use crate::adapters::git::service::GitService;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;

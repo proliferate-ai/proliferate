@@ -5,6 +5,7 @@ pub mod branch_refresh;
 pub mod checkout_gate;
 pub mod creator_context;
 pub mod detector;
+pub mod files_runtime;
 pub mod inventory;
 pub mod managed_root;
 pub mod model;

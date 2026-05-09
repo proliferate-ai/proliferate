@@ -21,7 +21,7 @@ use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadR
 use super::service::CoworkService;
 use crate::acp::manager::AcpManager;
 use crate::acp::session_actor::SessionCommand;
-use crate::git::GitService;
+use crate::adapters::git::GitService;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;

@@ -19,8 +19,7 @@ use serde::Deserialize;
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::app::AppState;
-use crate::git::types::{
+use crate::adapters::git::types::{
     CommitError, GitActionAvailability as InternalGitActionAvailability,
     GitBranch as InternalGitBranch, GitBranchDiffFilesResult as InternalGitBranchDiffFilesResult,
     GitChangedFile as InternalGitChangedFile, GitDiffError, GitDiffFile as InternalGitDiffFile,
@@ -29,7 +28,8 @@ use crate::git::types::{
     GitOperation as InternalGitOperation, GitStatusSnapshot as InternalGitStatusSnapshot,
     GitStatusSummary as InternalGitStatusSummary, PushError,
 };
-use crate::git::GitService;
+use crate::adapters::git::GitService;
+use crate::app::AppState;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
