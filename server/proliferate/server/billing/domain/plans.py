@@ -262,8 +262,7 @@ def compute_unlimited_cloud_hours_state(
     subscription = latest_healthy_cloud_subscription(subscriptions, now, config=config)
     manual_entitlement = active_unlimited_cloud_entitlement(entitlements, now)
     legacy_cloud_subscription = subscription is not None and (
-        not config.pro_billing_enabled
-        or subscription_is_legacy_cloud(subscription, config=config)
+        not config.pro_billing_enabled or subscription_is_legacy_cloud(subscription, config=config)
     )
     unlimited_boundaries = [
         boundary
