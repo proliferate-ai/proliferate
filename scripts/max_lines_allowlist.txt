@@ -44,7 +44,6 @@ desktop/src/components/workspace/chat/tool-calls/CollapsedActionRows.tsx
 desktop/src/hooks/sessions/use-session-control-actions.ts
 desktop/src/hooks/sessions/use-session-creation-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
-desktop/src/hooks/sessions/use-session-selection-actions.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/lib/domain/chat/__fixtures__/playground.ts
