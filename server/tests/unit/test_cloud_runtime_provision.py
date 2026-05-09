@@ -1159,3 +1159,140 @@ class TestProvisionWorkspaceGitSetup:
             "Sandbox limit reached. Archive or delete another cloud workspace before "
             "starting a new one."
         ]
+
+    @pytest.mark.asyncio
+    async def test_provision_workspace_cleans_up_new_sandbox_after_setup_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ctx = _make_provision_input(codex_enabled=True)
+        sandbox_record = SimpleNamespace(
+            id=uuid.uuid4(),
+            external_sandbox_id="sandbox-db-123",
+        )
+        connected = SimpleNamespace(
+            handle=SimpleNamespace(
+                sandbox_id="sandbox-provider-123",
+                template_version="v1",
+            ),
+            sandbox=object(),
+            endpoint=SimpleNamespace(runtime_url="https://runtime.invalid"),
+        )
+        destroyed: list[str] = []
+        closed_usage: list[dict[str, object]] = []
+        sandbox_statuses: list[tuple[object, str]] = []
+        workspace_errors: list[dict[str, object]] = []
+
+        class _Provider(SimpleNamespace):
+            async def destroy_sandbox(self, sandbox_id: str) -> None:
+                destroyed.append(sandbox_id)
+
+        provider = _Provider(
+            kind=SandboxProviderKind.daytona,
+            template_version="v1",
+        )
+
+        async def _load_provision_input(_workspace_id, *, requested_base_sha=None):
+            return ctx
+
+        async def _authorize_sandbox_start(*args, **kwargs):
+            return SimpleNamespace(allowed=True, message=None)
+
+        async def _connect_existing_environment_sandbox(*args, **kwargs):
+            return None
+
+        async def _reserve_and_attach_sandbox_for_environment(*args, **kwargs):
+            return sandbox_record
+
+        async def _create_and_connect_sandbox(*args, **kwargs):
+            return connected
+
+        async def _prepare_runtime_template(*args, **kwargs) -> None:
+            raise RuntimeError("template setup failed")
+
+        async def _set_workspace_status(*args, **kwargs) -> None:
+            return None
+
+        async def _load_cloud_sandbox_by_id(_sandbox_id):
+            return sandbox_record
+
+        async def _close_usage_segment_for_sandbox(**kwargs):
+            closed_usage.append(kwargs)
+
+        async def _update_sandbox_status(sandbox, status: str, **_kwargs):
+            sandbox_statuses.append((sandbox, status))
+
+        async def _mark_workspace_error_by_id(_workspace_id, message: str, **kwargs):
+            workspace_errors.append({"message": message, **kwargs})
+
+        monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
+        monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
+        monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_environment_sandbox",
+            _connect_existing_environment_sandbox,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "reserve_and_attach_sandbox_for_environment",
+            _reserve_and_attach_sandbox_for_environment,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_create_and_connect_sandbox",
+            _create_and_connect_sandbox,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_prepare_runtime_template",
+            _prepare_runtime_template,
+        )
+        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
+        monkeypatch.setattr(
+            runtime_provision,
+            "load_cloud_sandbox_by_id",
+            _load_cloud_sandbox_by_id,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "close_usage_segment_for_sandbox",
+            _close_usage_segment_for_sandbox,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "update_sandbox_status",
+            _update_sandbox_status,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "mark_workspace_error_by_id",
+            _mark_workspace_error_by_id,
+        )
+        monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_log_provision_summary",
+            lambda *args, **kwargs: None,
+        )
+
+        with pytest.raises(RuntimeError, match="template setup failed"):
+            await runtime_provision.provision_workspace(ctx.workspace_id)
+
+        assert destroyed == ["sandbox-provider-123"]
+        assert closed_usage == [
+            {
+                "sandbox_id": sandbox_record.id,
+                "ended_at": closed_usage[0]["ended_at"],
+                "closed_by": "provision_failure",
+                "is_billable": False,
+            }
+        ]
+        assert sandbox_statuses == [(sandbox_record, "destroyed")]
+        assert workspace_errors == [
+            {
+                "message": "template setup failed",
+                "clear_runtime_metadata": True,
+                "clear_active_sandbox": True,
+            }
+        ]
