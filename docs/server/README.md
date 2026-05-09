@@ -44,6 +44,8 @@ step is design clarity before code movement:
 
 - [audits/phase6-billing-reconciler.md](audits/phase6-billing-reconciler.md)
   for the billing reconciler worker-boundary audit.
+- [audits/phase6-cloud-runtime-background-loops.md](audits/phase6-cloud-runtime-background-loops.md)
+  for the cloud runtime setup monitor and provisioning scheduler audit.
 
 Specs (when added) define product/surface contracts: lifecycle invariants,
 edge cases, and focused verification for a specific cross-cutting flow such as
