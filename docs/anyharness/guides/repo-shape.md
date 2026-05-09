@@ -20,6 +20,15 @@ Use these thresholds for Rust source under `anyharness/crates/**`:
 
 Existing files above these limits are migration debt, not precedent.
 
+Current migration reality:
+
+- `sessions/store/**` is the current split session store shape.
+- `sessions/mcp_bindings/**` is the current split session MCP binding and
+  launch assembly shape.
+- `acp/event_sink/**` is the current split session event sink shape.
+- `sessions/runtime/**` is the current split session runtime shape.
+- `acp/session_actor.rs` remains a manual deferred rewrite target.
+
 ## Module Style
 
 Prefer explicit concern files over giant `mod.rs` files.

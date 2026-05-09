@@ -2,9 +2,18 @@
 
 Status: authoritative for durable/product code under `anyharness-lib/src/domains/**`.
 
-The current code is transitional and still has top-level folders such as
-`sessions/`, `workspaces/`, `agents`, and `cowork`. Those folders map to the
-target `domains/**` layer.
+The current code is transitional. Product domains such as `agents`, `cowork`,
+`reviews`, `plans`, and `mobility` live under `domains/**`. Core session,
+workspace, repo-root, and terminal paths still use top-level transitional
+folders until the final topology rename.
+
+Current session-domain reality:
+
+- user MCP bindings and session MCP launch assembly live under
+  `sessions/mcp_bindings/**`.
+- session persistence is split under `sessions/store/**`.
+- session runtime orchestration is split under `sessions/runtime/**`, while the
+  final `domains/sessions/**` topology remains deferred.
 
 ## Purpose
 
@@ -97,7 +106,7 @@ Expected shape:
   store/          # product-specific queries
   service/        # durable product rules
   runtime/        # only if it coordinates cross-domain or live work
-  mcp_server.rs   # when the product exposes MCP tools
+  mcp_server/     # when the product exposes MCP tools
   session_extension.rs  # when the product plugs into session launch/prompt
 ```
 
@@ -280,6 +289,10 @@ domains/reviews/session_extension.rs
 domains/sessions/subagents/session_extension.rs
 domains/sessions/workspace_naming/session_extension.rs
 ```
+
+Current implementations are still transitional in places:
+`domains/cowork/runtime.rs`, `domains/reviews/hooks.rs`,
+`sessions/subagents/hooks.rs`, and `sessions/workspace_naming/hooks.rs`.
 
 `app/` wires implementations into the core. The core domain depends only on the
 trait.

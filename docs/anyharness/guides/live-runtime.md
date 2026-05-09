@@ -5,6 +5,9 @@ Status: authoritative for long-lived in-memory runtime systems under
 
 The current code is transitional. Today `acp/**` maps mostly to target
 `live/sessions/**`, and `terminals/**` maps to target `live/terminals/**`.
+`SessionEventSink` has been split under `acp/event_sink/**`; the final move to
+`live/sessions/event_sink/**` is still a topology step. `SessionActor` remains
+in `acp/session_actor.rs`; the actor loop rewrite is deferred/manual.
 
 ## Purpose
 
@@ -53,8 +56,8 @@ Current name mapping:
 ```text
 AcpManager       -> LiveSessionManager
 RuntimeClient    -> AcpClient
-SessionEventSink -> keep or split under event_sink/
-InteractionBroker -> live/sessions/interactions/
+SessionEventSink -> currently acp/event_sink/**; target live/sessions/event_sink/
+InteractionBroker -> currently acp/permission_broker/**; target live/sessions/interactions/
 ```
 
 ## Actor Files
