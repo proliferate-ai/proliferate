@@ -15,7 +15,7 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     HttpLaunchTemplate,
     StaticUrl,
 )
-from proliferate.server.cloud.mcp_materialization import service
+from proliferate.server.cloud.mcp_materialization import http_launch, record_materialization
 from proliferate.server.cloud.mcp_materialization.models import (
     LocalStdioCandidateModel,
     MaterializeCloudMcpResponse,
@@ -91,9 +91,9 @@ async def test_no_auth_http_materializes_server(monkeypatch: pytest.MonkeyPatch)
         icon_id="globe",
         capabilities=(),
     )
-    monkeypatch.setattr(service, "get_catalog_entry", lambda _entry_id: entry)
+    monkeypatch.setattr(record_materialization, "get_catalog_entry", lambda _entry_id: entry)
 
-    result = await service._materialize_record(
+    result = await record_materialization.materialize_record(
         _connection(catalog_entry_id=entry.id),
         target_location="cloud",
     )
@@ -106,7 +106,7 @@ async def test_no_auth_http_materializes_server(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.asyncio
 async def test_cloudflare_docs_materializes_no_auth_http_server() -> None:
-    result = await service._materialize_record(
+    result = await record_materialization.materialize_record(
         _connection(catalog_entry_id="cloudflare_docs"),
         target_location="cloud",
     )
@@ -125,7 +125,7 @@ async def test_neon_materialization_includes_read_only_header() -> None:
         auth=_auth(temp.id, {"secretFields": {"api_key": "neon-token"}}),
     )
 
-    result = await service._materialize_record(record, target_location="cloud")
+    result = await record_materialization.materialize_record(record, target_location="cloud")
 
     assert len(result.servers) == 1
     headers = {header.name: header.value for header in result.servers[0].headers}
@@ -170,7 +170,7 @@ async def test_stdio_secret_and_setting_sources_resolve_to_static_launch_values(
         ),
         capabilities=(),
     )
-    monkeypatch.setattr(service, "get_catalog_entry", lambda _entry_id: entry)
+    monkeypatch.setattr(record_materialization, "get_catalog_entry", lambda _entry_id: entry)
     record = _connection(catalog_entry_id=entry.id, settings_json='{"mode":"readonly"}')
     record = _connection(
         catalog_entry_id=entry.id,
@@ -178,7 +178,7 @@ async def test_stdio_secret_and_setting_sources_resolve_to_static_launch_values(
         auth=_auth(record.id, {"secretFields": {"api_key": "secret-token"}}),
     )
 
-    result = await service._materialize_record(record, target_location="local")
+    result = await record_materialization.materialize_record(record, target_location="local")
 
     assert len(result.candidates) == 1
     candidate = result.candidates[0]
@@ -223,14 +223,14 @@ async def test_secret_http_invalid_settings_report_invalid_settings(
         ),
         capabilities=(),
     )
-    monkeypatch.setattr(service, "get_catalog_entry", lambda _entry_id: entry)
+    monkeypatch.setattr(record_materialization, "get_catalog_entry", lambda _entry_id: entry)
     temp = _connection(catalog_entry_id=entry.id)
     record = _connection(
         catalog_entry_id=entry.id,
         auth=_auth(temp.id, {"secretFields": {"api_key": "secret-token"}}),
     )
 
-    result = await service._materialize_record(record, target_location="cloud")
+    result = await record_materialization.materialize_record(record, target_location="cloud")
 
     assert result.servers == []
     assert result.summaries[0].reason == "invalid_settings"
@@ -266,10 +266,10 @@ async def test_oauth_http_invalid_settings_report_invalid_settings(
     async def _ready_oauth_access_token(_record: CloudMcpConnectionRecord) -> str:
         return "access-token"
 
-    monkeypatch.setattr(service, "get_catalog_entry", lambda _entry_id: entry)
-    monkeypatch.setattr(service, "_ready_oauth_access_token", _ready_oauth_access_token)
+    monkeypatch.setattr(record_materialization, "get_catalog_entry", lambda _entry_id: entry)
+    monkeypatch.setattr(http_launch, "ready_oauth_access_token", _ready_oauth_access_token)
 
-    result = await service._materialize_record(
+    result = await record_materialization.materialize_record(
         _connection(catalog_entry_id=entry.id),
         target_location="cloud",
     )
@@ -283,9 +283,9 @@ async def test_oauth_http_invalid_settings_report_invalid_settings(
 async def test_unknown_catalog_entry_materialization_is_silent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(service, "get_catalog_entry", lambda _entry_id: None)
+    monkeypatch.setattr(record_materialization, "get_catalog_entry", lambda _entry_id: None)
 
-    result = await service._materialize_record(
+    result = await record_materialization.materialize_record(
         _connection(catalog_entry_id="removed"),
         target_location="cloud",
     )
@@ -319,10 +319,14 @@ async def test_unconfigured_static_oauth_materialization_is_silent(
         icon_id="slack",
         capabilities=(),
     )
-    monkeypatch.setattr(service, "get_catalog_entry", lambda _entry_id: entry)
-    monkeypatch.setattr(service, "catalog_entry_is_configured", lambda _entry: False)
+    monkeypatch.setattr(record_materialization, "get_catalog_entry", lambda _entry_id: entry)
+    monkeypatch.setattr(
+        record_materialization,
+        "catalog_entry_is_configured",
+        lambda _entry: False,
+    )
 
-    result = await service._materialize_record(
+    result = await record_materialization.materialize_record(
         _connection(catalog_entry_id=entry.id),
         target_location="cloud",
     )
