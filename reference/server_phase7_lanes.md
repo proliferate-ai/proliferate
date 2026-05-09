@@ -207,6 +207,11 @@ short map, invariants, recommended split, and implementation/defer decision.
 
 ### 7G. Cloud Runtime Environments Store
 
+Status: completed as audit-only in
+`reference/server_phase7_runtime_environments_audit.md`. The remaining
+runtime-environment store debt is Phase 8 runtime-lifecycle work, not a safe
+Phase 7 implementation lane.
+
 Audit:
 
 - `server/proliferate/db/store/cloud_runtime_environments.py`

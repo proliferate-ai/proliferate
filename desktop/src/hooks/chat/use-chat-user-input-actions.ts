@@ -1,11 +1,11 @@
 import type { UserInputSubmittedAnswer } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionInteractionActions } from "@/hooks/sessions/workflows/use-session-interaction-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useChatUserInputActions() {
   const showToast = useToastStore((state) => state.show);
-  const { resolveUserInput } = useSessionActions();
+  const { resolveUserInput } = useSessionInteractionActions();
 
   const handleSubmitUserInput = useCallback((answers: UserInputSubmittedAnswer[]) => {
     void resolveUserInput({ outcome: "submitted", answers }).catch((error) => {

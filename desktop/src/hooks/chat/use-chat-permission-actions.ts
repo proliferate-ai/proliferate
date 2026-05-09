@@ -1,10 +1,10 @@
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionInteractionActions } from "@/hooks/sessions/workflows/use-session-interaction-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useChatPermissionActions() {
   const showToast = useToastStore((state) => state.show);
-  const { resolvePermission } = useSessionActions();
+  const { resolvePermission } = useSessionInteractionActions();
 
   const handleSelectPermissionOption = useCallback((optionId: string) => {
     void resolvePermission({ optionId }).catch((error) => {

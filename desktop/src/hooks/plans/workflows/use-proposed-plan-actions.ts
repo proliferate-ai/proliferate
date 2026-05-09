@@ -17,7 +17,8 @@ import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-ef
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
+import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
@@ -105,7 +106,8 @@ export function useProposedPlanActions() {
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
   const fetchPlanMutation = useFetchPlanMutation({ workspaceId: selectedWorkspaceId });
   const reviewActions = useReviewActions();
-  const { promptActiveSession, setActiveSessionConfigOption } = useSessionActions();
+  const { setActiveSessionConfigOption } = useSessionConfigActions();
+  const { promptActiveSession } = useSessionPromptActions();
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
   const {

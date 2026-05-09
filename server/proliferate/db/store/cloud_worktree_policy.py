@@ -10,13 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
 from proliferate.utils.time import utcnow
-
-DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO = 20
-MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO = 10
-MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO = 100
 
 
 @dataclass(frozen=True)
@@ -83,18 +78,8 @@ async def save_cloud_worktree_policy(
 async def load_cloud_worktree_policy_for_user(
     user_id: UUID,
 ) -> CloudWorktreePolicyValue | None:
+    # Transitional runtime-sync read; Phase 8 should thread this session boundary.
+    from proliferate.db import engine as db_engine
+
     async with db_engine.async_session_factory() as db:
         return await get_cloud_worktree_policy(db, user_id)
-
-
-async def persist_cloud_worktree_policy_for_user(
-    *,
-    user_id: UUID,
-    max_materialized_worktrees_per_repo: int,
-) -> CloudWorktreePolicyValue:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await save_cloud_worktree_policy(
-            db,
-            user_id=user_id,
-            max_materialized_worktrees_per_repo=max_materialized_worktrees_per_repo,
-        )

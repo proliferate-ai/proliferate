@@ -46,21 +46,24 @@ async def test_create_automation_bootstraps_repo_config(
     user_id = uuid.uuid4()
 
     try:
-        response = await automation_service.create_automation(
-            user_id,
-            CreateAutomationRequest(
-                title="Daily check",
-                prompt="Check the repo.",
-                gitOwner="proliferate-ai",
-                gitRepoName="proliferate",
-                schedule=AutomationScheduleRequest(
-                    rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
-                    timezone="UTC",
+        async with engine_module.async_session_factory() as session:
+            response = await automation_service.create_automation(
+                session,
+                user_id,
+                CreateAutomationRequest(
+                    title="Daily check",
+                    prompt="Check the repo.",
+                    gitOwner="proliferate-ai",
+                    gitRepoName="proliferate",
+                    schedule=AutomationScheduleRequest(
+                        rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
+                        timezone="UTC",
+                    ),
+                    executionTarget="cloud",
+                    agentKind="codex",
                 ),
-                executionTarget="cloud",
-                agentKind="codex",
-            ),
-        )
+            )
+            await session.commit()
 
         async with engine_module.async_session_factory() as session:
             repo_config = (
@@ -121,8 +124,9 @@ async def test_resume_cloud_automation_requires_agent_kind(
             )
             await session.commit()
 
-        with pytest.raises(AutomationAgentRequired) as exc:
-            await automation_service.resume_automation(user_id, automation_id)
+        async with engine_module.async_session_factory() as session:
+            with pytest.raises(AutomationAgentRequired) as exc:
+                await automation_service.resume_automation(session, user_id, automation_id)
 
         assert exc.value.code == "automation_agent_required"
     finally:
@@ -144,21 +148,23 @@ async def test_create_cloud_automation_requires_agent_kind(
     user_id = uuid.uuid4()
 
     try:
-        with pytest.raises(AutomationAgentRequired) as exc:
-            await automation_service.create_automation(
-                user_id,
-                CreateAutomationRequest(
-                    title="Daily check",
-                    prompt="Check the repo.",
-                    gitOwner="proliferate-ai",
-                    gitRepoName="proliferate",
-                    schedule=AutomationScheduleRequest(
-                        rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
-                        timezone="UTC",
+        async with engine_module.async_session_factory() as session:
+            with pytest.raises(AutomationAgentRequired) as exc:
+                await automation_service.create_automation(
+                    session,
+                    user_id,
+                    CreateAutomationRequest(
+                        title="Daily check",
+                        prompt="Check the repo.",
+                        gitOwner="proliferate-ai",
+                        gitRepoName="proliferate",
+                        schedule=AutomationScheduleRequest(
+                            rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
+                            timezone="UTC",
+                        ),
+                        executionTarget="cloud",
                     ),
-                    executionTarget="cloud",
-                ),
-            )
+                )
 
         assert exc.value.code == "automation_agent_required"
     finally:

@@ -8,7 +8,7 @@ import {
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
@@ -33,7 +33,7 @@ function markAutoSessionTitleRequested(sessionId: string): boolean {
 }
 
 export function useSessionTitleActions() {
-  const { applySessionSummary } = useSessionRuntimeActions();
+  const { applySessionSummary } = useSessionSummaryActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const updateSessionTitleMutation = useUpdateSessionTitleMutation();
 

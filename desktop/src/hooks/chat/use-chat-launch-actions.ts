@@ -1,7 +1,8 @@
 import { useCallback } from "react";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
 import type { Workspace } from "@anyharness/sdk";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
@@ -38,7 +39,8 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
-  const { createEmptySessionWithResolvedConfig, setActiveSessionConfigOption } = useSessionActions();
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const { setActiveSessionConfigOption } = useSessionConfigActions();
   const { createThreadFromSelection } = useCoworkThreadWorkflow();
   const {
     activeSessionId,

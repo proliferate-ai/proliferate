@@ -5,11 +5,11 @@ import {
 import { useCallback } from "react";
 import { useCoworkCache } from "@/hooks/access/anyharness/cowork/use-cowork-cache";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export function useCoworkSessionActions() {
-  const { applySessionSummary } = useSessionRuntimeActions();
+  const { applySessionSummary } = useSessionSummaryActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const {
     invalidateCoworkManagedWorkspaces,

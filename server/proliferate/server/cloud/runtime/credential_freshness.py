@@ -11,9 +11,8 @@ from typing import Literal
 from uuid import UUID
 
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, CloudRuntimeEnvironmentStatus
-from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
-from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
+from proliferate.db.store.cloud_credentials import CloudCredentialRecord
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
@@ -28,6 +27,7 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
     reconcile_remote_agents,
@@ -90,7 +90,9 @@ class CredentialFreshnessSnapshot:
     process_applied_at: datetime | None
 
 
-def _active_supported_credentials(records: list[CloudCredential]) -> list[CloudCredential]:
+def _active_supported_credentials(
+    records: list[CloudCredentialRecord],
+) -> list[CloudCredentialRecord]:
     return [
         record
         for record in records
@@ -98,7 +100,7 @@ def _active_supported_credentials(records: list[CloudCredential]) -> list[CloudC
     ]
 
 
-def _revision_for(records: list[CloudCredential], auth_mode: str, prefix: str) -> str:
+def _revision_for(records: list[CloudCredentialRecord], auth_mode: str, prefix: str) -> str:
     parts = sorted(
         f"{record.provider}:{record.auth_mode}:{record.payload_format}:{record.id}"
         for record in records
@@ -110,7 +112,7 @@ def _revision_for(records: list[CloudCredential], auth_mode: str, prefix: str) -
 
 
 def build_credential_revision_state(
-    records: list[CloudCredential],
+    records: list[CloudCredentialRecord],
 ) -> CredentialRevisionState:
     active_records = _active_supported_credentials(records)
     credential_payloads = {

@@ -11,7 +11,6 @@ from proliferate.db.store.cloud_mcp.connections import (
     upsert_user_connection,
 )
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
-from proliferate.server.cloud.mcp_catalog.domain.types import CatalogEntry
 
 
 async def legacy_upsert_secret_connection(
@@ -19,7 +18,8 @@ async def legacy_upsert_secret_connection(
     *,
     user_id: UUID,
     connection_id: str,
-    catalog_entry: CatalogEntry,
+    catalog_entry_id: str,
+    catalog_entry_version: int,
     server_name: str,
     settings_json: str,
     payload_ciphertext: str,
@@ -29,8 +29,8 @@ async def legacy_upsert_secret_connection(
         db,
         user_id=user_id,
         connection_id=connection_id,
-        catalog_entry_id=catalog_entry.id,
-        catalog_entry_version=catalog_entry.version,
+        catalog_entry_id=catalog_entry_id,
+        catalog_entry_version=catalog_entry_version,
         server_name=server_name,
         settings_json=settings_json,
         enabled=True,

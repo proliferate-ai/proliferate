@@ -18,7 +18,7 @@ import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -67,7 +67,7 @@ export function useWorkspaceShellActivation() {
   const setPendingChatActivation = useWorkspaceUiStore((state) => state.setPendingChatActivation);
   const clearPendingChatActivation = useWorkspaceUiStore((state) => state.clearPendingChatActivation);
   const rollbackShellIntent = useWorkspaceUiStore((state) => state.rollbackShellIntent);
-  const { selectSession } = useSessionActions();
+  const { selectSession } = useSessionSelectionActions();
 
   const activateViewerTarget = useCallback(({
     workspaceId,
@@ -361,7 +361,7 @@ async function runDeferredChatTabActivation({
   pending: PendingChatActivation;
   reuseHotOperationInSelect: boolean;
   rollbackShellIntent: WorkspaceUiStoreState["rollbackShellIntent"];
-  selectSession: ReturnType<typeof useSessionActions>["selectSession"];
+  selectSession: ReturnType<typeof useSessionSelectionActions>["selectSession"];
   selection?: SelectSessionOptionsWithoutGuard;
   sessionId: string;
   setPendingChatActivation: WorkspaceUiStoreState["setPendingChatActivation"];

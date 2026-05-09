@@ -12,7 +12,6 @@ from proliferate.constants.cloud import (
 from proliferate.db.store.cloud_credentials import (
     delete_cloud_credential,
     get_user_cloud_credentials,
-    load_cloud_credentials_for_user,
     sync_cloud_credential_if_changed,
 )
 from proliferate.server.cloud.credentials.domain.status import (
@@ -29,6 +28,9 @@ from proliferate.server.cloud.credentials.models import (
     CredentialStatus,
     SyncCloudCredentialRequest,
     credential_status_payload,
+)
+from proliferate.server.cloud.credentials.session_loader import (
+    load_cloud_credentials_for_user,
 )
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 

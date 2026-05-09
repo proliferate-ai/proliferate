@@ -4,10 +4,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store.cloud_worktree_policy import (
+from proliferate.constants.cloud import (
     DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
+    DEFAULT_WORKTREE_POLICY_UPDATED_AT,
     MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO,
     MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO,
+)
+from proliferate.db.store.cloud_worktree_policy import (
     get_cloud_worktree_policy,
     load_cloud_worktree_policy_for_user,
     save_cloud_worktree_policy,
@@ -17,8 +20,6 @@ from proliferate.server.cloud.worktree_policy.models import (
     CloudWorktreeRetentionPolicyResponse,
     cloud_worktree_policy_payload,
 )
-
-DEFAULT_POLICY_UPDATED_AT = "1970-01-01T00:00:00+00:00"
 
 
 def validate_worktree_policy_limit(value: int) -> int:
@@ -47,7 +48,7 @@ async def get_worktree_retention_policy(
     if value is None:
         return CloudWorktreeRetentionPolicyResponse(
             max_materialized_worktrees_per_repo=DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-            updated_at=DEFAULT_POLICY_UPDATED_AT,
+            updated_at=DEFAULT_WORKTREE_POLICY_UPDATED_AT,
             source="default",
         )
     return cloud_worktree_policy_payload(value)
@@ -76,7 +77,7 @@ async def load_worktree_retention_policy_for_runtime(
     if value is None:
         return CloudWorktreeRetentionPolicyResponse(
             max_materialized_worktrees_per_repo=DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-            updated_at=DEFAULT_POLICY_UPDATED_AT,
+            updated_at=DEFAULT_WORKTREE_POLICY_UPDATED_AT,
             source="default",
         )
     return cloud_worktree_policy_payload(value)

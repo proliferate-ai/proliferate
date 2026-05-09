@@ -33,7 +33,6 @@ from proliferate.db.store.automations import (
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
-from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
@@ -63,6 +62,7 @@ from proliferate.server.billing.service import (
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.credentials.service import load_cloud_credential_statuses
+from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
