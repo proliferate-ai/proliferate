@@ -25,7 +25,6 @@ from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
 )
-from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.cloud_runtime_environments import (
     ensure_runtime_environment_for_workspace_id,
@@ -51,6 +50,7 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repos.service import get_linked_github_account
 from proliferate.server.cloud.runtime.anyharness_api import (

@@ -10,12 +10,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.db.models.auth import OAuthAccount, User
 from proliferate.db.models.cloud import CloudCredential, CloudWorkspace
-from proliferate.db.store import cloud_credentials, cloud_workspaces, users
+from proliferate.db.store import cloud_workspaces, users
+from proliferate.integrations.anyharness import ResolvedRemoteWorkspace
 from proliferate.integrations.sandbox import SandboxProviderKind
+from proliferate.server.cloud.credentials import session_loader as cloud_credential_session_loader
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
-from proliferate.integrations.anyharness import ResolvedRemoteWorkspace
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.credentials import (
     ClaudeProvisionCredential,
@@ -58,7 +59,11 @@ def _make_workspace(user_id: uuid.UUID) -> CloudWorkspace:
 @pytest.fixture
 def _patched_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine) -> None:
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    monkeypatch.setattr(cloud_credentials.db_engine, "async_session_factory", factory)
+    monkeypatch.setattr(
+        cloud_credential_session_loader.db_engine,
+        "async_session_factory",
+        factory,
+    )
     monkeypatch.setattr(cloud_workspaces.db_engine, "async_session_factory", factory)
     monkeypatch.setattr(users.db_engine, "async_session_factory", factory)
 
