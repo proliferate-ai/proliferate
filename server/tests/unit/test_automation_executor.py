@@ -144,6 +144,17 @@ async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
         return automation.id
 
 
+async def _create_manual_run(user_id: uuid.UUID, automation_id: uuid.UUID):
+    async with engine_module.async_session_factory() as session:
+        run = await create_manual_run_for_user(
+            session,
+            user_id=user_id,
+            automation_id=automation_id,
+        )
+        await session.commit()
+        return run
+
+
 @pytest.mark.asyncio
 async def test_manual_run_snapshots_inputs_and_claim_uses_snapshot(
     test_engine,  # type: ignore[no-untyped-def]
@@ -155,7 +166,7 @@ async def test_manual_run_snapshots_inputs_and_claim_uses_snapshot(
 
     try:
         automation_id = await _create_cloud_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         async with engine_module.async_session_factory() as session:
@@ -196,7 +207,7 @@ async def test_claim_cloud_run_without_agent_snapshot_fails_at_claim_time(
 
     try:
         automation_id = await _create_cloud_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         async with engine_module.async_session_factory() as session:
@@ -235,7 +246,7 @@ async def test_stale_claim_cannot_mutate_after_reclaim(
 
     try:
         automation_id = await _create_cloud_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         first = (
@@ -285,7 +296,7 @@ async def test_local_claim_matches_user_and_canonical_repo_identity(
 
     try:
         automation_id = await _create_local_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
 
         wrong_user_claims = await claim_local_automation_runs(
@@ -337,7 +348,7 @@ async def test_local_claim_transition_requires_local_target_and_workspace_attach
 
     try:
         automation_id = await _create_local_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
         claim = (
             await claim_local_automation_runs(
@@ -416,7 +427,7 @@ async def test_local_reclaimed_attached_workspace_can_resume_provisioning(
 
     try:
         automation_id = await _create_local_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
         claim = (
             await claim_local_automation_runs(
@@ -470,7 +481,7 @@ async def test_expired_dispatching_run_is_swept_to_failed(
 
     try:
         automation_id = await _create_cloud_automation(user_id, now)
-        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        run = await _create_manual_run(user_id=user_id, automation_id=automation_id)
         assert run is not None
         claim = (
             await claim_cloud_automation_runs(
@@ -515,11 +526,11 @@ async def test_expired_dispatching_sweep_is_bounded_and_ordered(
 
     try:
         automation_id = await _create_cloud_automation(user_id, now)
-        first_run = await create_manual_run_for_user(
+        first_run = await _create_manual_run(
             user_id=user_id,
             automation_id=automation_id,
         )
-        second_run = await create_manual_run_for_user(
+        second_run = await _create_manual_run(
             user_id=user_id,
             automation_id=automation_id,
         )

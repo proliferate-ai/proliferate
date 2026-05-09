@@ -22,7 +22,7 @@ SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 trans
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/anonymous_telemetry.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 12 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 4 transitional store owns transaction commit
+STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 1 worker scheduler batch owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 33 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mcp_connections.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mobility.py 9 transitional store owns transaction commit
@@ -36,7 +36,7 @@ STORE_FORBIDDEN_IMPORT server/proliferate/db/store/cloud_mcp/compat.py 1 transit
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/anonymous_telemetry.py 1 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claims.py 13 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 8 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 2 worker/cloud workspace helper still opens isolated DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 34 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_credentials.py 1 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 3 materialization refresh wrappers open isolated DB sessions
@@ -54,7 +54,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 3 transitional s
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/anonymous_telemetry.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claims.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automations.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automations.py 1 worker/cloud workspace helper still imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/billing.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_credentials.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/auth.py 1 materialization refresh wrappers import DB session factory

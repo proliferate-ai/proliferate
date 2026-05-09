@@ -193,6 +193,7 @@ async def _load_automation_value(
 
 
 async def create_automation_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     cloud_repo_config_id: UUID,
@@ -208,61 +209,63 @@ async def create_automation_for_user(
     reasoning_effort: str | None,
     next_run_at: datetime | None,
 ) -> AutomationValue:
-    async with db_engine.async_session_factory() as db:
-        now = utcnow()
-        record = Automation(
-            user_id=user_id,
-            cloud_repo_config_id=cloud_repo_config_id,
-            title=title,
-            prompt=prompt,
-            schedule_rrule=schedule_rrule,
-            schedule_timezone=schedule_timezone,
-            schedule_summary=schedule_summary,
-            execution_target=execution_target,
-            agent_kind=agent_kind,
-            model_id=model_id,
-            mode_id=mode_id,
-            reasoning_effort=reasoning_effort,
-            enabled=True,
-            paused_at=None,
-            next_run_at=next_run_at,
-            last_scheduled_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(record)
-        await db.commit()
-        value = await _load_automation_value(db, user_id=user_id, automation_id=record.id)
-        if value is None:
-            raise RuntimeError("Created automation could not be loaded.")
-        return value
+    now = utcnow()
+    record = Automation(
+        user_id=user_id,
+        cloud_repo_config_id=cloud_repo_config_id,
+        title=title,
+        prompt=prompt,
+        schedule_rrule=schedule_rrule,
+        schedule_timezone=schedule_timezone,
+        schedule_summary=schedule_summary,
+        execution_target=execution_target,
+        agent_kind=agent_kind,
+        model_id=model_id,
+        mode_id=mode_id,
+        reasoning_effort=reasoning_effort,
+        enabled=True,
+        paused_at=None,
+        next_run_at=next_run_at,
+        last_scheduled_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(record)
+    await db.flush()
+    value = await _load_automation_value(db, user_id=user_id, automation_id=record.id)
+    if value is None:
+        raise RuntimeError("Created automation could not be loaded.")
+    return value
 
 
-async def list_automations_for_user(user_id: UUID) -> list[AutomationValue]:
-    async with db_engine.async_session_factory() as db:
-        rows = list(
-            (
-                await db.execute(
-                    select(Automation, CloudRepoConfig)
-                    .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
-                    .where(Automation.user_id == user_id)
-                    .order_by(Automation.created_at.desc())
-                )
-            ).all()
-        )
-        return [_automation_value(record, repo_config) for record, repo_config in rows]
+async def list_automations_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[AutomationValue]:
+    rows = list(
+        (
+            await db.execute(
+                select(Automation, CloudRepoConfig)
+                .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
+                .where(Automation.user_id == user_id)
+                .order_by(Automation.created_at.desc())
+            )
+        ).all()
+    )
+    return [_automation_value(record, repo_config) for record, repo_config in rows]
 
 
 async def load_automation_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     automation_id: UUID,
 ) -> AutomationValue | None:
-    async with db_engine.async_session_factory() as db:
-        return await _load_automation_value(db, user_id=user_id, automation_id=automation_id)
+    return await _load_automation_value(db, user_id=user_id, automation_id=automation_id)
 
 
 async def update_automation_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     automation_id: UUID,
@@ -280,142 +283,140 @@ async def update_automation_for_user(
     paused_at: object = _UNSET,
     next_run_at: object = _UNSET,
 ) -> AutomationValue | None:
-    async with db_engine.async_session_factory() as db:
-        record = (
-            await db.execute(
-                select(Automation).where(
-                    Automation.id == automation_id,
-                    Automation.user_id == user_id,
-                )
+    record = (
+        await db.execute(
+            select(Automation).where(
+                Automation.id == automation_id,
+                Automation.user_id == user_id,
             )
-        ).scalar_one_or_none()
-        if record is None:
-            return None
-        if title is not _UNSET:
-            record.title = title  # type: ignore[assignment]
-        if prompt is not _UNSET:
-            record.prompt = prompt  # type: ignore[assignment]
-        if schedule_rrule is not _UNSET:
-            record.schedule_rrule = schedule_rrule  # type: ignore[assignment]
-        if schedule_timezone is not _UNSET:
-            record.schedule_timezone = schedule_timezone  # type: ignore[assignment]
-        if schedule_summary is not _UNSET:
-            record.schedule_summary = schedule_summary  # type: ignore[assignment]
-        if execution_target is not _UNSET:
-            record.execution_target = execution_target  # type: ignore[assignment]
-        if agent_kind is not _UNSET:
-            record.agent_kind = agent_kind  # type: ignore[assignment]
-        if model_id is not _UNSET:
-            record.model_id = model_id  # type: ignore[assignment]
-        if mode_id is not _UNSET:
-            record.mode_id = mode_id  # type: ignore[assignment]
-        if reasoning_effort is not _UNSET:
-            record.reasoning_effort = reasoning_effort  # type: ignore[assignment]
-        if enabled is not _UNSET:
-            record.enabled = enabled  # type: ignore[assignment]
-        if paused_at is not _UNSET:
-            record.paused_at = paused_at  # type: ignore[assignment]
-        if next_run_at is not _UNSET:
-            record.next_run_at = next_run_at  # type: ignore[assignment]
-        record.updated_at = utcnow()
-        await db.commit()
-        return await _load_automation_value(db, user_id=user_id, automation_id=automation_id)
+        )
+    ).scalar_one_or_none()
+    if record is None:
+        return None
+    if title is not _UNSET:
+        record.title = title  # type: ignore[assignment]
+    if prompt is not _UNSET:
+        record.prompt = prompt  # type: ignore[assignment]
+    if schedule_rrule is not _UNSET:
+        record.schedule_rrule = schedule_rrule  # type: ignore[assignment]
+    if schedule_timezone is not _UNSET:
+        record.schedule_timezone = schedule_timezone  # type: ignore[assignment]
+    if schedule_summary is not _UNSET:
+        record.schedule_summary = schedule_summary  # type: ignore[assignment]
+    if execution_target is not _UNSET:
+        record.execution_target = execution_target  # type: ignore[assignment]
+    if agent_kind is not _UNSET:
+        record.agent_kind = agent_kind  # type: ignore[assignment]
+    if model_id is not _UNSET:
+        record.model_id = model_id  # type: ignore[assignment]
+    if mode_id is not _UNSET:
+        record.mode_id = mode_id  # type: ignore[assignment]
+    if reasoning_effort is not _UNSET:
+        record.reasoning_effort = reasoning_effort  # type: ignore[assignment]
+    if enabled is not _UNSET:
+        record.enabled = enabled  # type: ignore[assignment]
+    if paused_at is not _UNSET:
+        record.paused_at = paused_at  # type: ignore[assignment]
+    if next_run_at is not _UNSET:
+        record.next_run_at = next_run_at  # type: ignore[assignment]
+    record.updated_at = utcnow()
+    await db.flush()
+    return await _load_automation_value(db, user_id=user_id, automation_id=automation_id)
 
 
 async def create_manual_run_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     automation_id: UUID,
 ) -> AutomationRunValue | None:
-    async with db_engine.async_session_factory() as db:
-        row = (
-            await db.execute(
-                select(Automation, CloudRepoConfig)
-                .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
-                .where(
-                    Automation.id == automation_id,
-                    Automation.user_id == user_id,
-                )
+    row = (
+        await db.execute(
+            select(Automation, CloudRepoConfig)
+            .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
+            .where(
+                Automation.id == automation_id,
+                Automation.user_id == user_id,
             )
-        ).one_or_none()
-        if row is None:
-            return None
-        automation, repo_config = row
-        now = utcnow()
-        run = AutomationRun(
-            automation_id=automation.id,
-            user_id=user_id,
-            trigger_kind=AUTOMATION_RUN_TRIGGER_MANUAL,
-            scheduled_for=None,
-            execution_target=automation.execution_target,
-            status=AUTOMATION_RUN_STATUS_QUEUED,
-            title_snapshot=automation.title,
-            prompt_snapshot=automation.prompt,
-            git_provider_snapshot=SUPPORTED_GIT_PROVIDER,
-            git_owner_snapshot=repo_config.git_owner,
-            git_repo_name_snapshot=repo_config.git_repo_name,
-            cloud_repo_config_id_snapshot=automation.cloud_repo_config_id,
-            agent_kind_snapshot=automation.agent_kind,
-            model_id_snapshot=automation.model_id,
-            mode_id_snapshot=automation.mode_id,
-            reasoning_effort_snapshot=automation.reasoning_effort,
-            executor_kind=None,
-            executor_id=None,
-            claim_id=None,
-            claimed_at=None,
-            claim_expires_at=None,
-            last_heartbeat_at=None,
-            dispatch_started_at=None,
-            dispatched_at=None,
-            failed_at=None,
-            cloud_workspace_id=None,
-            anyharness_workspace_id=None,
-            anyharness_session_id=None,
-            cancelled_at=None,
-            last_error_code=None,
-            last_error_message=None,
-            created_at=now,
-            updated_at=now,
         )
-        db.add(run)
-        await db.commit()
-        await db.refresh(run)
-        return _run_value(run)
+    ).one_or_none()
+    if row is None:
+        return None
+    automation, repo_config = row
+    now = utcnow()
+    run = AutomationRun(
+        automation_id=automation.id,
+        user_id=user_id,
+        trigger_kind=AUTOMATION_RUN_TRIGGER_MANUAL,
+        scheduled_for=None,
+        execution_target=automation.execution_target,
+        status=AUTOMATION_RUN_STATUS_QUEUED,
+        title_snapshot=automation.title,
+        prompt_snapshot=automation.prompt,
+        git_provider_snapshot=SUPPORTED_GIT_PROVIDER,
+        git_owner_snapshot=repo_config.git_owner,
+        git_repo_name_snapshot=repo_config.git_repo_name,
+        cloud_repo_config_id_snapshot=automation.cloud_repo_config_id,
+        agent_kind_snapshot=automation.agent_kind,
+        model_id_snapshot=automation.model_id,
+        mode_id_snapshot=automation.mode_id,
+        reasoning_effort_snapshot=automation.reasoning_effort,
+        executor_kind=None,
+        executor_id=None,
+        claim_id=None,
+        claimed_at=None,
+        claim_expires_at=None,
+        last_heartbeat_at=None,
+        dispatch_started_at=None,
+        dispatched_at=None,
+        failed_at=None,
+        cloud_workspace_id=None,
+        anyharness_workspace_id=None,
+        anyharness_session_id=None,
+        cancelled_at=None,
+        last_error_code=None,
+        last_error_message=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(run)
+    await db.flush()
+    return _run_value(run)
 
 
 async def list_runs_for_automation_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     automation_id: UUID,
     limit: int,
 ) -> list[AutomationRunValue] | None:
-    async with db_engine.async_session_factory() as db:
-        exists = (
-            await db.execute(
-                select(Automation.id).where(
-                    Automation.id == automation_id,
-                    Automation.user_id == user_id,
-                )
+    exists = (
+        await db.execute(
+            select(Automation.id).where(
+                Automation.id == automation_id,
+                Automation.user_id == user_id,
             )
-        ).scalar_one_or_none()
-        if exists is None:
-            return None
-        records = list(
-            (
-                await db.execute(
-                    select(AutomationRun)
-                    .where(
-                        AutomationRun.automation_id == automation_id,
-                        AutomationRun.user_id == user_id,
-                    )
-                    .order_by(AutomationRun.created_at.desc(), AutomationRun.id.desc())
-                    .limit(limit)
-                )
-            )
-            .scalars()
-            .all()
         )
-        return [_run_value(record) for record in records]
+    ).scalar_one_or_none()
+    if exists is None:
+        return None
+    records = list(
+        (
+            await db.execute(
+                select(AutomationRun)
+                .where(
+                    AutomationRun.automation_id == automation_id,
+                    AutomationRun.user_id == user_id,
+                )
+                .order_by(AutomationRun.created_at.desc(), AutomationRun.id.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [_run_value(record) for record in records]
 
 
 async def list_latest_runs_by_cloud_workspace_ids_for_user(
