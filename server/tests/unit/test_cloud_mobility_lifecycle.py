@@ -24,6 +24,16 @@ from proliferate.db.store.cloud_mobility import (
     heartbeat_cloud_workspace_handoff_op,
     load_cloud_workspace_mobility_for_user,
 )
+from proliferate.server.cloud.mobility.domain.lifecycle import (
+    FINAL_HANDOFF_PHASES,
+    HANDOFF_PHASE_HANDOFF_FAILED,
+    LIFECYCLE_HANDOFF_FAILED,
+    OWNER_CLOUD,
+    moving_lifecycle_state,
+    stale_handoff_outcome,
+    visible_failure_last_error,
+    visible_failure_status_detail,
+)
 
 pytestmark = pytest.mark.usefixtures("mobility_session_factory")
 
@@ -116,6 +126,7 @@ async def test_create_handoff_sets_active_pointer_and_moving_state(
         direction="local_to_cloud",
         source_owner="local",
         target_owner="cloud",
+        moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
         requested_branch="feature/cloud",
         requested_base_sha="abc123",
         exclude_paths=["node_modules"],
@@ -156,6 +167,8 @@ async def test_create_handoff_for_user_rejects_existing_active_workspace_handoff
             direction="local_to_cloud",
             source_owner="local",
             target_owner="cloud",
+            moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
+            final_handoff_phases=FINAL_HANDOFF_PHASES,
             requested_branch="feature/cloud",
             requested_base_sha="abc123",
             exclude_paths=[],
@@ -178,8 +191,13 @@ async def test_cleanup_failed_handoff_counts_as_active(
     active_for_workspace = await get_active_handoff_for_mobility(
         db_session,
         mobility_workspace_id=mobility.id,
+        final_handoff_phases=FINAL_HANDOFF_PHASES,
     )
-    active_for_user = await get_active_user_handoff_op(db_session, user_id=user_id)
+    active_for_user = await get_active_user_handoff_op(
+        db_session,
+        user_id=user_id,
+        final_handoff_phases=FINAL_HANDOFF_PHASES,
+    )
 
     assert active_for_workspace is not None
     assert active_for_workspace.id == handoff.id
@@ -220,6 +238,7 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
         direction="local_to_cloud",
         source_owner="local",
         target_owner="cloud",
+        moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
         requested_branch="feature/cloud",
         requested_base_sha="abc123",
         exclude_paths=[],
@@ -261,6 +280,7 @@ async def test_cleanup_completion_clears_active_handoff_and_marks_completed(
         direction="local_to_cloud",
         source_owner="local",
         target_owner="cloud",
+        moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
         requested_branch="feature/cloud",
         requested_base_sha="abc123",
         exclude_paths=[],
@@ -299,6 +319,7 @@ async def test_failure_clears_active_handoff_and_truncates_visible_error(
         direction="local_to_cloud",
         source_owner="local",
         target_owner="cloud",
+        moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
         requested_branch="feature/cloud",
         requested_base_sha="abc123",
         exclude_paths=[],
@@ -313,8 +334,12 @@ async def test_failure_clears_active_handoff_and_truncates_visible_error(
         db_session,
         handoff_op=handoff_record,
         mobility_workspace=mobility_record,
+        phase=HANDOFF_PHASE_HANDOFF_FAILED,
+        lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
         failure_code="provisioning_failed",
         failure_detail=failure_detail,
+        status_detail=visible_failure_status_detail(failure_detail),
+        last_error=visible_failure_last_error(failure_detail),
     )
 
     visible = await load_cloud_workspace_mobility_for_user(
@@ -347,13 +372,22 @@ async def test_stale_expiry_before_finalize_marks_failed_and_clears_active_hando
     mobility.active_handoff_op_id = handoff.id
     mobility.last_handoff_op_id = handoff.id
     await db_session.commit()
+    stale_outcome = stale_handoff_outcome(
+        finalized_at=handoff.finalized_at,
+        cleanup_completed_at=handoff.cleanup_completed_at,
+    )
 
     expired = await expire_stale_cloud_workspace_handoff_op_for_user(
         user_id=user_id,
         mobility_workspace_id=mobility.id,
         handoff_op_id=handoff.id,
-        failure_code="handoff_stale",
-        failure_detail="Workspace mobility heartbeat expired.",
+        phase=stale_outcome.phase,
+        lifecycle_state=stale_outcome.lifecycle_state,
+        keep_active_handoff=stale_outcome.keep_active_handoff,
+        failure_code=stale_outcome.failure_code,
+        failure_detail=stale_outcome.failure_detail,
+        status_detail=visible_failure_status_detail(stale_outcome.failure_detail),
+        last_error=visible_failure_last_error(stale_outcome.failure_detail),
     )
 
     visible = await load_cloud_workspace_mobility_for_user(
@@ -386,13 +420,22 @@ async def test_stale_expiry_after_finalize_marks_cleanup_failed_and_keeps_active
     mobility.active_handoff_op_id = handoff.id
     mobility.last_handoff_op_id = handoff.id
     await db_session.commit()
+    stale_outcome = stale_handoff_outcome(
+        finalized_at=handoff.finalized_at,
+        cleanup_completed_at=handoff.cleanup_completed_at,
+    )
 
     expired = await expire_stale_cloud_workspace_handoff_op_for_user(
         user_id=user_id,
         mobility_workspace_id=mobility.id,
         handoff_op_id=handoff.id,
-        failure_code="cleanup_stale",
-        failure_detail="Workspace mobility cleanup heartbeat expired.",
+        phase=stale_outcome.phase,
+        lifecycle_state=stale_outcome.lifecycle_state,
+        keep_active_handoff=stale_outcome.keep_active_handoff,
+        failure_code=stale_outcome.failure_code,
+        failure_detail=stale_outcome.failure_detail,
+        status_detail=visible_failure_status_detail(stale_outcome.failure_detail),
+        last_error=visible_failure_last_error(stale_outcome.failure_detail),
     )
 
     visible = await load_cloud_workspace_mobility_for_user(

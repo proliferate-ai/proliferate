@@ -82,7 +82,7 @@ def _stub_common_preflight_dependencies(
     async def _get_detail(**_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id):
+    async def _load_active_user_handoff(*, user_id, **_kwargs):
         return active_handoff
 
     async def _load_user(_user_id):

@@ -12,6 +12,10 @@ from proliferate.db.store.cloud_mobility import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mobility import service as mobility_service
+from proliferate.server.cloud.mobility.domain.lifecycle import (
+    HANDOFF_PHASE_HANDOFF_FAILED,
+    LIFECYCLE_HANDOFF_FAILED,
+)
 
 
 def _workspace(
@@ -85,7 +89,7 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
     async def _get_detail(**_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id):
+    async def _load_active_user_handoff(*, user_id, **_kwargs):
         return None
 
     async def _load_user(_user_id):
@@ -140,7 +144,7 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
     async def _get_detail(**_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id):
+    async def _load_active_user_handoff(*, user_id, **_kwargs):
         return None
 
     async def _load_user(_user_id):
@@ -198,7 +202,7 @@ async def test_preflight_blocks_when_branch_is_not_published(
     async def _get_detail(**_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id):
+    async def _load_active_user_handoff(*, user_id, **_kwargs):
         return None
 
     async def _load_user(_user_id):
@@ -253,7 +257,7 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
     async def _get_detail(**_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id):
+    async def _load_active_user_handoff(*, user_id, **_kwargs):
         return None
 
     async def _load_user(_user_id):
@@ -429,8 +433,16 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
             "user_id": user_id,
             "mobility_workspace_id": workspace.id,
             "handoff_op_id": handoff.id,
+            "phase": HANDOFF_PHASE_HANDOFF_FAILED,
+            "lifecycle_state": LIFECYCLE_HANDOFF_FAILED,
             "failure_code": "github_repo_access_required",
             "failure_detail": (
+                "Reconnect GitHub and grant repository access before creating a cloud workspace."
+            ),
+            "status_detail": (
+                "Reconnect GitHub and grant repository access before creating a cloud workspace."
+            ),
+            "last_error": (
                 "Reconnect GitHub and grant repository access before creating a cloud workspace."
             ),
         }

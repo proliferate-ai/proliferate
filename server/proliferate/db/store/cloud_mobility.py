@@ -133,20 +133,21 @@ def _require_handoff_belongs_to_workspace(
     return mobility_workspace, handoff_op
 
 
-def _active_lifecycle_state(owner: str) -> str:
-    return "cloud_active" if owner == "cloud" else "local_active"
-
-
 def _clear_retryable_handoff_failure(
     record: CloudWorkspaceMobility,
     *,
     owner_hint: str,
+    active_lifecycle_state: str,
+    retryable_lifecycle_state: str,
 ) -> bool:
-    if record.lifecycle_state != "handoff_failed" or record.active_handoff_op_id is not None:
+    if (
+        record.lifecycle_state != retryable_lifecycle_state
+        or record.active_handoff_op_id is not None
+    ):
         return False
 
     record.owner = owner_hint
-    record.lifecycle_state = _active_lifecycle_state(owner_hint)
+    record.lifecycle_state = active_lifecycle_state
     record.status_detail = None
     record.last_error = None
     return True
@@ -246,15 +247,14 @@ async def get_active_user_handoff_op(
     db: AsyncSession,
     *,
     user_id: UUID,
+    final_handoff_phases: tuple[str, ...],
 ) -> CloudWorkspaceHandoffOp | None:
     return (
         await db.execute(
             select(CloudWorkspaceHandoffOp)
             .where(
                 CloudWorkspaceHandoffOp.user_id == user_id,
-                CloudWorkspaceHandoffOp.phase.not_in(
-                    ["completed", "handoff_failed"],
-                ),
+                CloudWorkspaceHandoffOp.phase.not_in(final_handoff_phases),
             )
             .order_by(CloudWorkspaceHandoffOp.created_at.desc())
         )
@@ -265,12 +265,13 @@ async def get_active_handoff_for_mobility(
     db: AsyncSession,
     *,
     mobility_workspace_id: UUID,
+    final_handoff_phases: tuple[str, ...],
 ) -> CloudWorkspaceHandoffOp | None:
     return (
         await db.execute(
             select(CloudWorkspaceHandoffOp).where(
                 CloudWorkspaceHandoffOp.mobility_workspace_id == mobility_workspace_id,
-                CloudWorkspaceHandoffOp.phase.not_in(["completed", "handoff_failed"]),
+                CloudWorkspaceHandoffOp.phase.not_in(final_handoff_phases),
             )
         )
     ).scalar_one_or_none()
@@ -285,6 +286,8 @@ async def ensure_cloud_workspace_mobility(
     git_repo_name: str,
     git_branch: str,
     owner_hint: str,
+    active_lifecycle_state: str,
+    retryable_lifecycle_state: str,
     display_name: str | None,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceMobilityValue:
@@ -306,7 +309,7 @@ async def ensure_cloud_workspace_mobility(
             git_repo_name=git_repo_name,
             git_branch=git_branch,
             owner=owner_hint,
-            lifecycle_state=_active_lifecycle_state(owner_hint),
+            lifecycle_state=active_lifecycle_state,
             status_detail=None,
             last_error=None,
             cloud_workspace_id=cloud_workspace_id,
@@ -322,7 +325,12 @@ async def ensure_cloud_workspace_mobility(
         await db.refresh(record)
         return _mobility_value(record)
 
-    changed = _clear_retryable_handoff_failure(record, owner_hint=owner_hint)
+    changed = _clear_retryable_handoff_failure(
+        record,
+        owner_hint=owner_hint,
+        active_lifecycle_state=active_lifecycle_state,
+        retryable_lifecycle_state=retryable_lifecycle_state,
+    )
     if display_name is not None and display_name != record.display_name:
         record.display_name = display_name
         changed = True
@@ -348,6 +356,8 @@ async def backfill_cloud_workspace_mobility_from_workspace(
     db: AsyncSession,
     *,
     workspace: CloudWorkspace,
+    active_lifecycle_state: str,
+    retryable_lifecycle_state: str,
 ) -> CloudWorkspaceMobilityValue:
     return await ensure_cloud_workspace_mobility(
         db,
@@ -357,6 +367,8 @@ async def backfill_cloud_workspace_mobility_from_workspace(
         git_repo_name=workspace.git_repo_name,
         git_branch=workspace.git_branch,
         owner_hint="cloud",
+        active_lifecycle_state=active_lifecycle_state,
+        retryable_lifecycle_state=retryable_lifecycle_state,
         display_name=workspace.display_name,
         cloud_workspace_id=workspace.id,
     )
@@ -369,6 +381,7 @@ async def create_cloud_workspace_handoff_op(
     direction: str,
     source_owner: str,
     target_owner: str,
+    moving_lifecycle_state: str,
     requested_branch: str,
     requested_base_sha: str | None,
     exclude_paths: list[str],
@@ -399,9 +412,7 @@ async def create_cloud_workspace_handoff_op(
     mobility_workspace.active_handoff_op_id = record.id
     mobility_workspace.last_handoff_op_id = record.id
     mobility_workspace.owner = source_owner
-    mobility_workspace.lifecycle_state = (
-        "moving_to_cloud" if target_owner == "cloud" else "moving_to_local"
-    )
+    mobility_workspace.lifecycle_state = moving_lifecycle_state
     mobility_workspace.status_detail = "Handoff started"
     mobility_workspace.last_error = None
     mobility_workspace.updated_at = now
@@ -506,20 +517,24 @@ async def fail_cloud_workspace_handoff_op(
     *,
     handoff_op: CloudWorkspaceHandoffOp,
     mobility_workspace: CloudWorkspaceMobility,
+    phase: str,
+    lifecycle_state: str,
     failure_code: str,
     failure_detail: str,
+    status_detail: str | None,
+    last_error: str,
 ) -> CloudWorkspaceHandoffOpValue:
     now = utcnow()
-    handoff_op.phase = "handoff_failed"
+    handoff_op.phase = phase
     handoff_op.failure_code = failure_code
     handoff_op.failure_detail = failure_detail
     handoff_op.heartbeat_at = now
     handoff_op.updated_at = now
 
     mobility_workspace.active_handoff_op_id = None
-    mobility_workspace.lifecycle_state = "handoff_failed"
-    mobility_workspace.status_detail = failure_detail[:255] if failure_detail else None
-    mobility_workspace.last_error = failure_detail[:2000]
+    mobility_workspace.lifecycle_state = lifecycle_state
+    mobility_workspace.status_detail = status_detail
+    mobility_workspace.last_error = last_error
     mobility_workspace.updated_at = now
 
     await db.commit()
@@ -578,6 +593,8 @@ async def ensure_cloud_workspace_mobility_for_user(
     git_repo_name: str,
     git_branch: str,
     owner_hint: str,
+    active_lifecycle_state: str,
+    retryable_lifecycle_state: str,
     display_name: str | None,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceMobilityValue:
@@ -590,6 +607,8 @@ async def ensure_cloud_workspace_mobility_for_user(
             git_repo_name=git_repo_name,
             git_branch=git_branch,
             owner_hint=owner_hint,
+            active_lifecycle_state=active_lifecycle_state,
+            retryable_lifecycle_state=retryable_lifecycle_state,
             display_name=display_name,
             cloud_workspace_id=cloud_workspace_id,
         )
@@ -598,17 +617,29 @@ async def ensure_cloud_workspace_mobility_for_user(
 async def backfill_cloud_workspace_mobility_for_workspace(
     *,
     workspace: CloudWorkspace,
+    active_lifecycle_state: str,
+    retryable_lifecycle_state: str,
 ) -> CloudWorkspaceMobilityValue:
     async with db_engine.async_session_factory() as db:
-        return await backfill_cloud_workspace_mobility_from_workspace(db, workspace=workspace)
+        return await backfill_cloud_workspace_mobility_from_workspace(
+            db,
+            workspace=workspace,
+            active_lifecycle_state=active_lifecycle_state,
+            retryable_lifecycle_state=retryable_lifecycle_state,
+        )
 
 
 async def load_active_user_handoff_op_for_user(
     *,
     user_id: UUID,
+    final_handoff_phases: tuple[str, ...],
 ) -> CloudWorkspaceHandoffOpValue | None:
     async with db_engine.async_session_factory() as db:
-        record = await get_active_user_handoff_op(db, user_id=user_id)
+        record = await get_active_user_handoff_op(
+            db,
+            user_id=user_id,
+            final_handoff_phases=final_handoff_phases,
+        )
         return _handoff_value(record) if record is not None else None
 
 
@@ -633,6 +664,8 @@ async def create_cloud_workspace_handoff_op_for_user(
     direction: str,
     source_owner: str,
     target_owner: str,
+    moving_lifecycle_state: str,
+    final_handoff_phases: tuple[str, ...],
     requested_branch: str,
     requested_base_sha: str | None,
     exclude_paths: list[str],
@@ -648,6 +681,7 @@ async def create_cloud_workspace_handoff_op_for_user(
         existing_handoff = await get_active_handoff_for_mobility(
             db,
             mobility_workspace_id=mobility_workspace_id,
+            final_handoff_phases=final_handoff_phases,
         )
         if existing_handoff is not None:
             raise ValueError("handoff already in progress for workspace")
@@ -657,6 +691,7 @@ async def create_cloud_workspace_handoff_op_for_user(
             direction=direction,
             source_owner=source_owner,
             target_owner=target_owner,
+            moving_lifecycle_state=moving_lifecycle_state,
             requested_branch=requested_branch,
             requested_base_sha=requested_base_sha,
             exclude_paths=exclude_paths,
@@ -776,8 +811,12 @@ async def fail_cloud_workspace_handoff_op_for_user(
     user_id: UUID,
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
+    phase: str,
+    lifecycle_state: str,
     failure_code: str,
     failure_detail: str,
+    status_detail: str | None,
+    last_error: str,
 ) -> CloudWorkspaceHandoffOpValue:
     async with db_engine.async_session_factory() as db:
         mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
@@ -796,8 +835,12 @@ async def fail_cloud_workspace_handoff_op_for_user(
             db,
             handoff_op=handoff_op,
             mobility_workspace=mobility_workspace,
+            phase=phase,
+            lifecycle_state=lifecycle_state,
             failure_code=failure_code,
             failure_detail=failure_detail,
+            status_detail=status_detail,
+            last_error=last_error,
         )
 
 
@@ -806,8 +849,13 @@ async def expire_stale_cloud_workspace_handoff_op_for_user(
     user_id: UUID,
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
+    phase: str,
+    lifecycle_state: str,
+    keep_active_handoff: bool,
     failure_code: str,
     failure_detail: str,
+    status_detail: str | None,
+    last_error: str,
 ) -> CloudWorkspaceHandoffOpValue:
     async with db_engine.async_session_factory() as db:
         mobility_workspace, handoff_op = _require_handoff_belongs_to_workspace(
@@ -828,18 +876,16 @@ async def expire_stale_cloud_workspace_handoff_op_for_user(
         handoff_op.failure_detail = failure_detail
         handoff_op.heartbeat_at = now
         handoff_op.updated_at = now
-        mobility_workspace.status_detail = failure_detail[:255] if failure_detail else None
-        mobility_workspace.last_error = failure_detail[:2000]
+        mobility_workspace.status_detail = status_detail
+        mobility_workspace.last_error = last_error
         mobility_workspace.updated_at = now
 
-        if handoff_op.finalized_at is not None and handoff_op.cleanup_completed_at is None:
-            handoff_op.phase = "cleanup_failed"
-            mobility_workspace.lifecycle_state = "cleanup_failed"
+        handoff_op.phase = phase
+        mobility_workspace.lifecycle_state = lifecycle_state
+        if keep_active_handoff:
             mobility_workspace.active_handoff_op_id = handoff_op.id
         else:
-            handoff_op.phase = "handoff_failed"
             mobility_workspace.active_handoff_op_id = None
-            mobility_workspace.lifecycle_state = "handoff_failed"
 
         await db.commit()
         await db.refresh(handoff_op)
