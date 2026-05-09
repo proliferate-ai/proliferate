@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   collectInactiveSessionStreamIds,
-  createEmptySessionRuntimeRecord,
-  createSessionRuntimeRecordFromSummary,
   detachAndCloseSessionStreams,
   fetchSessionHistory,
   pruneInactiveSessionStreams,
   resumeSession,
+  type FlushAwareSessionStreamHandle,
+  type SessionStreamPruningDeps,
 } from "./session-runtime";
-import type { Session, SessionStreamHandle } from "@anyharness/sdk";
-import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
+import type { SessionStreamHandle } from "@anyharness/sdk";
 import {
   createEmptySessionRecord,
+  findClientSessionIdByMaterializedSessionId,
+  getMaterializedSessionId,
   getSessionRecord,
+  getSessionRecords,
+  isPendingSessionId,
   patchSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
@@ -21,10 +24,34 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import {
+  closeSessionStreamHandle,
+  flushAllSessionStreamHandles,
   getSessionStreamHandle,
   setSessionStreamHandle,
   resetSessionStreamHandlesForTest,
 } from "@/lib/access/anyharness/session-stream-handles";
+
+const sessionStreamPruningDeps: SessionStreamPruningDeps = {
+  getSessionRecords,
+  getSessionStreamHandle: (sessionId: string) =>
+    getSessionStreamHandle(sessionId) as FlushAwareSessionStreamHandle | null,
+  closeSessionStreamHandle: (
+    sessionId: string,
+    handle: FlushAwareSessionStreamHandle,
+  ) => {
+    closeSessionStreamHandle(sessionId, handle);
+  },
+  flushAllSessionStreamHandles,
+  getMaterializedSessionId,
+  findClientSessionIdByMaterializedSessionId,
+  patchSessionStreamConnectionState: (
+    clientSessionId: string,
+    streamConnectionState,
+  ) => {
+    patchSessionRecord(clientSessionId, { streamConnectionState });
+  },
+  isPendingSessionId,
+};
 
 const mocks = vi.hoisted(() => ({
   listEvents: vi.fn(),
@@ -130,57 +157,21 @@ describe("fetchSessionHistory", () => {
 });
 
 describe("collectInactiveSessionStreamIds", () => {
-  it("initializes empty pending config changes on new slots", () => {
-    expect(createEmptySessionRuntimeRecord("session-1", "codex").pendingConfigChanges).toEqual({});
-  });
-
-  it("defaults generic slots to pending relationships", () => {
-    expect(createEmptySessionRuntimeRecord("session-1", "codex").sessionRelationship)
-      .toEqual({ kind: "pending" });
-  });
-
-  it("applies and prunes relationship hints when slots mount later", () => {
-    useSessionDirectoryStore.getState().recordRelationshipHint("child-session", {
-      kind: "subagent_child",
-      parentSessionId: "parent-session",
-      sessionLinkId: "link-1",
-      relation: "subagent",
-      workspaceId: "workspace-1",
-    });
-
-    putSessionRecord(
-      createEmptySessionRecord("child-session", "codex", {
-        workspaceId: "workspace-1",
-      }),
-    );
-
-    expect(useSessionDirectoryStore.getState().entriesById["child-session"]?.sessionRelationship)
-      .toEqual({
-        kind: "subagent_child",
-        parentSessionId: "parent-session",
-        sessionLinkId: "link-1",
-        relation: "subagent",
-        workspaceId: "workspace-1",
-      });
-    expect(useSessionDirectoryStore.getState().relationshipHintsBySessionId["child-session"])
-      .toBeUndefined();
-  });
-
   it("prunes only idle, non-pending sessions with open stream handles", () => {
     const idleSlot = {
-      ...createEmptySessionRuntimeRecord("session-idle", "codex"),
+      ...createEmptySessionRecord("session-idle", "codex"),
       streamConnectionState: "open" as const,
       transcriptHydrated: true,
       status: "idle" as const,
     };
     const workingSlot = {
-      ...createEmptySessionRuntimeRecord("session-working", "codex"),
+      ...createEmptySessionRecord("session-working", "codex"),
       streamConnectionState: "open" as const,
       transcriptHydrated: true,
       status: "running" as const,
     };
     const pendingSlot = {
-      ...createEmptySessionRuntimeRecord("pending-session:codex:1:abc123", "codex"),
+      ...createEmptySessionRecord("pending-session:codex:1:abc123", "codex"),
       streamConnectionState: "open" as const,
       transcriptHydrated: true,
       status: "idle" as const,
@@ -202,7 +193,7 @@ describe("collectInactiveSessionStreamIds", () => {
       "session-idle": idleSlot,
       "session-working": workingSlot,
       "pending-session:codex:1:abc123": pendingSlot,
-    }, {
+    }, sessionStreamPruningDeps, {
       preserveSessionIds: ["session-working"],
     });
 
@@ -231,7 +222,7 @@ describe("detachAndCloseSessionStreams", () => {
       title: "initial title",
     });
 
-    expect(detachAndCloseSessionStreams(["session-1"])).toBe(1);
+    expect(detachAndCloseSessionStreams(["session-1"], sessionStreamPruningDeps)).toBe(1);
 
     const slot = getSessionRecord("session-1")!;
     expect(close).toHaveBeenCalledTimes(1);
@@ -265,77 +256,13 @@ describe("pruneInactiveSessionStreams", () => {
       status: "idle",
     });
 
-    expect(pruneInactiveSessionStreams()).toEqual([]);
+    expect(pruneInactiveSessionStreams(sessionStreamPruningDeps)).toEqual([]);
 
     const slot = getSessionRecord("session-1")!;
     expect(flushPendingEvents).toHaveBeenCalledTimes(1);
     expect(close).not.toHaveBeenCalled();
     expect(getSessionStreamHandle("session-1")).toBe(handle);
     expect(slot.status).toBe("running");
-  });
-});
-
-describe("createSessionRuntimeRecordFromSummary", () => {
-  it("uses the subagent label as a fallback title for untitled runtime-created sessions", () => {
-    const session = {
-      id: "child-session",
-      agentKind: "claude",
-      modelId: "opus",
-      modeId: "default",
-      title: null,
-      status: "idle",
-      liveConfig: null,
-      executionSummary: null,
-      mcpBindingSummaries: null,
-      lastPromptAt: null,
-    } as Session;
-
-    const slot = createSessionRuntimeRecordFromSummary(session, "workspace-1", {
-      titleFallback: "haiku-test",
-    });
-
-    expect(slot.sessionId).toBe("child-session");
-    expect(slot.workspaceId).toBe("workspace-1");
-    expect(slot.title).toBe("haiku-test");
-    expect(slot.transcript.sessionMeta.title).toBe("haiku-test");
-    expect(slot.transcriptHydrated).toBe(false);
-    expect(slot.status).toBe("idle");
-  });
-
-  it("preserves existing relationship metadata across summary patches", () => {
-    const relationship = {
-      kind: "review_child" as const,
-      parentSessionId: "parent-session",
-      sessionLinkId: "review-link-1",
-      relation: "review",
-      workspaceId: "workspace-1",
-    };
-    const slot = createEmptySessionRuntimeRecord("review-session", "codex", {
-      workspaceId: "workspace-1",
-      sessionRelationship: relationship,
-    });
-    putSessionRecord(slot);
-
-    const patch = buildSessionSlotPatchFromSummary(
-      {
-        id: "review-session",
-        agentKind: "codex",
-        modelId: "gpt-5.4",
-        modeId: "default",
-        title: "Reviewer",
-        status: "idle",
-        liveConfig: null,
-        executionSummary: null,
-        mcpBindingSummaries: null,
-        lastPromptAt: null,
-      } as Session,
-      "workspace-1",
-      slot.transcript,
-    );
-    patchSessionRecord("review-session", patch);
-
-    expect(useSessionDirectoryStore.getState().entriesById["review-session"]?.sessionRelationship)
-      .toEqual(relationship);
   });
 });
 

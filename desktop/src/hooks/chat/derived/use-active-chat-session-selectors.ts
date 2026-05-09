@@ -24,10 +24,11 @@ import {
 } from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
 import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import { outboxEntriesForSession } from "@/lib/domain/chat/outbox/prompt-outbox-state";
-import { activitySnapshotFromDirectoryEntry, useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import type { SessionStreamConnectionState } from "@/lib/domain/sessions/directory/directory-entry";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import type { SessionStreamConnectionState } from "@/stores/sessions/session-types";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];

@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_LOCAL,
     AUTOMATION_EXECUTOR_KIND_DESKTOP,
@@ -99,6 +101,7 @@ def _normalize_local_error_code(value: str) -> str:
 
 
 async def claim_local_runs(
+    db: AsyncSession,
     user_id: UUID,
     body: LocalAutomationClaimRequest,
 ) -> LocalAutomationClaimListResponse:
@@ -111,6 +114,7 @@ async def claim_local_runs(
             repositories.append(identity)
 
     values = await claim_local_automation_runs(
+        db,
         user_id=user_id,
         executor_id=executor_id,
         available_repositories=repositories,
@@ -124,12 +128,14 @@ async def claim_local_runs(
 
 
 async def heartbeat_local_run(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     value = await heartbeat_run_claim(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         claim_ttl=_local_claim_ttl(),
@@ -144,12 +150,14 @@ async def heartbeat_local_run(
 
 
 async def mark_local_run_creating_workspace(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     value = await mark_run_creating_workspace(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         now=utcnow(),
@@ -163,12 +171,14 @@ async def mark_local_run_creating_workspace(
 
 
 async def attach_local_run_workspace(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     value = await attach_anyharness_workspace_to_run(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         anyharness_workspace_id=normalize_required_text(
@@ -187,12 +197,14 @@ async def attach_local_run_workspace(
 
 
 async def mark_local_run_provisioning_workspace(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     value = await mark_run_provisioning_workspace(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         now=utcnow(),
@@ -206,12 +218,14 @@ async def mark_local_run_provisioning_workspace(
 
 
 async def mark_local_run_creating_session(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     value = await mark_run_creating_session(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         anyharness_workspace_id=normalize_required_text(
@@ -230,12 +244,14 @@ async def mark_local_run_creating_session(
 
 
 async def attach_local_run_session(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     attached = await attach_anyharness_session_to_run(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         anyharness_workspace_id=normalize_required_text(
@@ -259,12 +275,14 @@ async def attach_local_run_session(
 
 
 async def mark_local_run_dispatching(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     value = await mark_run_dispatching(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         now=utcnow(),
@@ -278,12 +296,14 @@ async def mark_local_run_dispatching(
 
 
 async def mark_local_run_dispatched(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
 ) -> LocalAutomationMutationResponse:
     _normalize_executor_id(body.executor_id)
     dispatched = await mark_run_dispatched(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         anyharness_workspace_id=normalize_required_text(
@@ -307,6 +327,7 @@ async def mark_local_run_dispatched(
 
 
 async def mark_local_run_failed(
+    db: AsyncSession,
     user_id: UUID,
     run_id: UUID,
     body: LocalAutomationFailRequest,
@@ -314,6 +335,7 @@ async def mark_local_run_failed(
     _normalize_executor_id(body.executor_id)
     error_code = _normalize_local_error_code(body.error_code)
     failed = await mark_run_failed(
+        db,
         run_id=run_id,
         claim_id=body.claim_id,
         error_code=error_code,

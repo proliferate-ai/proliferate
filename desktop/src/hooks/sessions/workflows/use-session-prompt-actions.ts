@@ -4,11 +4,9 @@ import type { ActiveSessionPromptOptions } from "@/hooks/sessions/workflows/sess
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import {
   getSessionRecord,
+  isPendingSessionId,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import {
-  isPendingSessionId,
-} from "@/lib/workflows/sessions/session-runtime";
 
 export function useSessionPromptActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();

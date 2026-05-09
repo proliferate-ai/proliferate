@@ -158,35 +158,35 @@ async def get_organization_with_membership(
     )
 
 
-async def load_organization_with_membership(
-    *,
-    organization_id: UUID,
-    user_id: UUID,
-) -> OrganizationWithMembershipRecord | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_organization_with_membership(
-            db,
-            organization_id=organization_id,
-            user_id=user_id,
-        )
-
-
 async def load_active_membership(
     *,
     organization_id: UUID,
     user_id: UUID,
 ) -> MembershipRecord | None:
     async with db_engine.async_session_factory() as db:
-        membership = (
-            await db.execute(
-                select(OrganizationMembership).where(
-                    OrganizationMembership.organization_id == organization_id,
-                    OrganizationMembership.user_id == user_id,
-                    OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                )
+        return await get_active_membership(
+            db,
+            organization_id=organization_id,
+            user_id=user_id,
+        )
+
+
+async def get_active_membership(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    user_id: UUID,
+) -> MembershipRecord | None:
+    membership = (
+        await db.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
             )
-        ).scalar_one_or_none()
-        return membership_record(membership) if membership is not None else None
+        )
+    ).scalar_one_or_none()
+    return membership_record(membership) if membership is not None else None
 
 
 async def update_organization_settings(
@@ -293,17 +293,17 @@ async def ensure_organization_billing_subject_id(organization_id: UUID) -> UUID:
 
 
 async def load_organization_by_billing_subject(
+    db: AsyncSession,
     billing_subject_id: UUID,
 ) -> OrganizationRecord | None:
-    async with db_engine.async_session_factory() as db:
-        row = (
-            await db.execute(
-                select(Organization)
-                .join(BillingSubject, BillingSubject.organization_id == Organization.id)
-                .where(
-                    BillingSubject.id == billing_subject_id,
-                    BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
-                )
+    row = (
+        await db.execute(
+            select(Organization)
+            .join(BillingSubject, BillingSubject.organization_id == Organization.id)
+            .where(
+                BillingSubject.id == billing_subject_id,
+                BillingSubject.kind == BILLING_SUBJECT_KIND_ORGANIZATION,
             )
-        ).scalar_one_or_none()
-        return organization_record(row) if row is not None else None
+        )
+    ).scalar_one_or_none()
+    return organization_record(row) if row is not None else None

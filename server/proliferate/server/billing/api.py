@@ -4,9 +4,11 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import OwnerSelection
 from proliferate.auth.dependencies import current_active_user
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.billing.models import (
     BillingOverview,
@@ -38,9 +40,10 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 @router.get("/plan", response_model=PlanInfo)
 async def get_plan(
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> PlanInfo:
     try:
-        return await get_current_plan(user.id)
+        return await get_current_plan(db, user.id)
     except BillingServiceError as error:
         raise HTTPException(
             status_code=error.status_code,
@@ -53,11 +56,13 @@ async def get_cloud_plan_endpoint(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> CloudPlanInfo:
     try:
         if owner_scope == "personal" and organization_id is None:
-            return await get_cloud_plan(user.id)
+            return await get_cloud_plan(db, user.id)
         return await get_cloud_plan_for_owner(
+            db,
             user,
             OwnerSelection(owner_scope=owner_scope, organization_id=organization_id),
         )
@@ -73,11 +78,13 @@ async def get_overview(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> BillingOverview:
     try:
         if owner_scope == "personal" and organization_id is None:
-            return await get_billing_overview(user.id)
+            return await get_billing_overview(db, user.id)
         return await get_billing_overview_for_owner(
+            db,
             user,
             OwnerSelection(owner_scope=owner_scope, organization_id=organization_id),
         )
@@ -92,9 +99,11 @@ async def get_overview(
 async def create_cloud_checkout(
     request: BillingOwnerSelection | None = None,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
     try:
         return await create_cloud_checkout_session(
+            db,
             user,
             _owner_selection_from_body(request),
         )
@@ -109,9 +118,11 @@ async def create_cloud_checkout(
 async def create_customer_portal(
     request: BillingOwnerSelection | None = None,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
     try:
         return await create_customer_portal_session(
+            db,
             user,
             _owner_selection_from_body(request),
         )
@@ -126,9 +137,11 @@ async def create_customer_portal(
 async def create_refill_checkout(
     request: BillingOwnerSelection | None = None,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
     try:
         return await create_refill_checkout_session(
+            db,
             user,
             _owner_selection_from_body(request),
         )
@@ -143,9 +156,11 @@ async def create_refill_checkout(
 async def update_overage_settings_endpoint(
     request: OverageSettingsRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> OverageSettingsResponse:
     try:
         return await update_overage_settings(
+            db,
             user,
             enabled=request.enabled,
             cap_cents_per_seat=request.cap_cents_per_seat,

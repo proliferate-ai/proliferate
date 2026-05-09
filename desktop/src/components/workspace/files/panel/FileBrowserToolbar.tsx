@@ -12,7 +12,6 @@ import {
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 export type FileBrowserScopeFilter = "all" | GitPanelMode;
 
@@ -20,6 +19,7 @@ interface FileBrowserToolbarProps {
   search: string;
   scopeFilter: FileBrowserScopeFilter;
   changedFileCount: number;
+  treeStateKey: string | null;
   onSearchChange: (value: string) => void;
   onScopeFilterChange: (value: FileBrowserScopeFilter) => void;
   onRefresh: () => void;
@@ -40,11 +40,11 @@ export function FileBrowserToolbar({
   search,
   scopeFilter,
   changedFileCount,
+  treeStateKey,
   onSearchChange,
   onScopeFilterChange,
   onRefresh,
 }: FileBrowserToolbarProps) {
-  const treeStateKey = useWorkspaceViewerTabsStore((s) => s.treeStateKey);
   const collapseAllDirectories = useWorkspaceFileTreeUiStore((s) => s.collapseAllDirectories);
   const activeFilterLabel =
     FILE_BROWSER_FILTER_OPTIONS.find((option) => option.id === scopeFilter)?.label ?? "All files";

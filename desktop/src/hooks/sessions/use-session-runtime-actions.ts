@@ -24,6 +24,7 @@ import {
   resolveSessionStatus,
   shouldSkipColdIdleSessionStream,
 } from "@/lib/domain/sessions/activity";
+import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import {
   clearSessionReconnectTimer,
   scheduleSessionReconnectTimer,
@@ -45,10 +46,7 @@ import { useSessionStreamCache } from "@/hooks/sessions/cache/use-session-stream
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import {
-  activitySnapshotFromDirectoryEntry,
-  useSessionDirectoryStore,
-} from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
   getMaterializedSessionId,
   getSessionRecord,

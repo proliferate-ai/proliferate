@@ -76,9 +76,10 @@ async def create_automation_endpoint(
 @router.post("/executor/local/claims", response_model=LocalAutomationClaimListResponse)
 async def claim_local_runs_endpoint(
     body: LocalAutomationClaimRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationClaimListResponse:
-    return await claim_local_runs(user.id, body)
+    return await claim_local_runs(db, user.id, body)
 
 
 @router.post(
@@ -88,9 +89,10 @@ async def claim_local_runs_endpoint(
 async def heartbeat_local_run_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await heartbeat_local_run(user.id, run_id, body)
+    return await heartbeat_local_run(db, user.id, run_id, body)
 
 
 @router.post(
@@ -100,9 +102,10 @@ async def heartbeat_local_run_endpoint(
 async def mark_local_run_creating_workspace_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await mark_local_run_creating_workspace(user.id, run_id, body)
+    return await mark_local_run_creating_workspace(db, user.id, run_id, body)
 
 
 @router.post(
@@ -112,9 +115,10 @@ async def mark_local_run_creating_workspace_endpoint(
 async def attach_local_run_workspace_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await attach_local_run_workspace(user.id, run_id, body)
+    return await attach_local_run_workspace(db, user.id, run_id, body)
 
 
 @router.post(
@@ -124,9 +128,10 @@ async def attach_local_run_workspace_endpoint(
 async def mark_local_run_provisioning_workspace_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await mark_local_run_provisioning_workspace(user.id, run_id, body)
+    return await mark_local_run_provisioning_workspace(db, user.id, run_id, body)
 
 
 @router.post(
@@ -136,9 +141,10 @@ async def mark_local_run_provisioning_workspace_endpoint(
 async def mark_local_run_creating_session_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await mark_local_run_creating_session(user.id, run_id, body)
+    return await mark_local_run_creating_session(db, user.id, run_id, body)
 
 
 @router.post(
@@ -148,9 +154,10 @@ async def mark_local_run_creating_session_endpoint(
 async def attach_local_run_session_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await attach_local_run_session(user.id, run_id, body)
+    return await attach_local_run_session(db, user.id, run_id, body)
 
 
 @router.post(
@@ -160,9 +167,10 @@ async def attach_local_run_session_endpoint(
 async def mark_local_run_dispatching_endpoint(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await mark_local_run_dispatching(user.id, run_id, body)
+    return await mark_local_run_dispatching(db, user.id, run_id, body)
 
 
 @router.post(
@@ -172,9 +180,10 @@ async def mark_local_run_dispatching_endpoint(
 async def mark_local_run_dispatched_endpoint(
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await mark_local_run_dispatched(user.id, run_id, body)
+    return await mark_local_run_dispatched(db, user.id, run_id, body)
 
 
 @router.post(
@@ -184,9 +193,10 @@ async def mark_local_run_dispatched_endpoint(
 async def mark_local_run_failed_endpoint(
     run_id: UUID,
     body: LocalAutomationFailRequest,
+    db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> LocalAutomationMutationResponse:
-    return await mark_local_run_failed(user.id, run_id, body)
+    return await mark_local_run_failed(db, user.id, run_id, body)
 
 
 @router.get("/{automation_id}", response_model=AutomationResponse)

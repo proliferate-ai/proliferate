@@ -6,11 +6,11 @@ import { FileBrowserToolbar, type FileBrowserScopeFilter } from "./FileBrowserTo
 import { FileCreateDraftRow } from "./FileCreateDraftRow";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFilesRefresh } from "@/hooks/workspaces/files/workflows/use-workspace-files-refresh";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import { gitPanelEmptyMessage } from "@/lib/domain/workspaces/changes/git-panel-diff";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 interface WorkspaceFilesPanelProps {
   showHeader?: boolean;
@@ -19,7 +19,8 @@ interface WorkspaceFilesPanelProps {
 export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelProps) {
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<FileBrowserScopeFilter>("all");
-  const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
+  const fileContext = useWorkspaceFileContext();
+  const materializedWorkspaceId = fileContext.materializedWorkspaceId;
   const changesMode = scopeFilter === "all" ? "working_tree_composite" : scopeFilter;
   const changesState = useGitPanelState(changesMode);
   const searchQuery = useSearchWorkspaceFilesQuery({
@@ -28,9 +29,10 @@ export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelPr
     limit: 60,
     enabled: scopeFilter === "all" && search.trim().length > 0,
   });
-  const { openFile, openFileDiff } = useWorkspaceFileActions();
+  const { openFile, openFileDiff } = useWorkspaceFileActions(fileContext);
   const { refreshFiles } = useWorkspaceFilesRefresh({
     refetchChanges: changesState.refetch,
+    fileContext,
   });
   const changedSections = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -62,6 +64,7 @@ export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelPr
       <FileBrowserToolbar
         search={search}
         scopeFilter={scopeFilter}
+        treeStateKey={fileContext.treeStateKey}
         changedFileCount={
           scopeFilter === "all" ? changesState.totalChangedCount : changesState.visibleChangedCount
         }
