@@ -59,8 +59,8 @@ integrations/mcp/json_rpc.rs
 After a split lands, block the old flat file path from coming back. The
 repo-shape CI job runs `scripts/check_anyharness_old_paths.py` for completed
 AnyHarness splits. Add paths to that check only after the owning migration has
-landed on `main`; for example, `sessions/runtime.rs` stays out of the check
-until the session runtime split is complete.
+landed on `main`, then keep the old path blocked instead of relying on review
+to catch resurrected flat files.
 
 ## Review Questions
 
