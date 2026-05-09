@@ -9,7 +9,7 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::{broadcast, mpsc};
 
-use super::event_sink::publish_session_event;
+use super::event_sink::publish::publish_session_event;
 use super::session_actor::{
     ActorReadyResult, ForkSessionCommandError, LiveSessionHandle, PromptAcceptError,
     QueueMutationError, ResolveInteractionCommandError, SessionCommand,
