@@ -25,9 +25,7 @@ from proliferate.server.cloud.credentials.domain.types import (
     CloudCredentialAuthMode,
 )
 from proliferate.server.cloud.credentials.models import (
-    CredentialStatus,
     SyncCloudCredentialRequest,
-    credential_status_payload,
 )
 from proliferate.server.cloud.credentials.session_loader import (
     load_cloud_credentials_for_user,
@@ -38,9 +36,8 @@ from proliferate.utils.crypto import decrypt_json, encrypt_json
 async def list_cloud_credentials(
     db: AsyncSession,
     user_id: UUID,
-) -> list[CredentialStatus]:
-    statuses = await load_cloud_credential_statuses_for_request(db, user_id)
-    return [credential_status_payload(status) for status in statuses]
+) -> list[CredentialStatusRecord]:
+    return await load_cloud_credential_statuses_for_request(db, user_id)
 
 
 async def load_cloud_credential_statuses_for_request(

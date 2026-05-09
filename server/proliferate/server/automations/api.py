@@ -41,6 +41,8 @@ from proliferate.server.automations.models import (
     LocalAutomationFailRequest,
     LocalAutomationMutationResponse,
     UpdateAutomationRequest,
+    automation_payload,
+    automation_run_payload,
 )
 from proliferate.server.automations.service import (
     create_automation,
@@ -61,7 +63,8 @@ async def list_automations_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationListResponse:
-    return await list_automations(db, user.id)
+    values = await list_automations(db, user.id)
+    return AutomationListResponse(automations=[automation_payload(value) for value in values])
 
 
 @router.post("", response_model=AutomationResponse)
@@ -70,7 +73,7 @@ async def create_automation_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    return await create_automation(db, user.id, body)
+    return automation_payload(await create_automation(db, user.id, body))
 
 
 @router.post("/executor/local/claims", response_model=LocalAutomationClaimListResponse)
@@ -205,7 +208,7 @@ async def get_automation_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    return await get_automation(db, user.id, automation_id)
+    return automation_payload(await get_automation(db, user.id, automation_id))
 
 
 @router.patch("/{automation_id}", response_model=AutomationResponse)
@@ -215,7 +218,7 @@ async def update_automation_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    return await update_automation(db, user.id, automation_id, body)
+    return automation_payload(await update_automation(db, user.id, automation_id, body))
 
 
 @router.post("/{automation_id}/pause", response_model=AutomationResponse)
@@ -224,7 +227,7 @@ async def pause_automation_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    return await pause_automation(db, user.id, automation_id)
+    return automation_payload(await pause_automation(db, user.id, automation_id))
 
 
 @router.post("/{automation_id}/resume", response_model=AutomationResponse)
@@ -233,7 +236,7 @@ async def resume_automation_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationResponse:
-    return await resume_automation(db, user.id, automation_id)
+    return automation_payload(await resume_automation(db, user.id, automation_id))
 
 
 @router.post("/{automation_id}/run-now", response_model=AutomationRunResponse)
@@ -242,7 +245,7 @@ async def run_automation_now_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationRunResponse:
-    return await run_automation_now(db, user.id, automation_id)
+    return automation_run_payload(await run_automation_now(db, user.id, automation_id))
 
 
 @router.get("/{automation_id}/runs", response_model=AutomationRunListResponse)
@@ -254,4 +257,5 @@ async def list_automation_runs_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
 ) -> AutomationRunListResponse:
-    return await list_automation_runs(db, user.id, automation_id, limit=limit)
+    values = await list_automation_runs(db, user.id, automation_id, limit=limit)
+    return AutomationRunListResponse(runs=[automation_run_payload(value) for value in values])

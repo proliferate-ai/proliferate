@@ -11,6 +11,7 @@ from proliferate.server.cloud.credentials.models import (
     CloudCredentialMutationResponse,
     CredentialStatus,
     SyncCloudCredentialRequest,
+    credential_status_payload,
 )
 from proliferate.server.cloud.credentials.service import (
     delete_cloud_credential_for_user,
@@ -26,7 +27,9 @@ async def list_cloud_credentials_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[CredentialStatus]:
-    return await list_cloud_credentials(db, user.id)
+    return [
+        credential_status_payload(status) for status in await list_cloud_credentials(db, user.id)
+    ]
 
 
 @router.put("/credentials/{provider}")

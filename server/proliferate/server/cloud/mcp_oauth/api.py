@@ -14,6 +14,8 @@ from proliferate.server.cloud.mcp_connections.access import McpConnectionManageD
 from proliferate.server.cloud.mcp_oauth.models import (
     CloudMcpOAuthFlowStatusResponse,
     StartCloudMcpOAuthFlowResponse,
+    oauth_flow_start_payload,
+    oauth_flow_status_payload,
 )
 from proliferate.server.cloud.mcp_oauth.pages import make_mcp_oauth_callback_page
 from proliferate.server.cloud.mcp_oauth.service import (
@@ -34,7 +36,7 @@ async def start_cloud_mcp_oauth_flow_endpoint(
     connection: McpConnectionManageDependency,
     db: AsyncSession = Depends(get_async_session),
 ) -> StartCloudMcpOAuthFlowResponse:
-    return await start_cloud_mcp_oauth_flow(db, connection=connection)
+    return oauth_flow_start_payload(await start_cloud_mcp_oauth_flow(db, connection=connection))
 
 
 @router.get("/oauth/flows/{flow_id}", response_model=CloudMcpOAuthFlowStatusResponse)
@@ -43,7 +45,11 @@ async def get_cloud_mcp_oauth_flow_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
-    return await get_cloud_mcp_oauth_flow_status(db, user_id=user.id, flow_id=flow_id)
+    status = await get_cloud_mcp_oauth_flow_status(db, user_id=user.id, flow_id=flow_id)
+    return oauth_flow_status_payload(
+        status.flow,
+        include_authorization_url=status.include_authorization_url,
+    )
 
 
 @router.post("/oauth/flows/{flow_id}/cancel", response_model=CloudMcpOAuthFlowStatusResponse)
@@ -52,7 +58,11 @@ async def cancel_cloud_mcp_oauth_flow_endpoint(
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
-    return await cancel_cloud_mcp_oauth_flow(db, user_id=user.id, flow_id=flow_id)
+    status = await cancel_cloud_mcp_oauth_flow(db, user_id=user.id, flow_id=flow_id)
+    return oauth_flow_status_payload(
+        status.flow,
+        include_authorization_url=status.include_authorization_url,
+    )
 
 
 @router.get("/oauth/callback", response_class=HTMLResponse)

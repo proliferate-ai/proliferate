@@ -209,7 +209,7 @@ async def list_cloud_workspaces_for_user(
                 status_code=404,
             )
         try:
-            await resolve_owner_context(user, owner_selection)
+            await resolve_owner_context(user, owner_selection, db=db)
         except OrganizationServiceError as error:
             _map_owner_context_error(error)
         return []
@@ -568,6 +568,7 @@ async def _resolve_new_cloud_workspace_create(
 async def create_cloud_workspace(
     user: User,
     *,
+    db: AsyncSession | None = None,
     git_provider: str,
     git_owner: str,
     git_repo_name: str,
@@ -577,8 +578,14 @@ async def create_cloud_workspace(
     owner_selection: OwnerSelection | None = None,
 ) -> WorkspaceDetail:
     if owner_selection is not None and owner_selection.owner_scope == "organization":
+        if db is None:
+            raise CloudApiError(
+                "organization_not_found",
+                "Organization not found.",
+                status_code=404,
+            )
         try:
-            await resolve_owner_context(user, owner_selection)
+            await resolve_owner_context(user, owner_selection, db=db)
         except OrganizationServiceError as error:
             _map_owner_context_error(error)
         _raise_org_cloud_not_ready()

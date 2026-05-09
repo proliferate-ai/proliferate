@@ -1,25 +1,49 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
     DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-    DEFAULT_WORKTREE_POLICY_UPDATED_AT,
     MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO,
     MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO,
 )
 from proliferate.db.store.cloud_worktree_policy import (
+    CloudWorktreePolicyValue,
     get_cloud_worktree_policy,
     load_cloud_worktree_policy_for_user,
     save_cloud_worktree_policy,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.worktree_policy.models import (
-    CloudWorktreeRetentionPolicyResponse,
-    cloud_worktree_policy_payload,
-)
+
+CloudWorktreePolicySource = Literal["persisted", "default"]
+
+
+@dataclass(frozen=True)
+class CloudWorktreeRetentionPolicy:
+    max_materialized_worktrees_per_repo: int
+    updated_at: datetime | None
+    source: CloudWorktreePolicySource
+
+
+def _default_worktree_policy() -> CloudWorktreeRetentionPolicy:
+    return CloudWorktreeRetentionPolicy(
+        max_materialized_worktrees_per_repo=DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
+        updated_at=None,
+        source="default",
+    )
+
+
+def _worktree_policy_result(value: CloudWorktreePolicyValue) -> CloudWorktreeRetentionPolicy:
+    return CloudWorktreeRetentionPolicy(
+        max_materialized_worktrees_per_repo=value.max_materialized_worktrees_per_repo,
+        updated_at=value.updated_at,
+        source="persisted",
+    )
 
 
 def validate_worktree_policy_limit(value: int) -> int:
@@ -43,15 +67,11 @@ def validate_worktree_policy_limit(value: int) -> int:
 async def get_worktree_retention_policy(
     db: AsyncSession,
     user_id: UUID,
-) -> CloudWorktreeRetentionPolicyResponse:
+) -> CloudWorktreeRetentionPolicy:
     value = await get_cloud_worktree_policy(db, user_id)
     if value is None:
-        return CloudWorktreeRetentionPolicyResponse(
-            max_materialized_worktrees_per_repo=DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-            updated_at=DEFAULT_WORKTREE_POLICY_UPDATED_AT,
-            source="default",
-        )
-    return cloud_worktree_policy_payload(value)
+        return _default_worktree_policy()
+    return _worktree_policy_result(value)
 
 
 async def set_worktree_retention_policy(
@@ -59,7 +79,7 @@ async def set_worktree_retention_policy(
     user_id: UUID,
     *,
     max_materialized_worktrees_per_repo: int,
-) -> CloudWorktreeRetentionPolicyResponse:
+) -> CloudWorktreeRetentionPolicy:
     value = await save_cloud_worktree_policy(
         db,
         user_id=user_id,
@@ -67,17 +87,13 @@ async def set_worktree_retention_policy(
             max_materialized_worktrees_per_repo,
         ),
     )
-    return cloud_worktree_policy_payload(value)
+    return _worktree_policy_result(value)
 
 
 async def load_worktree_retention_policy_for_runtime(
     user_id: UUID,
-) -> CloudWorktreeRetentionPolicyResponse:
+) -> CloudWorktreeRetentionPolicy:
     value = await load_cloud_worktree_policy_for_user(user_id)
     if value is None:
-        return CloudWorktreeRetentionPolicyResponse(
-            max_materialized_worktrees_per_repo=DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO,
-            updated_at=DEFAULT_WORKTREE_POLICY_UPDATED_AT,
-            source="default",
-        )
-    return cloud_worktree_policy_payload(value)
+        return _default_worktree_policy()
+    return _worktree_policy_result(value)
