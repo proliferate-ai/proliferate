@@ -5,13 +5,18 @@ from __future__ import annotations
 import logging
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
-from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automation_run_claim_transitions import (
     mark_run_creating_workspace,
     mark_run_provisioning_workspace,
 )
+from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
+from proliferate.server.automations.domain.claim_lifecycle import (
+    CREATING_WORKSPACE_TRANSITION,
+    claim_is_active,
+    provisioning_workspace_transition,
+)
 from proliferate.server.automations.worker.cloud_executor_claims import (
     fail_claim,
     require_current_claim,
@@ -37,6 +42,8 @@ async def create_or_load_workspace(
         run_id=claim.id,
         claim_id=claim.claim_id,
         now=utcnow(),
+        transition=CREATING_WORKSPACE_TRANSITION,
+        claim_is_active=claim_is_active,
     )
     if current is None:
         return None
@@ -75,6 +82,8 @@ async def provision_workspace_for_claim(
         run_id=claim.id,
         claim_id=claim.claim_id,
         now=utcnow(),
+        transition=provisioning_workspace_transition(claim.execution_target),
+        claim_is_active=claim_is_active,
     )
     if current is None or current.cloud_workspace_id is None:
         return None

@@ -20,13 +20,14 @@ from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.automation_cloud_workspace_claims import (
-    create_cloud_workspace_for_claimed_run,
+from proliferate.server.automations.domain.claim_lifecycle import (
+    LocalAutomationRepoIdentity,
 )
-from proliferate.db.store.automation_run_claim_values import LocalAutomationRepoIdentity
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automations import create_manual_run_for_user
+from tests.unit.automation_claim_store_helpers import (
     claim_cloud_automation_runs,
     claim_local_automation_runs,
+    create_cloud_workspace_for_claimed_run,
     heartbeat_run_claim,
     mark_run_creating_session,
     mark_run_creating_workspace,
@@ -34,7 +35,6 @@ from proliferate.db.store.automation_run_claims import (
     mark_run_dispatching,
     mark_run_failed,
 )
-from proliferate.db.store.automations import create_manual_run_for_user
 
 
 def _patch_session_factory(test_engine):  # type: ignore[no-untyped-def]

@@ -5,14 +5,20 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from proliferate.db.store.automation_run_claim_transitions import (
+    mark_run_failed,
+)
 from proliferate.db.store.automation_run_claim_values import (
     AutomationRunClaimValue,
-    automation_error_message,
 )
 from proliferate.db.store.automation_run_claims import (
     heartbeat_run_claim,
     load_current_run_claim,
-    mark_run_failed,
+)
+from proliferate.server.automations.domain.claim_lifecycle import (
+    ACTIVE_CLAIM_STATUSES,
+    automation_error_message,
+    claim_is_active,
 )
 from proliferate.server.automations.worker.cloud_executor_config import CloudExecutorConfig
 from proliferate.utils.time import utcnow
@@ -32,6 +38,8 @@ async def fail_claim(
         error_code=code,
         message=(message or automation_error_message(code)),
         now=utcnow(),
+        active_statuses=ACTIVE_CLAIM_STATUSES,
+        claim_is_active=claim_is_active,
     )
     if not failed:
         logger.info(
@@ -60,6 +68,8 @@ async def heartbeat_loop(
                 claim_id=claim.claim_id,
                 claim_ttl=config.claim_ttl,
                 now=utcnow(),
+                active_statuses=ACTIVE_CLAIM_STATUSES,
+                claim_is_active=claim_is_active,
             )
         except Exception:
             logger.exception("automation cloud executor heartbeat failed run_id=%s", claim.id)
@@ -77,6 +87,8 @@ async def require_current_claim(
         run_id=claim.id,
         claim_id=claim.claim_id,
         now=utcnow(),
+        active_statuses=ACTIVE_CLAIM_STATUSES,
+        claim_is_active=claim_is_active,
     )
     if current is None:
         logger.info("automation cloud executor claim is no longer current run_id=%s", claim.id)

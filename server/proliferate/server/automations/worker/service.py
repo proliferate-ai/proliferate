@@ -13,6 +13,10 @@ from proliferate.db.store.automations import (
     AutomationScheduleFields,
     create_due_scheduled_runs_batch,
 )
+from proliferate.server.automations.domain.claim_lifecycle import (
+    AUTOMATION_RUN_STATUS_DISPATCHING,
+    dispatch_uncertain_failure,
+)
 from proliferate.server.automations.domain.schedule import due_and_next_occurrences
 from proliferate.utils.time import utcnow
 
@@ -37,7 +41,11 @@ def _resolve_due_schedule(
 
 
 async def run_scheduler_tick(*, batch_size: int = 100) -> SchedulerTickResult:
-    swept_dispatching_runs = await sweep_expired_dispatching_runs(now=utcnow())
+    swept_dispatching_runs = await sweep_expired_dispatching_runs(
+        now=utcnow(),
+        dispatching_status=AUTOMATION_RUN_STATUS_DISPATCHING,
+        dispatch_uncertain_failure=dispatch_uncertain_failure(),
+    )
     created_runs = await create_due_scheduled_runs_batch(
         now=utcnow(),
         limit=max(1, batch_size),
