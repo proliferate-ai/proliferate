@@ -8,7 +8,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from proliferate.integrations import anonymous_telemetry
+from proliferate.server.anonymous_telemetry import worker as anonymous_telemetry_worker
 from proliferate.server.anonymous_telemetry.service import AnonymousTelemetryEvent, VersionPayload
 
 
@@ -28,6 +28,29 @@ class _FakeAsyncClient:
         return self._responses.pop(0)
 
 
+class _FakeTransaction:
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+class _FakeSession:
+    def begin(self) -> _FakeTransaction:
+        return _FakeTransaction()
+
+    async def __aenter__(self) -> _FakeSession:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+def _fake_session_factory() -> _FakeSession:
+    return _FakeSession()
+
+
 @pytest.mark.asyncio
 async def test_emit_server_anonymous_version_uses_local_service_in_hosted_product(
     monkeypatch: pytest.MonkeyPatch,
@@ -37,36 +60,45 @@ async def test_emit_server_anonymous_version_uses_local_service_in_hosted_produc
     payload = VersionPayload(app_version="0.1.11", platform="darwin", arch="arm64")
 
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker.db_engine,
+        "async_session_factory",
+        _fake_session_factory,
+    )
+    monkeypatch.setattr(
+        anonymous_telemetry_worker,
         "load_or_create_local_install_id",
         AsyncMock(return_value=install_uuid),
     )
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "record_anonymous_telemetry",
         record_mock,
     )
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "get_server_telemetry_mode",
         lambda: "hosted_product",
     )
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "is_anonymous_telemetry_enabled",
         lambda: True,
     )
-    monkeypatch.setattr(anonymous_telemetry, "_version_payload", lambda: payload)
+    monkeypatch.setattr(anonymous_telemetry_worker, "_version_payload", lambda: payload)
 
     def _unexpected_client(**_kwargs: object) -> _FakeAsyncClient:
         raise AssertionError("remote HTTP should not be used in hosted_product mode")
 
-    monkeypatch.setattr(anonymous_telemetry.httpx, "AsyncClient", _unexpected_client)
+    monkeypatch.setattr(
+        anonymous_telemetry_worker.anonymous_telemetry_client.httpx,
+        "AsyncClient",
+        _unexpected_client,
+    )
 
-    await anonymous_telemetry.emit_server_anonymous_version()
+    await anonymous_telemetry_worker.emit_server_anonymous_version()
 
     record_mock.assert_awaited_once()
-    event = record_mock.await_args.args[0]
+    event = record_mock.await_args.args[1]
     assert isinstance(event, AnonymousTelemetryEvent)
     assert event.install_uuid == install_uuid
     assert event.surface == "server"
@@ -94,40 +126,45 @@ async def test_emit_server_anonymous_version_posts_remote_in_self_managed_mode(
     )
 
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker.db_engine,
+        "async_session_factory",
+        _fake_session_factory,
+    )
+    monkeypatch.setattr(
+        anonymous_telemetry_worker,
         "load_or_create_local_install_id",
         AsyncMock(return_value=install_uuid),
     )
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "get_server_telemetry_mode",
         lambda: "self_managed",
     )
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "is_anonymous_telemetry_enabled",
         lambda: True,
     )
-    monkeypatch.setattr(anonymous_telemetry, "_version_payload", lambda: payload)
+    monkeypatch.setattr(anonymous_telemetry_worker, "_version_payload", lambda: payload)
     monkeypatch.setattr(
-        anonymous_telemetry.settings,
+        anonymous_telemetry_worker.anonymous_telemetry_client.settings,
         "anonymous_telemetry_endpoint",
         "https://collector.example/v1/telemetry/anonymous",
     )
     monkeypatch.setattr(
-        anonymous_telemetry.httpx,
+        anonymous_telemetry_worker.anonymous_telemetry_client.httpx,
         "AsyncClient",
         lambda **_kwargs: fake_client,
     )
 
     record_mock = AsyncMock()
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "record_anonymous_telemetry",
         record_mock,
     )
 
-    await anonymous_telemetry.emit_server_anonymous_version()
+    await anonymous_telemetry_worker.emit_server_anonymous_version()
 
     record_mock.assert_not_awaited()
     assert len(fake_client.calls) == 1
@@ -158,16 +195,20 @@ async def test_sender_loop_captures_recovered_heartbeat_failures(
     async def _stop(_seconds: float) -> None:
         raise asyncio.CancelledError()
 
-    monkeypatch.setattr(anonymous_telemetry, "emit_server_anonymous_version", _boom)
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
+        "emit_server_anonymous_version",
+        _boom,
+    )
+    monkeypatch.setattr(
+        anonymous_telemetry_worker,
         "capture_server_sentry_exception",
         capture_mock,
     )
-    monkeypatch.setattr(anonymous_telemetry.asyncio, "sleep", _stop)
+    monkeypatch.setattr(anonymous_telemetry_worker.asyncio, "sleep", _stop)
 
     with pytest.raises(asyncio.CancelledError):
-        await anonymous_telemetry._sender_loop()
+        await anonymous_telemetry_worker._sender_loop()
 
     capture_mock.assert_called_once()
     assert capture_mock.call_args.args[0].args == ("collector offline",)
@@ -188,14 +229,18 @@ async def test_start_sender_does_not_wait_for_initial_emit(
         await asyncio.Future()
 
     monkeypatch.setattr(
-        anonymous_telemetry,
+        anonymous_telemetry_worker,
         "is_anonymous_telemetry_enabled",
         lambda: True,
     )
-    monkeypatch.setattr(anonymous_telemetry, "emit_server_anonymous_version", _block_forever)
+    monkeypatch.setattr(
+        anonymous_telemetry_worker,
+        "emit_server_anonymous_version",
+        _block_forever,
+    )
 
     task = await asyncio.wait_for(
-        anonymous_telemetry.start_server_anonymous_telemetry_sender(),
+        anonymous_telemetry_worker.start_server_anonymous_telemetry_sender(),
         timeout=0.1,
     )
 

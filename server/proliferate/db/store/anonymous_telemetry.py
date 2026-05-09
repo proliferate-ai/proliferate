@@ -6,7 +6,6 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.anonymous_telemetry import (
     AnonymousTelemetryEventRecord,
     AnonymousTelemetryInstall,
@@ -82,9 +81,8 @@ async def record_anonymous_telemetry_event(
     )
 
 
-async def _load_or_create_local_install_id(
+async def load_or_create_local_install_id(
     db: AsyncSession,
-    *,
     surface: str,
 ) -> UUID:
     existing = (
@@ -105,10 +103,4 @@ async def _load_or_create_local_install_id(
         updated_at=now,
     )
     db.add(record)
-    await db.commit()
     return record.install_uuid
-
-
-async def load_or_create_local_install_id(surface: str) -> UUID:
-    async with db_engine.async_session_factory() as db:
-        return await _load_or_create_local_install_id(db, surface=surface)

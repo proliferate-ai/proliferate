@@ -22,7 +22,7 @@ from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
 from proliferate.errors import ProliferateError
-from proliferate.integrations.anonymous_telemetry import (
+from proliferate.server.anonymous_telemetry.worker import (
     start_server_anonymous_telemetry_sender,
     stop_server_anonymous_telemetry_sender,
 )
