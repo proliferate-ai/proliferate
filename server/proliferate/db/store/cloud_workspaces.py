@@ -16,6 +16,7 @@ from proliferate.constants.cloud import (
     WORKSPACE_REPO_APPLY_LOCK_SALT,
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
+    WorkspacePostReadyPhase,
     WorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
@@ -200,7 +201,7 @@ async def create_cloud_workspace_record(
         repo_env_vars_ciphertext=repo_env_vars_ciphertext,
         repo_files_applied_version=0,
         repo_setup_applied_version=0,
-        repo_post_ready_phase="idle",
+        repo_post_ready_phase=WorkspacePostReadyPhase.idle.value,
         repo_post_ready_files_total=0,
         repo_post_ready_files_applied=0,
         repo_post_ready_apply_token=None,

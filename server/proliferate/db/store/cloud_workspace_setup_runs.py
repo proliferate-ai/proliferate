@@ -8,21 +8,18 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import WorkspacePostReadyPhase
+from proliferate.constants.cloud import (
+    SETUP_RUN_ACTIVE_STATUSES,
+    SETUP_RUN_STATUS_RUNNING,
+    bounded_setup_monitor_error,
+    classify_setup_run_finalization,
+)
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.workspaces import CloudWorkspace, CloudWorkspaceSetupRun
 from proliferate.utils.time import utcnow
 
-SETUP_RUN_ACTIVE_STATUSES = ("pending", "running")
 SETUP_MONITOR_CLAIM_TTL = timedelta(seconds=45)
 SETUP_MONITOR_POLL_INTERVAL = timedelta(seconds=5)
-MAX_SETUP_MONITOR_ERROR_CHARS = 2000
-
-
-def _bounded_error(value: str | None) -> str | None:
-    if value is None:
-        return None
-    return value[:MAX_SETUP_MONITOR_ERROR_CHARS]
 
 
 async def create_cloud_workspace_setup_run(
@@ -34,7 +31,7 @@ async def create_cloud_workspace_setup_run(
     setup_script_version: int,
     apply_token: str,
     deadline_at: datetime,
-    status: str = "running",
+    status: str = SETUP_RUN_STATUS_RUNNING,
 ) -> CloudWorkspaceSetupRun:
     async with db_engine.async_session_factory() as db:
         now = utcnow()
@@ -112,7 +109,7 @@ async def claim_due_setup_runs(
 async def release_setup_run_claim(
     setup_run_id: UUID,
     *,
-    status: str = "running",
+    status: str = SETUP_RUN_STATUS_RUNNING,
     next_poll_at: datetime | None = None,
     last_error: str | None = None,
 ) -> None:
@@ -126,7 +123,7 @@ async def release_setup_run_claim(
         run.claim_until = None
         run.last_polled_at = now
         run.next_poll_at = next_poll_at or (now + SETUP_MONITOR_POLL_INTERVAL)
-        run.last_error = _bounded_error(last_error)
+        run.last_error = bounded_setup_monitor_error(last_error)
         run.updated_at = now
         await db.commit()
 
@@ -155,49 +152,44 @@ async def _finalize_setup_run(
         return
     now = utcnow()
     workspace = await db.get(CloudWorkspace, run.workspace_id)
-    if workspace is None:
-        run.status = "stale"
-        run.claim_owner = None
-        run.claim_until = None
-        run.last_error = "Cloud workspace no longer exists."
-        run.updated_at = now
-        return
-
-    active_matches = bool(
-        workspace.repo_post_ready_apply_token == run.apply_token
-        and run.command_run_id
-        and workspace.repo_post_ready_phase == WorkspacePostReadyPhase.starting_setup.value
+    decision = classify_setup_run_finalization(
+        workspace_exists=workspace is not None,
+        workspace_apply_token=(
+            workspace.repo_post_ready_apply_token if workspace is not None else None
+        ),
+        workspace_phase=workspace.repo_post_ready_phase if workspace is not None else None,
+        run_apply_token=run.apply_token,
+        command_run_id=run.command_run_id,
+        final_status=final_status,
+        success=success,
+        last_error=last_error,
+        setup_script_version=run.setup_script_version,
     )
-    if not active_matches:
-        run.status = "stale"
-        run.claim_owner = None
-        run.claim_until = None
-        run.last_error = "Setup run was superseded by a newer apply."
-        run.updated_at = now
-        return
 
-    run.status = final_status
+    run.status = decision.run_status
     run.claim_owner = None
     run.claim_until = None
-    run.last_polled_at = now
-    run.next_poll_at = None
-    run.last_error = _bounded_error(last_error)
+    if decision.set_last_polled_at:
+        run.last_polled_at = now
+    if decision.clear_next_poll_at:
+        run.next_poll_at = None
+    run.last_error = decision.run_last_error
     run.updated_at = now
 
+    if not decision.should_update_workspace or workspace is None:
+        return
+    workspace_update = decision.workspace_update
+    if workspace_update is None:
+        return
     workspace.repo_post_ready_completed_at = now
     workspace.repo_post_ready_apply_token = None
     workspace.updated_at = now
-    if success:
-        workspace.repo_post_ready_phase = WorkspacePostReadyPhase.completed.value
-        workspace.repo_setup_applied_version = run.setup_script_version
-        workspace.repo_files_last_failed_path = None
-        workspace.repo_files_last_error = None
-        workspace.status_detail = "Ready"
-    else:
-        workspace.repo_post_ready_phase = WorkspacePostReadyPhase.failed.value
-        workspace.repo_files_last_failed_path = None
-        workspace.repo_files_last_error = _bounded_error(last_error) or "Repo setup failed"
-        workspace.status_detail = "Repo setup failed"
+    workspace.repo_post_ready_phase = workspace_update.phase.value
+    if workspace_update.repo_setup_applied_version is not None:
+        workspace.repo_setup_applied_version = workspace_update.repo_setup_applied_version
+    workspace.repo_files_last_failed_path = None
+    workspace.repo_files_last_error = workspace_update.repo_files_last_error
+    workspace.status_detail = workspace_update.status_detail
 
 
 async def mark_setup_run_timed_out(setup_run_id: UUID) -> None:
