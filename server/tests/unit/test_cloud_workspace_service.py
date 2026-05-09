@@ -204,6 +204,69 @@ async def test_automation_workspace_requires_selected_agent_credentials(
 
 
 @pytest.mark.asyncio
+async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    workspace = SimpleNamespace(id=uuid4(), status=workspace_service.CloudWorkspaceStatus.pending)
+    scheduled: list[object] = []
+
+    async def _resolve_new_cloud_workspace_create(*_args, **_kwargs):
+        return workspace_service.ResolvedCloudWorkspaceCreate(
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="feature/cloud",
+            git_base_branch="main",
+            display_name=None,
+            active_sandbox_count=0,
+            synced_providers=("claude",),
+            cloud_repo_limit=4,
+        )
+
+    async def _create_cloud_workspace_for_user(**_kwargs):
+        return workspace
+
+    async def _build_workspace_detail(_workspace):
+        return SimpleNamespace(status=_workspace.status)
+
+    monkeypatch.setattr(
+        workspace_service,
+        "_resolve_new_cloud_workspace_create",
+        _resolve_new_cloud_workspace_create,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "create_cloud_workspace_for_user",
+        _create_cloud_workspace_for_user,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "get_configured_sandbox_provider",
+        lambda: SimpleNamespace(template_version="v1"),
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "schedule_workspace_provision",
+        lambda workspace_id: scheduled.append(workspace_id),
+    )
+    monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+
+    payload = await workspace_service.create_cloud_workspace(
+        user,
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        base_branch="main",
+        branch_name="feature/cloud",
+        display_name=None,
+    )
+
+    assert payload.status == workspace_service.CloudWorkspaceStatus.pending
+    assert scheduled == [workspace.id]
+
+
+@pytest.mark.asyncio
 async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
