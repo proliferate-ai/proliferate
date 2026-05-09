@@ -57,16 +57,8 @@ async def update_user_github_profile(
     return user
 
 
-async def load_user_by_id(user_id: UUID) -> User | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_user_by_id(db, user_id)
-
-
-async def load_active_user_by_id(user_id: UUID) -> User | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_active_user_by_id(db, user_id)
-
-
 async def load_user_with_oauth_accounts_by_id(user_id: UUID) -> User | None:
+    # Transitional isolated read for deferred runtime/mobility/worker flows.
+    # Request-scoped callers should use get_user_with_oauth_accounts_by_id(db, ...).
     async with db_engine.async_session_factory() as db:
         return await get_user_with_oauth_accounts_by_id(db, user_id)

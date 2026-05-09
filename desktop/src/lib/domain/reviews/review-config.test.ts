@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  createStoredReviewKindDefaults,
   createReviewSetupDraft,
   createReviewSetupReviewerDraft,
   clampRounds,
   draftToStoredReviewDefaults,
   listReviewPersonaTemplates,
   MAX_REVIEW_ROUNDS,
+  nextAvailableReviewPersonaTemplate,
   nextReviewReviewerId,
+  reviewerMatchesReviewPersonaTemplate,
+  reviewerPersonalityLabel,
+  resolveReviewDefaultReviewerRows,
   resolveReviewPersonaTemplates,
   resolveReviewExecutionModeIdForAgent,
   type ReviewSessionDefaults,
@@ -123,6 +128,59 @@ describe("review setup config", () => {
     expect(nextReviewReviewerId("implementation-readiness", reviewers, 0)).toBe(
       "implementation-readiness-2",
     );
+  });
+
+  it("resolves one-click default reviewer rows from built-in personalities", () => {
+    const defaults = {
+      ...createStoredReviewKindDefaults(),
+      agentKind: "codex",
+      modelId: "gpt-5.4",
+      modeId: "full-access",
+    };
+    const rows = resolveReviewDefaultReviewerRows({
+      kind: "plan",
+      defaults,
+      personalityTemplates: listReviewPersonaTemplates("plan"),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["plan-skeptic", "implementation-readiness"]);
+    expect(rows[0]).toMatchObject({
+      agentKind: "codex",
+      modelId: "gpt-5.4",
+      modeId: "full-access",
+    });
+  });
+
+  it("labels and matches reusable reviewer personalities", () => {
+    const templates = listReviewPersonaTemplates("plan");
+    const planSkeptic = templates[0];
+    if (!planSkeptic) {
+      throw new Error("Missing plan skeptic template");
+    }
+    const reviewers = [
+      reviewer({
+        id: "plan-skeptic",
+        label: "Plan skeptic",
+        prompt: planSkeptic.prompt,
+      }),
+      reviewer({ id: "implementation-readiness" }),
+    ];
+
+    expect(reviewerPersonalityLabel(templates, reviewers[0])).toBe("Plan skeptic");
+    expect(reviewerPersonalityLabel(templates, {
+      ...reviewers[0],
+      prompt: "Edited prompt.",
+    })).toBe("Plan skeptic edited");
+    expect(reviewerMatchesReviewPersonaTemplate(
+      reviewers[0],
+      planSkeptic,
+      reviewers,
+      0,
+    )).toBe(true);
+    expect(nextAvailableReviewPersonaTemplate(templates, [reviewers[0]])?.id).toBe(
+      "implementation-readiness",
+    );
+    expect(nextAvailableReviewPersonaTemplate(templates, reviewers)?.id).toBe("plan-skeptic");
   });
 
   it("uses execution mode defaults for selected reviewer harnesses", () => {
