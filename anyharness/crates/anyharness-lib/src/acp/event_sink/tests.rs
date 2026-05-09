@@ -3,14 +3,16 @@ use std::path::PathBuf;
 use serde_json::json;
 use tokio::sync::broadcast;
 
+mod support;
+
 use super::{AcpChunkPayload, SessionEventSink};
-use crate::persistence::Db;
-use crate::sessions::model::{SessionBackgroundWorkState, SessionRecord};
+use crate::sessions::model::SessionBackgroundWorkState;
 use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
-use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
-    ContentPart, SessionEvent, SessionEventEnvelope, StopReason, TranscriptItemKind,
-    TranscriptItemStatus,
+    ContentPart, SessionEvent, StopReason, TranscriptItemKind, TranscriptItemStatus,
+};
+use support::{
+    assistant_completion_marker, drain_events, empty_store, seeded_store, transient_status_chunk,
 };
 
 #[test]
@@ -99,7 +101,7 @@ fn injected_runtime_event_persists_strictly_and_keeps_sequence() {
 
 #[test]
 fn injected_runtime_event_errors_when_persistence_fails() {
-    let store = SessionStore::new(Db::open_in_memory().expect("open db"));
+    let store = empty_store();
     let (tx, _rx) = broadcast::channel(32);
     let mut sink = SessionEventSink::new(
         "missing-session".to_string(),
@@ -580,81 +582,4 @@ fn async_launch_completion_preserves_background_metadata_on_completed_item() {
             .and_then(serde_json::Value::as_str),
         Some("/tmp/agent.output")
     );
-}
-
-fn seeded_store() -> SessionStore {
-    let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-04-04T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
-
-    let store = SessionStore::new(db);
-    store
-        .insert(&SessionRecord {
-            id: "session-1".to_string(),
-            workspace_id: "workspace-1".to_string(),
-            agent_kind: "claude".to_string(),
-            native_session_id: Some("native-1".to_string()),
-            requested_model_id: None,
-            current_model_id: None,
-            requested_mode_id: None,
-            current_mode_id: None,
-            title: None,
-            thinking_level_id: None,
-            thinking_budget_tokens: None,
-            status: "idle".to_string(),
-            created_at: "2026-04-04T00:00:00Z".to_string(),
-            updated_at: "2026-04-04T00:00:00Z".to_string(),
-            last_prompt_at: None,
-            closed_at: None,
-            dismissed_at: None,
-            mcp_bindings_ciphertext: None,
-            mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
-            system_prompt_append: None,
-            subagents_enabled: true,
-            action_capabilities_json: None,
-            origin: None,
-        })
-        .expect("seed session");
-    store
-}
-
-fn drain_events(rx: &mut broadcast::Receiver<SessionEventEnvelope>) -> Vec<SessionEventEnvelope> {
-    let mut events = Vec::new();
-    while let Ok(event) = rx.try_recv() {
-        events.push(event);
-    }
-    events
-}
-
-fn assistant_completion_marker(message_id: &str) -> AcpChunkPayload {
-    AcpChunkPayload {
-        content: json!(""),
-        meta: Some(json!({
-            "anyharness": {
-                "transcriptEvent": "assistant_message_completed",
-                "codexItemId": "item-1",
-            },
-        })),
-        message_id: Some(message_id.to_string()),
-    }
-}
-
-fn transient_status_chunk(text: &str) -> AcpChunkPayload {
-    AcpChunkPayload {
-        content: json!(text),
-        meta: Some(json!({
-            "anyharness": {
-                "transcriptEvent": "transient_status",
-            },
-        })),
-        message_id: Some("status-stream".to_string()),
-    }
 }
