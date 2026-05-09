@@ -23,9 +23,9 @@ use super::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_L
 use super::runtime_client::RuntimeClient;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
-use crate::plans::model::{NewPlan, PlanRecord};
-use crate::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
-use crate::reviews::service::ReviewService;
+use crate::domains::plans::model::{NewPlan, PlanRecord};
+use crate::domains::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
+use crate::domains::reviews::service::ReviewService;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::live_config::{
@@ -5062,8 +5062,8 @@ mod tests {
         ResolvedArtifact,
     };
     use crate::domains::agents::registry::built_in_registry;
+    use crate::domains::plans::{service::PlanService, store::PlanStore};
     use crate::persistence::Db;
-    use crate::plans::{service::PlanService, store::PlanStore};
     use crate::sessions::live_config::{snapshot_to_record, NormalizedControlKind};
     use crate::sessions::{model::SessionRecord, store::SessionStore};
     use agent_client_protocol as acp;

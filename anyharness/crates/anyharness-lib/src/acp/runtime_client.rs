@@ -15,7 +15,7 @@ use super::permission_broker::{InteractionBroker, PermissionOutcome, UserInputOu
 use super::permission_context::permission_context_from_meta;
 use super::permission_payload::{bound_raw_json, permission_option_mappings, permission_options};
 use super::session_actor::LiveSessionHandle;
-use crate::plans::service::PlanService;
+use crate::domains::plans::service::PlanService;
 use anyharness_contract::v1::{
     InteractionKind, InteractionPayload, InteractionRequestedEvent, InteractionSource,
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,

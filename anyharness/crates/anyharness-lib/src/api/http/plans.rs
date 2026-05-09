@@ -11,8 +11,8 @@ use serde::Deserialize;
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::plans::runtime::{GetPlanError, HandoffPlanError};
-use crate::plans::service::{plan_to_summary, PlanDecisionError};
+use crate::domains::plans::runtime::{GetPlanError, HandoffPlanError};
+use crate::domains::plans::service::{plan_to_summary, PlanDecisionError};
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Debug, Deserialize)]

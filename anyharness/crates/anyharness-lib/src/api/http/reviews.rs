@@ -14,8 +14,8 @@ use serde_json::Value;
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::reviews::mcp::handle_json_rpc;
-use crate::reviews::service::ReviewError;
+use crate::domains::reviews::mcp::handle_json_rpc;
+use crate::domains::reviews::service::ReviewError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(

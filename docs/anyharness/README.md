@@ -285,10 +285,10 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal/PTTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp.rs` | `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
-| Product MCP tool servers for cowork, reviews, subagents, workspace naming | `cowork/**`, `reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for cowork, reviews, subagents, workspace naming | `cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | scattered MCP helpers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [src/cowork-artifacts.md](src/cowork-artifacts.md) |
-| Reviews, plans, mobility, or repo-root product behavior | `reviews/**`, `plans/**`, `mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
+| Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
 | Latency tracing, request measurement, diagnostic ids | `api/http/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
 
@@ -362,8 +362,8 @@ current workspaces/    -> target domains/workspaces/
 current domains/agents/ -> target domains/agents/ plus integrations/agent_cli/
 current repo_roots/    -> target domains/repo_roots/
 current cowork/        -> target domains/cowork/
-current reviews/       -> target domains/reviews/
-current plans/         -> target domains/plans/
+domains/reviews/      -> target domains/reviews/
+domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
 current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
 current terminals/     -> target live/terminals/

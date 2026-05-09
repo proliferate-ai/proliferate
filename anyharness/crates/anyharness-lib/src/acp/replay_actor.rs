@@ -15,7 +15,7 @@ use super::session_actor::{
     QueueMutationError, ResolveInteractionCommandError, SessionCommand,
     SetConfigOptionCommandError,
 };
-use crate::plans::service::PlanDecisionError;
+use crate::domains::plans::service::PlanDecisionError;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::sessions::store::SessionStore;

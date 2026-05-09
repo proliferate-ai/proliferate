@@ -39,9 +39,9 @@ use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::agents::resolver::resolve_agent;
+use crate::domains::plans::model::PlanRecord;
+use crate::domains::plans::service::{PlanDecisionError, PlanService};
 use crate::origin::OriginContext;
-use crate::plans::model::PlanRecord;
-use crate::plans::service::{PlanDecisionError, PlanService};
 use crate::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
 };
