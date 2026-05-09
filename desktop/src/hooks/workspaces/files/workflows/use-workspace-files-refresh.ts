@@ -1,32 +1,48 @@
 import { useCallback } from "react";
+import {
+  resolveWorkspaceConnectionFromContext,
+  useAnyHarnessWorkspaceContext,
+} from "@anyharness/sdk-react";
 import { useWorkspaceFilesCache } from "@/hooks/access/anyharness/files/use-workspace-files-cache";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import {
+  useWorkspaceFileContext,
+  type WorkspaceFileContext,
+} from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 
 export function useWorkspaceFilesRefresh(args: {
   refetchChanges: () => Promise<unknown>;
+  fileContext?: WorkspaceFileContext;
 }) {
   const { refetchChanges } = args;
-  const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
-  const runtimeUrl = useWorkspaceViewerTabsStore((s) => s.runtimeUrl);
+  const derivedContext = useWorkspaceFileContext();
+  const fileContext = args.fileContext ?? derivedContext;
+  const workspace = useAnyHarnessWorkspaceContext();
   const { invalidateWorkspaceFiles } = useWorkspaceFilesCache();
 
   const refreshFiles = useCallback(() => {
-    if (!runtimeUrl || !materializedWorkspaceId) {
+    if (!fileContext.materializedWorkspaceId) {
       return;
     }
+    const workspaceId = fileContext.materializedWorkspaceId;
 
-    void Promise.all([
-      invalidateWorkspaceFiles({
-        runtimeUrl,
-        workspaceId: materializedWorkspaceId,
-      }),
-      refetchChanges(),
-    ]);
+    void (async () => {
+      const resolved = await resolveWorkspaceConnectionFromContext(
+        workspace,
+        workspaceId,
+      );
+      await Promise.all([
+        invalidateWorkspaceFiles({
+          runtimeUrl: resolved.connection.runtimeUrl,
+          workspaceId,
+        }),
+        refetchChanges(),
+      ]);
+    })().catch(() => undefined);
   }, [
+    fileContext.materializedWorkspaceId,
     invalidateWorkspaceFiles,
-    materializedWorkspaceId,
     refetchChanges,
-    runtimeUrl,
+    workspace,
   ]);
 
   return {

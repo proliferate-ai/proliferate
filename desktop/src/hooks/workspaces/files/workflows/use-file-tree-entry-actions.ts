@@ -16,6 +16,7 @@ import {
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useFileTreeNativeContextMenu } from "@/hooks/editor/ui/use-file-tree-native-context-menu";
 import { useTauriShellActions, type OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
@@ -33,10 +34,9 @@ export function useFileTreeEntryActions({
   entry,
   targets,
 }: UseFileTreeEntryActionsInput) {
-  const treeStateKey = useWorkspaceViewerTabsStore((s) => s.treeStateKey);
-  const workspaceUiKey = useWorkspaceViewerTabsStore((s) => s.workspaceUiKey);
+  const fileContext = useWorkspaceFileContext();
+  const { materializedWorkspaceId, treeStateKey, workspaceUiKey } = fileContext;
   const activeTargetKey = useWorkspaceViewerTabsStore((s) => s.activeTargetKey);
-  const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
   const renamePathReferences = useWorkspaceViewerTabsStore((s) => s.renamePathReferences);
   const closePathReferences = useWorkspaceViewerTabsStore((s) => s.closePathReferences);
   const setSelectedDirectory = useWorkspaceFileTreeUiStore((state) => state.setSelectedDirectory);
@@ -47,7 +47,7 @@ export function useFileTreeEntryActions({
       ? Boolean(state.expandedDirectoriesByTreeKey[treeStateKey]?.[entry.path])
       : false
   ));
-  const { toggleDirectory, openFile } = useWorkspaceFileActions();
+  const { toggleDirectory, openFile } = useWorkspaceFileActions(fileContext);
   const { activateChatShell, activateViewerTarget } = useWorkspaceShellActivation();
   const renameBufferPathPrefix = useWorkspaceFileBuffersStore((state) => state.renamePathPrefix);
   const clearBufferPathPrefix = useWorkspaceFileBuffersStore((state) => state.clearPathPrefix);
