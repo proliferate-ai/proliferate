@@ -3,11 +3,17 @@ import type { CloudMobilityWorkspaceSummary } from "@/lib/domain/workspaces/clou
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildLogicalWorkspaces,
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import {
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceRelatedIds,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import {
   replaceLogicalWorkspaceBranch,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
+import {
   resolveLogicalWorkspaceMaterializationId,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   buildGroups,
   makeCloudWorkspace,

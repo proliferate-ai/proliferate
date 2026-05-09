@@ -36,10 +36,10 @@ import {
   RIGHT_PANEL_MIN_WIDTH,
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
-  reconcileRightPanelWorkspaceState,
   type RightPanelDurableState,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";

@@ -13,7 +13,7 @@ import {
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   type RightPanelTool,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
@@ -22,7 +22,7 @@ import {
   CLOSED_PUBLISH_DIALOG_STATE,
   openPublishDialogState,
 } from "@/lib/domain/workspaces/creation/publish-dialog-state";
-import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow";
+import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
 
 interface UseMainScreenActionsArgs {
   layout: MainScreenLayoutState;

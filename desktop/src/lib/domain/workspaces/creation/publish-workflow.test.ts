@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { GitChangedFile, GitStatusSnapshot } from "@anyharness/sdk";
 import {
   buildPublishViewState,
-  defaultPublishPullRequestDraft,
-  type PublishIntent,
 } from "./publish-workflow";
+import { defaultPublishPullRequestDraft } from "./publish-draft";
+import type { PublishIntent } from "./publish-workflow-model";
 
 function file(path: string, includedState: GitChangedFile["includedState"]): GitChangedFile {
   return {

@@ -12,7 +12,7 @@ import type {
 } from "@/lib/access/cloud/client";
 import {
   buildRemoteLogicalWorkspaceId,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,
   markCloudDisplayNameSyncCompleted,

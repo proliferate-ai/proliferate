@@ -4,7 +4,7 @@ import {
 } from "@/lib/access/anyharness/workspaces";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {
   getCloudWorkspaceConnection,
   updateCloudWorkspaceDisplayName,

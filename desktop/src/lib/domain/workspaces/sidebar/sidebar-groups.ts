@@ -1,299 +1,36 @@
-import type { GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
+import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   latestLogicalWorkspaceTimestamp,
-  type LogicalWorkspace,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
+import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
+import { workspaceDefaultDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import {
+  activeWorkspaceActivity,
+  detailIndicatorsForWorkspace,
+  sidebarStatusIndicatorFromActivity,
+  sidebarWorkspaceVariantForLogicalWorkspace,
+} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
+import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
+import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import {
+  resolveSidebarWorkspaceTypes,
+} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
+import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
 import {
   compareLogicalWorkspaceRecency,
   compareResolvedLogicalWorkspaceRecency,
   type LogicalWorkspaceRecency,
   resolveLogicalWorkspaceRecency,
 } from "@/lib/domain/workspaces/sidebar/recency";
-import type {
-  SidebarCloudWorkspaceStatus,
-  SidebarCloudWorkspaceSummary,
-} from "./cloud-workspace";
-import {
-  humanizeBranchName,
-  workspaceCurrentBranchName,
-} from "@/lib/domain/workspaces/creation/branch-naming";
-import {
-  workspaceDefaultDisplayName,
-  workspaceDisplayName,
-} from "@/lib/domain/workspaces/display/workspace-display";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  cloudWorkspaceGroupKey,
-  localWorkspaceGroupKey,
-  repoRootGroupKey,
-} from "@/lib/domain/workspaces/cloud/collections";
-import {
-  activeWorkspaceActivity,
-  detailIndicatorsForWorkspace,
-  sidebarStatusIndicatorFromActivity,
-  sidebarWorkspaceVariantForLogicalWorkspace,
-} from "./sidebar-indicators";
-import type {
-  SidebarDetailIndicator,
-  SidebarStatusIndicator,
-  SidebarWorkspaceVariant,
-} from "./sidebar-indicators";
-
-export {
-  sidebarStatusIndicatorFromActivity,
-  sidebarWorkspaceVariantForLogicalWorkspace,
-} from "./sidebar-indicators";
-export type {
-  SidebarDetailIndicator,
-  SidebarIndicatorAction,
-  SidebarStatusIndicator,
-  SidebarWorkspaceVariant,
-} from "./sidebar-indicators";
-
-export interface LocalSidebarWorkspaceEntry {
-  source: "local";
-  id: string;
-  repoKey: string;
-  workspace: Workspace;
-}
-
-export interface CloudSidebarWorkspaceEntry {
-  source: "cloud";
-  id: string;
-  cloudWorkspaceId: string;
-  repoKey: string;
-  workspace: SidebarCloudWorkspaceSummary;
-}
-
-export type SidebarWorkspaceEntry =
-  | LocalSidebarWorkspaceEntry
-  | CloudSidebarWorkspaceEntry;
-
-export interface SidebarRepoGroupEntry {
-  repoKey: string;
-  name: string;
-  entries: SidebarWorkspaceEntry[];
-}
-
-export interface SidebarEntryGitMetadata {
-  provider: string | null;
-  owner: string | null;
-  repoName: string | null;
-  branchName: string | null;
-}
-
-export type SidebarEmptyState = "noWorkspaces" | "filteredOut" | null;
-
-export const DEFAULT_SIDEBAR_WORKSPACE_TYPES: SidebarWorkspaceVariant[] = [
-  "local",
-  "worktree",
-  "cloud",
-];
-export const SIDEBAR_REPO_GROUP_ITEM_LIMIT = 6;
-
-export interface SidebarWorkspaceItemState {
-  id: string;
-  localWorkspaceId: string | null;
-  name: string;
-  /**
-   * The label we would render if the user had not set a display name override.
-   * Used as the input placeholder in the rename popover. Equal to `name`
-   * when no override is set.
-   */
-  defaultName: string;
-  /**
-   * Whether the local workspace has a user-set display name override. Cloud
-   * entries are always `false` (cloud renaming uses a separate flow).
-   */
-  hasDisplayNameOverride: boolean;
-  /**
-   * Whether this entry supports renaming via the AnyHarness display name
-   * override. False for cloud entries (handled separately).
-   */
-  renameSupported: boolean;
-  subtitle: string | null;
-  active: boolean;
-  archived: boolean;
-  variant: SidebarWorkspaceVariant;
-  statusIndicator: SidebarStatusIndicator | null;
-  detailIndicators: SidebarDetailIndicator[];
-  cloudStatus: SidebarCloudWorkspaceStatus | null;
-  lastInteracted: string | null;
-  needsReview: boolean;
-}
-
-export interface SidebarGroupState {
-  sourceRoot: string;
-  name: string;
-  items: SidebarWorkspaceItemState[];
-  allLogicalWorkspaceIds: string[];
-  repoRootId: string | null;
-  localSourceRoot: string | null;
-  cloudRepoTarget: CloudWorkspaceRepoTarget | null;
-}
 
 function logicalGroupName(workspace: LogicalWorkspace): string {
   return workspace.repoName
     ?? workspace.sourceRoot.split("/").filter(Boolean).pop()
     ?? workspace.sourceRoot;
-}
-
-interface WorkspaceNeedsReviewInput {
-  isArchived: boolean;
-  lastInteracted: string | null | undefined;
-  lastViewedAt: string | null | undefined;
-}
-
-export function buildSidebarWorkspaceEntries(
-  localWorkspaces: Workspace[],
-  cloudWorkspaces: SidebarCloudWorkspaceSummary[],
-): SidebarWorkspaceEntry[] {
-  const entries: SidebarWorkspaceEntry[] = [
-    ...localWorkspaces.map((workspace) => ({
-      source: "local" as const,
-      id: workspace.id,
-      repoKey: localWorkspaceGroupKey(workspace),
-      workspace,
-    })),
-    ...cloudWorkspaces.map((workspace) => ({
-      source: "cloud" as const,
-      id: cloudWorkspaceSyntheticId(workspace.id),
-      cloudWorkspaceId: workspace.id,
-      repoKey: cloudWorkspaceGroupKey(workspace),
-      workspace,
-    })),
-  ];
-
-  return entries.sort((a, b) => {
-    const aTime = new Date(sidebarEntryUpdatedAt(a)).getTime();
-    const bTime = new Date(sidebarEntryUpdatedAt(b)).getTime();
-    return bTime - aTime;
-  });
-}
-
-export function groupSidebarEntries(
-  entries: SidebarWorkspaceEntry[],
-): SidebarRepoGroupEntry[] {
-  const groups = new Map<string, SidebarRepoGroupEntry>();
-
-  for (const entry of entries) {
-    if (!groups.has(entry.repoKey)) {
-      groups.set(entry.repoKey, {
-        repoKey: entry.repoKey,
-        name: sidebarEntryGroupName(entry),
-        entries: [],
-      });
-    }
-
-    groups.get(entry.repoKey)!.entries.push(entry);
-  }
-
-  return Array.from(groups.values());
-}
-
-export function sidebarEntryDisplayName(entry: SidebarWorkspaceEntry): string {
-  if (entry.source === "cloud") {
-    const override = entry.workspace.displayName?.trim();
-    if (override) {
-      return override;
-    }
-    return cloudEntryDefaultDisplayName(entry);
-  }
-
-  return workspaceDisplayName(entry.workspace);
-}
-
-function cloudEntryDefaultDisplayName(entry: CloudSidebarWorkspaceEntry): string {
-  return entry.workspace.repo.branch?.trim()
-    ? humanizeBranchName(entry.workspace.repo.branch)
-    : entry.workspace.repo.name;
-}
-
-export function sidebarEntryUpdatedAt(entry: SidebarWorkspaceEntry): string {
-  if (entry.source === "cloud") {
-    return entry.workspace.updatedAt ?? entry.workspace.createdAt ?? "";
-  }
-
-  return entry.workspace.updatedAt;
-}
-
-export function sidebarEntryGitMetadata(
-  entry: SidebarWorkspaceEntry,
-): SidebarEntryGitMetadata {
-  if (entry.source === "cloud") {
-    return {
-      provider: entry.workspace.repo.provider,
-      owner: entry.workspace.repo.owner,
-      repoName: entry.workspace.repo.name,
-      branchName: entry.workspace.repo.branch,
-    };
-  }
-
-  return {
-    provider: entry.workspace.gitProvider ?? null,
-    owner: entry.workspace.gitOwner ?? null,
-    repoName: entry.workspace.gitRepoName ?? null,
-    branchName: workspaceCurrentBranchName(entry.workspace),
-  };
-}
-
-export function sidebarEntryIsBranchBacked(entry: SidebarWorkspaceEntry): boolean {
-  return entry.source === "cloud" || entry.workspace.kind === "worktree";
-}
-
-export function sidebarEntryIsCloud(
-  entry: SidebarWorkspaceEntry,
-): entry is CloudSidebarWorkspaceEntry {
-  return entry.source === "cloud";
-}
-
-export function isWorkspaceNeedsReview({
-  isArchived,
-  lastInteracted,
-  lastViewedAt,
-}: WorkspaceNeedsReviewInput): boolean {
-  if (isArchived || !lastInteracted) {
-    return false;
-  }
-
-  return !lastViewedAt
-    || new Date(lastInteracted).getTime() > new Date(lastViewedAt).getTime();
-}
-
-export function normalizeSidebarWorkspaceTypes(
-  workspaceTypes: readonly SidebarWorkspaceVariant[],
-): SidebarWorkspaceVariant[] {
-  const typeSet = new Set<SidebarWorkspaceVariant>(workspaceTypes);
-  return DEFAULT_SIDEBAR_WORKSPACE_TYPES.filter((type) => typeSet.has(type));
-}
-
-export function resolveSidebarWorkspaceTypes(
-  workspaceTypes: readonly SidebarWorkspaceVariant[] | null | undefined,
-): SidebarWorkspaceVariant[] {
-  const normalized = normalizeSidebarWorkspaceTypes(workspaceTypes ?? []);
-  return normalized.length > 0 ? normalized : DEFAULT_SIDEBAR_WORKSPACE_TYPES;
-}
-
-export function isDefaultSidebarWorkspaceTypes(
-  workspaceTypes: readonly SidebarWorkspaceVariant[],
-): boolean {
-  return resolveSidebarWorkspaceTypes(workspaceTypes).length === DEFAULT_SIDEBAR_WORKSPACE_TYPES.length;
-}
-
-export function toggleSidebarWorkspaceTypeSelection(
-  workspaceTypes: readonly SidebarWorkspaceVariant[],
-  type: SidebarWorkspaceVariant,
-): SidebarWorkspaceVariant[] {
-  const normalized = resolveSidebarWorkspaceTypes(workspaceTypes);
-  if (normalized.includes(type)) {
-    return normalized.length === 1
-      ? normalized
-      : normalized.filter((selectedType) => selectedType !== type);
-  }
-
-  return normalizeSidebarWorkspaceTypes([...normalized, type]);
 }
 
 export function resolveAutoShowMoreRepoKey(args: {
@@ -325,7 +62,7 @@ export function resolveAutoShowMoreRepoKey(args: {
 export function resolveSidebarEmptyState(
   logicalWorkspaceCount: number,
   groupCount: number,
-): SidebarEmptyState {
+): "noWorkspaces" | "filteredOut" | null {
   if (groupCount > 0) {
     return null;
   }
@@ -341,7 +78,7 @@ export function buildSidebarGroupStates(args: {
   repoRoots: RepoRoot[];
   logicalWorkspaces: LogicalWorkspace[];
   showArchived: boolean;
-  workspaceTypes: SidebarWorkspaceVariant[];
+  workspaceTypes: ReturnType<typeof resolveSidebarWorkspaceTypes>;
   archivedSet: Set<string>;
   hiddenRepoRootIds: Set<string>;
   selectedLogicalWorkspaceId: string | null;
@@ -407,7 +144,7 @@ export function buildSidebarGroupStates(args: {
               : workspaceDefaultDisplayName(preferredLocalWorkspace)
           )
           : preferredCloudWorkspace
-            ? cloudEntryDefaultDisplayName({
+            ? cloudSidebarEntryDefaultDisplayName({
               source: "cloud",
               id: entry.id,
               cloudWorkspaceId: preferredCloudWorkspace.id,
@@ -546,15 +283,4 @@ function groupHasWorkActivity(
   return workspaces.some((workspace) =>
     resolveLogicalWorkspaceRecency(workspace, workspaceActivityAt).activityAt !== null
   );
-}
-
-function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {
-  if (entry.source === "cloud") {
-    return entry.workspace.repo.name;
-  }
-
-  return entry.workspace.gitRepoName
-    ?? entry.workspace.sourceRepoRootPath?.split("/").pop()
-    ?? entry.workspace.sourceRepoRootPath
-    ?? entry.workspace.path;
 }

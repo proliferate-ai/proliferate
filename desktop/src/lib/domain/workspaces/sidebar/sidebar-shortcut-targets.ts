@@ -1,5 +1,5 @@
 import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
-import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar";
+import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 
 export function visibleSidebarShortcutTargetIds(args: {
   groups: readonly SidebarGroupState[];

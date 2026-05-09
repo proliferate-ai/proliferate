@@ -10,7 +10,9 @@ import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
 import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { isDefaultSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar";
+import {
+  isDefaultSidebarWorkspaceTypes,
+} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
 import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   titleForStartBlockReason,

@@ -4,7 +4,7 @@ import {
   useState,
   type PointerEvent,
 } from "react";
-import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelHeaderEntryKey } from "@/lib/domain/workspaces/shell/right-panel-model";
 
 const HEADER_DRAG_THRESHOLD_PX = 4;
 

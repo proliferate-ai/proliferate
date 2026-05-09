@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   buildMobilityFooterContext,
   type WorkspaceMobilitySelectedMaterializationKind,

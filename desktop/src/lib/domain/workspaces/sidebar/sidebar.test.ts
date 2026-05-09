@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
+} from "./sidebar-model";
+import {
   resolveAutoShowMoreRepoKey,
   resolveSidebarEmptyState,
+} from "./sidebar-groups";
+import {
   resolveSidebarWorkspaceTypes,
   toggleSidebarWorkspaceTypeSelection,
-} from "./sidebar";
+} from "./sidebar-workspace-types";
 import {
   buildGroups,
   makeCloudLogicalWorkspace,
