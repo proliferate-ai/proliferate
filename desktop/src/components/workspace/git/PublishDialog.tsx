@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
-import { GitHub } from "@/components/ui/icons";
+import { GitHub } from "@/components/ui/git-icons";
 import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
 
 interface PublishDialogProps {

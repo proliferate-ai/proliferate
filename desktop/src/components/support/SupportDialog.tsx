@@ -1,12 +1,7 @@
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import {
-  Archive,
-  ChevronDown,
-  Copy,
-  FileText,
-  FolderList,
-} from "@/components/ui/icons";
+import { Archive, ChevronDown, Copy } from "@/components/ui/icons";
+import { FileText, FolderList } from "@/components/ui/file-icons";
 import {
   GmailBrandIcon,
   MailAppIcon,

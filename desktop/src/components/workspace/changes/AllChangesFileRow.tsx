@@ -4,12 +4,8 @@ import {
 } from "@anyharness/sdk-react";
 import { Button } from "@/components/ui/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronRight,
-  FileText,
-} from "@/components/ui/icons";
+import { ArrowUpRight, Check, ChevronRight } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type {
   GitPanelFile,

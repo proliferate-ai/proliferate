@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { GitBranch, RefreshCw, Trash } from "@/components/ui/icons";
+import { RefreshCw, Trash } from "@/components/ui/icons";
+import { GitBranch } from "@/components/ui/git-icons";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import {

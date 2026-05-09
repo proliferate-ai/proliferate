@@ -3,11 +3,7 @@ import type {
   CoworkCodingSessionSummary,
   CoworkManagedWorkspaceSummary,
 } from "@anyharness/sdk";
-import {
-  BrailleSweepBadge,
-  ChevronDown,
-  ChevronRight,
-} from "@/components/ui/icons";
+import { BrailleSweepBadge, ChevronDown, ChevronRight } from "@/components/ui/icons";
 import { AgentGlyph } from "@/components/ui/provider-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";

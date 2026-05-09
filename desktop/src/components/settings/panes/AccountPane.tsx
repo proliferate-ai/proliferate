@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
-import { ExternalLink, GitHub, Mail, RefreshCw } from "@/components/ui/icons";
+import { ExternalLink, Mail, RefreshCw } from "@/components/ui/icons";
+import { GitHub } from "@/components/ui/git-icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";

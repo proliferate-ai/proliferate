@@ -1,7 +1,7 @@
 import type { ToolCallItem } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { FileText } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { ToolActionRow } from "./ToolActionRow";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import { deriveCoworkArtifactToolPresentation } from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";

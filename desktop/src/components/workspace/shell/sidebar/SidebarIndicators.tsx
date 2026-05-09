@@ -1,15 +1,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
-import {
-  ArrowRight,
-  CircleAlert,
-  CircleQuestion,
-  ClipboardList,
-  Clock,
-  GitMerge,
-  MessageSquare,
-  Spinner,
-} from "@/components/ui/icons";
+import { ArrowRight, CircleAlert, CircleQuestion, ClipboardList, Clock, Spinner } from "@/components/ui/icons";
+import { GitMerge } from "@/components/ui/git-icons";
+import { MessageSquare } from "@/components/ui/session-icons";
 import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";

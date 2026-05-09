@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  BrailleSweepBadge,
-  CircleAlert,
-  MessageSquare,
-} from "@/components/ui/icons";
+import { BrailleSweepBadge, CircleAlert } from "@/components/ui/icons";
+import { MessageSquare } from "@/components/ui/session-icons";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import type {
   HeaderChatMenuEntry,

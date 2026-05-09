@@ -3,11 +3,7 @@
 import { act, isValidElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
-import {
-  CircleQuestion,
-  ClipboardList,
-  Spinner,
-} from "@/components/ui/icons";
+import { CircleQuestion, ClipboardList, Spinner } from "@/components/ui/icons";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,

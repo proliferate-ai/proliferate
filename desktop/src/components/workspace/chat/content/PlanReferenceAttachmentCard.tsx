@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { FileText, X } from "@/components/ui/icons";
+import { X } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
 import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";
 import type { PromptDisplayPlanPart } from "@/lib/domain/chat/composer/prompt-display-parts";

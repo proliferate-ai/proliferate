@@ -4,16 +4,10 @@ import type {
 } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  FilePen,
-  FileText,
-  GitBranch,
-  RefreshCw,
-  SplitPanel,
-} from "@/components/ui/icons";
+import { Check, ChevronDown, Copy, RefreshCw } from "@/components/ui/icons";
+import { FilePen, FileText } from "@/components/ui/file-icons";
+import { GitBranch } from "@/components/ui/git-icons";
+import { SplitPanel } from "@/components/ui/workspace-icons";
 import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";

@@ -1,5 +1,6 @@
 import { useId } from "react";
-import { FileIcon, type IconProps } from "@/components/ui/icons";
+import type { IconProps } from "@/components/ui/icons";
+import { FileIcon } from "@/components/ui/file-icons";
 
 export function MailAppIcon({ className, ...props }: IconProps) {
   const gradientId = useId();

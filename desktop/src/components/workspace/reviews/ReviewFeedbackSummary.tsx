@@ -1,7 +1,7 @@
 import type { ReviewAssignmentDetail } from "@anyharness/sdk";
 import { useSessionReviewsQuery } from "@anyharness/sdk-react";
 import { Button } from "@/components/ui/Button";
-import { FileText } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { ReviewFeedbackPromptReference } from "@/lib/domain/chat/subagents/provenance";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";

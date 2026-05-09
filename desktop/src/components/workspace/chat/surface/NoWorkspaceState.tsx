@@ -1,4 +1,4 @@
-import { Folder } from "@/components/ui/icons";
+import { Folder } from "@/components/ui/file-icons";
 import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
 import { ChatSurfaceCard } from "./ChatSurfaceCard";
 

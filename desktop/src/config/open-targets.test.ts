@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FileIcon } from "@/components/ui/icons";
+import { FileIcon } from "@/components/ui/file-icons";
 import {
   CursorIcon,
   FinderIcon,

@@ -1,8 +1,5 @@
 import type { Workspace } from "@anyharness/sdk";
-import {
-  CircleAlert,
-  RefreshCw,
-} from "@/components/ui/icons";
+import { CircleAlert, RefreshCw } from "@/components/ui/icons";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import { SidebarActionButton } from "./SidebarActionButton";
 import { SidebarRowSurface } from "./SidebarRowSurface";

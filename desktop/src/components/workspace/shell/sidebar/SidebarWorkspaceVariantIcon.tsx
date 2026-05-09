@@ -1,4 +1,5 @@
-import { CloudIcon, Monitor, Tree } from "@/components/ui/icons";
+import { Monitor } from "@/components/ui/icons";
+import { CloudIcon, Tree } from "@/components/ui/workspace-icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 

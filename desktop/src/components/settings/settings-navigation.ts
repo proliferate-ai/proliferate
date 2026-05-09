@@ -1,18 +1,9 @@
 import type { ComponentType } from "react";
-import {
-  Blocks,
-  BrainOutline,
-  CircleQuestion,
-  CircleUser,
-  CloudIcon,
-  CreditCard,
-  FolderList,
-  GitBranch,
-  Keyboard,
-  RefreshCw,
-  Settings,
-  Sparkles,
-} from "@/components/ui/icons";
+import { CircleQuestion, CreditCard, Keyboard, RefreshCw, Settings, Sparkles } from "@/components/ui/icons";
+import { FolderList } from "@/components/ui/file-icons";
+import { GitBranch } from "@/components/ui/git-icons";
+import { BrainOutline } from "@/components/ui/session-icons";
+import { Blocks, CircleUser, CloudIcon } from "@/components/ui/workspace-icons";
 import type { IconProps } from "@/components/ui/icons";
 import type { SettingsSection } from "@/config/settings";
 

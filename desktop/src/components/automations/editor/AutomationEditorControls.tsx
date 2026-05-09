@@ -19,12 +19,8 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import {
-  Brain,
-  Check,
-  Clock,
-  Sparkles,
-} from "@/components/ui/icons";
+import { Check, Clock, Sparkles } from "@/components/ui/icons";
+import { Brain } from "@/components/ui/session-icons";
 
 interface AutomationControlOption {
   value: string;

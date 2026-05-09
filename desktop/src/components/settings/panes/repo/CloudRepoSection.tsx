@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { CloudIcon } from "@/components/ui/icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import {
   EnvironmentPanel,
   EnvironmentPanelRow,

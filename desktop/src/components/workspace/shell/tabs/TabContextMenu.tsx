@@ -1,15 +1,6 @@
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import {
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  Fork,
-  Pencil,
-  Trash,
-  X,
-} from "@/components/ui/icons";
+import { ChevronDown, ChevronRight, Fork, Pencil, Trash, X } from "@/components/ui/icons";
+import { Folder, FolderOpen, FolderPlus } from "@/components/ui/file-icons";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {

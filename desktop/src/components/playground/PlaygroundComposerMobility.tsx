@@ -1,12 +1,8 @@
 import type { ReactNode } from "react";
-import {
-  ChevronDown,
-  CloudIcon,
-  Copy,
-  Folder,
-  FolderOpen,
-  GitBranch,
-} from "@/components/ui/icons";
+import { ChevronDown, Copy } from "@/components/ui/icons";
+import { Folder, FolderOpen } from "@/components/ui/file-icons";
+import { GitBranch } from "@/components/ui/git-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { WorkspaceMobilityFooterProgressStatus } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/input/WorkspaceMobilityLocationPopover";

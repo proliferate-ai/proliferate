@@ -3,12 +3,9 @@ import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopo
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import {
-  Check,
-  CloudIcon,
-  FolderOpen,
-  Plus,
-} from "@/components/ui/icons";
+import { Check, Plus } from "@/components/ui/icons";
+import { FolderOpen } from "@/components/ui/file-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import {
   type AutomationTargetGroup,
   type AutomationTargetRow,

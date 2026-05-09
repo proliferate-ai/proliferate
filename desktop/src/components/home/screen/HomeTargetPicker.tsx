@@ -5,14 +5,10 @@ import {
 } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import {
-  Check,
-  CloudIcon,
-  FolderOpen,
-  GitBranchIcon,
-  Plus,
-  Sparkles,
-} from "@/components/ui/icons";
+import { Check, Plus, Sparkles } from "@/components/ui/icons";
+import { FolderOpen } from "@/components/ui/file-icons";
+import { GitBranchIcon } from "@/components/ui/git-icons";
+import { CloudIcon } from "@/components/ui/workspace-icons";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
 import type {
   HomeNextDestination,

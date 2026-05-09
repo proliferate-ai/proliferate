@@ -3,10 +3,7 @@ import {
   type WorkspaceMobilityOverlayMode,
   useWorkspaceMobilityOverlayState,
 } from "@/hooks/workspaces/mobility/use-workspace-mobility-overlay-state";
-import {
-  CheckCircleFilled,
-  CircleAlert,
-} from "@/components/ui/icons";
+import { CheckCircleFilled, CircleAlert } from "@/components/ui/icons";
 
 export function WorkspaceMobilityOverlay() {
   const overlayState = useWorkspaceMobilityOverlayState();

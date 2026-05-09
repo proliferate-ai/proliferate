@@ -1,4 +1,4 @@
-import { Brain } from "@/components/ui/icons";
+import { Brain } from "@/components/ui/session-icons";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
