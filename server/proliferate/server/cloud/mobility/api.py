@@ -3,8 +3,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.mobility.models import (
@@ -70,9 +72,11 @@ async def ensure_mobility_workspace_endpoint(
 async def get_mobility_workspace_endpoint(
     mobility_workspace_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityWorkspaceDetail:
     try:
         value = await get_cloud_workspace_mobility_detail(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
         )
@@ -133,9 +137,11 @@ async def heartbeat_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
         value = await heartbeat_cloud_workspace_handoff(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
@@ -154,9 +160,11 @@ async def update_mobility_handoff_phase_endpoint(
     handoff_op_id: UUID,
     body: UpdateWorkspaceMobilityHandoffPhaseRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
         value = await update_cloud_workspace_handoff_phase(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
@@ -178,9 +186,11 @@ async def finalize_mobility_handoff_endpoint(
     handoff_op_id: UUID,
     body: FinalizeWorkspaceMobilityHandoffRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
         value = await finalize_cloud_workspace_handoff(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
@@ -199,9 +209,11 @@ async def cleanup_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
         value = await complete_cloud_workspace_handoff_cleanup(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
@@ -220,9 +232,11 @@ async def fail_mobility_handoff_endpoint(
     handoff_op_id: UUID,
     body: FailWorkspaceMobilityHandoffRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
         value = await fail_cloud_workspace_handoff(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,

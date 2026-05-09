@@ -15,7 +15,7 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claim_transitio
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_run_claims.py 3 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automations.py 1 worker scheduler batch owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 33 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mobility.py 9 transitional store owns transaction commit
+STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mobility.py 6 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_runtime_environments.py 3 phase 8 runtime lifecycle wrappers own deliberate checkpoint transactions
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspace_setup_runs.py 4 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspaces.py 16 transitional store owns transaction commit
@@ -28,7 +28,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 2 worker/c
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 34 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 3 materialization refresh wrappers open isolated DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper opens isolated DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mobility.py 13 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mobility.py 9 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_repo_config.py 2 deferred runtime/workspace flows still use isolated repo-config reads
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_runtime_environments.py 7 phase 8 runtime lifecycle wrappers open isolated DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_runs.py 5 transitional store opens DB session

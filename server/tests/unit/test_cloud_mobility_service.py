@@ -407,7 +407,7 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
     )
     monkeypatch.setattr(
         mobility_service,
-        "fail_cloud_workspace_handoff_op_for_user",
+        "fail_cloud_workspace_handoff_op_checkpoint_for_user",
         _fail_handoff,
     )
     monkeypatch.setattr(

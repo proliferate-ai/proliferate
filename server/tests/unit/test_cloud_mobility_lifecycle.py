@@ -254,6 +254,7 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
         mobility_workspace=mobility_record,
         cloud_workspace_id=None,
     )
+    await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
         user_id=user_id,
@@ -295,6 +296,7 @@ async def test_cleanup_completion_clears_active_handoff_and_marks_completed(
         handoff_op=handoff_record,
         mobility_workspace=mobility_record,
     )
+    await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
         user_id=user_id,
@@ -341,6 +343,7 @@ async def test_failure_clears_active_handoff_and_truncates_visible_error(
         status_detail=visible_failure_status_detail(failure_detail),
         last_error=visible_failure_last_error(failure_detail),
     )
+    await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
         user_id=user_id,
