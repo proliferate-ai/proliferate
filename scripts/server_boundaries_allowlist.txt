@@ -38,7 +38,6 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_cloud_workspac
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_run_claims.py 13 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automations.py 8 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/billing.py 34 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_credentials.py 1 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 3 materialization refresh wrappers open isolated DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper opens isolated DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp_connections.py 4 transitional store opens DB session
@@ -56,7 +55,6 @@ STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_cloud_worksp
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automations.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/billing.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_credentials.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/auth.py 1 materialization refresh wrappers import DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp_connections.py 1 transitional store imports DB session factory

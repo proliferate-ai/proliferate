@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -10,7 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudAgentKind
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import CloudCredential
 from proliferate.utils.crypto import decrypt_json
 from proliferate.utils.time import utcnow
@@ -18,11 +19,23 @@ from proliferate.utils.time import utcnow
 CloudCredentialPayloadMatches = Callable[[str], bool]
 
 
+@dataclass(frozen=True)
+class CloudCredentialRecord:
+    id: UUID
+    provider: str
+    auth_mode: str
+    payload_ciphertext: str
+    payload_format: str
+    revoked_at: datetime | None
+    last_synced_at: datetime | None
+    updated_at: datetime | None
+
+
 async def get_user_cloud_credentials(
     db: AsyncSession,
     user_id: UUID,
-) -> list[CloudCredential]:
-    return list(
+) -> list[CloudCredentialRecord]:
+    records = (
         (
             await db.execute(
                 select(CloudCredential)
@@ -33,6 +46,7 @@ async def get_user_cloud_credentials(
         .scalars()
         .all()
     )
+    return [_credential_record(record) for record in records]
 
 
 async def sync_cloud_credential_if_changed(
@@ -121,6 +135,14 @@ async def delete_cloud_credential(
     return bool(records)
 
 
-async def load_cloud_credentials_for_user(user_id: UUID) -> list[CloudCredential]:
-    async with db_engine.async_session_factory() as db:
-        return await get_user_cloud_credentials(db, user_id)
+def _credential_record(record: CloudCredential) -> CloudCredentialRecord:
+    return CloudCredentialRecord(
+        id=record.id,
+        provider=record.provider,
+        auth_mode=record.auth_mode,
+        payload_ciphertext=record.payload_ciphertext,
+        payload_format=record.payload_format,
+        revoked_at=record.revoked_at,
+        last_synced_at=record.last_synced_at,
+        updated_at=record.updated_at,
+    )
