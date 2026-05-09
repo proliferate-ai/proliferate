@@ -74,9 +74,7 @@ def filter_active_supported_credentials[CredentialRecordT: CredentialRecordForRe
 ) -> list[CredentialRecordT]:
     supported = frozenset(supported_providers)
     return [
-        record
-        for record in records
-        if record.provider in supported and record.revoked_at is None
+        record for record in records if record.provider in supported and record.revoked_at is None
     ]
 
 
