@@ -3,19 +3,16 @@ import type {
   McpElicitationInteractionPayload,
   McpElicitationSubmittedField,
 } from "@anyharness/sdk";
-import { type ReactNode, useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
-import { Select } from "@/components/ui/Select";
+import { useState } from "react";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatMcpElicitationActions } from "@/hooks/chat/use-chat-mcp-elicitation-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
+import { McpElicitationFormPanel } from "./McpElicitationFormPanel";
+import {
+  type McpDraftValue,
+} from "./McpElicitationFieldControl";
+import { McpElicitationUrlPanel } from "./McpElicitationUrlPanel";
 
-const BUTTON_CLASSNAME = "rounded-xl px-2.5 text-sm";
-
-type McpDraftValue = string | boolean | string[];
 type McpDrafts = Partial<Record<string, McpDraftValue>>;
 
 export interface McpElicitationCardProps {
@@ -72,66 +69,16 @@ export function McpElicitationCard({
 
     return (
       <ComposerAttachedPanel header={header}>
-        <div className="flex max-h-[min(40vh,360px)] flex-col">
-          <div className="min-h-0 overflow-y-auto p-3 pb-2">
-            <div className="flex flex-col gap-3">
-              <div className="space-y-1 text-sm">
-                <div className="text-muted-foreground">{payload.mode.message}</div>
-                <div className="text-xs text-muted-foreground">
-                  Destination: {payload.mode.urlDisplay}
-                </div>
-              </div>
-              {revealedUrl && (
-                <Input
-                  value={revealedUrl}
-                  readOnly
-                  data-telemetry-mask="true"
-                  className="font-mono text-xs"
-                />
-              )}
-              {error && <InlineError message={error} />}
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 pb-3 pt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className={BUTTON_CLASSNAME}
-              onClick={() => { void reveal(); }}
-            >
-              Reveal URL
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              className={BUTTON_CLASSNAME}
-              onClick={() => { void runAction(() => onAccept([])); }}
-            >
-              Accept
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className={BUTTON_CLASSNAME}
-              onClick={() => { void runAction(onDecline); }}
-            >
-              Decline
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className={BUTTON_CLASSNAME}
-              onClick={() => { void runAction(onCancel); }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <McpElicitationUrlPanel
+          message={payload.mode.message}
+          urlDisplay={payload.mode.urlDisplay}
+          revealedUrl={revealedUrl}
+          error={error}
+          onReveal={() => { void reveal(); }}
+          onAccept={() => { void runAction(() => onAccept([])); }}
+          onDecline={() => { void runAction(onDecline); }}
+          onCancel={() => { void runAction(onCancel); }}
+        />
       </ComposerAttachedPanel>
     );
   }
@@ -158,170 +105,17 @@ export function McpElicitationCard({
 
   return (
     <ComposerAttachedPanel header={header}>
-      <div className="flex max-h-[min(40vh,360px)] flex-col">
-        <div className="min-h-0 overflow-y-auto p-3 pb-2">
-          <div className="flex flex-col gap-3">
-            <div className="text-sm text-muted-foreground">
-              {formMode.message}
-            </div>
-            <div className="flex flex-col gap-3">
-              {formFields.map((field) => (
-                <McpFieldControl
-                  key={field.fieldId}
-                  field={field}
-                  value={drafts[field.fieldId]}
-                  onChange={(value) => updateDraft(field.fieldId, value)}
-                />
-              ))}
-            </div>
-            {error && <InlineError message={error} />}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 px-3 pb-3 pt-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className={BUTTON_CLASSNAME}
-            onClick={() => { void runAction(onCancel); }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className={BUTTON_CLASSNAME}
-            onClick={() => { void runAction(onDecline); }}
-          >
-            Decline
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className={BUTTON_CLASSNAME}
-            onClick={() => { void acceptForm(); }}
-          >
-            Submit
-          </Button>
-        </div>
-      </div>
-    </ComposerAttachedPanel>
-  );
-}
-
-function McpFieldControl({
-  field,
-  value,
-  onChange,
-}: {
-  field: McpElicitationField;
-  value: McpDraftValue | undefined;
-  onChange: (value: McpDraftValue) => void;
-}) {
-  const description = field.description ? (
-    <div className="mt-1 text-xs text-muted-foreground">{field.description}</div>
-  ) : null;
-  const label = `${field.label}${field.required ? " *" : ""}`;
-
-  if (field.fieldType === "boolean") {
-    return (
-      <div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            checked={Boolean(value)}
-            onChange={(event) => onChange(event.currentTarget.checked)}
-          />
-          <Label className="mb-0 text-sm text-foreground">{label}</Label>
-        </div>
-        {description}
-      </div>
-    );
-  }
-
-  if (field.fieldType === "single_select") {
-    return (
-      <FieldFrame label={label} description={description}>
-        <Select
-          value={typeof value === "string" ? value : ""}
-          onChange={(event) => onChange(event.currentTarget.value)}
-        >
-          <option value="">Choose an option</option>
-          {(field.options ?? []).map((option) => (
-            <option key={option.optionId} value={option.optionId}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      </FieldFrame>
-    );
-  }
-
-  if (field.fieldType === "multi_select") {
-    const selected = Array.isArray(value) ? value : [];
-    return (
-      <FieldFrame label={label} description={description}>
-        <div className="flex flex-col gap-2">
-          {(field.options ?? []).map((option) => (
-            <Button
-              key={option.optionId}
-              type="button"
-              variant={selected.includes(option.optionId) ? "primary" : "secondary"}
-              size="sm"
-              className="h-auto justify-start rounded-xl px-3 py-2 text-left"
-              onClick={() => {
-                onChange(selected.includes(option.optionId)
-                  ? selected.filter((entry) => entry !== option.optionId)
-                  : [...selected, option.optionId]);
-              }}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </FieldFrame>
-    );
-  }
-
-  return (
-    <FieldFrame label={label} description={description}>
-      <Input
-        type={field.fieldType === "number" ? "number" : "text"}
-        value={typeof value === "string" ? value : ""}
-        min={field.fieldType === "number" ? field.minimum ?? undefined : undefined}
-        max={field.fieldType === "number" ? field.maximum ?? undefined : undefined}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        data-telemetry-mask="true"
+      <McpElicitationFormPanel
+        message={formMode.message}
+        fields={formFields}
+        drafts={drafts}
+        error={error}
+        onFieldChange={updateDraft}
+        onCancel={() => { void runAction(onCancel); }}
+        onDecline={() => { void runAction(onDecline); }}
+        onSubmit={() => { void acceptForm(); }}
       />
-    </FieldFrame>
-  );
-}
-
-function FieldFrame({
-  label,
-  description,
-  children,
-}: {
-  label: string;
-  description: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <Label>{label}</Label>
-      {children}
-      {description}
-    </div>
-  );
-}
-
-function InlineError({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      {message}
-    </div>
+    </ComposerAttachedPanel>
   );
 }
 

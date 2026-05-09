@@ -12,7 +12,6 @@ import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
-import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import {
   useActiveSessionId,
@@ -46,18 +45,11 @@ import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
 } from "@/lib/infra/measurement/prompt-submit-measurement";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { ChatComposerActions } from "./ChatComposerActions";
-import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
-import { ComposerMentionEditor } from "./ComposerMentionEditor";
-import { ComposerTextarea } from "./ComposerTextarea";
-import { ComposerTextareaFrame } from "./ComposerTextareaFrame";
-import { ModelSelector } from "./ModelSelector";
-import { SessionConfigControls } from "./SessionConfigControls";
+import { ChatInputControlRow } from "./ChatInputControlRow";
+import { ChatInputDraftArea } from "./ChatInputDraftArea";
+import { ChatInputHiddenFileInput } from "./ChatInputHiddenFileInput";
 import { ChatComposerSurface } from "./ChatComposerSurface";
-import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 /**
@@ -126,45 +118,6 @@ export function ChatInput({
     workspaceUiKey,
     sdkWorkspaceId: materializedWorkspaceId,
   });
-  const canUseUtilityActions =
-    !effectiveIsEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled && !isSubmitting;
-  const canAttach = canUseUtilityActions && attachments.canAttachFiles;
-  // Plan references are resolved to markdown text by the runtime, so they do
-  // not depend on file/image attachment capabilities.
-  const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!materializedWorkspaceId;
-  const canStartReview = canUseUtilityActions
-    && !suppressActiveSessionState
-    && reviewActions.canStartCodeReview
-    && !activeReview.hasBlockingReview
-    && !activeReview.startingReview;
-  const attachFileDetail = (() => {
-    if (canAttach) {
-      return "Upload image or text context.";
-    }
-    if (!attachments.supportsAttachments) {
-      return activeSessionIdForUi
-        ? "Attachments are not supported by this agent"
-        : "Attachments are available after a session starts";
-    }
-    return "Chat is unavailable right now";
-  })();
-  const attachPlanDetail = canAttachPlan
-    ? "Attach an existing plan snapshot."
-    : workspaceUiKey
-      ? "Chat is unavailable right now"
-      : "Select a workspace before attaching a plan";
-  const reviewDetail = (() => {
-    if (canStartReview) {
-      return "Start review agents for the current implementation.";
-    }
-    if (activeReview.hasBlockingReview || activeReview.startingReview) {
-      return "A review is already active for this session";
-    }
-    if (!activeSessionIdForUi) {
-      return "Review is available after a session starts";
-    }
-    return "Review agents are unavailable right now";
-  })();
   const promptText = serializeChatDraftToPrompt(draft);
   const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
@@ -172,6 +125,12 @@ export function ChatInput({
     : isEmpty && !hasDraftAttachments;
   const canSubmit =
     !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans && !isSubmitting;
+  const canAcceptPastedAttachments =
+    !effectiveIsEditingQueuedPrompt
+    && !isDisabled
+    && !areRuntimeControlsDisabled
+    && !isSubmitting
+    && attachments.canAttachFiles;
   useComposerTextareaAutosize({
     textareaRef,
     value: editDraft,
@@ -280,7 +239,7 @@ export function ChatInput({
   }, [attachments, planAttachments]);
 
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
-    if (!canAttach) {
+    if (!canAcceptPastedAttachments) {
       return;
     }
     if (event.clipboardData.files.length > 0) {
@@ -292,7 +251,15 @@ export function ChatInput({
     if (text && attachments.addTextPaste(text)) {
       event.preventDefault();
     }
-  }, [attachments, canAttach]);
+  }, [attachments, canAcceptPastedAttachments]);
+
+  const handleComposerSurfaceClick = useCallback(() => {
+    if (effectiveIsEditingQueuedPrompt) {
+      textareaRef.current?.focus();
+      return;
+    }
+    focusChatInput();
+  }, [effectiveIsEditingQueuedPrompt]);
 
   useEffect(() => {
     if (!workspaceUiKey && !activeSessionIdForUi) {
@@ -341,118 +308,62 @@ export function ChatInput({
   return (
     <DebugProfiler id="chat-composer">
       <div className="relative">
-      <div ref={setMentionSearchHost} className="relative z-20 flex flex-col px-5" />
-      <ChatComposerSurface
-        overflowMode="clip"
-        onClick={() => {
-          if (effectiveIsEditingQueuedPrompt) {
-            textareaRef.current?.focus();
-            return;
-          }
-          focusChatInput();
-        }}
-        onPaste={handlePaste}
-      >
-        <form className="relative flex flex-col">
-          <Input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileInputChange}
-            accept="image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh"
-          />
-          {effectiveIsEditingQueuedPrompt && (
-            <div className="mx-5 mt-3 flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
-              <span>Editing queued message</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={cancelEdit}
-                className="h-6 px-2 text-xs"
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
-          {!effectiveIsEditingQueuedPrompt && (
-            <DraftAttachmentPreviewList
-              attachments={[...attachments.attachments, ...planAttachments.attachments]}
-              onRemove={handleRemoveDraftAttachment}
+        <div ref={setMentionSearchHost} className="relative z-20 flex flex-col px-5" />
+        <ChatComposerSurface
+          overflowMode="clip"
+          onClick={handleComposerSurfaceClick}
+          onPaste={handlePaste}
+        >
+          <form className="relative flex flex-col">
+            <ChatInputHiddenFileInput
+              ref={fileInputRef}
+              onChange={handleFileInputChange}
             />
-          )}
-          {effectiveIsEditingQueuedPrompt ? (
-            <ComposerTextareaFrame topInset="none">
-              <ComposerTextarea
-                data-chat-composer-editor
-                data-telemetry-mask
-                ref={textareaRef}
-                rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
-                value={editDraft}
-                onChange={(event) => setEditDraftText(event.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={CHAT_COMPOSER_LABELS.placeholder}
-                spellCheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-              />
-            </ComposerTextareaFrame>
-          ) : (
-            <ComposerMentionEditor
+            <ChatInputDraftArea
+              isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+              editDraft={editDraft}
+              onEditDraftChange={setEditDraftText}
+              textareaRef={textareaRef}
               draft={draft}
               onDraftChange={setDraft}
-              placeholder={CHAT_COMPOSER_LABELS.placeholder}
               canSubmit={canSubmit}
-              disabled={isDisabled}
+              isDisabled={isDisabled}
               onSubmit={onSubmit}
               onKeyDown={handleKeyDown}
-              topInset={hasDraftAttachments ? "none" : "standard"}
+              hasDraftAttachments={hasDraftAttachments}
+              draftAttachments={[...attachments.attachments, ...planAttachments.attachments]}
+              onRemoveDraftAttachment={handleRemoveDraftAttachment}
               searchHostElement={mentionSearchHost}
+              onCancelEdit={cancelEdit}
             />
-          )}
-
-          <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-            <div
-              className={`flex min-w-0 flex-nowrap items-center gap-[5px] ${
-                areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-              }`}
-            >
-              <ModelSelector {...modelSelectorProps} />
-              <SessionConfigControls
-                agentKind={effectiveAgentKind}
-                controls={effectiveSessionConfigControls}
-              />
-            </div>
-
-            <div className="flex items-center gap-[5px]">
-              {!effectiveIsEditingQueuedPrompt && (
-                <ComposerAddActionPopover
-                  canAttachFile={canAttach}
-                  attachFileDetail={attachFileDetail}
-                  canAttachPlan={canAttachPlan}
-                  attachPlanDetail={attachPlanDetail}
-                  canStartReview={canStartReview}
-                  reviewDetail={reviewDetail}
-                  workspaceUiKey={workspaceUiKey}
-                  sdkWorkspaceId={materializedWorkspaceId}
-                  onAttachFile={() => fileInputRef.current?.click()}
-                  onStartReview={reviewActions.startCodeReview}
-                  onConfigureReview={reviewActions.configureCodeReview}
-                />
-              )}
-              <ChatComposerActions
-                isRunning={isRunningForUi}
-                isEmpty={effectiveIsEmpty}
-                isDisabled={isDisabled || planAttachments.hasUnresolvedPlans || isSubmitting}
-                isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
-                onSubmit={onSubmit}
-                onCancel={onCancel}
-              />
-            </div>
-          </div>
-        </form>
-      </ChatComposerSurface>
+            <ChatInputControlRow
+              runtimeControlsDisabled={areRuntimeControlsDisabled}
+              modelSelectorProps={modelSelectorProps}
+              agentKind={effectiveAgentKind}
+              sessionConfigControls={effectiveSessionConfigControls}
+              isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
+              chatDisabled={isDisabled}
+              isSubmitting={isSubmitting}
+              supportsAttachments={attachments.supportsAttachments}
+              canAttachFiles={attachments.canAttachFiles}
+              activeSessionId={activeSessionIdForUi}
+              workspaceUiKey={workspaceUiKey}
+              sdkWorkspaceId={materializedWorkspaceId}
+              suppressActiveSessionState={suppressActiveSessionState}
+              canStartCodeReview={reviewActions.canStartCodeReview}
+              hasBlockingReview={activeReview.hasBlockingReview}
+              startingReview={!!activeReview.startingReview}
+              hasUnresolvedPlans={planAttachments.hasUnresolvedPlans}
+              onAttachFile={() => fileInputRef.current?.click()}
+              onStartReview={reviewActions.startCodeReview}
+              onConfigureReview={reviewActions.configureCodeReview}
+              isRunning={isRunningForUi}
+              isEmpty={effectiveIsEmpty}
+              onSubmit={onSubmit}
+              onCancel={onCancel}
+            />
+          </form>
+        </ChatComposerSurface>
       </div>
     </DebugProfiler>
   );
