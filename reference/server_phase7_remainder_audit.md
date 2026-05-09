@@ -26,14 +26,12 @@ the resolved follow-up below.
 
 | Path | Remaining rule families | Classification | Next step |
 |---|---|---|---|
-| `server/proliferate/integrations/anonymous_telemetry.py` | integration imports product/db | Small follow-up | Move persistence and product decisions out of the integration; keep the integration as transport/payload code. |
 | `server/proliferate/integrations/billing/stripe.py` | integration imports product | Phase 8 deferred | Handle with the billing/Stripe redesign so integration types and billing product types are separated deliberately. |
 | `server/proliferate/server/ai_magic/service.py` | service imports ORM/auth model | Small follow-up | Pass user IDs or small snapshots instead of auth ORM objects. |
 | `server/proliferate/server/billing/service.py` | service imports ORM/auth model | Phase 8 deferred | Billing service remains coupled to accounting, subscription, webhook, and usage semantics. |
 | `server/proliferate/server/cloud/repos/service.py` | service imports ORM/auth model | Small follow-up | Replace auth/ORM coupling with explicit user or owner snapshots. |
 | `server/proliferate/server/cloud/runtime/service.py` | service imports ORM/auth model | Phase 8 deferred | Runtime service cleanup belongs with runtime lifecycle/provisioning work. |
 | `server/proliferate/server/cloud/workspaces/service.py` | service imports ORM/auth model | Phase 8 deferred | Workspace service cleanup belongs with cloud workspace lifecycle/materialization work. |
-| `server/proliferate/db/store/anonymous_telemetry.py` | store opens/commits session | Small follow-up | Thread the DB session from the caller once telemetry ownership is moved out of the integration. |
 | `server/proliferate/db/store/automation_cloud_workspace_claims.py` | store opens/commits session | Phase 8 deferred | Claim transaction timing is worker/cloud-workspace scheduler behavior. |
 | `server/proliferate/db/store/automation_run_claims.py` | store opens/commits session | Phase 8 deferred | Run-claim locking, heartbeat, and retry semantics need a worker design pass. |
 | `server/proliferate/db/store/automations.py` | store opens/commits session | Phase 8 deferred | Remaining wrappers are worker/scheduler-facing rather than API CRUD cleanup. |
@@ -49,6 +47,13 @@ the resolved follow-up below.
 | `server/proliferate/db/store/cloud_worktree_policy.py` | store opens session | Intentional isolated wrapper | Remaining policy read serves deferred runtime policy sync. |
 | `server/proliferate/db/store/organization_invitations.py` | store opens session | Intentional isolated wrapper | Create/rotate must commit the invitation before external email delivery; replace only with an explicit delivery checkpoint or outbox design. |
 | `server/proliferate/db/store/users.py` | store opens session | Intentional isolated wrapper | Unused wrappers are removed; the remaining OAuth-account user load serves deferred runtime, mobility, and worker callers. |
+
+## Resolved Follow-Ups After Phase 7K
+
+- `server/proliferate/integrations/anonymous_telemetry.py` and
+  `server/proliferate/db/store/anonymous_telemetry.py`: resolved by moving the
+  server heartbeat worker into the product domain, keeping the integration as
+  remote transport only, and threading the DB session into the store.
 
 ## File-Size Debt
 

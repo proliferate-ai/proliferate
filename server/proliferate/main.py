@@ -22,15 +22,15 @@ from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
 from proliferate.errors import ProliferateError
-from proliferate.integrations.anonymous_telemetry import (
-    start_server_anonymous_telemetry_sender,
-    stop_server_anonymous_telemetry_sender,
-)
 from proliferate.integrations.sentry import flush_server_sentry, init_server_sentry
 from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.ai_magic.api import router as ai_magic_router
 from proliferate.server.anonymous_telemetry.api import router as anonymous_telemetry_router
+from proliferate.server.anonymous_telemetry.worker import (
+    start_server_anonymous_telemetry_sender,
+    stop_server_anonymous_telemetry_sender,
+)
 from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
 from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router

@@ -78,5 +78,8 @@ async def record_anonymous_telemetry(
     )
 
 
-async def load_or_create_local_install_id(surface: TelemetrySurface) -> UUID:
-    return await load_or_create_local_install_id_store(surface)
+async def load_or_create_local_install_id(
+    db: AsyncSession,
+    surface: TelemetrySurface,
+) -> UUID:
+    return await load_or_create_local_install_id_store(db, surface)
