@@ -85,6 +85,12 @@ from proliferate.server.cloud.runtime.service import (
     sync_workspace_credentials,
 )
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read
+from proliferate.server.cloud.workspaces.domain.lifecycle import (
+    decide_workspace_start_after_validation,
+    decide_workspace_status_transition,
+    provider_failure_debug_state,
+    start_request_should_return_existing,
+)
 from proliferate.server.cloud.workspaces.models import (
     WorkspaceConnection,
     WorkspaceCreatorContext,
@@ -143,50 +149,6 @@ class ResolvedCloudWorkspaceCreate:
     cloud_repo_limit: int | None
 
 
-PROVISIONING_STATUSES: frozenset[str] = frozenset(
-    {
-        CloudWorkspaceStatus.pending.value,
-        CloudWorkspaceStatus.materializing.value,
-    }
-)
-
-# Valid status transitions.  Each key lists the statuses that may follow it.
-# Every active or terminal state allows archive so that workspace stop/delete is
-# always permitted, and explicit start can revive an archived workspace.
-VALID_TRANSITIONS: dict[str, frozenset[str]] = {
-    CloudWorkspaceStatus.pending.value: frozenset(
-        {
-            CloudWorkspaceStatus.materializing.value,
-            CloudWorkspaceStatus.archived.value,
-            CloudWorkspaceStatus.error.value,
-        }
-    ),
-    CloudWorkspaceStatus.materializing.value: frozenset(
-        {
-            CloudWorkspaceStatus.ready.value,
-            CloudWorkspaceStatus.archived.value,
-            CloudWorkspaceStatus.error.value,
-        }
-    ),
-    CloudWorkspaceStatus.ready.value: frozenset(
-        {
-            CloudWorkspaceStatus.materializing.value,
-            CloudWorkspaceStatus.archived.value,
-            CloudWorkspaceStatus.error.value,
-        }
-    ),
-    CloudWorkspaceStatus.archived.value: frozenset(
-        {
-            CloudWorkspaceStatus.materializing.value,
-            CloudWorkspaceStatus.error.value,
-        }
-    ),
-    CloudWorkspaceStatus.error.value: frozenset(
-        {CloudWorkspaceStatus.materializing.value, CloudWorkspaceStatus.archived.value}
-    ),
-}
-
-
 def transition_workspace_status(
     workspace: CloudWorkspace,
     target: CloudWorkspaceStatus,
@@ -199,18 +161,19 @@ def transition_workspace_status(
     ``status_detail`` overrides the human-readable detail; when *None* the
     detail is derived from the target status.
     """
-    current = workspace.status
-    if current not in VALID_TRANSITIONS:
-        current = CloudWorkspaceStatus.error.value
-    allowed = VALID_TRANSITIONS.get(current)
-    if allowed is None or target.value not in allowed:
+    decision = decide_workspace_status_transition(
+        workspace.status,
+        target,
+        status_detail=status_detail,
+    )
+    if not decision.allowed:
         raise CloudApiError(
-            "invalid_status_transition",
-            f"Cannot transition workspace from '{workspace.status}' to '{target}'.",
-            status_code=409,
+            decision.error_code or "invalid_status_transition",
+            decision.error_message or "Invalid workspace status transition.",
+            status_code=decision.status_code or 409,
         )
-    workspace.status = target.value
-    workspace.status_detail = status_detail or target.value.replace("_", " ").title()
+    workspace.status = decision.target_status.value
+    workspace.status_detail = decision.status_detail
     workspace.updated_at = utcnow()
 
 
@@ -769,10 +732,7 @@ async def start_cloud_workspace(
     requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_read(user.id, workspace_id)
-    if (
-        workspace.status in PROVISIONING_STATUSES
-        and workspace.status != CloudWorkspaceStatus.pending.value
-    ):
+    if start_request_should_return_existing(workspace.status):
         return await _build_workspace_detail(workspace)
 
     repo_branches = await get_github_repo_branches(
@@ -815,12 +775,22 @@ async def start_cloud_workspace(
         active_sandbox_count=authorization.active_sandbox_count,
     )
 
-    if workspace.ready_at is None:
+    start_decision = decide_workspace_start_after_validation(
+        workspace.status,
+        ready_at_exists=workspace.ready_at is not None,
+    )
+    if start_decision.refresh_repo_env_snapshot:
         workspace = await _refresh_repo_env_snapshot_for_workspace(workspace)
+        start_decision = decide_workspace_start_after_validation(
+            workspace.status,
+            ready_at_exists=workspace.ready_at is not None,
+        )
 
-    if workspace.status == CloudWorkspaceStatus.pending.value:
-        workspace.last_error = None
-        await save_workspace(workspace)
+    if start_decision.action == "queue_pending":
+        if start_decision.clear_last_error:
+            workspace.last_error = None
+        if start_decision.persist_before_schedule:
+            await save_workspace(workspace)
         log_cloud_event(
             "cloud workspace queued",
             workspace_id=workspace.id,
@@ -829,22 +799,31 @@ async def start_cloud_workspace(
             branch_name=workspace.git_branch,
             requested_base_sha=requested_base_sha,
         )
-        schedule_workspace_provision(
-            workspace.id,
-            requested_base_sha=requested_base_sha,
+        if start_decision.schedule_provision:
+            schedule_workspace_provision(
+                workspace.id,
+                requested_base_sha=requested_base_sha,
+            )
+        return await _build_workspace_detail(workspace)
+
+    if start_decision.action in {"return_ready", "return_current"}:
+        return await _build_workspace_detail(workspace)
+
+    if start_decision.target_status is None:
+        raise CloudApiError(
+            "invalid_status_transition",
+            "Invalid workspace status transition.",
+            status_code=409,
         )
-        return await _build_workspace_detail(workspace)
-
-    if workspace.status == CloudWorkspaceStatus.ready.value:
-        return await _build_workspace_detail(workspace)
-
     transition_workspace_status(
         workspace,
-        CloudWorkspaceStatus.materializing,
-        status_detail="Preparing runtime",
+        start_decision.target_status,
+        status_detail=start_decision.status_detail,
     )
-    workspace.last_error = None
-    await save_workspace(workspace)
+    if start_decision.clear_last_error:
+        workspace.last_error = None
+    if start_decision.persist_before_schedule:
+        await save_workspace(workspace)
     log_cloud_event(
         "cloud workspace restart queued",
         workspace_id=workspace.id,
@@ -853,10 +832,11 @@ async def start_cloud_workspace(
         branch_name=workspace.git_branch,
         requested_base_sha=requested_base_sha,
     )
-    schedule_workspace_provision(
-        workspace.id,
-        requested_base_sha=requested_base_sha,
-    )
+    if start_decision.schedule_provision:
+        schedule_workspace_provision(
+            workspace.id,
+            requested_base_sha=requested_base_sha,
+        )
     return await _build_workspace_detail(workspace)
 
 
@@ -964,7 +944,8 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
         try:
             await provider.pause_sandbox(sandbox.external_sandbox_id)
         except Exception:
-            await update_sandbox_status(sandbox, "error")
+            failure_state = provider_failure_debug_state("stop")
+            await update_sandbox_status(sandbox, failure_state.sandbox_status)
             log_cloud_event(
                 "cloud sandbox pause failed",
                 level=logging.WARNING,
@@ -1011,7 +992,8 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
         try:
             await provider.destroy_sandbox(sandbox.external_sandbox_id)
         except Exception:
-            await update_sandbox_status(sandbox, "error")
+            failure_state = provider_failure_debug_state("destroy")
+            await update_sandbox_status(sandbox, failure_state.sandbox_status)
             log_cloud_event(
                 "cloud sandbox destroy failed",
                 level=logging.WARNING,
