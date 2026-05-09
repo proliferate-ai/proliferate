@@ -20,7 +20,7 @@ import { invalidateSessionActivationIntent } from "@/hooks/sessions/workflows/se
 import {
   writeChatShellIntentForEmptySurface,
   writeChatShellIntentForSession,
-} from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+} from "@/hooks/workspaces/tabs/workflows/workspace-shell-intent-writer";
 import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 

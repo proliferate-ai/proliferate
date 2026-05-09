@@ -18,14 +18,14 @@ import { useFinalizeCloudWorkspaceHandoff } from "@/hooks/access/cloud/use-final
 import { useStartCloudWorkspaceHandoff } from "@/hooks/access/cloud/use-start-cloud-workspace-handoff";
 import { useUpdateCloudWorkspaceHandoffPhase } from "@/hooks/access/cloud/use-update-cloud-workspace-handoff-phase";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useCloudWorkspaceReadinessWaiter } from "@/hooks/workspaces/mobility/use-cloud-workspace-readiness-waiter";
+import { useCloudWorkspaceReadinessWaiter } from "@/hooks/workspaces/mobility/workflows/use-cloud-workspace-readiness-waiter";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility/mobility-preflight-error";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
-import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";
+import { deriveHandoffFailureRecovery } from "@/lib/domain/workspaces/mobility/handoff-failure-recovery";
 
 function withRequiredSourceMetadata(
   preflight: WorkspaceMobilityPreflightResponse,

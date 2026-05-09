@@ -23,8 +23,8 @@ import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar
 import {
   ensureRepoGroupExpanded,
 } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceActions } from "./use-workspace-actions";
-import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
+import { useWorkspaceActions } from "./workflows/use-workspace-actions";
+import { useWorkspaceEntryFlow } from "./workflows/use-workspace-entry-flow";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import {
   elapsedMs,

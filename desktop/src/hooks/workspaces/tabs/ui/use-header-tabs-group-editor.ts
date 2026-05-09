@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
-import { useManualChatGroupActions } from "@/hooks/workspaces/tabs/use-manual-chat-group-actions";
+import { useManualChatGroupActions } from "@/hooks/workspaces/tabs/workflows/use-manual-chat-group-actions";
 import {
   createManualChatGroupId,
   getRandomManualChatGroupColorId,

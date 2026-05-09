@@ -6,7 +6,7 @@ import {
 import type { ModelRegistry, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

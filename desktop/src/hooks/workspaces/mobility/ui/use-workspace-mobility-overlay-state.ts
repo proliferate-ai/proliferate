@@ -6,8 +6,8 @@ import {
 } from "@/lib/domain/workspaces/mobility/presentation";
 import { MOBILITY_SUCCESS_DWELL_MS } from "@/config/workspace-mobility";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
-import { useWorkspaceMobilityCleanupActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-cleanup-actions";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { useWorkspaceMobilityCleanupActions } from "@/hooks/workspaces/mobility/workflows/use-workspace-mobility-cleanup-actions";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/derived/use-workspace-mobility-state";
 
 export type WorkspaceMobilityOverlayMode = "cleanup_failed" | "completion";
 

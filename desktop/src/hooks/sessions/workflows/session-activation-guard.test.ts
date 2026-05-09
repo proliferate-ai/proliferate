@@ -10,7 +10,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workflows/workspace-shell-intent-writer";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import {
   beginSessionActivationIntent,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";

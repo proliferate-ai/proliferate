@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 
 export function FileCreateDraftRow() {

@@ -7,7 +7,7 @@ import { ChangesFileRow } from "./ChangesFileRow";
 import { GitPanelHeader } from "./GitPanelHeader";
 import { Button } from "@/components/ui/Button";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
   gitPanelEmptyMessage,

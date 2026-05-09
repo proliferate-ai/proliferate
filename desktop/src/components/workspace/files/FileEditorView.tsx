@@ -12,7 +12,7 @@ import {
 } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useFileEditorCommands } from "@/hooks/workspaces/files/ui/use-file-editor-commands";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";

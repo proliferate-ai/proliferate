@@ -4,7 +4,7 @@ import {
   buildMobilityPromptState,
   type MobilityPromptState,
 } from "@/lib/domain/workspaces/mobility/mobility-prompt";
-import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
+import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/derived/use-mobility-footer-context";
 import { useWorkspaceMobilityState } from "./use-workspace-mobility-state";
 
 export function useMobilityPromptState(
