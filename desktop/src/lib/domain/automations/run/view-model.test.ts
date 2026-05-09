@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import type {
   AutomationRecord,
   AutomationRunRecord,
-} from "./automation-records";
+} from "./records";
 import {
   automationRunStatusLabel,
   buildAutomationRowViewModel,
   formatAutomationNextRunPlain,
 } from "./view-model";
-import { validateAutomationTimezone } from "./schedule";
+import { validateAutomationTimezone } from "@/lib/domain/automations/schedule/schedule";
 
 function automation(overrides: Partial<AutomationRecord> = {}): AutomationRecord {
   return {

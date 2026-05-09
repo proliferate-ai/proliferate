@@ -3,7 +3,7 @@ import type { AgentSummary, ModelRegistry, ModelRegistryModel } from "@anyharnes
 import {
   buildAutomationModelGroups,
   resolveAutomationModelSelection,
-} from "./model-selection";
+} from "./selection";
 
 function agent(overrides: Partial<AgentSummary> & { kind: string }): AgentSummary {
   return {

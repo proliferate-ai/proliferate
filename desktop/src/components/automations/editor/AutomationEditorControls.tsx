@@ -6,11 +6,11 @@ import {
   schedulePresetAcceptsTime,
   timeForRrule,
   type AutomationSchedulePresetOrCustom,
-} from "@/lib/domain/automations/schedule";
+} from "@/lib/domain/automations/schedule/schedule";
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
   formatScheduleControlLabel,
-} from "@/lib/domain/automations/options-presentation";
+} from "@/lib/domain/automations/schedule/presentation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";

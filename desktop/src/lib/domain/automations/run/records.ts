@@ -1,4 +1,4 @@
-export type AutomationExecutionTarget = "cloud" | "local";
+import type { AutomationExecutionTarget } from "@/lib/domain/automations/target/records";
 
 export interface AutomationScheduleSnapshot {
   rrule?: string;

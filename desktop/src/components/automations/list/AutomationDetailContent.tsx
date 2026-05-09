@@ -3,7 +3,7 @@ import { ArrowLeft } from "@/components/ui/icons";
 import type {
   AutomationRecord,
   AutomationRunRecord,
-} from "@/lib/domain/automations/automation-ui-records";
+} from "@/lib/domain/automations/run/ui-records";
 import { AutomationRunTimeline } from "@/components/automations/timeline/AutomationRunTimeline";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 

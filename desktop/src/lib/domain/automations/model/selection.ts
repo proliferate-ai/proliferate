@@ -5,7 +5,7 @@ import {
 } from "@/config/automations";
 import {
   AUTOMATION_AGENT_KIND_LABELS,
-} from "@/lib/domain/automations/options-presentation";
+} from "@/lib/domain/automations/model/presentation";
 import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,

@@ -1,3 +1,5 @@
+export type AutomationExecutionTarget = "cloud" | "local";
+
 export interface AutomationTargetRepoConfigRecord {
   gitOwner: string;
   gitRepoName: string;

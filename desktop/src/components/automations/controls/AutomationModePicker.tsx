@@ -2,7 +2,7 @@ import type {
   ConfiguredSessionControlValue,
   SessionControlIconKey,
 } from "@/lib/domain/chat/session-controls/presentation";
-import type { AutomationModeResolution } from "@/lib/domain/automations/mode-selection";
+import type { AutomationModeResolution } from "@/lib/domain/automations/mode/selection";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";

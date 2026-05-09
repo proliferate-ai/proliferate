@@ -3,7 +3,7 @@ import type {
   AutomationRepoRootRecord,
   AutomationRunClaimRecord,
   AutomationWorkspaceRecord,
-} from "./local-executor-records";
+} from "./records";
 import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,
@@ -11,7 +11,7 @@ import {
   normalizeAutomationWorkspaceDisplayName,
   safeAutomationSlug,
   workspaceMatchesAutomationPlan,
-} from "./local-executor";
+} from "./plan";
 
 function repoRoot(overrides: Partial<AutomationRepoRootRecord> = {}): AutomationRepoRootRecord {
   return {

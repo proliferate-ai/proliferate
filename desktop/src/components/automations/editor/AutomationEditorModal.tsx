@@ -6,21 +6,21 @@ import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import {
   AUTOMATION_REASONING_EFFORT_OPTIONS,
-} from "@/lib/domain/automations/options-presentation";
+} from "@/lib/domain/automations/model/presentation";
 import { useAutomationModelSelection } from "@/hooks/automations/derived/use-automation-model-selection";
 import { useAutomationModeSelection } from "@/hooks/automations/derived/use-automation-mode-selection";
 import { useAutomationTargetSelection } from "@/hooks/automations/derived/use-automation-target-selection";
 import type {
   AutomationModelOverride,
   AutomationModelSelection,
-} from "@/lib/domain/automations/model-selection";
-import type { AutomationModeOverride } from "@/lib/domain/automations/mode-selection";
-import type { AutomationTargetSelection } from "@/lib/domain/automations/target-selection";
+} from "@/lib/domain/automations/model/selection";
+import type { AutomationModeOverride } from "@/lib/domain/automations/mode/selection";
+import type { AutomationTargetSelection } from "@/lib/domain/automations/target/selection";
 import type {
   AutomationRecord,
   CreateAutomationInput,
   UpdateAutomationInput,
-} from "@/lib/domain/automations/automation-ui-records";
+} from "@/lib/domain/automations/run/ui-records";
 import {
   defaultAutomationTimezone,
   presetForRrule,
@@ -28,7 +28,7 @@ import {
   validateAutomationRrule,
   validateAutomationTimezone,
   type AutomationSchedulePresetOrCustom,
-} from "@/lib/domain/automations/schedule";
+} from "@/lib/domain/automations/schedule/schedule";
 import {
   AutomationSchedulePopover,
   AutomationSelectPopover,

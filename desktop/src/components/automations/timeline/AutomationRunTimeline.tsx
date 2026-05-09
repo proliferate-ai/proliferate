@@ -1,9 +1,9 @@
 import { memo, type KeyboardEvent } from "react";
-import type { AutomationRunRecord } from "@/lib/domain/automations/automation-ui-records";
+import type { AutomationRunRecord } from "@/lib/domain/automations/run/ui-records";
 import {
   automationRunStatusLabel,
   automationRunTimestampLabel,
-} from "@/lib/domain/automations/view-model";
+} from "@/lib/domain/automations/run/view-model";
 
 interface AutomationRunTimelineProps {
   runs: AutomationRunRecord[];

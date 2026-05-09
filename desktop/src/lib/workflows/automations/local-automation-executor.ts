@@ -10,7 +10,7 @@ import {
   workspaceMatchesAutomationPlan,
   type LocalAutomationRepoCandidate,
   type LocalAutomationWorktreePlan,
-} from "@/lib/domain/automations/local-executor";
+} from "@/lib/domain/automations/local-executor/plan";
 
 const AUTOMATION_LOCAL_ORIGIN = { kind: "system", entrypoint: "desktop" } as const;
 const SETUP_POLL_INTERVAL_MS = 2_000;

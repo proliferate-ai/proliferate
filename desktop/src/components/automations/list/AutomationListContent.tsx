@@ -1,5 +1,5 @@
 import { AUTOMATION_PREEXECUTOR_COPY } from "@/copy/automations/automation-copy";
-import type { AutomationRecord } from "@/lib/domain/automations/automation-ui-records";
+import type { AutomationRecord } from "@/lib/domain/automations/run/ui-records";
 import { AutomationRow } from "./AutomationRow";
 import { AutomationSectionHeader } from "./AutomationSectionHeader";
 
