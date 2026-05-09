@@ -11,11 +11,11 @@ import {
 import {
   getMaterializedSessionId,
   getSessionRecords,
+  isPendingSessionId,
   removeSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import {
   finishMeasurementOperation,
   finishOrCancelMeasurementOperation,

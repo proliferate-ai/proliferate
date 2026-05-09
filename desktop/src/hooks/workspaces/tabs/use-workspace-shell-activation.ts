@@ -32,8 +32,10 @@ import {
 } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
-import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import {
+  getSessionRecord,
+  isPendingSessionId,
+} from "@/stores/sessions/session-records";
 
 const HOT_SWITCH_SURFACES = [
   "workspace-shell",

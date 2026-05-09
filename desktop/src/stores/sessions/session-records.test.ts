@@ -1,20 +1,22 @@
-import { createTranscriptState } from "@anyharness/sdk";
+import { createTranscriptState, type Session } from "@anyharness/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
 import {
   createEmptySessionRecord,
+  createSessionRecordFromSummary,
   findClientSessionIdByMaterializedSessionId,
   getMaterializedSessionId,
   getSessionRecord,
   getSessionRecordByMaterializedSessionId,
   getWorkspaceSessionRecords,
+  isPendingSessionId,
   isSessionMaterialized,
   patchSessionRecord,
   putSessionRecord,
   removeSessionRecord,
   requireMaterializedSessionId,
-  waitForSessionMaterialization,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
@@ -61,6 +63,23 @@ describe("session records facade invariants", () => {
     expect(findClientSessionIdByMaterializedSessionId("runtime-a")).toBe("client-a");
     expect(getSessionRecordByMaterializedSessionId("runtime-a")?.sessionId).toBe("client-a");
     expect(getSessionRecord("client-a")?.transcript).toBe(transcript);
+  });
+
+  it("classifies pending client ids from synchronous directory state", () => {
+    putSessionRecord(createEmptySessionRecord("client-a", "codex", {
+      materializedSessionId: null,
+      workspaceId: "workspace-a",
+    }));
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-a",
+    }));
+
+    expect(isPendingSessionId("client-a")).toBe(true);
+    expect(isPendingSessionId("session-a")).toBe(false);
+
+    patchSessionRecord("client-a", { materializedSessionId: "runtime-a" });
+
+    expect(isPendingSessionId("client-a")).toBe(false);
   });
 
   it("returns only complete records from workspace-indexed facade reads", () => {
@@ -119,21 +138,99 @@ describe("session records facade invariants", () => {
     expect(useSessionIngestStore.getState()).toBe(ingestBefore);
   });
 
-  it("waits for materialization and rejects with the same guard error on timeout", async () => {
-    vi.useFakeTimers();
-    putSessionRecord(createEmptySessionRecord("client-a", "codex", {
-      materializedSessionId: null,
-      workspaceId: "workspace-a",
-    }));
+  it("initializes empty pending config changes and pending relationships on new records", () => {
+    const record = createEmptySessionRecord("session-1", "codex");
 
-    const pending = waitForSessionMaterialization("client-a", 1_000);
-    patchSessionRecord("client-a", { materializedSessionId: "runtime-a" });
-    await expect(pending).resolves.toBe("runtime-a");
+    expect(record.pendingConfigChanges).toEqual({});
+    expect(record.sessionRelationship).toEqual({ kind: "pending" });
+  });
 
-    const timedOut = expect(waitForSessionMaterialization("missing-client", 1_000))
-      .rejects
-      .toThrow("Session is still starting. Try again in a moment.");
-    await vi.advanceTimersByTimeAsync(1_000);
-    await timedOut;
+  it("applies and prunes relationship hints when records mount later", () => {
+    useSessionDirectoryStore.getState().recordRelationshipHint("child-session", {
+      kind: "subagent_child",
+      parentSessionId: "parent-session",
+      sessionLinkId: "link-1",
+      relation: "subagent",
+      workspaceId: "workspace-1",
+    });
+
+    putSessionRecord(
+      createEmptySessionRecord("child-session", "codex", {
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    expect(useSessionDirectoryStore.getState().entriesById["child-session"]?.sessionRelationship)
+      .toEqual({
+        kind: "subagent_child",
+        parentSessionId: "parent-session",
+        sessionLinkId: "link-1",
+        relation: "subagent",
+        workspaceId: "workspace-1",
+      });
+    expect(useSessionDirectoryStore.getState().relationshipHintsBySessionId["child-session"])
+      .toBeUndefined();
+  });
+
+  it("uses the subagent label as a fallback title for untitled runtime-created sessions", () => {
+    const session = {
+      id: "child-session",
+      agentKind: "claude",
+      modelId: "opus",
+      modeId: "default",
+      title: null,
+      status: "idle",
+      liveConfig: null,
+      executionSummary: null,
+      mcpBindingSummaries: null,
+      lastPromptAt: null,
+    } as Session;
+
+    const record = createSessionRecordFromSummary(session, "workspace-1", {
+      titleFallback: "haiku-test",
+    });
+
+    expect(record.sessionId).toBe("child-session");
+    expect(record.workspaceId).toBe("workspace-1");
+    expect(record.title).toBe("haiku-test");
+    expect(record.transcript.sessionMeta.title).toBe("haiku-test");
+    expect(record.transcriptHydrated).toBe(false);
+    expect(record.status).toBe("idle");
+  });
+
+  it("preserves existing relationship metadata across summary patches", () => {
+    const relationship = {
+      kind: "review_child" as const,
+      parentSessionId: "parent-session",
+      sessionLinkId: "review-link-1",
+      relation: "review",
+      workspaceId: "workspace-1",
+    };
+    const record = createEmptySessionRecord("review-session", "codex", {
+      workspaceId: "workspace-1",
+      sessionRelationship: relationship,
+    });
+    putSessionRecord(record);
+
+    const patch = buildSessionSlotPatchFromSummary(
+      {
+        id: "review-session",
+        agentKind: "codex",
+        modelId: "gpt-5.4",
+        modeId: "default",
+        title: "Reviewer",
+        status: "idle",
+        liveConfig: null,
+        executionSummary: null,
+        mcpBindingSummaries: null,
+        lastPromptAt: null,
+      } as Session,
+      "workspace-1",
+      record.transcript,
+    );
+    patchSessionRecord("review-session", patch);
+
+    expect(useSessionDirectoryStore.getState().entriesById["review-session"]?.sessionRelationship)
+      .toEqual(relationship);
   });
 });

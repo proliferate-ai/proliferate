@@ -247,32 +247,12 @@ export function isSessionMaterialized(clientSessionId: string | null | undefined
   return !!getMaterializedSessionId(clientSessionId);
 }
 
-export function waitForSessionMaterialization(
-  clientSessionId: string,
-  timeoutMs = 15_000,
-): Promise<string> {
-  const existing = getMaterializedSessionId(clientSessionId);
-  if (existing) {
-    return Promise.resolve(existing);
+export function isPendingSessionId(sessionId: string): boolean {
+  if (sessionId.startsWith("pending-session:") || sessionId.startsWith("client-session:")) {
+    return !isSessionMaterialized(sessionId);
   }
-
-  return new Promise((resolve, reject) => {
-    let unsubscribe: () => void = () => {};
-    const timeout = globalThis.setTimeout(() => {
-      unsubscribe();
-      reject(new Error("Session is still starting. Try again in a moment."));
-    }, timeoutMs);
-    unsubscribe = useSessionDirectoryStore.subscribe((state) => {
-      const materializedSessionId = state.entriesById[clientSessionId]?.materializedSessionId
-        ?? null;
-      if (!materializedSessionId) {
-        return;
-      }
-      globalThis.clearTimeout(timeout);
-      unsubscribe();
-      resolve(materializedSessionId);
-    });
-  });
+  const entry = useSessionDirectoryStore.getState().entriesById[sessionId];
+  return !!entry && !entry.materializedSessionId;
 }
 
 export function getSessionRecordByMaterializedSessionId(

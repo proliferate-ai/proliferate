@@ -16,9 +16,14 @@ import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";
 import {
-  getSessionRecord,
   waitForSessionMaterialization,
+  type SessionMaterializationDeps,
+} from "@/lib/workflows/sessions/session-materialization";
+import {
+  getMaterializedSessionId,
+  getSessionRecord,
 } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
@@ -30,6 +35,14 @@ const ACCEPTED_RUNNING_RECONCILE_DELAYS_MS = [250, 1_000, 2_500, 5_000, 10_000] 
 const ACCEPTED_RUNNING_RECONCILE_TIMEOUT_MS = 3_000;
 
 let activeDispatcherOwner: symbol | null = null;
+
+const sessionMaterializationDeps: SessionMaterializationDeps = {
+  getMaterializedSessionId,
+  subscribeToMaterializedSessionId: (clientSessionId, onChange) =>
+    useSessionDirectoryStore.subscribe((state) => {
+      onChange(state.entriesById[clientSessionId]?.materializedSessionId ?? null);
+    }),
+};
 
 export function usePromptOutboxDispatcher(): void {
   const dispatchVersion = usePromptOutboxStore((state) => state.dispatchVersion);
@@ -78,7 +91,8 @@ export function usePromptOutboxDispatcher(): void {
 
       const materializedSessionId = await waitForSessionMaterialization(
         entry.clientSessionId,
-        CONFIG_READY_TIMEOUT_MS,
+        sessionMaterializationDeps,
+        { timeoutMs: CONFIG_READY_TIMEOUT_MS },
       );
       usePromptOutboxStore.getState().bindMaterializedSession(
         entry.clientSessionId,

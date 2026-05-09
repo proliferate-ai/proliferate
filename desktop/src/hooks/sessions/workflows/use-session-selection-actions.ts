@@ -27,12 +27,12 @@ import {
 import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
+  isPendingSessionId,
   patchSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
