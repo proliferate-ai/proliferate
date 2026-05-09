@@ -19,7 +19,7 @@ use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::domains::reviews::hooks::ReviewSessionHooks;
-use crate::domains::reviews::mcp_auth::ReviewMcpAuth;
+use crate::domains::reviews::mcp_server::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;

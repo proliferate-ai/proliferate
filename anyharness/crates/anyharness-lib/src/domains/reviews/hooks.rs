@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
     SessionMcpTransport,
 };
 
-use super::mcp_auth::ReviewMcpAuth;
+use super::mcp_server::auth::ReviewMcpAuth;
 use crate::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
 };

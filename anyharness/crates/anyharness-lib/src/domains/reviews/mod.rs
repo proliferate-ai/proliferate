@@ -1,7 +1,5 @@
 pub mod hooks;
-pub mod mcp;
-pub mod mcp_auth;
-pub mod mcp_protocol;
+pub mod mcp_server;
 pub mod model;
 pub mod runtime;
 mod runtime_artifacts;
