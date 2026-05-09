@@ -4,7 +4,6 @@ import type {
   ResolvedConnectorModal,
 } from "@/lib/domain/mcp/connector-catalog-view-model";
 import { validateOAuthConnectorSettings } from "@/lib/domain/mcp/oauth";
-import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
 import {
   createDefaultConnectorSettings,
   normalizeConnectorSettings,
@@ -15,13 +14,21 @@ import type {
   ConnectorSettings,
   ConnectOAuthConnectorResult,
 } from "@/lib/domain/mcp/types";
-import { validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
+import {
+  connectorLocalOAuthSuccessToast,
+  hasAllConnectorSecretValues,
+  hasAnyConnectorSecretValue,
+  initialConnectorSecretValues,
+  resolveConnectorPrimaryButton,
+  validateConnectorSecretValues,
+} from "@/lib/domain/mcp/detail-modal";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { ConnectorAboutTab } from "./ConnectorAboutTab";
 import { ConnectorConfigureTab } from "./ConnectorConfigureTab";
-import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
+import { ConnectorDetailHeader } from "./ConnectorDetailHeader";
+import { ConnectorDetailTabs } from "./ConnectorDetailTabs";
+import { ConnectorPrimaryAction } from "./ConnectorPrimaryAction";
 import { ConnectorToolsTab } from "./ConnectorToolsTab";
 
 type DetailCallbacks = {
@@ -49,14 +56,6 @@ type DetailCallbacks = {
   ) => Promise<void>;
 };
 
-const TAB_LABELS: Record<ConnectorModalTab, string> = {
-  configure: "Configure",
-  tools: "Tools",
-  about: "About",
-};
-
-const TABS: readonly ConnectorModalTab[] = ["configure", "tools", "about"];
-
 export function ConnectorDetailModal({
   callbacks,
   modal,
@@ -81,7 +80,7 @@ export function ConnectorDetailModal({
   }, [entry, modal]);
 
   const [secretValues, setSecretValues] = useState<Record<string, string>>(
-    () => initialSecretValues(entry),
+    () => initialConnectorSecretValues(entry),
   );
   const [settings, setSettings] = useState<ConnectorSettings>(existingSettings);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +88,7 @@ export function ConnectorDetailModal({
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
-    setSecretValues(initialSecretValues(entry));
+    setSecretValues(initialConnectorSecretValues(entry));
     setSettings(existingSettings);
     setError(null);
   }, [entry.id, connectionId, existingSettings]);
@@ -108,10 +107,11 @@ export function ConnectorDetailModal({
     ? validateConnectorSettings(entry, settings)
     : null;
   const secretValidationError =
-    variant === "api_key" && hasAnySecretValue(secretValues)
-      ? validateSecretValues(entry, secretValues)
+    variant === "api_key" && hasAnyConnectorSecretValue(secretValues)
+      ? validateConnectorSecretValues(entry, secretValues)
       : null;
-  const hasRequiredSecrets = variant !== "api_key" || hasAllSecretValues(entry, secretValues);
+  const hasRequiredSecrets =
+    variant !== "api_key" || hasAllConnectorSecretValues(entry, secretValues);
 
   function handleClose() {
     if (reconnecting) {
@@ -153,7 +153,7 @@ export function ConnectorDetailModal({
     setError(null);
     try {
       await op();
-      showToast(localOAuthSuccessToast(entry.name, successLabel), "info");
+      showToast(connectorLocalOAuthSuccessToast(entry.name, successLabel), "info");
       onClose();
     } catch (opError) {
       setError(
@@ -169,7 +169,8 @@ export function ConnectorDetailModal({
   async function handlePrimaryAction() {
     if (modal.kind === "connect") {
       if (variant === "api_key") {
-        const validation = settingsValidationError ?? validateSecretValues(entry, secretValues);
+        const validation =
+          settingsValidationError ?? validateConnectorSecretValues(entry, secretValues);
         if (validation) {
           setError(validation);
           return;
@@ -234,7 +235,8 @@ export function ConnectorDetailModal({
 
     if (!connectionId) return;
     if (variant === "api_key") {
-      const validation = settingsValidationError ?? validateSecretValues(entry, secretValues);
+      const validation =
+        settingsValidationError ?? validateConnectorSecretValues(entry, secretValues);
       if (validation) {
         setError(validation);
         return;
@@ -291,7 +293,7 @@ export function ConnectorDetailModal({
     }
   }
 
-  const primary = resolvePrimaryButton({
+  const primary = resolveConnectorPrimaryButton({
     entry,
     isConnected,
     variant,
@@ -303,40 +305,17 @@ export function ConnectorDetailModal({
   const status = modal.kind === "manage" ? modal.status : null;
   const focus = modal.kind === "manage" ? modal.focus : null;
 
-  const primaryButton = modal.tab !== "configure"
+  const primaryAction = modal.tab !== "configure"
     ? null
-    : reconnecting
-      ? (
-        <div className="space-y-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={() => { void handleCancelOAuth(); }}
-            className="w-full rounded-[10px]"
-          >
-            Cancel browser sign-in
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Finish authorizing in your browser, or cancel to stop waiting.
-          </p>
-        </div>
-      )
-      : primary
-        ? (
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={() => { void handlePrimaryAction(); }}
-            loading={submitting}
-            disabled={primary.disabled}
-            className="w-full rounded-[10px]"
-          >
-            {primary.label}
-          </Button>
-        )
-        : null;
+    : (
+      <ConnectorPrimaryAction
+        onCancelOAuth={() => { void handleCancelOAuth(); }}
+        onPrimaryAction={() => { void handlePrimaryAction(); }}
+        primary={primary}
+        reconnecting={reconnecting}
+        submitting={submitting}
+      />
+    );
 
   return (
     <ModalShell
@@ -345,40 +324,9 @@ export function ConnectorDetailModal({
       disableClose={submitting}
       sizeClassName="max-w-[480px] h-[520px] max-h-[85vh]"
       bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-      title={(
-        <div className="flex items-center gap-3">
-          <ConnectorIcon entry={entry} size="sm" />
-          <span className="truncate text-base font-medium tracking-tight">
-            {entry.name}
-          </span>
-        </div>
-      )}
+      title={<ConnectorDetailHeader entry={entry} />}
     >
-      <div
-        role="tablist"
-        aria-orientation="horizontal"
-        className="flex shrink-0 gap-4 border-b border-border/60 px-5"
-      >
-        {TABS.map((tab) => {
-          const isActive = modal.tab === tab;
-          return (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => onSetTab(tab)}
-              className={`-mb-px border-b-[1.5px] py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {TAB_LABELS[tab]}
-            </button>
-          );
-        })}
-      </div>
+      <ConnectorDetailTabs activeTab={modal.tab} onSetTab={onSetTab} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {modal.tab === "configure" && (
@@ -396,7 +344,7 @@ export function ConnectorDetailModal({
               setSettings(value);
               if (error) setError(null);
             }}
-            primaryAction={primaryButton}
+            primaryAction={primaryAction}
             secretValues={secretValues}
             settings={settings}
             status={status}
@@ -408,107 +356,4 @@ export function ConnectorDetailModal({
       </div>
     </ModalShell>
   );
-}
-
-function initialSecretValues(entry: ConnectorCatalogEntry): Record<string, string> {
-  return Object.fromEntries(getConnectorSecretFields(entry).map((field) => [field.id, ""]));
-}
-
-function hasAnySecretValue(values: Record<string, string>): boolean {
-  return Object.values(values).some((value) => value.trim().length > 0);
-}
-
-function hasAllSecretValues(
-  entry: ConnectorCatalogEntry,
-  values: Record<string, string>,
-): boolean {
-  return getConnectorSecretFields(entry).every(
-    (field) => (values[field.id] ?? "").trim().length > 0,
-  );
-}
-
-function localOAuthSuccessToast(entryName: string, successLabel: string): string {
-  if (successLabel === "reconnected") {
-    return `${entryName} reconnected. Restart or resume the local session to refresh tools.`;
-  }
-  return `${entryName} connected. Start a new local session with plugins enabled to use it.`;
-}
-
-function validateSecretValues(
-  entry: ConnectorCatalogEntry,
-  values: Record<string, string>,
-): string | null {
-  for (const field of getConnectorSecretFields(entry)) {
-    const validation = validateConnectorSecretValue(values[field.id] ?? "");
-    if (validation) {
-      return `${field.label}: ${validation}`;
-    }
-  }
-  return null;
-}
-
-interface PrimaryButtonSpec {
-  label: string;
-  disabled: boolean;
-}
-
-function resolvePrimaryButton({
-  entry,
-  isConnected,
-  variant,
-  hasRequiredSecrets,
-  secretValidationError,
-  oauthValidationError,
-}: {
-  entry: ConnectorCatalogEntry;
-  isConnected: boolean;
-  variant: "no_setup" | "local_oauth" | "api_key" | "oauth" | "oauth_structured";
-  hasRequiredSecrets: boolean;
-  secretValidationError: string | null;
-  oauthValidationError: string | null;
-}): PrimaryButtonSpec | null {
-  if (!isConnected) {
-    if (variant === "no_setup") {
-      return { label: "Connect", disabled: false };
-    }
-    if (variant === "api_key") {
-      return {
-        label: "Connect",
-        disabled: !hasRequiredSecrets || Boolean(secretValidationError) || Boolean(oauthValidationError),
-      };
-    }
-    if (variant === "local_oauth") {
-      return {
-        label: "Connect in browser",
-        disabled: Boolean(oauthValidationError),
-      };
-    }
-    return {
-      label: "Connect in browser",
-      disabled: Boolean(oauthValidationError),
-    };
-  }
-
-  if (variant === "api_key") {
-    return {
-      label: "Save",
-      disabled: !hasRequiredSecrets || Boolean(secretValidationError) || Boolean(oauthValidationError),
-    };
-  }
-  if (variant === "oauth_structured") {
-    return {
-      label: "Save & reconnect",
-      disabled: Boolean(oauthValidationError),
-    };
-  }
-  if (variant === "oauth") {
-    return { label: "Reconnect", disabled: Boolean(oauthValidationError) };
-  }
-  if (variant === "local_oauth") {
-    if (entry.transport === "stdio" && entry.command.length === 0) {
-      return null;
-    }
-    return { label: "Reconnect", disabled: Boolean(oauthValidationError) };
-  }
-  return null;
 }
