@@ -1,6 +1,5 @@
 import type { Session } from "@anyharness/sdk";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
-import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
   resolveSessionViewState,
   type SessionViewState,
@@ -13,14 +12,52 @@ export type KnownHeaderSession =
   | { kind: "slot"; slot: SessionDirectoryEntry; session?: Session }
   | { kind: "session"; session: Session; clientSessionId?: string };
 
+export interface HeaderHierarchyChildRow {
+  sessionLinkId: string;
+  sessionId: string;
+  parentSessionId: string;
+  title: string;
+  agentKind: string;
+  source: "subagent" | "review";
+  meta: string | null;
+  statusLabel: string;
+  wakeScheduled: boolean;
+  isActive: boolean;
+}
+
+export function buildKnownHeaderSessions(args: {
+  sessions: readonly Session[] | null | undefined;
+  selectedWorkspaceId: string | null;
+  clientSessionIdByMaterializedSessionId: Readonly<Record<string, string | undefined>>;
+  liveSlots: readonly SessionDirectoryEntry[];
+}): Map<string, KnownHeaderSession> {
+  const map = new Map<string, KnownHeaderSession>();
+  for (const session of args.sessions ?? []) {
+    if (session.dismissedAt) continue;
+    if (!args.selectedWorkspaceId || session.workspaceId !== args.selectedWorkspaceId) continue;
+    const clientSessionId =
+      args.clientSessionIdByMaterializedSessionId[session.id] ?? session.id;
+    map.set(clientSessionId, { kind: "session", session, clientSessionId });
+  }
+  for (const slot of args.liveSlots) {
+    const existing = map.get(slot.sessionId);
+    map.set(slot.sessionId, {
+      kind: "slot",
+      slot,
+      session: existing?.kind === "session" ? existing.session : existing?.session,
+    });
+  }
+  return map;
+}
+
 export function collectHierarchyChildren(
-  childrenByParentSessionId: ReadonlyMap<string, readonly HeaderSubagentChildRow[]>,
+  childrenByParentSessionId: ReadonlyMap<string, readonly HeaderHierarchyChildRow[]>,
 ): {
-  rowsBySessionId: Map<string, HeaderSubagentChildRow>;
+  rowsBySessionId: Map<string, HeaderHierarchyChildRow>;
   childIdsByParentSessionId: Map<string, string[]>;
   visibilityCandidates: ChatVisibilityCandidate[];
 } {
-  const rowsBySessionId = new Map<string, HeaderSubagentChildRow>();
+  const rowsBySessionId = new Map<string, HeaderHierarchyChildRow>();
   const childIdsByParentSessionId = new Map<string, string[]>();
   const visibilityCandidates: ChatVisibilityCandidate[] = [];
   for (const [parentSessionId, children] of childrenByParentSessionId) {
@@ -36,6 +73,39 @@ export function collectHierarchyChildren(
     }
   }
   return { rowsBySessionId, childIdsByParentSessionId, visibilityCandidates };
+}
+
+export function buildHeaderLiveVisibilityCandidates(args: {
+  knownSessionIds: readonly string[];
+  childToParent: ReadonlyMap<string, string>;
+  hierarchyVisibilityCandidates: readonly ChatVisibilityCandidate[];
+}): ChatVisibilityCandidate[] {
+  const candidatesBySessionId = new Map<string, ChatVisibilityCandidate>();
+  for (const sessionId of args.knownSessionIds) {
+    candidatesBySessionId.set(sessionId, {
+      sessionId,
+      parentSessionId: args.childToParent.get(sessionId) ?? null,
+    });
+  }
+  for (const candidate of args.hierarchyVisibilityCandidates) {
+    candidatesBySessionId.set(candidate.sessionId, candidate);
+  }
+  return Array.from(candidatesBySessionId.values());
+}
+
+export function resolveHierarchyMaterializedSessionId(input: {
+  sessionId: string;
+  materializedSessionId: string | null;
+}): string | null {
+  if (input.materializedSessionId) {
+    return input.materializedSessionId;
+  }
+  return isTransientClientSessionId(input.sessionId) ? null : input.sessionId;
+}
+
+function isTransientClientSessionId(sessionId: string): boolean {
+  return sessionId.startsWith("client-session:")
+    || sessionId.startsWith("pending-session:");
 }
 
 export function getKnownSessionId(known: KnownHeaderSession): string {
@@ -109,7 +179,7 @@ export function getKnownSessionCanFork(known: KnownHeaderSession): boolean {
   return Boolean(known.session.actionCapabilities.fork);
 }
 
-export function getLinkedChildViewState(child: HeaderSubagentChildRow): SessionViewState {
+export function getLinkedChildViewState(child: HeaderHierarchyChildRow): SessionViewState {
   switch (child.statusLabel) {
     case "Starting":
     case "Working":

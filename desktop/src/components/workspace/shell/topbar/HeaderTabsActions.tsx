@@ -8,7 +8,7 @@ import {
 } from "@/components/workspace/shell/tabs/tab-rendering";
 import type {
   HeaderChatMenuEntry,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import type {
   HeaderSubagentChildRow,
 } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";

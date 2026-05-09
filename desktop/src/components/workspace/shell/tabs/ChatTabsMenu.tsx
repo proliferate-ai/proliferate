@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ChevronRight } from "@/components/ui/icons";
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
-import type { HeaderChatMenuEntry } from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+import type { HeaderChatMenuEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 
 const FLYOUT_WIDTH = 256;
