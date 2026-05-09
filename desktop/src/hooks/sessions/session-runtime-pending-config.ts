@@ -2,7 +2,7 @@ import {
   collectFailedQueuedChangesMatchingMutationIds,
   hasQueuedPendingConfigChanges,
   snapshotQueuedPendingConfigMutationIds,
-  type PendingSessionConfigChanges,
+  withoutPendingConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
 import {
   getSessionRecord,
@@ -10,22 +10,6 @@ import {
 } from "@/stores/sessions/session-records";
 
 const pendingConfigRollbackTimers = new Map<string, number>();
-
-function withoutPendingConfigChanges(
-  pendingConfigChanges: PendingSessionConfigChanges,
-  rawConfigIds: string[],
-): PendingSessionConfigChanges {
-  if (rawConfigIds.length === 0) {
-    return pendingConfigChanges;
-  }
-
-  const nextPendingConfigChanges = { ...pendingConfigChanges };
-  for (const rawConfigId of rawConfigIds) {
-    delete nextPendingConfigChanges[rawConfigId];
-  }
-
-  return nextPendingConfigChanges;
-}
 
 export function clearPendingConfigRollbackCheck(sessionId: string): void {
   const timer = pendingConfigRollbackTimers.get(sessionId);

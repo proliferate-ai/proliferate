@@ -20,8 +20,8 @@ import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runti
 import {
   getAuthoritativeConfigValue,
   shouldAcceptAuthoritativeLiveConfig,
-  type PendingSessionConfigChange,
-  type PendingSessionConfigChanges,
+  withPendingConfigChange,
+  withoutPendingConfigChange,
 } from "@/lib/domain/sessions/pending-config";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
@@ -101,28 +101,6 @@ interface SessionControlDeps {
 }
 
 let nextPendingConfigMutationId = 0;
-
-function withPendingConfigChange(
-  pendingConfigChanges: PendingSessionConfigChanges,
-  pendingChange: PendingSessionConfigChange,
-): PendingSessionConfigChanges {
-  return {
-    ...pendingConfigChanges,
-    [pendingChange.rawConfigId]: pendingChange,
-  };
-}
-
-function withoutPendingConfigChange(
-  pendingConfigChanges: PendingSessionConfigChanges,
-  rawConfigId: string,
-): PendingSessionConfigChanges {
-  if (!pendingConfigChanges[rawConfigId]) {
-    return pendingConfigChanges;
-  }
-
-  const { [rawConfigId]: _removed, ...rest } = pendingConfigChanges;
-  return rest;
-}
 
 export function useSessionControlActions({
   activateSession,

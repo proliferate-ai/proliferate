@@ -8,6 +8,9 @@ import {
   resolveDisplayedSessionControlState,
   snapshotQueuedPendingConfigMutationIds,
   shouldAcceptAuthoritativeLiveConfig,
+  withPendingConfigChange,
+  withoutPendingConfigChange,
+  withoutPendingConfigChanges,
   type PendingSessionConfigChanges,
 } from "./pending-config";
 
@@ -90,6 +93,95 @@ const LIVE_CONFIG: SessionLiveConfigSnapshot = {
 };
 
 describe("pending-config helpers", () => {
+  it("adds or replaces a pending change by raw config id", () => {
+    const existing: PendingSessionConfigChanges = {
+      effort: {
+        rawConfigId: "effort",
+        value: "high",
+        status: "queued",
+        mutationId: 1,
+      },
+    };
+    const pendingChange = {
+      rawConfigId: "effort",
+      value: "medium",
+      status: "submitting" as const,
+      mutationId: 2,
+    };
+
+    expect(withPendingConfigChange(existing, pendingChange)).toEqual({
+      effort: pendingChange,
+    });
+  });
+
+  it("removes one pending change without mutating the original map", () => {
+    const existing: PendingSessionConfigChanges = {
+      effort: {
+        rawConfigId: "effort",
+        value: "high",
+        status: "queued",
+        mutationId: 1,
+      },
+      fast_mode: {
+        rawConfigId: "fast_mode",
+        value: "on",
+        status: "queued",
+        mutationId: 2,
+      },
+    };
+
+    expect(withoutPendingConfigChange(existing, "effort")).toEqual({
+      fast_mode: existing.fast_mode,
+    });
+    expect(existing.effort).toBeDefined();
+  });
+
+  it("returns the original pending change map when removing a missing raw config id", () => {
+    const existing: PendingSessionConfigChanges = {
+      effort: {
+        rawConfigId: "effort",
+        value: "high",
+        status: "queued",
+        mutationId: 1,
+      },
+    };
+
+    expect(withoutPendingConfigChange(existing, "missing")).toBe(existing);
+  });
+
+  it("removes multiple pending changes", () => {
+    const existing: PendingSessionConfigChanges = {
+      effort: {
+        rawConfigId: "effort",
+        value: "high",
+        status: "queued",
+        mutationId: 1,
+      },
+      fast_mode: {
+        rawConfigId: "fast_mode",
+        value: "on",
+        status: "queued",
+        mutationId: 2,
+      },
+      mode: {
+        rawConfigId: "mode",
+        value: "plan",
+        status: "submitting",
+        mutationId: 3,
+      },
+    };
+
+    expect(withoutPendingConfigChanges(existing, ["effort", "mode"])).toEqual({
+      fast_mode: existing.fast_mode,
+    });
+  });
+
+  it("returns the original pending change map when removing no config ids", () => {
+    const existing: PendingSessionConfigChanges = {};
+
+    expect(withoutPendingConfigChanges(existing, [])).toBe(existing);
+  });
+
   it("overlays only the matching raw config id", () => {
     const pendingConfigChanges: PendingSessionConfigChanges = {
       effort: {
