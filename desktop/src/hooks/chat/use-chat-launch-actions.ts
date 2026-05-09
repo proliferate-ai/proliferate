@@ -13,7 +13,7 @@ import { useActiveSessionLaunchState } from "./derived/use-active-chat-session-s
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/transcript/file-mentions";
+} from "@/lib/domain/chat/composer/file-mention-draft-model";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   failLatencyFlow,

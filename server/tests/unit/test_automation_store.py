@@ -113,11 +113,13 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 next_run_at=now + timedelta(hours=1),
             )
 
-        created = await create_due_scheduled_runs_batch(
-            now=now,
-            limit=10,
-            schedule_advance_resolver=_advance,
-        )
+        async with engine_module.async_session_factory() as session, session.begin():
+            created = await create_due_scheduled_runs_batch(
+                session,
+                now=now,
+                limit=10,
+                schedule_advance_resolver=_advance,
+            )
 
         async with engine_module.async_session_factory() as session:
             good = await session.get(Automation, good_id)
@@ -245,11 +247,13 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
                 next_run_at=now + timedelta(hours=1),
             )
 
-        created = await create_due_scheduled_runs_batch(
-            now=now,
-            limit=10,
-            schedule_advance_resolver=_advance,
-        )
+        async with engine_module.async_session_factory() as session, session.begin():
+            created = await create_due_scheduled_runs_batch(
+                session,
+                now=now,
+                limit=10,
+                schedule_advance_resolver=_advance,
+            )
 
         async with engine_module.async_session_factory() as session:
             automation = await session.get(Automation, automation_id)

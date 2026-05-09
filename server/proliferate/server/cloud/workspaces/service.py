@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import NoReturn
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.auth.authorization import OwnerSelection
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
@@ -33,7 +35,11 @@ from proliferate.db.store.automations import (
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
-from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
+from proliferate.db.store.cloud_credentials import get_user_cloud_credentials
+from proliferate.db.store.cloud_runtime_environments import (
+    get_runtime_environment_for_workspace,
+    load_runtime_environment_for_workspace,
+)
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
@@ -47,9 +53,11 @@ from proliferate.db.store.cloud_workspaces import (
     persist_workspace_stop_state,
     save_workspace,
     update_sandbox_status,
+    update_workspace_branch,
+    update_workspace_display_name,
 )
 from proliferate.db.store.cloud_workspaces import (
-    list_cloud_workspaces_for_user as list_cloud_workspaces_store,
+    list_cloud_workspaces as list_cloud_workspaces_store,
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
@@ -64,9 +72,11 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.credentials.domain.status import allowed_agent_kinds
+from proliferate.server.cloud.credentials.domain.status import (
+    allowed_agent_kinds,
+    build_credential_statuses,
+)
 from proliferate.server.cloud.credentials.service import load_cloud_credential_statuses
-from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
@@ -88,7 +98,10 @@ from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
     sync_workspace_credentials,
 )
-from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read
+from proliferate.server.cloud.workspaces.access import (
+    cloud_workspace_user_can_read,
+    cloud_workspace_user_can_read_with_db,
+)
 from proliferate.server.cloud.workspaces.domain.lifecycle import (
     decide_workspace_start_after_validation,
     decide_workspace_status_transition,
@@ -182,6 +195,7 @@ def transition_workspace_status(
 
 
 async def list_cloud_workspaces_for_user(
+    db: AsyncSession,
     user_id: UUID,
     *,
     user: User | None = None,
@@ -199,17 +213,17 @@ async def list_cloud_workspaces_for_user(
         except OrganizationServiceError as error:
             _map_owner_context_error(error)
         return []
-    workspaces = await list_cloud_workspaces_store(user_id)
+    workspaces = await list_cloud_workspaces_store(db, user_id)
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
         user_id=user_id,
         cloud_workspace_ids=[workspace.id for workspace in workspaces],
     )
-    credential_records = await load_cloud_credentials_for_user(user_id)
+    credential_records = await get_user_cloud_credentials(db, user_id)
     credential_revisions = build_credential_revision_state(credential_records)
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
     summaries: list[WorkspaceSummary] = []
     for workspace in workspaces:
-        runtime_environment = await load_runtime_environment_for_workspace(workspace)
+        runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
         credential_freshness = (
             build_credential_freshness_snapshot(runtime_environment, credential_revisions)
             if runtime_environment is not None
@@ -308,11 +322,48 @@ def _provider_state_is_running(state: str | None) -> bool:
 
 
 async def get_cloud_workspace_detail(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
-    return await _build_workspace_detail(workspace)
+    workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def _build_workspace_detail_for_request(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+) -> WorkspaceDetail:
+    runtime_environment = await get_runtime_environment_for_workspace(db, workspace)
+    credential_records = await get_user_cloud_credentials(db, workspace.user_id)
+    credential_revisions = build_credential_revision_state(credential_records)
+    credential_freshness = (
+        build_credential_freshness_snapshot(runtime_environment, credential_revisions)
+        if runtime_environment is not None
+        else None
+    )
+    statuses = build_credential_statuses(credential_records)
+    billing = await get_billing_snapshot_for_subject(
+        runtime_environment.billing_subject_id
+        if runtime_environment is not None
+        else workspace.billing_subject_id
+    )
+    action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
+    automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+        user_id=workspace.user_id,
+        cloud_workspace_ids=[workspace.id],
+    )
+    return workspace_detail_payload(
+        workspace,
+        statuses,
+        runtime_environment=runtime_environment,
+        credential_freshness=credential_freshness,
+        action_block_kind=action_block_kind,
+        action_block_reason=action_block_reason,
+        creator_context=_creator_context_for_automation_run(
+            automation_runs_by_workspace.get(workspace.id)
+        ),
+    )
 
 
 async def _build_workspace_detail(
@@ -847,6 +898,7 @@ async def start_cloud_workspace(
 
 
 async def sync_cloud_workspace_branch(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
     *,
@@ -860,13 +912,13 @@ async def sync_cloud_workspace_branch(
             status_code=400,
         )
 
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
-    workspace.git_branch = cleaned_branch_name
-    workspace = await save_workspace(workspace)
-    return await _build_workspace_detail(workspace)
+    workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    workspace = await update_workspace_branch(db, workspace, cleaned_branch_name)
+    return await _build_workspace_detail_for_request(db, workspace)
 
 
 async def sync_cloud_workspace_display_name(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
     *,
@@ -893,20 +945,20 @@ async def sync_cloud_workspace_display_name(
                 status_code=400,
             )
 
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
-    workspace.display_name = cleaned
-    workspace = await save_workspace(workspace)
-    return await _build_workspace_detail(workspace)
+    workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    workspace = await update_workspace_display_name(db, workspace, cleaned)
+    return await _build_workspace_detail_for_request(db, workspace)
 
 
 async def sync_cloud_workspace_credentials(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
     await sync_workspace_credentials(workspace)
-    reloaded_workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
-    return await _build_workspace_detail(reloaded_workspace)
+    reloaded_workspace = await cloud_workspace_user_can_read_with_db(db, user_id, workspace_id)
+    return await _build_workspace_detail_for_request(db, reloaded_workspace)
 
 
 async def stop_cloud_workspace(

@@ -1,44 +1,37 @@
+import type { MeasurementFinishReason } from "./debug-measurement-catalog-types";
 import type {
-  MeasurementFinishReason,
   MeasurementOperationAggregate,
   MeasurementOperationRecord,
+  MeasurementSummaryBudget,
+} from "./debug-measurement-registry-types";
+import type {
   MeasurementSummaryPayload,
   MeasurementSummaryRow,
-  MeasurementSurface,
-} from "./debug-measurement-types";
+} from "./debug-measurement-report-types";
 import { now, pushBounded, round } from "./debug-measurement-utils";
 
 const RECENT_SUMMARY_LIMIT = 500;
-const HOT_BUDGET_REQUEST_COUNT = 0;
-const HOT_BUDGET_FIRST_COMMIT_MS = 50;
-const HOT_BUDGET_MAX_FRAME_GAP_MS = 50;
-const HOT_BUDGET_MAX_COMMIT_MS = 16;
-const HOT_BUDGET_TOTAL_COMMIT_MS = 80;
-const HOT_SURFACE_COMMIT_BUDGETS: Partial<Record<MeasurementSurface, number>> = {
-  "workspace-shell": 2,
-  "chat-surface": 2,
-  "session-transcript-pane": 2,
-  "transcript-list": 2,
-  "header-tabs": 3,
-  "workspace-sidebar": 3,
-};
 
-export function isHotPaintOperationKind(kind: string): boolean {
-  return kind === "workspace_hot_reopen" || kind === "session_hot_switch";
-}
-
-interface HotBudgetSummary {
+interface BudgetSummary {
   passed: boolean;
   failureLabels: string;
   surfaceCommitFailures: string;
-  requestCount: number;
+  requestCount: number | null;
+  requestBudgetCount: number | null;
   firstCommitMs: number | null;
+  firstCommitBudgetMs: number | null;
   maxFrameGapMs: number;
+  maxFrameGapBudgetMs: number | null;
   maxCommitMs: number;
+  maxCommitBudgetMs: number | null;
   totalCommitMs: number;
+  totalCommitBudgetMs: number | null;
 }
 
-function evaluateHotBudget(aggregate: MeasurementOperationAggregate): HotBudgetSummary {
+function evaluateBudget(
+  aggregate: MeasurementOperationAggregate,
+  budget: MeasurementSummaryBudget,
+): BudgetSummary {
   const failures: string[] = [];
   const surfaceFailures: string[] = [];
   const firstCommitMs = aggregate.firstCommitAtMs === null
@@ -48,31 +41,31 @@ function evaluateHotBudget(aggregate: MeasurementOperationAggregate): HotBudgetS
   const maxCommitMs = round(aggregate.maxCommitMs);
   const totalCommitMs = round(aggregate.totalCommitMs);
 
-  if (aggregate.requestCount !== HOT_BUDGET_REQUEST_COUNT) {
+  if (budget.requestCount !== undefined && aggregate.requestCount !== budget.requestCount) {
     failures.push("request_count");
   }
-  if (firstCommitMs === null || firstCommitMs > HOT_BUDGET_FIRST_COMMIT_MS) {
+  if (budget.firstCommitMs !== undefined && (firstCommitMs === null || firstCommitMs > budget.firstCommitMs)) {
     failures.push("first_commit_ms");
   }
-  if (maxFrameGapMs > HOT_BUDGET_MAX_FRAME_GAP_MS) {
+  if (budget.maxFrameGapMs !== undefined && maxFrameGapMs > budget.maxFrameGapMs) {
     failures.push("max_frame_gap_ms");
   }
-  if (maxCommitMs > HOT_BUDGET_MAX_COMMIT_MS) {
+  if (budget.maxCommitMs !== undefined && maxCommitMs > budget.maxCommitMs) {
     failures.push("max_commit_ms");
   }
-  if (totalCommitMs > HOT_BUDGET_TOTAL_COMMIT_MS) {
+  if (budget.totalCommitMs !== undefined && totalCommitMs > budget.totalCommitMs) {
     failures.push("total_commit_ms");
   }
 
-  for (const [surface, budget] of Object.entries(HOT_SURFACE_COMMIT_BUDGETS)) {
-    if (budget === undefined) {
+  for (const [surface, maxCommitCount] of Object.entries(budget.surfaceCommitBudgets ?? {})) {
+    if (maxCommitCount === undefined) {
       continue;
     }
-    const breakdown = aggregate.surfaceBreakdowns.get(surface as MeasurementSurface);
+    const breakdown = aggregate.surfaceBreakdowns.get(surface);
     const actual = breakdown?.reactCommitCount ?? 0;
-    if (actual > budget) {
+    if (actual > maxCommitCount) {
       failures.push("surface_commit_count");
-      surfaceFailures.push(`${surface}:${actual}/${budget}`);
+      surfaceFailures.push(`${surface}:${actual}/${maxCommitCount}`);
     }
   }
 
@@ -80,11 +73,16 @@ function evaluateHotBudget(aggregate: MeasurementOperationAggregate): HotBudgetS
     passed: failures.length === 0,
     failureLabels: [...new Set(failures)].join(","),
     surfaceCommitFailures: surfaceFailures.join(","),
-    requestCount: aggregate.requestCount,
+    requestCount: budget.requestCount === undefined ? null : aggregate.requestCount,
+    requestBudgetCount: budget.requestCount ?? null,
     firstCommitMs,
+    firstCommitBudgetMs: budget.firstCommitMs ?? null,
     maxFrameGapMs,
+    maxFrameGapBudgetMs: budget.maxFrameGapMs ?? null,
     maxCommitMs,
+    maxCommitBudgetMs: budget.maxCommitMs ?? null,
     totalCommitMs,
+    totalCommitBudgetMs: budget.totalCommitMs ?? null,
   };
 }
 
@@ -162,7 +160,7 @@ export function printSummaryRow(input: {
     rows.push({
       ...base,
       rowKind: "stream",
-      target: "session.stream",
+      target: breakdown.category,
       phase: breakdown.phase,
       durationMs: null,
       count: breakdown.count,
@@ -271,28 +269,28 @@ export function printSummaryRow(input: {
     });
   }
 
-  const hotBudget = isHotPaintOperationKind(operation.kind)
-    ? evaluateHotBudget(a)
+  const budget = operation.summaryBudget
+    ? evaluateBudget(a, operation.summaryBudget)
     : null;
-  if (hotBudget) {
+  if (budget && operation.summaryBudget) {
     rows.push({
       ...base,
       rowKind: "budget",
-      target: "hot_paint",
+      target: operation.summaryBudget.label,
       durationMs: null,
-      pass: hotBudget.passed,
-      failureLabels: hotBudget.failureLabels,
-      requestCount: hotBudget.requestCount,
-      requestBudgetCount: HOT_BUDGET_REQUEST_COUNT,
-      firstCommitMs: hotBudget.firstCommitMs,
-      firstCommitBudgetMs: HOT_BUDGET_FIRST_COMMIT_MS,
-      maxFrameGapMs: hotBudget.maxFrameGapMs,
-      maxFrameGapBudgetMs: HOT_BUDGET_MAX_FRAME_GAP_MS,
-      maxCommitMs: hotBudget.maxCommitMs,
-      maxCommitBudgetMs: HOT_BUDGET_MAX_COMMIT_MS,
-      totalCommitMs: hotBudget.totalCommitMs,
-      totalCommitBudgetMs: HOT_BUDGET_TOTAL_COMMIT_MS,
-      surfaceCommitFailures: hotBudget.surfaceCommitFailures,
+      pass: budget.passed,
+      failureLabels: budget.failureLabels,
+      requestCount: budget.requestCount,
+      requestBudgetCount: budget.requestBudgetCount,
+      firstCommitMs: budget.firstCommitMs,
+      firstCommitBudgetMs: budget.firstCommitBudgetMs,
+      maxFrameGapMs: budget.maxFrameGapMs,
+      maxFrameGapBudgetMs: budget.maxFrameGapBudgetMs,
+      maxCommitMs: budget.maxCommitMs,
+      maxCommitBudgetMs: budget.maxCommitBudgetMs,
+      totalCommitMs: budget.totalCommitMs,
+      totalCommitBudgetMs: budget.totalCommitBudgetMs,
+      surfaceCommitFailures: budget.surfaceCommitFailures,
     });
   }
 
@@ -307,17 +305,18 @@ export function printSummaryRow(input: {
   pushBounded(recentSummaries, payload, RECENT_SUMMARY_LIMIT);
   console.table(rows);
   console.debug("[measurement_summary_json]", JSON.stringify(payload));
-  if (hotBudget && !hotBudget.passed) {
-    console.error("[debug-measurement] hot paint budget violated", {
+  if (budget && !budget.passed) {
+    console.error("[debug-measurement] measurement budget violated", {
       operationId: operation.id,
       operationKind: operation.kind,
-      failureLabels: hotBudget.failureLabels,
-      requestCount: hotBudget.requestCount,
-      firstCommitMs: hotBudget.firstCommitMs,
-      maxFrameGapMs: hotBudget.maxFrameGapMs,
-      maxCommitMs: hotBudget.maxCommitMs,
-      totalCommitMs: hotBudget.totalCommitMs,
-      surfaceCommitFailures: hotBudget.surfaceCommitFailures,
+      budget: operation.summaryBudget?.label ?? null,
+      failureLabels: budget.failureLabels,
+      requestCount: budget.requestCount,
+      firstCommitMs: budget.firstCommitMs,
+      maxFrameGapMs: budget.maxFrameGapMs,
+      maxCommitMs: budget.maxCommitMs,
+      totalCommitMs: budget.totalCommitMs,
+      surfaceCommitFailures: budget.surfaceCommitFailures,
     });
   }
 }

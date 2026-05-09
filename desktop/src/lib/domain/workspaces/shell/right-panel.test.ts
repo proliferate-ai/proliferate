@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   RIGHT_PANEL_BROWSER_TAB_LIMIT,
   availableRightPanelTools,
-  canCreateRightPanelBrowserTab,
   clampRightPanelWidth,
-  createBrowserTabInRightPanelState,
   parseRightPanelHeaderEntryKey,
+} from "./right-panel-model";
+import {
+  canCreateRightPanelBrowserTab,
+  createBrowserTabInRightPanelState,
   reconcileRightPanelWorkspaceState,
   removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
@@ -13,7 +15,7 @@ import {
   reorderTerminalInRightPanelState,
   reorderToolInRightPanelState,
   updateBrowserTabUrlInRightPanelState,
-} from "./right-panel";
+} from "./right-panel-state";
 
 describe("right panel domain", () => {
   it("gates cloud settings to cloud workspaces", () => {

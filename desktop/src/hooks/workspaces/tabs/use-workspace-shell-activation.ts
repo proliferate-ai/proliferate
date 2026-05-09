@@ -24,13 +24,18 @@ import {
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
+} from "@/lib/infra/measurement/debug-measurement";
+import {
+  HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   type MeasurementOperationId,
   type MeasurementSurface,
-} from "@/lib/infra/measurement/debug-measurement";
+} from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
-import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import {
+  getSessionRecord,
+  isPendingSessionId,
+} from "@/stores/sessions/session-records";
 
 const HOT_SWITCH_SURFACES = [
   "workspace-shell",
@@ -295,6 +300,7 @@ function resolveHotSwitchMeasurement({
       surfaces: HOT_SWITCH_SURFACES,
       linkedLatencyFlowId: selection?.latencyFlowId ?? undefined,
       maxDurationMs: 2500,
+      summaryBudget: HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
     }),
     ownedByShellActivation: true,
     reuseInSelect: true,

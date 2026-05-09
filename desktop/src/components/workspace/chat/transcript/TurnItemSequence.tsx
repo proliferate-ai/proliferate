@@ -7,7 +7,7 @@ import type {
 import { ClipboardList } from "@/components/ui/icons";
 import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
+import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import {
   collectTurnCoworkArtifactToolCalls,
 } from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";

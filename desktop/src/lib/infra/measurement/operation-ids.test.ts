@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "./debug-measurement-catalog-types";
 import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
 
 function operationId(id: string): MeasurementOperationId {

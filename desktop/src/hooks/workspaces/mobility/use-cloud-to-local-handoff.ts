@@ -20,7 +20,7 @@ import { useWorkspaceMobilityCache } from "@/hooks/workspaces/cache/use-workspac
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility/mobility-preflight-error";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";

@@ -12,7 +12,7 @@ import type {
 } from "@/lib/access/cloud/client";
 import {
   buildRemoteLogicalWorkspaceId,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   CLOUD_DISPLAY_NAME_SYNC_RETRY_INTERVAL_MS,
   markCloudDisplayNameSyncCompleted,
@@ -24,10 +24,8 @@ import { isCloudDisplayNameBackfillSuppressed } from "./cloud-display-name-backf
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspace } from "@/lib/access/anyharness/workspaces";
-import {
-  activitySnapshotFromDirectoryEntry,
-  useSessionDirectoryStore,
-} from "@/stores/sessions/session-directory-store";
+import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";

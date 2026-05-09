@@ -4,7 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
+import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,

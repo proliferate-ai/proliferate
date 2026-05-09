@@ -3,7 +3,7 @@ import { ChatDiffViewer } from "@/components/ui/content/diff/ChatDiffViewer";
 import { SplitDiffViewer } from "@/components/ui/content/diff/SplitDiffViewer";
 import { UnifiedDiffViewer } from "@/components/ui/content/diff/UnifiedDiffViewer";
 import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 interface DiffViewerProps {
   patch: string;

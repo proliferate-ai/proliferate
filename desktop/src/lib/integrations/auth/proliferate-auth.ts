@@ -237,16 +237,6 @@ export function isSessionExpiring(session: StoredAuthSession, skewSeconds = 60):
   return expiresAt - Date.now() <= skewSeconds * 1000
 }
 
-export function sessionUser(session: StoredAuthSession): AuthUser {
-  return {
-    id: session.user_id,
-    email: session.email,
-    display_name: session.display_name,
-    github_login: session.github_login ?? null,
-    avatar_url: session.avatar_url ?? null,
-  }
-}
-
 export function buildGitHubOAuthAppSettingsUrl(clientId?: string | null): string {
   if (!clientId) {
     return GITHUB_APP_SETTINGS_FALLBACK_URL

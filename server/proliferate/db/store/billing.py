@@ -568,73 +568,75 @@ def _billing_subject_stripe_state(subject: BillingSubject) -> BillingSubjectStri
     )
 
 
+async def get_or_create_user_stripe_customer_state(
+    db: AsyncSession,
+    user_id: UUID,
+) -> BillingSubjectStripeState:
+    subject = await ensure_personal_billing_subject(db, user_id)
+    await db.flush()
+    return _billing_subject_stripe_state(subject)
+
+
 async def get_or_create_stripe_customer_state_for_user(user_id: UUID) -> BillingSubjectStripeState:
     async with db_engine.async_session_factory() as db:
-        subject = await ensure_personal_billing_subject(db, user_id)
-        state = _billing_subject_stripe_state(subject)
+        state = await get_or_create_user_stripe_customer_state(db, user_id)
         await db.commit()
         return state
 
 
-async def get_or_create_stripe_customer_state_for_organization(
+async def get_or_create_organization_stripe_customer_state(
+    db: AsyncSession,
     organization_id: UUID,
 ) -> BillingSubjectStripeState:
-    async with db_engine.async_session_factory() as db:
-        subject = await ensure_organization_billing_subject(db, organization_id)
-        state = _billing_subject_stripe_state(subject)
-        await db.commit()
-        return state
+    subject = await ensure_organization_billing_subject(db, organization_id)
+    await db.flush()
+    return _billing_subject_stripe_state(subject)
 
 
 async def bind_stripe_customer_to_billing_subject(
+    db: AsyncSession,
     *,
     billing_subject_id: UUID,
     stripe_customer_id: str,
 ) -> BillingSubjectStripeState:
-    async with db_engine.async_session_factory() as db:
-        subject = await set_billing_subject_stripe_customer(
-            db,
-            billing_subject_id=billing_subject_id,
-            stripe_customer_id=stripe_customer_id,
-        )
-        state = _billing_subject_stripe_state(subject)
-        await db.commit()
-        return state
+    subject = await set_billing_subject_stripe_customer(
+        db,
+        billing_subject_id=billing_subject_id,
+        stripe_customer_id=stripe_customer_id,
+    )
+    await db.flush()
+    return _billing_subject_stripe_state(subject)
 
 
 async def set_overage_policy_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     overage_enabled: bool,
     overage_cap_cents_per_seat: int | None = None,
 ) -> BillingSubject:
-    async with db_engine.async_session_factory() as db:
-        subject = await ensure_personal_billing_subject(db, user_id)
-        subject = await set_billing_subject_overage_policy(
-            db,
-            billing_subject_id=subject.id,
-            overage_enabled=overage_enabled,
-            overage_cap_cents_per_seat=overage_cap_cents_per_seat,
-        )
-        await db.commit()
-        return subject
+    subject = await ensure_personal_billing_subject(db, user_id)
+    return await set_billing_subject_overage_policy(
+        db,
+        billing_subject_id=subject.id,
+        overage_enabled=overage_enabled,
+        overage_cap_cents_per_seat=overage_cap_cents_per_seat,
+    )
 
 
 async def set_overage_policy_for_subject(
+    db: AsyncSession,
     *,
     billing_subject_id: UUID,
     overage_enabled: bool,
     overage_cap_cents_per_seat: int | None = None,
 ) -> BillingSubject:
-    async with db_engine.async_session_factory() as db:
-        subject = await set_billing_subject_overage_policy(
-            db,
-            billing_subject_id=billing_subject_id,
-            overage_enabled=overage_enabled,
-            overage_cap_cents_per_seat=overage_cap_cents_per_seat,
-        )
-        await db.commit()
-        return subject
+    return await set_billing_subject_overage_policy(
+        db,
+        billing_subject_id=billing_subject_id,
+        overage_enabled=overage_enabled,
+        overage_cap_cents_per_seat=overage_cap_cents_per_seat,
+    )
 
 
 async def get_billing_subject_for_stripe_reference(
@@ -1315,12 +1317,14 @@ async def count_active_seats_for_billing_subject(
     return 1
 
 
-async def count_active_seats_for_billing_subject_id(billing_subject_id: UUID) -> int:
-    async with db_engine.async_session_factory() as db:
-        subject = await db.get(BillingSubject, billing_subject_id)
-        if subject is None:
-            return 1
-        return await count_active_seats_for_billing_subject(db, subject)
+async def count_active_seats_for_billing_subject_id(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> int:
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is None:
+        return 1
+    return await count_active_seats_for_billing_subject(db, subject)
 
 
 async def prepare_initial_org_seat_reconcile(
@@ -2454,6 +2458,35 @@ async def _build_billing_snapshot_state_for_subject(
             else 0
         ),
     )
+
+
+async def get_billing_snapshot_state_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> BillingSnapshotState:
+    subject = await ensure_personal_billing_subject(db, user_id)
+    if settings.pro_billing_enabled:
+        await ensure_free_trial_v2_grant(db, subject)
+    else:
+        await ensure_free_included_grant(db, user_id)
+    await db.flush()
+    return await _build_billing_snapshot_state_for_subject(db, subject.id)
+
+
+async def get_billing_snapshot_state_for_subject(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> BillingSnapshotState:
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is None:
+        raise RuntimeError("Billing subject not found.")
+    if subject.kind == BILLING_SUBJECT_KIND_PERSONAL and subject.user_id is not None:
+        if settings.pro_billing_enabled:
+            await ensure_free_trial_v2_grant(db, subject)
+        else:
+            await ensure_free_included_grant(db, subject.user_id)
+        await db.flush()
+    return await _build_billing_snapshot_state_for_subject(db, billing_subject_id)
 
 
 async def load_billing_snapshot_state(user_id: UUID) -> BillingSnapshotState:

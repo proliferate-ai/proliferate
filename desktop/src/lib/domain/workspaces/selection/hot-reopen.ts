@@ -1,6 +1,6 @@
 import type { TranscriptState } from "@anyharness/sdk";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
-import { logicalWorkspaceRelatedIds } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import { logicalWorkspaceRelatedIds } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 
 export interface HotReopenSessionSlotSnapshot {
   sessionId: string;

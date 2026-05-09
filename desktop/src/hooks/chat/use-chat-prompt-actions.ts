@@ -24,7 +24,7 @@ import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configure
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/transcript/file-mentions";
+} from "@/lib/domain/chat/composer/file-mention-draft-model";
 import {
   createEmptySessionRecord,
   putSessionRecord,
@@ -36,10 +36,8 @@ import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspac
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
-import {
-  finishOrCancelMeasurementOperation,
-  type MeasurementOperationId,
-} from "@/lib/infra/measurement/debug-measurement";
+import { finishOrCancelMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import {
   failLatencyFlow,
   startLatencyFlow,

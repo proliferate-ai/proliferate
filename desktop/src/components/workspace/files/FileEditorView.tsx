@@ -13,6 +13,7 @@ import {
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useFileEditorCommands } from "@/hooks/workspaces/files/ui/use-file-editor-commands";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
@@ -42,14 +43,15 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
   const buffer = useWorkspaceFileBuffersStore((s) => s.buffersByPath[filePath]);
   const ensureBufferFromRead = useWorkspaceFileBuffersStore((s) => s.ensureBufferFromRead);
   const updateBuffer = useWorkspaceFileBuffersStore((s) => s.updateBuffer);
-  const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
+  const fileContext = useWorkspaceFileContext();
+  const materializedWorkspaceId = fileContext.materializedWorkspaceId;
   const mode = useWorkspaceViewerTabsStore(
     (s) => s.modeByTargetKey[targetKey] ?? defaultFileViewerMode(filePath),
   );
   const setTargetMode = useWorkspaceViewerTabsStore((s) => s.setTargetMode);
   const diffLayout = useWorkspaceViewerTabsStore((s) => s.layoutByTargetKey[targetKey] ?? "unified");
   const setTargetLayout = useWorkspaceViewerTabsStore((s) => s.setTargetLayout);
-  const { saveFile, reloadFile } = useWorkspaceFileActions();
+  const { saveFile, reloadFile } = useWorkspaceFileActions(fileContext);
   const statusQuery = useGitStatusQuery({
     workspaceId: materializedWorkspaceId,
   });

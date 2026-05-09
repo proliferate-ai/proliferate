@@ -7,6 +7,8 @@ import math
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.auth.authorization import OwnerContext, OwnerSelection, require_org_role
 from proliferate.config import settings
 from proliferate.constants.billing import (
@@ -18,6 +20,7 @@ from proliferate.constants.billing import (
     BILLING_MODE_OFF,
     BILLING_PLAN_FREE,
     BILLING_PLAN_PRO,
+    BILLING_SUBJECT_KIND_PERSONAL,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
@@ -50,8 +53,10 @@ from proliferate.db.store.billing import (
     claim_usage_exports_for_sending,
     count_active_seats_for_billing_subject_id,
     ensure_billing_grant_record,
-    get_or_create_stripe_customer_state_for_organization,
-    get_or_create_stripe_customer_state_for_user,
+    get_billing_snapshot_state_for_subject,
+    get_billing_snapshot_state_for_user,
+    get_or_create_organization_stripe_customer_state,
+    get_or_create_user_stripe_customer_state,
     list_billing_subject_ids_for_usage_accounting,
     load_billing_snapshot_state,
     load_billing_snapshot_state_for_subject,
@@ -65,7 +70,10 @@ from proliferate.db.store.billing import (
     set_overage_policy_for_subject,
     set_overage_policy_for_user,
 )
-from proliferate.db.store.organizations import load_organization_by_billing_subject
+from proliferate.db.store.organizations import (
+    get_organization_with_membership,
+    load_organization_by_billing_subject,
+)
 from proliferate.errors import ProliferateError
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.domain.accounting import (
@@ -108,10 +116,6 @@ from proliferate.server.billing.pricing import (
 from proliferate.server.billing.seats import (
     prorated_seat_grant_hours,
     seat_proration_grant_source_ref,
-)
-from proliferate.server.organizations.service import (
-    OrganizationServiceError,
-    resolve_owner_context,
 )
 
 logger = logging.getLogger("proliferate.billing.service")
@@ -193,6 +197,22 @@ async def get_billing_snapshot(user_id: UUID) -> BillingSnapshot:
 
 async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingSnapshot:
     state = await load_billing_snapshot_state_for_subject(billing_subject_id)
+    return _build_billing_snapshot(state)
+
+
+async def _get_billing_snapshot_for_request(
+    db: AsyncSession,
+    user_id: UUID,
+) -> BillingSnapshot:
+    state = await get_billing_snapshot_state_for_user(db, user_id)
+    return _build_billing_snapshot(state)
+
+
+async def _get_billing_snapshot_for_subject_request(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> BillingSnapshot:
+    state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
     return _build_billing_snapshot(state)
 
 
@@ -421,22 +441,23 @@ async def authorize_sandbox_start(
     )
 
 
-async def get_billing_overview(user_id: UUID) -> BillingOverview:
-    snapshot = await get_billing_snapshot(user_id)
+async def get_billing_overview(db: AsyncSession, user_id: UUID) -> BillingOverview:
+    snapshot = await _get_billing_snapshot_for_request(db, user_id)
     return _billing_overview_from_snapshot(snapshot)
 
 
 async def get_billing_overview_for_owner(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection,
 ) -> BillingOverview:
-    context = await _resolve_billing_owner_context(user, owner_selection)
-    snapshot = await get_billing_snapshot_for_subject(context.billing_subject_id)
+    context = await _resolve_billing_owner_context(db, user, owner_selection)
+    snapshot = await _get_billing_snapshot_for_subject_request(db, context.billing_subject_id)
     return _billing_overview_from_snapshot(snapshot)
 
 
-async def get_current_plan(user_id: UUID) -> PlanInfo:
-    snapshot = await get_billing_snapshot(user_id)
+async def get_current_plan(db: AsyncSession, user_id: UUID) -> PlanInfo:
+    snapshot = await _get_billing_snapshot_for_request(db, user_id)
     return PlanInfo(
         plan=snapshot.plan,
         usage_minutes=int(round(snapshot.used_hours * 60.0)),
@@ -444,17 +465,18 @@ async def get_current_plan(user_id: UUID) -> PlanInfo:
     )
 
 
-async def get_cloud_plan(user_id: UUID) -> CloudPlanInfo:
-    snapshot = await get_billing_snapshot(user_id)
+async def get_cloud_plan(db: AsyncSession, user_id: UUID) -> CloudPlanInfo:
+    snapshot = await _get_billing_snapshot_for_request(db, user_id)
     return _cloud_plan_from_snapshot(snapshot)
 
 
 async def get_cloud_plan_for_owner(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection,
 ) -> CloudPlanInfo:
-    context = await _resolve_billing_owner_context(user, owner_selection)
-    snapshot = await get_billing_snapshot_for_subject(context.billing_subject_id)
+    context = await _resolve_billing_owner_context(db, user, owner_selection)
+    snapshot = await _get_billing_snapshot_for_subject_request(db, context.billing_subject_id)
     return _cloud_plan_from_snapshot(snapshot)
 
 
@@ -579,78 +601,122 @@ def _require_redirect_urls() -> tuple[str, str, str]:
     return success_url, cancel_url, portal_return_url
 
 
-async def _ensure_stripe_customer_for_user(user: User) -> tuple[UUID, str]:
-    state = await get_or_create_stripe_customer_state_for_user(user.id)
-    if state.stripe_customer_id:
-        return state.billing_subject_id, state.stripe_customer_id
-    try:
-        customer = await stripe_billing.create_customer(
-            email=user.email,
-            billing_subject_id=str(state.billing_subject_id),
-            idempotency_key=f"customer:{state.billing_subject_id}",
-        )
-    except stripe_billing.StripeBillingError as error:
-        raise _map_stripe_error(error) from error
-    customer_id = customer.get("id")
-    if not isinstance(customer_id, str):
-        raise BillingServiceError(
-            "stripe_invalid_response",
-            "Stripe did not return a customer id.",
-            status_code=502,
-        )
-    state = await bind_stripe_customer_to_billing_subject(
-        billing_subject_id=state.billing_subject_id,
-        stripe_customer_id=customer_id,
+def _require_owner_selection_uuid(value: str | UUID | None, *, field: str) -> UUID:
+    if isinstance(value, UUID):
+        return value
+    if value:
+        try:
+            return UUID(value)
+        except ValueError as exc:
+            raise BillingServiceError(
+                "invalid_organization_id",
+                f"{field} must be a valid UUID.",
+                status_code=400,
+            ) from exc
+    raise BillingServiceError(
+        "missing_organization_id",
+        f"{field} is required for organization scope.",
+        status_code=400,
     )
-    return state.billing_subject_id, customer_id
 
 
 async def _resolve_billing_owner_context(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection,
 ) -> OwnerContext:
-    try:
-        return await resolve_owner_context(user, owner_selection)
-    except OrganizationServiceError as error:
+    selection = owner_selection or OwnerSelection()
+    if selection.owner_scope == "personal":
+        if selection.organization_id is not None:
+            raise BillingServiceError(
+                "invalid_owner_selection",
+                "organizationId is not valid for personal scope.",
+                status_code=400,
+            )
+        state = await get_or_create_user_stripe_customer_state(db, user.id)
+        if state.kind != BILLING_SUBJECT_KIND_PERSONAL:
+            raise BillingServiceError(
+                "invalid_owner_selection",
+                "Personal billing subject could not be resolved.",
+                status_code=500,
+            )
+        return OwnerContext(
+            owner_scope="personal",
+            actor_user_id=user.id,
+            owner_user_id=user.id,
+            organization_id=None,
+            membership_id=None,
+            membership_role=None,
+            billing_subject_id=state.billing_subject_id,
+        )
+
+    organization_id = _require_owner_selection_uuid(
+        selection.organization_id,
+        field="organizationId",
+    )
+    record = await get_organization_with_membership(
+        db,
+        organization_id=organization_id,
+        user_id=user.id,
+    )
+    if record is None:
         raise BillingServiceError(
-            error.code,
-            error.message,
-            status_code=error.status_code,
-        ) from error
+            "organization_not_found",
+            "Organization not found.",
+            status_code=404,
+        )
+    state = await get_or_create_organization_stripe_customer_state(db, organization_id)
+    return OwnerContext(
+        owner_scope="organization",
+        actor_user_id=user.id,
+        owner_user_id=None,
+        organization_id=organization_id,
+        membership_id=record.membership.id,
+        membership_role=record.membership.role,
+        billing_subject_id=state.billing_subject_id,
+    )
 
 
 async def _ensure_stripe_customer_for_owner(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection,
+    *,
+    owner_context: OwnerContext | None = None,
 ) -> tuple[UUID, str]:
-    context = await _resolve_billing_owner_context(user, owner_selection)
-    if context.owner_scope == "organization":
-        try:
-            require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-        except ProliferateError as error:
-            raise BillingServiceError(
-                error.code,
-                error.message,
-                status_code=error.status_code,
-            ) from error
-        if context.organization_id is None:
-            raise BillingServiceError(
-                "organization_not_found",
-                "Organization not found.",
-                status_code=404,
+    async with db.begin():
+        context = owner_context or await _resolve_billing_owner_context(db, user, owner_selection)
+        if context.owner_scope == "organization":
+            try:
+                require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+            except ProliferateError as error:
+                raise BillingServiceError(
+                    error.code,
+                    error.message,
+                    status_code=error.status_code,
+                ) from error
+            if context.organization_id is None:
+                raise BillingServiceError(
+                    "organization_not_found",
+                    "Organization not found.",
+                    status_code=404,
+                )
+            state = await get_or_create_organization_stripe_customer_state(
+                db,
+                context.organization_id,
             )
-        state = await get_or_create_stripe_customer_state_for_organization(
-            context.organization_id,
-        )
-        organization = await load_organization_by_billing_subject(state.billing_subject_id)
-        customer_name = organization.name if organization is not None else "Organization"
-        organization_id = str(context.organization_id)
-        created_by_user_id = str(user.id)
-    else:
-        state = await get_or_create_stripe_customer_state_for_user(user.id)
-        customer_name = None
-        organization_id = None
-        created_by_user_id = None
+            organization = await load_organization_by_billing_subject(
+                db,
+                state.billing_subject_id,
+            )
+            customer_name = organization.name if organization is not None else "Organization"
+            organization_id = str(context.organization_id)
+            created_by_user_id = str(user.id)
+        else:
+            state = await get_or_create_user_stripe_customer_state(db, user.id)
+            customer_name = None
+            organization_id = None
+            created_by_user_id = None
     if state.stripe_customer_id:
         return state.billing_subject_id, state.stripe_customer_id
     try:
@@ -671,29 +737,33 @@ async def _ensure_stripe_customer_for_owner(
             "Stripe did not return a customer id.",
             status_code=502,
         )
-    state = await bind_stripe_customer_to_billing_subject(
-        billing_subject_id=state.billing_subject_id,
-        stripe_customer_id=customer_id,
-    )
+    async with db.begin():
+        state = await bind_stripe_customer_to_billing_subject(
+            db,
+            billing_subject_id=state.billing_subject_id,
+            stripe_customer_id=customer_id,
+        )
     return state.billing_subject_id, customer_id
 
 
 async def create_cloud_checkout_session(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
 ) -> BillingUrlResponse:
     selection = owner_selection or OwnerSelection()
     org_context: OwnerContext | None = None
     if selection.owner_scope == "organization":
-        org_context = await _resolve_billing_owner_context(user, selection)
-        try:
-            require_org_role(org_context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-        except ProliferateError as error:
-            raise BillingServiceError(
-                error.code,
-                error.message,
-                status_code=error.status_code,
-            ) from error
+        async with db.begin():
+            org_context = await _resolve_billing_owner_context(db, user, selection)
+            try:
+                require_org_role(org_context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
+            except ProliferateError as error:
+                raise BillingServiceError(
+                    error.code,
+                    error.message,
+                    status_code=error.status_code,
+                ) from error
         if not settings.pro_billing_enabled:
             raise BillingServiceError(
                 "org_pro_billing_disabled",
@@ -710,10 +780,18 @@ async def create_cloud_checkout_session(
         raise _map_stripe_error(error) from error
 
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
+        db,
         user,
         selection,
+        owner_context=org_context,
     )
-    snapshot = await get_billing_snapshot_for_subject(subject_id)
+    async with db.begin():
+        snapshot = await _get_billing_snapshot_for_subject_request(db, subject_id)
+        seat_quantity = (
+            await count_active_seats_for_billing_subject_id(db, subject_id)
+            if org_context is not None and not snapshot.is_paid_cloud
+            else 1
+        )
     if snapshot.is_paid_cloud:
         try:
             portal = await stripe_billing.create_customer_portal_session(
@@ -730,11 +808,6 @@ async def create_cloud_checkout_session(
             configured_pro_monthly_price_id()
             if settings.pro_billing_enabled
             else settings.stripe_cloud_monthly_price_id
-        )
-        seat_quantity = (
-            await count_active_seats_for_billing_subject_id(subject_id)
-            if org_context is not None
-            else 1
         )
         checkout = await stripe_billing.create_subscription_checkout_session(
             stripe_customer_id=stripe_customer_id,
@@ -766,6 +839,7 @@ async def create_cloud_checkout_session(
 
 
 async def create_refill_checkout_session(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
 ) -> BillingUrlResponse:
@@ -788,6 +862,7 @@ async def create_refill_checkout_session(
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
+        db,
         user,
         selection,
     )
@@ -806,11 +881,13 @@ async def create_refill_checkout_session(
 
 
 async def create_customer_portal_session(
+    db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
 ) -> BillingUrlResponse:
     _success_url, _cancel_url, portal_return_url = _require_redirect_urls()
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
+        db,
         user,
         owner_selection or OwnerSelection(),
     )
@@ -826,6 +903,7 @@ async def create_customer_portal_session(
 
 
 async def update_overage_settings(
+    db: AsyncSession,
     user: User,
     *,
     enabled: bool,
@@ -843,12 +921,13 @@ async def update_overage_settings(
     selection = owner_selection or OwnerSelection()
     if selection.owner_scope == "personal":
         subject = await set_overage_policy_for_user(
+            db,
             user_id=user.id,
             overage_enabled=enabled,
             overage_cap_cents_per_seat=cap_cents_per_seat,
         )
     else:
-        context = await _resolve_billing_owner_context(user, selection)
+        context = await _resolve_billing_owner_context(db, user, selection)
         try:
             require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
         except ProliferateError as error:
@@ -858,6 +937,7 @@ async def update_overage_settings(
                 status_code=error.status_code,
             ) from error
         subject = await set_overage_policy_for_subject(
+            db,
             billing_subject_id=context.billing_subject_id,
             overage_enabled=enabled,
             overage_cap_cents_per_seat=cap_cents_per_seat,

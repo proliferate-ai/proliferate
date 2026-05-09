@@ -14,7 +14,7 @@ import {
   PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
 } from "@/lib/domain/chat/__fixtures__/playground";
-import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/transcript/file-mention-links";
+import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/composer/file-mention-links";
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [
   "user-input-single-option",

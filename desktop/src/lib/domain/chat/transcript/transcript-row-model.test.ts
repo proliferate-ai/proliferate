@@ -4,7 +4,7 @@ import {
   buildTranscriptRowModel,
   createTranscriptRowModelCache,
 } from "@/lib/domain/chat/transcript/transcript-row-model";
-import { createPromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox";
+import { createPromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import {
   shouldStickToVirtualBottom,
 } from "@/lib/domain/chat/transcript/transcript-virtual-rows";

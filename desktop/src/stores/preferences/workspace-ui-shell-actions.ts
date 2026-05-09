@@ -1,13 +1,5 @@
 import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import type { WorkspaceUiState } from "@/stores/preferences/workspace-ui-store";
-
-type WorkspaceUiSet = (
-  partial:
-    | Partial<WorkspaceUiState>
-    | WorkspaceUiState
-    | ((state: WorkspaceUiState) => Partial<WorkspaceUiState> | WorkspaceUiState),
-) => void;
-type WorkspaceUiGet = () => WorkspaceUiState;
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiShellActions = Pick<
   WorkspaceUiState,

@@ -30,7 +30,7 @@ use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
-use crate::sessions::mcp::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
+use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
@@ -406,7 +406,7 @@ pub(crate) mod test_support {
     use std::ffi::OsString;
     use std::sync::{Mutex, OnceLock};
 
-    use crate::sessions::mcp::DATA_KEY_ENV_VAR;
+    use crate::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
 
     pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 

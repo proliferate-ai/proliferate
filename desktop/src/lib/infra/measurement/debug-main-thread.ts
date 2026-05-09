@@ -1,8 +1,6 @@
-import {
-  isMainThreadMeasurementEnabled,
-  recordMeasurementMetric,
-  setLongTaskObserverSupportedForMeasurement,
-} from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
+import { isMainThreadMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import { setLongTaskObserverSupportedForMeasurement } from "@/lib/infra/measurement/debug-measurement-observer";
 
 const FRAME_GAP_THRESHOLD_MS = 50;
 

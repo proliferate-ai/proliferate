@@ -1,6 +1,6 @@
 import { CloudIcon, Monitor, Tree } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar";
+import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 
 const VARIANT_ICONS: Record<SidebarWorkspaceVariant, typeof Monitor> = {
   local: Monitor,

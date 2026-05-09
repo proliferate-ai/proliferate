@@ -1,5 +1,5 @@
 import type { CommitRequest } from "@anyharness/sdk";
-import type { PublishWorkflowStep } from "@/lib/domain/workspaces/creation/publish-workflow";
+import type { PublishWorkflowStep } from "@/lib/domain/workspaces/creation/publish-workflow-model";
 
 export interface WorkspacePublishWorkflowRunner {
   stagePaths: (paths: string[]) => Promise<unknown>;

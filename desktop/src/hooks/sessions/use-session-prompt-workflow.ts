@@ -8,18 +8,16 @@ import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   recordMeasurementWorkflowStep,
-  type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
-import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/infra/measurement/prompt-submit-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   getSessionRecord,
 } from "@/stores/sessions/session-records";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
-import {
-  outboxEntriesForSession,
-  resolvePromptOutboxPlacement,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+import { resolvePromptOutboxPlacement } from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import { outboxEntriesForSession } from "@/lib/domain/chat/outbox/prompt-outbox-state";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";

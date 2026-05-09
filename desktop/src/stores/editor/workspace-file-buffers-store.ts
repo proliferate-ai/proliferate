@@ -18,8 +18,10 @@ export interface WorkspaceFileBuffer {
 }
 
 interface WorkspaceFileBuffersState {
+  connectionFingerprint: string | null;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   reset: () => void;
+  resetForConnection: (connectionFingerprint: string) => void;
   ensureBufferFromRead: (path: string, result: ReadWorkspaceFileResponse) => void;
   replaceBufferFromRead: (path: string, result: ReadWorkspaceFileResponse) => void;
   updateBuffer: (path: string, content: string) => void;
@@ -35,9 +37,19 @@ interface WorkspaceFileBuffersState {
 }
 
 export const useWorkspaceFileBuffersStore = create<WorkspaceFileBuffersState>((set) => ({
+  connectionFingerprint: null,
   buffersByPath: {},
 
-  reset: () => set({ buffersByPath: {} }),
+  reset: () => set({ connectionFingerprint: null, buffersByPath: {} }),
+
+  resetForConnection: (connectionFingerprint) => {
+    set((current) => current.connectionFingerprint === connectionFingerprint
+      ? current
+      : {
+        connectionFingerprint,
+        buffersByPath: {},
+      });
+  },
 
   ensureBufferFromRead: (path, result) => {
     const content = result.content;

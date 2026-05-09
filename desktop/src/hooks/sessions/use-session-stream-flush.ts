@@ -10,14 +10,16 @@ import {
   markOperationForNextCommit,
   recordMeasurementMetric,
   startMeasurementOperation,
-  type MeasurementOperationId,
-  type MeasurementSurface,
 } from "@/lib/infra/measurement/debug-measurement";
+import type {
+  MeasurementOperationId,
+  MeasurementSurface,
+} from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/stores/sessions/session-types";
+} from "@/lib/domain/sessions/directory/relationship";
 import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
 import { isDocumentVisibleAndFocused } from "@/hooks/ui/use-document-focus-visibility";
 import {
@@ -29,7 +31,7 @@ import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch
 import {
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-reconciliation";
 import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
@@ -37,11 +39,9 @@ import {
 import type { ReconciledStreamConfigIntent } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
+import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import {
-  activityFromTranscript,
-  useSessionDirectoryStore,
-} from "@/stores/sessions/session-directory-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";

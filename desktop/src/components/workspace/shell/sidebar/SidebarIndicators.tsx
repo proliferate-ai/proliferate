@@ -18,7 +18,7 @@ import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,
   SidebarStatusIndicator,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
 
 interface SidebarStatusIndicatorViewProps {

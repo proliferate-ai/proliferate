@@ -1,10 +1,8 @@
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { resolveSessionSidebarActivityState } from "@/lib/domain/sessions/activity";
-import {
-  activitySnapshotFromDirectoryEntry,
-  useSessionDirectoryStore,
-} from "@/stores/sessions/session-directory-store";
+import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { isHotSessionClientId } from "@/lib/workflows/sessions/hot-session-ingest-manager";

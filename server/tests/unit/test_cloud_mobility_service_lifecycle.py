@@ -254,7 +254,7 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
     monkeypatch.setattr(mobility_service, "start_cloud_workspace", _start_cloud_workspace)
     monkeypatch.setattr(
         mobility_service,
-        "update_cloud_workspace_handoff_phase_for_user",
+        "update_cloud_workspace_handoff_phase_checkpoint_for_user",
         _update_phase,
     )
 
@@ -341,6 +341,7 @@ async def test_update_handoff_phase_rejects_unsupported_phase(
 
     with pytest.raises(CloudApiError) as exc_info:
         await mobility_service.update_cloud_workspace_handoff_phase(
+            object(),
             user_id=uuid4(),
             mobility_workspace_id=uuid4(),
             handoff_op_id=uuid4(),

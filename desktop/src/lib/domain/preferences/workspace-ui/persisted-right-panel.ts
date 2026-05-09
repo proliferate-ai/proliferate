@@ -1,10 +1,10 @@
 import {
   clampRightPanelWidth,
   normalizeRightPanelDurableState,
-  normalizeRightPanelMaterializedState,
   type RightPanelDurableState,
   type RightPanelMaterializedState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { normalizeRightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-state";
 import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-migration";
 
 export function migrateLegacyRightPanelPreferences(args: {

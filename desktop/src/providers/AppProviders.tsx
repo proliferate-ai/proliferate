@@ -11,10 +11,14 @@ import { appQueryClient } from "@/lib/infra/query/query-client";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import {
   buildLogicalWorkspaces,
+} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import {
   findLogicalWorkspace,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import {
   logicalWorkspaceCloudMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
-} from "@/lib/domain/workspaces/cloud/logical-workspaces";
+} from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import { buildStandardRepoProjection } from "@/lib/domain/workspaces/cloud/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/access/cloud/use-cloud-workspace-connection";

@@ -15,7 +15,9 @@ use crate::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
     SessionTurnOutcome,
 };
-use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
+use crate::sessions::mcp_bindings::model::{
+    SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+};
 use crate::sessions::prompt::PromptPayload;
 use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::sessions::store::SessionStore;

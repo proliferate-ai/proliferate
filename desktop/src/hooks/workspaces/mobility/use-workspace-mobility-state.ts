@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/use-selected-logical-workspace";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   isWorkspaceMobilityTransitionPhase,
   resolveWorkspaceMobilityStatusModel,

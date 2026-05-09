@@ -6,6 +6,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from proliferate.db import engine as db_engine
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.automations.worker.service import run_scheduler_tick
 
@@ -33,7 +34,10 @@ async def run_scheduler_loop(
             if not schema_validated:
                 await validate_schema()
                 schema_validated = True
-            result = await run_scheduler_tick(batch_size=batch_size)
+            result = await run_scheduler_tick(
+                session_factory=db_engine.async_session_factory,
+                batch_size=batch_size,
+            )
             consecutive_failures = 0
             if result.created_runs:
                 logger.info("Automation scheduler created runs count=%s", result.created_runs)

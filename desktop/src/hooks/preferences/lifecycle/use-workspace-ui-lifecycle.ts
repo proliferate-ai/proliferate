@@ -9,7 +9,8 @@ import {
   isNonPersistedWorkspaceUiStateKey,
   selectPersistedWorkspaceUiState,
 } from "@/lib/domain/preferences/workspace-ui/persistence";
-import { isDebugMeasurementEnabled, recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
+import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
