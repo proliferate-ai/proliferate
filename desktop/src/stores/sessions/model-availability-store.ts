@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ModelLaunchRemediation } from "@anyharness/sdk";
+import type { PausedSessionModelAvailability } from "@/lib/domain/sessions/creation/model-availability";
 
 export type SessionModelAvailabilityDecisionKind =
   | "managed_reinstall"
@@ -10,19 +10,6 @@ export type SessionModelAvailabilityDecisionKind =
 
 export interface SessionModelAvailabilityDecision {
   kind: SessionModelAvailabilityDecisionKind;
-}
-
-export interface PausedSessionModelAvailability {
-  id: string;
-  sessionId: string;
-  workspaceId: string;
-  agentKind: string;
-  providerDisplayName: string;
-  requestedModelId: string;
-  requestedModelDisplayName: string;
-  currentModelId: string;
-  currentModelDisplayName: string;
-  remediation: ModelLaunchRemediation | null;
 }
 
 type DecisionResolver = (decision: SessionModelAvailabilityDecision) => void;
