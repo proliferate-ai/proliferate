@@ -1,7 +1,7 @@
 import { useChatLoadingSubstep } from "@/hooks/chat/derived/use-chat-loading-substep";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { BrailleSweepBadge } from "@/components/ui/icons";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 
 /**
  * Hero variant of the chat surface shown while a session is being prepared.

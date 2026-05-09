@@ -22,7 +22,7 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";

@@ -3,7 +3,7 @@ import { ChatView } from "@/components/workspace/chat/ChatView";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspace-content-shortcuts";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
 import { viewerTargetKey } from "@/lib/domain/workspaces/viewer/viewer-target";

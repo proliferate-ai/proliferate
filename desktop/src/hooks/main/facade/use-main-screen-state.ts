@@ -27,7 +27,7 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,

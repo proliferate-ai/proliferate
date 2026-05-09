@@ -11,7 +11,7 @@ import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import { Check, ChevronDown, Plus, Search } from "@/components/ui/icons";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { useModelSelectorMenu } from "@/hooks/chat/ui/use-model-selector-menu";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayRegistration } from "@/hooks/ui/native/use-native-overlay-presence";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 

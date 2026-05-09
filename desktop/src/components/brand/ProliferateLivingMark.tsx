@@ -7,7 +7,7 @@ import {
 import {
   BRAILLE_SWEEP_FRAMES,
   BRAILLE_SWEEP_FRAME_INTERVAL_MS,
-} from "@/hooks/ui/use-braille-sweep";
+} from "@/hooks/ui/animation/use-braille-sweep";
 
 const ICON_ENTER_MS = 700;
 const ICON_HOLD_MS = 950;

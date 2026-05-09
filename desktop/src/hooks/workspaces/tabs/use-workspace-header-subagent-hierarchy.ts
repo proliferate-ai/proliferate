@@ -31,7 +31,7 @@ import {
 } from "@/lib/domain/chat/subagents/session-relationship-hints";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   resolveHierarchyMaterializedSessionId,

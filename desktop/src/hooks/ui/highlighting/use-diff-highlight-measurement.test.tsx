@@ -8,7 +8,7 @@ import {
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
-import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
+import { useDiffHighlight } from "@/hooks/ui/highlighting/use-diff-highlight";
 
 const SECRET_PATCH = [
   "diff --git a/secret/path.ts b/secret/path.ts",

@@ -12,7 +12,7 @@ import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import { useDelegatedWorkComposer } from "@/hooks/chat/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-tracker";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";

@@ -1,8 +1,8 @@
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/ui/use-plan-handoff-dialog-state";
