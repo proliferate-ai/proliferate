@@ -51,14 +51,17 @@ start of the task, not after implementation has already started.
 ## Authoritative AnyHarness standards
 
 - `docs/anyharness/README.md`
-  - start here for runtime crate boundaries, runtime structure, ownership, and read order
-- `docs/anyharness/binary.md`
-  - `anyharness` binary crate rules
+  - start here for runtime crate boundaries, runtime structure, ownership, code map, and read order
+- `docs/anyharness/guides/*.md`
+  - focused standards for crates, API, domains, live runtime, adapters,
+    integrations, harnesses, persistence, observability, and repo shape
+- `docs/anyharness/specs/*.md`
+  - focused runtime specs for flows such as the session engine and MCP
 - `docs/anyharness/contract.md`
   - `anyharness-contract` transport schema rules
 - `docs/anyharness/src/*.md`
-  - subsystem logic docs for ACP, agents, sessions, workspaces, git, files,
-    and persistence
+  - legacy subsystem logic docs for ACP, agents, sessions, workspaces, git,
+    files, and persistence while they are being migrated
 
 ## Authoritative CI/CD standards
 
@@ -89,6 +92,9 @@ start of the task, not after implementation has already started.
   - operator-facing server env var surface
 - `docs/reference/workspace-command-environment.md`
   - environment variables available to workspace run commands
+- `docs/notes/agent-credentials-sync.md`
+  - non-authoritative design/reference note for local agent credentials and
+    future credential sync
 - `docs/reference/self-hosted-deploy.md`
   - canonical Docker Compose self-hosted deployment
 - `docs/reference/self-hosted-aws.md`

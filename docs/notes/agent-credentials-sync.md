@@ -1,10 +1,18 @@
-# Agent Credentials and Sync Notes
+# Agent Credentials And Sync Reference
 
-Status: working design note, not an authoritative area standard.
+Status: reference note, not an authoritative area standard.
 
 This note captures the current mental model for agent installation and
 credentials, the confirmed env-var bug in desktop, and a scoped outline for a
 future credential-sync system.
+
+Authoritative implementation rules live in:
+
+- `docs/anyharness/README.md`
+- `docs/anyharness/guides/crates.md`
+- `docs/anyharness/guides/harnesses.md`
+- `docs/anyharness/guides/integrations.md`
+- `docs/frontend/guides/access.md`
 
 ## 1. Current Mental Model
 
