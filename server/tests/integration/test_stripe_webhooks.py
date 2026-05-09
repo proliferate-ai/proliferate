@@ -21,7 +21,13 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db import engine as engine_module
 from proliferate.db.models.auth import User
-from proliferate.db.models.billing import BillingGrant, BillingSeatAdjustment, BillingSubscription
+from proliferate.db.models.billing import (
+    BillingGrant,
+    BillingHold,
+    BillingSeatAdjustment,
+    BillingSubscription,
+    WebhookEventReceipt,
+)
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.billing import (
     ensure_organization_billing_subject,
@@ -101,6 +107,132 @@ async def test_stripe_webhook_requires_configuration(
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "stripe_webhook_unconfigured"
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(
+    reason=(
+        "Current receipt claim logic reclaims processed events because processed "
+        "receipts have no active lease; Phase 8 webhook idempotency cleanup "
+        "should make this return an ack without dispatch."
+    ),
+    strict=True,
+)
+async def test_stripe_webhook_duplicate_processed_event_does_not_dispatch_again(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    payload = json.dumps(
+        {
+            "id": "evt_duplicate",
+            "livemode": False,
+            "type": "invoice.payment_failed",
+            "data": {"object": {"id": "in_duplicate"}},
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    signature = _stripe_signature(payload, secret=secret)
+    dispatched: list[str] = []
+
+    async def _dispatch(event: dict[str, object]) -> None:
+        dispatched.append(str(event["id"]))
+
+    monkeypatch.setattr(stripe_webhooks, "_dispatch_stripe_event", _dispatch)
+
+    first = await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=signature,
+    )
+    second = await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=signature,
+    )
+
+    assert first == second
+    assert dispatched == ["evt_duplicate"]
+    receipt = (
+        await db_session.execute(
+            select(WebhookEventReceipt).where(WebhookEventReceipt.event_id == "evt_duplicate")
+        )
+    ).scalar_one()
+    assert receipt.provider == "stripe"
+    assert receipt.status == "processed"
+    assert receipt.attempt_count == 1
+
+
+@pytest.mark.asyncio
+async def test_stripe_webhook_failed_event_can_be_reclaimed_and_processed(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    secret = "whsec_test_secret"
+    monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
+    payload = json.dumps(
+        {
+            "id": "evt_retry_after_failure",
+            "type": "invoice.paid",
+            "data": {"object": {"id": "in_retry_after_failure"}},
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    signature = _stripe_signature(payload, secret=secret)
+    attempts = 0
+
+    async def _dispatch(_event: dict[str, object]) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("transient webhook failure")
+
+    monkeypatch.setattr(stripe_webhooks, "_dispatch_stripe_event", _dispatch)
+
+    with pytest.raises(RuntimeError, match="transient webhook failure"):
+        await stripe_webhooks.handle_stripe_webhook(
+            payload=payload,
+            signature_header=signature,
+        )
+
+    failed = (
+        await db_session.execute(
+            select(WebhookEventReceipt).where(
+                WebhookEventReceipt.event_id == "evt_retry_after_failure"
+            )
+        )
+    ).scalar_one()
+    assert failed.status == "failed"
+    assert failed.attempt_count == 1
+    assert failed.last_error == "transient webhook failure"
+
+    await stripe_webhooks.handle_stripe_webhook(
+        payload=payload,
+        signature_header=signature,
+    )
+    db_session.expire_all()
+    processed = (
+        await db_session.execute(
+            select(WebhookEventReceipt).where(
+                WebhookEventReceipt.event_id == "evt_retry_after_failure"
+            )
+        )
+    ).scalar_one()
+    assert attempts == 2
+    assert processed.status == "processed"
+    assert processed.attempt_count == 2
+    assert processed.last_error is None
 
 
 @pytest.mark.asyncio
@@ -544,6 +676,124 @@ async def test_org_pro_subscription_sync_reconciles_active_seats_before_period_g
     assert subscription.seat_quantity == 3
     assert len(grants) == 1
     assert grants[0].hours_granted == 60.0
+
+
+@pytest.mark.asyncio
+async def test_invoice_failed_hold_blocks_until_invoice_paid_clears_it(
+    db_session: AsyncSession,
+    test_engine,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        engine_module,
+        "async_session_factory",
+        async_sessionmaker(test_engine, expire_on_commit=False),
+    )
+    monkeypatch.setattr(settings, "pro_billing_enabled", True)
+    monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro")
+    monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "")
+    monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
+    monkeypatch.setattr(settings, "stripe_managed_cloud_overage_price_id", "price_overage")
+
+    user_id = uuid.uuid4()
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_payment_hold"
+    subject_id = subject.id
+    await db_session.commit()
+
+    subscription_payload = {
+        "id": "sub_payment_hold",
+        "customer": "cus_payment_hold",
+        "status": "active",
+        "cancel_at_period_end": False,
+        "canceled_at": None,
+        "current_period_start": 1_776_586_422,
+        "current_period_end": 1_779_178_422,
+        "latest_invoice": "in_paid_after_hold",
+        "metadata": {
+            "billing_subject_id": str(subject_id),
+            "purpose": "cloud_subscription",
+        },
+        "items": {
+            "data": [
+                {
+                    "id": "si_hold_monthly",
+                    "quantity": 1,
+                    "price": {"id": "price_pro"},
+                },
+                {
+                    "id": "si_hold_overage",
+                    "price": {"id": "price_overage"},
+                },
+            ]
+        },
+    }
+
+    async def _retrieve_subscription(subscription_id: str) -> dict[str, object]:
+        assert subscription_id == "sub_payment_hold"
+        return subscription_payload
+
+    monkeypatch.setattr(
+        stripe_webhooks.stripe_billing,
+        "retrieve_subscription",
+        _retrieve_subscription,
+    )
+
+    await stripe_webhooks._handle_invoice_payment_failed(
+        {
+            "id": "in_failed_hold",
+            "customer": "cus_payment_hold",
+            "subscription": "sub_payment_hold",
+            "metadata": {"billing_subject_id": str(subject_id)},
+        }
+    )
+    db_session.expire_all()
+    hold = (
+        await db_session.execute(
+            select(BillingHold).where(BillingHold.billing_subject_id == subject_id)
+        )
+    ).scalar_one()
+    assert hold.kind == "payment_failed"
+    assert hold.status == "active"
+    assert hold.source_ref == "in_failed_hold"
+
+    await stripe_webhooks._handle_invoice_paid(
+        {
+            "id": "in_paid_after_hold",
+            "customer": "cus_payment_hold",
+            "subscription": "sub_payment_hold",
+            "metadata": {"billing_subject_id": str(subject_id)},
+            "lines": {
+                "data": [
+                    {
+                        "id": "il_paid_hold",
+                        "pricing": {
+                            "price_details": {
+                                "price": "price_pro",
+                                "product": "prod_pro",
+                            },
+                            "type": "price_details",
+                        },
+                        "parent": {
+                            "subscription_item_details": {
+                                "subscription": "sub_payment_hold",
+                                "subscription_item": "si_hold_monthly",
+                            },
+                            "type": "subscription_item_details",
+                        },
+                    }
+                ]
+            },
+        }
+    )
+    db_session.expire_all()
+    hold = (
+        await db_session.execute(
+            select(BillingHold).where(BillingHold.billing_subject_id == subject_id)
+        )
+    ).scalar_one()
+    assert hold.status == "resolved"
+    assert hold.resolved_at is not None
 
 
 @pytest.mark.asyncio

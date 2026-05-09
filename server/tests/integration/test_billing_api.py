@@ -312,6 +312,89 @@ class TestBillingApi:
         assert payload["concurrentSandboxLimit"] is None
 
     @pytest.mark.asyncio
+    async def test_cloud_checkout_routes_paid_subject_to_portal(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "pro_billing_enabled", False)
+        monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+        monkeypatch.setattr(settings, "stripe_checkout_success_url", "https://app.test/success")
+        monkeypatch.setattr(settings, "stripe_checkout_cancel_url", "https://app.test/cancel")
+        monkeypatch.setattr(
+            settings,
+            "stripe_customer_portal_return_url",
+            "https://app.test/portal",
+        )
+        captured: dict[str, object] = {}
+
+        async def fake_validate_cloud_subscription_price_configuration() -> None:
+            captured["validated"] = True
+
+        async def fake_create_subscription_checkout_session(**_kwargs: object) -> object:
+            raise AssertionError("paid subjects should not get duplicate checkout sessions")
+
+        async def fake_create_customer_portal_session(
+            **kwargs: object,
+        ) -> stripe_billing.StripeUrlResponse:
+            captured["portal"] = kwargs
+            return stripe_billing.StripeUrlResponse(url="https://portal.test/active")
+
+        monkeypatch.setattr(
+            stripe_billing,
+            "validate_cloud_subscription_price_configuration",
+            fake_validate_cloud_subscription_price_configuration,
+        )
+        monkeypatch.setattr(
+            stripe_billing,
+            "create_subscription_checkout_session",
+            fake_create_subscription_checkout_session,
+        )
+        monkeypatch.setattr(
+            stripe_billing,
+            "create_customer_portal_session",
+            fake_create_customer_portal_session,
+        )
+
+        session = await _register_and_login(client, "billing-checkout-portal@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        subject = await ensure_personal_billing_subject(db_session, user_id)
+        subject.stripe_customer_id = "cus_checkout_portal"
+        now = datetime.now(UTC)
+        db_session.add(
+            BillingSubscription(
+                billing_subject_id=subject.id,
+                stripe_subscription_id="sub_checkout_portal",
+                stripe_customer_id="cus_checkout_portal",
+                status="active",
+                cancel_at_period_end=False,
+                canceled_at=None,
+                current_period_start=now - timedelta(days=1),
+                current_period_end=now + timedelta(days=29),
+                cloud_monthly_price_id="price_cloud",
+                overage_price_id=None,
+                monthly_subscription_item_id="si_checkout_portal",
+                metered_subscription_item_id=None,
+                latest_invoice_id=None,
+                latest_invoice_status=None,
+                hosted_invoice_url=None,
+            )
+        )
+        await db_session.commit()
+
+        response = await client.post("/v1/billing/cloud-checkout", headers=headers)
+
+        assert response.status_code == 200
+        assert response.json() == {"url": "https://portal.test/active"}
+        portal = captured["portal"]
+        assert isinstance(portal, dict)
+        assert portal["stripe_customer_id"] == "cus_checkout_portal"
+        assert portal["return_url"] == "https://app.test/portal"
+        assert portal["idempotency_key"] == f"portal:active-cloud:{subject.id}"
+
+    @pytest.mark.asyncio
     async def test_pro_overage_used_is_scoped_to_current_period(
         self,
         client: AsyncClient,

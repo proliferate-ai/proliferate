@@ -10,10 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
+    BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
+    BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_PENDING,
     BILLING_USAGE_EXPORT_STATUS_SENDING,
+    BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
     BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
     FREE_INCLUDED_GRANT_TYPE,
     MONTHLY_CLOUD_GRANT_TYPE,
@@ -21,6 +25,7 @@ from proliferate.constants.billing import (
     REFILL_10H_GRANT_TYPE,
 )
 from proliferate.db.models.billing import (
+    BillingDecisionEvent,
     BillingEntitlement,
     BillingGrant,
     BillingGrantConsumption,
@@ -36,6 +41,7 @@ from proliferate.db.store.billing import (
     ensure_personal_billing_subject,
 )
 from proliferate.server.billing import service as billing_service
+from proliferate.integrations.billing import stripe as stripe_billing
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,
@@ -702,3 +708,166 @@ async def test_paid_accounting_does_not_export_pre_subscription_free_overage(
         )
     ).scalar_one()
     assert cursor.accounted_until == segment_ended_at
+
+
+@pytest.mark.asyncio
+async def test_observe_mode_does_not_send_pending_meter_exports(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_global_session_factory(test_engine, monkeypatch)
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
+    user_id = uuid.uuid4()
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    subject.stripe_customer_id = "cus_observe_export"
+    now = datetime.now(UTC)
+    export = BillingUsageExport(
+        billing_subject_id=subject.id,
+        billing_subscription_id=None,
+        usage_segment_id=uuid.uuid4(),
+        period_start=now - timedelta(days=1),
+        period_end=now + timedelta(days=29),
+        accounted_from=now - timedelta(hours=1),
+        accounted_until=now,
+        quantity_seconds=1800.0,
+        meter_quantity_cents=100,
+        cap_cents_snapshot=2000,
+        cap_used_cents_snapshot=0,
+        idempotency_key=f"observe-export:{uuid.uuid4()}",
+        status=BILLING_USAGE_EXPORT_STATUS_PENDING,
+    )
+    db_session.add(export)
+    await db_session.commit()
+    export_id = export.id
+
+    async def _create_meter_event(**_kwargs: object) -> dict[str, str]:
+        raise AssertionError("observe mode must not send Stripe meter events")
+
+    monkeypatch.setattr(stripe_billing, "create_meter_event", _create_meter_event)
+
+    await billing_service.send_pending_usage_exports()
+    db_session.expire_all()
+
+    export = await db_session.get(BillingUsageExport, export_id)
+    assert export is not None
+    assert export.status == BILLING_USAGE_EXPORT_STATUS_PENDING
+    assert export.stripe_meter_event_identifier is None
+
+
+@pytest.mark.asyncio
+async def test_enforce_mode_export_success_retryable_and_terminal_paths(
+    db_session: AsyncSession,
+    test_engine: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_global_session_factory(test_engine, monkeypatch)
+    monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(
+        settings,
+        "stripe_managed_cloud_overage_meter_event_name",
+        "managed_cloud_hours",
+    )
+    now = datetime.now(UTC)
+    billable_subject = await ensure_personal_billing_subject(db_session, uuid.uuid4())
+    billable_subject.stripe_customer_id = "cus_export_paths"
+    missing_customer_subject = await ensure_personal_billing_subject(db_session, uuid.uuid4())
+    success_export = BillingUsageExport(
+        billing_subject_id=billable_subject.id,
+        billing_subscription_id=None,
+        usage_segment_id=uuid.uuid4(),
+        period_start=now - timedelta(days=1),
+        period_end=now + timedelta(days=29),
+        accounted_from=now - timedelta(hours=3),
+        accounted_until=now - timedelta(hours=2),
+        quantity_seconds=3600.0,
+        meter_quantity_cents=200,
+        cap_cents_snapshot=2000,
+        cap_used_cents_snapshot=0,
+        idempotency_key=f"export-success:{uuid.uuid4()}",
+        status=BILLING_USAGE_EXPORT_STATUS_PENDING,
+    )
+    retryable_export = BillingUsageExport(
+        billing_subject_id=billable_subject.id,
+        billing_subscription_id=None,
+        usage_segment_id=uuid.uuid4(),
+        period_start=now - timedelta(days=1),
+        period_end=now + timedelta(days=29),
+        accounted_from=now - timedelta(hours=2),
+        accounted_until=now - timedelta(hours=1),
+        quantity_seconds=1800.0,
+        meter_quantity_cents=100,
+        cap_cents_snapshot=2000,
+        cap_used_cents_snapshot=200,
+        idempotency_key=f"export-retry:{uuid.uuid4()}",
+        status=BILLING_USAGE_EXPORT_STATUS_PENDING,
+    )
+    terminal_export = BillingUsageExport(
+        billing_subject_id=missing_customer_subject.id,
+        billing_subscription_id=None,
+        usage_segment_id=uuid.uuid4(),
+        period_start=now - timedelta(days=1),
+        period_end=now + timedelta(days=29),
+        accounted_from=now - timedelta(hours=1),
+        accounted_until=now,
+        quantity_seconds=900.0,
+        meter_quantity_cents=50,
+        cap_cents_snapshot=2000,
+        cap_used_cents_snapshot=300,
+        idempotency_key=f"export-terminal:{uuid.uuid4()}",
+        status=BILLING_USAGE_EXPORT_STATUS_PENDING,
+    )
+    db_session.add_all([success_export, retryable_export, terminal_export])
+    await db_session.commit()
+    success_id = success_export.id
+    retryable_id = retryable_export.id
+    terminal_id = terminal_export.id
+    calls: list[dict[str, object]] = []
+
+    async def _create_meter_event(**kwargs: object) -> dict[str, str]:
+        calls.append(kwargs)
+        if kwargs["idempotency_key"] == retryable_export.idempotency_key:
+            raise stripe_billing.StripeBillingError(
+                "stripe_rate_limited",
+                "Stripe rate limited the meter event.",
+                status_code=429,
+            )
+        return {"identifier": str(kwargs["identifier"])}
+
+    monkeypatch.setattr(stripe_billing, "create_meter_event", _create_meter_event)
+
+    await billing_service.send_pending_usage_exports(limit=10)
+    db_session.expire_all()
+
+    success = await db_session.get(BillingUsageExport, success_id)
+    retryable = await db_session.get(BillingUsageExport, retryable_id)
+    terminal = await db_session.get(BillingUsageExport, terminal_id)
+    assert success is not None
+    assert retryable is not None
+    assert terminal is not None
+    assert [call["idempotency_key"] for call in calls] == [
+        success_export.idempotency_key,
+        retryable_export.idempotency_key,
+    ]
+    assert calls[0]["identifier"] == f"usage_export:{success_id}"
+    assert success.status == BILLING_USAGE_EXPORT_STATUS_SUCCEEDED
+    assert success.stripe_meter_event_identifier == f"usage_export:{success_id}"
+    assert retryable.status == BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE
+    assert retryable.error == "Stripe rate limited the meter event."
+    assert terminal.status == BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL
+    assert terminal.error == "Billing subject has no Stripe customer id."
+
+    decisions = list(
+        (
+            await db_session.execute(
+                select(BillingDecisionEvent).order_by(BillingDecisionEvent.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [decision.reason for decision in decisions] == [
+        BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
+        "failed_retryable",
+        BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
+    ]
