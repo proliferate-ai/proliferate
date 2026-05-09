@@ -33,6 +33,23 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mobility.domain.lifecycle import (
+    FINAL_HANDOFF_PHASES,
+    HANDOFF_PHASE_HANDOFF_FAILED,
+    LIFECYCLE_HANDOFF_FAILED,
+    OWNER_CLOUD,
+    active_lifecycle_state,
+    is_local_to_cloud_direction,
+    is_valid_handoff_direction,
+    is_valid_handoff_phase,
+    is_valid_owner,
+    moving_lifecycle_state,
+    owner_direction_blocker,
+    stale_handoff_outcome,
+    target_owner_for_direction,
+    visible_failure_last_error,
+    visible_failure_status_detail,
+)
 from proliferate.server.cloud.mobility.models import (
     WorkspaceMobilityPreflightResponse,
     mobility_workspace_detail_payload,
@@ -44,18 +61,6 @@ from proliferate.server.cloud.workspaces.service import (
 )
 from proliferate.utils.time import duration_ms, utcnow
 
-_VALID_HANDOFF_PHASES: frozenset[str] = frozenset(
-    {
-        "start_requested",
-        "source_frozen",
-        "destination_ready",
-        "install_succeeded",
-        "cleanup_pending",
-        "cleanup_failed",
-        "completed",
-        "handoff_failed",
-    }
-)
 _STALE_HANDOFF_AFTER = timedelta(seconds=120)
 _BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."
 _BRANCH_HEAD_MISMATCH_BLOCKER = "The branch '{branch}' on GitHub is not at the requested commit."
@@ -68,22 +73,21 @@ async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> No
         active_handoff = workspace.active_handoff
         if active_handoff is None or active_handoff.heartbeat_at >= stale_before:
             continue
+        outcome = stale_handoff_outcome(
+            finalized_at=active_handoff.finalized_at,
+            cleanup_completed_at=active_handoff.cleanup_completed_at,
+        )
         await expire_stale_cloud_workspace_handoff_op_for_user(
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             handoff_op_id=active_handoff.id,
-            failure_code=(
-                "cleanup_stale"
-                if active_handoff.finalized_at is not None
-                and active_handoff.cleanup_completed_at is None
-                else "handoff_stale"
-            ),
-            failure_detail=(
-                "Workspace mobility cleanup heartbeat expired."
-                if active_handoff.finalized_at is not None
-                and active_handoff.cleanup_completed_at is None
-                else "Workspace mobility heartbeat expired."
-            ),
+            phase=outcome.phase,
+            lifecycle_state=outcome.lifecycle_state,
+            keep_active_handoff=outcome.keep_active_handoff,
+            failure_code=outcome.failure_code,
+            failure_detail=outcome.failure_detail,
+            status_detail=visible_failure_status_detail(outcome.failure_detail),
+            last_error=visible_failure_last_error(outcome.failure_detail),
         )
 
 
@@ -93,7 +97,11 @@ async def list_cloud_workspace_mobility_for_user(
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
     workspaces = await list_cloud_workspaces_store(user_id)
     for workspace in workspaces:
-        await backfill_cloud_workspace_mobility_for_workspace(workspace=workspace)
+        await backfill_cloud_workspace_mobility_for_workspace(
+            workspace=workspace,
+            active_lifecycle_state=active_lifecycle_state(OWNER_CLOUD),
+            retryable_lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
+        )
     return await list_cloud_workspace_mobility_store(user_id=user_id)
 
 
@@ -108,7 +116,7 @@ async def ensure_cloud_workspace_mobility(
     owner_hint: str,
 ) -> CloudWorkspaceMobilityValue:
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
-    if owner_hint not in {"local", "cloud"}:
+    if not is_valid_owner(owner_hint):
         raise CloudApiError(
             "invalid_owner_hint",
             "ownerHint must be either 'local' or 'cloud'.",
@@ -133,6 +141,8 @@ async def ensure_cloud_workspace_mobility(
         git_repo_name=git_repo_name,
         git_branch=git_branch,
         owner_hint=owner_hint,
+        active_lifecycle_state=active_lifecycle_state(owner_hint),
+        retryable_lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
         display_name=resolved_display_name,
         cloud_workspace_id=cloud_workspace_id,
     )
@@ -181,7 +191,7 @@ async def preflight_cloud_workspace_handoff(
     )
     detail_elapsed_ms = duration_ms(detail_started)
     blockers: list[str] = []
-    if direction not in {"local_to_cloud", "cloud_to_local"}:
+    if not is_valid_handoff_direction(direction):
         raise CloudApiError(
             "invalid_handoff_direction",
             "direction must be either 'local_to_cloud' or 'cloud_to_local'.",
@@ -191,14 +201,16 @@ async def preflight_cloud_workspace_handoff(
         blockers.append("cloud workspace is in cloud_lost state")
     if workspace.active_handoff is not None:
         blockers.append("handoff already in progress for workspace")
-    active_handoff = await load_active_user_handoff_op_for_user(user_id=user_id)
+    active_handoff = await load_active_user_handoff_op_for_user(
+        user_id=user_id,
+        final_handoff_phases=FINAL_HANDOFF_PHASES,
+    )
     if active_handoff is not None and active_handoff.mobility_workspace_id != workspace.id:
         blockers.append("another handoff is already in progress for this user")
-    if direction == "local_to_cloud" and workspace.owner != "local":
-        blockers.append("workspace is not currently local-owned")
-    if direction == "cloud_to_local" and workspace.owner != "cloud":
-        blockers.append("workspace is not currently cloud-owned")
-    if direction == "local_to_cloud":
+    owner_blocker = owner_direction_blocker(owner=workspace.owner, direction=direction)
+    if owner_blocker is not None:
+        blockers.append(owner_blocker)
+    if is_local_to_cloud_direction(direction):
         user = await load_user_with_oauth_accounts_by_id(user_id)
         if user is None:
             raise CloudApiError("user_not_found", "User not found.", status_code=404)
@@ -302,7 +314,7 @@ async def start_cloud_workspace_handoff(
             status_code=409,
         )
     source_owner = workspace.owner
-    target_owner = "cloud" if direction == "local_to_cloud" else "local"
+    target_owner = target_owner_for_direction(direction)
     try:
         handoff = await create_cloud_workspace_handoff_op_for_user(
             user_id=user_id,
@@ -310,6 +322,8 @@ async def start_cloud_workspace_handoff(
             direction=direction,
             source_owner=source_owner,
             target_owner=target_owner,
+            moving_lifecycle_state=moving_lifecycle_state(target_owner),
+            final_handoff_phases=FINAL_HANDOFF_PHASES,
             requested_branch=requested_branch,
             requested_base_sha=requested_base_sha,
             exclude_paths=exclude_paths,
@@ -360,8 +374,12 @@ async def start_cloud_workspace_handoff(
                     user_id=user_id,
                     mobility_workspace_id=mobility_workspace_id,
                     handoff_op_id=handoff.id,
+                    phase=HANDOFF_PHASE_HANDOFF_FAILED,
+                    lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
                     failure_code=failure_code,
                     failure_detail=failure_detail,
+                    status_detail=visible_failure_status_detail(failure_detail),
+                    last_error=visible_failure_last_error(failure_detail),
                 )
             raise
         return await update_cloud_workspace_handoff_phase_for_user(
@@ -402,7 +420,7 @@ async def update_cloud_workspace_handoff_phase(
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceHandoffOpValue:
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
-    if phase not in _VALID_HANDOFF_PHASES:
+    if not is_valid_handoff_phase(phase):
         raise CloudApiError(
             "invalid_handoff_phase",
             f"Unsupported handoff phase '{phase}'.",
@@ -471,8 +489,12 @@ async def fail_cloud_workspace_handoff(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
+            phase=HANDOFF_PHASE_HANDOFF_FAILED,
+            lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
             failure_code=failure_code,
             failure_detail=failure_detail,
+            status_detail=visible_failure_status_detail(failure_detail),
+            last_error=visible_failure_last_error(failure_detail),
         )
     except ValueError as error:
         raise CloudApiError("handoff_not_found", str(error), status_code=404) from error
