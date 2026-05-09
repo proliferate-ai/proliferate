@@ -34,9 +34,8 @@ Implementation reality after the completed migration phases:
 
 - session MCP assembly lives under `sessions/mcp_bindings/**`.
 - `SessionStore` is split under `sessions/store/**`.
+- `SessionRuntime` is split under `sessions/runtime/**`.
 - `SessionEventSink` is split under `acp/event_sink/**`.
-- `sessions/runtime.rs` remains the current `SessionRuntime` implementation;
-  the runtime split is in progress/planned on this base.
 - `acp/session_actor.rs` remains the current actor implementation; the actor
   loop rewrite is deferred/manual.
 
@@ -83,11 +82,9 @@ High-level session use cases:
 - edit/remove pending prompts
 - inject/replay events
 
-This is the bridge between durable sessions and live execution.
-
-The current implementation remains in `sessions/runtime.rs` until the Phase 6
-runtime split lands. Do not document or assume a completed `sessions/runtime/**`
-split on this base.
+This is the bridge between durable sessions and live execution. The
+implementation is split under `sessions/runtime/**` by API-facing operation
+family; callers should continue to use the public `SessionRuntime` type.
 
 ### LiveSessionManager
 

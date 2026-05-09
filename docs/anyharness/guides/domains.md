@@ -12,8 +12,8 @@ Current session-domain reality:
 - user MCP bindings and session MCP launch assembly live under
   `sessions/mcp_bindings/**`.
 - session persistence is split under `sessions/store/**`.
-- `sessions/runtime.rs` remains the current runtime bridge; the runtime split
-  is in progress/planned on this base.
+- session runtime orchestration is split under `sessions/runtime/**`, while the
+  final `domains/sessions/**` topology remains deferred.
 
 ## Purpose
 

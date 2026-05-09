@@ -26,8 +26,7 @@ Current migration reality:
 - `sessions/mcp_bindings/**` is the current split session MCP binding and
   launch assembly shape.
 - `acp/event_sink/**` is the current split session event sink shape.
-- `sessions/runtime.rs` remains unsplit on this base; treat a runtime folder as
-  planned until the runtime split lands.
+- `sessions/runtime/**` is the current split session runtime shape.
 - `acp/session_actor.rs` remains a manual deferred rewrite target.
 
 ## Module Style

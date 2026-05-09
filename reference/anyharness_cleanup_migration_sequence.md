@@ -24,12 +24,12 @@ planned or manual cleanup only.
 | 3 | Complete | Product MCP servers follow feature-owned `mcp_server/**` modules and use shared `integrations/mcp/**` helpers where common protocol/auth scaffolding has landed. |
 | 4 | Complete | Session MCP binding models, crypto, contract mapping, summaries, ACP conversion, and launch assembly live under `sessions/mcp_bindings/**`. |
 | 5 | Complete | `SessionStore` is split under `sessions/store/**`, while the public `SessionStore` type remains caller-facing. |
-| 6 | In progress/planned | `SessionRuntime` still lives in `sessions/runtime.rs` on this base. Do not document a completed runtime folder split until it lands. |
+| 6 | Complete | `SessionRuntime` is split under `sessions/runtime/**`, while the public `SessionRuntime` type remains caller-facing. |
 | 7 | Complete | `SessionEventSink` is split under `acp/event_sink/**`, while the final `live/sessions/event_sink/**` topology remains future work. |
 | 8 | Deferred/manual | The `SessionActor` loop rewrite remains deferred until a dedicated actor spec exists. Current actor implementation stays in `acp/session_actor.rs`. |
 | 9 | Remaining | Final topology/naming moves remain: live session manager/client/broker naming, `sessions/**` to `domains/sessions/**`, `workspaces/**` to `domains/workspaces/**`, terminal live topology, and related import cleanup. |
 | 10 | Remaining | Ratchet tightening, allowlist shrinkage, and additional tests remain after the implementation phases settle. |
-| 10a | Current docs lane | Update docs to describe completed Phases 1-5 and 7 without overstating Phase 6, 8, 9, or 10. |
+| 10a | Complete | Docs describe completed Phases 1-7, while keeping Phase 8 actor work, Phase 9 final topology, and Phase 10 ratchet tightening deferred. |
 
 ## North Star
 
@@ -183,22 +183,15 @@ Still deferred:
 
 ## Phase 6: Session Runtime Split
 
-Status: in progress/planned on this base.
+Status: complete.
 
 Current implementation:
-
-```text
-sessions/runtime.rs
-```
-
-Target after the split:
 
 ```text
 sessions/runtime/
   mod.rs
   contract.rs
   creation.rs
-  live_session.rs
   prompt.rs
   pending_prompts.rs
   config.rs
@@ -207,9 +200,8 @@ sessions/runtime/
   interactions.rs
   replay.rs
   plans.rs
-  extensions.rs
   startup.rs
-  errors.rs
+  tests.rs
 ```
 
 Rules:

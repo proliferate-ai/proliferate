@@ -6,8 +6,8 @@ orchestration that bridges durable sessions into live ACP execution.
 
 This is a legacy subsystem doc updated for current implementation paths.
 Session MCP binding assembly lives under `sessions/mcp_bindings/**`, and the
-session store is split under `sessions/store/**`. `sessions/runtime.rs` remains
-the current runtime implementation until the runtime split lands.
+session store is split under `sessions/store/**`. The runtime implementation is
+split under `sessions/runtime/**`.
 
 ## Core Concepts
 
@@ -343,8 +343,8 @@ merging live events.
 
 ## Runtime Flow
 
-`sessions/runtime.rs` is still the current implementation on this base. Treat
-a split `sessions/runtime/**` layout as in progress/planned, not completed.
+The runtime flow is implemented across `sessions/runtime/**`, split by
+API-facing session operation family.
 
 ### Create and Start
 
