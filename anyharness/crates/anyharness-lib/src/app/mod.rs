@@ -39,7 +39,7 @@ use crate::sessions::subagents::mcp_server::auth::SubagentMcpAuth;
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
 use crate::sessions::workspace_naming::hooks::WorkspaceNamingSessionHooks;
-use crate::sessions::workspace_naming::mcp_auth::WorkspaceNamingMcpAuth;
+use crate::sessions::workspace_naming::mcp_server::auth::WorkspaceNamingMcpAuth;
 use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
