@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import type { Workspace } from "@anyharness/sdk";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

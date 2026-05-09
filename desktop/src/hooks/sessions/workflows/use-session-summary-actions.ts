@@ -19,7 +19,7 @@ import { activityFromTranscript } from "@/lib/domain/sessions/directory/director
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
 import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/session-runtime-pending-config";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";

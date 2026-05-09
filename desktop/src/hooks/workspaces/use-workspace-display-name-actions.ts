@@ -9,7 +9,7 @@ import {
   getCloudWorkspaceConnection,
   updateCloudWorkspaceDisplayName,
 } from "@/lib/access/cloud/workspaces";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";

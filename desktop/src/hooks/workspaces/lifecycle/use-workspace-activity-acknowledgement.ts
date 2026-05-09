@@ -8,7 +8,7 @@ import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
 } from "@/hooks/ui/use-document-focus-visibility";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

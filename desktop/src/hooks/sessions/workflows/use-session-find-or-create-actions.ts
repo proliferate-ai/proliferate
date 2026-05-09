@@ -8,7 +8,7 @@ import type {
   LaunchPromptInput,
   SessionControlDeps,
 } from "@/hooks/sessions/workflows/session-control-contract";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import {
   sessionSlotBelongsToWorkspace,

@@ -21,7 +21,7 @@ vi.mock("@/hooks/ui/use-document-focus-visibility", () => ({
   useDocumentFocusVisibilityNonce: () => mocks.focusVisibilityNonce,
 }));
 
-vi.mock("@/hooks/workspaces/use-logical-workspaces", () => ({
+vi.mock("@/hooks/workspaces/derived/use-logical-workspaces", () => ({
   useLogicalWorkspaces: () => ({
     logicalWorkspaces: mocks.logicalWorkspaces,
     isLoading: false,

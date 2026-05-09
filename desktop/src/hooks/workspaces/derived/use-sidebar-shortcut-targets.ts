@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   buildSidebarGroupStates,
 } from "@/lib/domain/workspaces/sidebar/sidebar-groups";

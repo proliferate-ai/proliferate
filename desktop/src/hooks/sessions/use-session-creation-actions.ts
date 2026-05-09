@@ -39,8 +39,8 @@ import {
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import {
   requestSessionModelAvailabilityDecision,

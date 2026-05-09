@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useLogicalWorkspaces } from "./use-logical-workspaces";
-import { useWorkspaceSelection } from "./selection/use-workspace-selection";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
+import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 
 export function usePersistedLogicalWorkspaceSelection() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);

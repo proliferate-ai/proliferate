@@ -6,7 +6,7 @@ import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/cha
 import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
@@ -50,7 +50,7 @@ import {
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { markWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
+import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;

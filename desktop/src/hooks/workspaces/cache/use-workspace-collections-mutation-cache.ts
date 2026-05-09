@@ -12,7 +12,7 @@ import {
   upsertLocalWorkspaceCollections,
   upsertRepoRootCollections,
 } from "@/lib/domain/workspaces/cloud/collections";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;

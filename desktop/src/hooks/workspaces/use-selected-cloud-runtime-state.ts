@@ -6,7 +6,7 @@ import type {
 import { useMemo } from "react";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildSelectedCloudRuntimeViewModel,
@@ -17,8 +17,8 @@ import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-work
 import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/access/cloud/workspaces";
 import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
-import { useIsHotPaintGatePendingForWorkspace } from "./use-hot-paint-gate";
+import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 
 export interface SelectedCloudRuntimeState {
   workspaceId: string | null;

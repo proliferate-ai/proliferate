@@ -28,7 +28,7 @@ import { useWorkspaceActiveChatTabId } from "@/hooks/workspaces/tabs/use-workspa
 import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
