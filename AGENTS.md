@@ -98,10 +98,14 @@ at the start of the task, not halfway through implementation.
 ### AnyHarness Runtime (`anyharness/crates/**`)
 
 1. `docs/anyharness/README.md`
-2. `docs/anyharness/contract.md` if the change touches contract schemas
-3. `docs/anyharness/binary.md` if the change touches the binary crate
-4. The relevant subsystem doc under `docs/anyharness/src/**` when the change
-   touches runtime logic
+2. The focused guide under `docs/anyharness/guides/**` for the layer being
+   changed, such as API, domains, live runtime, adapters, integrations,
+   harnesses, persistence, observability, repo shape, or crate ownership.
+3. The focused spec under `docs/anyharness/specs/**` when changing a covered
+   subsystem such as the session engine or MCP.
+4. `docs/anyharness/contract.md` if the change touches contract schemas.
+5. The relevant legacy subsystem doc under `docs/anyharness/src/**` when the
+   change touches runtime logic not yet covered by a newer guide or spec.
 
 ### CI/CD, Release, And Deployment
 

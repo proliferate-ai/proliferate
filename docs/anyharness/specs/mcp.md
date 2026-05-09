@@ -1,0 +1,262 @@
+# MCP In AnyHarness
+
+Status: authoritative for the MCP mental model in AnyHarness.
+
+MCP appears in several places. They are related, but they are not the same
+thing.
+
+## Four MCP Concepts
+
+### 1. User MCP Bindings
+
+MCP servers explicitly attached to a session by a client/user.
+
+Current owner: `sessions/mcp.rs`.
+
+Target owner:
+
+```text
+domains/sessions/mcp_bindings/
+```
+
+Responsibilities:
+
+- stored MCP server models
+- encryption/decryption
+- binding summary validation
+- contract mapping
+- conversion to ACP MCP server config
+
+This folder also owns the central session MCP assembly path described below.
+
+### 2. Session Extensions
+
+Product features can inject MCP servers into a session launch.
+
+Current trait: `SessionExtension`.
+
+Target owner:
+
+```text
+domains/sessions/extensions/
+```
+
+Implementations:
+
+```text
+domains/cowork/session_extension.rs
+domains/reviews/session_extension.rs
+domains/sessions/subagents/session_extension.rs
+domains/sessions/workspace_naming/session_extension.rs
+```
+
+The extension returns launch extras:
+
+- system prompt append text
+- first prompt system prompt append text
+- internal MCP servers
+- binding summaries
+
+### 3. Product MCP Servers
+
+Internal Proliferate tool surfaces exposed to agents through HTTP MCP servers.
+
+Examples:
+
+- cowork artifact/delegation tools
+- subagent tools
+- review tools
+- workspace naming tool
+
+Target shape:
+
+```text
+domains/cowork/mcp_server.rs
+domains/reviews/mcp_server.rs
+domains/sessions/subagents/mcp_server.rs
+domains/sessions/workspace_naming/mcp_server.rs
+```
+
+Product tool behavior stays with the product domain.
+
+### 4. MCP Elicitation
+
+Live ACP interaction type where an agent asks for an MCP form or URL reveal.
+
+Target owner:
+
+```text
+live/sessions/interactions/mcp_elicitation/
+```
+
+This is part of the live interaction broker, not a product MCP tool server.
+
+## Current Injection Flow
+
+```text
+SessionRuntime starts a session
+  -> decrypts user MCP bindings unless internal-only policy applies
+  -> asks registered SessionExtension implementations for launch extras
+  -> merges system prompt append values
+  -> persists extension binding summaries
+  -> appends internal MCP servers to user MCP servers
+  -> passes final MCP server list to the live session actor
+```
+
+## Session MCP Assembly
+
+Session launch needs one central assembly boundary. Do not spread MCP launch
+composition across session runtime, product domains, and actor startup.
+
+Target owner:
+
+```text
+domains/sessions/mcp_bindings/assembly.rs
+```
+
+This boundary answers one question:
+
+```text
+Which MCP servers, prompt additions, and binding summaries should this session
+launch with?
+```
+
+Expected shape:
+
+```text
+domains/sessions/mcp_bindings/
+  model.rs       # SessionMcpServer, headers/env, policies, summaries
+  crypto.rs      # binding encryption/decryption and data-key loading
+  contract.rs    # contract <-> domain mapping
+  summaries.rs   # summary validation/serialization/merge helpers
+  acp.rs         # SessionMcpServer -> ACP MCP server config
+  assembly.rs    # assemble_session_mcp_launch(...)
+```
+
+The assembly function owns:
+
+- applying `InternalOnly` vs user-inherited binding policy
+- decrypting user-supplied MCP bindings
+- collecting launch extras from registered session extensions
+- merging user and product MCP servers in launch order
+- merging and validating binding summaries
+- producing system prompt append text and first-prompt append text
+- returning restart-required/missing-data-key errors when persisted bindings
+  cannot be used
+
+It does not own:
+
+- JSON-RPC parsing or response formatting
+- capability-token signing
+- product tool behavior such as `create_subagent`, `submit_review_result`, or
+  `create_artifact`
+- live MCP elicitation resolution
+
+The caller should read like:
+
+```text
+SessionRuntime::start_live_session
+  -> load workspace and resolve agent
+  -> assemble_session_mcp_launch(...)
+  -> persist changed/extension binding summaries
+  -> start live actor with final MCP server list and prompt additions
+```
+
+The actor receives the final launch payload. It should not decide which product
+MCP servers to inject.
+
+### Product MCP Extension Pattern
+
+Every product MCP feature should follow the same two-part pattern.
+
+First, a session extension contributes launch extras:
+
+```text
+domains/<feature>/session_extension.rs
+  -> returns internal MCP server config
+  -> returns binding summaries
+  -> returns any system prompt additions
+```
+
+Second, the product MCP server implements the tools:
+
+```text
+domains/<feature>/mcp_server/
+  protocol.rs    # feature tool args and tool list
+  server.rs      # initialize/tools/list/tools/call dispatch
+  tools.rs       # product tool handlers
+  auth.rs        # thin feature auth wrapper around integrations/mcp
+```
+
+Session extension code is about making tools available to an agent. MCP server
+code is about handling tool calls after the agent invokes them. Keep those
+separate.
+
+Each product extension typically creates an HTTP MCP server:
+
+```text
+url: /v1/workspaces/{workspace_id}/.../{session_id}/mcp
+headers:
+  authorization: Bearer <runtime token>       # when runtime auth is enabled
+  x-<feature>-session-token: <capability token>
+```
+
+## Current Endpoint Flow
+
+Each product MCP endpoint currently has:
+
+```text
+GET  -> 204 No Content
+POST -> validate capability header
+        optionally acquire workspace operation lease
+        optionally assert workspace mutable
+        call product handle_json_rpc(...)
+        return JSON-RPC response or no-content response
+```
+
+Target shared owner for transport scaffolding:
+
+```text
+api/http/mcp_endpoint.rs
+```
+
+Target shared owner for protocol/auth helpers:
+
+```text
+integrations/mcp/
+  capability_token.rs
+  json_rpc.rs
+  tools.rs
+```
+
+## Consolidation Rule
+
+Move common scaffolding:
+
+- signed capability-token helper
+- secret-file creation
+- JSON-RPC request parsing
+- initialize response helper
+- result/error helpers
+- tool definition helper
+- tool result formatting
+
+Do not move product behavior:
+
+- `create_subagent`
+- `submit_review_result`
+- `set_workspace_display_name`
+- `create_artifact`
+- cowork delegation/coding tools
+
+Those stay in the owning domain.
+
+## Dependency Rule
+
+```text
+domains/<feature>/mcp_server -> integrations/mcp
+api/http/*_mcp_endpoint -> domains/<feature>/mcp_server
+integrations/mcp -> no product domains
+```
+
+The integration layer speaks MCP. Product domains decide what tools do.

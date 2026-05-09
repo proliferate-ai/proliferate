@@ -9,183 +9,445 @@ Scope:
 - `anyharness/crates/anyharness-contract/**`
 - `anyharness/crates/anyharness-lib/**`
 
-Use this doc to answer the main runtime questions:
+Use this doc first to understand AnyHarness ownership. Then read the focused
+guide or spec for the layer or subsystem you are changing.
 
-- which crate owns what?
-- where does code live inside `anyharness-lib/src/**`?
-- what is the difference between transport state, durable state, and live
-  runtime state?
-- why do handlers reach for `AppState` instead of importing everything
-  directly?
+## Overarching Architecture
 
-This file owns the overall structure and ownership model for AnyHarness.
-Subsystem docs under `docs/anyharness/src/**` explain the deeper runtime logic
-for individual areas.
+AnyHarness is a runtime server for coding-agent work inside workspaces. The
+central subsystem is the session engine: it creates, starts, resumes, prompts,
+streams, controls, and records agent sessions.
 
-## 1. File Tree
+The structure exists because AnyHarness has to keep four concerns separate:
+
+- operate live ACP-backed agent sessions and their subprocesses
+- expose APIs for sessions, workspaces, files, git, terminals, and process
+  operations
+- keep public over-the-wire contracts stable for SDKs and clients
+- expose controlled agent extensions, especially product-owned MCP tools
+
+These concerns change for different reasons and fail in different ways. Code is
+organized around those boundaries, not around whichever HTTP route happens to
+call it first.
+
+### How To Think About The Boundaries
+
+AnyHarness code falls into a small set of architectural divisions.
+
+**Wire vs. runtime.** Public HTTP/SSE/WS shapes are the client contract. Runtime
+internals may change; wire types should change deliberately and stay stable for
+SDK consumers.
+
+**Transport vs. behavior.** API code receives requests and returns responses.
+It should translate between wire shapes and runtime calls. It should not become
+the place where session, workspace, MCP, or agent behavior is defined.
+
+**Durable vs. live.** Durable truth survives restart: session records, events,
+workspace records, agent readiness facts, config snapshots, and product rules.
+Live execution exists only in this process: ACP subprocesses, actors, handles,
+streams, PTYs, and pending permission/user-input/MCP callbacks.
+
+**Product meaning vs. local capability.** Domains decide what an operation
+means in the product. Adapters perform focused local work such as reading
+files, running git, opening hosting metadata, or executing a process.
+
+**Product extension vs. protocol mechanics.** Product features own what their
+tools do. Integration code owns how to speak MCP, ACP, or a provider CLI. A
+shared MCP `tools/list` helper is protocol mechanics; a cowork or review tool
+is product behavior.
+
+**Composition vs. implementation.** App wiring constructs the runtime graph and
+connects extension implementations. It should not contain the implementation
+of those systems.
+
+**Startup vs. runtime.** The binary starts the process, chooses runtime home,
+initializes logging, and dispatches commands. Runtime behavior belongs behind
+the library boundary.
+
+**Credential discovery vs. readiness.** Credential discovery finds and
+normalizes local provider auth material. Agent readiness and install policy are
+runtime product decisions.
+
+### Core Session Engine
+
+The session engine bridges durable state and live execution.
 
 ```text
-anyharness/
-  crates/
-    anyharness/
-      src/
-    anyharness-credential-discovery/
-      src/
-    anyharness-contract/
-      src/
-        v1/
-    anyharness-lib/
-      src/
-        app/
-        api/
-        acp/
-        agents/
-        cowork/
+api/http/sessions
+  -> domains/sessions/runtime::SessionRuntime
+    -> domains/sessions/service::SessionService
+    -> domains/sessions/store::SessionStore
+    -> live/sessions::LiveSessionManager
+      -> LiveSessionHandle
+        -> SessionActor
+          -> AcpClient
+          -> SessionEventSink
+          -> InteractionBroker
+```
+
+It owns these workflows:
+
+- create durable session records
+- resolve workspace, agent, model, mode, and launch config
+- prepare launch payloads and prompt payloads
+- start, resume, and close ACP-backed agent processes
+- send prompts and live config changes to the running actor
+- ingest ACP notifications
+- normalize, persist, and broadcast session events
+- broker permissions, user-input requests, and MCP elicitation
+
+Role boundaries:
+
+- `SessionRuntime` owns high-level session use cases.
+- `SessionService` owns durable session rules.
+- `SessionStore` owns SQL for session data.
+- `LiveSessionManager` owns the live session registry and startup de-dupe.
+- `SessionActor` owns one running session command loop.
+- `AcpClient` owns low-level ACP request/notification I/O.
+- `SessionEventSink` owns ACP notification normalization and persistence.
+- `InteractionBroker` owns pending live interaction rendezvous.
+
+### Runtime Capabilities Around The Engine
+
+The engine depends on capabilities that are not themselves the engine.
+
+```text
+domains/workspaces
+  workspace identity, paths, materialization, cleanup, retention
+
+domains/agents
+  agent catalog, readiness meaning, install/readiness policy
+
+adapters/files
+adapters/git
+adapters/hosting
+adapters/processes
+  local workspace and machine operations
+
+live/terminals
+  PTY lifecycle, terminal handles, terminal event streams
+```
+
+Adapters perform local operations. Domains decide product meaning. Live systems
+own running state.
+
+### Product Domains And Extensions
+
+Product features build on the core primitives:
+
+```text
+domains/cowork
+domains/reviews
+domains/plans
+domains/mobility
+domains/sessions/subagents
+domains/sessions/workspace_naming
+```
+
+They should not fork session startup, prompt dispatch, or event ingestion. When
+a product feature needs to participate in a session lifecycle, it plugs into a
+core extension point and `app/` wires the implementation.
+
+Example:
+
+```text
+domains/sessions/extensions::SessionExtension
+  implemented by cowork, reviews, subagents, workspace naming
+  wired by app/
+  consumed by SessionRuntime at launch/prompt boundaries
+```
+
+### MCP Is A Vertical
+
+MCP crosses layers. Do not put all MCP code in one folder.
+
+```text
+domains/sessions/mcp_bindings
+  durable user-attached MCP server config and summaries
+
+domains/<feature>/mcp_server
+  product MCP tool behavior
+
+integrations/mcp
+  shared JSON-RPC, tool formatting, and capability-token scaffolding
+
+live/sessions/interactions/mcp_elicitation
+  live ACP interaction state
+
+api/http
+  HTTP endpoint wrapper for product MCP servers
+```
+
+Move protocol scaffolding to `integrations/mcp`. Keep product tool semantics in
+the owning domain.
+
+### Placement Questions
+
+Use these questions before adding or moving code:
+
+- Public wire shape? `anyharness-contract`, with API mapping in `api/`.
+- HTTP/SSE/WS request handling? `api/`.
+- Dependency construction? `app/`.
+- Persisted product truth or durable rule? `domains/<domain>/`.
+- Running process, actor, stream, handle, or pending callback? `live/`.
+- Local file, git, hosting, or process operation? `adapters/`.
+- Vendor/protocol mechanics? `integrations/`.
+- SQLite setup or migrations? `persistence/`.
+- Measurement/tracing helpers? `observability/`.
+- Process startup? `anyharness`.
+
+## Read Order
+
+Always start here.
+
+Guides define reusable engineering standards: where code goes, what each layer
+may own, and which patterns are allowed.
+
+Guides:
+
+- [guides/crates.md](guides/crates.md) for crate ownership:
+  `anyharness`, `anyharness-contract`, `anyharness-credential-discovery`, and
+  `anyharness-lib`.
+- [guides/api.md](guides/api.md) for HTTP/SSE/WS handler ownership, contract
+  mapping, and transport-boundary rules.
+- [guides/domains.md](guides/domains.md) for durable domains, the
+  `model/store/service/runtime` shape, and product surface domains.
+- [guides/live-runtime.md](guides/live-runtime.md) for managers, actors,
+  handles, event sinks, brokers, and long-lived in-memory state.
+- [guides/adapters.md](guides/adapters.md) for files, git, hosting, and
+  process capabilities.
+- [guides/integrations.md](guides/integrations.md) for MCP, ACP, agent CLI, and
+  provider/protocol mechanics.
+- [guides/harnesses.md](guides/harnesses.md) for provider-specific runtime
+  behavior documented under `docs/anyharness/harnesses/**`.
+- [guides/persistence.md](guides/persistence.md) for SQLite, stores,
+  migrations, and transaction ownership.
+- [guides/observability.md](guides/observability.md) for latency tracing,
+  request measurements, and diagnostic helpers.
+- [guides/repo-shape.md](guides/repo-shape.md) for file size thresholds,
+  module style, and migration discipline.
+
+Specs define subsystem behavior: lifecycle invariants, edge cases, and
+verification for specific runtime flows.
+
+Specs:
+
+- [specs/session-engine.md](specs/session-engine.md) for the core session
+  engine: `SessionRuntime`, live session manager, actor, ACP client, event
+  sink, and interaction broker.
+- [specs/mcp.md](specs/mcp.md) for user MCP bindings, product MCP servers,
+  session extensions, capability tokens, and MCP elicitation.
+
+Existing subsystem docs under `docs/anyharness/src/**` remain valid during the
+migration. Treat them as subsystem specs until they are moved or rewritten:
+
+- [src/agents.md](src/agents.md)
+- [src/acp.md](src/acp.md)
+- [src/cowork-artifacts.md](src/cowork-artifacts.md)
+- [src/files.md](src/files.md)
+- [src/git.md](src/git.md)
+- [src/persistence.md](src/persistence.md)
+- [src/sessions.md](src/sessions.md)
+- [src/workspaces.md](src/workspaces.md)
+
+Harness docs cover provider-specific behavior. Read
+[guides/harnesses.md](guides/harnesses.md) first when deciding whether a
+provider rule belongs in a harness doc or an integration guide:
+
+- [harnesses/claude.md](harnesses/claude.md)
+- [harnesses/codex.md](harnesses/codex.md)
+
+Also read:
+
+- [contract.md](contract.md) if the change touches public transport schemas.
+
+## Code Map
+
+Use this map when starting from a file, task, or feature idea and deciding
+which guide to read and where the code belongs.
+
+| You are changing or building | Current common paths | Target owner | Read |
+| --- | --- | --- | --- |
+| Binary startup, CLI flags, runtime-home selection, command dispatch | `anyharness/crates/anyharness/src/**` | `anyharness` thin binary | [guides/crates.md](guides/crates.md) |
+| Public HTTP/SSE/WS schemas, OpenAPI-visible request/response types | `anyharness-contract/src/v1/**` | `anyharness-contract` | [guides/crates.md](guides/crates.md), [contract.md](contract.md) |
+| Provider credential file discovery or portable credential export/import | `anyharness-credential-discovery/src/**` | `anyharness-credential-discovery` | [guides/crates.md](guides/crates.md) |
+| HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [guides/api.md](guides/api.md) |
+| AppState, dependency construction, wiring extension implementations | `anyharness-lib/src/app/**` | `app/**` | [guides/domains.md](guides/domains.md) |
+| SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [guides/persistence.md](guides/persistence.md) |
+| Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
+| Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
+| Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
+| Agent catalog, readiness, supported-agent meaning | `anyharness-lib/src/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [src/agents.md](src/agents.md) |
+| Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/agents/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
+| Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/acp/**`, `docs/anyharness/harnesses/**` | harness doc plus owning runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
+| File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
+| Git status/diff/branch operations and git command parsing | `anyharness-lib/src/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
+| Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/hosting/**`, `anyharness-lib/src/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
+| Terminal/PTTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
+| MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp.rs` | `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for cowork, reviews, subagents, workspace naming | `cowork/**`, `reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
+| Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | scattered MCP helpers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
+| Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [src/cowork-artifacts.md](src/cowork-artifacts.md) |
+| Reviews, plans, mobility, or repo-root product behavior | `reviews/**`, `plans/**`, `mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
+| Latency tracing, request measurement, diagnostic ids | `api/http/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
+| Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
+
+If a task appears to belong in two places, split by ownership. Example: a new
+subagent MCP tool puts product behavior in `domains/sessions/subagents/**`,
+shared JSON-RPC/capability helpers in `integrations/mcp/**`, and the HTTP route
+adapter in `api/http/**`.
+
+## Target Shape
+
+This is the target architecture. Existing code is transitional and still uses
+the older flat `anyharness-lib/src/**` shape in several places. New code and
+cleanup work should move toward this structure.
+
+```text
+anyharness/crates/
+  anyharness/
+    src/                         # thin binary
+  anyharness-contract/
+    src/v1/                      # public wire schemas
+  anyharness-credential-discovery/
+    src/                         # shared provider credential discovery
+  anyharness-lib/
+    src/
+      api/
+        http/
+        sse/
+        ws/
+        openapi.rs
+        router.rs
+      app/
+        mod.rs                   # AppState composition root
+      persistence/
+      observability/
+      domains/
         sessions/
-        repo_roots/
         workspaces/
+        agents/
+        repo_roots/
+        cowork/
+        reviews/
+        plans/
+        mobility/
+      live/
+        sessions/
+        terminals/
+      adapters/
         files/
         git/
         hosting/
         processes/
-        terminals/
-        persistence/
+      integrations/
+        mcp/
+        agent_cli/
+        acp/                     # only when protocol mechanics earn it
+      origin.rs
+      lib.rs
 ```
 
-Use this as the default runtime shape.
+Do not add new top-level AnyHarness folders without updating this doc and the
+focused guide that owns the layer.
 
-- `anyharness` is the thin binary crate.
-- `anyharness-credential-discovery` owns shared provider-specific auth parsing
-  and portable export rules used by both desktop and runtime code.
-- `anyharness-contract` is the transport-schema crate.
-- `anyharness-lib` owns the actual runtime implementation.
+## Transitional State
 
-## 2. Non-Negotiable Rules
+The target shape is not fully implemented yet.
+
+Current high-level mappings:
+
+```text
+current sessions/      -> target domains/sessions/
+current workspaces/    -> target domains/workspaces/
+current agents/        -> target domains/agents/ plus integrations/agent_cli/
+current repo_roots/    -> target domains/repo_roots/
+current cowork/        -> target domains/cowork/
+current reviews/       -> target domains/reviews/
+current plans/         -> target domains/plans/
+current mobility/      -> target domains/mobility/
+current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
+current terminals/     -> target live/terminals/
+current files/         -> target adapters/files/
+current git/           -> target adapters/git/
+current hosting/       -> target adapters/hosting/
+current processes/     -> target adapters/processes/
+current api/http/latency.rs -> target observability/latency.rs
+```
+
+Known transitional issues:
+
+- Some runtime/domain modules import `crate::api::http::latency`; latency
+  helpers should move to `observability/`.
+- Contract request/response types leak below `api/`. Contract event payloads
+  may be a deliberate durable event-log type, but other contract types should
+  be mapped at the API boundary.
+- Core session files are too large and mix multiple roles:
+  `acp/session_actor.rs`, `acp/event_sink.rs`, `sessions/runtime.rs`, and
+  `sessions/store.rs`.
+- Product MCP servers duplicate JSON-RPC helpers and capability-token logic.
+  Common protocol/auth scaffolding should move to `integrations/mcp/`; product
+  tool semantics stay with their owning domain.
+- Agent/provider CLI mechanics are mixed with agent catalog/readiness logic.
+  Provider-specific process/install/probe behavior should move toward
+  `integrations/agent_cli/`.
+
+Cleanup work should preserve behavior, then move code to the target owner.
+Do not leave duplicate old and new code paths after a migration.
+
+## Hard Rules
 
 - `anyharness` stays thin. It owns CLI/bootstrap only, not runtime behavior.
-- `anyharness-credential-discovery` owns provider-specific credential parsing
-  and portable file normalization, not transport or runtime orchestration.
-- `anyharness-contract` owns wire shapes only. It must not grow runtime logic.
-- `anyharness-lib` owns runtime behavior, domain logic, live orchestration, and
-  workspace-facing adapters.
-- API handlers are boundary adapters, not the canonical home for runtime logic.
-- Contract types stop at the transport boundary. They are not the default
-  internal service model.
-- `AppState` is shared runtime dependencies, not business logic and not a
-  global junk drawer.
-- Long-lived mutable runtime state must stay explicit and injectable.
-- Durable business domains may use `model.rs` / `store.rs` / `service.rs`.
-- Live runtime subsystems may use role-shaped modules such as `manager`,
-  `actor`, `sink`, `broker`, `resolver`, or `installer`.
-- Use `runtime.rs` or `orchestrator.rs` for cross-domain flows that do not fit
-  one durable domain cleanly.
+- `anyharness-contract` owns wire schemas only. It must not grow runtime logic.
+- `anyharness-credential-discovery` owns shared provider credential parsing and
+  portable auth-file normalization. It must not own runtime orchestration.
+- `anyharness-lib` owns runtime behavior, durable domain rules, live
+  orchestration, workspace adapters, and protocol integrations.
+- `api/` is transport. It parses requests, calls the owning domain/runtime, and
+  maps responses/errors.
+- `app/` wires dependencies. `AppState` is not a place for business logic.
+- `domains/` owns product concepts and durable business rules.
+- `live/` owns long-lived in-memory actors, registries, handles, streams,
+  subprocesses, and brokers.
+- `adapters/` owns local workspace/machine capabilities such as file, git,
+  hosting, and process operations.
+- `integrations/` owns external protocol/vendor mechanics such as MCP, ACP
+  protocol glue, and provider CLI quirks.
+- `persistence/` owns SQLite setup, migrations, and DB wiring. Product stores
+  own product-specific queries.
+- `observability/` owns reusable latency/tracing/measurement helpers.
 - Avoid generic catch-all modules such as `utils`, `helpers`, `misc`, or flat
   `services`.
+- Keep imports direct and concrete. Do not add barrel files or convenience
+  re-export modules unless a focused guide explicitly documents an exception.
 - Delete dead runtime code instead of preserving parallel implementations.
 
-## 3. Ownership Model
+## Dependency Direction
 
-Use the lowest crate or runtime area that can own the logic cleanly.
+The intended dependency direction is:
 
-| Concern | Owner | Rule of thumb |
-| --- | --- | --- |
-| CLI parsing, tracing init, command dispatch, server startup | `anyharness` | Thin executable shell only. |
-| Shared Claude/Codex auth discovery and portable file normalization | `anyharness-credential-discovery` | Reused by desktop sync and runtime readiness without owning env persistence. |
-| HTTP bodies, SSE payloads, WS payloads, OpenAPI-visible schemas | `anyharness-contract` | Public wire shapes only. |
-| Composition root and shared runtime object graph | `anyharness-lib/src/app/` | Build `AppState` here and keep it focused on injected dependencies. |
-| HTTP, SSE, WS, router, auth middleware, OpenAPI translation | `anyharness-lib/src/api/` | Transport boundary only. |
-| Durable session truth and session-domain invariants | `anyharness-lib/src/sessions/` | Session rows, event rows, validation, and durable configuration rules. |
-| Durable cowork truth and cowork thread invariants | `anyharness-lib/src/cowork/` | Cowork root/thread rows, artifact lifecycle, built-in MCP, and cowork-specific orchestration. |
-| Durable repo-root truth | `anyharness-lib/src/repo_roots/` | Canonical repo roots, remote metadata, and repo-level identity. |
-| Live ACP-backed session execution | `anyharness-lib/src/acp/` | In-memory actors, live session registry, permission mediation, and event normalization. |
-| Agent metadata, readiness, installation, and provider catalog | `anyharness-lib/src/agents/` | Descriptor, registry, resolver, installer, and credential discovery flow. |
-| Workspace identity, registration, resolution, worktrees, and env derivation | `anyharness-lib/src/workspaces/` | Execution-surface truth and worktree semantics. |
-| Focused workspace-facing adapters | `anyharness-lib/src/files/`, `git/`, `hosting/`, `processes/` | Keep them narrow and scoped to one capability. |
-| Live PTY lifecycle and terminal state | `anyharness-lib/src/terminals/` | Long-lived in-memory PTY handles and WS bridge behavior. |
-| SQLite bootstrap, migrations, and DB wiring | `anyharness-lib/src/persistence/` | Shared DB/runtime persistence boundary. |
+```text
+api -> domains/live/adapters/integrations for narrow transport/protocol wrappers
+app -> everything for composition only
+domains -> persistence/adapters/integrations/observability
+live -> domains/integrations/observability
+adapters -> observability and low-level filesystem/process/git crates
+integrations -> external protocol/vendor crates and low-level helpers
+persistence -> database crates only
+```
 
-### Main Runtime Concepts
+Avoid these directions:
 
-There are three different kinds of truth in the runtime:
+```text
+domains -> api
+live -> api
+adapters -> domains
+integrations -> domains
+persistence -> domains
+```
 
-- Contract state
-  - what clients see on the wire
-  - owned by `anyharness-contract`
-- Durable state
-  - what SQLite stores across process restarts
-  - mainly owned by `sessions/`, `workspaces/`, and `persistence/`
-- Live state
-  - what only exists while the process is running
-  - mainly owned by `acp/` and `terminals/`
-
-That is why the code is layered. The runtime is intentionally separating:
-
-- transport glue
-- durable domain logic
-- live in-memory orchestration
-
-### Why `AppState` Exists
-
-Imports give you code definitions. `AppState` gives handlers the already-built
-runtime dependencies.
-
-Use `AppState` when the API layer needs a shared long-lived runtime object,
-such as:
-
-- session runtime orchestration
-- ACP live-session management
-- terminal/PTTY lifecycle management
-- shared workspace or session services built with runtime dependencies
-
-Do not use `AppState` as a place to hide business logic. Handlers should pull a
-coarse-grained dependency from state, then call into the owning service or
-runtime.
-
-### Common Flow Shapes
-
-- Workspace resolve
-  - handler -> workspace service -> resolver + workspace store
-- Session create / resume / prompt
-  - handler -> session runtime -> session service -> session store
-  - then session runtime -> workspace service + ACP manager for live execution
-- Session SSE
-  - SSE handler -> durable backlog from session service + live events from ACP
-- Terminal WebSocket
-  - WS handler -> terminal service
-
-### Common Module Patterns
-
-- `model.rs`
-  - internal durable records and runtime-owned domain types
-- `store.rs`
-  - persistence access only
-- `service.rs`
-  - durable-domain invariants and orchestration
-- `runtime.rs` or `orchestrator.rs`
-  - cross-domain workflows that coordinate durable domains with live runtime
-    subsystems
-- `resolver.rs`
-  - discovery and probing
-- `manager.rs`, `session_actor.rs`, `event_sink.rs`, `permission_broker.rs`
-  - live runtime coordination
-- `<dependency>.rs` or `<dependency>_cli.rs`
-  - raw external wrappers
-
-## 4. Read Order
-
-Read this file first.
-
-Then read:
-
-1. [binary.md](binary.md) if the change touches the binary crate
-2. [contract.md](contract.md) if the change touches transport schemas
-3. the relevant subsystem doc under `docs/anyharness/src/**` when the change
-   touches runtime logic:
-   - `src/agents.md`
-   - `src/acp.md`
-   - `src/cowork-artifacts.md`
-   - `src/git.md`
-   - `src/files.md`
-   - `src/persistence.md`
-   - `src/workspaces.md`
-   - `src/sessions.md`
+Core domains should not import product surface domains. When a product surface
+needs to plug into a core lifecycle, use an extension point wired in `app/`.
+For example, the session engine owns the `SessionExtension` trait; cowork,
+reviews, subagents, and workspace naming implement it; `app` wires them into
+`SessionRuntime`.
