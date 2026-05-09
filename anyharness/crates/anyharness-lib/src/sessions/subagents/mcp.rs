@@ -1,12 +1,15 @@
 use serde_json::{json, Value};
 
-use super::mcp_protocol::JsonRpcRequest;
 use super::mcp_protocol::{
-    build_tool_list, deserialize_args, jsonrpc_error, jsonrpc_result, jsonrpc_tool_result,
-    CallToolParams, ChildSessionArgs, CreateSubagentArgs, InitializeParams, ReadSubagentEventsArgs,
+    build_tool_list, ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs,
     SendSubagentMessageArgs,
 };
 use super::service::{SubagentService, MAX_SUBAGENTS_PER_PARENT};
+use crate::integrations::mcp::json_rpc::{
+    deserialize_args, jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams,
+    JsonRpcRequest,
+};
+use crate::integrations::mcp::tools::jsonrpc_tool_result;
 use crate::origin::OriginContext;
 use crate::sessions::delegation::{READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT};
 use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};

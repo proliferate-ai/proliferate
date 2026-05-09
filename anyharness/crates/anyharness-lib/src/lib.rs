@@ -4,6 +4,7 @@ pub mod agents;
 pub mod api;
 pub mod app;
 pub mod cowork;
+pub mod integrations;
 pub mod mobility;
 pub mod origin;
 pub mod persistence;

@@ -1,11 +1,14 @@
 use serde_json::{json, Value};
 
 use super::mcp_protocol::{
-    deserialize_args, jsonrpc_error, jsonrpc_result, jsonrpc_tool_result, parent_tool_list,
-    reviewer_tool_list, CallToolParams, InitializeParams, JsonRpcRequest,
-    MarkReviewRevisionReadyArgs, SubmitReviewResultArgs,
+    parent_tool_list, reviewer_tool_list, MarkReviewRevisionReadyArgs, SubmitReviewResultArgs,
 };
 use super::runtime::ReviewRuntime;
+use crate::integrations::mcp::json_rpc::{
+    deserialize_args, jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams,
+    JsonRpcRequest,
+};
+use crate::integrations::mcp::tools::jsonrpc_tool_result;
 
 enum ReviewMcpRole {
     Parent { can_signal_revision: bool },

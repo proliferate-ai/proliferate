@@ -8,31 +8,12 @@ use super::artifacts::{
 };
 use super::delegation::mcp as delegation_mcp;
 use super::runtime::CoworkRuntime;
+use crate::integrations::mcp::json_rpc::{
+    deserialize_args, jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams,
+    JsonRpcRequest,
+};
+use crate::integrations::mcp::tools::{jsonrpc_tool_result, tool_definition};
 use crate::workspaces::model::WorkspaceRecord;
-
-#[derive(Debug, Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    #[serde(default)]
-    id: Option<Value>,
-    method: String,
-    #[serde(default)]
-    params: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct InitializeParams {
-    #[serde(default)]
-    protocol_version: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CallToolParams {
-    name: String,
-    #[serde(default)]
-    arguments: Option<Value>,
-}
 
 #[derive(Debug, Deserialize)]
 struct CreateArtifactArgs {
@@ -271,63 +252,6 @@ async fn handle_tool_call(
     }
 }
 
-fn deserialize_args<T: for<'de> Deserialize<'de>>(value: Option<Value>) -> anyhow::Result<T> {
-    serde_json::from_value(value.unwrap_or_else(|| json!({}))).map_err(anyhow::Error::from)
-}
-
-fn jsonrpc_result(id: Option<Value>, result: Value) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id.unwrap_or(Value::Null),
-        "result": result,
-    })
-}
-
-fn jsonrpc_error(id: Option<Value>, code: i64, message: impl Into<String>) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id.unwrap_or(Value::Null),
-        "error": {
-            "code": code,
-            "message": message.into(),
-        }
-    })
-}
-
-fn jsonrpc_tool_result<T, E>(id: Option<Value>, result: Result<T, E>) -> Value
-where
-    T: serde::Serialize,
-    E: ToString,
-{
-    match result {
-        Ok(result) => {
-            let structured = serde_json::to_value(result).unwrap_or_else(|_| json!({}));
-            jsonrpc_result(
-                id,
-                json!({
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": serde_json::to_string_pretty(&structured).unwrap_or_else(|_| structured.to_string())
-                        }
-                    ],
-                    "structuredContent": structured,
-                    "isError": false
-                }),
-            )
-        }
-        Err(error) => jsonrpc_result(
-            id,
-            json!({
-                "content": [
-                    { "type": "text", "text": error.to_string() }
-                ],
-                "isError": true,
-            }),
-        ),
-    }
-}
-
 fn build_tool_list(include_delegation_tools: bool) -> Vec<Value> {
     let mut tools = vec![
         tool_definition(
@@ -395,12 +319,4 @@ fn build_tool_list(include_delegation_tools: bool) -> Vec<Value> {
     }
 
     tools
-}
-
-fn tool_definition(name: &str, description: &str, input_schema: Value) -> Value {
-    json!({
-        "name": name,
-        "description": description,
-        "inputSchema": input_schema,
-    })
 }

@@ -6,6 +6,8 @@ use super::model::{
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
 use crate::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::integrations::mcp::json_rpc::deserialize_args;
+use crate::integrations::mcp::tools::tool_definition;
 use crate::sessions::runtime::SendPromptOutcome;
 use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
 
@@ -110,10 +112,6 @@ pub async fn handle_tool_call(
         }
         _ => anyhow::bail!("unknown cowork delegation tool: {tool_name}"),
     }
-}
-
-fn deserialize_args<T: for<'de> Deserialize<'de>>(value: Option<Value>) -> anyhow::Result<T> {
-    serde_json::from_value(value.unwrap_or_else(|| json!({}))).map_err(anyhow::Error::from)
 }
 
 fn get_coding_workspace_launch_options(
@@ -562,12 +560,4 @@ impl From<SendCodingMessageArgs> for super::model::SendCodingMessageInput {
             wake_on_completion: value.wake_on_completion,
         }
     }
-}
-
-fn tool_definition(name: &str, description: &str, input_schema: Value) -> Value {
-    json!({
-        "name": name,
-        "description": description,
-        "inputSchema": input_schema,
-    })
 }

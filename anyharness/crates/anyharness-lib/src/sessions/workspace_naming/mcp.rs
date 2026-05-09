@@ -1,10 +1,12 @@
 use serde_json::{json, Value};
 
 use super::eligibility;
-use super::mcp_protocol::{
-    build_tool_list, deserialize_args, jsonrpc_error, jsonrpc_result, jsonrpc_tool_result,
-    CallToolParams, InitializeParams, JsonRpcRequest, SetWorkspaceDisplayNameArgs,
+use super::mcp_protocol::{build_tool_list, SetWorkspaceDisplayNameArgs};
+use crate::integrations::mcp::json_rpc::{
+    deserialize_args, jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams,
+    JsonRpcRequest,
 };
+use crate::integrations::mcp::tools::jsonrpc_tool_result;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
