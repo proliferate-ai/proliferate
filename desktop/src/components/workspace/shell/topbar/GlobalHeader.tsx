@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/icons";
 import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 
 interface GlobalHeaderProps {
   gitStatus: GitStatusSnapshot | null;

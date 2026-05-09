@@ -2,7 +2,7 @@ import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ChatDiffViewer } from "@/components/ui/content/diff/ChatDiffViewer";
 import { SplitDiffViewer } from "@/components/ui/content/diff/SplitDiffViewer";
 import { UnifiedDiffViewer } from "@/components/ui/content/diff/UnifiedDiffViewer";
-import { useDiffHighlight } from "@/hooks/ui/use-diff-highlight";
+import { useDiffHighlight } from "@/hooks/ui/highlighting/use-diff-highlight";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 interface DiffViewerProps {

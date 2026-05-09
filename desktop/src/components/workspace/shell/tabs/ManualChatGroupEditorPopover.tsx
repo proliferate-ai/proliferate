@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayRegistration } from "@/hooks/ui/native/use-native-overlay-presence";
 import {
   MANUAL_CHAT_GROUP_COLOR_IDS,
   resolveManualChatGroupColor,

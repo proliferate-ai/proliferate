@@ -12,7 +12,7 @@ import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
-import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
+import { useBrailleFillsweep } from "@/hooks/ui/animation/use-braille-sweep";
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,

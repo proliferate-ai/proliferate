@@ -1,5 +1,5 @@
 import { SHORTCUTS } from "@/config/shortcuts";
-import { useNativeContextMenu } from "@/hooks/ui/use-native-context-menu";
+import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
 import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
 import type {
   WorkspaceTabContextMenuCommand,

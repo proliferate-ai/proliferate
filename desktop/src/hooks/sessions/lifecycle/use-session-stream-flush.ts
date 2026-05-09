@@ -21,7 +21,7 @@ import type {
   SessionRelationship,
 } from "@/lib/domain/sessions/directory/relationship";
 import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
-import { isDocumentVisibleAndFocused } from "@/hooks/ui/use-document-focus-visibility";
+import { isDocumentVisibleAndFocused } from "@/hooks/ui/focus/use-document-focus-visibility";
 import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChange,
