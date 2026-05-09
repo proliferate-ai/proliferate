@@ -16,7 +16,7 @@ use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::mcp::SessionMcpServer;
+use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,

@@ -4,7 +4,7 @@ pub mod execution_summary;
 pub mod extensions;
 pub mod links;
 pub mod live_config;
-pub mod mcp;
+pub mod mcp_bindings;
 pub mod model;
 pub mod prompt;
 pub mod replay;

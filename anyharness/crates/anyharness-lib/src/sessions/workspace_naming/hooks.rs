@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
-use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
+use crate::sessions::mcp_bindings::model::{
+    SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+};
 use crate::sessions::store::SessionStore;
 use crate::sessions::workspace_naming::eligibility;
 use crate::sessions::workspace_naming::mcp_server::auth::WorkspaceNamingMcpAuth;
@@ -214,7 +216,9 @@ mod tests {
             extras.system_prompt_append[0]
         );
         assert_eq!(extras.mcp_servers.len(), 1);
-        let crate::sessions::mcp::SessionMcpServer::Http(server) = &extras.mcp_servers[0] else {
+        let crate::sessions::mcp_bindings::model::SessionMcpServer::Http(server) =
+            &extras.mcp_servers[0]
+        else {
             panic!("expected http server");
         };
         assert_eq!(server.server_name, "workspace_naming");
