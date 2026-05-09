@@ -6,11 +6,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigSummaryValue,
     CloudRepoConfigValue,
     CloudRepoFileValue,
+)
+from proliferate.server.cloud.repo_config.domain.status import (
+    CloudRepoFileMetadataValue,
+    CloudWorkspaceRepoConfigStatusValue,
+    CloudWorkspaceSetupRunValue,
 )
 
 
@@ -106,7 +110,9 @@ def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepo
     )
 
 
-def repo_file_metadata_payload(value: CloudRepoFileValue) -> CloudRepoFileMetadata:
+def repo_file_metadata_payload(
+    value: CloudRepoFileValue | CloudRepoFileMetadataValue,
+) -> CloudRepoFileMetadata:
     return CloudRepoFileMetadata(
         relative_path=value.relative_path,
         content_sha256=value.content_sha256,
@@ -130,40 +136,31 @@ def repo_config_payload(value: CloudRepoConfigValue) -> CloudRepoConfigResponse:
 
 
 def workspace_repo_config_status_payload(
-    workspace: CloudWorkspace,
-    repo_config: CloudRepoConfigValue | None,
+    value: CloudWorkspaceRepoConfigStatusValue,
 ) -> CloudWorkspaceRepoConfigStatusResponse:
-    tracked_files = (
-        []
-        if repo_config is None
-        else [repo_file_metadata_payload(item) for item in repo_config.tracked_files]
-    )
-    env_var_keys = [] if repo_config is None else sorted(repo_config.env_vars)
-    current_version = 0 if repo_config is None else repo_config.files_version
     return CloudWorkspaceRepoConfigStatusResponse(
-        current_repo_files_version=current_version,
-        repo_files_applied_version=workspace.repo_files_applied_version,
-        repo_files_applied_at=_to_iso(workspace.repo_files_applied_at),
-        files_out_of_sync=workspace.repo_files_applied_version != current_version,
-        tracked_files=tracked_files,
-        env_var_keys=env_var_keys,
-        post_ready_phase=workspace.repo_post_ready_phase,
-        post_ready_files_total=workspace.repo_post_ready_files_total,
-        post_ready_files_applied=workspace.repo_post_ready_files_applied,
-        post_ready_started_at=_to_iso(workspace.repo_post_ready_started_at),
-        post_ready_completed_at=_to_iso(workspace.repo_post_ready_completed_at),
-        last_apply_failed_path=workspace.repo_files_last_failed_path,
-        last_apply_error=workspace.repo_files_last_error,
+        current_repo_files_version=value.current_repo_files_version,
+        repo_files_applied_version=value.repo_files_applied_version,
+        repo_files_applied_at=_to_iso(value.repo_files_applied_at),
+        files_out_of_sync=value.files_out_of_sync,
+        tracked_files=[repo_file_metadata_payload(item) for item in value.tracked_files],
+        env_var_keys=list(value.env_var_keys),
+        post_ready_phase=value.post_ready_phase,
+        post_ready_files_total=value.post_ready_files_total,
+        post_ready_files_applied=value.post_ready_files_applied,
+        post_ready_started_at=_to_iso(value.post_ready_started_at),
+        post_ready_completed_at=_to_iso(value.post_ready_completed_at),
+        last_apply_failed_path=value.last_apply_failed_path,
+        last_apply_error=value.last_apply_error,
     )
 
 
 def resync_cloud_workspace_files_payload(
-    workspace: CloudWorkspace,
-    repo_config: CloudRepoConfigValue | None,
+    value: CloudWorkspaceRepoConfigStatusValue,
 ) -> ResyncCloudWorkspaceFilesResponse:
-    status = workspace_repo_config_status_payload(workspace, repo_config)
+    status = workspace_repo_config_status_payload(value)
     return ResyncCloudWorkspaceFilesResponse(
-        workspace_id=str(workspace.id),
+        workspace_id=str(value.workspace_id),
         current_repo_files_version=status.current_repo_files_version,
         repo_files_applied_version=status.repo_files_applied_version,
         repo_files_applied_at=status.repo_files_applied_at,
@@ -181,17 +178,12 @@ def resync_cloud_workspace_files_payload(
 
 
 def run_cloud_workspace_setup_payload(
-    workspace: CloudWorkspace,
-    *,
-    command: str,
-    terminal_id: str | None,
-    command_run_id: str | None,
-    status: str,
+    value: CloudWorkspaceSetupRunValue,
 ) -> RunCloudWorkspaceSetupResponse:
     return RunCloudWorkspaceSetupResponse(
-        workspace_id=str(workspace.id),
-        command=command,
-        terminal_id=terminal_id,
-        command_run_id=command_run_id,
-        status=status,
+        workspace_id=str(value.workspace_id),
+        command=value.command,
+        terminal_id=value.terminal_id,
+        command_run_id=value.command_run_id,
+        status=value.status,
     )

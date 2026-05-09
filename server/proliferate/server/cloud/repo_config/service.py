@@ -10,6 +10,7 @@ from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigValue,
     CloudRepoFileInput,
+    CloudRepoFileValue,
     bootstrap_cloud_repo_config_for_user,
     get_cloud_repo_config,
     list_cloud_repo_configs,
@@ -26,6 +27,11 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repo_config.domain.status import (
+    CloudRepoFileMetadataValue,
+    CloudWorkspaceRepoConfigStatusValue,
+    CloudWorkspaceSetupRunValue,
+)
 from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigResponse,
     CloudRepoConfigsListResponse,
@@ -66,6 +72,45 @@ def _default_repo_config_response() -> CloudRepoConfigResponse:
         run_command="",
         files_version=0,
         tracked_files=[],
+    )
+
+
+def _repo_file_metadata_value(value: CloudRepoFileValue) -> CloudRepoFileMetadataValue:
+    return CloudRepoFileMetadataValue(
+        relative_path=value.relative_path,
+        content_sha256=value.content_sha256,
+        byte_size=value.byte_size,
+        updated_at=value.updated_at,
+        last_synced_at=value.last_synced_at,
+    )
+
+
+def _workspace_repo_config_status_value(
+    workspace: CloudWorkspace,
+    repo_config: CloudRepoConfigValue | None,
+) -> CloudWorkspaceRepoConfigStatusValue:
+    tracked_files = (
+        ()
+        if repo_config is None
+        else tuple(_repo_file_metadata_value(item) for item in repo_config.tracked_files)
+    )
+    env_var_keys = () if repo_config is None else tuple(sorted(repo_config.env_vars))
+    current_version = 0 if repo_config is None else repo_config.files_version
+    return CloudWorkspaceRepoConfigStatusValue(
+        workspace_id=workspace.id,
+        current_repo_files_version=current_version,
+        repo_files_applied_version=workspace.repo_files_applied_version,
+        repo_files_applied_at=workspace.repo_files_applied_at,
+        files_out_of_sync=workspace.repo_files_applied_version != current_version,
+        tracked_files=tracked_files,
+        env_var_keys=env_var_keys,
+        post_ready_phase=workspace.repo_post_ready_phase,
+        post_ready_files_total=workspace.repo_post_ready_files_total,
+        post_ready_files_applied=workspace.repo_post_ready_files_applied,
+        post_ready_started_at=workspace.repo_post_ready_started_at,
+        post_ready_completed_at=workspace.repo_post_ready_completed_at,
+        last_apply_failed_path=workspace.repo_files_last_failed_path,
+        last_apply_error=workspace.repo_files_last_error,
     )
 
 
@@ -308,7 +353,9 @@ async def get_workspace_repo_config_status(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return workspace_repo_config_status_payload(workspace, repo_config)
+    return workspace_repo_config_status_payload(
+        _workspace_repo_config_status_value(workspace, repo_config)
+    )
 
 
 async def build_resync_workspace_repo_config_status(
@@ -323,7 +370,9 @@ async def build_resync_workspace_repo_config_status(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return resync_cloud_workspace_files_payload(workspace, repo_config)
+    return resync_cloud_workspace_files_payload(
+        _workspace_repo_config_status_value(workspace, repo_config)
+    )
 
 
 def _runtime_access_from_target(
@@ -376,7 +425,9 @@ async def resync_workspace_files(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return resync_cloud_workspace_files_payload(workspace, repo_config)
+    return resync_cloud_workspace_files_payload(
+        _workspace_repo_config_status_value(workspace, repo_config)
+    )
 
 
 async def run_workspace_setup(
@@ -407,9 +458,11 @@ async def run_workspace_setup(
 
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     return run_cloud_workspace_setup_payload(
-        workspace,
-        command=started.command,
-        terminal_id=started.terminal_id,
-        command_run_id=started.command_run_id,
-        status=started.status,
+        CloudWorkspaceSetupRunValue(
+            workspace_id=workspace.id,
+            command=started.command,
+            terminal_id=started.terminal_id,
+            command_run_id=started.command_run_id,
+            status=started.status,
+        )
     )

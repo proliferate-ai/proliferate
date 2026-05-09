@@ -38,6 +38,8 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
         "OPENAI_API_KEY",
     }
 )
+CLOUD_REPO_TRACKED_FILE_MAX_BYTES: int = 1_048_576
+CLOUD_REPO_ENV_VAR_KEY_PATTERN: str = r"^[A-Za-z_][A-Za-z0-9_]*$"
 
 # ---------------------------------------------------------------------------
 # Allowed credential auth files
