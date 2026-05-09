@@ -32,6 +32,9 @@ jobs:
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py
 
+      - name: Check AnyHarness layer boundaries
+        run: python3 scripts/check_anyharness_boundaries.py
+
   cargo-check:
     name: Cargo check & test
     runs-on: ubuntu-latest

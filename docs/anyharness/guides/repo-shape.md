@@ -54,6 +54,18 @@ integrations/mcp/json_rpc.rs
 - When splitting god files, split by responsibility, not by arbitrary line
   ranges.
 
+## Boundary Ratchet
+
+CI runs `scripts/check_anyharness_boundaries.py` to keep AnyHarness dependency
+direction from regressing while cleanup is in progress. Existing violations are
+count-based debt in `scripts/anyharness_boundaries_allowlist.txt`; new
+violations, increased counts, and stale allowlist entries fail the check.
+
+When a cleanup removes an allowlisted violation, reduce or delete that
+allowlist entry in the same change. The Phase 6 session-runtime split should
+revisit transitional session-runtime and live-runtime allowances and shrink the
+allowlist where ownership has moved to the documented target shape.
+
 ## Review Questions
 
 Ask these in PR review:
