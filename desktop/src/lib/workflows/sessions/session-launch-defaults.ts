@@ -10,7 +10,7 @@ import type {
 import type {
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/session-defaults";
 
 const LIVE_CONFIG_AVAILABILITY_ATTEMPTS = 3;
 const QUEUED_APPLY_ATTEMPTS = 10;

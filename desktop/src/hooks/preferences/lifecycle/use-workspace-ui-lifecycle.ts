@@ -1,12 +1,14 @@
 import { useEffect } from "react";
+import { migrateWorkspaceUiState } from "@/lib/domain/preferences/workspace-ui/migration";
+import {
+  WORKSPACE_UI_DEFAULTS,
+  type PersistedWorkspaceUiState,
+} from "@/lib/domain/preferences/workspace-ui/model";
 import {
   getChangedWorkspaceUiStateKeys,
   isNonPersistedWorkspaceUiStateKey,
-  migrateWorkspaceUiState,
   selectPersistedWorkspaceUiState,
-  WORKSPACE_UI_DEFAULTS,
-  type PersistedWorkspaceUiState,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/persistence";
 import { isDebugMeasurementEnabled, recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";

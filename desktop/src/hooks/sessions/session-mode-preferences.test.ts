@@ -3,7 +3,7 @@ import {
   persistDefaultSessionModePreference,
   shouldPersistDefaultSessionModePreference,
 } from "@/hooks/sessions/session-mode-preferences";
-import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user-preferences";
+import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 describe("session mode preferences", () => {

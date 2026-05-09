@@ -8,7 +8,7 @@ import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";

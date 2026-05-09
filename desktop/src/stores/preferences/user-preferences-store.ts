@@ -2,7 +2,7 @@ import { create } from "zustand";
 import {
   USER_PREFERENCE_DEFAULTS,
   type UserPreferences,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/model";
 import type { PersistedUserPreferencesMetadata } from "@/lib/domain/preferences/persisted-metadata";
 
 interface UserPreferencesState extends UserPreferences {

@@ -15,7 +15,7 @@ import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/wo
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
-} from "@/lib/domain/preferences/workspace-ui-state";
+} from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";

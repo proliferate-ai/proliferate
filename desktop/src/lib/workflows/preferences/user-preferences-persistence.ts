@@ -1,15 +1,19 @@
 import {
+  migrateUserPreferences,
+} from "@/lib/domain/preferences/user/migration";
+import {
   getForwardCompatibleUserPreferenceExtras,
   hasDeprecatedUserPreferenceKeys,
-  isValidWorktreeAutoDeleteLimit,
-  migrateUserPreferences,
+  pickLegacyUserPreferencesInput,
+  type LegacyUserPreferencesInput,
+} from "@/lib/domain/preferences/user/persisted-keys";
+import {
   NEW_USER_DEFAULTS,
   PERSISTED_RECORD_BACKFILL,
-  pickLegacyUserPreferencesInput,
   type BranchPrefixType,
-  type LegacyUserPreferencesInput,
   type UserPreferences,
-} from "@/lib/domain/preferences/user-preferences";
+} from "@/lib/domain/preferences/user/model";
+import { isValidWorktreeAutoDeleteLimit } from "@/lib/domain/preferences/user/worktree-auto-delete";
 import {
   buildPersistedUserPreferencesRecord,
   WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY,

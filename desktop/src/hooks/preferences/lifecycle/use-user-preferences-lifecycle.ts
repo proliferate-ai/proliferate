@@ -3,7 +3,7 @@ import {
   selectPersistedUserPreferencesSlice,
   type PersistedUserPreferencesMetadata,
 } from "@/lib/domain/preferences/persisted-metadata";
-import type { UserPreferences } from "@/lib/domain/preferences/user-preferences";
+import type { UserPreferences } from "@/lib/domain/preferences/user/model";
 import {
   loadUserPreferences,
   persistUserPreferences,
