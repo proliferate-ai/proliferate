@@ -4,10 +4,10 @@ import { generateSessionTitle } from "@/lib/access/cloud/ai-magic";
 import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
 import {
   finishMeasurementOperation,
-  getMeasurementRequestOptions,
   recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAuthStore } from "@/stores/auth/auth-store";

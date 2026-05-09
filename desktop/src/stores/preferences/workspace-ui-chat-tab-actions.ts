@@ -10,18 +10,12 @@ import {
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
 import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import type { WorkspaceUiState } from "@/stores/preferences/workspace-ui-store";
-
-type WorkspaceUiSet = (
-  partial:
-    | Partial<WorkspaceUiState>
-    | WorkspaceUiState
-    | ((state: WorkspaceUiState) => Partial<WorkspaceUiState> | WorkspaceUiState),
-) => void;
-type WorkspaceUiGet = () => WorkspaceUiState;
+import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiChatTabActions = Pick<
   WorkspaceUiState,
+  | "setUrgentHighlightedChatSessionForWorkspace"
+  | "clearUrgentHighlightedChatSessionForWorkspace"
   | "setVisibleChatSessionIdsForWorkspace"
   | "rememberHiddenChatSessionForWorkspace"
   | "clearHiddenChatSessionsForWorkspace"
@@ -40,6 +34,28 @@ export function createWorkspaceUiChatTabActions(
   get: WorkspaceUiGet,
 ): WorkspaceUiChatTabActions {
   return {
+    setUrgentHighlightedChatSessionForWorkspace: (workspaceId, sessionId) => {
+      set({
+        urgentHighlightedChatSessionByWorkspace: {
+          ...get().urgentHighlightedChatSessionByWorkspace,
+          [workspaceId]: sessionId,
+        },
+      });
+    },
+
+    clearUrgentHighlightedChatSessionForWorkspace: (workspaceId, sessionId) => {
+      const current = get().urgentHighlightedChatSessionByWorkspace[workspaceId] ?? null;
+      if (!current || (sessionId !== undefined && current !== sessionId)) {
+        return;
+      }
+      set({
+        urgentHighlightedChatSessionByWorkspace: {
+          ...get().urgentHighlightedChatSessionByWorkspace,
+          [workspaceId]: null,
+        },
+      });
+    },
+
     setVisibleChatSessionIdsForWorkspace: (workspaceId, sessionIds) => {
       const nextSessionIds = uniqueIds(sessionIds);
       set((state) => {

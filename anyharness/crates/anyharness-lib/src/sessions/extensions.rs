@@ -1,6 +1,6 @@
 use anyharness_contract::v1::{ErrorEventDetails, SessionMcpBindingSummary};
 
-use crate::sessions::mcp::SessionMcpServer;
+use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::workspaces::model::WorkspaceRecord;
 
 use super::model::SessionRecord;

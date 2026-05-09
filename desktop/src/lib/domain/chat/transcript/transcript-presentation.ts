@@ -3,24 +3,12 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
+import { classifyCollapsedAction } from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
 import {
-  classifyCollapsedAction,
   getToolCallParsedCommands,
   getToolCallShellCommand,
   isExplorationParsedCommand,
-} from "@/lib/domain/chat/transcript/transcript-actions";
-
-export {
-  classifyCollapsedAction,
-  formatCollapsedActionsSummary,
-  getToolCallParsedCommands,
-  getToolCallShellCommand,
-  getToolCallShellCommandName,
-  summarizeCollapsedActions,
-  type CollapsedActionSummary,
-  type ParsedToolCommand,
-  type ParsedToolCommandKind,
-} from "@/lib/domain/chat/transcript/transcript-actions";
+} from "@/lib/domain/chat/transcript/transcript-tool-commands";
 
 export type TurnDisplayBlock =
   | { kind: "item"; itemId: string }

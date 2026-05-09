@@ -1,110 +1,47 @@
-import {
-  hashTimingScope,
-  type AnyHarnessRequestOptions,
-  type AnyHarnessTimingCategory,
-} from "@anyharness/sdk";
 import { applyMetric, createEmptyAggregate } from "./debug-measurement-aggregate";
-import { isHotPaintOperationKind, printSummaryRow } from "./debug-measurement-summary";
-import { metricSnapshot, operationSnapshot } from "./debug-measurement-snapshots";
+import { clearDebugMeasurementBuffer, recordMetricEvent, recordOperationEvent } from "./debug-measurement-events";
+import { isDebugMeasurementEnabled, isMainThreadMeasurementEnabled } from "./debug-measurement-env";
+import {
+  getLongTaskObserverSupportedForMeasurement,
+  resetLongTaskObserverSupportForTest,
+} from "./debug-measurement-observer";
+import { printSummaryRow } from "./debug-measurement-summary";
+import {
+  activeSampleOperations,
+  categoryBindings,
+  cooldownUntilBySample,
+  nextMeasurementBindingId,
+  nextMeasurementOperationId,
+  operationFinishListeners,
+  operations,
+  pendingCommitMarks,
+  recentSummaries,
+  resetMeasurementSequencesForTest,
+} from "./debug-measurement-state";
+import type {
+  MeasurementFinishReason,
+  MeasurementOperationId,
+  MeasurementOperationKind,
+  MeasurementSampleKey,
+  MeasurementSurface,
+  MeasurementTimingCategory,
+  MeasurementWorkflowOutcome,
+  MeasurementWorkflowStep,
+} from "./debug-measurement-catalog-types";
+import type { MeasurementMetricInput } from "./debug-measurement-metric-types";
 import type {
   MeasurementCategoryBinding,
   MeasurementCategoryBindingInput,
-  MeasurementDebugApi,
-  MeasurementDebugDump,
-  MeasurementDebugStatus,
-  MeasurementFinishReason,
-  MeasurementMemoryEvent,
-  MeasurementMetricEvent,
-  MeasurementMetricInput,
-  MeasurementOperationEvent,
   MeasurementOperationFinishListener,
-  MeasurementOperationId,
-  MeasurementOperationKind,
   MeasurementOperationRecord,
-  MeasurementSampleKey,
-  MeasurementSummaryPayload,
-  MeasurementSurface,
-  MeasurementTimingCategory,
-  MeasurementWorkflowOutcome,
-  MeasurementWorkflowStep,
-} from "./debug-measurement-types";
-import {
-  envFlagEnabled,
-  getMeasurementMemorySnapshot,
-  getTimeOrigin,
-  now,
-  pushBounded,
-  round,
-} from "./debug-measurement-utils";
-
-export type {
-  MeasurementCategoryBindingInput,
-  MeasurementCloudCategory,
-  MeasurementDebugApi,
-  MeasurementDebugDump,
-  MeasurementDebugStatus,
-  MeasurementFinishReason,
-  MeasurementMetricInput,
-  MeasurementOperationId,
-  MeasurementOperationKind,
-  MeasurementSampleKey,
-  MeasurementStateCountTarget,
-  MeasurementSurface,
-  MeasurementTimingCategory,
-  MeasurementWorkflowOutcome,
-  MeasurementWorkflowStep,
-} from "./debug-measurement-types";
+  MeasurementSummaryBudget,
+} from "./debug-measurement-registry-types";
+import { now } from "./debug-measurement-utils";
 
 // Dev-only measurement plumbing. Collection is disabled unless the Vite dev
 // build sets VITE_PROLIFERATE_DEBUG_MAIN_THREAD=1 or
 // VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING=1; emitted records are limited to
 // ids, counts, durations, categories, and hashed scopes.
-
-const MEASUREMENT_HEADER = "x-proliferate-measurement-operation-id";
-// Diagnostic sessions can generate many short-lived events; this buffer is
-// still dev-only because recordMeasurementMetric exits when measurement is off.
-const RECENT_METRIC_LIMIT = 50_000;
-const RECENT_OPERATION_EVENT_LIMIT = 1_000;
-const RECENT_MEMORY_SAMPLE_LIMIT = 1_000;
-const MEMORY_SAMPLE_INTERVAL_MS = 5_000;
-const operations = new Map<MeasurementOperationId, MeasurementOperationRecord>();
-const activeSampleOperations = new Map<string, MeasurementOperationId>();
-const cooldownUntilBySample = new Map<string, number>();
-const pendingCommitMarks = new Map<MeasurementOperationId, Set<MeasurementSurface>>();
-const categoryBindings = new Map<string, MeasurementCategoryBinding>();
-const operationFinishListeners = new Map<MeasurementOperationId, Set<MeasurementOperationFinishListener>>();
-const recentMetrics: MeasurementMetricEvent[] = [];
-const recentOperationEvents: MeasurementOperationEvent[] = [];
-const recentMemorySamples: MeasurementMemoryEvent[] = [];
-const recentSummaries: MeasurementSummaryPayload[] = [];
-let operationSeq = 0;
-let bindingSeq = 0;
-let metricEventSeq = 0;
-let operationEventSeq = 0;
-let memoryEventSeq = 0;
-let longTaskObserverSupported = false;
-
-export function isMainThreadMeasurementEnabled(): boolean {
-  return import.meta.env.DEV
-    && envFlagEnabled(import.meta.env.VITE_PROLIFERATE_DEBUG_MAIN_THREAD, false);
-}
-
-export function isAnyHarnessTimingEnabled(): boolean {
-  return import.meta.env.DEV
-    && envFlagEnabled(import.meta.env.VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING, false);
-}
-
-export function isDebugMeasurementEnabled(): boolean {
-  return isMainThreadMeasurementEnabled() || isAnyHarnessTimingEnabled();
-}
-
-export function setLongTaskObserverSupportedForMeasurement(supported: boolean): void {
-  longTaskObserverSupported = supported;
-}
-
-export function hashMeasurementScope(value: string): string {
-  return hashTimingScope(value);
-}
 
 export function startMeasurementOperation(input: {
   kind: MeasurementOperationKind;
@@ -114,6 +51,7 @@ export function startMeasurementOperation(input: {
   idleTimeoutMs?: number;
   maxDurationMs?: number;
   cooldownMs?: number;
+  summaryBudget?: MeasurementSummaryBudget | null;
 }): MeasurementOperationId | null {
   if (!isDebugMeasurementEnabled()) {
     return null;
@@ -131,7 +69,7 @@ export function startMeasurementOperation(input: {
     }
   }
 
-  const id = `mop_${(++operationSeq).toString(36)}` as MeasurementOperationId;
+  const id = nextMeasurementOperationId();
   const operation: MeasurementOperationRecord = {
     id,
     kind: input.kind,
@@ -142,6 +80,7 @@ export function startMeasurementOperation(input: {
     idleTimeoutMs: input.idleTimeoutMs ?? null,
     maxDurationMs: input.maxDurationMs ?? null,
     cooldownMs: input.cooldownMs ?? 0,
+    summaryBudget: input.summaryBudget ?? null,
     idleTimer: null,
     maxTimer: null,
     inFlightRequestCount: 0,
@@ -209,8 +148,13 @@ export function finishMeasurementOperation(
   recordOperationEvent(operation, "finish", reason);
   notifyOperationFinish(operation, reason);
   cleanupOperation(operation, reason);
-  if (operation.hasMetrics || isHotPaintOperationKind(operation.kind)) {
-    printSummaryRow({ operation, reason, longTaskObserverSupported, recentSummaries });
+  if (operation.hasMetrics || operation.summaryBudget) {
+    printSummaryRow({
+      operation,
+      reason,
+      longTaskObserverSupported: getLongTaskObserverSupportedForMeasurement(),
+      recentSummaries,
+    });
   }
 }
 
@@ -225,8 +169,13 @@ export function cancelMeasurementOperation(
   recordOperationEvent(operation, "finish", reason);
   notifyOperationFinish(operation, reason);
   cleanupOperation(operation, reason);
-  if (operation.hasMetrics || isHotPaintOperationKind(operation.kind)) {
-    printSummaryRow({ operation, reason, longTaskObserverSupported, recentSummaries });
+  if (operation.hasMetrics || operation.summaryBudget) {
+    printSummaryRow({
+      operation,
+      reason,
+      longTaskObserverSupported: getLongTaskObserverSupportedForMeasurement(),
+      recentSummaries,
+    });
   }
 }
 
@@ -280,34 +229,11 @@ export function markOperationForNextCommit(
   pendingCommitMarks.set(id, new Set(surfaces));
 }
 
-export function getMeasurementRequestOptions(input: {
-  operationId?: MeasurementOperationId | null;
-  category: AnyHarnessTimingCategory;
-  headers?: HeadersInit;
-}): AnyHarnessRequestOptions | undefined {
-  if (!isAnyHarnessTimingEnabled()) {
-    return input.headers ? { headers: input.headers } : undefined;
-  }
-
-  const options: AnyHarnessRequestOptions = {
-    headers: input.headers,
-    timingCategory: input.category,
-  };
-  if (input.operationId) {
-    options.measurementOperationId = input.operationId;
-    options.headers = mergeMeasurementHeader(input.headers, input.operationId);
-    options.timingLifecycle = {
-      onRequestStart: () => beginMeasurementRequest(input.operationId),
-    };
-  }
-  return options;
-}
-
 export function bindMeasurementCategories(input: MeasurementCategoryBindingInput): () => void {
   if (!isDebugMeasurementEnabled() || !operations.has(input.operationId)) {
     return () => undefined;
   }
-  const id = `binding_${++bindingSeq}`;
+  const id = nextMeasurementBindingId();
   const binding: MeasurementCategoryBinding = {
     id,
     operationId: input.operationId,
@@ -430,155 +356,8 @@ export function resetDebugMeasurementForTest(): void {
   categoryBindings.clear();
   operationFinishListeners.clear();
   clearDebugMeasurementBuffer();
-  operationSeq = 0;
-  bindingSeq = 0;
-  metricEventSeq = 0;
-  operationEventSeq = 0;
-  memoryEventSeq = 0;
-  longTaskObserverSupported = false;
-}
-
-export function getDebugMeasurementDump(): MeasurementDebugDump {
-  return {
-    tag: "measurement_dump",
-    version: 1,
-    createdAt: new Date().toISOString(),
-    timestampMs: Date.now(),
-    timeOriginMs: getTimeOrigin(),
-    enabled: {
-      mainThread: isMainThreadMeasurementEnabled(),
-      anyHarnessTiming: isAnyHarnessTimingEnabled(),
-    },
-    longTaskObserverSupported,
-    memory: getMeasurementMemorySnapshot(),
-    counts: getDebugMeasurementStatus().counts,
-    activeOperations: [...operations.values()].map(operationSnapshot),
-    recentOperationEvents: [...recentOperationEvents],
-    recentMetrics: [...recentMetrics],
-    recentMemorySamples: [...recentMemorySamples],
-    recentSummaries: [...recentSummaries],
-  };
-}
-
-export function clearDebugMeasurementBuffer(): void {
-  recentMetrics.length = 0;
-  recentOperationEvents.length = 0;
-  recentMemorySamples.length = 0;
-  recentSummaries.length = 0;
-}
-
-export function installDebugMeasurementExport(): () => void {
-  if (!import.meta.env.DEV || typeof window === "undefined") {
-    return () => undefined;
-  }
-
-  const api: MeasurementDebugApi = {
-    dump: getDebugMeasurementDump,
-    export: exportDebugMeasurementDump,
-    clear: clearDebugMeasurementBuffer,
-    status: () => getDebugMeasurementStatus(),
-  };
-  recordMemorySample();
-  const memoryTimer = window.setInterval(recordMemorySample, MEMORY_SAMPLE_INTERVAL_MS);
-  window.proliferateDebugMeasurement = api;
-  window.__PROLIFERATE_DEBUG_MEASUREMENT__ = api;
-  return () => {
-    window.clearInterval(memoryTimer);
-    if (window.proliferateDebugMeasurement === api) {
-      delete window.proliferateDebugMeasurement;
-    }
-    if (window.__PROLIFERATE_DEBUG_MEASUREMENT__ === api) {
-      delete window.__PROLIFERATE_DEBUG_MEASUREMENT__;
-    }
-  };
-}
-
-function getDebugMeasurementStatus(): MeasurementDebugStatus {
-  return {
-    enabled: {
-      mainThread: isMainThreadMeasurementEnabled(),
-      anyHarnessTiming: isAnyHarnessTimingEnabled(),
-    },
-    counts: {
-      activeOperations: operations.size,
-      pendingCommitMarks: pendingCommitMarks.size,
-      categoryBindings: categoryBindings.size,
-      recentOperationEvents: recentOperationEvents.length,
-      recentMetrics: recentMetrics.length,
-      recentMemorySamples: recentMemorySamples.length,
-      recentSummaries: recentSummaries.length,
-    },
-  };
-}
-
-function exportDebugMeasurementDump(fileName?: string): MeasurementDebugDump {
-  const dump = getDebugMeasurementDump();
-  const body = JSON.stringify(dump, null, 2);
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    console.debug("[measurement_dump_json]", body);
-    return dump;
-  }
-
-  const blob = new Blob([body], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  const safeTimestamp = dump.createdAt.replace(/[:.]/g, "-");
-  link.href = url;
-  link.download = fileName ?? `proliferate-measurement-dump-${safeTimestamp}.json`;
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  return dump;
-}
-
-function recordMetricEvent(
-  input: MeasurementMetricInput,
-  operationIds: MeasurementOperationId[],
-): void {
-  pushBounded(recentMetrics, {
-    tag: "measurement_metric",
-    seq: ++metricEventSeq,
-    timestampMs: Date.now(),
-    timeOriginMs: getTimeOrigin(),
-    operationIds,
-    metric: metricSnapshot(input),
-  }, RECENT_METRIC_LIMIT);
-}
-
-function recordOperationEvent(
-  operation: MeasurementOperationRecord,
-  phase: "start" | "finish",
-  finishReason?: MeasurementFinishReason,
-): void {
-  pushBounded(recentOperationEvents, {
-    tag: "measurement_operation",
-    seq: ++operationEventSeq,
-    timestampMs: Date.now(),
-    timeOriginMs: getTimeOrigin(),
-    phase,
-    operationId: operation.id,
-    operationKind: operation.kind,
-    finishReason,
-    durationMs: phase === "finish" ? round(now() - operation.startedAt) : undefined,
-    surfaces: [...operation.surfaces],
-    sampleKey: operation.sampleKey,
-  }, RECENT_OPERATION_EVENT_LIMIT);
-}
-
-function recordMemorySample(): void {
-  const memory = getMeasurementMemorySnapshot();
-  pushBounded(recentMemorySamples, {
-    tag: "measurement_memory",
-    seq: ++memoryEventSeq,
-    timestampMs: Date.now(),
-    timeOriginMs: getTimeOrigin(),
-    activeOperations: operations.size,
-    recentMetrics: recentMetrics.length,
-    recentSummaries: recentSummaries.length,
-    ...memory,
-  }, RECENT_MEMORY_SAMPLE_LIMIT);
+  resetMeasurementSequencesForTest();
+  resetLongTaskObserverSupportForTest();
 }
 
 function resolveMetricOperationIds(input: MeasurementMetricInput): MeasurementOperationId[] {
@@ -745,13 +524,4 @@ function clearOperationTimers(operation: MeasurementOperationRecord): void {
     clearTimeout(operation.maxTimer);
     operation.maxTimer = null;
   }
-}
-
-function mergeMeasurementHeader(
-  headers: HeadersInit | undefined,
-  operationId: MeasurementOperationId,
-): Headers {
-  const next = new Headers(headers);
-  next.set(MEASUREMENT_HEADER, operationId);
-  return next;
 }

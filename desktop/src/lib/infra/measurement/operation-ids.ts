@@ -1,4 +1,4 @@
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "./debug-measurement-catalog-types";
 
 export function uniqueMeasurementOperationIds(
   operationIds: readonly (MeasurementOperationId | null | undefined)[],

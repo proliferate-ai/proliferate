@@ -20,16 +20,9 @@ export interface WorkspaceViewerRestoreMarker {
   ready: boolean;
 }
 
-export interface WorkspaceViewerContext {
+interface WorkspaceViewerTabsState {
   workspaceUiKey: string | null;
   materializedWorkspaceId: string | null;
-  anyharnessWorkspaceId: string | null;
-  runtimeUrl: string | null;
-  authToken: string | null;
-  treeStateKey: string | null;
-}
-
-interface WorkspaceViewerTabsState extends WorkspaceViewerContext {
   initVersion: number;
   viewerRestoreMarker: WorkspaceViewerRestoreMarker | null;
   openTargets: ViewerTarget[];
@@ -40,10 +33,6 @@ interface WorkspaceViewerTabsState extends WorkspaceViewerContext {
   prepareWorkspace: (args: {
     workspaceUiKey: string;
     materializedWorkspaceId: string;
-    anyharnessWorkspaceId: string;
-    runtimeUrl: string;
-    treeStateKey: string;
-    authToken?: string | null;
     initialOpenTargets?: ViewerTarget[];
     initialActiveTargetKey?: string | null;
   }) => number;
@@ -77,10 +66,6 @@ function targetMode(target: ViewerTarget): FileViewerMode {
 export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set, get) => ({
   workspaceUiKey: null,
   materializedWorkspaceId: null,
-  anyharnessWorkspaceId: null,
-  runtimeUrl: null,
-  authToken: null,
-  treeStateKey: null,
   initVersion: 0,
   viewerRestoreMarker: null,
   ...emptyViewerState(),
@@ -101,10 +86,6 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
     set({
       workspaceUiKey: args.workspaceUiKey,
       materializedWorkspaceId: args.materializedWorkspaceId,
-      anyharnessWorkspaceId: args.anyharnessWorkspaceId,
-      runtimeUrl: args.runtimeUrl,
-      authToken: args.authToken ?? null,
-      treeStateKey: args.treeStateKey,
       initVersion,
       ...emptyViewerState(),
       openTargets: initialOpenTargets,
@@ -125,10 +106,6 @@ export const useWorkspaceViewerTabsStore = create<WorkspaceViewerTabsState>((set
     set({
       workspaceUiKey: null,
       materializedWorkspaceId: null,
-      anyharnessWorkspaceId: null,
-      runtimeUrl: null,
-      authToken: null,
-      treeStateKey: null,
       initVersion,
       viewerRestoreMarker: null,
       ...emptyViewerState(),

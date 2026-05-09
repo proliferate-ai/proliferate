@@ -8,9 +8,11 @@ import {
 import {
   buildSidebarGroupStates,
   resolveSidebarEmptyState,
-  type SidebarEmptyState,
-  type SidebarGroupState,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+import type {
+  SidebarEmptyState,
+  SidebarGroupState,
+} from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";

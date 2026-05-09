@@ -7,8 +7,6 @@ from proliferate.constants.cloud import (
     SETUP_RUN_STATUS_STALE,
     SETUP_RUN_SUPERSEDED_ERROR,
     WorkspacePostReadyPhase,
-    classify_setup_run_finalization,
-    setup_run_has_active_workspace_token,
 )
 from proliferate.server.cloud.workspaces.domain.lifecycle import (
     VALID_STATUS_TRANSITIONS,
@@ -16,6 +14,20 @@ from proliferate.server.cloud.workspaces.domain.lifecycle import (
     decide_workspace_status_transition,
     provider_failure_debug_state,
     start_request_should_return_existing,
+)
+from proliferate.server.cloud.workspaces.domain.post_ready import (
+    repo_config_apply_started,
+    repo_config_completed,
+    repo_config_empty_completed,
+    repo_config_file_failed,
+    repo_config_file_progress,
+    repo_config_files_version_applied,
+    repo_setup_start_failed,
+    repo_setup_starting,
+)
+from proliferate.server.cloud.workspaces.domain.setup_runs import (
+    classify_setup_run_finalization,
+    setup_run_has_active_workspace_token,
 )
 
 
@@ -183,6 +195,62 @@ def test_setup_run_finalization_classifies_stale_and_active_results() -> None:
     assert failed.workspace_update is not None
     assert failed.workspace_update.phase == WorkspacePostReadyPhase.failed
     assert failed.workspace_update.repo_files_last_error == SETUP_RUN_DEFAULT_FAILURE_ERROR
+
+
+def test_post_ready_patch_builders_capture_repo_apply_status_decisions() -> None:
+    started = repo_config_apply_started(3)
+    progress = repo_config_file_progress(2)
+    failed = repo_config_file_failed(relative_path="setup.sh", error="boom")
+    version_applied = repo_config_files_version_applied(7)
+    empty_completed = repo_config_empty_completed()
+    completed = repo_config_completed(
+        files_total=3,
+        files_version=7,
+        clear_apply_token=True,
+    )
+
+    assert started.phase == WorkspacePostReadyPhase.applying_files
+    assert started.files_total == 3
+    assert started.files_applied == 0
+    assert started.mark_started is True
+    assert started.status_detail == "Applying repo config"
+    assert progress.phase is None
+    assert progress.files_applied == 2
+    assert progress.set_failed_path is True
+    assert progress.set_failed_error is True
+    assert failed.phase == WorkspacePostReadyPhase.failed
+    assert failed.failed_path == "setup.sh"
+    assert failed.failed_error == "boom"
+    assert failed.mark_completed is True
+    assert failed.status_detail == "Repo config apply failed"
+    assert version_applied.files_version == 7
+    assert version_applied.mark_applied_now is True
+    assert empty_completed.phase == WorkspacePostReadyPhase.completed
+    assert empty_completed.files_total == 0
+    assert empty_completed.files_version == 0
+    assert empty_completed.clear_apply_token is False
+    assert completed.phase == WorkspacePostReadyPhase.completed
+    assert completed.files_total == 3
+    assert completed.files_applied == 3
+    assert completed.files_version == 7
+    assert completed.clear_apply_token is True
+    assert completed.status_detail == "Ready"
+
+
+def test_post_ready_patch_builders_capture_setup_status_decisions() -> None:
+    starting = repo_setup_starting("apply-token")
+    failed = repo_setup_start_failed("start failed")
+
+    assert starting.phase == WorkspacePostReadyPhase.starting_setup
+    assert starting.apply_token == "apply-token"
+    assert starting.mark_started is True
+    assert starting.clear_completed_at is True
+    assert starting.status_detail == "Starting repo setup"
+    assert failed.phase == WorkspacePostReadyPhase.failed
+    assert failed.failed_error == "start failed"
+    assert failed.clear_apply_token is True
+    assert failed.mark_completed is True
+    assert failed.status_detail == "Repo setup failed to start"
 
 
 def test_provider_failure_debug_state_preserves_stop_but_clears_destroy() -> None:

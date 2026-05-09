@@ -10,13 +10,16 @@ import {
   signOut,
 } from "@/lib/integrations/auth/orchestration";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
+import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 
 // Owns user-triggered auth actions and their telemetry. Does not own auth bootstrap.
 export function useAuthActions() {
+  const authEffects = useAuthOrchestrationEffects();
+
   return {
     signInWithGitHub: useCallback(async (options?: GitHubDesktopSignInOptions) => {
       try {
-        const result = await signInWithGitHub(options);
+        const result = await signInWithGitHub(options, authEffects);
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,
@@ -38,10 +41,10 @@ export function useAuthActions() {
         });
         throw error;
       }
-    }, []),
+    }, [authEffects]),
     signOut: useCallback(async () => {
       try {
-        const result = await signOut();
+        const result = await signOut(authEffects);
         trackProductEvent("auth_signed_out", {
           provider: result.provider,
         });
@@ -55,6 +58,6 @@ export function useAuthActions() {
         });
         throw error;
       }
-    }, []),
+    }, [authEffects]),
   };
 }

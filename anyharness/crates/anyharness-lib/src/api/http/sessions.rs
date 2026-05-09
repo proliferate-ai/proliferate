@@ -21,7 +21,9 @@ use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
 use crate::origin::OriginContext;
-use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
+use crate::sessions::mcp_bindings::contract::bindings_from_contract;
+use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::sessions::runtime::{
     session_link_to_summary, CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     InteractionResolutionRequest, PendingPromptMutationError, ResolveInteractionError,
@@ -1145,9 +1147,9 @@ fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
             format!("workspace only allows a single session; existing session: {session_id}"),
             "WORKSPACE_SINGLE_SESSION",
         ),
-        CreateAndStartSessionError::MissingDataKey => ApiError::internal(
-            crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
-        ),
+        CreateAndStartSessionError::MissingDataKey => {
+            ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+        }
         CreateAndStartSessionError::StartFailed(error) => {
             ApiError::internal(format!("ACP session start failed: {error}"))
         }
@@ -1167,9 +1169,9 @@ fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> ApiError {
         EnsureLiveSessionError::Invalid(detail) => {
             ApiError::bad_request(detail, "SESSION_RESUME_FAILED")
         }
-        EnsureLiveSessionError::MissingDataKey => ApiError::internal(
-            crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
-        ),
+        EnsureLiveSessionError::MissingDataKey => {
+            ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+        }
         EnsureLiveSessionError::Internal(error) => {
             ApiError::internal(format!("resume failed: {error}"))
         }
@@ -1216,9 +1218,9 @@ fn map_fork_session_error(error: ForkSessionError) -> ApiError {
             "session must have a native agent session id before forking",
             "FORK_MISSING_NATIVE_SESSION",
         ),
-        ForkSessionError::MissingDataKey => ApiError::internal(
-            crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
-        ),
+        ForkSessionError::MissingDataKey => {
+            ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+        }
         ForkSessionError::StartFailed { error, .. } => {
             ApiError::internal(format!("fork child start failed: {error}"))
         }

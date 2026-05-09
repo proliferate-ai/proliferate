@@ -1,12 +1,14 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 import {
   buildSidebarGroupStates,
+} from "./sidebar-groups";
+import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-  type SidebarWorkspaceVariant,
-} from "./sidebar";
+} from "./sidebar-model";
+import type { SidebarWorkspaceVariant } from "./sidebar-indicators";
 
 const DEFAULT_UPDATED_AT = "2026-04-13T10:00:00.000Z";
 

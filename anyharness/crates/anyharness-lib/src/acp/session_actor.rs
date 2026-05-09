@@ -33,7 +33,8 @@ use crate::sessions::live_config::{
     snapshot_to_record, LegacyModeOption, LegacyModeState, NormalizedControlKind,
     LEGACY_MODE_COMPAT_CONFIG_ID,
 };
-use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
+use crate::sessions::mcp_bindings::acp::to_acp_servers;
+use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::{
     serialize_action_capabilities, PendingConfigChangeRecord, PromptAttachmentRecord,
     PromptAttachmentState, SessionRecord,

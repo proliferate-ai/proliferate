@@ -3,8 +3,10 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   buildSidebarGroupStates,
+} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import {
   sidebarRepoGroupKeyForCloudTarget,
   sidebarRepoGroupKeyForWorkspace,

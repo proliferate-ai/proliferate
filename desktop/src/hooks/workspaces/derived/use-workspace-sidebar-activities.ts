@@ -4,11 +4,9 @@ import {
   collectWorkspaceSidebarActivityStatesWithErrorAttention,
   type SidebarSessionActivityState,
 } from "@/lib/domain/sessions/activity";
-import {
-  activitySnapshotFromDirectoryEntry,
-  useSessionDirectoryStore,
-} from "@/stores/sessions/session-directory-store";
-import type { SessionDirectoryEntry } from "@/stores/sessions/session-types";
+import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
+import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/directory-entry";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 const EMPTY_ACTIVITY_STATES: Record<string, SidebarSessionActivityState> = {};
 const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};

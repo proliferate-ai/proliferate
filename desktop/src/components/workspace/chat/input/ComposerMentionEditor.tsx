@@ -21,21 +21,25 @@ import {
   isRepeatedComposerSubmitKey,
 } from "@/lib/domain/chat/composer/composer-keyboard";
 import {
-  createTextDraft,
   findMentionTrigger,
-  linearOffsetFromPosition,
-  positionFromLinearOffset,
+  type MentionTrigger,
+} from "@/lib/domain/chat/composer/file-mention-draft-edits";
+import {
+  createTextDraft,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
-  type MentionTrigger,
-} from "@/lib/domain/chat/transcript/file-mentions";
-import { formatMarkdownFileLink } from "@/lib/domain/chat/transcript/file-mention-links";
+} from "@/lib/domain/chat/composer/file-mention-draft-model";
+import {
+  linearOffsetFromPosition,
+  positionFromLinearOffset,
+} from "@/lib/domain/chat/composer/file-mention-draft-position";
+import { formatMarkdownFileLink } from "@/lib/domain/chat/composer/file-mention-links";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
   startMeasurementOperation,
-  type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
 import { ComposerTextarea } from "./ComposerTextarea";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "./ComposerTextareaFrame";

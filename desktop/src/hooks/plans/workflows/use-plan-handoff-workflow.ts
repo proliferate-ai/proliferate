@@ -20,7 +20,7 @@ import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cl
 import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/composer/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import {
   listPlanHandoffModeOptions,
   resolvePlanHandoffModeId,

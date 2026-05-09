@@ -6,7 +6,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { normalizeBrowserUrl } from "@/lib/domain/workspaces/shell/browser-url";
 import { useTauriBrowserWebviewActions } from "@/hooks/access/tauri/use-browser-webview-actions";
 import { BrowserEmptyState } from "./BrowserFallbackStates";

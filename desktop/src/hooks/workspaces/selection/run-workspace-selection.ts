@@ -1,7 +1,8 @@
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   markWorkspaceViewed,
   markWorkspaceViewedAt,

@@ -4,7 +4,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { browserIframeSandbox } from "@/lib/domain/workspaces/shell/browser-url";
 import { BrowserUnavailableOverlay } from "./BrowserFallbackStates";
 import type { FrameStatus } from "./BrowserPanelTypes";

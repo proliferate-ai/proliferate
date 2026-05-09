@@ -6,13 +6,13 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
-import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 export function FileCreateDraftRow() {
-  const treeStateKey = useWorkspaceViewerTabsStore((s) => s.treeStateKey);
-  const materializedWorkspaceId = useWorkspaceViewerTabsStore((s) => s.materializedWorkspaceId);
+  const fileContext = useWorkspaceFileContext();
+  const { materializedWorkspaceId, treeStateKey } = fileContext;
   const draft = useWorkspaceFileTreeUiStore((s) =>
     treeStateKey ? s.createDraftByTreeKey[treeStateKey] : undefined
   );
@@ -24,7 +24,7 @@ export function FileCreateDraftRow() {
   const createDirectory = useCreateWorkspaceDirectoryMutation({
     workspaceId: materializedWorkspaceId,
   });
-  const { openFile } = useWorkspaceFileActions();
+  const { openFile } = useWorkspaceFileActions(fileContext);
   const [name, setName] = useState("");
   const draftKey = draft ? `${draft.kind}:${draft.parentPath}` : null;
 

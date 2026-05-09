@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ReviewKind } from "@anyharness/sdk";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
+import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 
 export type ReviewSetupTarget =
   | { kind: "plan"; plan: PromptPlanAttachmentDescriptor }

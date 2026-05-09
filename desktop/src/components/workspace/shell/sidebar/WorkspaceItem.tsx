@@ -16,7 +16,7 @@ import type {
   SidebarIndicatorAction,
   SidebarStatusIndicator,
   SidebarWorkspaceVariant,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import {
   SidebarDetailIndicatorsView,

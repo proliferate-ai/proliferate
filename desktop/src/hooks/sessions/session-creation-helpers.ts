@@ -5,7 +5,7 @@ import type {
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import {

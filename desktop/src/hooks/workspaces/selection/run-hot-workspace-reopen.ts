@@ -1,4 +1,5 @@
-import { findLogicalWorkspace, resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
+import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
   resolveHotReopenCandidate,
 } from "@/lib/domain/workspaces/selection/hot-reopen";
@@ -10,11 +11,11 @@ import {
 import {
   getMaterializedSessionId,
   getSessionRecords,
+  isPendingSessionId,
   removeSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import {
   finishMeasurementOperation,
   finishOrCancelMeasurementOperation,
@@ -22,6 +23,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
@@ -91,6 +93,7 @@ export function runHotWorkspaceReopen(
     ],
     linkedLatencyFlowId: request.options?.latencyFlowId ?? undefined,
     maxDurationMs: 2500,
+    summaryBudget: HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   });
 
   const nonce = useSessionSelectionStore.getState().workspaceSelectionNonce + 1;

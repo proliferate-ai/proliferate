@@ -9,7 +9,7 @@ import {
   RefreshCw,
 } from "@/components/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel";
+import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { FrameStatus } from "./BrowserPanelTypes";
 
 export function BrowserToolbar({

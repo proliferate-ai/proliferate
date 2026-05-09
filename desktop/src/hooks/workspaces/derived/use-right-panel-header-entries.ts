@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import {
   availableRightPanelTools,
-  canCreateRightPanelBrowserTab,
   parseRightPanelHeaderEntryKey,
   terminalIdsFromHeaderOrder,
   type RightPanelHeaderEntryKey,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { canCreateRightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-state";
 import {
   orderBrowserTabs,
   orderTerminals,

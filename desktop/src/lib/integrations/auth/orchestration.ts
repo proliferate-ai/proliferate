@@ -6,18 +6,10 @@ import {
   getStoredPendingAuthSession,
   setStoredAuthSession,
   setStoredPendingAuthSession,
-  type StoredAuthSession,
   type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth";
 import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
-import { closeAllSessionStreamHandles } from "@/lib/access/anyharness/session-stream-handles";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
-import { useAuthStore } from "@/stores/auth/auth-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
-import { useToastStore } from "@/stores/toast/toast-store";
 import {
   cancelGitHubSignIn,
   getActiveGitHubSignIn,
@@ -26,7 +18,18 @@ import {
   startGitHubSignIn,
 } from "@/lib/domain/auth/github-signin-state";
 import { createDevBypassSession, isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
+import {
+  anonymousAuthState,
+  authErrorStatePatch,
+  bootstrappingAuthStatePatch,
+  type AuthClientState,
+  type AuthClientStatePatch,
+} from "@/lib/domain/auth/auth-state-mapping";
+import {
+  storedSessionWithValidatedUser,
+} from "@/lib/domain/auth/session-mapping";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
+import type { StoredAuthSession } from "@/lib/domain/auth/stored-auth-session";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
 import {
@@ -41,7 +44,6 @@ import {
   parseDesktopAuthCallback,
   pollGitHubDesktopSession,
   refreshDesktopUserSession,
-  sessionUser,
 } from "@/lib/integrations/auth/proliferate-auth";
 import {
   captureTelemetryException,
@@ -53,16 +55,23 @@ import {
   startStartupTimer,
   summarizeStartupError,
 } from "@/lib/infra/measurement/debug-startup";
+import {
+  applyAnonymousAuthState,
+  applyPersistedAuthenticatedAuthState,
+  applyVolatileAuthenticatedAuthState,
+} from "@/lib/workflows/auth/apply-auth-state";
 
-function applyDevBypassState(): void {
+export interface AuthOrchestrationDeps {
+  getAuthState(): AuthClientState;
+  setAuthState(state: AuthClientStatePatch): void;
+  clearSessionRuntimeState(): void;
+  closeRepoSetupModal(): void;
+  showToast(message: string): void;
+}
+
+function applyDevBypassState(deps: AuthOrchestrationDeps): void {
   const session = createDevBypassSession();
-
-  useAuthStore.setState({
-    status: "authenticated",
-    session,
-    user: sessionUser(session),
-    error: null,
-  });
+  applyVolatileAuthenticatedAuthState({ session }, deps);
 }
 
 function isTransientBootstrapError(error: unknown): boolean {
@@ -71,20 +80,6 @@ function isTransientBootstrapError(error: unknown): boolean {
   }
 
   return error instanceof Error;
-}
-
-function persistValidatedSession(
-  session: StoredAuthSession,
-  user: AuthUser,
-): StoredAuthSession {
-  return {
-    ...session,
-    user_id: user.id,
-    email: user.email,
-    display_name: user.display_name,
-    github_login: user.github_login ?? null,
-    avatar_url: user.avatar_url ?? null,
-  };
 }
 
 function wait(ms: number): Promise<void> {
@@ -112,43 +107,39 @@ async function validateSession(
 
 async function recoverValidatedSessionAfterTransientFailure(
   storedSession: StoredAuthSession,
+  deps: AuthOrchestrationDeps,
 ): Promise<void> {
   const expectedRefreshToken = storedSession.refresh_token;
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await wait(1000);
 
-    const currentSession = useAuthStore.getState().session;
+    const currentSession = deps.getAuthState().session;
     if (currentSession?.refresh_token !== expectedRefreshToken) {
       return;
     }
 
     try {
       const { session, user } = await validateSession(storedSession);
-      const persistedSession = persistValidatedSession(session, user);
+      const persistedSession = storedSessionWithValidatedUser(session, user);
       await setStoredAuthSession(persistedSession);
 
-      if (useAuthStore.getState().session?.refresh_token !== expectedRefreshToken) {
+      if (deps.getAuthState().session?.refresh_token !== expectedRefreshToken) {
         return;
       }
 
-      useAuthStore.setState({
-        status: "authenticated",
-        session: persistedSession,
-        user,
-        error: null,
-      });
+      applyVolatileAuthenticatedAuthState({ session: persistedSession, user }, deps);
       return;
     } catch (error) {
       if (isTransientBootstrapError(error)) {
         continue;
       }
 
-      if (useAuthStore.getState().session?.refresh_token !== expectedRefreshToken) {
+      if (deps.getAuthState().session?.refresh_token !== expectedRefreshToken) {
         return;
       }
 
-      await applyAnonymousState();
+      await applyAnonymousState(deps);
       return;
     }
   }
@@ -162,37 +153,38 @@ function toError(error: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
-async function applyAnonymousState(options?: {
-  clearPendingAuth?: boolean;
-}): Promise<void> {
-  await clearStoredAuthSession();
-  if (options?.clearPendingAuth) {
-    await clearStoredPendingAuthSession();
-  }
-  clearSessionRuntimeStateForAuth();
-  useRepoSetupModalStore.getState().close();
-  useAuthStore.setState({
-    status: "anonymous",
-    session: null,
-    user: null,
-    error: null,
+async function applyAnonymousState(
+  deps: AuthOrchestrationDeps,
+  options?: {
+    clearPendingAuth?: boolean;
+  },
+): Promise<void> {
+  await applyAnonymousAuthState(options ?? {}, {
+    clearStoredAuthSession,
+    clearStoredPendingAuthSession,
+    clearSessionRuntimeState: deps.clearSessionRuntimeState,
+    closeRepoSetupModal: deps.closeRepoSetupModal,
+    setAuthState: deps.setAuthState,
   });
 }
 
-async function applyAuthenticatedState(session: StoredAuthSession): Promise<void> {
-  await setStoredAuthSession(session);
-  useAuthStore.setState({
-    status: "authenticated",
-    session,
-    user: sessionUser(session),
-    error: null,
+async function applyAuthenticatedState(
+  deps: AuthOrchestrationDeps,
+  session: StoredAuthSession,
+): Promise<void> {
+  await applyPersistedAuthenticatedAuthState({ session }, {
+    setStoredAuthSession,
+    setAuthState: deps.setAuthState,
   });
 }
 
-function reportBackgroundAuthError(message: string): void {
-  useToastStore.getState().show(message);
-  if (useAuthStore.getState().status !== "authenticated") {
-    useAuthStore.setState({ error: message });
+function reportBackgroundAuthError(
+  message: string,
+  deps: AuthOrchestrationDeps,
+): void {
+  deps.showToast(message);
+  if (deps.getAuthState().status !== "authenticated") {
+    deps.setAuthState(authErrorStatePatch(message));
   }
   captureTelemetryException(new Error(message), {
     level: "warning",
@@ -241,14 +233,14 @@ async function restorePendingCallbackMarker(
   });
 }
 
-export async function bootstrapAuth(): Promise<void> {
+export async function bootstrapAuth(deps: AuthOrchestrationDeps): Promise<void> {
   const startedAt = startStartupTimer();
-  useAuthStore.setState({ status: "bootstrapping", error: null });
+  deps.setAuthState(bootstrappingAuthStatePatch());
   logStartupDebug("auth.bootstrap.start");
 
   if (isDevAuthBypassed()) {
     await clearStoredPendingAuthSession();
-    applyDevBypassState();
+    applyDevBypassState(deps);
     logStartupDebug("auth.bootstrap.dev_bypass", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
@@ -259,34 +251,24 @@ export async function bootstrapAuth(): Promise<void> {
   const controlPlaneReachable = await checkControlPlaneReachable();
   if (!controlPlaneReachable) {
     await clearStoredPendingAuthSession();
-    clearSessionRuntimeStateForAuth();
+    deps.clearSessionRuntimeState();
 
     if (storedSession) {
-      useAuthStore.setState({
-        status: "authenticated",
-        session: storedSession,
-        user: sessionUser(storedSession),
-        error: null,
-      });
+      applyVolatileAuthenticatedAuthState({ session: storedSession }, deps);
       logStartupDebug("auth.bootstrap.control_plane_unreachable.cached_session", {
         elapsedMs: elapsedStartupMs(startedAt),
       });
       return;
     }
 
-    useAuthStore.setState({
-      status: "anonymous",
-      session: null,
-      user: null,
-      error: null,
-    });
+    deps.setAuthState(anonymousAuthState());
     logStartupDebug("auth.bootstrap.control_plane_unreachable.anonymous", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
     return;
   }
 
-  await ensureDeepLinkBridge(handleDesktopCallbackUrl);
+  await ensureDeepLinkBridge((url) => handleDesktopCallbackUrl(url, deps));
 
   const pending = await getStoredPendingAuthSession();
   if (pending && isPendingDesktopAuthExpired(pending)) {
@@ -297,12 +279,7 @@ export async function bootstrapAuth(): Promise<void> {
   }
 
   if (!storedSession) {
-    useAuthStore.setState({
-      status: "anonymous",
-      session: null,
-      user: null,
-      error: null,
-    });
+    deps.setAuthState(anonymousAuthState());
     logStartupDebug("auth.bootstrap.no_stored_session", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
@@ -312,34 +289,29 @@ export async function bootstrapAuth(): Promise<void> {
   try {
     logStartupDebug("auth.bootstrap.validate_stored_session.start");
     const { session, user } = await validateSession(storedSession);
-    const persistedSession = persistValidatedSession(session, user);
-    await setStoredAuthSession(persistedSession);
-    useAuthStore.setState({
-      status: "authenticated",
-      session: persistedSession,
-      user,
-      error: null,
-    });
+    const persistedSession = storedSessionWithValidatedUser(session, user);
+    await applyPersistedAuthenticatedAuthState(
+      { session: persistedSession, user },
+      {
+        setStoredAuthSession,
+        setAuthState: deps.setAuthState,
+      },
+    );
     logStartupDebug("auth.bootstrap.validate_stored_session.completed", {
       elapsedMs: elapsedStartupMs(startedAt),
     });
   } catch (error) {
     if (isTransientBootstrapError(error)) {
-      useAuthStore.setState({
-        status: "authenticated",
-        session: storedSession,
-        user: sessionUser(storedSession),
-        error: null,
-      });
+      applyVolatileAuthenticatedAuthState({ session: storedSession }, deps);
       logStartupDebug("auth.bootstrap.transient_failure_background_recovery", {
         elapsedMs: elapsedStartupMs(startedAt),
         ...summarizeStartupError(error),
       });
-      void recoverValidatedSessionAfterTransientFailure(storedSession);
+      void recoverValidatedSessionAfterTransientFailure(storedSession, deps);
       return;
     }
 
-    await applyAnonymousState();
+    await applyAnonymousState(deps);
     logStartupDebug("auth.bootstrap.failed_anonymous", {
       elapsedMs: elapsedStartupMs(startedAt),
       ...summarizeStartupError(error),
@@ -348,19 +320,15 @@ export async function bootstrapAuth(): Promise<void> {
   }
 }
 
-function clearSessionRuntimeStateForAuth(): void {
-  closeAllSessionStreamHandles();
-  useSessionDirectoryStore.getState().clearEntries();
-  useSessionTranscriptStore.getState().clearEntries();
-  useSessionSelectionStore.getState().clearSelection();
-}
-
-export async function signInWithGitHub(options?: GitHubDesktopSignInOptions): Promise<{
+export async function signInWithGitHub(
+  options: GitHubDesktopSignInOptions | undefined,
+  deps: AuthOrchestrationDeps,
+): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
   if (isDevAuthBypassed()) {
-    applyDevBypassState();
+    applyDevBypassState(deps);
     return {
       provider: "dev_bypass",
       source: "dev_bypass",
@@ -429,7 +397,7 @@ export async function signInWithGitHub(options?: GitHubDesktopSignInOptions): Pr
     }
 
     await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(session);
+    await applyAuthenticatedState(deps, session);
     return {
       provider: "github",
       source,
@@ -438,7 +406,7 @@ export async function signInWithGitHub(options?: GitHubDesktopSignInOptions): Pr
     if (
       error instanceof Error
       && error.name === "AbortError"
-      && useAuthStore.getState().status === "authenticated"
+      && deps.getAuthState().status === "authenticated"
     ) {
       return {
         provider: "github",
@@ -454,25 +422,28 @@ export async function signInWithGitHub(options?: GitHubDesktopSignInOptions): Pr
   }
 }
 
-export async function signOut(): Promise<{
+export async function signOut(deps: AuthOrchestrationDeps): Promise<{
   provider: AuthTelemetryProvider;
 }> {
   if (isDevAuthBypassed()) {
     await clearPendingGitHubAuth();
-    applyDevBypassState();
+    applyDevBypassState(deps);
     return {
       provider: "dev_bypass",
     };
   }
 
   await clearPendingGitHubAuth();
-  await applyAnonymousState({ clearPendingAuth: true });
+  await applyAnonymousState(deps, { clearPendingAuth: true });
   return {
     provider: "github",
   };
 }
 
-export async function handleDesktopCallbackUrl(url: string): Promise<boolean> {
+export async function handleDesktopCallbackUrl(
+  url: string,
+  deps: AuthOrchestrationDeps,
+): Promise<boolean> {
   if (handleDesktopNavigationUrl(url)) {
     return true;
   }
@@ -494,13 +465,14 @@ export async function handleDesktopCallbackUrl(url: string): Promise<boolean> {
   if (isPendingDesktopAuthExpired(pending)) {
     const message = "GitHub sign-in expired. Start again from Proliferate.";
     await clearPendingGitHubAuth(pending.state, new Error(message));
-    reportBackgroundAuthError(message);
+    reportBackgroundAuthError(message, deps);
     return false;
   }
 
   if (pending.state !== callback.state) {
     reportBackgroundAuthError(
       "Proliferate ignored a stale browser callback because it did not match the active sign-in.",
+      deps,
     );
     return false;
   }
@@ -519,7 +491,7 @@ export async function handleDesktopCallbackUrl(url: string): Promise<boolean> {
 
     resolveGitHubSignIn(pending.state, session);
     await clearStoredPendingAuthSession();
-    await applyAuthenticatedState(session);
+    await applyAuthenticatedState(deps, session);
     return true;
   } catch (error) {
     const latestPending = await getStoredPendingAuthSession();
@@ -546,6 +518,7 @@ export async function handleDesktopCallbackUrl(url: string): Promise<boolean> {
 
     reportBackgroundAuthError(
       error instanceof Error ? error.message : "GitHub sign-in failed",
+      deps,
     );
     return false;
   }

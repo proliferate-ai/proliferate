@@ -4,7 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import type { SessionActivationGuard, SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;

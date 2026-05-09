@@ -16,21 +16,23 @@ import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-ro
 import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
 import {
   RIGHT_PANEL_BROWSER_TAB_LIMIT,
-  createBrowserTabInRightPanelState,
-  createRightPanelBrowserTabId,
-  reconcileRightPanelWorkspaceState,
-  removeBrowserTabFromRightPanelState,
-  removeTerminalFromRightPanelState,
-  reorderHeaderEntryInRightPanelState,
   rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
   terminalIdsFromHeaderOrder,
-  updateBrowserTabUrlInRightPanelState,
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
   type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-model";
+import { createRightPanelBrowserTabId } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
+import {
+  createBrowserTabInRightPanelState,
+  reconcileRightPanelWorkspaceState,
+  removeBrowserTabFromRightPanelState,
+  removeTerminalFromRightPanelState,
+  reorderHeaderEntryInRightPanelState,
+  updateBrowserTabUrlInRightPanelState,
+} from "@/lib/domain/workspaces/shell/right-panel-state";
 import {
   rightPanelStateEqual,
 } from "@/lib/domain/workspaces/shell/right-panel-view";

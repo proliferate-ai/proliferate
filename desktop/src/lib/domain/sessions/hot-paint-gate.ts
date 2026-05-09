@@ -1,4 +1,4 @@
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 
 export interface HotPaintGate {
   workspaceId: string;

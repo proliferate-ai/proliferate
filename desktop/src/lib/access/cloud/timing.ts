@@ -1,9 +1,10 @@
-import {
-  isAnyHarnessTimingEnabled,
-  recordMeasurementMetric,
-  type MeasurementCloudCategory,
-  type MeasurementOperationId,
-} from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
+import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement-catalog-types";
+
+type CloudMeasurementCategory =
+  | "cloud.workspace.list"
+  | "cloud.workspace.display_name.update";
 
 export interface CloudMeasurementOptions {
   measurementOperationId?: MeasurementOperationId | null;
@@ -12,7 +13,7 @@ export interface CloudMeasurementOptions {
 
 export async function measureCloudRequest<T>(input: {
   operationId?: MeasurementOperationId | null;
-  category: MeasurementCloudCategory;
+  category: CloudMeasurementCategory;
   method: "GET" | "PATCH";
   run: () => Promise<T>;
 }): Promise<T> {

@@ -6,8 +6,8 @@ import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarEmptyState,
   type SidebarGroupState,
-  type SidebarIndicatorAction,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { BrailleSweepBadge } from "@/components/ui/icons";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";

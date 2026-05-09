@@ -1,26 +1,21 @@
 import {
-  type PendingPromptEntry,
   streamSession,
 } from "@anyharness/sdk";
 import type {
   Session,
-  SessionActionCapabilities,
   SessionEventEnvelope,
-  SessionExecutionSummary,
-  SessionLiveConfigSnapshot,
-  SessionMcpBindingSummary,
   SessionStreamHandle,
 } from "@anyharness/sdk";
 import {
   resolveSessionViewState,
 } from "@/lib/domain/sessions/activity";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import {
-  getMeasurementRequestOptions,
-  recordMeasurementWorkflowStep,
-  type MeasurementOperationId,
-  type MeasurementWorkflowStep,
-} from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementWorkflowStep } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import type {
+  MeasurementOperationId,
+  MeasurementWorkflowStep,
+} from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { waitForSessionHistoryTimeout } from "@/lib/infra/abort/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
@@ -39,19 +34,11 @@ import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/sess
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
-  createEmptySessionRecord,
-  createSessionRecordFromSummary,
-  getMaterializedSessionId,
-  getSessionRecords,
-  isSessionMaterialized,
   requireMaterializedSessionId,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type { SessionRelationship, SessionRuntimeRecord } from "@/stores/sessions/session-types";
+import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import {
-  closeSessionStreamHandle,
-  flushAllSessionStreamHandles,
-  getSessionStreamHandle,
   type ManagedSessionStreamHandle,
 } from "@/lib/access/anyharness/session-stream-handles";
 
@@ -65,6 +52,29 @@ interface SessionStreamCallbacks {
 }
 
 export type FlushAwareSessionStreamHandle = ManagedSessionStreamHandle;
+
+export interface SessionStreamStatusDeps {
+  getSessionStreamHandle(sessionId: string): FlushAwareSessionStreamHandle | null;
+  isPendingSessionId(sessionId: string): boolean;
+}
+
+export interface SessionStreamDetachDeps {
+  getMaterializedSessionId(clientSessionId: string): string | null;
+  getSessionStreamHandle(sessionId: string): FlushAwareSessionStreamHandle | null;
+  closeSessionStreamHandle(sessionId: string, handle: FlushAwareSessionStreamHandle): void;
+  findClientSessionIdByMaterializedSessionId(materializedSessionId: string): string | null;
+  patchSessionStreamConnectionState(
+    clientSessionId: string,
+    streamConnectionState: SessionRuntimeRecord["streamConnectionState"],
+  ): void;
+}
+
+export interface SessionStreamPruningDeps
+  extends SessionStreamDetachDeps,
+    SessionStreamStatusDeps {
+  getSessionRecords(): Record<string, SessionRuntimeRecord>;
+  flushAllSessionStreamHandles(): void;
+}
 
 const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
 function buildConnection(target: RuntimeTarget): AnyHarnessWorkspaceSessionConnection {
@@ -103,46 +113,6 @@ async function measureSessionWorkflowStep<T>(
 
 export function createPendingSessionId(agentKind: string): string {
   return `client-session:${agentKind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function isPendingSessionId(sessionId: string): boolean {
-  if (sessionId.startsWith("pending-session:") || sessionId.startsWith("client-session:")) {
-    return !isSessionMaterialized(sessionId);
-  }
-  const entry = useSessionDirectoryStore.getState().entriesById[sessionId];
-  return !!entry && !entry.materializedSessionId;
-}
-
-export function createEmptySessionRuntimeRecord(
-  sessionId: string,
-  agentKind: string,
-  config?: {
-    workspaceId?: string | null;
-    modelId?: string | null;
-    modeId?: string | null;
-    title?: string | null;
-    actionCapabilities?: SessionActionCapabilities | null;
-    liveConfig?: SessionLiveConfigSnapshot | null;
-    executionSummary?: SessionExecutionSummary | null;
-    mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
-    lastPromptAt?: string | null;
-    optimisticPrompt?: PendingPromptEntry | null;
-    sessionRelationship?: SessionRelationship;
-  },
-): SessionRuntimeRecord {
-  return createEmptySessionRecord(sessionId, agentKind, config);
-}
-
-export function createSessionRuntimeRecordFromSummary(
-  session: Session,
-  workspaceId: string,
-  options?: {
-    titleFallback?: string | null;
-    transcriptHydrated?: boolean;
-    sessionRelationship?: SessionRelationship;
-  },
-): SessionRuntimeRecord {
-  return createSessionRecordFromSummary(session, workspaceId, options);
 }
 
 export function getWorkspaceClientAndId(
@@ -362,6 +332,7 @@ export async function resumeSession(
 
 export function collectInactiveSessionStreamIds(
   sessions: Record<string, SessionRuntimeRecord>,
+  deps: SessionStreamStatusDeps,
   options?: {
     preserveSessionIds?: Iterable<string>;
   },
@@ -372,8 +343,8 @@ export function collectInactiveSessionStreamIds(
   for (const [sessionId, record] of Object.entries(sessions)) {
     if (
       !record.materializedSessionId
-      || !getSessionStreamHandle(record.materializedSessionId)
-      || isPendingSessionId(sessionId)
+      || !deps.getSessionStreamHandle(record.materializedSessionId)
+      || deps.isPendingSessionId(sessionId)
       || preservedSessionIds.has(sessionId)
     ) {
       continue;
@@ -392,6 +363,7 @@ export function collectInactiveSessionStreamIds(
 
 export function detachAndCloseSessionStreams(
   sessionIds: Iterable<string>,
+  deps: SessionStreamDetachDeps,
 ): number {
   const uniqueSessionIds = Array.from(new Set(sessionIds));
   if (uniqueSessionIds.length === 0) {
@@ -400,9 +372,9 @@ export function detachAndCloseSessionStreams(
 
   const streams: { sessionId: string; handle: FlushAwareSessionStreamHandle }[] = [];
   for (const sessionId of uniqueSessionIds) {
-    const materializedSessionId = getMaterializedSessionId(sessionId);
+    const materializedSessionId = deps.getMaterializedSessionId(sessionId);
     const handle = materializedSessionId
-      ? getSessionStreamHandle(materializedSessionId)
+      ? deps.getSessionStreamHandle(materializedSessionId)
       : null;
     if (!materializedSessionId || !handle) {
       continue;
@@ -415,32 +387,31 @@ export function detachAndCloseSessionStreams(
   }
 
   for (const { sessionId, handle } of streams) {
-    closeSessionStreamHandle(sessionId, handle);
-    const clientSessionId =
-      useSessionDirectoryStore.getState().clientSessionIdByMaterializedSessionId[sessionId]
+    deps.closeSessionStreamHandle(sessionId, handle);
+    const clientSessionId = deps.findClientSessionIdByMaterializedSessionId(sessionId)
       ?? sessionId;
-    useSessionDirectoryStore.getState().patchEntry(clientSessionId, {
-      streamConnectionState: "disconnected",
-    });
+    deps.patchSessionStreamConnectionState(clientSessionId, "disconnected");
   }
   return streams.length;
 }
 
 export function pruneInactiveSessionStreams(
+  deps: SessionStreamPruningDeps,
   options?: {
     preserveSessionIds?: Iterable<string>;
   },
 ): string[] {
-  flushAllSessionStreamHandles();
+  deps.flushAllSessionStreamHandles();
   const prunableSessionIds = collectInactiveSessionStreamIds(
-    getSessionRecords(),
+    deps.getSessionRecords(),
+    deps,
     options,
   );
   if (prunableSessionIds.length === 0) {
     return [];
   }
 
-  detachAndCloseSessionStreams(prunableSessionIds);
+  detachAndCloseSessionStreams(prunableSessionIds, deps);
   logLatency("session.stream.pruned", {
     closedSessionCount: prunableSessionIds.length,
   });

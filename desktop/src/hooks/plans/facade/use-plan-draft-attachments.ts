@@ -8,7 +8,7 @@ import {
   planReferenceContentPartFromDescriptor,
   type PromptPlanAttachmentDescriptor,
   type PromptPlanAttachmentPointer,
-} from "@/lib/domain/chat/composer/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import { dedupePlanReferenceBlocks } from "@/lib/domain/chat/composer/prompt-input";
 import { useAddPlanDraftAttachment } from "@/hooks/plans/workflows/use-add-plan-draft-attachment";
 import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";

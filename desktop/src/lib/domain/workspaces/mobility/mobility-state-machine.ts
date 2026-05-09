@@ -1,4 +1,4 @@
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { mobilityStatusCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import type { WorkspaceMobilityHandoffSummary } from "@/lib/domain/workspaces/mobility/types";
 

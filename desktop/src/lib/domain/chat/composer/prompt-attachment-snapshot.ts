@@ -2,7 +2,7 @@ import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import type {
   PromptAttachmentDescriptor,
   PromptAttachmentSource,
-} from "@/lib/domain/chat/composer/prompt-content";
+} from "@/lib/domain/chat/composer/prompt-attachment-rules";
 
 export interface PromptAttachmentSnapshot {
   id: string;

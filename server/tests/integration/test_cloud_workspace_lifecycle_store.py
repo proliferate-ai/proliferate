@@ -27,6 +27,10 @@ from proliferate.db.store.cloud_workspaces import (
     reserve_sandbox_slot_for_workspace,
 )
 from proliferate.server.cloud.workspaces import service as workspace_service
+from proliferate.server.cloud.workspaces.domain.setup_runs import (
+    bounded_setup_monitor_error,
+    classify_setup_run_finalization,
+)
 
 
 def _patch_global_session_factory(
@@ -100,7 +104,12 @@ async def test_setup_run_claim_release_and_expired_claim_reclaim(
     assert [run.id for run in next_claim] == [second.id]
 
     next_poll_at = now + timedelta(seconds=30)
-    await release_setup_run_claim(first.id, next_poll_at=next_poll_at, last_error="retry")
+    await release_setup_run_claim(
+        first.id,
+        bound_error=bounded_setup_monitor_error,
+        next_poll_at=next_poll_at,
+        last_error="retry",
+    )
     released = await db_session.get(type(first), first.id)
     assert released is not None
     await db_session.refresh(released)
@@ -146,7 +155,12 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
         apply_token="old-token",
         deadline_at=datetime.now(UTC) + timedelta(minutes=10),
     )
-    await finalize_setup_run(stale_run.id, final_status="succeeded", success=True)
+    await finalize_setup_run(
+        stale_run.id,
+        classify_finalization=classify_setup_run_finalization,
+        final_status="succeeded",
+        success=True,
+    )
 
     await db_session.refresh(stored_workspace)
     stale_record = await db_session.get(type(stale_run), stale_run.id)
@@ -166,7 +180,12 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
         apply_token="current-token",
         deadline_at=datetime.now(UTC) + timedelta(minutes=10),
     )
-    await finalize_setup_run(active_run.id, final_status="succeeded", success=True)
+    await finalize_setup_run(
+        active_run.id,
+        classify_finalization=classify_setup_run_finalization,
+        final_status="succeeded",
+        success=True,
+    )
 
     await db_session.refresh(stored_workspace)
     active_record = await db_session.get(type(active_run), active_run.id)

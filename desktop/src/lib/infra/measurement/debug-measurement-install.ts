@@ -2,12 +2,10 @@ import {
   setAnyHarnessTimingObserver,
 } from "@anyharness/sdk";
 import { installDebugMainThreadDetectors } from "@/lib/infra/measurement/debug-main-thread";
-import {
-  installDebugMeasurementExport,
-  isAnyHarnessTimingEnabled,
-  recordMeasurementMetric,
-  type MeasurementOperationId,
-} from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
+import { installDebugMeasurementExport } from "@/lib/infra/measurement/debug-measurement-dump";
+import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import type { MeasurementOperationId } from "./debug-measurement-catalog-types";
 
 let uninstallMeasurement: (() => void) | null = null;
 

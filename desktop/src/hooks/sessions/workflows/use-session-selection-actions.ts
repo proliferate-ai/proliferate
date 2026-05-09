@@ -24,14 +24,15 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { isPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
+  isPendingSessionId,
   patchSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
@@ -39,7 +40,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/stores/sessions/session-types";
+} from "@/lib/domain/sessions/directory/relationship";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 
 interface UseSessionSelectionWorkflowActionsOptions {
@@ -166,6 +167,7 @@ export function useSessionSelectionWorkflowActions({
             ],
             linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
             maxDurationMs: 2500,
+            summaryBudget: HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
           });
         const gateState = useSessionSelectionStore.getState();
         const previousHotOperationId = gateState.hotPaintGate?.operationId ?? null;

@@ -1,11 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import { parsePatch, type ParsedPatch } from "@/lib/domain/files/diff-parser";
 import {
-  isDebugMeasurementEnabled,
   measureDebugComputation,
   recordMeasurementDiagnostic,
-  type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
+import { isDebugMeasurementEnabled } from "@/lib/infra/measurement/debug-measurement-env";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import {
   highlightLines,
   type HighlightedToken,

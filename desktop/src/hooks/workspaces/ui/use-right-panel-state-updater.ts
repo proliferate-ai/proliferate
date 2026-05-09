@@ -5,8 +5,8 @@ import {
 } from "react";
 import {
   reconcileRightPanelWorkspaceState,
-  type RightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel";
+} from "@/lib/domain/workspaces/shell/right-panel-state";
+import type { RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { rightPanelStateEqual } from "@/lib/domain/workspaces/shell/right-panel-view";
 
 export function useRightPanelStateUpdater({

@@ -4,8 +4,10 @@ import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces"
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import {
   buildSidebarGroupStates,
+} from "@/lib/domain/workspaces/sidebar/sidebar-groups";
+import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
-} from "@/lib/domain/workspaces/sidebar/sidebar";
+} from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { visibleSidebarShortcutTargetIds } from "@/lib/domain/workspaces/sidebar/sidebar-shortcut-targets";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

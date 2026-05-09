@@ -9,11 +9,13 @@ import {
 } from "@anyharness/sdk-react";
 import {
   buildPublishViewState,
-  defaultPublishPullRequestDraft,
-  type PublishCommitDraft,
-  type PublishIntent,
-  type PublishPullRequestDraft,
 } from "@/lib/domain/workspaces/creation/publish-workflow";
+import { defaultPublishPullRequestDraft } from "@/lib/domain/workspaces/creation/publish-draft";
+import type {
+  PublishCommitDraft,
+  PublishIntent,
+  PublishPullRequestDraft,
+} from "@/lib/domain/workspaces/creation/publish-workflow-model";
 import { runWorkspacePublishWorkflow } from "@/lib/workflows/workspaces/run-workspace-publish-workflow";
 
 export interface UseWorkspacePublishWorkflowOptions {
