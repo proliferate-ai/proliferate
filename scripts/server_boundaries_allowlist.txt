@@ -11,11 +11,9 @@ INTEGRATION_DB_IMPORT server/proliferate/integrations/anonymous_telemetry.py 1 t
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sandbox/daytona.py 1 transitional integration depends on product domain types/logic
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sandbox/e2b.py 1 transitional integration depends on product domain types/logic
-MODELS_ORM_IMPORT server/proliferate/server/cloud/repo_config/models.py 1 transitional Pydantic constructor still accepts ORM type
 MODELS_ORM_IMPORT server/proliferate/server/cloud/workspaces/models.py 1 transitional Pydantic constructor still accepts ORM type
 SERVICE_ORM_IMPORT server/proliferate/server/ai_magic/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/repo_config/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/repos/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 transitional service imports ORM/auth model
@@ -43,11 +41,11 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/auth.py 3 mater
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper opens isolated DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mcp_connections.py 4 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mobility.py 13 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_repo_config.py 2 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_repo_config.py 2 deferred runtime/workspace flows still use isolated repo-config reads
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_runtime_environments.py 7 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_runs.py 5 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 26 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 2 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 7 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 8 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 3 transitional store opens DB session
@@ -61,11 +59,11 @@ STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/auth.py 1 mat
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp/oauth_clients.py 1 materialization refresh wrapper imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mcp_connections.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_mobility.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_repo_config.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_repo_config.py 1 deferred runtime/workspace flows still use isolated repo-config reads
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_runtime_environments.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspace_setup_runs.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspaces.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_worktree_policy.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organization_invitations.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organizations.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 1 transitional store imports DB session factory
