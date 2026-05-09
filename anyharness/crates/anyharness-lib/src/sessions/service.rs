@@ -15,7 +15,7 @@ use crate::domains::agents::catalog::{LaunchCatalogService, ModelCatalogService}
 use crate::domains::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::agents::resolver::resolve_agent;
-use crate::mobility::model::MobilityPromptAttachmentData;
+use crate::domains::mobility::model::MobilityPromptAttachmentData;
 use crate::origin::OriginContext;
 use crate::workspaces::store::WorkspaceStore;
 use anyharness_contract::v1::{

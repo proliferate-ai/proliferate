@@ -5,7 +5,7 @@ use super::model::{
     CreateCodingSessionInput, CreateCodingWorkspaceInput,
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
-use crate::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::integrations::mcp::tools::tool_definition;
 use crate::sessions::runtime::SendPromptOutcome;

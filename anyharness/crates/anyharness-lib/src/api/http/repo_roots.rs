@@ -272,22 +272,22 @@ pub async fn prepare_repo_root_mobility_destination(
         )
         .await
         .map_err(|error| match error {
-            crate::mobility::service::MobilityError::WorkspaceNotFound(_)
-            | crate::mobility::service::MobilityError::Invalid(_) => {
+            crate::domains::mobility::service::MobilityError::WorkspaceNotFound(_)
+            | crate::domains::mobility::service::MobilityError::Invalid(_) => {
                 ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
             }
-            crate::mobility::service::MobilityError::NotGitWorkspace(_) => {
+            crate::domains::mobility::service::MobilityError::NotGitWorkspace(_) => {
                 ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
             }
-            crate::mobility::service::MobilityError::BaseCommitMismatch { .. }
-            | crate::mobility::service::MobilityError::SessionAlreadyExists(_)
-            | crate::mobility::service::MobilityError::SizeLimitExceeded(_) => {
+            crate::domains::mobility::service::MobilityError::BaseCommitMismatch { .. }
+            | crate::domains::mobility::service::MobilityError::SessionAlreadyExists(_)
+            | crate::domains::mobility::service::MobilityError::SizeLimitExceeded(_) => {
                 ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
             }
-            crate::mobility::service::MobilityError::DestinationConflict(_) => {
+            crate::domains::mobility::service::MobilityError::DestinationConflict(_) => {
                 ApiError::conflict(error.to_string(), "MOBILITY_DESTINATION_CONFLICT")
             }
-            crate::mobility::service::MobilityError::Internal(inner) => {
+            crate::domains::mobility::service::MobilityError::Internal(inner) => {
                 if inner.to_string().contains("repo root not found") {
                     ApiError::not_found("Repo root not found", "REPO_ROOT_NOT_FOUND")
                 } else {

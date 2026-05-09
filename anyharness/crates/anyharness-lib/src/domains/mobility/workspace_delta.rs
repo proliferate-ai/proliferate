@@ -6,7 +6,7 @@ use anyhow::Context;
 
 use crate::adapters::files::safety::resolve_safe_path;
 use crate::adapters::git::executor::run_git_ok;
-use crate::mobility::model::MobilityFileData;
+use crate::domains::mobility::model::MobilityFileData;
 
 #[derive(Debug, Clone)]
 pub struct WorkspaceDelta {

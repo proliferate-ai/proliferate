@@ -16,10 +16,10 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract_with_summary;
 use crate::app::AppState;
-use crate::cowork::manifest::CoworkArtifactError;
-use crate::cowork::mcp::handle_json_rpc;
-use crate::cowork::model::CoworkRootRecord;
-use crate::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
+use crate::domains::cowork::manifest::CoworkArtifactError;
+use crate::domains::cowork::mcp::handle_json_rpc;
+use crate::domains::cowork::model::CoworkRootRecord;
+use crate::domains::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
 use crate::workspaces::model::WorkspaceRecord;
@@ -259,7 +259,7 @@ pub async fn get_cowork_managed_workspaces(
         .managed_workspaces_context(&session_id)
         .await
         .map_err(|error| match error {
-            crate::cowork::delegation::service::CoworkDelegationError::CoworkThreadNotFound(_) => {
+            crate::domains::cowork::delegation::service::CoworkDelegationError::CoworkThreadNotFound(_) => {
                 ApiError::not_found("cowork thread not found", "COWORK_THREAD_NOT_FOUND")
             }
             other => ApiError::internal(other.to_string()),

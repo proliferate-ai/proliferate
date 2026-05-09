@@ -1,6 +1,6 @@
 use rusqlite::{params, OptionalExtension};
 
-use crate::mobility::model::ImportedWorkspaceArchiveSummary;
+use crate::domains::mobility::model::ImportedWorkspaceArchiveSummary;
 use crate::persistence::Db;
 
 #[derive(Clone)]

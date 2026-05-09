@@ -6,8 +6,8 @@ use super::model::{
     CodingWorkspaceLaunchOption, MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE,
     MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
-use crate::cowork::model::{CoworkManagedWorkspaceRecord, CoworkThreadRecord};
-use crate::cowork::service::CoworkService;
+use crate::domains::cowork::model::{CoworkManagedWorkspaceRecord, CoworkThreadRecord};
+use crate::domains::cowork::service::CoworkService;
 use crate::sessions::delegation::{self, DelegatedEventSlice};
 use crate::sessions::links::completions::{
     LinkCompletionRecord, LinkCompletionStore, LinkWakeScheduleRecord,
