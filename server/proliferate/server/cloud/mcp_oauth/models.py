@@ -25,11 +25,6 @@ class CloudMcpOAuthFlowStatusResponse(BaseModel):
     failure_code: str | None = Field(default=None, serialization_alias="failureCode")
 
 
-class CloudMcpOAuthCallbackResponse(BaseModel):
-    ok: bool
-    status: str
-
-
 def oauth_flow_start_payload(flow: CloudMcpOAuthFlowRecord) -> StartCloudMcpOAuthFlowResponse:
     return StartCloudMcpOAuthFlowResponse(
         flow_id=flow.id,

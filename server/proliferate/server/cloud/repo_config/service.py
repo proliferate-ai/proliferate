@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
+    CloudRepoConfigSummaryValue,
     CloudRepoConfigValue,
     CloudRepoFileInput,
     bootstrap_cloud_repo_config_for_user,
@@ -23,6 +24,7 @@ from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.integrations.anyharness import CloudRuntimeOperationError
 from proliferate.server.billing.service import (
     get_billing_snapshot,
+    get_billing_snapshot_for_request,
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud.errors import CloudApiError
@@ -33,18 +35,8 @@ from proliferate.server.cloud.repo_config.domain.workspace_status import (
     WorkspaceRepoConfigStatus,
 )
 from proliferate.server.cloud.repo_config.models import (
-    CloudRepoConfigResponse,
-    CloudRepoConfigsListResponse,
-    CloudWorkspaceRepoConfigStatusResponse,
     PutCloudRepoFileRequest,
-    ResyncCloudWorkspaceFilesResponse,
-    RunCloudWorkspaceSetupResponse,
     SaveCloudRepoConfigRequest,
-    repo_config_payload,
-    repo_config_summary_payload,
-    resync_cloud_workspace_files_payload,
-    run_cloud_workspace_setup_payload,
-    workspace_repo_config_status_payload,
 )
 from proliferate.server.cloud.repo_config.validation import (
     normalize_env_vars,
@@ -78,19 +70,6 @@ class _WorkspaceRepoConfigRecord(Protocol):
     repo_post_ready_completed_at: datetime | None
     repo_files_last_failed_path: str | None
     repo_files_last_error: str | None
-
-
-def _default_repo_config_response() -> CloudRepoConfigResponse:
-    return CloudRepoConfigResponse(
-        configured=False,
-        configured_at=None,
-        default_branch=None,
-        env_vars={},
-        setup_script="",
-        run_command="",
-        files_version=0,
-        tracked_files=[],
-    )
 
 
 def _raise_workspace_not_found() -> NoReturn:
@@ -180,11 +159,8 @@ def _resync_workspace_repo_config_status(
 async def list_repo_configs(
     db: AsyncSession,
     user_id: UUID,
-) -> CloudRepoConfigsListResponse:
-    values = await list_cloud_repo_configs(db, user_id)
-    return CloudRepoConfigsListResponse(
-        configs=[repo_config_summary_payload(value) for value in values]
-    )
+) -> list[CloudRepoConfigSummaryValue]:
+    return await list_cloud_repo_configs(db, user_id)
 
 
 async def get_repo_config(
@@ -193,14 +169,13 @@ async def get_repo_config(
     *,
     git_owner: str,
     git_repo_name: str,
-) -> CloudRepoConfigResponse:
-    value = await get_cloud_repo_config(
+) -> CloudRepoConfigValue | None:
+    return await get_cloud_repo_config(
         db,
         user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
     )
-    return _default_repo_config_response() if value is None else repo_config_payload(value)
 
 
 def _normalize_files(files: list[CloudRepoFileInput]) -> list[CloudRepoFileInput]:
@@ -262,7 +237,7 @@ async def save_repo_config(
     git_owner: str,
     git_repo_name: str,
     body: SaveCloudRepoConfigRequest,
-) -> CloudRepoConfigResponse:
+) -> CloudRepoConfigValue:
     env_vars = normalize_env_vars(body.env_vars)
     default_branch = await _validate_default_branch(
         db,
@@ -277,7 +252,7 @@ async def save_repo_config(
             for item in body.files
         ]
     )
-    billing_snapshot = await get_billing_snapshot(user_id)
+    billing_snapshot = await get_billing_snapshot_for_request(db, user_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
         value = await save_cloud_repo_config(
@@ -303,7 +278,7 @@ async def save_repo_config(
             ),
             status_code=409,
         ) from error
-    return repo_config_payload(value)
+    return value
 
 
 async def save_repo_file(
@@ -313,7 +288,7 @@ async def save_repo_file(
     git_owner: str,
     git_repo_name: str,
     body: PutCloudRepoFileRequest,
-) -> CloudRepoConfigResponse:
+) -> CloudRepoConfigValue:
     relative_path = normalize_repo_file_path(body.relative_path)
     validate_tracked_file_content(body.content)
     value = await save_cloud_repo_file(
@@ -324,7 +299,7 @@ async def save_repo_file(
         relative_path=relative_path,
         content=body.content,
     )
-    return repo_config_payload(value)
+    return value
 
 
 async def load_repo_config_value(
@@ -371,7 +346,7 @@ async def get_workspace_repo_config_status(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
-) -> CloudWorkspaceRepoConfigStatusResponse:
+) -> WorkspaceRepoConfigStatus:
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     repo_config = await get_cloud_repo_config(
         db,
@@ -379,16 +354,14 @@ async def get_workspace_repo_config_status(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return workspace_repo_config_status_payload(
-        _workspace_repo_config_status(workspace, repo_config)
-    )
+    return _workspace_repo_config_status(workspace, repo_config)
 
 
 async def build_resync_workspace_repo_config_status(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
-) -> ResyncCloudWorkspaceFilesResponse:
+) -> ResyncWorkspaceRepoConfigStatus:
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     repo_config = await get_cloud_repo_config(
         db,
@@ -396,9 +369,7 @@ async def build_resync_workspace_repo_config_status(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return resync_cloud_workspace_files_payload(
-        _resync_workspace_repo_config_status(workspace, repo_config)
-    )
+    return _resync_workspace_repo_config_status(workspace, repo_config)
 
 
 def _runtime_access_from_target(
@@ -421,7 +392,7 @@ async def resync_workspace_files(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
-) -> ResyncCloudWorkspaceFilesResponse:
+) -> ResyncWorkspaceRepoConfigStatus:
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
 
     # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
@@ -452,16 +423,14 @@ async def resync_workspace_files(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return resync_cloud_workspace_files_payload(
-        _resync_workspace_repo_config_status(workspace, repo_config)
-    )
+    return _resync_workspace_repo_config_status(workspace, repo_config)
 
 
 async def run_workspace_setup(
     db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
-) -> RunCloudWorkspaceSetupResponse:
+) -> RunWorkspaceSetupStatus:
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
 
     # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
@@ -485,12 +454,10 @@ async def run_workspace_setup(
         ) from error
 
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
-    return run_cloud_workspace_setup_payload(
-        RunWorkspaceSetupStatus(
-            workspace_id=workspace.id,
-            command=started.command,
-            terminal_id=started.terminal_id,
-            command_run_id=started.command_run_id,
-            status=started.status,
-        )
+    return RunWorkspaceSetupStatus(
+        workspace_id=workspace.id,
+        command=started.command,
+        terminal_id=started.terminal_id,
+        command_run_id=started.command_run_id,
+        status=started.status,
     )

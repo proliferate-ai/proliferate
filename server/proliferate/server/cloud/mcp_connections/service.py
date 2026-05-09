@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from dataclasses import dataclass
 from typing import NoReturn
 from uuid import UUID
 
@@ -42,17 +43,20 @@ from proliferate.server.cloud.mcp_connections.domain.connection_rules import (
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpAuthKind,
     CloudMcpAuthStatus,
-    CloudMcpConnectionResponse,
-    CloudMcpConnectionsResponse,
-    CloudMcpConnectionSyncStatus,
     CreateCloudMcpConnectionRequest,
     PatchCloudMcpConnectionRequest,
     PutCloudMcpSecretAuthRequest,
     SyncCloudMcpConnectionRequest,
-    cloud_mcp_connection_payload,
-    cloud_mcp_connection_status_payload,
 )
 from proliferate.utils.crypto import encrypt_json
+
+
+@dataclass(frozen=True)
+class CloudMcpConnectionPayload:
+    record: CloudMcpConnectionRecord
+    settings: dict[str, object]
+    auth_kind: CloudMcpAuthKind
+    auth_status: CloudMcpAuthStatus
 
 
 def _invalid_payload(message: str) -> NoReturn:
@@ -121,36 +125,34 @@ def _auth_state(
     return state.auth_kind, state.auth_status
 
 
-def _connection_payload(record: CloudMcpConnectionRecord) -> CloudMcpConnectionResponse:
+def _connection_payload(record: CloudMcpConnectionRecord) -> CloudMcpConnectionPayload:
     auth_kind, auth_status = _auth_state(record)
     entry = get_catalog_entry(record.catalog_entry_id)
     parsed_settings = parse_connection_settings(record.settings_json)
     if entry is not None:
         with suppress(McpConnectionRuleViolation):
             parsed_settings = validate_connection_settings(entry, parsed_settings)
-    return cloud_mcp_connection_payload(
-        record,
-        parsed_settings,
-        auth_kind,
-        auth_status,
+    return CloudMcpConnectionPayload(
+        record=record,
+        settings=parsed_settings,
+        auth_kind=auth_kind,
+        auth_status=auth_status,
     )
 
 
 async def list_cloud_mcp_connections(
     db: AsyncSession,
     user_id: UUID,
-) -> CloudMcpConnectionsResponse:
+) -> list[CloudMcpConnectionPayload]:
     records = await list_user_connections(db, user_id)
-    return CloudMcpConnectionsResponse(
-        connections=[_connection_payload(record) for record in records]
-    )
+    return [_connection_payload(record) for record in records]
 
 
 async def create_cloud_mcp_connection(
     db: AsyncSession,
     user_id: UUID,
     body: CreateCloudMcpConnectionRequest,
-) -> CloudMcpConnectionResponse:
+) -> CloudMcpConnectionPayload:
     catalog_entry_id = body.catalog_entry_id.strip()
     entry = get_catalog_entry(catalog_entry_id)
     if entry is None:
@@ -196,7 +198,7 @@ async def patch_cloud_mcp_connection(
     db: AsyncSession,
     existing: CloudMcpConnectionRecord,
     body: PatchCloudMcpConnectionRequest,
-) -> CloudMcpConnectionResponse:
+) -> CloudMcpConnectionPayload:
     entry = get_catalog_entry(existing.catalog_entry_id)
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")
@@ -233,7 +235,7 @@ async def put_cloud_mcp_connection_secret_auth(
     db: AsyncSession,
     record: CloudMcpConnectionRecord,
     body: PutCloudMcpSecretAuthRequest,
-) -> CloudMcpConnectionResponse:
+) -> CloudMcpConnectionPayload:
     entry = get_catalog_entry(record.catalog_entry_id)
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")
@@ -262,11 +264,8 @@ async def delete_cloud_mcp_connection_for_user(
 async def list_cloud_mcp_connection_statuses(
     db: AsyncSession,
     user_id: UUID,
-) -> list[CloudMcpConnectionSyncStatus]:
-    return [
-        cloud_mcp_connection_status_payload(record)
-        for record in await legacy_list_connections(db, user_id)
-    ]
+) -> list[CloudMcpConnectionRecord]:
+    return await legacy_list_connections(db, user_id)
 
 
 async def sync_cloud_mcp_connection_for_user(

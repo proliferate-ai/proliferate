@@ -25,6 +25,7 @@ def _redirect_uri() -> str:
     return oauth_redirect_uri(
         configured_callback_base_url=settings.cloud_mcp_oauth_callback_base_url,
         api_base_url=settings.api_base_url,
+        fallback_callback_base_url=settings.cloud_mcp_oauth_callback_fallback_base_url,
     )
 
 

@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     automation_cloud_executor_branch_prefix: str = "automation"
     automation_cloud_executor_branch_slug_chars: int = 48
     cloud_mcp_oauth_callback_base_url: str = ""
+    cloud_mcp_oauth_callback_fallback_base_url: str = "http://localhost:8000"
     cloud_mcp_slack_enabled: bool = False
     cloud_mcp_slack_client_id: str = ""
     cloud_mcp_slack_client_secret: str = ""

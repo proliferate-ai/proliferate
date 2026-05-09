@@ -17,10 +17,6 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingSubject
 from proliferate.db.models.organizations import Organization, OrganizationMembership
-from proliferate.db.store.billing import (
-    ensure_organization_billing_subject,
-    maybe_create_org_seat_adjustment,
-)
 from proliferate.db.store.organization_records import (
     MemberRecord,
     MembershipRecord,
@@ -119,7 +115,6 @@ async def ensure_default_organization_for_user(
         updated_at=now,
     )
     db.add(membership)
-    await ensure_organization_billing_subject(db, organization.id)
     await db.flush()
     return [
         OrganizationWithMembershipRecord(
@@ -276,20 +271,7 @@ async def update_organization_membership(
             membership.joined_at = now
     membership.updated_at = now
     await db.flush()
-    if status is not None:
-        await maybe_create_org_seat_adjustment(
-            db,
-            organization_id=organization_id,
-            membership_id=membership.id,
-        )
     return membership_record(membership), None
-
-
-async def ensure_organization_billing_subject_id(organization_id: UUID) -> UUID:
-    async with db_engine.async_session_factory() as db:
-        subject = await ensure_organization_billing_subject(db, organization_id)
-        await db.commit()
-        return subject.id
 
 
 async def load_organization_by_billing_subject(

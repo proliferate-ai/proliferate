@@ -31,11 +31,6 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
-from proliferate.db.store.billing import (
-    ensure_organization_billing_subject,
-    get_or_create_stripe_customer_state_for_user,
-    get_or_create_user_stripe_customer_state,
-)
 from proliferate.db.store.organization_records import (
     InvitationCreateRecord,
     InvitationRecord,
@@ -45,6 +40,11 @@ from proliferate.db.store.organization_records import (
     normalize_invitation_email,
 )
 from proliferate.integrations import resend
+from proliferate.server.billing.service import (
+    ensure_organization_billing_subject_state,
+    ensure_personal_billing_subject_state,
+    maybe_create_organization_seat_adjustment,
+)
 from proliferate.server.organizations.domain.policy import (
     can_modify_membership,
     can_modify_owner_memberships,
@@ -175,7 +175,7 @@ async def resolve_owner_context(
     actor_user: OrganizationActor,
     owner_selection: OwnerSelection | None = None,
     *,
-    db: AsyncSession | None = None,
+    db: AsyncSession,
 ) -> OwnerContext:
     selection = owner_selection or OwnerSelection()
     if selection.owner_scope == "personal":
@@ -185,11 +185,7 @@ async def resolve_owner_context(
                 "organizationId is not valid for personal scope.",
                 status_code=400,
             )
-        state = (
-            await get_or_create_user_stripe_customer_state(db, actor_user.id)
-            if db is not None
-            else await get_or_create_stripe_customer_state_for_user(actor_user.id)
-        )
+        state = await ensure_personal_billing_subject_state(db, actor_user.id)
         if state.kind != BILLING_SUBJECT_KIND_PERSONAL:
             raise OrganizationServiceError(
                 "invalid_owner_selection",
@@ -207,27 +203,16 @@ async def resolve_owner_context(
         )
 
     organization_id = _require_uuid(selection.organization_id, field="organizationId")
-    if db is not None:
-        record = await organization_store.get_organization_with_membership(
-            db,
-            organization_id=organization_id,
-            user_id=actor_user.id,
-        )
-        if record is None:
-            raise _org_not_found()
-        subject = await ensure_organization_billing_subject(db, organization_id)
-        membership = record.membership
-        billing_subject_id = subject.id
-    else:
-        membership = await organization_store.load_active_membership(
-            organization_id=organization_id,
-            user_id=actor_user.id,
-        )
-        if membership is None:
-            raise _org_not_found()
-        billing_subject_id = await organization_store.ensure_organization_billing_subject_id(
-            organization_id,
-        )
+    record = await organization_store.get_organization_with_membership(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user.id,
+    )
+    if record is None:
+        raise _org_not_found()
+    subject = await ensure_organization_billing_subject_state(db, organization_id)
+    membership = record.membership
+    billing_subject_id = subject.billing_subject_id
     return OwnerContext(
         owner_scope="organization",
         actor_user_id=actor_user.id,
@@ -251,7 +236,7 @@ async def _resolve_organization_owner_context(
     )
     if record is None:
         raise _org_not_found()
-    subject = await ensure_organization_billing_subject(db, organization_id)
+    subject = await ensure_organization_billing_subject_state(db, organization_id)
     return OwnerContext(
         owner_scope="organization",
         actor_user_id=actor_user.id,
@@ -259,7 +244,7 @@ async def _resolve_organization_owner_context(
         organization_id=organization_id,
         membership_id=record.membership.id,
         membership_role=record.membership.role,
-        billing_subject_id=subject.id,
+        billing_subject_id=subject.billing_subject_id,
     )
 
 
@@ -270,12 +255,15 @@ async def list_organizations(
     records = await organization_store.list_organizations_for_user(db, actor_user.id)
     if records:
         return records
-    return await organization_store.ensure_default_organization_for_user(
+    records = await organization_store.ensure_default_organization_for_user(
         db,
         user_id=actor_user.id,
         name=_default_organization_name(actor_user),
         logo_domain=derive_logo_domain_from_email(actor_user.email),
     )
+    if records:
+        await ensure_organization_billing_subject_state(db, records[0].organization.id)
+    return records
 
 
 async def get_organization(
@@ -375,6 +363,12 @@ async def update_membership(
         )
     if membership is None:
         raise _org_not_found()
+    if status is not None:
+        await maybe_create_organization_seat_adjustment(
+            db,
+            organization_id=organization_id,
+            membership_id=membership.id,
+        )
     return membership
 
 
@@ -581,6 +575,11 @@ async def accept_invitation(
             message,
             status_code=status_code,
         )
+    await maybe_create_organization_seat_adjustment(
+        db,
+        organization_id=accepted.organization.id,
+        membership_id=accepted.membership.id,
+    )
     return OrganizationWithMembershipRecord(
         organization=accepted.organization,
         membership=accepted.membership,
