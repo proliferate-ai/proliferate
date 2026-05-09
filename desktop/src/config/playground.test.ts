@@ -3,13 +3,11 @@ import { createElement, isValidElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "./playground";
-import { renderDelegationSlot } from "@/components/playground/PlaygroundComposerDelegation";
+import { renderDelegationSlot } from "@/components/playground/delegation/PlaygroundComposerDelegation";
 import { renderMobilityOverlayPreview } from "@/components/playground/PlaygroundComposerMobility";
-import {
-  renderActiveSlot,
-  renderAttachedSlot,
-  renderOutboundSlot,
-} from "@/components/playground/PlaygroundComposerSlots";
+import { renderActiveSlot } from "@/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
+import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
+import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import { renderComposerSurfaceForScenario } from "@/components/playground/PlaygroundComposerSurfaces";
 import {
   FILE_MENTION_SEARCH_RESULTS,

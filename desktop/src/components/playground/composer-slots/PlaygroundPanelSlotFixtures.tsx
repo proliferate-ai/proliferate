@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
-import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
@@ -24,12 +23,6 @@ import {
   MCP_ELICITATION_MIXED_REQUIRED,
   MCP_ELICITATION_MULTI_SELECT,
   MCP_ELICITATION_URL,
-  PENDING_PROMPTS_MULTI,
-  PENDING_PROMPTS_SINGLE,
-  PENDING_PROMPTS_WITH_EDITING,
-  PENDING_REVIEW_COMPLETE,
-  PENDING_REVIEW_FEEDBACK_READY,
-  PLAYGROUND_SUBAGENT_WAKE_QUEUE,
   TODOS_LONG,
   TODOS_MID,
   TODOS_SHORT,
@@ -40,74 +33,9 @@ import {
   USER_INPUT_SINGLE_OPTION,
   WORKSPACE_ARRIVAL_CREATED,
 } from "@/lib/domain/chat/__fixtures__/playground";
-import {
-  derivePendingPromptQueueRow,
-  type PendingPromptQueueEntry,
-} from "@/lib/domain/chat/outbox/pending-prompt-queue";
 import { noop, noopAsync, revealExampleUrl } from "@/components/playground/PlaygroundComposerActions";
-import { renderDelegationSlot } from "@/components/playground/PlaygroundComposerDelegation";
 
-export function renderActiveSlot(scenario: ScenarioKey): ReactNode | null {
-  switch (scenario) {
-    case "todos-short":
-    case "todos-mid":
-    case "todos-long":
-    case "execute-approval":
-    case "edit-approval":
-    case "pending-prompts-with-approval":
-    case "subagents-queued-wake-with-approval":
-    case "subagents-coding-review-with-approval":
-    case "gemini-mcp-approval-options":
-    case "gemini-tool-before-approval":
-    case "user-input-single-option":
-    case "user-input-single-freeform":
-    case "user-input-option-plus-other":
-    case "user-input-secret":
-    case "user-input-multi-question":
-    case "mcp-elicitation-boolean":
-    case "mcp-elicitation-enum":
-    case "mcp-elicitation-multi-select":
-    case "mcp-elicitation-mixed-required":
-    case "mcp-elicitation-url":
-    case "mcp-elicitation-validation-error":
-    case "mcp-elicitation-cancel-decline":
-      return renderPanelSlotFixture(scenario);
-    default:
-      return null;
-  }
-}
-
-export function renderAttachedSlot(scenario: ScenarioKey): ReactNode | null {
-  const contextPanel = (() => {
-    switch (scenario) {
-      case "workspace-arrival-created":
-      case "cloud-first-runtime":
-      case "cloud-provisioning":
-      case "cloud-applying-files":
-      case "cloud-blocked":
-      case "cloud-error":
-      case "cloud-reconnecting":
-      case "cloud-reconnect-error":
-        return renderPanelSlotFixture(scenario);
-      default:
-        return null;
-    }
-  })();
-  const delegationPanel = renderDelegationSlot(scenario);
-
-  if (!contextPanel && !delegationPanel) {
-    return null;
-  }
-
-  return (
-    <>
-      {contextPanel}
-      {delegationPanel}
-    </>
-  );
-}
-
-function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
+export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "clean":
     case "gemini-retry-status":
@@ -366,66 +294,7 @@ function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
           onRevealUrl={revealExampleUrl}
         />
       );
-  }
-}
-
-export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
-  switch (scenario) {
-    case "pending-prompts-single":
-    case "pending-prompts-with-approval":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_PROMPTS_SINGLE)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "pending-prompts-multi":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_PROMPTS_MULTI)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "pending-prompts-editing":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_PROMPTS_WITH_EDITING)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "pending-review-feedback-ready":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_REVIEW_FEEDBACK_READY)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "pending-review-complete":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PENDING_REVIEW_COMPLETE)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
-    case "subagents-queued-wake":
-    case "subagents-queued-wake-with-approval":
-      return (
-        <PendingPromptList
-          entries={pendingQueueRows(PLAYGROUND_SUBAGENT_WAKE_QUEUE)}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
     default:
       return null;
   }
-}
-
-function pendingQueueRows(entries: PendingPromptQueueEntry[]) {
-  return entries.map(derivePendingPromptQueueRow);
 }

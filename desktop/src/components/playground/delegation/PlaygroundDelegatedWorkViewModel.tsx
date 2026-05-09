@@ -1,141 +1,17 @@
 import type { ReviewRunDetail } from "@anyharness/sdk";
-import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
-import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
-import type { ScenarioKey } from "@/config/playground";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
-import type {
-  CoworkComposerStripSummary,
-  CoworkComposerWorkspaceRow,
-} from "@/hooks/cowork/facade/use-cowork-composer-strip";
 import {
-  PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   type PlaygroundReviewComposerRow,
   type PlaygroundReviewComposerState,
 } from "@/lib/domain/chat/__fixtures__/playground";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
+import {
+  PLAYGROUND_COWORK_ROWS,
+  PLAYGROUND_COWORK_SUMMARY,
+} from "@/components/playground/delegation/PlaygroundDelegatedWorkFixtures";
 
-const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
-  {
-    ownershipId: "workspace-frontend-polish",
-    workspaceId: "workspace-frontend-polish",
-    parentSessionId: "playground-root-session",
-    label: "frontend-polish",
-    sessionCount: 2,
-    active: true,
-    sessions: [
-      {
-        sessionLinkId: "coding-link-composer-layout",
-        codingSessionId: "coding-session-composer-layout",
-        parentSessionId: "playground-root-session",
-        label: "composer layout cleanup",
-        agentKind: "codex",
-        statusLabel: "Working",
-        meta: "Codex · gpt-5.4 · implementation",
-        latestCompletionLabel: null,
-        wakeScheduled: false,
-        color: resolveSubagentColor("coding-link-composer-layout"),
-        active: true,
-      },
-      {
-        sessionLinkId: "coding-link-visual-regression",
-        codingSessionId: "coding-session-visual-regression",
-        parentSessionId: "playground-root-session",
-        label: "visual regression pass",
-        agentKind: "claude",
-        statusLabel: "Idle",
-        meta: "Claude · sonnet · verification",
-        latestCompletionLabel: "Turn completed",
-        wakeScheduled: true,
-        color: resolveSubagentColor("coding-link-visual-regression"),
-        active: false,
-      },
-    ],
-  },
-];
-
-const PLAYGROUND_COWORK_SUMMARY: CoworkComposerStripSummary = {
-  label: "1 coding workspace",
-  detail: "1 working · 1 wake scheduled",
-  active: true,
-};
-
-export function renderDelegationSlot(scenario: ScenarioKey) {
-  const reviewState = reviewComposerStateForScenario(scenario);
-  if (reviewState) {
-    return (
-      <DelegatedWorkComposerPanel>
-        <DelegatedWorkComposerControl
-          viewModel={buildPlaygroundDelegatedWorkViewModel({ reviewState })}
-        />
-      </DelegatedWorkComposerPanel>
-    );
-  }
-
-  switch (scenario) {
-    case "agents-cowork-only":
-      return (
-        <DelegatedWorkComposerPanel>
-          <DelegatedWorkComposerControl
-            viewModel={buildPlaygroundDelegatedWorkViewModel({ cowork: true })}
-          />
-        </DelegatedWorkComposerPanel>
-      );
-    case "subagents-composer-few":
-      return (
-        <PlaygroundDelegatedWorkControl
-          subagentRows={PLAYGROUND_SUBAGENT_STRIP_ROWS.slice(0, 3)}
-        />
-      );
-    case "subagents-coding-review-with-approval":
-      return <PlaygroundDelegationStack />;
-    case "subagents-composer-many":
-    case "subagents-queued-wake":
-    case "subagents-queued-wake-with-approval":
-      return (
-        <PlaygroundDelegatedWorkControl subagentRows={PLAYGROUND_SUBAGENT_STRIP_ROWS} />
-      );
-    default:
-      return null;
-  }
-}
-
-function PlaygroundDelegationStack() {
-  return (
-    <DelegatedWorkComposerPanel>
-      <DelegatedWorkComposerControl
-        viewModel={buildPlaygroundDelegatedWorkViewModel({
-          reviewState: PLAYGROUND_REVIEW_COMPOSER_STATES["subagents-reviewing-code"],
-          cowork: true,
-          subagentRows: PLAYGROUND_SUBAGENT_STRIP_ROWS,
-        })}
-      />
-    </DelegatedWorkComposerPanel>
-  );
-}
-
-function reviewComposerStateForScenario(
-  scenario: ScenarioKey,
-): PlaygroundReviewComposerState | null {
-  return PLAYGROUND_REVIEW_COMPOSER_STATES[scenario] ?? null;
-}
-
-function PlaygroundDelegatedWorkControl({
-  subagentRows,
-}: {
-  subagentRows: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;
-}) {
-  return (
-    <DelegatedWorkComposerPanel>
-      <DelegatedWorkComposerControl
-        viewModel={buildPlaygroundDelegatedWorkViewModel({ subagentRows })}
-      />
-    </DelegatedWorkComposerPanel>
-  );
-}
-
-function buildPlaygroundDelegatedWorkViewModel(args: {
+export function buildPlaygroundDelegatedWorkViewModel(args: {
   reviewState?: PlaygroundReviewComposerState | null;
   cowork?: boolean;
   subagentRows?: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS;

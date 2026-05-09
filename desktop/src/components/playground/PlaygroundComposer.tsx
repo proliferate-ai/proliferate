@@ -9,11 +9,9 @@ import {
   ReplayComposerSurface,
   renderComposerSurfaceForScenario,
 } from "@/components/playground/PlaygroundComposerSurfaces";
-import {
-  renderActiveSlot,
-  renderAttachedSlot,
-  renderOutboundSlot,
-} from "@/components/playground/PlaygroundComposerSlots";
+import { renderActiveSlot } from "@/components/playground/composer-slots/PlaygroundActiveSlotFixtures";
+import { renderAttachedSlot } from "@/components/playground/composer-slots/PlaygroundAttachedSlotFixtures";
+import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import type { PlaygroundScenarioSelection } from "@/config/playground";
 import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
