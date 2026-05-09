@@ -18,7 +18,7 @@ STORE_COMMIT_ROLLBACK server/proliferate/db/store/billing.py 33 transitional sto
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_mobility.py 6 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_runtime_environments.py 3 phase 8 runtime lifecycle wrappers own deliberate checkpoint transactions
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspace_setup_runs.py 4 transitional store owns transaction commit
-STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspaces.py 16 transitional store owns transaction commit
+STORE_COMMIT_ROLLBACK server/proliferate/db/store/cloud_workspaces.py 14 transitional store owns transaction commit
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/organizations.py 1 transitional store owns transaction commit
 STORE_FORBIDDEN_IMPORT server/proliferate/db/store/billing.py 4 transitional store imports product/integration code
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store opens DB session
@@ -32,7 +32,7 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_mobility.py 9 trans
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_repo_config.py 2 deferred runtime/workspace flows still use isolated repo-config reads
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_runtime_environments.py 7 phase 8 runtime lifecycle wrappers open isolated DB sessions
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_runs.py 5 transitional store opens DB session
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 26 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 24 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 2 intentional create/rotate transaction commits before external email delivery
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 4 transitional wrappers used by deferred billing/cloud callers
