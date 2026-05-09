@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -15,7 +15,6 @@ from proliferate.constants.cloud import (
     CloudRuntimeEnvironmentStatus,
     CloudWorkspaceStatus,
 )
-from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
 from proliferate.server.cloud.credentials.domain.status import (
     CredentialStatusRecord,
     allowed_agent_kinds,
@@ -24,6 +23,37 @@ from proliferate.server.cloud.credentials.domain.status import (
 from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
 
 logger = logging.getLogger(__name__)
+
+
+class WorkspaceRecord(Protocol):
+    id: UUID
+    display_name: str | None
+    git_provider: str
+    git_owner: str
+    git_repo_name: str
+    git_branch: str
+    git_base_branch: str | None
+    origin_json: str | None
+    status: str
+    status_detail: str | None
+    last_error: str | None
+    template_version: str
+    runtime_generation: int
+    anyharness_workspace_id: str | None
+    repo_post_ready_phase: str
+    repo_post_ready_files_total: int
+    repo_post_ready_files_applied: int
+    repo_post_ready_started_at: datetime | None
+    repo_post_ready_completed_at: datetime | None
+    repo_files_last_failed_path: str | None
+    updated_at: datetime
+    created_at: datetime
+
+
+class RuntimeEnvironmentRecord(Protocol):
+    id: UUID
+    status: str
+    runtime_generation: int
 
 
 class CreateCloudWorkspaceRequest(BaseModel):
@@ -174,7 +204,7 @@ class WorkspaceRuntimeSummary(BaseModel):
     action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
 
 
-def _repo_ref(workspace: CloudWorkspace) -> RepoRef:
+def _repo_ref(workspace: WorkspaceRecord) -> RepoRef:
     return RepoRef(
         provider=workspace.git_provider,
         owner=workspace.git_owner,
@@ -184,7 +214,7 @@ def _repo_ref(workspace: CloudWorkspace) -> RepoRef:
     )
 
 
-def _origin_payload(workspace: CloudWorkspace) -> OriginContext | None:
+def _origin_payload(workspace: WorkspaceRecord) -> OriginContext | None:
     if not workspace.origin_json:
         return None
     try:
@@ -218,9 +248,9 @@ def credential_freshness_payload(
 
 
 def workspace_summary_payload(
-    workspace: CloudWorkspace,
+    workspace: WorkspaceRecord,
     *,
-    runtime_environment: CloudRuntimeEnvironment | None = None,
+    runtime_environment: RuntimeEnvironmentRecord | None = None,
     credential_freshness: CredentialFreshnessSnapshot | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
@@ -274,10 +304,10 @@ def workspace_summary_payload(
 
 
 def workspace_detail_payload(
-    workspace: CloudWorkspace,
+    workspace: WorkspaceRecord,
     credential_statuses: list[CredentialStatusRecord],
     *,
-    runtime_environment: CloudRuntimeEnvironment | None = None,
+    runtime_environment: RuntimeEnvironmentRecord | None = None,
     credential_freshness: CredentialFreshnessSnapshot | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,

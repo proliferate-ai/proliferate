@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from sqlalchemy.ext.asyncio import AsyncSession

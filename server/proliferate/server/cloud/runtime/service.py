@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.server.billing.service import get_billing_snapshot_for_subject

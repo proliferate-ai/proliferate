@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudRepoConfig, CloudRepoFile
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig, CloudRepoFile
 from proliferate.db.store.billing import (
     acquire_billing_subject_repo_limit_lock,
     cloud_repo_slot_exists,

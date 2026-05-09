@@ -8,7 +8,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.db import engine as engine_module
-from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import (
     count_active_cloud_repo_environments,
     ensure_personal_billing_subject,

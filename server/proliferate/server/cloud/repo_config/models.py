@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigSummaryValue,
     CloudRepoConfigValue,

@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudMcpConnection
+from proliferate.db.models.cloud.mcp import CloudMcpConnection
 from proliferate.utils.time import utcnow
 
 

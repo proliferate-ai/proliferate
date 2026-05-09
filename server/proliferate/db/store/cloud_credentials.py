@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudAgentKind
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudCredential
+from proliferate.db.models.cloud.credentials import CloudCredential
 from proliferate.utils.crypto import decrypt_json
 from proliferate.utils.time import utcnow
 

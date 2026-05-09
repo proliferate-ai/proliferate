@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud import CloudMcpOAuthFlow
+from proliferate.db.models.cloud.mcp import CloudMcpOAuthFlow
 from proliferate.db.store.cloud_mcp.types import CloudMcpOAuthFlowRecord
 from proliferate.utils.time import utcnow
 

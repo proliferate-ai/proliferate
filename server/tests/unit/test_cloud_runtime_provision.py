@@ -9,7 +9,8 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.db.models.auth import OAuthAccount, User
-from proliferate.db.models.cloud import CloudCredential, CloudWorkspace
+from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_credentials, cloud_workspaces, users
 from proliferate.integrations.sandbox import SandboxProviderKind
 from proliferate.server.cloud.errors import CloudApiError

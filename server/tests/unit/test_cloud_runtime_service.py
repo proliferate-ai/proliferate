@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import service as runtime_service
 

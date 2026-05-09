@@ -11,7 +11,8 @@ from typing import Literal
 from uuid import UUID
 
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, CloudRuntimeEnvironmentStatus
-from proliferate.db.models.cloud import CloudCredential, CloudRuntimeEnvironment
+from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.cloud_runtime_environments import (

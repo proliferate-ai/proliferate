@@ -11,11 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import (
-    CloudWorkspace,
-    CloudWorkspaceHandoffOp,
-    CloudWorkspaceMobility,
-)
+from proliferate.db.models.cloud.mobility import CloudWorkspaceHandoffOp, CloudWorkspaceMobility
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
 
 

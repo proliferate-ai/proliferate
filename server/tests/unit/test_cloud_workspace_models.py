@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.server.cloud.workspaces import models as workspace_models
 from proliferate.server.cloud.workspaces.models import workspace_summary_payload
 

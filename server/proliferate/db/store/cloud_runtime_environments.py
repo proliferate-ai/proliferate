@@ -17,7 +17,9 @@ from proliferate.constants.cloud import (
     CloudRuntimeIsolationPolicy,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.utils.time import utcnow
 

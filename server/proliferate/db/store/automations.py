@@ -22,7 +22,7 @@ from proliferate.constants.automations import (
 from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
 from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import Automation, AutomationRun
-from proliferate.db.models.cloud import CloudRepoConfig
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
