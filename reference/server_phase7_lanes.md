@@ -1,10 +1,13 @@
 # Server Phase 7 Lanes
 
-Status: working reference.
+Status: completed implementation reference.
 
 Use this file when assigning Phase 7 server cleanup work. The goal is to finish
 normal medium store/model/file cleanup and prove that the remaining debt belongs
 to explicitly deferred complex systems.
+
+The final remainder classification lives in
+`reference/server_phase7_remainder_audit.md`.
 
 Phase 7 is not "clean every large server file." It is the pass that makes
 medium, ownership-obvious areas conform to `docs/server/**` after the DB,
@@ -253,6 +256,9 @@ Question: does any cleanup stand alone, or is this tied to cloud runtime
 materialization and therefore Phase 8?
 
 ### 7K. Boundary Allowlist Remainder
+
+Status: completed as audit-only in
+`reference/server_phase7_remainder_audit.md`.
 
 Audit:
 
