@@ -33,8 +33,8 @@ import {
 import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
-  type ReconciledStreamConfigIntent,
 } from "@/hooks/sessions/session-stream-side-effects";
+import type { ReconciledStreamConfigIntent } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
