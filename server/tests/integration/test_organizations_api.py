@@ -8,6 +8,7 @@ from collections.abc import Iterator
 import pytest
 from httpx import AsyncClient
 
+from proliferate.auth.authorization import OwnerSelection
 from proliferate.server.organizations import service as organization_service
 
 TINY_PNG_DATA_URL = (
@@ -138,6 +139,38 @@ async def test_default_organization_member_list_and_last_owner_protection(
     )
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "cannot_modify_own_membership"
+
+
+@pytest.mark.asyncio
+async def test_resolve_owner_context_uses_threaded_db(
+    client: AsyncClient,
+) -> None:
+    owner = await _create_user_and_get_tokens(
+        client,
+        email="owner@acme.dev",
+        display_name="Owner User",
+    )
+    organization = await _default_organization(client, owner)
+    organization_id = uuid.UUID(str(organization["id"]))
+
+    from proliferate.db import engine as engine_module
+    from proliferate.db.models.auth import User
+
+    async with engine_module.async_session_factory() as session:
+        user = await session.get(User, uuid.UUID(owner["user_id"]))
+        assert user is not None
+        context = await organization_service.resolve_owner_context(
+            user,
+            OwnerSelection(
+                owner_scope="organization",
+                organization_id=organization_id,
+            ),
+            db=session,
+        )
+
+    assert context.owner_scope == "organization"
+    assert context.organization_id == organization_id
+    assert context.membership_role == "owner"
 
 
 @pytest.mark.asyncio

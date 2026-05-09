@@ -34,6 +34,7 @@ from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.billing import (
     ensure_organization_billing_subject,
     get_or_create_stripe_customer_state_for_user,
+    get_or_create_user_stripe_customer_state,
 )
 from proliferate.db.store.organization_records import (
     InvitationCreateRecord,
@@ -173,6 +174,8 @@ def _org_not_found() -> OrganizationServiceError:
 async def resolve_owner_context(
     actor_user: OrganizationActor,
     owner_selection: OwnerSelection | None = None,
+    *,
+    db: AsyncSession | None = None,
 ) -> OwnerContext:
     selection = owner_selection or OwnerSelection()
     if selection.owner_scope == "personal":
@@ -182,7 +185,11 @@ async def resolve_owner_context(
                 "organizationId is not valid for personal scope.",
                 status_code=400,
             )
-        state = await get_or_create_stripe_customer_state_for_user(actor_user.id)
+        state = (
+            await get_or_create_user_stripe_customer_state(db, actor_user.id)
+            if db is not None
+            else await get_or_create_stripe_customer_state_for_user(actor_user.id)
+        )
         if state.kind != BILLING_SUBJECT_KIND_PERSONAL:
             raise OrganizationServiceError(
                 "invalid_owner_selection",
@@ -200,22 +207,34 @@ async def resolve_owner_context(
         )
 
     organization_id = _require_uuid(selection.organization_id, field="organizationId")
-    record = await organization_store.load_organization_with_membership(
-        organization_id=organization_id,
-        user_id=actor_user.id,
-    )
-    if record is None:
-        raise _org_not_found()
-    billing_subject_id = await organization_store.ensure_organization_billing_subject_id(
-        organization_id,
-    )
+    if db is not None:
+        record = await organization_store.get_organization_with_membership(
+            db,
+            organization_id=organization_id,
+            user_id=actor_user.id,
+        )
+        if record is None:
+            raise _org_not_found()
+        subject = await ensure_organization_billing_subject(db, organization_id)
+        membership = record.membership
+        billing_subject_id = subject.id
+    else:
+        membership = await organization_store.load_active_membership(
+            organization_id=organization_id,
+            user_id=actor_user.id,
+        )
+        if membership is None:
+            raise _org_not_found()
+        billing_subject_id = await organization_store.ensure_organization_billing_subject_id(
+            organization_id,
+        )
     return OwnerContext(
         owner_scope="organization",
         actor_user_id=actor_user.id,
         owner_user_id=None,
         organization_id=organization_id,
-        membership_id=record.membership.id,
-        membership_role=record.membership.role,
+        membership_id=membership.id,
+        membership_role=membership.role,
         billing_subject_id=billing_subject_id,
     )
 
