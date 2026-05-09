@@ -1,7 +1,8 @@
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
-  findReviewPersonaTemplateForReviewer,
   nextReviewReviewerId,
+  reviewerMatchesReviewPersonaTemplate,
+  reviewerPersonalityLabel,
   resolveReviewExecutionModeIdForAgent,
   type ReviewPersonaTemplate,
   type ReviewSetupDraft,
@@ -113,7 +114,7 @@ function ReviewPersonalitySettingsMenu({
 }) {
   return (
     <SettingsMenu
-      label={personalityLabel(templates, reviewer) || `Reviewer ${reviewerIndex + 1}`}
+      label={reviewerPersonalityLabel(templates, reviewer) || `Reviewer ${reviewerIndex + 1}`}
       leading={<Brain className="size-4 text-muted-foreground" />}
       className="w-full min-w-0"
       menuClassName="w-80"
@@ -125,7 +126,12 @@ function ReviewPersonalitySettingsMenu({
             label: template.label,
             detail: template.prompt,
             icon: <Brain className="size-3.5" />,
-            selected: reviewerMatchesTemplate(reviewer, template, reviewers, reviewerIndex),
+            selected: reviewerMatchesReviewPersonaTemplate(
+              reviewer,
+              template,
+              reviewers,
+              reviewerIndex,
+            ),
             onSelect: () => onSelect(template),
           })),
         },
@@ -152,33 +158,6 @@ function reviewerHasRequiredFields(
     && !!reviewer.agentKind.trim()
     && !!reviewer.modelId.trim()
     && !!reviewer.modeId.trim();
-}
-
-function reviewerMatchesTemplate(
-  reviewer: ReviewSetupDraft["reviewers"][number],
-  template: ReviewPersonaTemplate,
-  reviewers: ReviewSetupDraft["reviewers"],
-  reviewerIndex: number,
-): boolean {
-  return nextReviewReviewerId(template.id, reviewers, reviewerIndex) === reviewer.id
-    && reviewer.label === template.label
-    && reviewer.prompt === template.prompt;
-}
-
-function personalityLabel(
-  templates: ReviewPersonaTemplate[],
-  reviewer: ReviewSetupDraft["reviewers"][number],
-): string {
-  const exact = templates.find((template) =>
-    findReviewPersonaTemplateForReviewer([template], reviewer.id)
-    && reviewer.label === template.label
-    && reviewer.prompt === template.prompt
-  );
-  if (exact) {
-    return exact.label;
-  }
-  const base = findReviewPersonaTemplateForReviewer(templates, reviewer.id);
-  return base ? `${base.label} edited` : reviewer.label || "Choose personality";
 }
 
 function updateReviewer(
