@@ -849,7 +849,7 @@ class TestCloudMcpConnections:
             raise RuntimeError("provider unavailable")
 
         monkeypatch.setattr(
-            "proliferate.server.cloud.mcp_materialization.service.refresh_token",
+            "proliferate.server.cloud.mcp_materialization.oauth_tokens.refresh_token",
             _raise_provider_error,
         )
 

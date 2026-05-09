@@ -59,4 +59,3 @@ server/proliferate/server/billing/service.py
 server/proliferate/db/store/cloud_workspaces.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py
-server/proliferate/server/cloud/mcp_materialization/service.py
