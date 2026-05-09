@@ -135,7 +135,7 @@ mod tests {
     };
     use tower::Service;
 
-    use anyharness_lib::{agents::seed::AgentSeedStore, app::AppState, persistence::Db};
+    use anyharness_lib::{app::AppState, domains::agents::seed::AgentSeedStore, persistence::Db};
 
     use super::build_app;
 
