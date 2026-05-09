@@ -9,12 +9,12 @@ use axum::{
 
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
-use crate::app::AppState;
-use crate::hosting::types::{
+use crate::adapters::hosting::types::{
     CreatePullRequestResult, CurrentPullRequestResult, HostingServiceError,
     PullRequestState as InternalPullRequestState, PullRequestSummary as InternalPullRequestSummary,
 };
-use crate::hosting::HostingService;
+use crate::adapters::hosting::HostingService;
+use crate::app::AppState;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(

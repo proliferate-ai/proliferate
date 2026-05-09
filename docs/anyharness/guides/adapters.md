@@ -2,8 +2,7 @@
 
 Status: authoritative for local workspace/machine capability adapters.
 
-The current top-level folders `files/`, `git/`, `hosting`, and `processes`
-map to target `adapters/**`.
+Adapter code lives under `anyharness-lib/src/adapters/**`.
 
 ## Purpose
 

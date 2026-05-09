@@ -4,8 +4,8 @@ use std::path::Path;
 
 use anyhow::Context;
 
-use crate::files::safety::resolve_safe_path;
-use crate::git::executor::run_git_ok;
+use crate::adapters::files::safety::resolve_safe_path;
+use crate::adapters::git::executor::run_git_ok;
 use crate::mobility::model::MobilityFileData;
 
 #[derive(Debug, Clone)]

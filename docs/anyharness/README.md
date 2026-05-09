@@ -280,9 +280,9 @@ which guide to read and where the code belongs.
 | Agent catalog, readiness, supported-agent meaning | `anyharness-lib/src/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [src/agents.md](src/agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/agents/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/acp/**`, `docs/anyharness/harnesses/**` | harness doc plus owning runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
-| File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
-| Git status/diff/branch operations and git command parsing | `anyharness-lib/src/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
-| Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/hosting/**`, `anyharness-lib/src/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
+| File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/adapters/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
+| Git status/diff/branch operations and git command parsing | `anyharness-lib/src/adapters/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
+| Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal/PTTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp.rs` | `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
 | Product MCP tool servers for cowork, reviews, subagents, workspace naming | `cowork/**`, `reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
@@ -299,9 +299,8 @@ adapter in `api/http/**`.
 
 ## Target Shape
 
-This is the target architecture. Existing code is transitional and still uses
-the older flat `anyharness-lib/src/**` shape in several places. New code and
-cleanup work should move toward this structure.
+This is the target architecture. Existing code is transitional in several
+places. New code and cleanup work should move toward this structure.
 
 ```text
 anyharness/crates/
@@ -368,10 +367,6 @@ current plans/         -> target domains/plans/
 current mobility/      -> target domains/mobility/
 current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
 current terminals/     -> target live/terminals/
-current files/         -> target adapters/files/
-current git/           -> target adapters/git/
-current hosting/       -> target adapters/hosting/
-current processes/     -> target adapters/processes/
 current api/http/latency.rs -> target observability/latency.rs
 ```
 

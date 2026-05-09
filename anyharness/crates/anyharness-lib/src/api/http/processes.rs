@@ -2,10 +2,10 @@ use anyharness_contract::v1::processes::{RunCommandRequest, RunCommandResponse};
 use axum::extract::{Path, State};
 use axum::Json;
 
+use crate::adapters::processes::types::{ProcessServiceError, RunProcessRequest, RunProcessResult};
 use crate::api::http::access::assert_workspace_mutable;
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::processes::types::{ProcessServiceError, RunProcessRequest, RunProcessResult};
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(

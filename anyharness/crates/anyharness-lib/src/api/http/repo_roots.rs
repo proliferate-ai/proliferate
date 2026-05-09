@@ -18,9 +18,9 @@ use super::files::{map_service_error, read_response_to_contract, run_files_task,
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces::workspace_to_contract;
 use super::workspaces_contract::detection_result_to_contract;
+use crate::adapters::files::service::WorkspaceFilesService;
+use crate::adapters::git::GitService;
 use crate::app::AppState;
-use crate::files::service::WorkspaceFilesService;
-use crate::git::GitService;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::workspaces::types::ResolveRepoRootError;
 

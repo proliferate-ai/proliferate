@@ -14,16 +14,16 @@ use anyharness_contract::v1::{
     WriteWorkspaceFileResponse,
 };
 
-use crate::app::AppState;
-use crate::files::service::FileServiceError;
-use crate::files::types::{
+use crate::adapters::files::service::FileServiceError;
+use crate::adapters::files::types::{
     CreateWorkspaceFileEntryKind as InternalCreateWorkspaceFileEntryKind,
     CreateWorkspaceFileEntryResult, DeleteWorkspaceFileEntryResult, ListWorkspaceFilesResult,
     ReadWorkspaceFileResult, RenameWorkspaceFileEntryResult, StatWorkspaceFileResult,
     WorkspaceFileEntry as InternalWorkspaceFileEntry,
     WorkspaceFileKind as InternalWorkspaceFileKind, WriteWorkspaceFileResult,
 };
-use crate::git::file_search::WorkspaceFileSearchMatch;
+use crate::adapters::git::file_search::WorkspaceFileSearchMatch;
+use crate::app::AppState;
 
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;

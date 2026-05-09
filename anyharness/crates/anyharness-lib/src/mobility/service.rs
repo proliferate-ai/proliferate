@@ -5,12 +5,11 @@ use std::time::Instant;
 
 use anyhow::Context;
 
+use crate::adapters::git::executor::run_git_ok;
 use crate::agents::portability::{
     collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
     validate_session_agent_artifacts,
 };
-use crate::git::executor::run_git_ok;
-use crate::git::mobility_delta::{collect_workspace_delta, current_branch_name};
 use crate::mobility::model::{
     DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
     MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
@@ -18,6 +17,7 @@ use crate::mobility::model::{
     MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::mobility::store::MobilityStore;
+use crate::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::subagents::service::SubagentService;
@@ -28,7 +28,7 @@ use crate::workspaces::access_model::WorkspaceAccessMode;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
-use crate::{files::safety::resolve_safe_path, git::GitService};
+use crate::{adapters::files::safety::resolve_safe_path, adapters::git::GitService};
 
 const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
 
