@@ -1,8 +1,8 @@
 import type {
   SessionActivationGuard,
   SessionActivationOutcome,
-} from "@/hooks/sessions/session-activation-guard";
-import { beginSessionActivationIntent } from "@/hooks/sessions/session-activation-guard";
+} from "@/hooks/sessions/workflows/session-activation-guard";
+import { beginSessionActivationIntent } from "@/hooks/sessions/workflows/session-activation-guard";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 

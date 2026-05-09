@@ -11,13 +11,13 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
-import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/session-shell-selection";
+import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import {
   beginSessionActivationIntent,
   commitActiveSession,
   invalidateSessionActivationIntent,
   isSessionActivationCurrent,
-} from "./session-activation-guard";
+} from "@/hooks/sessions/workflows/session-activation-guard";
 
 describe("session activation guard", () => {
   beforeEach(() => {

@@ -9,7 +9,7 @@ import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
+import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {

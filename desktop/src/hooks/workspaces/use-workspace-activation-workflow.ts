@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
+import type { SessionActivationOutcome } from "@/hooks/sessions/workflows/session-activation-guard";
 import {
   type SelectSessionOptionsWithoutGuard,
   useWorkspaceShellActivation,

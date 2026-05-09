@@ -23,7 +23,7 @@ import type {
 import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,
-} from "@/hooks/sessions/session-runtime-pending-config";
+} from "@/hooks/sessions/lifecycle/session-runtime-pending-config";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 

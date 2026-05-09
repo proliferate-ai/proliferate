@@ -5,7 +5,7 @@ import {
   commitHotActiveSession,
   isSessionActivationCurrent,
   type SessionActivationOutcome,
-} from "@/hooks/sessions/session-activation-guard";
+} from "@/hooks/sessions/workflows/session-activation-guard";
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { resolveTrustedSessionSelectionRelationship } from "@/lib/domain/sessions/selection/trusted-session-selection";

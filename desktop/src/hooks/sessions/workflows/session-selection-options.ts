@@ -1,5 +1,5 @@
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import type { SessionActivationGuard } from "@/hooks/sessions/session-activation-guard";
+import type { SessionActivationGuard } from "@/hooks/sessions/workflows/session-activation-guard";
 
 export interface SelectSessionOptionsWithoutGuard {
   latencyFlowId?: string | null;

@@ -35,7 +35,7 @@ import {
 import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
-} from "@/hooks/sessions/session-stream-side-effects";
+} from "@/hooks/sessions/lifecycle/session-stream-side-effects";
 import type { ReconciledStreamConfigIntent } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
