@@ -18,12 +18,12 @@ import {
 import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@/lib/domain/sessions/activity";
 import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import {
-  outboxEntriesForSession,
   outboxEntryToPendingPromptEntry,
   queuedOutboxEntriesForSession,
   renderableOutboxEntriesForTranscript,
-  type PromptOutboxEntry,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
+import { outboxEntriesForSession } from "@/lib/domain/chat/outbox/prompt-outbox-state";
 import { activitySnapshotFromDirectoryEntry, useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";

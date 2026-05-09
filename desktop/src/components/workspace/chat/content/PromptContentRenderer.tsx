@@ -9,11 +9,11 @@ import { usePromptAttachmentUrl } from "@/hooks/access/anyharness/sessions/use-p
 import {
   normalizeContentParts,
   normalizeDraftAttachments,
-  type PromptDraftAttachmentDescriptor,
   type PromptDisplayAttachmentPart,
   type PromptDisplayPart,
-} from "@/lib/domain/chat/composer/prompt-content";
-import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/transcript/file-mention-links";
+} from "@/lib/domain/chat/composer/prompt-display-parts";
+import type { PromptDraftAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-attachment-rules";
+import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/composer/file-mention-links";
 
 type PromptContentRendererVariant = "transcript" | "compact";
 type PromptContentRendererLayout = "stack" | "wrap" | "auto";

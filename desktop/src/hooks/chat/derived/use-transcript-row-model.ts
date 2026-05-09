@@ -5,7 +5,7 @@ import {
   createTranscriptRowModelCache,
   type TranscriptRow,
 } from "@/lib/domain/chat/transcript/transcript-row-model";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 
 export function useTranscriptRowModel(input: {
   activeSessionId: string;

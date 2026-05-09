@@ -3,12 +3,12 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
+import { summarizeCollapsedActions } from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
 import {
-  summarizeCollapsedActions,
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "@/lib/domain/chat/transcript/transcript-presentation";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 
 const EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID = new Map<string, string>();
 

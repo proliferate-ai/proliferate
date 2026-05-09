@@ -1,7 +1,7 @@
 import type { KeyboardEventHandler, RefObject } from "react";
 import { WORKSPACE_CHAT_COMPOSER_INPUT } from "@/config/chat";
 import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
-import type { ChatComposerDraft } from "@/lib/domain/chat/transcript/file-mentions";
+import type { ChatComposerDraft } from "@/lib/domain/chat/composer/file-mention-draft-model";
 import {
   DraftAttachmentPreviewList,
   type DraftAttachmentPreviewListProps,

@@ -24,7 +24,7 @@ import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configure
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
-} from "@/lib/domain/chat/transcript/file-mentions";
+} from "@/lib/domain/chat/composer/file-mention-draft-model";
 import {
   createEmptySessionRecord,
   putSessionRecord,

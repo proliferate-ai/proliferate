@@ -22,7 +22,7 @@ import {
 import {
   resolvePendingPromptTrailingStatus,
 } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 
 const OUTBOX_ACCEPTED_RUNNING_ECHO_GRACE_MS = 15_000;
 

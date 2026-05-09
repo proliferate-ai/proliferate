@@ -32,7 +32,7 @@ import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
-import { serializeChatDraftToPrompt } from "@/lib/domain/chat/transcript/file-mentions";
+import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-mention-draft-model";
 import { promptAttachmentSnapshotsToContentParts } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";

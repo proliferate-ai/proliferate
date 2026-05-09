@@ -29,7 +29,7 @@ import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch
 import {
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-reconciliation";
 import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
 import {
   applyBatchedStreamSideEffects,

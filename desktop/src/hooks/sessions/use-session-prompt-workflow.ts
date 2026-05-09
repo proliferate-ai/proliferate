@@ -16,10 +16,8 @@ import {
   getSessionRecord,
 } from "@/stores/sessions/session-records";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
-import {
-  outboxEntriesForSession,
-  resolvePromptOutboxPlacement,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+import { resolvePromptOutboxPlacement } from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import { outboxEntriesForSession } from "@/lib/domain/chat/outbox/prompt-outbox-state";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";

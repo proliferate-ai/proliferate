@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ContentPart } from "@anyharness/sdk";
 import {
-  formatPromptFileSize,
-  isResolvedPlanAttachment,
   normalizeContentParts,
   normalizeDraftAttachments,
-  planAttachmentPlaceholderFromPointer,
   promptPartSummary,
-} from "./prompt-content";
+} from "./prompt-display-parts";
+import {
+  isResolvedPlanAttachment,
+  planAttachmentPlaceholderFromPointer,
+} from "./prompt-plan-attachments";
 
 describe("prompt content normalization", () => {
   it("normalizes image content parts with attachment metadata", () => {
@@ -225,13 +226,5 @@ describe("prompt content normalization", () => {
       resolutionState: "error",
       resolutionMessage: "Plan lookup failed.",
     }]);
-  });
-
-  it("formats prompt file sizes using compact binary units", () => {
-    expect(formatPromptFileSize(undefined)).toBeUndefined();
-    expect(formatPromptFileSize(0)).toBe("0 B");
-    expect(formatPromptFileSize(1024)).toBe("1 KB");
-    expect(formatPromptFileSize(1536)).toBe("1.5 KB");
-    expect(formatPromptFileSize(10 * 1024 * 1024)).toBe("10 MB");
   });
 });
