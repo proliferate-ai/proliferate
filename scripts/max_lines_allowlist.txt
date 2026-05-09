@@ -14,7 +14,7 @@ anyharness/crates/anyharness-lib/src/api/http/mobility.rs
 anyharness/crates/anyharness-lib/src/acp/background_work/claude.rs
 anyharness/crates/anyharness-contract/src/v1/events.rs
 anyharness/crates/anyharness-contract/src/v1/sessions.rs
-anyharness/crates/anyharness-lib/src/files/service.rs
+anyharness/crates/anyharness-lib/src/adapters/files/service.rs
 anyharness/crates/anyharness-lib/src/reviews/runtime.rs
 anyharness/crates/anyharness-lib/src/reviews/service.rs
 anyharness/crates/anyharness-lib/src/reviews/store.rs

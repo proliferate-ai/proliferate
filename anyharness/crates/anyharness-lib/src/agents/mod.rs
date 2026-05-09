@@ -1,4 +1,3 @@
-pub mod acp_registry;
 pub mod catalog;
 pub mod credentials;
 pub mod install_lock;

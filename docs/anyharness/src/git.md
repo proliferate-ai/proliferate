@@ -1,6 +1,6 @@
 # Git
 
-`anyharness-lib/src/git/**` owns workspace-scoped git execution, status
+`anyharness-lib/src/adapters/git/**` owns workspace-scoped git execution, status
 normalization, and action availability for repository operations.
 
 ## Core Concepts
@@ -21,10 +21,10 @@ It does not own workspace registration or pull-request hosting logic.
 
 Core model and service files:
 
-- `anyharness/crates/anyharness-lib/src/git/types.rs`
-- `anyharness/crates/anyharness-lib/src/git/service.rs`
-- `anyharness/crates/anyharness-lib/src/git/parse_status.rs`
-- `anyharness/crates/anyharness-lib/src/git/executor.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/types.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/service.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/parse_status.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/executor.rs`
 
 The main git models are:
 
@@ -45,7 +45,7 @@ These are runtime-owned normalized summaries built from git CLI output.
 ### Status Flow
 
 `GitService::status(...)`
-(`anyharness/crates/anyharness-lib/src/git/service.rs`):
+(`anyharness/crates/anyharness-lib/src/adapters/git/service.rs`):
 
 1. resolves the repo root
 2. runs `git status --porcelain=v2 --branch -z`
@@ -59,7 +59,7 @@ This is the main “what state is the repo in?” path.
 ### Parsing and Normalization
 
 `parse_status.rs`
-(`anyharness/crates/anyharness-lib/src/git/parse_status.rs`)
+(`anyharness/crates/anyharness-lib/src/adapters/git/parse_status.rs`)
 owns the porcelain-v2 parser.
 
 It turns raw entries into:
@@ -71,7 +71,7 @@ It turns raw entries into:
 - conflict detection
 
 `service.rs`
-(`anyharness/crates/anyharness-lib/src/git/service.rs`)
+(`anyharness/crates/anyharness-lib/src/adapters/git/service.rs`)
 then adds higher-level behavior like:
 
 - clean vs dirty summary
@@ -84,7 +84,7 @@ then adds higher-level behavior like:
 `diff_for_path_with_scope(...)` with `GitDiffScope::WorkingTree`.
 
 `diff_for_path_with_scope(...)`
-(`anyharness/crates/anyharness-lib/src/git/service.rs`):
+(`anyharness/crates/anyharness-lib/src/adapters/git/service.rs`):
 
 1. resolves the repo root
 2. validates scope-specific arguments
@@ -125,7 +125,7 @@ workflow orchestration.
 
 Command execution itself is kept in:
 
-- `anyharness/crates/anyharness-lib/src/git/executor.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/executor.rs`
 
 ## Boundaries
 

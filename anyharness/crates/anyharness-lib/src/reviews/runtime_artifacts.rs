@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use super::model::{ReviewAssignmentRecord, ReviewChangedFileManifest, ReviewCodeTargetManifest};
 use super::runtime::ReviewRuntime;
 use super::service::ReviewError;
-use crate::git::GitService;
+use crate::adapters::git::GitService;
 
 impl ReviewRuntime {
     pub(super) async fn capture_code_manifest(

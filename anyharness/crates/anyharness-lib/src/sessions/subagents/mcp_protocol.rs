@@ -1,31 +1,8 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use crate::integrations::mcp::tools::tool_definition;
 use crate::sessions::delegation::READ_EVENTS_MAX_LIMIT;
-
-#[derive(Debug, Deserialize)]
-pub(super) struct JsonRpcRequest {
-    pub jsonrpc: String,
-    #[serde(default)]
-    pub id: Option<Value>,
-    pub method: String,
-    #[serde(default)]
-    pub params: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct InitializeParams {
-    #[serde(default)]
-    pub protocol_version: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct CallToolParams {
-    pub name: String,
-    #[serde(default)]
-    pub arguments: Option<Value>,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,61 +43,6 @@ pub(super) struct ReadSubagentEventsArgs {
     pub since_seq: Option<i64>,
     #[serde(default)]
     pub limit: Option<usize>,
-}
-
-pub(super) fn deserialize_args<T: for<'de> Deserialize<'de>>(
-    value: Option<Value>,
-) -> anyhow::Result<T> {
-    serde_json::from_value(value.unwrap_or_else(|| json!({}))).map_err(anyhow::Error::from)
-}
-
-pub(super) fn jsonrpc_result(id: Option<Value>, result: Value) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id.unwrap_or(Value::Null),
-        "result": result,
-    })
-}
-
-pub(super) fn jsonrpc_error(id: Option<Value>, code: i64, message: impl Into<String>) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id.unwrap_or(Value::Null),
-        "error": {
-            "code": code,
-            "message": message.into(),
-        }
-    })
-}
-
-pub(super) fn jsonrpc_tool_result(id: Option<Value>, result: anyhow::Result<Value>) -> Value {
-    match result {
-        Ok(structured) => jsonrpc_result(
-            id,
-            json!({
-                "content": [
-                    {
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&structured).unwrap_or_else(|_| structured.to_string())
-                    }
-                ],
-                "structuredContent": structured,
-                "isError": false
-            }),
-        ),
-        Err(error) => jsonrpc_result(
-            id,
-            json!({
-                "content": [
-                    {
-                        "type": "text",
-                        "text": error.to_string()
-                    }
-                ],
-                "isError": true,
-            }),
-        ),
-    }
 }
 
 pub(super) fn build_tool_list() -> Vec<Value> {
@@ -202,14 +124,6 @@ pub(super) fn build_tool_list() -> Vec<Value> {
             }),
         ),
     ]
-}
-
-fn tool_definition(name: &str, description: &str, input_schema: Value) -> Value {
-    json!({
-        "name": name,
-        "description": description,
-        "inputSchema": input_schema,
-    })
 }
 
 #[cfg(test)]

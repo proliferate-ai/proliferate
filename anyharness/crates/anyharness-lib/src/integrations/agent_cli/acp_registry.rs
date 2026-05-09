@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 use serde::Deserialize;
 
-use super::model::Platform;
+use super::executable::make_executable;
 
 const DEFAULT_ACP_REGISTRY_URL: &str =
     "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";
@@ -93,14 +93,15 @@ fn registry_url() -> String {
     std::env::var("ANYHARNESS_ACP_REGISTRY_URL").unwrap_or_else(|_| DEFAULT_ACP_REGISTRY_URL.into())
 }
 
-fn platform_registry_key(platform: Platform) -> &'static str {
-    match platform {
-        Platform::LinuxX64 => "linux-x86_64",
-        Platform::LinuxArm64 => "linux-aarch64",
-        Platform::MacosArm64 => "darwin-aarch64",
-        Platform::MacosX64 => "darwin-x86_64",
-        Platform::WindowsX64 => "windows-x86_64",
-        Platform::WindowsArm64 => "windows-aarch64",
+fn current_platform_registry_key() -> Option<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => Some("linux-x86_64"),
+        ("linux", "aarch64") => Some("linux-aarch64"),
+        ("macos", "aarch64") => Some("darwin-aarch64"),
+        ("macos", "x86_64") => Some("darwin-x86_64"),
+        ("windows", "x86_64") => Some("windows-x86_64"),
+        ("windows", "aarch64") => Some("windows-aarch64"),
+        _ => None,
     }
 }
 
@@ -164,8 +165,7 @@ pub fn resolve_from_registry(
     }
 
     if let Some(binary_map) = entry.distribution.binary {
-        let platform = Platform::detect().ok_or(RegistryError::NoPlatformDistribution)?;
-        let key = platform_registry_key(platform);
+        let key = current_platform_registry_key().ok_or(RegistryError::NoPlatformDistribution)?;
         if let Some(target) = binary_map.get(key) {
             return Ok(ResolvedRegistryDistribution::Binary {
                 archive_url: target.archive.clone(),
@@ -263,14 +263,7 @@ pub fn install_binary_archive(
     })?;
     let _ = std::fs::remove_dir_all(&staging);
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Ok(mut perms) = std::fs::metadata(&final_path).map(|m| m.permissions()) {
-            perms.set_mode(0o755);
-            let _ = std::fs::set_permissions(&final_path, perms);
-        }
-    }
+    make_executable(&final_path).map_err(|e| e.to_string())?;
 
     Ok(final_path)
 }
@@ -312,5 +305,44 @@ fn split_package_version(package: &str) -> Option<(&str, &str)> {
         let idx = package.rfind('@')?;
         let (name, version) = package.split_at(idx);
         Some((name, version.trim_start_matches('@')))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn applies_version_override_to_scoped_and_unscoped_packages() {
+        assert_eq!(
+            apply_version_override("@scope/tool@1.0.0", "2.0.0"),
+            "@scope/tool@2.0.0"
+        );
+        assert_eq!(
+            apply_version_override("@scope/tool", "2.0.0"),
+            "@scope/tool@2.0.0"
+        );
+        assert_eq!(
+            apply_version_override("plain-tool@1.0.0", "2.0.0"),
+            "plain-tool@2.0.0"
+        );
+        assert_eq!(
+            apply_version_override("plain-tool", "2.0.0"),
+            "plain-tool@2.0.0"
+        );
+    }
+
+    #[test]
+    fn extracts_versions_from_registry_package_specs() {
+        assert_eq!(
+            extract_package_version("@scope/tool@1.0.0"),
+            Some("1.0.0".to_string())
+        );
+        assert_eq!(extract_package_version("@scope/tool"), None);
+        assert_eq!(
+            extract_package_version("plain-tool@1.0.0"),
+            Some("1.0.0".to_string())
+        );
+        assert_eq!(extract_package_version("plain-tool"), None);
     }
 }

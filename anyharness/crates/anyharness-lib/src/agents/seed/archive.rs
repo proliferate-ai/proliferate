@@ -5,7 +5,7 @@ use std::path::{Component, Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use crate::agents::installer::is_valid_executable;
+use crate::integrations::agent_cli::executable::is_valid_executable;
 
 use super::types::{AgentSeedManifest, SeedError};
 use super::MANIFEST_SCHEMA_VERSION;

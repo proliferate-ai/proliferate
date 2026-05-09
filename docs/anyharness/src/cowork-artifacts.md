@@ -6,7 +6,7 @@ Scope:
 
 - `anyharness/crates/anyharness-contract/**` for cowork artifact wire shapes
 - `anyharness/crates/anyharness-lib/src/cowork/**` for artifact lifecycle logic
-- `anyharness/crates/anyharness-lib/src/files/**` for artifact write protection
+- `anyharness/crates/anyharness-lib/src/adapters/files/**` for artifact write protection
 - `anyharness/sdk/**` and `anyharness/sdk-react/**` for cowork artifact client access
 - desktop consumers of cowork artifact HTTP endpoints
 
@@ -75,7 +75,7 @@ Keep ownership split the same way the rest of the runtime is split:
   - tool registry and dispatch
 - `api/http/cowork.rs`
   - cowork artifact HTTP handlers only
-- `files/`
+- `adapters/files/`
   - generic write protection for manifest and artifact-backed paths
 
 Do not put artifact lifecycle logic in HTTP handlers or desktop hooks.

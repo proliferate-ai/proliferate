@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::github_cli;
 use super::types::{CreatePullRequestResult, CurrentPullRequestResult, HostingServiceError};
-use crate::git::GitService;
+use crate::adapters::git::GitService;
 
 pub struct HostingService;
 

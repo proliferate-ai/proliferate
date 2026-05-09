@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::service::{FileServiceError, WorkspaceFilesService};
-use super::types::{
+use crate::adapters::files::service::{FileServiceError, WorkspaceFilesService};
+use crate::adapters::files::types::{
     CreateWorkspaceFileEntryKind, CreateWorkspaceFileEntryResult, DeleteWorkspaceFileEntryResult,
     ListWorkspaceFilesResult, ReadWorkspaceFileResult, RenameWorkspaceFileEntryResult,
     StatWorkspaceFileResult, WriteWorkspaceFileResult,
 };
+use crate::adapters::git::file_search::WorkspaceFileSearchMatch;
+use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::cowork::artifacts::CoworkArtifactRuntime;
-use crate::git::file_search::WorkspaceFileSearchMatch;
-use crate::git::WorkspaceFileSearchCache;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
