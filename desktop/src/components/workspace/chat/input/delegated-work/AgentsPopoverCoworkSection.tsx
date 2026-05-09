@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/Button";
-import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/facade/use-delegated-work-composer";
 import { PopoverSection } from "./PopoverSection";
 
 export function AgentsPopoverCoworkSection({

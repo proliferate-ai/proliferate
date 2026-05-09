@@ -6,7 +6,7 @@ import {
   StopSquare,
   X,
 } from "@/components/ui/icons";
-import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/facade/use-delegated-work-composer";
 import {
   latestReviewRound,
   reviewAssignmentStatusLabel,
