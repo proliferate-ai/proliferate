@@ -40,6 +40,7 @@ import {
   type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
+import { resolveTrustedSessionSelectionRelationship } from "@/lib/domain/sessions/selection/trusted-session-selection";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import {
   commitHotActiveSession,
@@ -81,18 +82,24 @@ type SessionLatencyFlowOptions = SelectSessionOptionsWithoutGuard & {
 export function classifyTrustedSessionSelection(sessionId: string): SessionRelationship {
   const state = useSessionDirectoryStore.getState();
   const slot = state.entriesById[sessionId] ?? null;
-  if (slot && slot.sessionRelationship.kind !== "pending") {
-    return slot.sessionRelationship;
-  }
   const relationshipHint =
     state.relationshipHintsBySessionId[sessionId] as SessionChildRelationship | undefined;
-  const relationship = relationshipHint ?? { kind: "root" as const };
-  if (relationship.kind === "root") {
-    state.setSessionRelationship(sessionId, relationship);
-  } else {
-    state.recordRelationshipHint(sessionId, relationship);
+
+  const plan = resolveTrustedSessionSelectionRelationship<
+    SessionRelationship,
+    SessionChildRelationship
+  >({
+    currentRelationship: slot?.sessionRelationship ?? null,
+    relationshipHint,
+    rootRelationship: { kind: "root" },
+  });
+
+  if (plan.commitAction === "promote_root") {
+    state.setSessionRelationship(sessionId, plan.relationship);
+  } else if (plan.commitAction === "apply_hint") {
+    state.recordRelationshipHint(sessionId, plan.relationship);
   }
-  return relationship;
+  return plan.relationship;
 }
 
 export async function fetchWorkspaceSessions(
