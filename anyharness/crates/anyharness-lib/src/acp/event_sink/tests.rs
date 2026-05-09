@@ -61,13 +61,13 @@ fn assistant_chunking_emits_one_item_lifecycle_with_monotonic_seq() {
         .all(|window| window[0].seq < window[1].seq));
     assert_eq!(events[3].item_id, events[4].item_id);
     assert_eq!(events[4].item_id, events[5].item_id);
+    let persisted = store.list_events("session-1").expect("persisted events");
+    assert_eq!(persisted.len(), events.len());
     assert_eq!(
-        store
-            .list_events("session-1")
-            .expect("persisted events")
-            .len(),
-        events.len()
+        persisted.iter().map(|event| event.seq).collect::<Vec<_>>(),
+        events.iter().map(|event| event.seq).collect::<Vec<_>>()
     );
+    assert_eq!(sink.next_seq(), events.len() as i64 + 1);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn injected_runtime_event_persists_strictly_and_keeps_sequence() {
 #[test]
 fn injected_runtime_event_errors_when_persistence_fails() {
     let store = empty_store();
-    let (tx, _rx) = broadcast::channel(32);
+    let (tx, mut rx) = broadcast::channel(32);
     let mut sink = SessionEventSink::new(
         "missing-session".to_string(),
         "claude".to_string(),
@@ -123,6 +123,10 @@ fn injected_runtime_event_errors_when_persistence_fails() {
         RuntimeEventInjectionError::PersistenceFailed(_)
     ));
     assert_eq!(sink.next_seq(), 1);
+    assert!(matches!(
+        rx.try_recv(),
+        Err(broadcast::error::TryRecvError::Empty)
+    ));
 }
 
 #[test]
