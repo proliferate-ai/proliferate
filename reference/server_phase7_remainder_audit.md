@@ -27,9 +27,7 @@ the resolved follow-up below.
 | Path | Remaining rule families | Classification | Next step |
 |---|---|---|---|
 | `server/proliferate/integrations/billing/stripe.py` | integration imports product | Phase 8 deferred | Handle with the billing/Stripe redesign so integration types and billing product types are separated deliberately. |
-| `server/proliferate/server/ai_magic/service.py` | service imports ORM/auth model | Small follow-up | Pass user IDs or small snapshots instead of auth ORM objects. |
 | `server/proliferate/server/billing/service.py` | service imports ORM/auth model | Phase 8 deferred | Billing service remains coupled to accounting, subscription, webhook, and usage semantics. |
-| `server/proliferate/server/cloud/repos/service.py` | service imports ORM/auth model | Small follow-up | Replace auth/ORM coupling with explicit user or owner snapshots. |
 | `server/proliferate/server/cloud/runtime/service.py` | service imports ORM/auth model | Phase 8 deferred | Runtime service cleanup belongs with runtime lifecycle/provisioning work. |
 | `server/proliferate/server/cloud/workspaces/service.py` | service imports ORM/auth model | Phase 8 deferred | Workspace service cleanup belongs with cloud workspace lifecycle/materialization work. |
 | `server/proliferate/db/store/automation_cloud_workspace_claims.py` | store opens/commits session | Phase 8 deferred | Claim transaction timing is worker/cloud-workspace scheduler behavior. |
@@ -54,6 +52,11 @@ the resolved follow-up below.
   `server/proliferate/db/store/anonymous_telemetry.py`: resolved by moving the
   server heartbeat worker into the product domain, keeping the integration as
   remote transport only, and threading the DB session into the store.
+- `server/proliferate/server/ai_magic/service.py`: resolved by passing the
+  authenticated user ID into service logic instead of an auth ORM object.
+- `server/proliferate/server/cloud/repos/service.py`: resolved by moving
+  request-user credential lookup into a cloud repos access dependency and
+  passing a GitHub credential snapshot into service logic.
 
 ## File-Size Debt
 
@@ -110,14 +113,10 @@ only when the deferred caller owning the transaction boundary migrates.
 - `server/proliferate/db/store/organization_invitations.py`
 - `server/proliferate/db/store/users.py`
 
-## Resolved Follow-ups After Phase 7K
-
-- `server/proliferate/integrations/sandbox/daytona.py`
-- `server/proliferate/integrations/sandbox/e2b.py`
-
-  Removed the product-domain timestamp import from the provider integrations.
-  Both providers now use `proliferate.utils.time.utcnow`, so their
-  `INTEGRATION_PRODUCT_IMPORT` allowlist entries were deleted.
+- `server/proliferate/integrations/sandbox/daytona.py` and
+  `server/proliferate/integrations/sandbox/e2b.py`: resolved by moving
+  provider timestamp usage to `proliferate.utils.time.utcnow`, removing the
+  product-domain billing model import from both integrations.
 
 ## Phase 7 Result
 
