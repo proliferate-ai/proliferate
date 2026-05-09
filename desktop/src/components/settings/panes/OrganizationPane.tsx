@@ -1,87 +1,35 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
-  type ChangeEvent,
   type FormEvent,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { ChevronRight, CloudUpload, Mail, RefreshCw, Trash } from "@/components/ui/icons";
+import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
+import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
+import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
+import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
+import { OrganizationSection } from "@/components/settings/panes/organization/OrganizationLogo";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import {
-  Avatar,
-  OrganizationLogo,
-  OrganizationSection,
-} from "@/components/settings/panes/organization/OrganizationLogo";
-import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import {
+  type OrganizationInvitationRecord,
+  type OrganizationMemberRecord,
+  type OrganizationRole,
+} from "@/lib/domain/organizations/organization-records";
+import { organizationLogoImageValidationError } from "@/lib/domain/organizations/logo-image";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
-type OrganizationRole = "owner" | "admin" | "member";
-
-interface OrganizationRecord {
-  id: string;
-  name: string;
-  logoImage?: string | null;
-  logoDomain?: string | null;
-}
-
-interface OrganizationMemberRecord {
-  membershipId: string;
-  userId: string;
-  role: OrganizationRole;
-  status: string;
-  displayName?: string | null;
-  email: string;
-  avatarUrl?: string | null;
-}
-
-interface OrganizationInvitationRecord {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  deliveryStatus: string;
-}
-
 const EMPTY_MEMBERS: OrganizationMemberRecord[] = [];
 const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
-const ORGANIZATION_LOGO_IMAGE_MAX_BYTES = 256 * 1024;
-const ORGANIZATION_LOGO_IMAGE_TYPES = new Set([
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-
-const MEMBERSHIP_STATUS_BADGES: Record<string, { label: string; tone: BadgeTone }> = {
-  active: { label: "Active", tone: "success" },
-  removed: { label: "Removed", tone: "destructive" },
-};
-
-const INVITATION_STATUS_BADGES: Record<string, { label: string; tone: BadgeTone }> = {
-  pending: { label: "Pending", tone: "warning" },
-  accepted: { label: "Accepted", tone: "success" },
-  revoked: { label: "Revoked", tone: "destructive" },
-  expired: { label: "Expired", tone: "neutral" },
-};
-
-function organizationStatusBadge(
-  value: string,
-  map: Record<string, { label: string; tone: BadgeTone }>,
-) {
-  return map[value] ?? { label: value, tone: "neutral" as const };
-}
 
 function readLogoImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -173,12 +121,9 @@ export function OrganizationPane() {
     if (!file) {
       return;
     }
-    if (!ORGANIZATION_LOGO_IMAGE_TYPES.has(file.type)) {
-      setLogoImageError("Use a PNG, JPEG, WebP, or GIF image.");
-      return;
-    }
-    if (file.size > ORGANIZATION_LOGO_IMAGE_MAX_BYTES) {
-      setLogoImageError("Use an image 256 KB or smaller.");
+    const validationError = organizationLogoImageValidationError(file);
+    if (validationError) {
+      setLogoImageError(validationError);
       return;
     }
     try {
@@ -188,11 +133,17 @@ export function OrganizationPane() {
     }
   }
 
-  async function handleInvite(event: FormEvent) {
-    event.preventDefault();
+  async function handleInvite() {
     await actions.createInvitation({ email: inviteEmail, role: inviteRole });
     setInviteEmail("");
     setInviteRole("member");
+  }
+
+  function updateMemberRole(membershipId: string, role: OrganizationRole) {
+    void actions.updateMembership({
+      membershipId,
+      input: { role },
+    });
   }
 
   const unauthenticatedHandoff = transientInviteHandoff && authStatus !== "authenticated";
@@ -299,296 +250,44 @@ export function OrganizationPane() {
             canManage={canManage}
             saving={actions.updatingOrganization}
             onNameChange={setSettingsName}
-            onLogoImageChange={(image) => setSettingsLogoImage(image)}
+            onLogoImageChange={setSettingsLogoImage}
             onLogoImageFile={handleLogoImageFile}
             onSubmit={handleUpdateOrganization}
           />
 
-          <OrganizationSection title="Billing">
-            <SettingsCard>
-              <SettingsCardRow
-                label="Organization billing"
-                description="Manage organization plan, seats, and overage from Billing."
-              >
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => navigate(buildSettingsHref({ section: "billing" }))}
-                >
-                  Open billing
-                  <ChevronRight className="size-4" />
-                </Button>
-              </SettingsCardRow>
-            </SettingsCard>
-          </OrganizationSection>
+          <OrganizationBillingLinkSection />
 
-          <OrganizationSection title="Members">
-            <SettingsCard>
-              {members.map((member) => (
-                <MemberRow
-                  key={member.membershipId}
-                  member={member}
-                  canManage={canManage}
-                  canManageOwners={canManageOwners}
-                  currentUserId={currentUser?.id ?? null}
-                  updating={actions.updatingMembership || actions.removingMembership}
-                  onRoleChange={(role) => {
-                    void actions.updateMembership({
-                      membershipId: member.membershipId,
-                      input: { role },
-                    });
-                  }}
-                  onRemove={() => {
-                    void actions.removeMembership(member.membershipId);
-                  }}
-                />
-              ))}
-              {members.length === 0 ? (
-                <div className="p-3 text-sm text-muted-foreground">No members yet.</div>
-              ) : null}
-            </SettingsCard>
-          </OrganizationSection>
+          <OrganizationMembersSection
+            members={members}
+            canManage={canManage}
+            canManageOwners={canManageOwners}
+            currentUserId={currentUser?.id ?? null}
+            updating={actions.updatingMembership || actions.removingMembership}
+            onRoleChange={updateMemberRole}
+            onRemove={(membershipId) => {
+              void actions.removeMembership(membershipId);
+            }}
+          />
 
-          <OrganizationSection title="Invitations">
-            <SettingsCard>
-              {canManage ? (
-                <form onSubmit={(event) => { void handleInvite(event); }} className="flex gap-2 p-3">
-                  <Input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.currentTarget.value)}
-                    placeholder="name@company.com"
-                    aria-label="Invite email"
-                  />
-                  <Select
-                    value={inviteRole}
-                    onChange={(event) => setInviteRole(event.currentTarget.value as "admin" | "member")}
-                    aria-label="Invite role"
-                    className="w-32"
-                  >
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </Select>
-                  <Button type="submit" disabled={!inviteEmail.trim()} loading={actions.creatingInvitation}>
-                    <Mail className="size-4" />
-                    Invite
-                  </Button>
-                </form>
-              ) : null}
-              {invitations.map((invitation) => (
-                <InvitationRow
-                  key={invitation.id}
-                  invitation={invitation}
-                  canManage={canManage}
-                  working={actions.resendingInvitation || actions.revokingInvitation}
-                  onResend={() => { void actions.resendInvitation(invitation.id); }}
-                  onRevoke={() => { void actions.revokeInvitation(invitation.id); }}
-                />
-              ))}
-              {invitations.length === 0 ? (
-                <div className="p-3 text-sm text-muted-foreground">No pending invitations.</div>
-              ) : null}
-            </SettingsCard>
-          </OrganizationSection>
+          <OrganizationInvitationsSection
+            invitations={invitations}
+            canManage={canManage}
+            inviteEmail={inviteEmail}
+            inviteRole={inviteRole}
+            creatingInvitation={actions.creatingInvitation}
+            working={actions.resendingInvitation || actions.revokingInvitation}
+            onInviteEmailChange={setInviteEmail}
+            onInviteRoleChange={setInviteRole}
+            onInviteSubmit={handleInvite}
+            onResend={(invitationId) => {
+              void actions.resendInvitation(invitationId);
+            }}
+            onRevoke={(invitationId) => {
+              void actions.revokeInvitation(invitationId);
+            }}
+          />
         </>
       ) : null}
     </section>
-  );
-}
-
-function OrganizationSettingsCard({
-  organization,
-  settingsName,
-  settingsLogoImage,
-  logoImageError,
-  canManage,
-  saving,
-  onNameChange,
-  onLogoImageChange,
-  onLogoImageFile,
-  onSubmit,
-}: {
-  organization: OrganizationRecord;
-  settingsName: string;
-  settingsLogoImage: string | null;
-  logoImageError: string | null;
-  canManage: boolean;
-  saving: boolean;
-  onNameChange: (value: string) => void;
-  onLogoImageChange: (value: string | null) => void;
-  onLogoImageFile: (file: File | null) => Promise<void>;
-  onSubmit: (event: FormEvent) => void;
-}) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    await onLogoImageFile(event.currentTarget.files?.[0] ?? null);
-    event.currentTarget.value = "";
-  }
-
-  return (
-    <OrganizationSection title="Organization Settings">
-      <SettingsCard>
-        <form onSubmit={(event) => { void onSubmit(event); }}>
-          <SettingsCardRow
-            label="Organization image"
-            description="Used in the organization switcher and settings."
-          >
-            <div className="flex items-center gap-2">
-              <OrganizationLogo organization={organization} logoImage={settingsLogoImage} />
-              <Input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                className="sr-only"
-                tabIndex={-1}
-                onChange={(event) => { void handleFileChange(event); }}
-              />
-              {canManage ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <CloudUpload className="size-4" />
-                    Upload
-                  </Button>
-                  {settingsLogoImage ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        onLogoImageChange(null);
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-            {logoImageError ? (
-              <div className="mt-2 text-xs text-destructive">{logoImageError}</div>
-            ) : null}
-          </SettingsCardRow>
-          <SettingsCardRow
-            label="Organization name"
-            description="Shown in the organization switcher and settings."
-          >
-            <Input
-              value={settingsName}
-              onChange={(event) => onNameChange(event.currentTarget.value)}
-              aria-label="Organization name"
-              disabled={!canManage}
-              className="w-64"
-            />
-          </SettingsCardRow>
-          {canManage ? (
-            <div className="flex justify-end p-3">
-              <Button type="submit" loading={saving} disabled={!settingsName.trim()}>
-                Save
-              </Button>
-            </div>
-          ) : null}
-        </form>
-      </SettingsCard>
-    </OrganizationSection>
-  );
-}
-
-function MemberRow({
-  member,
-  canManage,
-  canManageOwners,
-  currentUserId,
-  updating,
-  onRoleChange,
-  onRemove,
-}: {
-  member: OrganizationMemberRecord;
-  canManage: boolean;
-  canManageOwners: boolean;
-  currentUserId: string | null;
-  updating: boolean;
-  onRoleChange: (role: OrganizationRole) => void;
-  onRemove: () => void;
-}) {
-  const isCurrentUser = member.userId === currentUserId;
-  const roleDisabled = !canManage || isCurrentUser || (member.role === "owner" && !canManageOwners);
-  const removeDisabled = !canManage || isCurrentUser;
-  const status = organizationStatusBadge(member.status, MEMBERSHIP_STATUS_BADGES);
-  return (
-    <div className="flex items-center gap-3 p-3">
-      <Avatar member={member} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">
-          {member.displayName || member.email}
-        </div>
-        <div className="truncate text-sm text-muted-foreground">{member.email}</div>
-      </div>
-      <Badge tone={status.tone}>{status.label}</Badge>
-      <Select
-        value={member.role}
-        disabled={roleDisabled || updating}
-        onChange={(event) => onRoleChange(event.currentTarget.value as OrganizationRole)}
-        aria-label={`Role for ${member.email}`}
-        className="w-28"
-      >
-        <option value="member">Member</option>
-        <option value="admin">Admin</option>
-        <option value="owner" disabled={!canManageOwners}>Owner</option>
-      </Select>
-      {canManage ? (
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={removeDisabled || updating}
-          onClick={onRemove}
-          aria-label={`Remove ${member.email}`}
-        >
-          <Trash className="size-4" />
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-function InvitationRow({
-  invitation,
-  canManage,
-  working,
-  onResend,
-  onRevoke,
-}: {
-  invitation: OrganizationInvitationRecord;
-  canManage: boolean;
-  working: boolean;
-  onResend: () => void;
-  onRevoke: () => void;
-}) {
-  const status = organizationStatusBadge(invitation.status, INVITATION_STATUS_BADGES);
-  return (
-    <div className="flex items-center gap-3 p-3">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{invitation.email}</div>
-        <div className="truncate text-sm text-muted-foreground">
-          {invitation.role} - {invitation.deliveryStatus}
-        </div>
-      </div>
-      <Badge tone={status.tone}>{status.label}</Badge>
-      {canManage && invitation.status === "pending" ? (
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="ghost" disabled={working} onClick={onResend}>
-            <RefreshCw className="size-4" />
-            Resend
-          </Button>
-          <Button type="button" variant="ghost" disabled={working} onClick={onRevoke}>
-            <Trash className="size-4" />
-            Revoke
-          </Button>
-        </div>
-      ) : null}
-    </div>
   );
 }
