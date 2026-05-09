@@ -4,9 +4,9 @@ import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
-import { useMobilityPromptState } from "@/hooks/workspaces/mobility/use-mobility-prompt-state";
-import { useWorkspaceMobilityHandoffActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-handoff-actions";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { useMobilityPromptState } from "@/hooks/workspaces/mobility/derived/use-mobility-prompt-state";
+import { useWorkspaceMobilityHandoffActions } from "@/hooks/workspaces/mobility/workflows/use-workspace-mobility-handoff-actions";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/derived/use-workspace-mobility-state";
 import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
 import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mobility/mobility-footer-progress";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";

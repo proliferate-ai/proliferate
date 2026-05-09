@@ -7,7 +7,7 @@ import { StrictMode, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetDebugMeasurementForTest } from "@/lib/infra/measurement/debug-measurement";
 import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
-import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
+import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/lifecycle/use-diff-review-measurement";
 
 describe("useDiffReviewMeasurement", () => {
   afterEach(() => {

@@ -1,5 +1,5 @@
 import { AnimatedSwapText } from "@/components/ui/AnimatedSwapText";
-import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
+import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/derived/use-mobility-footer-context";
 import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-workspace-mobility-footer-flow";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import {

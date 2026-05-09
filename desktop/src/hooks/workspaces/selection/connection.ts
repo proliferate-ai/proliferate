@@ -4,7 +4,7 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
-import { ensureRuntimeReady } from "@/hooks/workspaces/runtime-ready";
+import { ensureRuntimeReady } from "@/hooks/workspaces/workflows/runtime-ready";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import type {
   ReadyCloudReadinessResult,

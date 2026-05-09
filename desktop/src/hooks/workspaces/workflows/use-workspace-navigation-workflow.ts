@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/derived/use-workspace-mobility-state";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   failLatencyFlow,

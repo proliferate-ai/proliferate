@@ -7,7 +7,7 @@ import { FileCreateDraftRow } from "./FileCreateDraftRow";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useWorkspaceFilesRefresh } from "@/hooks/workspaces/files/workflows/use-workspace-files-refresh";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import { gitPanelEmptyMessage } from "@/lib/domain/workspaces/changes/git-panel-diff";

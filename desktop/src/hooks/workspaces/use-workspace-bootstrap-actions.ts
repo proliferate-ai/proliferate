@@ -5,7 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
 import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";

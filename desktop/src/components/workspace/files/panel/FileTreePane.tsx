@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useWorkspaceFilesQuery } from "@anyharness/sdk-react";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";

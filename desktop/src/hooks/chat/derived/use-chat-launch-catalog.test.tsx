@@ -18,7 +18,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   useModelRegistriesQuery: mocks.useModelRegistriesQuery,
 }));
 
-vi.mock("@/hooks/workspaces/use-selected-cloud-runtime-state", () => ({
+vi.mock("@/hooks/workspaces/derived/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: () => ({ state: null }),
 }));
 

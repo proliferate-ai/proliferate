@@ -23,7 +23,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility/mobility-preflight-error";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
-import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";
+import { deriveHandoffFailureRecovery } from "@/lib/domain/workspaces/mobility/handoff-failure-recovery";
 
 function withRequiredSourceMetadata(
   preflight: WorkspaceMobilityPreflightResponse,

@@ -16,7 +16,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
+vi.mock("@/hooks/workspaces/files/workflows/use-workspace-file-actions", () => ({
   useWorkspaceFileActions: () => ({
     openFile: vi.fn(),
     openFileDiff: vi.fn(),

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "@/components/workspace/chat/surface/CloudStatusCompactHeader";
 import { CircleAlert, LoaderCircle } from "@/components/ui/icons";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 
 function SectionRow({

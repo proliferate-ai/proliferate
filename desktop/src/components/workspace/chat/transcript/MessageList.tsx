@@ -7,7 +7,7 @@ import {
 } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "@/config/chat-layout";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/workflows/use-open-cowork-artifact";
 import { useChatTranscriptSelection } from "@/hooks/chat/ui/use-chat-transcript-selection";

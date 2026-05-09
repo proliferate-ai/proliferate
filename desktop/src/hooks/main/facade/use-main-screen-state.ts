@@ -17,7 +17,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useResize } from "@/hooks/ui/layout/use-resize";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { shouldMountWorkspaceShell } from "@/lib/domain/chat/surface/chat-surface";
