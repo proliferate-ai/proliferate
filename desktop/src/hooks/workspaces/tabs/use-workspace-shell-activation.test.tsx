@@ -33,7 +33,7 @@ const measurementMocks = vi.hoisted(() => {
   return state;
 });
 
-vi.mock("@/hooks/sessions/use-session-selection-actions", () => ({
+vi.mock("@/hooks/sessions/facade/use-session-selection-actions", () => ({
   useSessionSelectionActions: () => ({
     selectSession: hookMocks.selectSession,
   }),

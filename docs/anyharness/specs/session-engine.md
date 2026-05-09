@@ -19,7 +19,7 @@ api/http/sessions
 Current names:
 
 ```text
-SessionRuntime      anyharness-lib/src/sessions/runtime.rs
+SessionRuntime      anyharness-lib/src/sessions/runtime/
 SessionService      anyharness-lib/src/sessions/service.rs
 SessionStore        anyharness-lib/src/sessions/store.rs
 AcpManager          target name: LiveSessionManager

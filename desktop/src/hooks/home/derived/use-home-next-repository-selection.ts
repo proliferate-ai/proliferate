@@ -3,7 +3,7 @@ import type { GitBranchRef, RepoRoot, Workspace } from "@anyharness/sdk";
 import { useRepoRootGitBranchesQuery } from "@anyharness/sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import {
   buildCloudRepoActionBySourceRoot,
   buildConfiguredCloudRepoKeys,

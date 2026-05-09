@@ -3,12 +3,12 @@ import {
   BrailleSweepBadge,
   CircleAlert,
   MessageSquare,
-  ProviderIcon,
 } from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 import type {
   HeaderChatMenuEntry,
   HeaderChatTabEntry,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export function renderChatTabIcon(
   tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "agentKind" | "viewState">,

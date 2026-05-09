@@ -11,7 +11,7 @@ import {
   SIDEBAR_REPO_GROUP_ITEM_LIMIT,
   type SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
-import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-sidebar-show-more-store";

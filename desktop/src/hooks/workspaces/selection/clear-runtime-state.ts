@@ -17,7 +17,7 @@ import {
   closeSessionStreamHandle,
   getSessionStreamHandle,
 } from "@/lib/access/anyharness/session-stream-handles";
-import { clearWorkspaceBootstrappedInSession } from "../workspace-bootstrap-memory";
+import { clearWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 import type { WorkspaceSelectionDeps } from "./types";
 
 const sessionStreamDetachDeps: SessionStreamDetachDeps = {

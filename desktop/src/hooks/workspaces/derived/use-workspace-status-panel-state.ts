@@ -7,7 +7,7 @@ import {
 import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { summarizeSetupFailure } from "@/lib/domain/workspaces/creation/arrival";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaceArrivalState } from "@/hooks/workspaces/derived/use-workspace-arrival-state";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -16,7 +16,7 @@ import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/select
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
-import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 
 export type WorkspaceStatusPanelState =
   | {

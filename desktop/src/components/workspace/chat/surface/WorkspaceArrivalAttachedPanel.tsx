@@ -6,7 +6,7 @@ import { ComposerAttachedPanel } from "@/components/workspace/chat/input/Compose
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
 import { useWorkspaceArrivalActions } from "@/hooks/workspaces/workflows/use-workspace-arrival-actions";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
-import { usePendingWorkspaceEntryActions } from "@/hooks/workspaces/use-pending-workspace-entry-actions";
+import { usePendingWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-pending-workspace-entry-actions";
 import { useCloudWorkspaceStatusScreenActions } from "@/hooks/cloud/workflows/use-cloud-workspace-status-screen-actions";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";

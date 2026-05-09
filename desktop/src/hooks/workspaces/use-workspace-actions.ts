@@ -19,7 +19,7 @@ import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
 } from "@/lib/domain/workspaces/creation/arrival";
-import { useWorkspaces } from "./use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   captureTelemetryException,

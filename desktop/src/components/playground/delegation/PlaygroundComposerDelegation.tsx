@@ -5,7 +5,7 @@ import {
   PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   type PlaygroundReviewComposerState,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
 import { buildPlaygroundDelegatedWorkViewModel } from "@/components/playground/delegation/PlaygroundDelegatedWorkViewModel";
 
 export function renderDelegationSlot(scenario: ScenarioKey) {

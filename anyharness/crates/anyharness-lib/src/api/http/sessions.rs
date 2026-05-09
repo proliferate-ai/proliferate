@@ -24,8 +24,9 @@ use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
+use crate::sessions::runtime::contract::session_link_to_summary;
 use crate::sessions::runtime::{
-    session_link_to_summary, CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
+    CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     InteractionResolutionRequest, PendingPromptMutationError, ResolveInteractionError,
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionMcpRefresh,
     SetSessionConfigOptionError,

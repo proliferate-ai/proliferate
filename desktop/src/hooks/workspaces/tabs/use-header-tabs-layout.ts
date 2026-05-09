@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { HeaderWorkspaceShellStripRow } from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+import type { HeaderWorkspaceShellStripRow } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import {
   computeHeaderStripLayout,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";

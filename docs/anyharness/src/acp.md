@@ -130,8 +130,8 @@ It resolves requests by:
 
 The live start flow is:
 
-1. `sessions/runtime.rs` decides a session should be live.
-   - code: `anyharness/crates/anyharness-lib/src/sessions/runtime.rs`
+1. `sessions/runtime/startup.rs` decides a session should be live.
+   - code: `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`
 2. It resolves workspace and agent dependencies.
 3. It calls `AcpManager::start_session(...)`.
 4. `AcpManager` enters the start/inject critical section, deduplicates by

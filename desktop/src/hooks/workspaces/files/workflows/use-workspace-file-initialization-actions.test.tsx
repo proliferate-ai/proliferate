@@ -28,7 +28,7 @@ vi.mock("@/hooks/access/anyharness/files/use-workspace-files-cache", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-runtime-block", () => ({
+vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     getWorkspaceRuntimeBlockReason: mocks.getWorkspaceRuntimeBlockReason,
   }),

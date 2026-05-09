@@ -1,10 +1,10 @@
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
+import { persistDefaultSessionModePreference } from "@/hooks/sessions/workflows/session-mode-preferences";
 import type { SessionConfigOptionUpdateOptions } from "@/hooks/sessions/workflows/session-control-contract";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
 import {
   resolveStatusFromExecutionSummary,
 } from "@/lib/domain/sessions/activity";

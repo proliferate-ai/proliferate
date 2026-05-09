@@ -15,6 +15,9 @@ import {
   CLOUD_STATUS_ERROR,
   CLOUD_STATUS_FIRST_RUNTIME,
   CLOUD_STATUS_PROVISIONING,
+  WORKSPACE_ARRIVAL_CREATED,
+} from "@/lib/domain/chat/__fixtures__/playground/panel-cloud-fixtures";
+import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
   GEMINI_MCP_OPTIONS,
@@ -23,16 +26,17 @@ import {
   MCP_ELICITATION_MIXED_REQUIRED,
   MCP_ELICITATION_MULTI_SELECT,
   MCP_ELICITATION_URL,
-  TODOS_LONG,
-  TODOS_MID,
-  TODOS_SHORT,
   USER_INPUT_MULTI_QUESTION,
   USER_INPUT_OPTION_PLUS_OTHER,
   USER_INPUT_SECRET,
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
-  WORKSPACE_ARRIVAL_CREATED,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/panel-interaction-fixtures";
+import {
+  TODOS_LONG,
+  TODOS_MID,
+  TODOS_SHORT,
+} from "@/lib/domain/chat/__fixtures__/playground/panel-todo-fixtures";
 import { noop, noopAsync, revealExampleUrl } from "@/components/playground/PlaygroundComposerActions";
 
 export function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {

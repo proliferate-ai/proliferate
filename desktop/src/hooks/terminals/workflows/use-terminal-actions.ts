@@ -1,15 +1,7 @@
-import {
-  AnyHarnessError,
-  type TerminalPurpose,
-  type TerminalRecord,
-} from "@anyharness/sdk";
+import type { TerminalPurpose, TerminalRecord } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
 import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
-import {
-  findReusableRunTerminalId,
-  RUN_TERMINAL_TITLE,
-} from "@/lib/domain/terminals/run-terminal";
 import {
   clearTerminal,
   clearTerminalIntentionalClose,
@@ -18,15 +10,19 @@ import {
 import {
   closeTerminal,
   createWorkspaceTerminal,
+  isMissingTerminalError,
   listWorkspaceTerminals,
   resizeTerminal,
   runTerminalCommand,
   updateTerminalTitle,
 } from "@/lib/access/anyharness/terminals";
+import {
+  closeTerminalTabWorkflow,
+  createRunTerminalTabWorkflow,
+  type CloseTerminalResult,
+} from "@/lib/workflows/terminals/terminal-record-workflows";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
-
-type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
 // Owns terminal record user actions. Does not own terminal rendering or stream lifecycle.
 export function useTerminalActions() {
@@ -87,38 +83,19 @@ export function useTerminalActions() {
     cols = 120,
     rows = 40,
   ) => {
-    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
-    if (blockedReason) {
-      throw new Error(blockedReason);
-    }
-
-    const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-    let records: TerminalRecord[] = [];
-    try {
-      records = await listWorkspaceTerminals(connection);
-      setWorkspaceTerminalRecords(workspaceId, records);
-    } catch {
-      // Listing is used for Run reuse. If it fails, preserve the existing behavior
-      // of creating a Run terminal so the workflow still has a path forward.
-    }
-
-    const existingRunTabId = findReusableRunTerminalId(
-      records.map((record) => ({ ...record, workspaceId })),
+    return createRunTerminalTabWorkflow({
       workspaceId,
-    );
-    if (existingRunTabId) {
-      return existingRunTabId;
-    }
-
-    const record = await createWorkspaceTerminal(connection, {
+      command,
       cols,
       rows,
-      title: RUN_TERMINAL_TITLE,
-      purpose: "run",
-      startupCommand: command,
+    }, {
+      getWorkspaceRuntimeBlockReason,
+      resolveWorkspaceConnection: resolveTerminalWorkspaceConnection,
+      listWorkspaceTerminals,
+      setWorkspaceTerminalRecords,
+      createWorkspaceTerminal,
+      invalidateWorkspaceTerminals,
     });
-    await invalidateWorkspaceTerminals(workspaceId);
-    return record.id;
   }, [
     getWorkspaceRuntimeBlockReason,
     invalidateWorkspaceTerminals,
@@ -136,29 +113,20 @@ export function useTerminalActions() {
     terminalId: string,
     workspaceId: string,
   ): Promise<CloseTerminalResult> => {
-    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
-    if (blockedReason) {
-      showToast(blockedReason);
-      return "blocked";
-    }
-
-    markTerminalIntentionalClose(terminalId);
-
-    try {
-      const connection = await resolveTerminalWorkspaceConnection(workspaceId);
-      await closeTerminal(connection, terminalId);
-      clearClosedTerminalState(terminalId, workspaceId);
-      return "closed";
-    } catch (error) {
-      if (isMissingTerminalError(error)) {
-        clearClosedTerminalState(terminalId, workspaceId);
-        return "missing";
-      }
-      return "failed";
-    } finally {
-      clearTerminalIntentionalClose(terminalId);
-      await invalidateWorkspaceTerminals(workspaceId);
-    }
+    return closeTerminalTabWorkflow({
+      terminalId,
+      workspaceId,
+    }, {
+      getWorkspaceRuntimeBlockReason,
+      showToast,
+      markTerminalIntentionalClose,
+      clearTerminalIntentionalClose,
+      resolveWorkspaceConnection: resolveTerminalWorkspaceConnection,
+      closeTerminal,
+      clearClosedTerminalState,
+      isMissingTerminalError,
+      invalidateWorkspaceTerminals,
+    });
   }, [
     clearClosedTerminalState,
     getWorkspaceRuntimeBlockReason,
@@ -244,9 +212,4 @@ export function useTerminalActions() {
     renameTab,
     rerunCommand,
   };
-}
-
-function isMissingTerminalError(error: unknown): boolean {
-  return error instanceof AnyHarnessError
-    && (error.problem.status === 404 || error.problem.code === "TERMINAL_NOT_FOUND");
 }

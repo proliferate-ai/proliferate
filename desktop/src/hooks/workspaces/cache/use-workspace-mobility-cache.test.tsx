@@ -6,7 +6,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useWorkspaceMobilityCache } from "./use-workspace-mobility-cache";
 
 function makeQueryClient(): QueryClient {

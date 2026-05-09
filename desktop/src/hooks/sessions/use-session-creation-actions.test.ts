@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { buildModelAvailabilityRetryOptions } from "@/lib/domain/sessions/creation/retry-options";
 import {
-  buildModelAvailabilityRetryOptions,
   materializeSessionRecord,
   removeSessionRecordAndClearSelection,
-} from "@/hooks/sessions/session-creation-helpers";
+} from "@/hooks/sessions/workflows/session-creation-local-state";
 import {
   createEmptySessionRecord,
   getSessionRecord,

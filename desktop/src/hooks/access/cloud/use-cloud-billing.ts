@@ -11,7 +11,7 @@ import {
   updateOverageSettings,
 } from "@/lib/access/cloud/billing";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { cloudBillingKey, type CloudOwnerSelectionKey } from "@/hooks/access/cloud/query-keys";
 

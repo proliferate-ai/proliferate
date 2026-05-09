@@ -8,12 +8,12 @@ import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCal
 import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
 import type { ScenarioKey } from "@/config/playground";
+import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 import {
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
-  PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/tool-transcript-fixtures";
 import { TranscriptPreviewShell } from "@/components/playground/transcript/PlaygroundTranscriptShell";
 
 export function renderPlaygroundToolTranscript(

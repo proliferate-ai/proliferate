@@ -5,7 +5,7 @@ import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/session-relationship-hints";
+import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
 

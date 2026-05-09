@@ -38,7 +38,7 @@ vi.mock("./runtime-ready", () => ({
   ensureRuntimeReady: mocks.ensureRuntimeReady,
 }));
 
-vi.mock("./use-workspaces", () => ({
+vi.mock("@/hooks/workspaces/cache/use-workspaces", () => ({
   useWorkspaces: () => ({
     data: {
       localWorkspaces: [],

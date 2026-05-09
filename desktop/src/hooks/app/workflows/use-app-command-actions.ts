@@ -5,10 +5,10 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
-import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
-import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/use-workspace-navigation-workflow";
+import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
+import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { APP_ROUTES } from "@/config/app-routes";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
