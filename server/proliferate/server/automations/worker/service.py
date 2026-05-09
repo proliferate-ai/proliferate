@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.automation_run_claims import (
     sweep_expired_dispatching_runs,
@@ -27,6 +31,9 @@ class SchedulerTickResult:
     swept_dispatching_runs: int = 0
 
 
+SchedulerSessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+
+
 def _resolve_due_schedule(
     fields: AutomationScheduleFields,
     now: datetime,
@@ -40,16 +47,41 @@ def _resolve_due_schedule(
     return AutomationScheduleAdvance(scheduled_for=scheduled_for, next_run_at=next_run_at)
 
 
-async def run_scheduler_tick(*, batch_size: int = 100) -> SchedulerTickResult:
-    swept_dispatching_runs = await sweep_expired_dispatching_runs(
-        now=utcnow(),
-        dispatching_status=AUTOMATION_RUN_STATUS_DISPATCHING,
-        dispatch_uncertain_failure=dispatch_uncertain_failure(),
-    )
-    created_runs = await create_due_scheduled_runs_batch(
-        now=utcnow(),
-        limit=max(1, batch_size),
-        schedule_advance_resolver=_resolve_due_schedule,
+async def _sweep_expired_dispatching_runs(
+    session_factory: SchedulerSessionFactory,
+) -> int:
+    async with session_factory() as db, db.begin():
+        return await sweep_expired_dispatching_runs(
+            db,
+            now=utcnow(),
+            dispatching_status=AUTOMATION_RUN_STATUS_DISPATCHING,
+            dispatch_uncertain_failure=dispatch_uncertain_failure(),
+        )
+
+
+async def _create_due_scheduled_runs_batch(
+    session_factory: SchedulerSessionFactory,
+    *,
+    batch_size: int,
+) -> int:
+    async with session_factory() as db, db.begin():
+        return await create_due_scheduled_runs_batch(
+            db,
+            now=utcnow(),
+            limit=max(1, batch_size),
+            schedule_advance_resolver=_resolve_due_schedule,
+        )
+
+
+async def run_scheduler_tick(
+    *,
+    session_factory: SchedulerSessionFactory,
+    batch_size: int = 100,
+) -> SchedulerTickResult:
+    swept_dispatching_runs = await _sweep_expired_dispatching_runs(session_factory)
+    created_runs = await _create_due_scheduled_runs_batch(
+        session_factory,
+        batch_size=batch_size,
     )
     return SchedulerTickResult(
         created_runs=created_runs,

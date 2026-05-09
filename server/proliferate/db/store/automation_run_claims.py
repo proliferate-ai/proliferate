@@ -338,6 +338,7 @@ async def _heartbeat_run_claim(
 
 
 async def sweep_expired_dispatching_runs(
+    db: AsyncSession,
     *,
     now: datetime,
     dispatching_status: str,
@@ -347,31 +348,28 @@ async def sweep_expired_dispatching_runs(
     if limit <= 0:
         return 0
 
-    async def operation(db: AsyncSession) -> int:
-        runs = list(
-            (
-                await db.execute(
-                    select(AutomationRun)
-                    .where(
-                        AutomationRun.status == dispatching_status,
-                        AutomationRun.claim_expires_at.is_not(None),
-                        AutomationRun.claim_expires_at <= now,
-                    )
-                    .order_by(AutomationRun.claim_expires_at.asc(), AutomationRun.id.asc())
-                    .limit(limit)
-                    .with_for_update(skip_locked=True)
+    runs = list(
+        (
+            await db.execute(
+                select(AutomationRun)
+                .where(
+                    AutomationRun.status == dispatching_status,
+                    AutomationRun.claim_expires_at.is_not(None),
+                    AutomationRun.claim_expires_at <= now,
                 )
+                .order_by(AutomationRun.claim_expires_at.asc(), AutomationRun.id.asc())
+                .limit(limit)
+                .with_for_update(skip_locked=True)
             )
-            .scalars()
-            .all()
         )
-        for run in runs:
-            run.status = AUTOMATION_RUN_STATUS_FAILED
-            run.failed_at = now
-            run.last_error_code = dispatch_uncertain_failure.code
-            run.last_error_message = dispatch_uncertain_failure.message
-            clear_claim_metadata(run)
-            run.updated_at = now
-        return len(runs)
-
-    return await _run_self_committing(operation)
+        .scalars()
+        .all()
+    )
+    for run in runs:
+        run.status = AUTOMATION_RUN_STATUS_FAILED
+        run.failed_at = now
+        run.last_error_code = dispatch_uncertain_failure.code
+        run.last_error_message = dispatch_uncertain_failure.message
+        clear_claim_metadata(run)
+        run.updated_at = now
+    return len(runs)
