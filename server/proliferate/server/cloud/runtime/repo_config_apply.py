@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID, uuid4
 
-from proliferate.constants.cloud import WorkspacePostReadyPhase
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigValue,
@@ -29,14 +28,22 @@ from proliferate.integrations.anyharness import (
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.workspaces.domain.post_ready import (
+    WorkspacePostReadyStatusPatch,
+    repo_config_apply_started,
+    repo_config_completed,
+    repo_config_empty_completed,
+    repo_config_file_failed,
+    repo_config_file_progress,
+    repo_config_files_version_applied,
+    repo_setup_start_failed,
+    repo_setup_starting,
+)
 from proliferate.utils.time import duration_ms, utcnow
 
 
 class WorkspaceRepoApplyBusyError(RuntimeError):
     """Raised when a workspace already has an apply or setup operation in flight."""
-
-
-_SKIP = object()
 
 
 @dataclass(frozen=True)
@@ -72,43 +79,37 @@ async def _load_workspace_repo_config(workspace: CloudWorkspace) -> CloudRepoCon
     )
 
 
-async def _set_apply_phase(
+async def _apply_post_ready_patch(
     workspace_id: UUID,
-    *,
-    phase: WorkspacePostReadyPhase,
-    files_total: int | None = None,
-    files_applied: int | None = None,
-    started: bool = False,
-    completed: bool = False,
-    failed_path: str | None | object = _SKIP,
-    failed_error: str | None | object = _SKIP,
-    files_version: int | None = None,
-    applied_now: bool = False,
-    status_detail: str,
-    apply_token: str | None | object = _SKIP,
+    patch: WorkspacePostReadyStatusPatch,
 ) -> None:
-    kwargs: dict[str, object] = {
-        "repo_post_ready_phase": phase.value,
-        "status_detail": status_detail,
-    }
-    if files_total is not None:
-        kwargs["repo_post_ready_files_total"] = files_total
-    if files_applied is not None:
-        kwargs["repo_post_ready_files_applied"] = files_applied
-    if started:
+    kwargs: dict[str, object] = {}
+    if patch.phase is not None:
+        kwargs["repo_post_ready_phase"] = patch.phase.value
+    if patch.status_detail is not None:
+        kwargs["status_detail"] = patch.status_detail
+    if patch.files_total is not None:
+        kwargs["repo_post_ready_files_total"] = patch.files_total
+    if patch.files_applied is not None:
+        kwargs["repo_post_ready_files_applied"] = patch.files_applied
+    if patch.mark_started:
         kwargs["repo_post_ready_started_at"] = utcnow()
-    if completed:
+    if patch.mark_completed:
         kwargs["repo_post_ready_completed_at"] = utcnow()
-    if failed_path is not _SKIP:
-        kwargs["repo_files_last_failed_path"] = failed_path
-    if failed_error is not _SKIP:
-        kwargs["repo_files_last_error"] = failed_error
-    if files_version is not None:
-        kwargs["repo_files_applied_version"] = files_version
-    if applied_now:
+    if patch.clear_completed_at:
+        kwargs["repo_post_ready_completed_at"] = None
+    if patch.set_failed_path:
+        kwargs["repo_files_last_failed_path"] = patch.failed_path
+    if patch.set_failed_error:
+        kwargs["repo_files_last_error"] = patch.failed_error
+    if patch.files_version is not None:
+        kwargs["repo_files_applied_version"] = patch.files_version
+    if patch.mark_applied_now:
         kwargs["repo_files_applied_at"] = utcnow()
-    if apply_token is not _SKIP:
-        kwargs["repo_post_ready_apply_token"] = apply_token
+    if patch.clear_apply_token:
+        kwargs["repo_post_ready_apply_token"] = None
+    elif patch.apply_token is not None:
+        kwargs["repo_post_ready_apply_token"] = patch.apply_token
     await update_workspace_repo_apply_status_by_id(workspace_id, **kwargs)
 
 
@@ -120,16 +121,7 @@ async def _start_workspace_setup_monitor(
     setup_script: str,
 ) -> WorkspaceSetupStartResult:
     apply_token = uuid4().hex
-    await update_workspace_repo_apply_status_by_id(
-        workspace.id,
-        repo_post_ready_phase=WorkspacePostReadyPhase.starting_setup.value,
-        repo_post_ready_started_at=utcnow(),
-        repo_post_ready_completed_at=None,
-        repo_post_ready_apply_token=apply_token,
-        repo_files_last_failed_path=None,
-        repo_files_last_error=None,
-        status_detail="Starting repo setup",
-    )
+    await _apply_post_ready_patch(workspace.id, repo_setup_starting(apply_token))
     try:
         setup_started = time.perf_counter()
         started = await start_remote_workspace_setup(
@@ -160,14 +152,9 @@ async def _start_workspace_setup_monitor(
         )
     except Exception as exc:
         error_message = format_exception_message(exc)
-        await update_workspace_repo_apply_status_by_id(
+        await _apply_post_ready_patch(
             workspace.id,
-            repo_post_ready_phase=WorkspacePostReadyPhase.failed.value,
-            repo_post_ready_completed_at=utcnow(),
-            repo_post_ready_apply_token=None,
-            repo_files_last_failed_path=None,
-            repo_files_last_error=error_message,
-            status_detail="Repo setup failed to start",
+            repo_setup_start_failed(error_message),
         )
         raise CloudRuntimeOperationError(error_message) from exc
 
@@ -186,16 +173,7 @@ async def _apply_repo_files(
     repo_config: CloudRepoConfigValue,
 ) -> None:
     total_files = len(repo_config.tracked_files)
-    await _set_apply_phase(
-        workspace.id,
-        phase=WorkspacePostReadyPhase.applying_files,
-        files_total=total_files,
-        files_applied=0,
-        started=True,
-        failed_path=None,
-        failed_error=None,
-        status_detail="Applying repo config",
-    )
+    await _apply_post_ready_patch(workspace.id, repo_config_apply_started(total_files))
 
     for index, tracked_file in enumerate(repo_config.tracked_files, start=1):
         try:
@@ -233,30 +211,20 @@ async def _apply_repo_files(
             )
         except Exception as exc:
             error_message = format_exception_message(exc)
-            await update_workspace_repo_apply_status_by_id(
+            await _apply_post_ready_patch(
                 workspace.id,
-                repo_post_ready_phase=WorkspacePostReadyPhase.failed.value,
-                repo_post_ready_completed_at=utcnow(),
-                repo_files_last_failed_path=tracked_file.relative_path,
-                repo_files_last_error=error_message,
-                status_detail="Repo config apply failed",
+                repo_config_file_failed(
+                    relative_path=tracked_file.relative_path,
+                    error=error_message,
+                ),
             )
             raise CloudRuntimeOperationError(error_message) from exc
 
-        await update_workspace_repo_apply_status_by_id(
-            workspace.id,
-            repo_post_ready_files_applied=index,
-            repo_files_last_failed_path=None,
-            repo_files_last_error=None,
-            status_detail="Applying repo config",
-        )
+        await _apply_post_ready_patch(workspace.id, repo_config_file_progress(index))
 
-    await update_workspace_repo_apply_status_by_id(
+    await _apply_post_ready_patch(
         workspace.id,
-        repo_files_applied_version=repo_config.files_version,
-        repo_files_applied_at=utcnow(),
-        repo_files_last_failed_path=None,
-        repo_files_last_error=None,
+        repo_config_files_version_applied(repo_config.files_version),
     )
 
 
@@ -269,18 +237,7 @@ async def apply_workspace_repo_config(
     async with _workspace_apply_lock(workspace.id):
         repo_config = await _load_workspace_repo_config(workspace)
         if repo_config is None:
-            await _set_apply_phase(
-                workspace.id,
-                phase=WorkspacePostReadyPhase.completed,
-                files_total=0,
-                files_applied=0,
-                completed=True,
-                files_version=0,
-                applied_now=True,
-                failed_path=None,
-                failed_error=None,
-                status_detail="Ready",
-            )
+            await _apply_post_ready_patch(workspace.id, repo_config_empty_completed())
             return None
 
         await _apply_repo_files(workspace, runtime=runtime, repo_config=repo_config)
@@ -295,18 +252,13 @@ async def apply_workspace_repo_config(
             )
             return repo_config
 
-        await _set_apply_phase(
+        await _apply_post_ready_patch(
             workspace.id,
-            phase=WorkspacePostReadyPhase.completed,
-            files_total=len(repo_config.tracked_files),
-            files_applied=len(repo_config.tracked_files),
-            completed=True,
-            files_version=repo_config.files_version,
-            applied_now=True,
-            failed_path=None,
-            failed_error=None,
-            status_detail="Ready",
-            apply_token=None,
+            repo_config_completed(
+                files_total=len(repo_config.tracked_files),
+                files_version=repo_config.files_version,
+                clear_apply_token=True,
+            ),
         )
         return repo_config
 

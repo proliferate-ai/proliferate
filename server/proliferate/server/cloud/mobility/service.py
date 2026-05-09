@@ -45,6 +45,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     OWNER_CLOUD,
     active_lifecycle_state,
     is_local_to_cloud_direction,
+    is_retryable_mobility_failure,
     is_valid_handoff_direction,
     is_valid_handoff_phase,
     is_valid_owner,
@@ -105,7 +106,7 @@ async def list_cloud_workspace_mobility_for_user(
         await backfill_cloud_workspace_mobility_for_workspace(
             workspace=workspace,
             active_lifecycle_state=active_lifecycle_state(OWNER_CLOUD),
-            retryable_lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
+            is_retryable_failure=is_retryable_mobility_failure,
         )
     return await list_cloud_workspace_mobility_store(user_id=user_id)
 
@@ -147,7 +148,7 @@ async def ensure_cloud_workspace_mobility(
         git_branch=git_branch,
         owner_hint=owner_hint,
         active_lifecycle_state=active_lifecycle_state(owner_hint),
-        retryable_lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
+        is_retryable_failure=is_retryable_mobility_failure,
         display_name=resolved_display_name,
         cloud_workspace_id=cloud_workspace_id,
     )

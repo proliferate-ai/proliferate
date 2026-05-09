@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.cloud.mobility import CloudWorkspaceMobility
 from proliferate.db.store.cloud_mobility import ensure_cloud_workspace_mobility
 from proliferate.server.cloud.mobility.domain.lifecycle import (
-    LIFECYCLE_HANDOFF_FAILED,
     OWNER_LOCAL,
     active_lifecycle_state,
+    is_retryable_mobility_failure,
 )
 
 
@@ -49,7 +49,7 @@ async def test_ensure_clears_retryable_handoff_failure(
         git_branch="gannet",
         owner_hint="local",
         active_lifecycle_state=active_lifecycle_state(OWNER_LOCAL),
-        retryable_lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
+        is_retryable_failure=is_retryable_mobility_failure,
         display_name="Gannet",
         cloud_workspace_id=None,
     )

@@ -19,6 +19,10 @@ from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.integrations.anyharness import get_remote_terminal_command_run
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.service import get_workspace_connection
+from proliferate.server.cloud.workspaces.domain.setup_runs import (
+    bounded_setup_monitor_error,
+    classify_setup_run_finalization,
+)
 from proliferate.utils.time import duration_ms, utcnow
 
 _SETUP_MONITOR_POLL_SECONDS = 5
@@ -69,14 +73,14 @@ async def reconcile_cloud_setup_runs() -> None:
         except Exception as exc:
             error_message = format_exception_message(exc)
             if utcnow() >= run.deadline_at:
-                await finalize_setup_run(
+                await _finalize_setup_run(
                     run.id,
                     final_status="failed",
                     success=False,
                     last_error=error_message,
                 )
             else:
-                await release_setup_run_claim(run.id, last_error=error_message)
+                await _release_setup_run_claim(run.id, last_error=error_message)
 
 
 async def _poll_setup_run(setup_run_id: UUID) -> None:
@@ -84,12 +88,12 @@ async def _poll_setup_run(setup_run_id: UUID) -> None:
     if setup_run is None:
         return
     if utcnow() >= setup_run.deadline_at:
-        await mark_setup_run_timed_out(setup_run.id)
+        await _mark_setup_run_timed_out(setup_run.id)
         return
 
     workspace = await load_cloud_workspace_by_id(setup_run.workspace_id)
     if workspace is None:
-        await finalize_setup_run(
+        await _finalize_setup_run(
             setup_run.id,
             final_status="stale",
             success=False,
@@ -99,7 +103,7 @@ async def _poll_setup_run(setup_run_id: UUID) -> None:
 
     target = await get_workspace_connection(workspace)
     if not target.anyharness_workspace_id:
-        await release_setup_run_claim(
+        await _release_setup_run_claim(
             setup_run.id,
             last_error="Cloud workspace runtime is not ready yet.",
         )
@@ -121,15 +125,15 @@ async def _poll_setup_run(setup_run_id: UUID) -> None:
     )
 
     if detail.status in {"queued", "running"}:
-        await release_setup_run_claim(setup_run.id, status="running")
+        await _release_setup_run_claim(setup_run.id, status="running")
         return
 
     if detail.status == "succeeded":
-        await finalize_setup_run(setup_run.id, final_status="succeeded", success=True)
+        await _finalize_setup_run(setup_run.id, final_status="succeeded", success=True)
         return
 
     final_status = "timed_out" if detail.status == "timed_out" else "failed"
-    await finalize_setup_run(
+    await _finalize_setup_run(
         setup_run.id,
         final_status=final_status,
         success=False,
@@ -146,3 +150,40 @@ def _setup_error_message(
         if value and value.strip():
             return value.strip()
     return "Repo setup failed."
+
+
+async def _release_setup_run_claim(
+    setup_run_id: UUID,
+    *,
+    status: str = "running",
+    last_error: str | None = None,
+) -> None:
+    await release_setup_run_claim(
+        setup_run_id,
+        bound_error=bounded_setup_monitor_error,
+        status=status,
+        last_error=last_error,
+    )
+
+
+async def _finalize_setup_run(
+    setup_run_id: UUID,
+    *,
+    final_status: str,
+    success: bool,
+    last_error: str | None = None,
+) -> None:
+    await finalize_setup_run(
+        setup_run_id,
+        classify_finalization=classify_setup_run_finalization,
+        final_status=final_status,
+        success=success,
+        last_error=last_error,
+    )
+
+
+async def _mark_setup_run_timed_out(setup_run_id: UUID) -> None:
+    await mark_setup_run_timed_out(
+        setup_run_id,
+        classify_finalization=classify_setup_run_finalization,
+    )
