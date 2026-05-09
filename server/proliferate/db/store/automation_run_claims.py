@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -46,6 +47,13 @@ class LocalAutomationRepoIdentity(Protocol):
 
 class ClaimActivePredicate(Protocol):
     def __call__(self, claim_expires_at: datetime | None, now: datetime) -> bool: ...
+
+
+async def _run_self_committing[T](operation: Callable[[AsyncSession], Awaitable[T]]) -> T:
+    async with db_engine.async_session_factory() as db:
+        result = await operation(db)
+        await db.commit()
+        return result
 
 
 async def load_claimed_run_for_update(
@@ -107,21 +115,26 @@ async def claim_cloud_automation_runs(
     reclaimable_statuses: frozenset[str],
     unconfigured_agent_failure: ClaimFailure,
 ) -> list[AutomationRunClaimValue]:
-    return await _claim_automation_runs(
-        executor_id=executor_id,
-        executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
-        execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-        claim_ttl=claim_ttl,
-        limit=limit,
-        now=now,
-        reclaimable_statuses=reclaimable_statuses,
-        unconfigured_agent_failure=unconfigured_agent_failure,
-        user_id=None,
-        repo_identities=None,
-    )
+    async def operation(db: AsyncSession) -> list[AutomationRunClaimValue]:
+        return await _claim_automation_runs(
+            db,
+            executor_id=executor_id,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+            claim_ttl=claim_ttl,
+            limit=limit,
+            now=now,
+            reclaimable_statuses=reclaimable_statuses,
+            unconfigured_agent_failure=unconfigured_agent_failure,
+            user_id=None,
+            repo_identities=None,
+        )
+
+    return await _run_self_committing(operation)
 
 
 async def claim_local_automation_runs(
+    db: AsyncSession | None = None,
     *,
     user_id: UUID,
     executor_id: str,
@@ -139,21 +152,28 @@ async def claim_local_automation_runs(
     }
     if not identities:
         return []
-    return await _claim_automation_runs(
-        executor_id=executor_id,
-        executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
-        execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
-        claim_ttl=claim_ttl,
-        limit=limit,
-        now=now,
-        reclaimable_statuses=reclaimable_statuses,
-        unconfigured_agent_failure=unconfigured_agent_failure,
-        user_id=user_id,
-        repo_identities=sorted(identities),
-    )
+    repo_identities = sorted(identities)
+
+    async def operation(session: AsyncSession) -> list[AutomationRunClaimValue]:
+        return await _claim_automation_runs(
+            session,
+            executor_id=executor_id,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            claim_ttl=claim_ttl,
+            limit=limit,
+            now=now,
+            reclaimable_statuses=reclaimable_statuses,
+            unconfigured_agent_failure=unconfigured_agent_failure,
+            user_id=user_id,
+            repo_identities=repo_identities,
+        )
+
+    return await operation(db) if db is not None else await _run_self_committing(operation)
 
 
 async def _claim_automation_runs(
+    db: AsyncSession,
     *,
     executor_id: str,
     executor_kind: str,
@@ -193,40 +213,38 @@ async def _claim_automation_runs(
             )
         )
 
-    async with db_engine.async_session_factory() as db:
-        rows = list(
-            (
-                await db.execute(
-                    select(AutomationRun)
-                    .where(*predicates)
-                    .order_by(AutomationRun.created_at.asc(), AutomationRun.id.asc())
-                    .limit(max(1, limit))
-                    .with_for_update(skip_locked=True)
-                )
+    rows = list(
+        (
+            await db.execute(
+                select(AutomationRun)
+                .where(*predicates)
+                .order_by(AutomationRun.created_at.asc(), AutomationRun.id.asc())
+                .limit(max(1, limit))
+                .with_for_update(skip_locked=True)
             )
-            .scalars()
-            .all()
         )
-        expires_at = now + claim_ttl
-        values: list[AutomationRunClaimValue] = []
-        for run in rows:
-            if run.agent_kind_snapshot is None:
-                _fail_unconfigured_agent(run, now, unconfigured_agent_failure)
-                continue
-            run.status = AUTOMATION_RUN_STATUS_CLAIMED
-            run.executor_kind = executor_kind
-            run.executor_id = executor_id
-            run.claim_id = uuid4()
-            run.claimed_at = now
-            run.claim_expires_at = expires_at
-            run.last_heartbeat_at = now
-            run.failed_at = None
-            run.last_error_code = None
-            run.last_error_message = None
-            run.updated_at = now
-            values.append(claim_value(run))
-        await db.commit()
-        return values
+        .scalars()
+        .all()
+    )
+    expires_at = now + claim_ttl
+    values: list[AutomationRunClaimValue] = []
+    for run in rows:
+        if run.agent_kind_snapshot is None:
+            _fail_unconfigured_agent(run, now, unconfigured_agent_failure)
+            continue
+        run.status = AUTOMATION_RUN_STATUS_CLAIMED
+        run.executor_kind = executor_kind
+        run.executor_id = executor_id
+        run.claim_id = uuid4()
+        run.claimed_at = now
+        run.claim_expires_at = expires_at
+        run.last_heartbeat_at = now
+        run.failed_at = None
+        run.last_error_code = None
+        run.last_error_message = None
+        run.updated_at = now
+        values.append(claim_value(run))
+    return values
 
 
 async def load_current_run_claim(
@@ -258,6 +276,7 @@ async def load_current_run_claim(
 
 
 async def heartbeat_run_claim(
+    db: AsyncSession | None = None,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -269,25 +288,53 @@ async def heartbeat_run_claim(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> AutomationRunClaimValue | None:
-    async with db_engine.async_session_factory() as db:
-        run = await load_claimed_run_for_update(
-            db,
+    async def operation(session: AsyncSession) -> AutomationRunClaimValue | None:
+        return await _heartbeat_run_claim(
+            session,
             run_id=run_id,
             claim_id=claim_id,
+            claim_ttl=claim_ttl,
             now=now,
-            allowed_statuses=active_statuses,
+            active_statuses=active_statuses,
+            claim_is_active=claim_is_active,
             execution_target=execution_target,
             executor_kind=executor_kind,
-            claim_is_active=claim_is_active,
             user_id=user_id,
         )
-        if run is None:
-            return None
-        run.claim_expires_at = now + claim_ttl
-        run.last_heartbeat_at = now
-        run.updated_at = now
-        await db.commit()
-        return claim_value(run)
+
+    return await operation(db) if db is not None else await _run_self_committing(operation)
+
+
+async def _heartbeat_run_claim(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    claim_id: UUID,
+    claim_ttl: timedelta,
+    now: datetime,
+    active_statuses: frozenset[str],
+    claim_is_active: ClaimActivePredicate,
+    execution_target: str,
+    executor_kind: str,
+    user_id: UUID | None,
+) -> AutomationRunClaimValue | None:
+    run = await load_claimed_run_for_update(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        allowed_statuses=active_statuses,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        claim_is_active=claim_is_active,
+        user_id=user_id,
+    )
+    if run is None:
+        return None
+    run.claim_expires_at = now + claim_ttl
+    run.last_heartbeat_at = now
+    run.updated_at = now
+    return claim_value(run)
 
 
 async def sweep_expired_dispatching_runs(
@@ -299,7 +346,8 @@ async def sweep_expired_dispatching_runs(
 ) -> int:
     if limit <= 0:
         return 0
-    async with db_engine.async_session_factory() as db:
+
+    async def operation(db: AsyncSession) -> int:
         runs = list(
             (
                 await db.execute(
@@ -324,5 +372,6 @@ async def sweep_expired_dispatching_runs(
             run.last_error_message = dispatch_uncertain_failure.message
             clear_claim_metadata(run)
             run.updated_at = now
-        await db.commit()
         return len(runs)
+
+    return await _run_self_committing(operation)
