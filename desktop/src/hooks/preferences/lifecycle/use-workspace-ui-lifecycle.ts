@@ -71,8 +71,10 @@ async function readWorkspaceUiState(): Promise<{
 export function useWorkspaceUiLifecycle(): void {
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
 
-    void readWorkspaceUiState().then(({ state, didMigrate }) => {
+    const bootstrap = async () => {
+      const { state, didMigrate } = await readWorkspaceUiState();
       if (cancelled) {
         return;
       }
@@ -86,40 +88,42 @@ export function useWorkspaceUiLifecycle(): void {
           selectPersistedWorkspaceUiState(useWorkspaceUiStore.getState()),
         );
       }
-    });
 
-    const unsubscribe = useWorkspaceUiStore.subscribe((state, prev) => {
-      const changedKeys = getChangedWorkspaceUiStateKeys(prev, state);
-      if (isDebugMeasurementEnabled() && changedKeys.length > 0) {
-        recordMeasurementDiagnostic({
-          category: "workspace_ui_store.write",
-          label: "top_level_keys",
-          keys: changedKeys,
-          count: changedKeys.length,
-        });
-      }
+      unsubscribe = useWorkspaceUiStore.subscribe((state, prev) => {
+        if (!state._hydrated || !prev._hydrated) {
+          return;
+        }
 
-      if (!state._hydrated) {
-        return;
-      }
+        const changedKeys = getChangedWorkspaceUiStateKeys(prev, state);
+        if (isDebugMeasurementEnabled() && changedKeys.length > 0) {
+          recordMeasurementDiagnostic({
+            category: "workspace_ui_store.write",
+            label: "top_level_keys",
+            keys: changedKeys,
+            count: changedKeys.length,
+          });
+        }
 
-      if (
-        changedKeys.length > 0
-        && changedKeys.every(isNonPersistedWorkspaceUiStateKey)
-      ) {
-        return;
-      }
+        if (
+          changedKeys.length > 0
+          && changedKeys.every(isNonPersistedWorkspaceUiStateKey)
+        ) {
+          return;
+        }
 
-      const currentSlice = selectPersistedWorkspaceUiState(state);
-      const previousSlice = selectPersistedWorkspaceUiState(prev);
-      if (JSON.stringify(currentSlice) !== JSON.stringify(previousSlice)) {
-        void persistValue(WORKSPACE_UI_KEY, currentSlice);
-      }
-    });
+        const currentSlice = selectPersistedWorkspaceUiState(state);
+        const previousSlice = selectPersistedWorkspaceUiState(prev);
+        if (JSON.stringify(currentSlice) !== JSON.stringify(previousSlice)) {
+          void persistValue(WORKSPACE_UI_KEY, currentSlice);
+        }
+      });
+    };
+
+    void bootstrap();
 
     return () => {
       cancelled = true;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 }
