@@ -9,7 +9,7 @@ use crate::domains::agents::reconcile_execution::AgentReconcileService;
 use crate::domains::agents::seed::AgentSeedStore;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::delegation::service::CoworkDelegationService;
-use crate::domains::cowork::mcp_auth::CoworkMcpAuth;
+use crate::domains::cowork::mcp_server::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::CoworkStore;

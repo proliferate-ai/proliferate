@@ -1,77 +1,128 @@
-use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::model::{
-    CreateCodingSessionInput, CreateCodingWorkspaceInput,
+use super::protocol::{
+    self, CodingSessionArgs, CodingWorkspaceArgs, CreateArtifactArgs, CreateCodingSessionArgs,
+    CreateCodingWorkspaceArgs, DeleteArtifactArgs, GetArtifactArgs, ReadCodingEventsArgs,
+    SendCodingMessageArgs, UpdateArtifactArgs,
+};
+use crate::domains::cowork::artifacts::{
+    CoworkArtifactRuntime, CreateCoworkArtifactInput, UpdateCoworkArtifactInput,
+};
+use crate::domains::cowork::delegation::model::{
+    CreateCodingSessionInput, CreateCodingWorkspaceInput, SendCodingMessageInput,
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
-use crate::integrations::mcp::json_rpc::deserialize_args;
-use crate::integrations::mcp::tools::tool_definition;
+use crate::integrations::mcp::json_rpc::{deserialize_args, jsonrpc_error, CallToolParams};
+use crate::integrations::mcp::tools::jsonrpc_tool_result;
 use crate::sessions::runtime::SendPromptOutcome;
 use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
+use crate::workspaces::model::WorkspaceRecord;
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CreateCodingWorkspaceArgs {
-    source_workspace_id: String,
-    #[serde(default)]
-    label: Option<String>,
-    #[serde(default)]
-    workspace_name: Option<String>,
-    #[serde(default)]
-    branch_name: Option<String>,
+pub(super) async fn handle_tool_call(
+    artifact_runtime: &CoworkArtifactRuntime,
+    cowork_runtime: &CoworkRuntime,
+    workspace: &WorkspaceRecord,
+    parent_session_id: &str,
+    workspace_delegation_enabled: bool,
+    id: Option<Value>,
+    params: CallToolParams,
+) -> anyhow::Result<Value> {
+    if protocol::is_delegation_tool(&params.name) && !workspace_delegation_enabled {
+        return Ok(jsonrpc_tool_result::<Value, _>(
+            id,
+            Err(anyhow::anyhow!(
+                "cowork workspace delegation is disabled for this thread"
+            )),
+        ));
+    }
+
+    match params.name.as_str() {
+        "create_artifact" => {
+            let args: CreateArtifactArgs = deserialize_args(params.arguments)?;
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let artifact = tokio::task::spawn_blocking(move || {
+                artifact_runtime.create_artifact(
+                    &workspace,
+                    CreateCoworkArtifactInput {
+                        path: args.path,
+                        content: args.content,
+                        title: args.title,
+                        description: args.description,
+                    },
+                )
+            })
+            .await?;
+            Ok(jsonrpc_tool_result(id, artifact))
+        }
+        "update_artifact" => {
+            let args: UpdateArtifactArgs = deserialize_args(params.arguments)?;
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let artifact = tokio::task::spawn_blocking(move || {
+                artifact_runtime.update_artifact(
+                    &workspace,
+                    UpdateCoworkArtifactInput {
+                        id: args.id,
+                        content: args.content,
+                        title: args.title,
+                        description: args.description,
+                    },
+                )
+            })
+            .await?;
+            Ok(jsonrpc_tool_result(id, artifact))
+        }
+        "delete_artifact" => {
+            let args: DeleteArtifactArgs = deserialize_args(params.arguments)?;
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                artifact_runtime
+                    .delete_artifact(&workspace, &args.id)
+                    .map(|_| {
+                        json!({
+                            "id": args.id,
+                            "deleted": true,
+                        })
+                    })
+            })
+            .await?;
+            Ok(jsonrpc_tool_result(id, result))
+        }
+        "list_artifacts" => {
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let manifest =
+                tokio::task::spawn_blocking(move || artifact_runtime.get_manifest(&workspace))
+                    .await?;
+            Ok(jsonrpc_tool_result(id, manifest))
+        }
+        "get_artifact" => {
+            let args: GetArtifactArgs = deserialize_args(params.arguments)?;
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let artifact = tokio::task::spawn_blocking(move || {
+                artifact_runtime.get_artifact(&workspace, &args.id)
+            })
+            .await?;
+            Ok(jsonrpc_tool_result(id, artifact))
+        }
+        name if protocol::is_delegation_tool(name) => Ok(jsonrpc_tool_result(
+            id,
+            handle_delegation_tool_call(cowork_runtime, parent_session_id, name, params.arguments)
+                .await,
+        )),
+        _ => Ok(jsonrpc_error(
+            id,
+            -32601,
+            format!("unknown tool: {}", params.name),
+        )),
+    }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CodingWorkspaceArgs {
-    workspace_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CreateCodingSessionArgs {
-    workspace_id: String,
-    prompt: String,
-    #[serde(default)]
-    label: Option<String>,
-    #[serde(default)]
-    agent_kind: Option<String>,
-    #[serde(default)]
-    model_id: Option<String>,
-    #[serde(default)]
-    mode_id: Option<String>,
-    #[serde(default)]
-    wake_on_completion: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CodingSessionArgs {
-    coding_session_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SendCodingMessageArgs {
-    coding_session_id: String,
-    prompt: String,
-    #[serde(default)]
-    wake_on_completion: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ReadCodingEventsArgs {
-    coding_session_id: String,
-    #[serde(default)]
-    since_seq: Option<i64>,
-    #[serde(default)]
-    limit: Option<usize>,
-}
-
-pub async fn handle_tool_call(
+async fn handle_delegation_tool_call(
     cowork_runtime: &CoworkRuntime,
     parent_session_id: &str,
     tool_name: &str,
@@ -426,133 +477,7 @@ fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
     }
 }
 
-pub fn tool_definitions() -> Vec<Value> {
-    vec![
-        tool_definition(
-            "get_coding_workspace_launch_options",
-            "List eligible standard source workspaces, repo default base branches, supported agent/model choices, and recommended fast coding mode ids before creating cowork-managed coding workspaces.",
-            json!({ "type": "object", "properties": {} }),
-        ),
-        tool_definition(
-            "create_coding_workspace",
-            "Create a cowork-managed standard worktree workspace from the source repo default branch. This only provisions the workspace; call create_coding_session to start agent work inside it.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "sourceWorkspaceId": { "type": "string" },
-                    "label": { "type": "string" },
-                    "workspaceName": {
-                        "type": "string",
-                        "description": "Optional concise workspace/path slug. The runtime normalizes it to kebab-case."
-                    },
-                    "branchName": {
-                        "type": "string",
-                        "description": "Optional full Git branch name. If omitted, the runtime uses cowork/coding/<workspaceName>."
-                    }
-                },
-                "required": ["sourceWorkspaceId"]
-            }),
-        ),
-        tool_definition(
-            "list_coding_workspaces",
-            "List cowork-managed coding workspaces and linked coding sessions owned by this cowork thread.",
-            json!({ "type": "object", "properties": {} }),
-        ),
-        tool_definition(
-            "get_coding_session_launch_options",
-            "List supported agent/model choices and recommended fast coding mode ids before creating coding sessions inside an owned cowork-managed workspace.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "workspaceId": { "type": "string" }
-                },
-                "required": ["workspaceId"]
-            }),
-        ),
-        tool_definition(
-            "create_coding_session",
-            "Create a linked coding session inside an owned cowork-managed coding workspace and send it an initial prompt. Pass modeId from get_coding_session_launch_options for fast autonomous execution; set wakeOnCompletion to true if you want this cowork thread prompted when the coding session finishes its next turn.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "workspaceId": { "type": "string" },
-                    "prompt": { "type": "string" },
-                    "label": { "type": "string" },
-                    "agentKind": { "type": "string" },
-                    "modelId": { "type": "string" },
-                    "modeId": { "type": "string" },
-                    "wakeOnCompletion": { "type": "boolean" }
-                },
-                "required": ["workspaceId", "prompt"]
-            }),
-        ),
-        tool_definition(
-            "send_coding_message",
-            "Send a parent-authored prompt to an owned coding session. Set wakeOnCompletion to true if you want this cowork thread prompted when the coding session finishes its next turn.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "codingSessionId": { "type": "string" },
-                    "prompt": { "type": "string" },
-                    "wakeOnCompletion": { "type": "boolean" }
-                },
-                "required": ["codingSessionId", "prompt"]
-            }),
-        ),
-        tool_definition(
-            "schedule_coding_wake",
-            "Schedule a one-shot wake for the next newly completed turn of an owned coding session. Idempotent while a wake is already scheduled and not retroactive for old completions.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "codingSessionId": { "type": "string" }
-                },
-                "required": ["codingSessionId"]
-            }),
-        ),
-        tool_definition(
-            "get_coding_status",
-            "Get execution status for an owned coding session.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "codingSessionId": { "type": "string" }
-                },
-                "required": ["codingSessionId"]
-            }),
-        ),
-        tool_definition(
-            "read_coding_events",
-            "Read a bounded, sanitized event slice from an owned coding session.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "codingSessionId": { "type": "string" },
-                    "sinceSeq": { "type": "integer" },
-                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
-                },
-                "required": ["codingSessionId"]
-            }),
-        ),
-    ]
-}
-
-pub fn is_tool(name: &str) -> bool {
-    matches!(
-        name,
-        "get_coding_workspace_launch_options"
-            | "create_coding_workspace"
-            | "list_coding_workspaces"
-            | "get_coding_session_launch_options"
-            | "create_coding_session"
-            | "send_coding_message"
-            | "schedule_coding_wake"
-            | "get_coding_status"
-            | "read_coding_events"
-    )
-}
-
-impl From<SendCodingMessageArgs> for super::model::SendCodingMessageInput {
+impl From<SendCodingMessageArgs> for SendCodingMessageInput {
     fn from(value: SendCodingMessageArgs) -> Self {
         Self {
             coding_session_id: value.coding_session_id,
