@@ -6,6 +6,7 @@ pub mod cowork;
 pub mod files;
 pub mod git;
 pub mod hosting;
+pub mod integrations;
 pub mod mobility;
 pub mod origin;
 pub mod persistence;
