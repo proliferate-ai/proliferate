@@ -2,22 +2,25 @@ import { useMemo } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
 import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
+  buildHeaderLiveVisibilityCandidates,
+  buildKnownHeaderSessions,
   collectHierarchyChildren,
   type KnownHeaderSession,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import {
+  buildHeaderDisplayShellRows,
   buildHeaderChatTabs,
   buildHeaderMenuChatTabs,
   buildManualGroupByTopLevelSessionId,
   resolveHighlightedChatSessionId,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-derivation";
-import { createWorkspaceHeaderLiveSlotsSelector } from "@/hooks/workspaces/tabs/workspace-header-live-slots-selector";
+  selectHeaderStripChatSessionIds,
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
+import { createWorkspaceHeaderLiveSlotsSelector } from "@/lib/domain/workspaces/tabs/workspace-header-live-slots-selector";
 import type {
   HeaderChatMenuEntry,
-  HeaderChatStripRow,
   HeaderChatTabEntry,
   HeaderWorkspaceShellStripRow,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import { buildGroupedChatTabs } from "@/lib/domain/workspaces/tabs/grouping";
 import { buildHeaderStripRows } from "@/lib/domain/workspaces/tabs/group-rows";
 import {
@@ -112,22 +115,12 @@ export function useWorkspaceHeaderTabsViewModel() {
       keys: ["liveSlots", "workspaceSessionsQuery.data", "selectedWorkspaceId"],
       count: (map) => map.size,
     }, () => {
-      const map = new Map<string, KnownHeaderSession>();
-      for (const session of workspaceSessionsQuery.data ?? []) {
-        if (session.dismissedAt) continue;
-        if (!selectedWorkspaceId || session.workspaceId !== selectedWorkspaceId) continue;
-        const clientSessionId = clientSessionIdByMaterializedSessionId[session.id] ?? session.id;
-        map.set(clientSessionId, { kind: "session", session, clientSessionId });
-      }
-      for (const slot of liveSlots) {
-        const existing = map.get(slot.sessionId);
-        map.set(slot.sessionId, {
-          kind: "slot",
-          slot,
-          session: existing?.kind === "session" ? existing.session : existing?.session,
-        });
-      }
-      return map;
+      return buildKnownHeaderSessions({
+        sessions: workspaceSessionsQuery.data,
+        selectedWorkspaceId,
+        clientSessionIdByMaterializedSessionId,
+        liveSlots,
+      });
     }), [
       clientSessionIdByMaterializedSessionId,
       liveSlots,
@@ -156,19 +149,11 @@ export function useWorkspaceHeaderTabsViewModel() {
       label: "live_visibility_candidates",
       keys: ["knownSessionIds", "hierarchy.childToParent", "hierarchyChildren.visibilityCandidates"],
       count: (candidates) => candidates.length,
-    }, () => {
-      const candidatesBySessionId = new Map<string, ChatVisibilityCandidate>();
-      for (const sessionId of knownSessionIds) {
-        candidatesBySessionId.set(sessionId, {
-          sessionId,
-          parentSessionId: hierarchy.childToParent.get(sessionId) ?? null,
-        });
-      }
-      for (const candidate of hierarchyChildren.visibilityCandidates) {
-        candidatesBySessionId.set(candidate.sessionId, candidate);
-      }
-      return Array.from(candidatesBySessionId.values());
-    }),
+    }, () => buildHeaderLiveVisibilityCandidates({
+      knownSessionIds,
+      childToParent: hierarchy.childToParent,
+      hierarchyVisibilityCandidates: hierarchyChildren.visibilityCandidates,
+    })),
     [hierarchy.childToParent, hierarchyChildren.visibilityCandidates, knownSessionIds],
   );
   const liveChatSessionIds = useMemo(
@@ -322,10 +307,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     ],
   );
   const stripChatSessionIds = useMemo(
-    () => stripRows
-      .filter((row): row is Extract<HeaderChatStripRow, { kind: "tab" }> => row.kind === "tab")
-      .filter((row) => !row.tab.isReviewAgentChild)
-      .map((row) => row.tab.sessionId),
+    () => selectHeaderStripChatSessionIds(stripRows),
     [stripRows],
   );
   const {
@@ -354,20 +336,9 @@ export function useWorkspaceHeaderTabsViewModel() {
       label: "display_shell_rows",
       keys: ["highlightedChatSessionId", "shellRows"],
       count: (rows) => rows.length,
-    }, () => shellRows.map((shellRow) => {
-      if (shellRow.kind !== "chat" || shellRow.row.kind !== "tab") {
-        return shellRow;
-      }
-      return {
-        ...shellRow,
-        row: {
-          ...shellRow.row,
-          tab: {
-            ...shellRow.row.tab,
-            isActive: shellRow.row.tab.sessionId === highlightedChatSessionId,
-          },
-        },
-      };
+    }, () => buildHeaderDisplayShellRows({
+      highlightedChatSessionId,
+      shellRows,
     })),
     [highlightedChatSessionId, shellRows],
   );

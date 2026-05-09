@@ -1,4 +1,3 @@
-import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
   getKnownSessionAgentKind,
   getKnownSessionCanFork,
@@ -6,8 +5,9 @@ import {
   getKnownSessionTitle,
   getKnownSessionViewState,
   getLinkedChildViewState,
+  type HeaderHierarchyChildRow,
   type KnownHeaderSession,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 import {
   resolveManualChatGroupColor,
   type DisplayManualChatGroup,
@@ -15,8 +15,10 @@ import {
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type {
   HeaderChatMenuEntry,
+  HeaderChatStripRow,
   HeaderChatTabEntry,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+  HeaderWorkspaceShellStripRow,
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
 
 export function buildManualGroupByTopLevelSessionId(
@@ -34,8 +36,8 @@ export function buildManualGroupByTopLevelSessionId(
 export function buildHeaderChatTabs(args: {
   activeChatSessionIdForTabs: string | null;
   groupedTabs: readonly GroupedChatTab[];
-  rowsBySessionId: ReadonlyMap<string, HeaderSubagentChildRow>;
-  childrenByParentSessionId: ReadonlyMap<string, readonly HeaderSubagentChildRow[]>;
+  rowsBySessionId: ReadonlyMap<string, HeaderHierarchyChildRow>;
+  childrenByParentSessionId: ReadonlyMap<string, readonly HeaderHierarchyChildRow[]>;
   resolvedSessionIds: ReadonlySet<string>;
   knownSessions: ReadonlyMap<string, KnownHeaderSession>;
   manualGroupByTopLevelSessionId: ReadonlyMap<string, DisplayManualChatGroup>;
@@ -75,6 +77,15 @@ export function buildHeaderChatTabs(args: {
     .filter((tab): tab is HeaderChatTabEntry => !!tab);
 }
 
+export function selectHeaderStripChatSessionIds(
+  stripRows: readonly HeaderChatStripRow[],
+): string[] {
+  return stripRows
+    .filter((row): row is Extract<HeaderChatStripRow, { kind: "tab" }> => row.kind === "tab")
+    .filter((row) => !row.tab.isReviewAgentChild)
+    .map((row) => row.tab.sessionId);
+}
+
 export function resolveHighlightedChatSessionId(
   highlightedTabKey: string | null | undefined,
 ): string | null {
@@ -101,4 +112,25 @@ export function buildHeaderMenuChatTabs(args: {
         isVisible: args.visibleChatSessionIds.includes(id),
       };
     });
+}
+
+export function buildHeaderDisplayShellRows(args: {
+  highlightedChatSessionId: string | null;
+  shellRows: readonly HeaderWorkspaceShellStripRow[];
+}): HeaderWorkspaceShellStripRow[] {
+  return args.shellRows.map((shellRow) => {
+    if (shellRow.kind !== "chat" || shellRow.row.kind !== "tab") {
+      return shellRow;
+    }
+    return {
+      ...shellRow,
+      row: {
+        ...shellRow.row,
+        tab: {
+          ...shellRow.row.tab,
+          isActive: shellRow.row.tab.sessionId === args.highlightedChatSessionId,
+        },
+      },
+    };
+  });
 }

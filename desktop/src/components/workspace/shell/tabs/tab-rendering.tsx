@@ -8,7 +8,7 @@ import {
 import type {
   HeaderChatMenuEntry,
   HeaderChatTabEntry,
-} from "@/hooks/workspaces/tabs/workspace-header-tabs-view-model-types";
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 export function renderChatTabIcon(
   tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "agentKind" | "viewState">,
