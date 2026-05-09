@@ -20,7 +20,8 @@ import {
   waitForSessionMaterialization,
 } from "@/stores/sessions/session-records";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
@@ -32,7 +33,8 @@ let activeDispatcherOwner: symbol | null = null;
 
 export function usePromptOutboxDispatcher(): void {
   const dispatchVersion = usePromptOutboxStore((state) => state.dispatchVersion);
-  const { applySessionSummary, rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
+  const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
+  const { applySessionSummary } = useSessionSummaryActions();
   const { maybeGenerateSessionTitle } = useSessionTitleActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const promptSessionMutation = usePromptSessionMutation();
@@ -288,7 +290,7 @@ function scheduleAcceptedRunningHistoryReconcile({
   clientSessionId: string;
   clientPromptId: string;
   requestHeaders: HeadersInit | null;
-  rehydrateSessionSlotFromHistory: ReturnType<typeof useSessionRuntimeActions>["rehydrateSessionSlotFromHistory"];
+  rehydrateSessionSlotFromHistory: ReturnType<typeof useSessionHistoryHydration>["rehydrateSessionSlotFromHistory"];
 }): void {
   for (const delayMs of ACCEPTED_RUNNING_RECONCILE_DELAYS_MS) {
     window.setTimeout(() => {

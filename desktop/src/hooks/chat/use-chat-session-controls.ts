@@ -3,7 +3,7 @@ import {
   buildLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls/session-controls";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useActiveSessionConfigState } from "./derived/use-active-chat-session-selectors";
@@ -18,7 +18,7 @@ export function useChatSessionControls(): {
   const activeSessionConfig = useActiveSessionConfigState();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
-  const { setActiveSessionConfigOption } = useSessionActions();
+  const { setActiveSessionConfigOption } = useSessionConfigActions();
 
   const onSelect = useCallback((rawConfigId: string, value: string) => {
     void setActiveSessionConfigOption(rawConfigId, value).catch((error) => {

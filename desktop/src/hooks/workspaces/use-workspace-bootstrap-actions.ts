@@ -7,8 +7,9 @@ import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
@@ -95,8 +96,9 @@ export function useWorkspaceBootstrapActions() {
     prepareFileWorkspace,
     prefetchWorkspaceDirectories,
   } = useWorkspaceFileActions();
-  const { selectSession, createEmptySessionWithResolvedConfig } = useSessionActions();
-  const { rehydrateSessionSlotFromHistory } = useSessionRuntimeActions();
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
+  const { selectSession } = useSessionSelectionActions();
   const cancelDeferredFileTreePrefetchRef = useRef<(() => void) | null>(null);
 
   const cancelDeferredFileTreePrefetch = useCallback(() => {

@@ -1,9 +1,9 @@
 import type { McpElicitationSubmittedField } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionInteractionActions } from "@/hooks/sessions/workflows/use-session-interaction-actions";
 
 export function useChatMcpElicitationActions() {
-  const { resolveMcpElicitation, revealMcpElicitationUrl } = useSessionActions();
+  const { resolveMcpElicitation, revealMcpElicitationUrl } = useSessionInteractionActions();
 
   const handleAcceptMcpElicitation = useCallback((fields: McpElicitationSubmittedField[]) =>
     resolveMcpElicitation({ outcome: "accepted", fields }), [resolveMcpElicitation]);

@@ -4,9 +4,14 @@ import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useSessionCancelActions } from "@/hooks/sessions/workflows/use-session-cancel-actions";
+import { useSessionFindOrCreateActions } from "@/hooks/sessions/workflows/use-session-find-or-create-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
+import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
+import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -49,12 +54,17 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
-  const {
-    cancelActiveSession,
+  const { cancelActiveSession } = useSessionCancelActions();
+  const { createSessionWithResolvedConfig } = useSessionCreationActions();
+  const { activateSession } = useSessionRuntimeActions();
+  const { ensureWorkspaceSessions, selectSession } = useSessionSelectionActions();
+  const { findOrCreateSession } = useSessionFindOrCreateActions({
+    activateSession,
     createSessionWithResolvedConfig,
-    findOrCreateSession,
-    promptActiveSession,
-  } = useSessionActions();
+    ensureWorkspaceSessions,
+    selectSession,
+  });
+  const { promptActiveSession } = useSessionPromptActions();
   const { promptSession } = useSessionPromptWorkflow();
   const clearDraft = useChatInputStore((state) => state.clearDraft);
   const {

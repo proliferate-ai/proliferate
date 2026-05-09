@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
@@ -31,7 +31,7 @@ export function useWorkspaceCommandPaletteTabs() {
   });
   const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
-  const { createEmptySessionWithResolvedConfig } = useSessionActions();
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
 
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
     if (tab.kind === "chat") {

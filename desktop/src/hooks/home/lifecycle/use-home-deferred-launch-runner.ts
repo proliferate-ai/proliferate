@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {
@@ -36,7 +36,7 @@ export function useHomeDeferredLaunchRunner() {
   const markPending = useDeferredHomeLaunchStore((state) => state.markPending);
   const clear = useDeferredHomeLaunchStore((state) => state.clear);
   const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
-  const { createSessionWithResolvedConfig } = useSessionActions();
+  const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const {
     data: workspaceCollections,

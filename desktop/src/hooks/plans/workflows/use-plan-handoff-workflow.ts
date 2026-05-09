@@ -10,7 +10,8 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useSessionActions } from "@/hooks/sessions/facade/use-session-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import type { SessionActivationOutcome } from "@/hooks/sessions/session-activation-guard";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
@@ -59,10 +60,8 @@ export function usePlanHandoffWorkflow({
     activeSelection: selection ?? configuredLaunch.selection,
   });
   const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
-  const {
-    createEmptySessionWithResolvedConfig,
-    dismissSession,
-  } = useSessionActions();
+  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const { dismissSession } = useSessionDismissActions();
   const { activateChatTab } = useWorkspaceShellActivation();
   const { promptSession } = useSessionPromptWorkflow();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
