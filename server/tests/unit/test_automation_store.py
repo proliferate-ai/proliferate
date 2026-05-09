@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from proliferate.constants.automations import AUTOMATION_EXECUTION_TARGET_CLOUD
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
-from proliferate.db.models.cloud import CloudRepoConfig
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.automations import (
     AutomationScheduleAdvance,
     create_due_scheduled_runs_batch,

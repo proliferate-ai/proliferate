@@ -10,7 +10,7 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces.domain.policy import can_read_cloud_workspace
 
 if TYPE_CHECKING:
-    from proliferate.db.models.cloud import CloudWorkspace
+    from proliferate.db.models.cloud.workspaces import CloudWorkspace
 
 
 def _raise_policy_denied(verdict: PolicyDenied) -> NoReturn:

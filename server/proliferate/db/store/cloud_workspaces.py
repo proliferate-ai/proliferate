@@ -19,7 +19,8 @@ from proliferate.constants.cloud import (
     WorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import (
     acquire_billing_subject_repo_limit_lock,
     cloud_repo_slot_exists,

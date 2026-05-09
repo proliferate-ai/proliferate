@@ -14,7 +14,7 @@ from proliferate.constants.automations import (
 )
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
-from proliferate.db.models.cloud import CloudRepoConfig
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.automation_run_claim_values import (
     AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,

@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud import (
+from proliferate.db.models.cloud.mcp import (
     CloudMcpConnection,
     CloudMcpConnectionAuth,
     CloudMcpOAuthFlow,

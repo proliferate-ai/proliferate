@@ -11,7 +11,7 @@ from proliferate.constants.automations import (
     AUTOMATION_RUN_STATUS_CREATING_WORKSPACE,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.automation_run_claims import load_claimed_run_for_update
 from proliferate.db.store.cloud_workspaces import create_cloud_workspace_record
 

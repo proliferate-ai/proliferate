@@ -13,16 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_MODE_OBSERVE
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.cloud import (
-    CloudCredential,
-    CloudMcpConnection,
-    CloudMcpConnectionAuth,
-    CloudRepoConfig,
-    CloudRuntimeEnvironment,
-    CloudSandbox,
-    CloudWorkspace,
-    CloudWorktreeRetentionPolicy,
-)
+from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
 from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
     upsert_connection_auth,

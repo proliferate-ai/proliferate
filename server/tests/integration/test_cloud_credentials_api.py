@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
-from proliferate.db.models.cloud import CloudCredential
+from proliferate.db.models.cloud.credentials import CloudCredential
 
 
 async def _create_user_and_get_tokens(

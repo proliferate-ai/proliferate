@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation
-from proliferate.db.models.cloud import CloudRepoConfig
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.errors import ProliferateError
 from proliferate.server.automations import service as automation_service
 from proliferate.server.automations.errors import AutomationAgentRequired, AutomationServiceError

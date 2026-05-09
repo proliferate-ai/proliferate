@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud import CloudWorktreeRetentionPolicy
+from proliferate.db.models.cloud.worktree_policy import CloudWorktreeRetentionPolicy
 from proliferate.utils.time import utcnow
 
 

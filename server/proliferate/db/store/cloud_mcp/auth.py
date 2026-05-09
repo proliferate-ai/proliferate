@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudMcpConnection, CloudMcpConnectionAuth
+from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord
 from proliferate.utils.time import utcnow
 

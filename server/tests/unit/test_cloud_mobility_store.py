@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud import CloudWorkspaceMobility
+from proliferate.db.models.cloud.mobility import CloudWorkspaceMobility
 from proliferate.db.store.cloud_mobility import ensure_cloud_workspace_mobility
 
 

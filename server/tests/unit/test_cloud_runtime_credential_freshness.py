@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from proliferate.db.models.cloud import CloudCredential, CloudRuntimeEnvironment
+from proliferate.db.models.cloud.credentials import CloudCredential
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.integrations.sandbox import SandboxRuntimeContext
 from proliferate.server.cloud.runtime import credential_freshness
 from proliferate.server.cloud.runtime.credential_freshness import (

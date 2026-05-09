@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import WorkspacePostReadyPhase
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import CloudWorkspace, CloudWorkspaceSetupRun
+from proliferate.db.models.cloud.workspaces import CloudWorkspace, CloudWorkspaceSetupRun
 from proliferate.utils.time import utcnow
 
 SETUP_RUN_ACTIVE_STATUSES = ("pending", "running")

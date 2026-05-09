@@ -3,10 +3,8 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from proliferate.db.models.cloud import (
-    CloudSandbox,
-    CloudWorkspace,
-)
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import ensure_personal_billing_subject
 
 

@@ -34,7 +34,8 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
     UsageSegment,
 )
-from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.billing import (
     ensure_billing_grant,

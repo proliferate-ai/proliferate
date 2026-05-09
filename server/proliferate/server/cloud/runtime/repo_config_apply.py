@@ -11,7 +11,7 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 from proliferate.constants.cloud import WorkspacePostReadyPhase
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigValue,
     load_cloud_repo_config_for_user,

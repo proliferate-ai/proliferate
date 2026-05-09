@@ -11,7 +11,6 @@ INTEGRATION_DB_IMPORT server/proliferate/integrations/anonymous_telemetry.py 1 t
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sandbox/daytona.py 1 transitional integration depends on product domain types/logic
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sandbox/e2b.py 1 transitional integration depends on product domain types/logic
-MODELS_ORM_IMPORT server/proliferate/server/cloud/workspaces/models.py 1 transitional Pydantic constructor still accepts ORM type
 SERVICE_ORM_IMPORT server/proliferate/server/ai_magic/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/repos/service.py 1 transitional service imports ORM/auth model

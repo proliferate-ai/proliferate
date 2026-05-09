@@ -57,12 +57,10 @@ from proliferate.db.models.billing import (
     UsageSegment,
     WebhookEventReceipt,
 )
-from proliferate.db.models.cloud import (
-    CloudRepoConfig,
-    CloudRuntimeEnvironment,
-    CloudSandbox,
-    CloudWorkspace,
-)
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.models.organizations import OrganizationMembership
 from proliferate.server.billing.accounting import overage_seconds_to_cents
 from proliferate.server.billing.models import coerce_utc, utcnow

@@ -5,7 +5,8 @@ from __future__ import annotations
 import shlex
 from uuid import UUID
 
-from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
 from proliferate.db.store.cloud_workspaces import (
     load_active_sandbox_for_workspace,
