@@ -1,16 +1,18 @@
 import { create } from "zustand";
 import {
-  bindOutboxSessionMaterialization,
   createPromptOutboxEntry,
-  outboxEntriesForSession,
-  patchPromptOutboxEntry,
-  pruneEchoedOutboxTombstones,
-  removePromptOutboxEntry,
-  upsertPromptOutboxEntry,
   type PromptOutboxCreateInput,
   type PromptOutboxEntry,
+} from "@/lib/domain/chat/outbox/prompt-outbox-model";
+import { pruneEchoedOutboxTombstones } from "@/lib/domain/chat/outbox/prompt-outbox-reconciliation";
+import {
+  bindOutboxSessionMaterialization,
+  outboxEntriesForSession,
+  patchPromptOutboxEntry,
+  removePromptOutboxEntry,
+  upsertPromptOutboxEntry,
   type PromptOutboxStateShape,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-state";
 
 interface PromptOutboxStoreState extends PromptOutboxStateShape {
   dispatchVersion: number;

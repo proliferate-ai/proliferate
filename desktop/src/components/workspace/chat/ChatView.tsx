@@ -27,7 +27,7 @@ import { useSessionErrorAcknowledgement } from "@/hooks/sessions/lifecycle/use-s
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/use-workspace-mobility-lifecycle";
-import { canAttachPromptContent } from "@/lib/domain/chat/composer/prompt-content";
+import { canAttachPromptContent } from "@/lib/domain/chat/composer/prompt-attachment-rules";
 import {
   canAcceptChatFileDrop,
   isFileDrag,

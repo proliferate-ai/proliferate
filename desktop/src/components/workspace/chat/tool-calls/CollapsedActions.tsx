@@ -8,7 +8,7 @@ import { ChevronRight } from "@/components/ui/icons";
 import {
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
-} from "@/lib/domain/chat/transcript/transcript-presentation";
+} from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
 import { CollapsedActionRows } from "@/components/workspace/chat/tool-calls/CollapsedActionRows";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";

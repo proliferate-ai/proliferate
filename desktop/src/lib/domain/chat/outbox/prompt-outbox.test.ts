@@ -6,18 +6,24 @@ import {
   type TranscriptState,
 } from "@anyharness/sdk";
 import {
-  bindOutboxSessionMaterialization,
   createPromptOutboxEntry,
-  pruneEchoedOutboxTombstones,
-  pruneEchoedOutboxTombstonesForTranscript,
+} from "@/lib/domain/chat/outbox/prompt-outbox-model";
+import {
   queuedOutboxEntriesForSession,
-  reconcileOutboxFromEnvelopes,
   renderableOutboxEntriesForTranscript,
   resolvePromptOutboxPlacement,
   selectNextDispatchableOutboxEntry,
+} from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import {
+  pruneEchoedOutboxTombstones,
+  pruneEchoedOutboxTombstonesForTranscript,
+  reconcileOutboxFromEnvelopes,
+} from "@/lib/domain/chat/outbox/prompt-outbox-reconciliation";
+import {
+  bindOutboxSessionMaterialization,
   upsertPromptOutboxEntry,
   type PromptOutboxStateShape,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-state";
 
 const NOW = "2026-01-01T00:00:00.000Z";
 

@@ -1,6 +1,6 @@
 import type { ContentPart, PromptProvenance } from "@anyharness/sdk";
-import { summarizeContentParts } from "@/lib/domain/chat/composer/prompt-content";
-import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/outbox/prompt-outbox";
+import { summarizeContentParts } from "@/lib/domain/chat/composer/prompt-display-parts";
+import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import {
   formatReviewFeedbackQueueText,
   formatWakePromptQueueText,

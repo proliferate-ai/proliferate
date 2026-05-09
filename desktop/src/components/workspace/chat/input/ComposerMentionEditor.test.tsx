@@ -7,7 +7,7 @@ import {
   createTextDraft,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/transcript/file-mentions";
+} from "@/lib/domain/chat/composer/file-mention-draft-model";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
 
 type FileSearchResult = SearchWorkspaceFilesResponse["results"][number];

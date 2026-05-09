@@ -5,7 +5,7 @@ import {
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
   type ChatComposerDraft,
-} from "@/lib/domain/chat/transcript/file-mentions";
+} from "@/lib/domain/chat/composer/file-mention-draft-model";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

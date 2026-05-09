@@ -3,11 +3,13 @@ import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
 import {
   classifyCollapsedAction,
   formatCollapsedActionsSummary,
+  summarizeCollapsedActions,
+} from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
+import {
   getToolCallParsedCommands,
   getToolCallShellCommand,
   getToolCallShellCommandName,
-  summarizeCollapsedActions,
-} from "@/lib/domain/chat/transcript/transcript-actions";
+} from "@/lib/domain/chat/transcript/transcript-tool-commands";
 import {
   bareNativeToolItem,
   parsedCommandItem,

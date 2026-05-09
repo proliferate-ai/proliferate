@@ -8,7 +8,7 @@ import type {
 import {
   getToolCallShellCommand,
   type ParsedToolCommand,
-} from "@/lib/domain/chat/transcript/transcript-actions";
+} from "@/lib/domain/chat/transcript/transcript-tool-commands";
 import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
 
 export function formatSearchLabel(item: ToolCallItem): string {

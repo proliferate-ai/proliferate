@@ -1,20 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   appendTextToDraft,
-  collapseSelection,
-  createFileMentionNode,
-  createTextDraft,
   deleteBackwardAtSelection,
   deleteForwardAtSelection,
   findMentionTrigger,
   insertFileMentionAtTrigger,
   insertTextAtSelection,
-  isChatDraftEmpty,
-  positionFromLinearOffset,
   removeMentionAtIndex,
+} from "./file-mention-draft-edits";
+import {
+  createFileMentionNode,
+  createTextDraft,
+  isChatDraftEmpty,
   serializeChatDraftToPrompt,
   type ChatComposerDraft,
-} from "./file-mentions";
+} from "./file-mention-draft-model";
+import {
+  collapseSelection,
+  positionFromLinearOffset,
+} from "./file-mention-draft-position";
 import {
   formatMarkdownFileLink,
   isValidWorkspaceRelativePath,

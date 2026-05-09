@@ -11,7 +11,7 @@ import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/workflows/use-open-cowork-artifact";
 import { useChatTranscriptSelection } from "@/hooks/chat/ui/use-chat-transcript-selection";
-import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-content";
+import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript-copy";
 import {
   finishOrCancelMeasurementOperation,
@@ -27,8 +27,8 @@ import {
 import {
   outboxEntryToPendingPromptEntry,
   renderableOutboxEntriesForTranscript,
-  type PromptOutboxEntry,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { useTranscriptRowModel } from "@/hooks/chat/derived/use-transcript-row-model";
 import { usePromptOutboxActions } from "@/hooks/chat/use-prompt-outbox-actions";

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { createTranscriptState } from "@anyharness/sdk";
 import type { ToolCallItem } from "@anyharness/sdk";
 import {
-  buildTranscriptDisplayBlocks,
-  buildTurnPresentation,
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
+} from "@/lib/domain/chat/transcript/transcript-collapsed-actions";
+import {
+  buildTranscriptDisplayBlocks,
+  buildTurnPresentation,
 } from "@/lib/domain/chat/transcript/transcript-presentation";
 import {
   assistantItem,

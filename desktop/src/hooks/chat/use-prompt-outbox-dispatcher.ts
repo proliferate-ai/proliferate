@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
   selectNextDispatchableOutboxEntry,
-  type PromptOutboxEntry,
-} from "@/lib/domain/chat/outbox/prompt-outbox";
+} from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import {
   promptAttachmentSnapshotsToBlocks,
 } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
