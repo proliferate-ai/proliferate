@@ -31,7 +31,10 @@ from proliferate.constants.organizations import (
 )
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
-from proliferate.db.store.billing import get_or_create_stripe_customer_state_for_user
+from proliferate.db.store.billing import (
+    ensure_organization_billing_subject,
+    get_or_create_stripe_customer_state_for_user,
+)
 from proliferate.db.store.organization_records import (
     InvitationCreateRecord,
     InvitationRecord,
@@ -217,6 +220,30 @@ async def resolve_owner_context(
     )
 
 
+async def _resolve_organization_owner_context(
+    db: AsyncSession,
+    actor_user: OrganizationActor,
+    organization_id: UUID,
+) -> OwnerContext:
+    record = await organization_store.get_organization_with_membership(
+        db,
+        organization_id=organization_id,
+        user_id=actor_user.id,
+    )
+    if record is None:
+        raise _org_not_found()
+    subject = await ensure_organization_billing_subject(db, organization_id)
+    return OwnerContext(
+        owner_scope="organization",
+        actor_user_id=actor_user.id,
+        owner_user_id=None,
+        organization_id=organization_id,
+        membership_id=record.membership.id,
+        membership_role=record.membership.role,
+        billing_subject_id=subject.id,
+    )
+
+
 async def list_organizations(
     db: AsyncSession,
     actor_user: OrganizationActor,
@@ -256,12 +283,14 @@ async def update_organization(
     logo_image: str | None,
     update_logo_image: bool,
 ) -> OrganizationWithMembershipRecord:
-    context = await resolve_owner_context(
+    context = await _resolve_organization_owner_context(
+        db,
         actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
+        organization_id,
     )
     require_org_role(context, organization_admin_roles())
     updated = await organization_store.update_organization_settings(
+        db,
         organization_id=organization_id,
         name=_clean_organization_name(name) if name is not None else None,
         logo_image=_sanitize_logo_image(logo_image) if update_logo_image else None,
@@ -276,17 +305,16 @@ async def update_organization(
 
 
 async def list_members(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
 ) -> list[MemberRecord]:
-    await resolve_owner_context(
-        actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
-    )
-    return await organization_store.list_organization_members(organization_id)
+    await _resolve_organization_owner_context(db, actor_user, organization_id)
+    return await organization_store.list_organization_members(db, organization_id)
 
 
 async def update_membership(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
     membership_id: UUID,
@@ -294,10 +322,7 @@ async def update_membership(
     role: str | None,
     status: str | None,
 ) -> MembershipRecord:
-    context = await resolve_owner_context(
-        actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
-    )
+    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
     require_org_role(context, organization_admin_roles())
     _raise_if_denied(can_modify_membership(context, membership_id))
     can_modify_owner = can_modify_owner_memberships(context)
@@ -310,6 +335,7 @@ async def update_membership(
             status_code=400,
         )
     membership, error = await organization_store.update_organization_membership(
+        db,
         organization_id=organization_id,
         membership_id=membership_id,
         role=role,
@@ -334,11 +360,13 @@ async def update_membership(
 
 
 async def remove_membership(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
     membership_id: UUID,
 ) -> MembershipRecord:
     return await update_membership(
+        db,
         actor_user,
         organization_id,
         membership_id,
@@ -348,16 +376,14 @@ async def remove_membership(
 
 
 async def create_invitation(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
     *,
     email: str,
     role: str,
 ) -> OrganizationInvitationEmailResult:
-    context = await resolve_owner_context(
-        actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
-    )
+    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
     require_org_role(context, required_roles_for_invitation_role(role))
     normalized_email = normalize_invitation_email(email)
     token = _new_token()
@@ -371,11 +397,12 @@ async def create_invitation(
     )
     if record is None:
         raise _org_not_found()
-    delivery = await _send_invitation_email(record, token, actor_user)
+    delivery = await _send_invitation_email(db, record, token, actor_user)
     invitation = record.invitation
     if delivery.sent or delivery.skipped:
         invitation = (
             await invitation_store.mark_invitation_delivery(
+                db,
                 invitation_id=record.invitation.id,
                 sent=delivery.sent,
                 skipped=delivery.skipped,
@@ -389,14 +416,12 @@ async def create_invitation(
 
 
 async def resend_invitation(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
     invitation_id: UUID,
 ) -> OrganizationInvitationEmailResult:
-    context = await resolve_owner_context(
-        actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
-    )
+    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
     require_org_role(context, organization_admin_roles())
     token = _new_token()
     record = await invitation_store.rotate_organization_invitation(
@@ -411,11 +436,12 @@ async def resend_invitation(
             "Organization invitation not found.",
             status_code=404,
         )
-    delivery = await _send_invitation_email(record, token, actor_user)
+    delivery = await _send_invitation_email(db, record, token, actor_user)
     invitation = record.invitation
     if delivery.sent or delivery.skipped:
         invitation = (
             await invitation_store.mark_invitation_delivery(
+                db,
                 invitation_id=record.invitation.id,
                 sent=delivery.sent,
                 skipped=delivery.skipped,
@@ -429,6 +455,7 @@ async def resend_invitation(
 
 
 async def _send_invitation_email(
+    db: AsyncSession,
     record: InvitationCreateRecord,
     token: str,
     actor_user: OrganizationActor,
@@ -443,6 +470,7 @@ async def _send_invitation_email(
         )
     except resend.ResendEmailError as error:
         await invitation_store.mark_invitation_delivery(
+            db,
             invitation_id=record.invitation.id,
             sent=False,
             skipped=False,
@@ -462,27 +490,24 @@ def _invitation_landing_url(token: str) -> str:
 
 
 async def list_invitations(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
 ) -> list[InvitationRecord]:
-    await resolve_owner_context(
-        actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
-    )
-    return await invitation_store.list_organization_invitations(organization_id)
+    await _resolve_organization_owner_context(db, actor_user, organization_id)
+    return await invitation_store.list_organization_invitations(db, organization_id)
 
 
 async def revoke_invitation(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     organization_id: UUID,
     invitation_id: UUID,
 ) -> InvitationRecord:
-    context = await resolve_owner_context(
-        actor_user,
-        OwnerSelection(owner_scope="organization", organization_id=organization_id),
-    )
+    context = await _resolve_organization_owner_context(db, actor_user, organization_id)
     require_org_role(context, organization_admin_roles())
     invitation = await invitation_store.revoke_organization_invitation(
+        db,
         organization_id=organization_id,
         invitation_id=invitation_id,
     )
@@ -495,9 +520,10 @@ async def revoke_invitation(
     return invitation
 
 
-async def create_invitation_landing_handoff(raw_token: str) -> str:
+async def create_invitation_landing_handoff(db: AsyncSession, raw_token: str) -> str:
     handoff_token = _new_token()
     handoff = await invitation_store.create_invitation_handoff(
+        db,
         token_hash=_hash_token(raw_token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         handoff_token_hash=_hash_token(handoff_token, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
         handoff_token=handoff_token,
@@ -514,10 +540,12 @@ async def create_invitation_landing_handoff(raw_token: str) -> str:
 
 
 async def accept_invitation(
+    db: AsyncSession,
     actor_user: OrganizationActor,
     invite_handoff: str,
 ) -> OrganizationWithMembershipRecord:
     accepted, error = await invitation_store.accept_invitation_handoff(
+        db,
         handoff_token_hash=_hash_token(invite_handoff, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
         authenticated_user_id=actor_user.id,
         authenticated_email=actor_user.email,

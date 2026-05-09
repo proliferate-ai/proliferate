@@ -146,61 +146,61 @@ async def create_or_rotate_organization_invitation(
         )
 
 
-async def list_organization_invitations(organization_id: UUID) -> list[InvitationRecord]:
+async def list_organization_invitations(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> list[InvitationRecord]:
     now = utcnow()
-    async with db_engine.async_session_factory() as db:
-        await db.execute(
-            update(OrganizationInvitation)
-            .where(
-                OrganizationInvitation.organization_id == organization_id,
-                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
-                OrganizationInvitation.expires_at <= now,
-            )
-            .values(
-                status=ORGANIZATION_INVITATION_STATUS_EXPIRED,
-                expired_at=now,
-                handoff_token_hash=None,
-                handoff_expires_at=None,
-                updated_at=now,
-            )
+    await db.execute(
+        update(OrganizationInvitation)
+        .where(
+            OrganizationInvitation.organization_id == organization_id,
+            OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+            OrganizationInvitation.expires_at <= now,
         )
-        await db.commit()
-        rows = (
-            await db.execute(
-                select(OrganizationInvitation)
-                .where(OrganizationInvitation.organization_id == organization_id)
-                .order_by(OrganizationInvitation.created_at.desc())
-            )
-        ).scalars()
-        return [invitation_record(invitation) for invitation in rows.all()]
+        .values(
+            status=ORGANIZATION_INVITATION_STATUS_EXPIRED,
+            expired_at=now,
+            handoff_token_hash=None,
+            handoff_expires_at=None,
+            updated_at=now,
+        )
+    )
+    rows = (
+        await db.execute(
+            select(OrganizationInvitation)
+            .where(OrganizationInvitation.organization_id == organization_id)
+            .order_by(OrganizationInvitation.created_at.desc())
+        )
+    ).scalars()
+    return [invitation_record(invitation) for invitation in rows.all()]
 
 
 async def revoke_organization_invitation(
+    db: AsyncSession,
     *,
     organization_id: UUID,
     invitation_id: UUID,
 ) -> InvitationRecord | None:
-    async with db_engine.async_session_factory() as db:
-        invitation = (
-            await db.execute(
-                select(OrganizationInvitation).where(
-                    OrganizationInvitation.id == invitation_id,
-                    OrganizationInvitation.organization_id == organization_id,
-                )
+    invitation = (
+        await db.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.organization_id == organization_id,
             )
-        ).scalar_one_or_none()
-        if invitation is None:
-            return None
-        now = utcnow()
-        if invitation.status == ORGANIZATION_INVITATION_STATUS_PENDING:
-            invitation.status = ORGANIZATION_INVITATION_STATUS_REVOKED
-            invitation.revoked_at = now
-            invitation.handoff_token_hash = None
-            invitation.handoff_expires_at = None
-            invitation.updated_at = now
-            await db.commit()
-            await db.refresh(invitation)
-        return invitation_record(invitation)
+        )
+    ).scalar_one_or_none()
+    if invitation is None:
+        return None
+    now = utcnow()
+    if invitation.status == ORGANIZATION_INVITATION_STATUS_PENDING:
+        invitation.status = ORGANIZATION_INVITATION_STATUS_REVOKED
+        invitation.revoked_at = now
+        invitation.handoff_token_hash = None
+        invitation.handoff_expires_at = None
+        invitation.updated_at = now
+        await db.flush()
+    return invitation_record(invitation)
 
 
 async def rotate_organization_invitation(
@@ -243,36 +243,36 @@ async def rotate_organization_invitation(
 
 
 async def mark_invitation_delivery(
+    db: AsyncSession,
     *,
     invitation_id: UUID,
     sent: bool,
     skipped: bool,
     error: str | None = None,
 ) -> InvitationRecord | None:
-    async with db_engine.async_session_factory() as db:
-        invitation = await db.get(OrganizationInvitation, invitation_id)
-        if invitation is None:
-            return None
-        now = utcnow()
-        if sent:
-            invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_SENT
-            invitation.delivery_error = None
-            invitation.delivered_at = now
-        elif skipped:
-            invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_SKIPPED
-            invitation.delivery_error = None
-            invitation.delivered_at = None
-        else:
-            invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_FAILED
-            invitation.delivery_error = error[:1000] if error else "Invitation delivery failed."
-            invitation.delivered_at = None
-        invitation.updated_at = now
-        await db.commit()
-        await db.refresh(invitation)
-        return invitation_record(invitation)
+    invitation = await db.get(OrganizationInvitation, invitation_id)
+    if invitation is None:
+        return None
+    now = utcnow()
+    if sent:
+        invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_SENT
+        invitation.delivery_error = None
+        invitation.delivered_at = now
+    elif skipped:
+        invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_SKIPPED
+        invitation.delivery_error = None
+        invitation.delivered_at = None
+    else:
+        invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_FAILED
+        invitation.delivery_error = error[:1000] if error else "Invitation delivery failed."
+        invitation.delivered_at = None
+    invitation.updated_at = now
+    await db.flush()
+    return invitation_record(invitation)
 
 
 async def create_invitation_handoff(
+    db: AsyncSession,
     *,
     token_hash: str,
     handoff_token_hash: str,
@@ -280,41 +280,41 @@ async def create_invitation_handoff(
     handoff_expires_at: datetime,
 ) -> InvitationHandoffRecord | None:
     now = utcnow()
-    async with db_engine.async_session_factory() as db, db.begin():
-        row = (
-            await db.execute(
-                select(OrganizationInvitation, Organization)
-                .join(
-                    Organization,
-                    Organization.id == OrganizationInvitation.organization_id,
-                )
-                .where(
-                    OrganizationInvitation.token_hash == token_hash,
-                    OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
-                )
-                .with_for_update()
+    row = (
+        await db.execute(
+            select(OrganizationInvitation, Organization)
+            .join(
+                Organization,
+                Organization.id == OrganizationInvitation.organization_id,
             )
-        ).one_or_none()
-        if row is None:
-            return None
-        invitation, organization = row
-        if invitation.expires_at <= now:
-            invitation.status = ORGANIZATION_INVITATION_STATUS_EXPIRED
-            invitation.expired_at = now
-            invitation.updated_at = now
-            return None
-        invitation.handoff_token_hash = handoff_token_hash
-        invitation.handoff_expires_at = handoff_expires_at
-        invitation.updated_at = now
-        return InvitationHandoffRecord(
-            organization_id=organization.id,
-            organization_name=organization.name,
-            invite_email=invitation.email,
-            handoff_token=handoff_token,
+            .where(
+                OrganizationInvitation.token_hash == token_hash,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+            )
+            .with_for_update()
         )
+    ).one_or_none()
+    if row is None:
+        return None
+    invitation, organization = row
+    if invitation.expires_at <= now:
+        invitation.status = ORGANIZATION_INVITATION_STATUS_EXPIRED
+        invitation.expired_at = now
+        invitation.updated_at = now
+        return None
+    invitation.handoff_token_hash = handoff_token_hash
+    invitation.handoff_expires_at = handoff_expires_at
+    invitation.updated_at = now
+    return InvitationHandoffRecord(
+        organization_id=organization.id,
+        organization_name=organization.name,
+        invite_email=invitation.email,
+        handoff_token=handoff_token,
+    )
 
 
 async def accept_invitation_handoff(
+    db: AsyncSession,
     *,
     handoff_token_hash: str,
     authenticated_user_id: UUID,
@@ -322,82 +322,81 @@ async def accept_invitation_handoff(
 ) -> tuple[InvitationAcceptRecord | None, str | None]:
     now = utcnow()
     normalized_email = normalize_invitation_email(authenticated_email)
-    async with db_engine.async_session_factory() as db, db.begin():
-        row = (
-            await db.execute(
-                select(OrganizationInvitation, Organization)
-                .join(
-                    Organization,
-                    Organization.id == OrganizationInvitation.organization_id,
-                )
-                .where(
-                    OrganizationInvitation.handoff_token_hash == handoff_token_hash,
-                    OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
-                )
-                .with_for_update()
+    row = (
+        await db.execute(
+            select(OrganizationInvitation, Organization)
+            .join(
+                Organization,
+                Organization.id == OrganizationInvitation.organization_id,
             )
-        ).one_or_none()
-        if row is None:
-            return None, "invalid_invitation"
-        invitation, organization = row
-        if invitation.expires_at <= now:
-            invitation.status = ORGANIZATION_INVITATION_STATUS_EXPIRED
-            invitation.expired_at = now
-            invitation.handoff_token_hash = None
-            invitation.handoff_expires_at = None
-            invitation.updated_at = now
-            return None, "invitation_expired"
-        if invitation.handoff_expires_at is None or invitation.handoff_expires_at <= now:
-            invitation.handoff_token_hash = None
-            invitation.handoff_expires_at = None
-            invitation.updated_at = now
-            return None, "invitation_handoff_expired"
-        if invitation.email != normalized_email:
-            return None, "invitation_email_mismatch"
-
-        result = await db.execute(
-            pg_insert(OrganizationMembership)
-            .values(
-                organization_id=invitation.organization_id,
-                user_id=authenticated_user_id,
-                role=invitation.role,
-                status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                joined_at=now,
-                removed_at=None,
-                created_at=now,
-                updated_at=now,
+            .where(
+                OrganizationInvitation.handoff_token_hash == handoff_token_hash,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
             )
-            .on_conflict_do_update(
-                constraint="uq_organization_membership_org_user",
-                set_={
-                    "role": invitation.role,
-                    "status": ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-                    "removed_at": None,
-                    "updated_at": now,
-                },
-            )
-            .returning(OrganizationMembership.id)
+            .with_for_update()
         )
-        membership_id = result.scalar_one()
-        membership = await db.get(OrganizationMembership, membership_id)
-        if membership is None:
-            raise RuntimeError("Organization membership disappeared after invitation accept.")
-
-        invitation.status = ORGANIZATION_INVITATION_STATUS_ACCEPTED
-        invitation.accepted_by_user_id = authenticated_user_id
-        invitation.accepted_at = now
+    ).one_or_none()
+    if row is None:
+        return None, "invalid_invitation"
+    invitation, organization = row
+    if invitation.expires_at <= now:
+        invitation.status = ORGANIZATION_INVITATION_STATUS_EXPIRED
+        invitation.expired_at = now
         invitation.handoff_token_hash = None
         invitation.handoff_expires_at = None
         invitation.updated_at = now
-        await maybe_create_org_seat_adjustment(
-            db,
+        return None, "invitation_expired"
+    if invitation.handoff_expires_at is None or invitation.handoff_expires_at <= now:
+        invitation.handoff_token_hash = None
+        invitation.handoff_expires_at = None
+        invitation.updated_at = now
+        return None, "invitation_handoff_expired"
+    if invitation.email != normalized_email:
+        return None, "invitation_email_mismatch"
+
+    result = await db.execute(
+        pg_insert(OrganizationMembership)
+        .values(
             organization_id=invitation.organization_id,
-            membership_id=membership.id,
+            user_id=authenticated_user_id,
+            role=invitation.role,
+            status=ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            joined_at=now,
+            removed_at=None,
+            created_at=now,
+            updated_at=now,
         )
-        return (
-            InvitationAcceptRecord(
-                organization=organization_record(organization),
-                membership=membership_record(membership),
-            ),
-            None,
+        .on_conflict_do_update(
+            constraint="uq_organization_membership_org_user",
+            set_={
+                "role": invitation.role,
+                "status": ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+                "removed_at": None,
+                "updated_at": now,
+            },
         )
+        .returning(OrganizationMembership.id)
+    )
+    membership_id = result.scalar_one()
+    membership = await db.get(OrganizationMembership, membership_id)
+    if membership is None:
+        raise RuntimeError("Organization membership disappeared after invitation accept.")
+
+    invitation.status = ORGANIZATION_INVITATION_STATUS_ACCEPTED
+    invitation.accepted_by_user_id = authenticated_user_id
+    invitation.accepted_at = now
+    invitation.handoff_token_hash = None
+    invitation.handoff_expires_at = None
+    invitation.updated_at = now
+    await maybe_create_org_seat_adjustment(
+        db,
+        organization_id=invitation.organization_id,
+        membership_id=membership.id,
+    )
+    return (
+        InvitationAcceptRecord(
+            organization=organization_record(organization),
+            membership=membership_record(membership),
+        ),
+        None,
+    )
