@@ -127,6 +127,16 @@ WORKSPACE_REPO_APPLY_LOCK_SALT: int = 4_203_902
 
 
 # ---------------------------------------------------------------------------
+# Cloud worktree retention policy
+# ---------------------------------------------------------------------------
+
+DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO = 20
+MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO = 10
+MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO = 100
+DEFAULT_WORKTREE_POLICY_UPDATED_AT = "1970-01-01T00:00:00+00:00"
+
+
+# ---------------------------------------------------------------------------
 # Git provider
 # ---------------------------------------------------------------------------
 

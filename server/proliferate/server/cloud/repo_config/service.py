@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import NoReturn
+from datetime import datetime
+from typing import NoReturn, Protocol
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     CloudRepoConfigValue,
@@ -26,6 +26,12 @@ from proliferate.server.billing.service import (
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repo_config.domain.workspace_status import (
+    RepoConfigTrackedFileStatus,
+    ResyncWorkspaceRepoConfigStatus,
+    RunWorkspaceSetupStatus,
+    WorkspaceRepoConfigStatus,
+)
 from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigResponse,
     CloudRepoConfigsListResponse,
@@ -56,6 +62,24 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
 from proliferate.server.cloud.runtime.service import get_workspace_connection
 
 
+class _WorkspaceRepoConfigRecord(Protocol):
+    id: UUID
+    owner_scope: str
+    owner_user_id: UUID | None
+    organization_id: UUID | None
+    git_owner: str
+    git_repo_name: str
+    repo_files_applied_version: int
+    repo_files_applied_at: datetime | None
+    repo_post_ready_phase: str
+    repo_post_ready_files_total: int
+    repo_post_ready_files_applied: int
+    repo_post_ready_started_at: datetime | None
+    repo_post_ready_completed_at: datetime | None
+    repo_files_last_failed_path: str | None
+    repo_files_last_error: str | None
+
+
 def _default_repo_config_response() -> CloudRepoConfigResponse:
     return CloudRepoConfigResponse(
         configured=False,
@@ -84,7 +108,7 @@ def _raise_org_cloud_not_ready() -> NoReturn:
 async def _load_authorized_workspace_for_repo_config(
     user_id: UUID,
     workspace_id: UUID,
-) -> CloudWorkspace:
+) -> _WorkspaceRepoConfigRecord:
     workspace = await load_cloud_workspace_by_id(workspace_id)
     if workspace is None:
         _raise_workspace_not_found()
@@ -104,6 +128,53 @@ async def _load_authorized_workspace_for_repo_config(
         _raise_org_cloud_not_ready()
 
     _raise_workspace_not_found()
+
+
+def _workspace_repo_config_status(
+    workspace: _WorkspaceRepoConfigRecord,
+    repo_config: CloudRepoConfigValue | None,
+) -> WorkspaceRepoConfigStatus:
+    tracked_files = (
+        ()
+        if repo_config is None
+        else tuple(
+            RepoConfigTrackedFileStatus(
+                relative_path=item.relative_path,
+                content_sha256=item.content_sha256,
+                byte_size=item.byte_size,
+                updated_at=item.updated_at,
+                last_synced_at=item.last_synced_at,
+            )
+            for item in repo_config.tracked_files
+        )
+    )
+    env_var_keys = () if repo_config is None else tuple(sorted(repo_config.env_vars))
+    current_version = 0 if repo_config is None else repo_config.files_version
+    return WorkspaceRepoConfigStatus(
+        current_repo_files_version=current_version,
+        repo_files_applied_version=workspace.repo_files_applied_version,
+        repo_files_applied_at=workspace.repo_files_applied_at,
+        files_out_of_sync=workspace.repo_files_applied_version != current_version,
+        tracked_files=tracked_files,
+        env_var_keys=env_var_keys,
+        post_ready_phase=workspace.repo_post_ready_phase,
+        post_ready_files_total=workspace.repo_post_ready_files_total,
+        post_ready_files_applied=workspace.repo_post_ready_files_applied,
+        post_ready_started_at=workspace.repo_post_ready_started_at,
+        post_ready_completed_at=workspace.repo_post_ready_completed_at,
+        last_apply_failed_path=workspace.repo_files_last_failed_path,
+        last_apply_error=workspace.repo_files_last_error,
+    )
+
+
+def _resync_workspace_repo_config_status(
+    workspace: _WorkspaceRepoConfigRecord,
+    repo_config: CloudRepoConfigValue | None,
+) -> ResyncWorkspaceRepoConfigStatus:
+    return ResyncWorkspaceRepoConfigStatus(
+        workspace_id=workspace.id,
+        status=_workspace_repo_config_status(workspace, repo_config),
+    )
 
 
 async def list_repo_configs(
@@ -308,7 +379,9 @@ async def get_workspace_repo_config_status(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return workspace_repo_config_status_payload(workspace, repo_config)
+    return workspace_repo_config_status_payload(
+        _workspace_repo_config_status(workspace, repo_config)
+    )
 
 
 async def build_resync_workspace_repo_config_status(
@@ -323,7 +396,9 @@ async def build_resync_workspace_repo_config_status(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return resync_cloud_workspace_files_payload(workspace, repo_config)
+    return resync_cloud_workspace_files_payload(
+        _resync_workspace_repo_config_status(workspace, repo_config)
+    )
 
 
 def _runtime_access_from_target(
@@ -349,10 +424,11 @@ async def resync_workspace_files(
 ) -> ResyncCloudWorkspaceFilesResponse:
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
 
-    target = await get_workspace_connection(workspace)
+    # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
+    target = await get_workspace_connection(workspace)  # type: ignore[arg-type]
     try:
         await apply_workspace_repo_config(
-            workspace,
+            workspace,  # type: ignore[arg-type]
             runtime=_runtime_access_from_target(target),
             run_setup=False,
         )
@@ -376,7 +452,9 @@ async def resync_workspace_files(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
-    return resync_cloud_workspace_files_payload(workspace, repo_config)
+    return resync_cloud_workspace_files_payload(
+        _resync_workspace_repo_config_status(workspace, repo_config)
+    )
 
 
 async def run_workspace_setup(
@@ -386,10 +464,11 @@ async def run_workspace_setup(
 ) -> RunCloudWorkspaceSetupResponse:
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
 
-    target = await get_workspace_connection(workspace)
+    # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
+    target = await get_workspace_connection(workspace)  # type: ignore[arg-type]
     try:
         started = await run_workspace_saved_setup(
-            workspace,
+            workspace,  # type: ignore[arg-type]
             runtime=_runtime_access_from_target(target),
         )
     except WorkspaceRepoApplyBusyError as error:
@@ -407,9 +486,11 @@ async def run_workspace_setup(
 
     workspace = await _load_authorized_workspace_for_repo_config(user_id, workspace_id)
     return run_cloud_workspace_setup_payload(
-        workspace,
-        command=started.command,
-        terminal_id=started.terminal_id,
-        command_run_id=started.command_run_id,
-        status=started.status,
+        RunWorkspaceSetupStatus(
+            workspace_id=workspace.id,
+            command=started.command,
+            terminal_id=started.terminal_id,
+            command_run_id=started.command_run_id,
+            status=started.status,
+        )
     )
