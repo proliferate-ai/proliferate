@@ -7,7 +7,7 @@ import type {
 import type {
   LocalAutomationRepoCandidate,
   LocalAutomationWorktreePlan,
-} from "@/lib/domain/automations/local-executor";
+} from "@/lib/domain/automations/local-executor/plan";
 import { executeLocalAutomationRun } from "./local-automation-executor";
 
 const accepted = (): LocalAutomationMutationResponse => ({

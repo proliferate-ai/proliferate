@@ -2,8 +2,8 @@ import { AUTOMATION_RUN_COPY } from "@/copy/automations/automation-copy";
 import type {
   AutomationRecord,
   AutomationRunRecord,
-} from "./automation-records";
-import { formatAutomationTimestamp } from "./schedule";
+} from "./records";
+import { formatAutomationTimestamp } from "@/lib/domain/automations/schedule/schedule";
 
 export interface AutomationRowViewModel {
   id: string;

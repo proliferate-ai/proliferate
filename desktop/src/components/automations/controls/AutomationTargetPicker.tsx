@@ -13,7 +13,7 @@ import {
   type AutomationTargetGroup,
   type AutomationTargetRow,
   type AutomationTargetSelection,
-} from "@/lib/domain/automations/target-selection";
+} from "@/lib/domain/automations/target/selection";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
 
 interface AutomationTargetPickerProps {

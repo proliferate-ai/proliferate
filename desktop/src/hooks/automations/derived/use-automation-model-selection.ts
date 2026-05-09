@@ -7,7 +7,7 @@ import {
   buildAutomationModelGroups,
   resolveAutomationModelSelection,
   type AutomationModelOverride,
-} from "@/lib/domain/automations/model-selection";
+} from "@/lib/domain/automations/model/selection";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];

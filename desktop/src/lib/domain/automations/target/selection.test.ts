@@ -3,11 +3,11 @@ import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories
 import type {
   AutomationTargetCloudWorkspaceRecord,
   AutomationTargetRepoConfigRecord,
-} from "./target-records";
+} from "./records";
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
-} from "./target-selection";
+} from "./selection";
 
 function repoConfig(
   overrides: Partial<AutomationTargetRepoConfigRecord> & {

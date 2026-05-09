@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { MoreHorizontal, Pause, Pencil, Play, Zap } from "@/components/ui/icons";
-import type { AutomationRecord } from "@/lib/domain/automations/automation-ui-records";
-import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
+import type { AutomationRecord } from "@/lib/domain/automations/run/ui-records";
+import { buildAutomationRowViewModel } from "@/lib/domain/automations/run/view-model";
 
 interface AutomationRowProps {
   automation: AutomationRecord;

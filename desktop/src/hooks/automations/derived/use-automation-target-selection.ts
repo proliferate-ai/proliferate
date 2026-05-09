@@ -5,7 +5,7 @@ import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-
 import {
   buildAutomationTargetState,
   type AutomationTargetSelection,
-} from "@/lib/domain/automations/target-selection";
+} from "@/lib/domain/automations/target/selection";
 import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 
 const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];

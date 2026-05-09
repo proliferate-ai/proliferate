@@ -2,7 +2,7 @@ import type {
   AutomationModelGroup,
   AutomationModelResolution,
   AutomationModelSelection,
-} from "@/lib/domain/automations/model-selection";
+} from "@/lib/domain/automations/model/selection";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";

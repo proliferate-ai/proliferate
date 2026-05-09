@@ -17,7 +17,7 @@ import {
 } from "@/hooks/access/cloud/automations/use-automations";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
+import { buildAutomationRowViewModel } from "@/lib/domain/automations/run/view-model";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type {
@@ -25,7 +25,7 @@ import type {
   AutomationRunRecord,
   CreateAutomationInput,
   UpdateAutomationInput,
-} from "@/lib/domain/automations/automation-ui-records";
+} from "@/lib/domain/automations/run/ui-records";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";

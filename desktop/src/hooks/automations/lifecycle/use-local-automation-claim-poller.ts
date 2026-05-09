@@ -11,7 +11,7 @@ import {
   findCandidateForClaim,
   LOCAL_AUTOMATION_ERROR_CODES,
   type LocalAutomationRepoCandidate,
-} from "@/lib/domain/automations/local-executor";
+} from "@/lib/domain/automations/local-executor/plan";
 import {
   executeLocalAutomationRun,
   LocalAutomationExecutorError,

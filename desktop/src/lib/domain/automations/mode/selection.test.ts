@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAutomationModeSelection } from "./mode-selection";
+import { resolveAutomationModeSelection } from "./selection";
 
 const PREFERENCES = {
   defaultSessionModeByAgentKind: {
