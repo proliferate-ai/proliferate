@@ -187,9 +187,10 @@ Important install cases:
 
 ### ACP Registry Flow
 
-`acp_registry.rs`
-(`anyharness/crates/anyharness-lib/src/agents/acp_registry.rs`)
-is a helper boundary for ACP-registry-backed agent-process installation.
+`integrations/agent_cli/acp_registry.rs`
+(`anyharness/crates/anyharness-lib/src/integrations/agent_cli/acp_registry.rs`)
+is the provider-mechanics helper boundary for ACP-registry-backed
+agent-process installation.
 
 It owns:
 

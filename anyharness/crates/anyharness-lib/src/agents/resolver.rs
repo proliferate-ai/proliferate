@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::credentials::detect_credentials;
-use super::installer::is_valid_executable;
 use super::model::*;
 use super::seed;
+use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
 
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
@@ -451,17 +451,6 @@ fn not_found_artifact(role: ArtifactRole, message: Option<String>) -> ResolvedAr
         path: None,
         message,
     }
-}
-
-fn find_in_path(binary_name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path_var) {
-        let candidate = dir.join(binary_name);
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-    None
 }
 
 pub(crate) fn artifact_root(runtime_home: &Path, kind: &AgentKind, role: &ArtifactRole) -> PathBuf {
