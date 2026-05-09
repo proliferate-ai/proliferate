@@ -40,23 +40,20 @@ Desktop:
 - logical-workspace derivation by repo + branch
 - initial mobility-aware sidebar/display-name behavior
 
-### 0.2 Exists but is in the wrong final shape
+### 0.2 Current AnyHarness shape
 
-These are real code paths that should be treated as transitional and refactored
-as part of implementation:
+These are real code paths to account for during implementation:
 
 - `server/cloud/mobility/service.py` currently opens DB sessions directly and
   performs ORM commit/refresh work inline; that must move into `db/store/**`
   to satisfy the server layer law
-- `anyharness-lib/src/mobility/mod.rs` currently holds internal archive data
-  models that belong in `mobility/model.rs`
-- `anyharness-lib/src/mobility/service.rs` is currently acting as the
-  cross-domain workflow owner; the target shape is `mobility/orchestrator.rs`
-  (or equivalent)
-- git delta logic currently lives in `mobility/service.rs`; it belongs in
-  `git/`
-- provider artifact portability logic currently lives in
-  `mobility/agent_artifacts.rs`; it belongs in `agents/portability/**`
+- `anyharness-lib/src/domains/mobility/model.rs` owns internal archive data
+  models
+- `anyharness-lib/src/domains/mobility/service.rs` owns the mobility product
+  workflow
+- `anyharness-lib/src/domains/mobility/workspace_delta.rs` owns mobility
+  workspace delta product logic built on file/git adapters
+- provider artifact portability logic belongs in `agents/portability/**`
 - mobility contract record types currently mirror internal session records
   closely; they are acceptable as transport types but must remain boundary
   types, not internal runtime models

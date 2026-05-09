@@ -10,15 +10,19 @@ use axum::{
     Json,
 };
 
-use crate::agents::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
-use crate::agents::model::*;
-use crate::agents::reconcile::{
+use crate::app::AppState;
+use crate::domains::agents::installer::{
+    self, InstallError, InstallOptions, InstalledArtifactResult,
+};
+use crate::domains::agents::model::*;
+use crate::domains::agents::reconcile::{
     AgentReconcileOutcome, AgentReconcileResult as InternalAgentReconcileResult,
 };
-use crate::agents::reconcile_execution::{AgentReconcileJobSnapshot, AgentReconcileJobStatus};
-use crate::agents::registry::built_in_registry;
-use crate::agents::resolver::resolve_agent;
-use crate::app::AppState;
+use crate::domains::agents::reconcile_execution::{
+    AgentReconcileJobSnapshot, AgentReconcileJobStatus,
+};
+use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::resolver::resolve_agent;
 
 type ProblemResponse = (StatusCode, Json<ProblemDetails>);
 

@@ -5,7 +5,7 @@ Status: authoritative for cowork artifact lifecycle in AnyHarness.
 Scope:
 
 - `anyharness/crates/anyharness-contract/**` for cowork artifact wire shapes
-- `anyharness/crates/anyharness-lib/src/cowork/**` for artifact lifecycle logic
+- `anyharness/crates/anyharness-lib/src/domains/cowork/**` for artifact lifecycle logic
 - `anyharness/crates/anyharness-lib/src/adapters/files/**` for artifact write protection
 - `anyharness/sdk/**` and `anyharness/sdk-react/**` for cowork artifact client access
 - desktop consumers of cowork artifact HTTP endpoints
@@ -57,20 +57,20 @@ Explicitly out of scope for this phase:
 
 Keep ownership split the same way the rest of the runtime is split:
 
-- `cowork/service.rs`
+- `domains/cowork/service.rs`
   - durable cowork root and thread invariants only
-- `cowork/runtime.rs`
+- `domains/cowork/runtime.rs`
   - cross-domain orchestration
   - session startup prompt assembly
   - built-in cowork MCP binding injection
   - turn-end artifact autosave trigger
-- `cowork/manifest.rs`
+- `domains/cowork/manifest.rs`
   - manifest schema
   - parse, validate, normalize, persist
-- `cowork/artifacts.rs`
+- `domains/cowork/artifacts.rs`
   - artifact lifecycle operations
   - create, update, delete, read, list
-- `cowork/mcp.rs`
+- `domains/cowork/mcp.rs`
   - built-in cowork MCP server implementation
   - tool registry and dispatch
 - `api/http/cowork.rs`

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use super::{proliferate_home_dir_name, test_support, AppState};
-use crate::{agents::seed::AgentSeedStore, persistence::Db};
+use crate::{domains::agents::seed::AgentSeedStore, persistence::Db};
 
 #[tokio::test(flavor = "current_thread")]
 async fn app_state_allows_missing_bearer_token_when_not_required() {

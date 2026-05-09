@@ -9,7 +9,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::plans::{document, model::PlanRecord};
+use crate::domains::plans::{document, model::PlanRecord};
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::model::{
     PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentSource, PromptAttachmentState,

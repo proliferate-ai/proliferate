@@ -11,11 +11,11 @@ use super::model::{
     SessionRecord,
 };
 use super::store::SessionStore;
-use crate::agents::catalog::{LaunchCatalogService, ModelCatalogService};
-use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
-use crate::agents::registry::built_in_registry;
-use crate::agents::resolver::resolve_agent;
-use crate::mobility::model::MobilityPromptAttachmentData;
+use crate::domains::agents::catalog::{LaunchCatalogService, ModelCatalogService};
+use crate::domains::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
+use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::resolver::resolve_agent;
+use crate::domains::mobility::model::MobilityPromptAttachmentData;
 use crate::origin::OriginContext;
 use crate::workspaces::store::WorkspaceStore;
 use anyharness_contract::v1::{
@@ -167,7 +167,7 @@ impl SessionService {
 
         let agent_resolution_started = Instant::now();
         let resolved = resolve_agent(descriptor, &self.runtime_home);
-        if resolved.status != crate::agents::model::ResolvedAgentStatus::Ready {
+        if resolved.status != crate::domains::agents::model::ResolvedAgentStatus::Ready {
             let detail = resolved.agent_process.message.clone().or_else(|| {
                 resolved
                     .native
@@ -680,19 +680,19 @@ fn control_value(
 }
 
 fn model_session_default_controls_to_launch_controls(
-    controls: Vec<crate::agents::model::SessionDefaultControlMetadata>,
+    controls: Vec<crate::domains::agents::model::SessionDefaultControlMetadata>,
 ) -> Vec<WorkspaceSessionLaunchControl> {
     controls
         .into_iter()
         .map(|control| {
             let key = match control.key {
-                crate::agents::model::SessionDefaultControlKey::Reasoning => {
+                crate::domains::agents::model::SessionDefaultControlKey::Reasoning => {
                     WorkspaceSessionLaunchControlKey::Reasoning
                 }
-                crate::agents::model::SessionDefaultControlKey::Effort => {
+                crate::domains::agents::model::SessionDefaultControlKey::Effort => {
                     WorkspaceSessionLaunchControlKey::Effort
                 }
-                crate::agents::model::SessionDefaultControlKey::FastMode => {
+                crate::domains::agents::model::SessionDefaultControlKey::FastMode => {
                     WorkspaceSessionLaunchControlKey::FastMode
                 }
             };
@@ -853,7 +853,7 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::model::{
+    use crate::domains::agents::model::{
         ModelCatalogStatus, ModelRegistryModelMetadata, SessionDefaultControlsState,
     };
 

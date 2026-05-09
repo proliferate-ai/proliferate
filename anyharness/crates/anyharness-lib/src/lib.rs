@@ -1,16 +1,12 @@
 pub mod acp;
 pub mod adapters;
-pub mod agents;
 pub mod api;
 pub mod app;
-pub mod cowork;
+pub mod domains;
 pub mod integrations;
-pub mod mobility;
 pub mod origin;
 pub mod persistence;
-pub mod plans;
 pub mod repo_roots;
-pub mod reviews;
 pub mod sessions;
 pub mod terminals;
 pub mod workspaces;

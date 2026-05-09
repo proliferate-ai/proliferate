@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::Context;
 
-use crate::mobility::model::MobilityFileData;
+use crate::domains::mobility::model::MobilityFileData;
 use crate::sessions::model::SessionRecord;
 
 const CLAUDE_SANITIZED_PATH_LIMIT: usize = 200;

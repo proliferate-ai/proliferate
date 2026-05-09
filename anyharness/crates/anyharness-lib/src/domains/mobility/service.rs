@@ -6,18 +6,18 @@ use std::time::Instant;
 use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
-use crate::agents::portability::{
+use crate::domains::agents::portability::{
     collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
     validate_session_agent_artifacts,
 };
-use crate::mobility::model::{
+use crate::domains::mobility::model::{
     DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
     MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
     WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData,
     MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
-use crate::mobility::store::MobilityStore;
-use crate::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
+use crate::domains::mobility::store::MobilityStore;
+use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::subagents::service::SubagentService;
@@ -644,7 +644,12 @@ impl MobilityService {
                     let content = self
                         .session_service
                         .read_prompt_attachment_content(&record)?;
-                    Ok(crate::mobility::model::MobilityPromptAttachmentData { record, content })
+                    Ok(
+                        crate::domains::mobility::model::MobilityPromptAttachmentData {
+                            record,
+                            content,
+                        },
+                    )
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
             let events = self.session_service.store().list_events(&session.id)?;

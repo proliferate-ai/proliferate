@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use super::router::build_router;
 use crate::{
-    agents::seed::AgentSeedStore,
     app::{test_support, AppState},
+    domains::agents::seed::AgentSeedStore,
     persistence::Db,
     sessions::{model::SessionRecord, store::SessionStore},
     terminals::model::{CreateTerminalOptions, TerminalPurpose},

@@ -35,13 +35,13 @@ use crate::acp::session_actor::{
     PromptAcceptance, QueueMutationError, ResolveInteractionCommandError, SessionCommand,
     SessionStartupStrategy, SetConfigOptionCommandError,
 };
-use crate::agents::model::{AgentKind, ResolvedAgent};
-use crate::agents::registry::built_in_registry;
-use crate::agents::resolver::resolve_agent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::domains::agents::model::{AgentKind, ResolvedAgent};
+use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::resolver::resolve_agent;
+use crate::domains::plans::model::PlanRecord;
+use crate::domains::plans::service::{PlanDecisionError, PlanService};
 use crate::origin::OriginContext;
-use crate::plans::model::PlanRecord;
-use crate::plans::service::{PlanDecisionError, PlanService};
 use crate::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
 };
@@ -2422,11 +2422,11 @@ mod tests {
         validate_fork_parent,
     };
     use crate::acp::session_actor::SessionStartupStrategy;
-    use crate::agents::model::{
+    use crate::domains::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
         ResolvedArtifact,
     };
-    use crate::agents::registry::built_in_registry;
+    use crate::domains::agents::registry::built_in_registry;
     use crate::origin::OriginContext;
     use crate::persistence::Db;
     use crate::sessions::links::model::{

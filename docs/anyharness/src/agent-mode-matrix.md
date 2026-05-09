@@ -51,10 +51,10 @@ preference directly from the store
 `use-session-creation-actions.ts:335`).
 
 Registered agent kinds come from
-`anyharness/crates/anyharness-lib/src/agents/model.rs:6-47`: `claude`,
+`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:6-47`: `claude`,
 `codex`, `gemini`, `cursor`, `opencode`, `amp`. All six are wired into the
 descriptor list at
-`anyharness/crates/anyharness-lib/src/agents/registry.rs:15-21`.
+`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:15-21`.
 
 ## Per-agent matrix
 
@@ -88,7 +88,7 @@ configured for Claude.
   stricter than `dontAsk` ("Auto-approve most actions"). Runtime cannot
   verify this independently — these strings are forwarded to the Claude ACP
   binary (`git+proliferate-ai/claude-agent-acp` pinned in
-  `anyharness/crates/anyharness-lib/src/agents/registry.rs:5-6`), which owns
+  `anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:5-6`), which owns
   the actual enforcement semantics.
 
 ### Codex (`codex`)
@@ -151,14 +151,14 @@ All four values are exposed in desktop config. No `collaboration_mode`.
 - Unambiguous? Yes on desktop copy (`yolo` = "Skip permission checks" vs
   `autoEdit` = "Auto-approve edits"). As with Claude, actual enforcement
   lives in the Gemini ACP binary
-  (`anyharness/crates/anyharness-lib/src/agents/registry.rs:122-155`); the
+  (`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:122-155`); the
   desktop labels reflect intent, not a runtime-side whitelist.
 
 ### Cursor (`cursor`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/agents/model.rs:10,22,53`,
-`anyharness/crates/anyharness-lib/src/agents/registry.rs:159-189`) via
+(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:10,22,53`,
+`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:159-189`) via
 `cursor-acp` (fallback `cursor-agent acp`).
 
 **No entry in `desktop/src/config/session-control-presentations.ts`.**
@@ -177,8 +177,8 @@ desktop UI has no first-class mode selector for Cursor.
 ### OpenCode (`opencode`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/agents/model.rs:11,23,54`,
-`anyharness/crates/anyharness-lib/src/agents/registry.rs:239-263`) via the
+(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:11,23,54`,
+`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:239-263`) via the
 `opencode` ACP registry id (fallback npm package `opencode-ai`).
 
 **No entry in `desktop/src/config/session-control-presentations.ts`.** Same
@@ -191,8 +191,8 @@ will pass `mode_id` through verbatim.
 ### Amp (`amp`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/agents/model.rs:12,24,55`,
-`anyharness/crates/anyharness-lib/src/agents/registry.rs:193-235`) via
+(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:12,24,55`,
+`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:193-235`) via
 `amp-acp`.
 
 **No entry in `desktop/src/config/session-control-presentations.ts`.** Not

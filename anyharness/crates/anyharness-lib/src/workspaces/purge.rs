@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::agents::portability::delete_session_agent_artifacts;
+use crate::domains::agents::portability::delete_session_agent_artifacts;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};

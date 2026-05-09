@@ -278,7 +278,9 @@ impl ReviewRuntime {
             return Err(ReviewError::AssignmentNotFound(assignment_id.to_string()));
         }
         let deadline_at = (chrono::Utc::now()
-            + chrono::Duration::minutes(crate::reviews::service::REVIEWER_DEADLINE_MINUTES))
+            + chrono::Duration::minutes(
+                crate::domains::reviews::service::REVIEWER_DEADLINE_MINUTES,
+            ))
         .to_rfc3339();
         let assignment = self
             .service

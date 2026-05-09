@@ -3,8 +3,8 @@
 Status: authoritative for durable/product code under `anyharness-lib/src/domains/**`.
 
 The current code is transitional and still has top-level folders such as
-`sessions/`, `workspaces/`, `agents`, `cowork`, and `reviews`. Those folders
-map to the target `domains/**` layer.
+`sessions/`, `workspaces/`, `agents`, and `cowork`. Those folders map to the
+target `domains/**` layer.
 
 ## Purpose
 

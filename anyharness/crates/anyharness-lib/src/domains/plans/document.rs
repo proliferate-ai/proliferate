@@ -80,7 +80,7 @@ mod tests {
     use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState};
 
     use super::render_markdown;
-    use crate::plans::model::PlanRecord;
+    use crate::domains::plans::model::PlanRecord;
 
     #[test]
     fn render_markdown_does_not_duplicate_matching_h1() {

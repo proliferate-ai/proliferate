@@ -16,7 +16,7 @@ use anyharness_contract::v1::{
     WorkspaceSessionLaunchControlValue,
 };
 
-use crate::agents::model::{
+use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AgentProcessArtifactSpec, AgentProcessFallback,
     AgentProcessInstallSpec, AuthSpec, CommandSpec, CredentialDiscoveryKind, LaunchSpecTemplate,
     LoginSpec, ModelCatalogStatus, ModelLaunchRemediationMetadata, ModelRegistryMetadata,
@@ -2194,7 +2194,7 @@ pub fn bundled_model_registries() -> Vec<ModelRegistryMetadata> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::model::ModelLaunchRemediationKind;
+    use crate::domains::agents::model::ModelLaunchRemediationKind;
 
     fn temp_cache_path() -> PathBuf {
         std::env::temp_dir().join(format!(

@@ -1,12 +1,12 @@
 use anyhow::{anyhow, bail, Result};
 use clap::Args;
 
-use anyharness_lib::agents::model::AgentKind;
-use anyharness_lib::agents::reconcile::{
+use anyharness_lib::app::{default_runtime_home, ensure_runtime_home};
+use anyharness_lib::domains::agents::model::{AgentDescriptor, AgentKind};
+use anyharness_lib::domains::agents::reconcile::{
     reconcile_agents, AgentReconcileOutcome, AgentReconcileResult,
 };
-use anyharness_lib::agents::registry::built_in_registry;
-use anyharness_lib::app::{default_runtime_home, ensure_runtime_home};
+use anyharness_lib::domains::agents::registry::built_in_registry;
 
 #[derive(Args)]
 pub struct InstallAgentsArgs {
@@ -85,9 +85,7 @@ fn resolve_requested_agents(requested: &[String]) -> Result<Vec<AgentKind>> {
         .collect()
 }
 
-fn selected_registry(
-    requested_agents: &[AgentKind],
-) -> Vec<anyharness_lib::agents::model::AgentDescriptor> {
+fn selected_registry(requested_agents: &[AgentKind]) -> Vec<AgentDescriptor> {
     built_in_registry()
         .into_iter()
         .filter(|descriptor| requested_agents.iter().any(|kind| kind == &descriptor.kind))

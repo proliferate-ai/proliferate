@@ -11,10 +11,10 @@ use super::session_actor::{
     spawn_session_actor_pending, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
     SessionStartupStrategy, SessionTurnFinishResult,
 };
-use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::plans::service::PlanService;
-use crate::reviews::service::ReviewService;
+use crate::domains::agents::model::ResolvedAgent;
+use crate::domains::plans::service::PlanService;
+use crate::domains::reviews::service::ReviewService;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
@@ -423,13 +423,13 @@ mod tests {
 
     use super::{AcpManager, PromptAttachmentStorage};
     use crate::acp::session_actor::{LiveSessionHandle, SessionStartupStrategy};
-    use crate::agents::model::{
+    use crate::domains::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
         ResolvedArtifact,
     };
-    use crate::agents::registry::built_in_registry;
+    use crate::domains::agents::registry::built_in_registry;
+    use crate::domains::plans::{service::PlanService, store::PlanStore};
     use crate::persistence::Db;
-    use crate::plans::{service::PlanService, store::PlanStore};
     use crate::sessions::model::{SessionEventRecord, SessionRecord};
     use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
     use crate::sessions::store::SessionStore;

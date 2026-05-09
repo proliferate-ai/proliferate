@@ -25,12 +25,12 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
-use crate::mobility::model::{
+use crate::domains::mobility::model::{
     ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData,
     MobilityPromptAttachmentData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
     WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
-use crate::mobility::service::MobilityError;
+use crate::domains::mobility::service::MobilityError;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::links::model::{
@@ -48,7 +48,7 @@ use crate::workspaces::access_model::WorkspaceAccessMode;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize =
-    crate::mobility::model::MAX_MOBILITY_ARCHIVE_BODY_BYTES;
+    crate::domains::mobility::model::MAX_MOBILITY_ARCHIVE_BODY_BYTES;
 
 #[utoipa::path(
     post,

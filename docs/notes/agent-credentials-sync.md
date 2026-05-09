@@ -116,7 +116,7 @@ Current allowlist in `desktop/src-tauri/src/commands/keychain.rs`:
 - `GEMINI_API_KEY`
 
 But the runtime agent registry currently expects additional env vars in
-`anyharness/crates/anyharness-lib/src/agents/registry.rs`:
+`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs`:
 
 - `CURSOR_API_KEY`
 - `AMP_API_KEY`

@@ -9,7 +9,7 @@ use crate::adapters::files::types::{
 };
 use crate::adapters::git::file_search::WorkspaceFileSearchMatch;
 use crate::adapters::git::WorkspaceFileSearchCache;
-use crate::cowork::artifacts::CoworkArtifactRuntime;
+use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
 

@@ -1303,8 +1303,8 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::agents::seed::AgentSeedStore;
     use crate::app::test_support;
+    use crate::domains::agents::seed::AgentSeedStore;
     use crate::persistence::Db;
     use crate::workspaces::store::WorkspaceStore;
 

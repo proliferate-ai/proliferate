@@ -5,7 +5,7 @@ use serde::Deserialize;
 use tokio::sync::broadcast;
 
 use super::persistence_sanitizer::sanitize_session_event_for_sqlite;
-use crate::plans::service::PlanEventContext;
+use crate::domains::plans::service::PlanEventContext;
 use crate::sessions::model::{SessionBackgroundWorkState, SessionEventRecord};
 use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
 use crate::sessions::store::SessionStore;

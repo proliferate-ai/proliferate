@@ -1,6 +1,6 @@
 # Agents
 
-`anyharness-lib/src/agents/**` owns supported-agent metadata, installation,
+`anyharness-lib/src/domains/agents/**` owns supported-agent metadata, installation,
 credential detection, readiness, and the final resolved launch surface handed to
 the live ACP runtime.
 
@@ -18,7 +18,7 @@ This area is about availability and launchability, not live session execution.
 
 ## Core Models
 
-### `AgentDescriptor` (`anyharness/crates/anyharness-lib/src/agents/model.rs`)
+### `AgentDescriptor` (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
 `AgentDescriptor` is the full static metadata definition for one supported
 agent.
@@ -33,9 +33,9 @@ It includes:
 - docs URL
 
 The built-in descriptors live in
-`anyharness/crates/anyharness-lib/src/agents/registry.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs`.
 
-### Artifact Specs (`anyharness/crates/anyharness-lib/src/agents/model.rs`)
+### Artifact Specs (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
 There are two distinct artifact roles:
 
@@ -53,7 +53,7 @@ Install specs cover several cases:
 - PATH-only discovery
 - manual-install-only guidance
 
-### Credential and Readiness Models (`anyharness/crates/anyharness-lib/src/agents/model.rs`)
+### Credential and Readiness Models (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
 Credential detection produces `CredentialState`:
 
@@ -71,7 +71,7 @@ Overall runtime readiness is summarized as `ResolvedAgentStatus`:
 - `Unsupported`
 - `Error`
 
-### `ResolvedArtifact` and `ResolvedAgent` (`anyharness/crates/anyharness-lib/src/agents/model.rs`)
+### `ResolvedArtifact` and `ResolvedAgent` (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
 `ResolvedArtifact` is the machine-local state for one artifact:
 
@@ -104,8 +104,8 @@ There are two separate static sources:
 
 Code paths:
 
-- `anyharness/crates/anyharness-lib/src/agents/registry.rs`
-- `anyharness/crates/anyharness-lib/src/agents/catalog.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agents/registry.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agents/catalog.rs`
 
 Those are related but distinct:
 
@@ -115,7 +115,7 @@ Those are related but distinct:
 ### Resolution Flow
 
 Resolution is owned by
-`anyharness/crates/anyharness-lib/src/agents/resolver.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/resolver.rs`.
 
 The flow is:
 
@@ -151,7 +151,7 @@ chain support, public/free model behavior, and live ACP-reported model list.
 
 Code path:
 
-- `anyharness/crates/anyharness-lib/src/agents/credentials.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agents/credentials.rs`
 - Claude/Codex local file parsing and portable export normalization are shared
   with desktop cloud sync via `anyharness/crates/anyharness-credential-discovery/`
 
@@ -164,7 +164,7 @@ Local readiness and cloud portability intentionally remain separate questions:
 ### Installation Flow
 
 Managed installation is owned by
-`anyharness/crates/anyharness-lib/src/agents/installer.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/installer.rs`.
 
 The flow is:
 
@@ -205,7 +205,7 @@ the broader agents flow.
 ### Reconcile Flow
 
 `reconcile.rs`
-(`anyharness/crates/anyharness-lib/src/agents/reconcile.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/agents/reconcile.rs`)
 is the batch install path.
 
 It iterates the built-in registry and attempts managed install where supported,
@@ -225,7 +225,7 @@ Packaged desktop builds can ship a compressed agent seed so first launch does
 not need to download the most common managed agents before the user can start.
 The seed is a `.tar.zst` resource built by `scripts/build-agent-seed.mjs` from
 `desktop/src-tauri/agent-seed.inputs.json` and hydrated by
-`anyharness/crates/anyharness-lib/src/agents/seed/` at runtime startup.
+`anyharness/crates/anyharness-lib/src/domains/agents/seed/` at runtime startup.
 The HTTP runtime starts immediately with `agentSeed.status=hydrating`; the heavy
 archive extraction and checksum verification run on a blocking background task
 so `/health` can respond while seed hydration is still in progress.
