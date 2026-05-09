@@ -13,7 +13,6 @@ import {
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
@@ -24,12 +23,14 @@ import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
 import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   getSessionRecord,
@@ -196,7 +197,7 @@ export function useProposedPlanActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }),
+          }, { trackProductEvent }),
         showToast,
       });
     })().finally(() => {

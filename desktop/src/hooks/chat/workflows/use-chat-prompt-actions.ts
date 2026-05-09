@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import {
   captureTelemetryException,
+  trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
@@ -42,7 +43,7 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { completeChatPromptSubmitSideEffects } from "./chat-submit-effects";
+import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   const forceNewSession = options?.forceNewSession ?? false;
@@ -209,7 +210,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         agentKind: launchSelection?.kind ?? "unknown",
         reuseSession: targetSessionId !== null,
         setWorkspaceArrivalEvent,
-      });
+      }, { trackProductEvent });
       return true;
     } catch (error) {
       if (isSessionModelAvailabilityInterruption(error)) {
