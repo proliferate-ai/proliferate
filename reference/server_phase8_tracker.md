@@ -10,6 +10,18 @@ Source note: `reference/server_cleanup_migration_sequence.md` was requested as
 an input, but it is not present on current `origin/main`. This tracker uses the
 Phase 8 audit docs present on main plus the post-Wave-3 audit context.
 
+## How to use this tracker
+
+- Start from `docs/server/README.md` and the focused server guides for normal
+  code. They are the current rules.
+- Use this tracker only for the deferred complex lanes below: systems whose
+  lifecycle, transaction, retry, or external-I/O semantics need staged cleanup.
+- Deferred does not mean exempt. Touch these lanes only when preserving the
+  lane invariants, reducing debt opportunistically, and keeping public behavior
+  plus durable checkpoints intact.
+- Stop when a change hits a lane stop condition, changes another lane's
+  lifecycle contract, or needs broad design before code movement.
+
 ## Baseline
 
 - Post-Wave-3 green anchor: `be58fe84dc9eb3a346d30b12014d3e1c4e2a1797`.
@@ -22,8 +34,8 @@ Remaining server boundary debt:
 
 | Rule | Count | Notes |
 | --- | ---: | --- |
-| `STORE_SESSION_FACTORY_CALL` | 93 | Remaining self-opening store entrypoints. |
-| `STORE_COMMIT_ROLLBACK` | 61 | Remaining store-owned transaction boundaries. |
+| `STORE_SESSION_FACTORY_CALL` | 90 | Remaining self-opening store entrypoints. |
+| `STORE_COMMIT_ROLLBACK` | 59 | Remaining store-owned transaction boundaries. |
 | `STORE_SESSION_FACTORY_IMPORT` | 16 | Remaining store imports of the session factory. |
 | `STORE_FORBIDDEN_IMPORT` | 4 | All in the billing store. |
 | `SERVICE_ORM_IMPORT` | 5 | Billing, cloud runtime, and cloud workspaces services. |
@@ -200,7 +212,57 @@ Stop conditions:
   lifecycle boundary is explicit.
 - Billing repo-limit or concurrency semantics cannot be preserved locally.
 
-### 5. MCP Materialization
+### 5. Cloud Mobility
+
+Owned paths:
+
+- `server/proliferate/server/cloud/mobility/**`
+- `server/proliferate/db/store/cloud_mobility.py`
+- `server/proliferate/db/models/cloud/mobility.py`
+- Mobility-specific callsites in
+  `server/proliferate/server/cloud/workspaces/service.py`,
+  `server/proliferate/server/cloud/runtime/provision.py`, and
+  `server/proliferate/server/cloud/runtime/anyharness_api.py` by coordination
+  with the workspace and runtime lanes
+
+Invariants:
+
+- Logical mobility workspace identity remains unique per user, provider,
+  owner, repository, and branch.
+- Only one active handoff exists per mobility workspace; preflight also blocks
+  another active handoff for the same user.
+- Handoff creation remains a durable checkpoint before local-to-cloud
+  provisioning continues.
+- Local-to-cloud provisioning failure after handoff creation records an
+  observable failed handoff before surfacing the original error.
+- Finalization flips the visible owner and lifecycle state to the target owner
+  but leaves the active handoff until source cleanup completes.
+- Cleanup completion clears the active handoff; `cleanup_failed` remains active
+  under current semantics until a product decision changes that model.
+- Stale expiry distinguishes pre-finalization handoff failure from
+  post-finalization cleanup failure.
+- Branch and repository preflight remains strict about access, branch presence,
+  branch match, and requested base SHA.
+- Read paths that expire stale handoffs or backfill cloud-owned rows preserve
+  that behavior until a tested replacement exists.
+- Public API payloads and the desktop/runtime handoff protocol remain stable.
+
+Stop conditions:
+
+- Handoff start would become one broad request transaction that can roll back
+  durable handoff creation after provisioning failure.
+- GitHub, provider, AnyHarness, or workspace provisioning I/O would be held
+  inside a broad DB transaction.
+- Active-handoff, retryability, or `cleanup_failed` semantics are unclear or
+  changed without a product decision.
+- Mobility cleanup needs workspace or runtime lifecycle changes before those
+  lane boundaries are explicit.
+- The store split becomes mechanical before lifecycle rules and checkpoint
+  ownership are explicit.
+- Stale expiry or backfill behavior would be removed without a tested
+  replacement.
+
+### 6. MCP Materialization
 
 Owned paths:
 

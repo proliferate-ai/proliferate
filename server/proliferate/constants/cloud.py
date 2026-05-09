@@ -39,6 +39,8 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
     }
 )
 
+CLOUD_REPO_CONFIG_FILE_MAX_BYTES: Final = 1_048_576
+
 # ---------------------------------------------------------------------------
 # Allowed credential auth files
 # ---------------------------------------------------------------------------

@@ -47,6 +47,7 @@ from proliferate.db.models.billing import (
 from proliferate.db.store.billing import (
     BillingAccountingResult,
     BillingSnapshotState,
+    BillingSubjectStripeState,
     account_usage_for_billing_subject,
     bind_stripe_customer_to_billing_subject,
     claim_pending_seat_adjustments,
@@ -65,6 +66,7 @@ from proliferate.db.store.billing import (
     mark_seat_adjustment_stripe_confirmed,
     mark_usage_export_failed,
     mark_usage_export_succeeded,
+    maybe_create_org_seat_adjustment,
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
     set_overage_policy_for_subject,
@@ -174,6 +176,33 @@ def repo_limit_for_billing_snapshot(snapshot: BillingSnapshot) -> int | None:
     )
 
 
+async def ensure_personal_billing_subject_state(
+    db: AsyncSession,
+    user_id: UUID,
+) -> BillingSubjectStripeState:
+    return await get_or_create_user_stripe_customer_state(db, user_id)
+
+
+async def ensure_organization_billing_subject_state(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> BillingSubjectStripeState:
+    return await get_or_create_organization_stripe_customer_state(db, organization_id)
+
+
+async def maybe_create_organization_seat_adjustment(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    membership_id: UUID | None,
+) -> bool:
+    return await maybe_create_org_seat_adjustment(
+        db,
+        organization_id=organization_id,
+        membership_id=membership_id,
+    )
+
+
 def _grant_applies_to_paid_state(grant: BillingGrant, *, is_paid_cloud: bool) -> bool:
     return grant_applies_to_paid_state(
         grant.grant_type,
@@ -193,6 +222,13 @@ def _segment_seconds(segment: UsageSegment, now: datetime) -> float:
 async def get_billing_snapshot(user_id: UUID) -> BillingSnapshot:
     state = await load_billing_snapshot_state(user_id)
     return _build_billing_snapshot(state)
+
+
+async def get_billing_snapshot_for_request(
+    db: AsyncSession,
+    user_id: UUID,
+) -> BillingSnapshot:
+    return await _get_billing_snapshot_for_request(db, user_id)
 
 
 async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingSnapshot:

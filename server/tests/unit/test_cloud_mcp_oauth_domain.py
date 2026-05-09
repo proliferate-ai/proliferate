@@ -22,6 +22,7 @@ def test_oauth_redirect_uri_prefers_configured_callback_base() -> None:
         oauth_redirect_uri(
             configured_callback_base_url=" https://callbacks.example.com/ ",
             api_base_url="https://api.example.com",
+            fallback_callback_base_url="http://localhost:8000",
         )
         == "https://callbacks.example.com/v1/cloud/mcp/oauth/callback"
     )
@@ -32,6 +33,7 @@ def test_oauth_redirect_uri_falls_back_to_api_base_and_localhost() -> None:
         oauth_redirect_uri(
             configured_callback_base_url="",
             api_base_url=" https://api.example.com/ ",
+            fallback_callback_base_url="http://localhost:8000",
         )
         == "https://api.example.com/v1/cloud/mcp/oauth/callback"
     )
@@ -39,6 +41,7 @@ def test_oauth_redirect_uri_falls_back_to_api_base_and_localhost() -> None:
         oauth_redirect_uri(
             configured_callback_base_url="",
             api_base_url="",
+            fallback_callback_base_url="http://localhost:8000",
         )
         == "http://localhost:8000/v1/cloud/mcp/oauth/callback"
     )

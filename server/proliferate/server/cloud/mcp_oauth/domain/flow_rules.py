@@ -15,10 +15,11 @@ def resolve_callback_base_url(
     *,
     configured_callback_base_url: str,
     api_base_url: str,
+    fallback_callback_base_url: str = "",
 ) -> str:
     base = configured_callback_base_url.strip() or api_base_url.strip()
     if not base:
-        base = "http://localhost:8000"
+        base = fallback_callback_base_url.strip()
     return base.rstrip("/")
 
 
@@ -26,10 +27,12 @@ def oauth_redirect_uri(
     *,
     configured_callback_base_url: str,
     api_base_url: str,
+    fallback_callback_base_url: str = "",
 ) -> str:
     base_url = resolve_callback_base_url(
         configured_callback_base_url=configured_callback_base_url,
         api_base_url=api_base_url,
+        fallback_callback_base_url=fallback_callback_base_url,
     )
     return f"{base_url}{CLOUD_MCP_OAUTH_CALLBACK_PATH}"
 

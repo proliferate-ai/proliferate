@@ -6,12 +6,12 @@ import re
 
 from proliferate.constants.cloud import (
     ANYHARNESS_RESERVED_ENV_PREFIX,
+    CLOUD_REPO_CONFIG_FILE_MAX_BYTES,
     PROLIFERATE_RESERVED_ENV_PREFIX,
     RESERVED_CLOUD_REPO_ENV_VARS,
 )
 from proliferate.server.cloud.errors import CloudApiError
 
-_MAX_TRACKED_FILE_BYTES = 1_048_576
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -55,7 +55,7 @@ def normalize_repo_file_path(value: str) -> str:
 
 
 def validate_tracked_file_content(content: str) -> None:
-    if len(content.encode("utf-8")) > _MAX_TRACKED_FILE_BYTES:
+    if len(content.encode("utf-8")) > CLOUD_REPO_CONFIG_FILE_MAX_BYTES:
         raise CloudApiError(
             "repo_file_too_large",
             "Tracked files must be 1 MiB or smaller.",

@@ -62,7 +62,8 @@ async def test_org_cloud_workspace_create_fails_before_personal_helpers(
     user = SimpleNamespace(id=uuid4())
     organization_id = uuid4()
 
-    async def _resolve_owner_context(_user, owner_selection):
+    async def _resolve_owner_context(_user, owner_selection, *, db):
+        assert db is not None
         assert owner_selection.owner_scope == "organization"
         assert owner_selection.organization_id == organization_id
         return OwnerContext(
@@ -88,6 +89,7 @@ async def test_org_cloud_workspace_create_fails_before_personal_helpers(
     with pytest.raises(CloudApiError) as exc_info:
         await workspace_service.create_cloud_workspace(
             user,
+            db=object(),  # type: ignore[arg-type]
             git_provider="github",
             git_owner="acme",
             git_repo_name="rocket",

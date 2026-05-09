@@ -10,6 +10,7 @@ from proliferate.constants.automations import (
     AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
 )
 from proliferate.db.store.automations import (
+    AutomationRunValue,
     AutomationValue,
     create_automation_for_user,
     create_manual_run_for_user,
@@ -20,7 +21,7 @@ from proliferate.db.store.automations import (
 )
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
-    bootstrap_cloud_repo_config_for_user,
+    bootstrap_cloud_repo_config,
 )
 from proliferate.server.automations.domain.schedule import (
     next_future_occurrence,
@@ -45,23 +46,18 @@ from proliferate.server.automations.errors import (
     AutomationRepoLimitExceeded,
 )
 from proliferate.server.automations.models import (
-    AutomationListResponse,
-    AutomationResponse,
-    AutomationRunListResponse,
-    AutomationRunResponse,
     CreateAutomationRequest,
     UpdateAutomationRequest,
-    automation_payload,
-    automation_run_payload,
 )
 from proliferate.server.billing.service import (
-    get_billing_snapshot,
+    get_billing_snapshot_for_request,
     repo_limit_for_billing_snapshot,
 )
 from proliferate.utils.time import utcnow
 
 
 async def _ensure_repo_config_id(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
@@ -69,10 +65,11 @@ async def _ensure_repo_config_id(
 ) -> UUID:
     # Automations point at a repo identity. Runtime-input config for that repo can still
     # be empty; the executor PR will decide when to apply env/files/setup.
-    billing_snapshot = await get_billing_snapshot(user_id)
+    billing_snapshot = await get_billing_snapshot_for_request(db, user_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
-        repo_config = await bootstrap_cloud_repo_config_for_user(
+        repo_config = await bootstrap_cloud_repo_config(
+            db,
             user_id=user_id,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
@@ -86,31 +83,31 @@ async def _ensure_repo_config_id(
     return repo_config.id
 
 
-async def list_automations(db: AsyncSession, user_id: UUID) -> AutomationListResponse:
-    values = await list_automations_for_user(db, user_id)
-    return AutomationListResponse(automations=[automation_payload(value) for value in values])
+async def list_automations(db: AsyncSession, user_id: UUID) -> list[AutomationValue]:
+    return await list_automations_for_user(db, user_id)
 
 
 async def get_automation(
     db: AsyncSession,
     user_id: UUID,
     automation_id: UUID,
-) -> AutomationResponse:
+) -> AutomationValue:
     value = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
     if value is None:
         raise AutomationNotFound()
-    return automation_payload(value)
+    return value
 
 
 async def create_automation(
     db: AsyncSession,
     user_id: UUID,
     body: CreateAutomationRequest,
-) -> AutomationResponse:
+) -> AutomationValue:
     now = utcnow()
     git_owner = normalize_repo_part(body.git_owner, field_name="gitOwner")
     git_repo_name = normalize_repo_part(body.git_repo_name, field_name="gitRepoName")
     repo_config_id = await _ensure_repo_config_id(
+        db,
         user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
@@ -139,7 +136,7 @@ async def create_automation(
         reasoning_effort=normalize_reasoning_effort(body.reasoning_effort),
         next_run_at=schedule.next_run_at,
     )
-    return automation_payload(value)
+    return value
 
 
 async def update_automation(
@@ -147,7 +144,7 @@ async def update_automation(
     user_id: UUID,
     automation_id: UUID,
     body: UpdateAutomationRequest,
-) -> AutomationResponse:
+) -> AutomationValue:
     existing = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
     if existing is None:
         raise AutomationNotFound()
@@ -204,14 +201,14 @@ async def update_automation(
     )
     if value is None:
         raise AutomationNotFound()
-    return automation_payload(value)
+    return value
 
 
 async def pause_automation(
     db: AsyncSession,
     user_id: UUID,
     automation_id: UUID,
-) -> AutomationResponse:
+) -> AutomationValue:
     value = await update_automation_for_user(
         db,
         user_id=user_id,
@@ -222,14 +219,14 @@ async def pause_automation(
     )
     if value is None:
         raise AutomationNotFound()
-    return automation_payload(value)
+    return value
 
 
 async def resume_automation(
     db: AsyncSession,
     user_id: UUID,
     automation_id: UUID,
-) -> AutomationResponse:
+) -> AutomationValue:
     existing = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
     if existing is None:
         raise AutomationNotFound()
@@ -249,14 +246,14 @@ async def resume_automation(
     )
     if value is None:
         raise AutomationNotFound()
-    return automation_payload(value)
+    return value
 
 
 async def run_automation_now(
     db: AsyncSession,
     user_id: UUID,
     automation_id: UUID,
-) -> AutomationRunResponse:
+) -> AutomationRunValue:
     existing = await load_automation_for_user(db, user_id=user_id, automation_id=automation_id)
     if existing is None:
         raise AutomationNotFound()
@@ -264,6 +261,7 @@ async def run_automation_now(
         raise AutomationPaused()
     require_agent_kind(existing.execution_target, existing.agent_kind)
     await _ensure_repo_config_id(
+        db,
         user_id=user_id,
         git_owner=existing.git_owner,
         git_repo_name=existing.git_repo_name,
@@ -271,7 +269,7 @@ async def run_automation_now(
     value = await create_manual_run_for_user(db, user_id=user_id, automation_id=automation_id)
     if value is None:
         raise AutomationNotFound()
-    return automation_run_payload(value)
+    return value
 
 
 async def list_automation_runs(
@@ -280,7 +278,7 @@ async def list_automation_runs(
     automation_id: UUID,
     *,
     limit: int = AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
-) -> AutomationRunListResponse:
+) -> list[AutomationRunValue]:
     bounded_limit = bounded_run_list_limit(limit)
     values = await list_runs_for_automation_for_user(
         db,
@@ -290,8 +288,4 @@ async def list_automation_runs(
     )
     if values is None:
         raise AutomationNotFound()
-    return AutomationRunListResponse(runs=[automation_run_payload(value) for value in values])
-
-
-def automation_for_tests(value: AutomationValue) -> AutomationResponse:
-    return automation_payload(value)
+    return values

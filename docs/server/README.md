@@ -47,6 +47,14 @@ step is design clarity before code movement:
 - [audits/phase6-cloud-runtime-background-loops.md](audits/phase6-cloud-runtime-background-loops.md)
   for the cloud runtime setup monitor and provisioning scheduler audit.
 
+The [Phase 8 server tracker](../../reference/server_phase8_tracker.md)
+coordinates the remaining deferred complex systems. Normal server code follows
+this README and the focused guides now; the tracker only names lanes whose
+lifecycle, transaction, retry, or external-I/O semantics still need staged
+cleanup. Deferred lanes are not exemptions: when touching them, preserve the
+listed invariants and take invariant-pinned opportunistic cleanup toward the
+guide shape.
+
 Specs (when added) define product/surface contracts: lifecycle invariants,
 edge cases, and focused verification for a specific cross-cutting flow such as
 billing, runtime provisioning, or MCP. None are written yet.

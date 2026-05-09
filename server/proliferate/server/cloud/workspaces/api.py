@@ -60,10 +60,12 @@ async def list_cloud_workspaces_endpoint(
 async def create_cloud_workspace_endpoint(
     body: CreateCloudWorkspaceRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
         payload = await create_cloud_workspace(
             user,
+            db=db,
             git_provider=body.git_provider,
             git_owner=body.git_owner,
             git_repo_name=body.git_repo_name,
