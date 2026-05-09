@@ -13,6 +13,7 @@ import {
   type MeasurementOperationId,
   type MeasurementSurface,
 } from "@/lib/infra/measurement/debug-measurement";
+import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
 import type {
   SessionChildRelationship,
   SessionRelationship,
@@ -472,12 +473,6 @@ function reconcileBatchPendingConfigChanges(
     pendingConfigChanges: nextPendingConfigChanges,
     reconciledIntents,
   };
-}
-
-function uniqueMeasurementOperationIds(
-  operationIds: readonly (MeasurementOperationId | null | undefined)[],
-): MeasurementOperationId[] {
-  return [...new Set(operationIds.filter((id): id is MeasurementOperationId => !!id))];
 }
 
 function recordStreamStateCounts(
