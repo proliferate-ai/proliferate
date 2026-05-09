@@ -2,7 +2,7 @@ import { useSearchParams } from "react-router-dom";
 import { PlaygroundComposer } from "@/components/playground/PlaygroundComposer";
 import { PlaygroundScenarioBar } from "@/components/playground/PlaygroundScenarioBar";
 import { PlaygroundSidebarGitDiff } from "@/components/playground/PlaygroundSidebarGitDiff";
-import { PlaygroundTranscript } from "@/components/playground/PlaygroundTranscript";
+import { PlaygroundTranscript } from "@/components/playground/transcript/PlaygroundTranscript";
 import {
   resolvePlaygroundScenarioSelection,
   type ScenarioKey,
