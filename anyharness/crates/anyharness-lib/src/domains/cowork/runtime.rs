@@ -30,7 +30,9 @@ use crate::sessions::extensions::{
 };
 use crate::sessions::links::completions::LinkCompletionRecord;
 use crate::sessions::links::model::SessionLinkRelation;
-use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
+use crate::sessions::mcp_bindings::model::{
+    SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+};
 use crate::sessions::model::SessionRecord;
 use crate::sessions::prompt::{PromptPayload, PromptProvenance};
 use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, SessionRuntime};
@@ -1586,7 +1588,7 @@ mod tests {
         materialize_cowork_workspace_path, workspace_name_with_suffix,
         COWORK_WORKSPACE_PATH_PLACEHOLDER,
     };
-    use crate::sessions::mcp::{SessionMcpServer, SessionMcpStdioServer};
+    use crate::sessions::mcp_bindings::model::{SessionMcpServer, SessionMcpStdioServer};
 
     #[test]
     fn materializes_cowork_workspace_path_in_stdio_args() {

@@ -21,7 +21,9 @@ use crate::domains::cowork::mcp_server::server::handle_json_rpc;
 use crate::domains::cowork::model::CoworkRootRecord;
 use crate::domains::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
-use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
+use crate::sessions::mcp_bindings::contract::bindings_from_contract;
+use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -289,9 +291,7 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
             }
             crate::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
-                ApiError::internal(
-                    crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
-                )
+                ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
             }
             crate::sessions::runtime::CreateAndStartSessionError::StartFailed(error) => {
                 ApiError::internal(format!("ACP session start failed: {error}"))

@@ -9,7 +9,9 @@ use super::mcp_server::auth::ReviewMcpAuth;
 use crate::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
 };
-use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
+use crate::sessions::mcp_bindings::model::{
+    SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+};
 
 #[derive(Clone)]
 pub struct ReviewSessionHooks {

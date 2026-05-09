@@ -17,11 +17,13 @@ use super::execution_summary::{
 };
 use super::links::model::{SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation};
 use super::links::service::SessionLinkService;
-use super::mcp::{
-    decrypt_bindings, encrypt_bindings, serialize_binding_summaries, SessionDataCipher,
-    SessionMcpBindingsError, SessionMcpServer, SessionMcpSummaryError,
+use super::mcp_bindings::assembly::{
+    assemble_session_mcp_launch, join_system_prompt_append, SessionMcpLaunchAssemblyError,
     SESSION_RESTART_REQUIRED_DETAIL,
 };
+use super::mcp_bindings::crypto::{encrypt_bindings, SessionDataCipher, SessionMcpBindingsError};
+use super::mcp_bindings::model::SessionMcpServer;
+use super::mcp_bindings::summaries::{serialize_binding_summaries, SessionMcpSummaryError};
 use super::model::{SessionMcpBindingPolicy, SessionRecord};
 use super::replay::{
     derive_source_agent_kind, export_recording, list_recordings, load_recording, validate_speed,
@@ -42,9 +44,7 @@ use crate::domains::agents::resolver::resolve_agent;
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::{PlanDecisionError, PlanService};
 use crate::origin::OriginContext;
-use crate::sessions::extensions::{
-    SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
-};
+use crate::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
 use crate::sessions::model::PromptAttachmentState;
 use crate::sessions::prompt::{
     capabilities_from_live_config, prepare_prompt, PlanReferenceResolver, PromptPrepareContext,
@@ -1999,26 +1999,20 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
-        let mut mcp_servers = if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly
-        {
-            Vec::new()
-        } else {
-            decrypt_bindings(
-                self.session_data_cipher.as_ref(),
-                record.mcp_bindings_ciphertext.as_deref(),
-            )
-            .map_err(map_decrypt_bindings_error_to_start)?
-        };
-        let launch_extras = self
-            .resolve_extension_launch_extras(&workspace, record)
-            .map_err(StartSessionError::Internal)?;
-        let first_prompt_system_prompt_append =
-            join_system_prompt_append(Some(launch_extras.first_prompt_system_prompt_append));
-        let system_prompt_append =
-            merge_system_prompt_append(system_prompt_append, launch_extras.system_prompt_append);
-        self.persist_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries)
-            .map_err(StartSessionError::Internal)?;
-        mcp_servers.extend(launch_extras.mcp_servers);
+        let mcp_launch = assemble_session_mcp_launch(
+            self.session_data_cipher.as_ref(),
+            &self.session_extensions,
+            &workspace,
+            record,
+            system_prompt_append,
+        )
+        .map_err(map_mcp_launch_assembly_error_to_start)?;
+        if let Some(summaries_json) = mcp_launch.mcp_binding_summaries_json.clone() {
+            self.session_service
+                .store()
+                .update_mcp_binding_summaries(&record.id, Some(summaries_json))
+                .map_err(StartSessionError::Internal)?;
+        }
         let acp_start_started = Instant::now();
         let (handle, ready) = self
             .acp_manager
@@ -2030,10 +2024,10 @@ impl SessionRuntime {
                 session_launch_env,
                 session_store,
                 attachment_storage,
-                mcp_servers,
+                mcp_launch.mcp_servers,
                 startup_strategy,
-                system_prompt_append,
-                first_prompt_system_prompt_append,
+                mcp_launch.system_prompt_append,
+                mcp_launch.first_prompt_system_prompt_append,
                 Some(Arc::new({
                     let extensions = self.session_extensions.clone();
                     let workspace = workspace.clone();
@@ -2081,57 +2075,6 @@ impl SessionRuntime {
         self.acp_manager
             .emit_runtime_event(session_id, self.session_service.store().clone(), event)
             .await
-    }
-
-    fn resolve_extension_launch_extras(
-        &self,
-        workspace: &crate::workspaces::model::WorkspaceRecord,
-        record: &SessionRecord,
-    ) -> anyhow::Result<SessionLaunchExtras> {
-        let ctx = SessionLaunchContext {
-            workspace,
-            session: record,
-        };
-        let mut combined = SessionLaunchExtras::default();
-        for extension in &self.session_extensions {
-            let mut extras = extension.resolve_launch_extras(&ctx)?;
-            combined
-                .system_prompt_append
-                .append(&mut extras.system_prompt_append);
-            combined
-                .first_prompt_system_prompt_append
-                .append(&mut extras.first_prompt_system_prompt_append);
-            combined.mcp_servers.append(&mut extras.mcp_servers);
-            combined
-                .mcp_binding_summaries
-                .append(&mut extras.mcp_binding_summaries);
-        }
-        Ok(combined)
-    }
-
-    fn persist_extension_binding_summaries(
-        &self,
-        record: &SessionRecord,
-        extension_summaries: &[SessionMcpBindingSummary],
-    ) -> anyhow::Result<()> {
-        if extension_summaries.is_empty() {
-            return Ok(());
-        }
-        let mut summaries = record
-            .to_contract()
-            .mcp_binding_summaries
-            .unwrap_or_default();
-        for summary in extension_summaries {
-            if summaries.iter().all(|existing| existing.id != summary.id) {
-                summaries.push(summary.clone());
-            }
-        }
-        let summaries_json = serialize_binding_summaries(Some(summaries))
-            .map_err(|error| anyhow::anyhow!("serialize MCP binding summaries: {error}"))?;
-        self.session_service
-            .store()
-            .update_mcp_binding_summaries(&record.id, summaries_json)?;
-        Ok(())
     }
 
     fn get_session_or_not_found(
@@ -2193,41 +2136,6 @@ fn build_session_launch_env(resolved_agent: &ResolvedAgent) -> BTreeMap<String, 
         "CLAUDE_CODE_EXECUTABLE".to_string(),
         path.to_string_lossy().into_owned(),
     )])
-}
-
-fn join_system_prompt_append(system_prompt_append: Option<Vec<String>>) -> Option<String> {
-    let parts = system_prompt_append?
-        .into_iter()
-        .map(|entry| entry.trim().to_string())
-        .filter(|entry| !entry.is_empty())
-        .collect::<Vec<_>>();
-
-    if parts.is_empty() {
-        return None;
-    }
-
-    Some(parts.join("\n\n"))
-}
-
-fn merge_system_prompt_append(
-    persisted: Option<String>,
-    extra_lines: Vec<String>,
-) -> Option<String> {
-    let mut parts = Vec::new();
-    if let Some(persisted) = persisted
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-    {
-        parts.push(persisted);
-    }
-    if let Some(extra) = join_system_prompt_append(Some(extra_lines)) {
-        parts.push(extra);
-    }
-    if parts.is_empty() {
-        None
-    } else {
-        Some(parts.join("\n\n"))
-    }
 }
 
 pub(crate) fn session_link_to_summary(record: &SessionLinkRecord) -> SessionLinkSummary {
@@ -2367,13 +2275,15 @@ fn map_mcp_summary_error_to_start(error: SessionMcpSummaryError) -> StartSession
     }
 }
 
-fn map_decrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartSessionError {
+fn map_mcp_launch_assembly_error_to_start(
+    error: SessionMcpLaunchAssemblyError,
+) -> StartSessionError {
     match error {
-        SessionMcpBindingsError::MissingDataKey => StartSessionError::MissingDataKey,
-        SessionMcpBindingsError::Encrypt(error) => StartSessionError::Internal(error),
-        SessionMcpBindingsError::Decrypt(_) => {
-            StartSessionError::RestartRequired(SESSION_RESTART_REQUIRED_DETAIL.to_string())
+        SessionMcpLaunchAssemblyError::MissingDataKey => StartSessionError::MissingDataKey,
+        SessionMcpLaunchAssemblyError::RestartRequired(detail) => {
+            StartSessionError::RestartRequired(detail)
         }
+        SessionMcpLaunchAssemblyError::Internal(error) => StartSessionError::Internal(error),
     }
 }
 
