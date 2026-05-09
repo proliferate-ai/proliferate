@@ -1,10 +1,8 @@
 import {
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/measurement/latency-flow";
-import {
-  getMeasurementRequestOptions,
-  type MeasurementOperationId,
-} from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { fetchWorkspaceSessionSummaries } from "@/lib/workflows/sessions/session-runtime";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";

@@ -1,4 +1,4 @@
-import type { MeasurementMemorySnapshot } from "./debug-measurement-types";
+import type { MeasurementMemorySnapshot } from "./debug-measurement-report-types";
 
 export function envFlagEnabled(value: string | boolean | undefined, defaultValue = false): boolean {
   if (typeof value === "boolean") {

@@ -10,9 +10,11 @@ import {
   markOperationForNextCommit,
   recordMeasurementMetric,
   startMeasurementOperation,
-  type MeasurementOperationId,
-  type MeasurementSurface,
 } from "@/lib/infra/measurement/debug-measurement";
+import type {
+  MeasurementOperationId,
+  MeasurementSurface,
+} from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { uniqueMeasurementOperationIds } from "@/lib/infra/measurement/operation-ids";
 import type {
   SessionChildRelationship,

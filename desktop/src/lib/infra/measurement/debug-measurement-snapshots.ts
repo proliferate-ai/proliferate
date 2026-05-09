@@ -1,9 +1,11 @@
 import type {
   MeasurementMetricInput,
   MeasurementMetricSnapshot,
-  MeasurementOperationRecord,
+} from "./debug-measurement-metric-types";
+import type {
   MeasurementOperationSnapshot,
-} from "./debug-measurement-types";
+} from "./debug-measurement-report-types";
+import type { MeasurementOperationRecord } from "./debug-measurement-registry-types";
 import { aggregateSnapshot } from "./debug-measurement-aggregate";
 import { now, round } from "./debug-measurement-utils";
 
@@ -22,6 +24,7 @@ export function metricSnapshot(input: MeasurementMetricInput): MeasurementMetric
     case "stream":
       return {
         type: "stream",
+        category: input.category,
         phase: input.phase,
         durationMs: input.durationMs === undefined ? null : round(input.durationMs),
         eventCount: input.eventCount ?? null,

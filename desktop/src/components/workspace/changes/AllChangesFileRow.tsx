@@ -15,7 +15,7 @@ import type {
   GitPanelFile,
   GitPanelSectionScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
-import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement";
+import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import {
   serializeViewedKey,
   useWorkspaceChangeReviewStore,

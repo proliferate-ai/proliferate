@@ -28,15 +28,17 @@ import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-fl
 import {
   bindMeasurementCategories,
   finishOrCancelMeasurementOperation,
-  getMeasurementRequestOptions,
-  hashMeasurementScope,
   markOperationForNextCommit,
   recordMeasurementMetric,
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
-  type MeasurementFinishReason,
-  type MeasurementOperationId,
 } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
+import type {
+  MeasurementFinishReason,
+  MeasurementOperationId,
+} from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   clearLastViewedSession,

@@ -22,6 +22,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
@@ -91,6 +92,7 @@ export function runHotWorkspaceReopen(
     ],
     linkedLatencyFlowId: request.options?.latencyFlowId ?? undefined,
     maxDurationMs: 2500,
+    summaryBudget: HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   });
 
   const nonce = useSessionSelectionStore.getState().workspaceSelectionNonce + 1;

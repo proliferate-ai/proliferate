@@ -15,12 +15,12 @@ import {
   resolveSessionViewState,
 } from "@/lib/domain/sessions/activity";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
-import {
-  getMeasurementRequestOptions,
-  recordMeasurementWorkflowStep,
-  type MeasurementOperationId,
-  type MeasurementWorkflowStep,
-} from "@/lib/infra/measurement/debug-measurement";
+import { recordMeasurementWorkflowStep } from "@/lib/infra/measurement/debug-measurement";
+import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
+import type {
+  MeasurementOperationId,
+  MeasurementWorkflowStep,
+} from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { waitForSessionHistoryTimeout } from "@/lib/infra/abort/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
