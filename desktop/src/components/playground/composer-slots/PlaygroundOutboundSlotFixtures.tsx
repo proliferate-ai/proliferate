@@ -7,8 +7,10 @@ import {
   PENDING_PROMPTS_WITH_EDITING,
   PENDING_REVIEW_COMPLETE,
   PENDING_REVIEW_FEEDBACK_READY,
+} from "@/lib/domain/chat/__fixtures__/playground/outbound-slot-fixtures";
+import {
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/tool-transcript-fixtures";
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,

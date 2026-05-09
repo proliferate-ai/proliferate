@@ -6,6 +6,15 @@ import type {
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
+import {
+  fallbackLocatorSession,
+  planSessionDebugActionAvailability,
+  requireMaterializedSessionIdForDebug,
+  resolveActiveSessionWorkspaceId,
+  resolveRuntimeLocation,
+  resolveWorkspaceIdForInvestigation,
+  type SessionDebugActionState,
+} from "@/lib/domain/support/session-debug/action-state";
 import { buildSessionDebugExport } from "@/lib/domain/support/session-debug/export-models";
 import { suggestSessionDebugFileName } from "@/lib/domain/support/session-debug/file-name";
 import { buildSessionDebugLocator } from "@/lib/domain/support/session-debug/locator";
@@ -51,6 +60,142 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     actionCapabilities: overrides.actionCapabilities ?? { fork: false, targetedFork: false },
   };
 }
+
+function makeActionState(
+  overrides: Partial<SessionDebugActionState> = {},
+): SessionDebugActionState {
+  return {
+    runtimeUrl: "http://127.0.0.1:7007",
+    selectedWorkspaceId: "workspace-ui",
+    selectedLogicalWorkspaceId: "logical-workspace",
+    activeSessionId: "session-12345678",
+    sessionRecords: {
+      "session-12345678": {
+        sessionId: "session-12345678",
+        materializedSessionId: "materialized-session-12345678",
+        workspaceId: "workspace-slot",
+        agentKind: "codex",
+        modelId: "gpt-5.4",
+        modeId: "default",
+        title: "Debug session",
+        status: "idle",
+        actionCapabilities: { fork: false, targetedFork: false },
+      },
+    },
+    ...overrides,
+  };
+}
+
+describe("session debug action state", () => {
+  it("resolves active session workspaces from the owning record before selected workspace fallback", () => {
+    expect(resolveActiveSessionWorkspaceId(makeActionState())).toBe("workspace-slot");
+    expect(resolveActiveSessionWorkspaceId(makeActionState({
+      sessionRecords: {},
+    }))).toBe("workspace-ui");
+    expect(resolveActiveSessionWorkspaceId(makeActionState({
+      activeSessionId: null,
+    }))).toBeNull();
+  });
+
+  it("prefers the active session workspace for investigation locators", () => {
+    expect(resolveWorkspaceIdForInvestigation(makeActionState())).toBe("workspace-slot");
+    expect(resolveWorkspaceIdForInvestigation(makeActionState({
+      activeSessionId: null,
+      sessionRecords: {},
+    }))).toBe("workspace-ui");
+    expect(resolveWorkspaceIdForInvestigation(makeActionState({
+      activeSessionId: null,
+      selectedWorkspaceId: null,
+      sessionRecords: {},
+    }))).toBeNull();
+  });
+
+  it("requires a materialized runtime session id for full debug export", () => {
+    expect(requireMaterializedSessionIdForDebug(makeActionState(), "session-12345678")).toBe(
+      "materialized-session-12345678",
+    );
+    expect(() => requireMaterializedSessionIdForDebug(
+      makeActionState({
+        sessionRecords: {
+          "session-12345678": {
+            ...makeActionState().sessionRecords["session-12345678"],
+            materializedSessionId: null,
+          },
+        },
+      }),
+      "session-12345678",
+    )).toThrow("Session is still starting. Try again in a moment.");
+  });
+
+  it("builds fallback locator session fields from the session directory record", () => {
+    expect(fallbackLocatorSession(makeActionState(), "session-12345678")).toEqual({
+      id: "session-12345678",
+      owningWorkspaceId: "workspace-slot",
+      agentKind: "codex",
+      status: "idle",
+      title: "Debug session",
+      modelId: "gpt-5.4",
+      modeId: "default",
+      nativeSessionId: null,
+      actionCapabilities: { fork: false, targetedFork: false },
+      createdAt: null,
+      updatedAt: null,
+    });
+    expect(fallbackLocatorSession(makeActionState({ sessionRecords: {} }), "missing")).toEqual({
+      id: "missing",
+      owningWorkspaceId: null,
+      agentKind: null,
+      status: null,
+      title: null,
+      modelId: null,
+      modeId: null,
+      nativeSessionId: null,
+      actionCapabilities: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+  });
+
+  it("normalizes runtime URLs before classifying local versus cloud locations", () => {
+    expect(resolveRuntimeLocation(
+      " http://127.0.0.1:7007/ ",
+      "http://127.0.0.1:7007",
+    )).toBe("local");
+    expect(resolveRuntimeLocation(
+      "http://127.0.0.1:7007",
+      "https://runtime.example.test",
+    )).toBe("cloud");
+  });
+
+  it("plans support debug button availability without side effects", () => {
+    expect(planSessionDebugActionAvailability(makeActionState(), {
+      isDev: true,
+      isTauriDesktop: true,
+      replayExportAvailable: true,
+    })).toEqual({
+      activeSessionWorkspaceId: "workspace-slot",
+      canCopyInvestigationJson: true,
+      canExportActiveSessionJson: true,
+      canExportReplayRecording: true,
+      canExportWorkspaceJson: true,
+    });
+    expect(planSessionDebugActionAvailability(makeActionState({
+      activeSessionId: null,
+      selectedWorkspaceId: "workspace-ui",
+      sessionRecords: {},
+    }), {
+      isDev: true,
+      isTauriDesktop: false,
+      replayExportAvailable: true,
+    })).toEqual({
+      activeSessionWorkspaceId: null,
+      canCopyInvestigationJson: true,
+      canExportActiveSessionJson: false,
+      canExportReplayRecording: false,
+      canExportWorkspaceJson: false,
+    });
+  });
+});
 
 describe("buildSessionDebugLocator", () => {
   it("includes local runtime home, db path, API paths, and SQLite queries", () => {

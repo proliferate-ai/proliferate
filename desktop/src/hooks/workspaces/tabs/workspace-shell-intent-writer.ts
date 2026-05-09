@@ -1,4 +1,4 @@
-import { invalidateSessionActivationIntent } from "@/hooks/sessions/session-activation-guard";
+import { invalidateSessionActivationIntent } from "@/hooks/sessions/workflows/session-activation-guard";
 import {
   chatShellWorkspaceIntentKey,
   chatWorkspaceShellTabKey,

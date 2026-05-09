@@ -5,7 +5,7 @@ import type { ScenarioKey } from "@/config/playground";
 import {
   PLAYGROUND_REVIEW_COMPLETE_ASSIGNMENTS,
   PLAYGROUND_REVIEW_FEEDBACK_ASSIGNMENTS,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/review-transcript-fixtures";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
 import { TranscriptPreviewShell } from "@/components/playground/transcript/PlaygroundTranscriptShell";
 

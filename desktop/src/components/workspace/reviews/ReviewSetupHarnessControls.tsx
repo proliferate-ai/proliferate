@@ -1,7 +1,7 @@
 import type { AgentModelGroup, AgentModelOption } from "@/lib/domain/agents/model-options";
 import type { ReviewSetupDraft } from "@/lib/domain/reviews/review-config";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
-import { ProviderIcon } from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 
 type ReviewerDraft = ReviewSetupDraft["reviewers"][number];
 

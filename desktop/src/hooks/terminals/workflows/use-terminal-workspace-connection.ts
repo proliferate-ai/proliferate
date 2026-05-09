@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   resolveWorkspaceConnection,
   type AnyHarnessDesktopResolvedConnection,

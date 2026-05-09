@@ -67,7 +67,7 @@ vi.mock("@/hooks/access/cloud/query-keys", () => ({
   ],
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-runtime-block", () => ({
+vi.mock("@/hooks/workspaces/derived/use-workspace-runtime-block", () => ({
   useWorkspaceRuntimeBlock: () => ({
     selectedCloudRuntime: {
       workspaceId: null,

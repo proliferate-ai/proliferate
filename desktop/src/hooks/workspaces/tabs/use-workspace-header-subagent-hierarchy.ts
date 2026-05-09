@@ -33,6 +33,9 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import {
+  resolveHierarchyMaterializedSessionId,
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
 
 export interface HeaderSubagentParentRow {
   sessionId: string;
@@ -378,21 +381,6 @@ function buildSubagentRelationshipHintSignature(
     ].join(":"))
     .sort()
     .join("|");
-}
-
-export function resolveHierarchyMaterializedSessionId(input: {
-  sessionId: string;
-  materializedSessionId: string | null;
-}): string | null {
-  if (input.materializedSessionId) {
-    return input.materializedSessionId;
-  }
-  return isTransientClientSessionId(input.sessionId) ? null : input.sessionId;
-}
-
-function isTransientClientSessionId(sessionId: string): boolean {
-  return sessionId.startsWith("client-session:")
-    || sessionId.startsWith("pending-session:");
 }
 
 function formatSessionStatus(status: ChildSubagentSummary["status"]): string {

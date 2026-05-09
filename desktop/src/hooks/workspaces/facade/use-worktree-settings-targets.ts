@@ -14,7 +14,7 @@ import {
 } from "@/hooks/access/anyharness/worktrees/use-worktree-target-inventories";
 import { useWorktreeSettingsTargetCache } from "@/hooks/workspaces/cache/use-worktree-settings-target-cache";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   buildLocalWorktreeSettingsTarget,

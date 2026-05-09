@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/use-workspace-activation-workflow";
+import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export function useOpenCoworkCodingSession() {

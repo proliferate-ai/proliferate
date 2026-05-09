@@ -39,9 +39,9 @@ import {
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
-import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
+import { useDismissedSessionCleanup } from "@/hooks/sessions/workflows/use-dismissed-session-cleanup";
 import {
   requestSessionModelAvailabilityDecision,
   SessionModelAvailabilityBusyError,
@@ -49,7 +49,7 @@ import {
   SessionModelAvailabilityRoutedToSettingsError,
 } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { reconcilePendingConfigChanges } from "@/lib/domain/sessions/pending-config";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
+import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
   createPendingSessionId,
   pruneInactiveSessionStreams,
@@ -86,16 +86,16 @@ import {
   rememberLastViewedSession,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
+import { buildModelAvailabilityRetryOptions } from "@/lib/domain/sessions/creation/retry-options";
+import { buildLatencyRequestOptions } from "@/hooks/sessions/workflows/session-creation-request-options";
 import {
-  buildLatencyRequestOptions,
-  buildModelAvailabilityRetryOptions,
   materializeSessionRecord,
   removeSessionRecordAndClearSelection,
-  reportConnectorLaunchWarnings,
-} from "@/hooks/sessions/session-creation-helpers";
+} from "@/hooks/sessions/workflows/session-creation-local-state";
+import { reportConnectorLaunchWarnings } from "@/hooks/sessions/workflows/session-launch-warning-effects";
 import {
   inFlightSessionCreatesByWorkspace,
-} from "@/hooks/sessions/session-creation-in-flight";
+} from "@/hooks/sessions/workflows/session-creation-in-flight";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 
 interface CreateSessionWithResolvedConfigOptions {

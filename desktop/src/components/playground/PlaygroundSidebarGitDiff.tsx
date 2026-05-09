@@ -5,7 +5,7 @@ import {
   PLAYGROUND_SIDEBAR_GIT_DIFF_FILES,
   PLAYGROUND_SIDEBAR_GIT_DIFF_SECTIONS,
   type PlaygroundSidebarGitDiffFile,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 
 const SIDEBAR_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
 

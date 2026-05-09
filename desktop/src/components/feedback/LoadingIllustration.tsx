@@ -1,4 +1,4 @@
-import { ProliferateIconLoading } from "@/components/ui/icons";
+import { ProliferateIconLoading } from "@/components/ui/proliferate-icons";
 
 /**
  * Full loading state: icon + message + optional subtext.

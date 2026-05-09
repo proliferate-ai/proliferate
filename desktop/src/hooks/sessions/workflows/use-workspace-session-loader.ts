@@ -6,7 +6,7 @@ import {
   ensureRuntimeReadyForSessions,
   fetchWorkspaceSessions,
 } from "@/hooks/sessions/workflows/session-selection-runtime";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/measurement/latency-flow";
 import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
 

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";

@@ -2,9 +2,9 @@ import { SessionControlIcon } from "@/components/session-controls/SessionControl
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import {
   Brain,
-  ProviderIcon,
   Sparkles,
 } from "@/components/ui/icons";
+import { ProviderIcon } from "@/components/ui/provider-icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   listConfiguredSessionControlValues,

@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from "react";
 import {
   AnyHarnessError,
   type ContentPart,
-  type NormalizedSessionControl,
   type PlanDecisionResponse,
   type PromptInputBlock,
   type ProposedPlanDetail,
@@ -13,7 +12,6 @@ import {
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useProposedPlanCache } from "@/hooks/plans/cache/use-proposed-plan-cache";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
@@ -23,37 +21,23 @@ import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/composer/prompt-plan-attachments";
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
-import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";
+import {
+  resolvePlanImplementationReadiness,
+  resolvePlanImplementationTargetCheck,
+  type PlanImplementationHarnessState,
+} from "@/lib/domain/plans/implementation-target";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
 } from "@/lib/infra/measurement/latency-flow";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import {
-  getSessionRecord,
-  getSessionRecords,
-  patchSessionRecord,
-} from "@/stores/sessions/session-records";
+import { getSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-
-type PlanImplementationSessionRecord = {
-  workspaceId: string | null;
-  agentKind?: string | null;
-  liveConfig: {
-    normalizedControls: {
-      collaborationMode?: NormalizedSessionControl | null;
-      mode?: NormalizedSessionControl | null;
-    };
-  } | null;
-};
-
-interface PlanImplementationHarnessState {
-  activeSessionId: string | null;
-  sessionRecords: Record<string, PlanImplementationSessionRecord | undefined>;
-}
 
 interface PromptActiveSessionOptions {
   latencyFlowId?: string | null;
@@ -90,37 +74,45 @@ interface ExecutePlanImplementationInput {
   showToast: (message: string) => void;
 }
 
-// Owns proposed-plan card actions. Does not own transcript row rendering or session runtime.
+// Compatibility facade for proposed-plan card actions.
 export function useProposedPlanActions() {
+  const decisionActions = useProposedPlanDecisionActions();
+  const implementationActions = usePlanImplementationActions();
+  const reviewActions = useReviewActions();
+
+  return {
+    approvePlan: decisionActions.approvePlan,
+    rejectPlan: decisionActions.rejectPlan,
+    implementPlanHere: implementationActions.implementPlanHere,
+    reviewPlan: reviewActions.startPlanReview,
+    configurePlanReview: reviewActions.configurePlanReview,
+    isApprovingPlan: decisionActions.isApprovingPlan,
+    isRejectingPlan: decisionActions.isRejectingPlan,
+    isImplementingPlan: implementationActions.isImplementingPlan,
+    isStartingReview: reviewActions.isStartingReview,
+  };
+}
+
+// Owns approve/reject actions and decision-conflict refresh behavior.
+function useProposedPlanDecisionActions() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
-  const setWorkspaceArrivalEvent = useSessionSelectionStore(
-    (state) => state.setWorkspaceArrivalEvent,
-  );
-  const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
   const showToast = useToastStore((state) => state.show);
-  const [isImplementingPlan, setIsImplementingPlan] = useState(false);
-  const isImplementingPlanRef = useRef(false);
-  const availability = useChatAvailabilityState();
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
   const fetchPlanMutation = useFetchPlanMutation({ workspaceId: selectedWorkspaceId });
-  const reviewActions = useReviewActions();
-  const { setActiveSessionConfigOption } = useSessionConfigActions();
-  const { promptActiveSession } = useSessionPromptActions();
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
   const {
-    patchPlanDecisionQueries,
+    applyPlanDecisionToCache,
   } = useProposedPlanCache({
     runtimeUrl,
     selectedWorkspaceId,
   });
 
   const applyPlanDecision = useCallback((plan: ProposedPlanDetail) => {
-    patchPlanDecisionQueries(plan);
-    patchCachedPlanTranscripts(plan);
-  }, [patchPlanDecisionQueries]);
+    applyPlanDecisionToCache(plan);
+  }, [applyPlanDecisionToCache]);
 
   const refreshAndApplyPlanDecision = useCallback(async (planId: string) => {
     const plan = await fetchPlanMutation.mutateAsync({
@@ -172,6 +164,27 @@ export function useProposedPlanActions() {
     showToast,
   ]);
 
+  return {
+    approvePlan,
+    rejectPlan,
+    isApprovingPlan: approveMutation.isPending,
+    isRejectingPlan: rejectMutation.isPending,
+  };
+}
+
+// Owns implement-here submission wiring. Does not own session runtime internals.
+function usePlanImplementationActions() {
+  const setWorkspaceArrivalEvent = useSessionSelectionStore(
+    (state) => state.setWorkspaceArrivalEvent,
+  );
+  const { getCachedWorkspaceSetupStatus } = useWorkspaceSetupStatusCache();
+  const showToast = useToastStore((state) => state.show);
+  const [isImplementingPlan, setIsImplementingPlan] = useState(false);
+  const isImplementingPlanRef = useRef(false);
+  const availability = useChatAvailabilityState();
+  const { setActiveSessionConfigOption } = useSessionConfigActions();
+  const { promptActiveSession } = useSessionPromptActions();
+
   const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
     if (!claimPlanImplementationRun(isImplementingPlanRef)) {
       return;
@@ -196,7 +209,7 @@ export function useProposedPlanActions() {
             agentKind,
             reuseSession,
             setWorkspaceArrivalEvent,
-          }),
+          }, { trackProductEvent }),
         showToast,
       });
     })().finally(() => {
@@ -214,15 +227,8 @@ export function useProposedPlanActions() {
   ]);
 
   return {
-    approvePlan,
-    rejectPlan,
     implementPlanHere,
-    reviewPlan: reviewActions.startPlanReview,
-    configurePlanReview: reviewActions.configurePlanReview,
-    isApprovingPlan: approveMutation.isPending,
-    isRejectingPlan: rejectMutation.isPending,
     isImplementingPlan,
-    isStartingReview: reviewActions.isStartingReview,
   };
 }
 
@@ -275,25 +281,6 @@ async function runPlanDecisionMutation({
   }
 }
 
-function patchCachedPlanTranscripts(plan: ProposedPlanDetail): void {
-  const candidateSessionIds = new Set([plan.sessionId, plan.sourceSessionId]);
-  candidateSessionIds.forEach((sessionId) => {
-    const slot = getSessionRecord(sessionId);
-    if (!slot) {
-      return;
-    }
-
-    const transcript = patchProposedPlanDecisionInTranscript(slot.transcript, plan);
-    if (transcript === slot.transcript) {
-      return;
-    }
-
-    patchSessionRecord(sessionId, {
-      transcript,
-    });
-  });
-}
-
 function getPlanImplementationHarnessState(): PlanImplementationHarnessState {
   return {
     activeSessionId: useSessionSelectionStore.getState().activeSessionId,
@@ -314,22 +301,14 @@ export async function executePlanImplementation({
   showToast,
 }: ExecutePlanImplementationInput): Promise<void> {
   const harnessState = getHarnessState();
-  const planSessionSlot = harnessState.sessionRecords[plan.sourceSessionId] ?? null;
-  if (!planSessionSlot) {
-    showToast("Plan session is not available.");
-    return;
-  }
-  if (harnessState.activeSessionId !== plan.sourceSessionId) {
-    showToast("Select the plan's session before carrying it out.");
-    return;
-  }
-  const workspaceId = planSessionSlot.workspaceId;
-  if (!workspaceId) {
-    showToast("Select a workspace before implementing a plan.");
-    return;
-  }
-  if (isChatDisabled) {
-    showToast(chatDisabledReason ?? "Chat is unavailable.");
+  const readiness = resolvePlanImplementationReadiness({
+    plan,
+    harnessState,
+    isChatDisabled,
+    chatDisabledReason,
+  });
+  if (readiness.status === "blocked") {
+    showToast(readiness.message);
     return;
   }
 
@@ -339,14 +318,14 @@ export async function executePlanImplementation({
     flowKind: "prompt_submit",
     source: "plan_card_implement_here",
     targetSessionId: plan.sourceSessionId,
-    targetWorkspaceId: workspaceId,
+    targetWorkspaceId: readiness.workspaceId,
     promptId,
   });
 
   const modeSwitch = resolvePlanImplementationModeSwitch({
     collaborationMode:
-      planSessionSlot.liveConfig?.normalizedControls.collaborationMode ?? null,
-    mode: planSessionSlot.liveConfig?.normalizedControls.mode ?? null,
+      readiness.session.liveConfig?.normalizedControls.collaborationMode ?? null,
+    mode: readiness.session.liveConfig?.normalizedControls.mode ?? null,
   });
   if (modeSwitch) {
     try {
@@ -361,14 +340,14 @@ export async function executePlanImplementation({
   }
 
   const latestHarnessState = getHarnessState();
-  const latestPlanSessionSlot =
-    latestHarnessState.sessionRecords[plan.sourceSessionId] ?? null;
-  if (
-    latestHarnessState.activeSessionId !== plan.sourceSessionId
-    || latestPlanSessionSlot?.workspaceId !== workspaceId
-  ) {
+  const targetCheck = resolvePlanImplementationTargetCheck({
+    plan,
+    harnessState: latestHarnessState,
+    expectedWorkspaceId: readiness.workspaceId,
+  });
+  if (targetCheck.status === "blocked") {
     failLatencyFlow(latencyFlowId, "plan_implementation_target_changed");
-    showToast("Select the plan's session before carrying it out.");
+    showToast(targetCheck.message);
     return;
   }
 
@@ -380,8 +359,8 @@ export async function executePlanImplementation({
       latencyFlowId,
     });
     onPromptSubmitted({
-      workspaceId,
-      agentKind: planSessionSlot.agentKind ?? "unknown",
+      workspaceId: readiness.workspaceId,
+      agentKind: readiness.agentKind,
       reuseSession: true,
     });
   } catch (error) {

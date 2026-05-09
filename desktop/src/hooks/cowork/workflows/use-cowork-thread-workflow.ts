@@ -48,7 +48,7 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
+import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 

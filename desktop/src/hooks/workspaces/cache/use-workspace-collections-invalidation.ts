@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 
 // Owns invalidation for the product-composed workspace collection cache.
 export function useWorkspaceCollectionsInvalidation(runtimeUrl: string) {

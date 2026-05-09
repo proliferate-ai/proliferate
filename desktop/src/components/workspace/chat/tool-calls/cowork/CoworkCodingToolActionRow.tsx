@@ -7,8 +7,8 @@ import {
   ExternalLink,
   FolderPlus,
   GitBranch,
-  ProliferateIcon,
 } from "@/components/ui/icons";
+import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";

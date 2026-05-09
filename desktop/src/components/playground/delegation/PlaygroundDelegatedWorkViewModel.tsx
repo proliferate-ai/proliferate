@@ -4,7 +4,7 @@ import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   type PlaygroundReviewComposerRow,
   type PlaygroundReviewComposerState,
-} from "@/lib/domain/chat/__fixtures__/playground";
+} from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
 import { noop } from "@/components/playground/PlaygroundComposerActions";
 import {
   PLAYGROUND_COWORK_ROWS,
