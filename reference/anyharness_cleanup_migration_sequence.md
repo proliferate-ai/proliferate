@@ -11,6 +11,10 @@ Authoritative docs:
 - `docs/anyharness/specs/session-engine.md`
 - `docs/anyharness/specs/mcp.md`
 
+Deferred and closeout inventory:
+
+- `reference/anyharness_deferred_cleanup.md`
+
 This plan is behavior-preserving unless a phase explicitly says otherwise.
 Completed phases document landed ownership and shape; remaining phases document
 planned or manual cleanup only.
@@ -31,6 +35,12 @@ planned or manual cleanup only.
 | 9 | Remaining | Final topology/naming moves remain: live session manager/client/broker naming, `sessions/**` to `domains/sessions/**`, `workspaces/**` to `domains/workspaces/**`, terminal live topology, and related import cleanup. |
 | 10 | Remaining | Further ratchet tightening, allowlist shrinkage, and additional tests remain after the implementation phases settle. |
 | 10a | Complete | Docs describe completed Phases 1-7, old-path ratchets block retired split files, focused invariant tests landed, and boundary rails run in CI. Phase 8 actor work and Phase 9 final topology stay deferred/manual. |
+
+Non-deferred closeout is intentionally narrow: burn down the remaining
+AnyHarness boundary allowlist rows, keep repo-shape checks green from a clean
+worktree, and update docs when reality changes. Large file-size burndown and
+Phase 8/9 architecture work are tracked separately in
+`reference/anyharness_deferred_cleanup.md`.
 
 ## North Star
 
@@ -319,6 +329,9 @@ Acceptance:
 - New target-shape code is CI-enforced.
 - Remaining exceptions are documented with owner and reason.
 
+Use `reference/anyharness_deferred_cleanup.md` to distinguish closeout work
+from explicitly deferred actor, topology, schema, and product-behavior work.
+
 ## Phase 10a: Docs Reality Lane
 
 Status: complete.
@@ -356,6 +369,9 @@ Do not mix these into broad structural migration PRs:
 - Review/cowork product workflow behavior changes.
 - Large `AppState` dependency graph redesign.
 - Renaming core live/session types before code ownership is split.
+
+The detailed deferred inventory, including current boundary rows and file-size
+debt categories, lives in `reference/anyharness_deferred_cleanup.md`.
 
 ## Handoff Template
 
