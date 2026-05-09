@@ -7,10 +7,8 @@ import re
 import shlex
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
 from uuid import UUID
 
-from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, CloudRuntimeEnvironmentStatus
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.store.cloud_credentials import CloudCredentialRecord
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
@@ -43,6 +41,15 @@ from proliferate.server.cloud.runtime.credentials import (
     normalize_provision_credentials,
     write_credential_files,
 )
+from proliferate.server.cloud.runtime.domain.credential_revision import (
+    CredentialFreshnessStatus,
+    CredentialRevisionPlan,
+    build_credential_revision_plan,
+    classify_credential_freshness,
+    credential_apply_is_already_current,
+    decide_process_credential_restart,
+    filter_active_supported_credentials,
+)
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     build_detached_runtime_launch_command,
@@ -55,16 +62,6 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
 from proliferate.utils.crypto import decrypt_json, decrypt_text
 from proliferate.utils.time import utcnow
 
-CredentialFreshnessStatus = Literal[
-    "current",
-    "stale",
-    "restart_required",
-    "apply_failed",
-    "missing_credentials",
-]
-
-_EMPTY_FILES_REVISION = "credential-files:v1:empty"
-_EMPTY_PROCESS_REVISION = "credential-process:v1:empty"
 _RUNNING_SANDBOX_STATES = frozenset({"running", "started"})
 
 logger = logging.getLogger("proliferate.cloud")
@@ -76,6 +73,14 @@ class CredentialRevisionState:
     process_revision: str
     credentials: ProvisionCredentials
     missing_credentials: bool
+
+    @property
+    def plan(self) -> CredentialRevisionPlan:
+        return CredentialRevisionPlan(
+            files_revision=self.files_revision,
+            process_revision=self.process_revision,
+            missing_credentials=self.missing_credentials,
+        )
 
 
 @dataclass(frozen=True)
@@ -93,36 +98,22 @@ class CredentialFreshnessSnapshot:
 def _active_supported_credentials(
     records: list[CloudCredentialRecord],
 ) -> list[CloudCredentialRecord]:
-    return [
-        record
-        for record in records
-        if record.provider in SUPPORTED_CLOUD_AGENTS and record.revoked_at is None
-    ]
-
-
-def _revision_for(records: list[CloudCredentialRecord], auth_mode: str, prefix: str) -> str:
-    parts = sorted(
-        f"{record.provider}:{record.auth_mode}:{record.payload_format}:{record.id}"
-        for record in records
-        if record.auth_mode == auth_mode
-    )
-    if not parts:
-        return _EMPTY_FILES_REVISION if auth_mode == "file" else _EMPTY_PROCESS_REVISION
-    return f"{prefix}:v1:{','.join(parts)}"
+    return filter_active_supported_credentials(records)
 
 
 def build_credential_revision_state(
     records: list[CloudCredentialRecord],
 ) -> CredentialRevisionState:
     active_records = _active_supported_credentials(records)
+    revision_plan = build_credential_revision_plan(active_records)
     credential_payloads = {
         record.provider: decrypt_json(record.payload_ciphertext) for record in active_records
     }
     return CredentialRevisionState(
-        files_revision=_revision_for(active_records, "file", "credential-files"),
-        process_revision=_revision_for(active_records, "env", "credential-process"),
+        files_revision=revision_plan.files_revision,
+        process_revision=revision_plan.process_revision,
         credentials=normalize_provision_credentials(credential_payloads),
-        missing_credentials=not active_records,
+        missing_credentials=revision_plan.missing_credentials,
     )
 
 
@@ -140,56 +131,26 @@ def build_credential_freshness_snapshot(
     environment: CloudRuntimeEnvironment,
     revisions: CredentialRevisionState,
 ) -> CredentialFreshnessSnapshot:
-    assume_legacy_current = not revisions.missing_credentials
-    files_current = _revision_is_current(
-        environment,
-        applied_revision=environment.credential_files_applied_revision,
-        desired_revision=revisions.files_revision,
-        assume_legacy_current=assume_legacy_current,
+    decision = classify_credential_freshness(
+        runtime_status=environment.status,
+        active_sandbox_id=environment.active_sandbox_id,
+        files_applied_revision=environment.credential_files_applied_revision,
+        process_applied_revision=environment.credential_process_applied_revision,
+        credential_last_error=environment.credential_last_error,
+        credential_last_error_at=environment.credential_last_error_at,
+        credential_files_applied_at=environment.credential_files_applied_at,
+        credential_process_applied_at=environment.credential_process_applied_at,
+        revisions=revisions.plan,
     )
-    process_current = _revision_is_current(
-        environment,
-        applied_revision=environment.credential_process_applied_revision,
-        desired_revision=revisions.process_revision,
-        assume_legacy_current=assume_legacy_current,
-    )
-    requires_restart = not process_current
-    if files_current and process_current:
-        status: CredentialFreshnessStatus = (
-            "missing_credentials" if revisions.missing_credentials else "current"
-        )
-    elif environment.credential_last_error:
-        status = "apply_failed"
-    elif requires_restart:
-        status = "restart_required"
-    else:
-        status = "stale"
     return CredentialFreshnessSnapshot(
-        status=status,
-        files_current=files_current,
-        process_current=process_current,
-        requires_restart=requires_restart,
-        last_error=environment.credential_last_error,
-        last_error_at=environment.credential_last_error_at,
-        files_applied_at=environment.credential_files_applied_at,
-        process_applied_at=environment.credential_process_applied_at,
-    )
-
-
-def _revision_is_current(
-    environment: CloudRuntimeEnvironment,
-    *,
-    applied_revision: str | None,
-    desired_revision: str,
-    assume_legacy_current: bool,
-) -> bool:
-    if applied_revision == desired_revision:
-        return True
-    return (
-        applied_revision is None
-        and assume_legacy_current
-        and environment.status == CloudRuntimeEnvironmentStatus.running.value
-        and environment.active_sandbox_id is not None
+        status=decision.status,
+        files_current=decision.files_current,
+        process_current=decision.process_current,
+        requires_restart=decision.requires_restart,
+        last_error=decision.last_error,
+        last_error_at=decision.last_error_at,
+        files_applied_at=decision.files_applied_at,
+        process_applied_at=decision.process_applied_at,
     )
 
 
@@ -462,9 +423,7 @@ async def ensure_runtime_environment_credentials_current(
         records = await load_cloud_credentials_for_user(environment.user_id)
         revisions = build_credential_revision_state(records)
         snapshot = build_credential_freshness_snapshot(environment, revisions)
-        if snapshot.status == "current" or (
-            revisions.missing_credentials and snapshot.files_current and snapshot.process_current
-        ):
+        if credential_apply_is_already_current(snapshot, revisions.plan):
             return snapshot
 
         try:
@@ -504,7 +463,12 @@ async def ensure_runtime_environment_credentials_current(
                     )
                 return snapshot
 
-            if not allow_process_restart:
+            restart_decision = decide_process_credential_restart(
+                requires_restart=snapshot.requires_restart,
+                allow_process_restart=allow_process_restart,
+                runtime_has_live_sessions=False,
+            )
+            if not restart_decision.allowed:
                 return snapshot
 
             (
@@ -515,11 +479,17 @@ async def ensure_runtime_environment_credentials_current(
             runtime_url = environment.runtime_url
             if not runtime_url:
                 raise CloudRuntimeReconnectError("Cloud runtime URL is not available.")
-            if await _runtime_has_live_sessions(
+            has_live_sessions = await _runtime_has_live_sessions(
                 runtime_url,
                 access_token,
                 workspace_id=workspace_id,
-            ):
+            )
+            restart_decision = decide_process_credential_restart(
+                requires_restart=snapshot.requires_restart,
+                allow_process_restart=allow_process_restart,
+                runtime_has_live_sessions=has_live_sessions,
+            )
+            if not restart_decision.allowed:
                 return snapshot
 
             await _relaunch_runtime_with_credentials(

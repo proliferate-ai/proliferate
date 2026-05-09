@@ -14,10 +14,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
 )
-from proliferate.constants.cloud import (
-    CloudRuntimeEnvironmentStatus,
-    CloudWorkspaceStatus,
-)
+from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.constants.cloud import (
     WorkspaceStatus as LegacyWorkspaceStatus,
 )
@@ -76,6 +73,14 @@ from proliferate.server.cloud.runtime.credentials import (
     write_credential_files,
 )
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.domain.reconnect_policy import (
+    SandboxReconnectAction,
+    reconnect_action_for_sandbox_state,
+)
+from proliferate.server.cloud.runtime.domain.runtime_state import (
+    runtime_connected_sandbox_update,
+    runtime_ready_update,
+)
 from proliferate.server.cloud.runtime.git_operations import (
     checkout_cloud_branch,
     clone_repository,
@@ -366,13 +371,14 @@ async def _connect_existing_environment_sandbox(
             tracker.complete(reused_sandbox=False, reason="provider_state_missing")
             return None
 
-        state = provider_state.state.strip().lower()
-        if state in {"running", "started"}:
+        observed_state = provider_state.state.strip().lower()
+        reconnect_action = reconnect_action_for_sandbox_state(observed_state)
+        if reconnect_action == SandboxReconnectAction.connect:
             sandbox = await provider.connect_running_sandbox(sandbox_record.external_sandbox_id)
-        elif state in {"paused", "stopped"}:
+        elif reconnect_action == SandboxReconnectAction.resume:
             sandbox = await provider.resume_sandbox(sandbox_record.external_sandbox_id)
         else:
-            tracker.complete(reused_sandbox=False, provider_state=state)
+            tracker.complete(reused_sandbox=False, provider_state=observed_state)
             return None
 
         runtime_context = await provider.resolve_runtime_context(sandbox)
@@ -397,10 +403,10 @@ async def _connect_existing_environment_sandbox(
     )
     await save_runtime_environment_state(
         ctx.runtime_environment_id,
-        status=CloudRuntimeEnvironmentStatus.running.value,
-        runtime_url=endpoint.runtime_url,
-        active_sandbox_id=sandbox_record.id,
-        last_error=None,
+        **runtime_connected_sandbox_update(
+            runtime_url=endpoint.runtime_url,
+            active_sandbox_id=sandbox_record.id,
+        ),
     )
     tracker.complete(runtime_url=endpoint.runtime_url, reused_sandbox=True)
 
@@ -970,16 +976,14 @@ async def provision_workspace(
             anyharness_workspace_id=handshake.anyharness_workspace_id,
             template_version=connected.handle.template_version,
         )
-        runtime_state_updates: dict[str, object] = {
-            "status": CloudRuntimeEnvironmentStatus.running.value,
-            "runtime_url": connected.endpoint.runtime_url,
-            "runtime_token_ciphertext": encrypt_text(handshake.runtime_token),
-            "root_anyharness_workspace_id": handshake.root_anyharness_workspace_id,
-            "root_anyharness_repo_root_id": handshake.anyharness_repo_root_id,
-            "increment_runtime_generation": launched_runtime_this_attempt,
-            "repo_env_applied_version": ctx.repo_env_version,
-            "last_error": None,
-        }
+        runtime_state_updates = runtime_ready_update(
+            runtime_url=connected.endpoint.runtime_url,
+            runtime_token_ciphertext=encrypt_text(handshake.runtime_token),
+            root_anyharness_workspace_id=handshake.root_anyharness_workspace_id,
+            root_anyharness_repo_root_id=handshake.anyharness_repo_root_id,
+            launched_runtime=launched_runtime_this_attempt,
+            repo_env_applied_version=ctx.repo_env_version,
+        )
         if launched_runtime_this_attempt:
             runtime_state_updates.update(
                 {

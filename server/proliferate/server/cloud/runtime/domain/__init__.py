@@ -1,0 +1,1 @@
+"""Pure runtime lifecycle decisions."""

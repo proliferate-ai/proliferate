@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from uuid import UUID
 
 from proliferate.constants.billing import (
@@ -8,7 +7,6 @@ from proliferate.constants.billing import (
     PROVIDER_EVENT_KIND_CREATED,
     PROVIDER_EVENT_KIND_KILLED,
     PROVIDER_EVENT_KIND_PAUSED,
-    PROVIDER_EVENT_KIND_PRECEDENCE,
     PROVIDER_EVENT_KIND_RESUMED,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED,
@@ -16,7 +14,6 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
-from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
@@ -39,6 +36,17 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.runtime.domain.provider_events import (
+    is_stale_provider_event as _is_stale_provider_event,
+)
+from proliferate.server.cloud.runtime.domain.provider_events import (
+    provider_event_kind as _provider_event_kind,
+)
+from proliferate.server.cloud.runtime.domain.runtime_state import (
+    runtime_provider_destroyed_update,
+    runtime_provider_paused_update,
+    runtime_provider_running_update,
+)
 from proliferate.server.cloud.webhooks.models import E2BWebhookEvent, E2BWebhookReceipt
 
 _E2B_WEBHOOK_ERROR_RESPONSE = {
@@ -58,31 +66,6 @@ def _verify_e2b_signature(raw_body: bytes, signature: str | None) -> None:
             exc.message,
             status_code=status_code,
         ) from exc
-
-
-def _provider_event_kind(event_type: str) -> str | None:
-    suffix = event_type.removeprefix("sandbox.lifecycle.")
-    if suffix in PROVIDER_EVENT_KIND_PRECEDENCE:
-        return suffix
-    return None
-
-
-def _is_stale_provider_event(
-    *,
-    last_event_at: datetime | None,
-    last_event_kind: str | None,
-    incoming_event_at: datetime,
-    incoming_event_kind: str,
-) -> bool:
-    if last_event_at is None:
-        return False
-    if incoming_event_at < last_event_at:
-        return True
-    if incoming_event_at > last_event_at:
-        return False
-    return PROVIDER_EVENT_KIND_PRECEDENCE.get(
-        incoming_event_kind, 0
-    ) <= PROVIDER_EVENT_KIND_PRECEDENCE.get(last_event_kind or "", 0)
 
 
 def _metadata_sandbox_id(metadata: dict[str, str]) -> UUID | None:
@@ -180,7 +163,7 @@ async def handle_e2b_webhook(
             if runtime_environment is not None:
                 await save_runtime_environment_state(
                     runtime_environment.id,
-                    status=CloudRuntimeEnvironmentStatus.paused.value,
+                    **runtime_provider_paused_update(),
                 )
             return E2BWebhookReceipt()
 
@@ -216,7 +199,7 @@ async def handle_e2b_webhook(
         if runtime_environment is not None:
             await save_runtime_environment_state(
                 runtime_environment.id,
-                status=CloudRuntimeEnvironmentStatus.running.value,
+                **runtime_provider_running_update(),
             )
         return E2BWebhookReceipt()
 
@@ -237,7 +220,7 @@ async def handle_e2b_webhook(
         if runtime_environment is not None:
             await save_runtime_environment_state(
                 runtime_environment.id,
-                status=CloudRuntimeEnvironmentStatus.paused.value,
+                **runtime_provider_paused_update(),
             )
         return E2BWebhookReceipt()
 
@@ -258,12 +241,7 @@ async def handle_e2b_webhook(
         if runtime_environment is not None:
             await save_runtime_environment_state(
                 runtime_environment.id,
-                status=CloudRuntimeEnvironmentStatus.error.value,
-                runtime_url=None,
-                runtime_token_ciphertext=None,
-                active_sandbox_id=None,
-                increment_runtime_generation=True,
-                last_error="Provider reported sandbox killed.",
+                **runtime_provider_destroyed_update(),
             )
         return E2BWebhookReceipt()
 
