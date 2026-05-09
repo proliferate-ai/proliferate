@@ -550,8 +550,7 @@ async def create_due_scheduled_runs_batch(
                 record.last_scheduled_at = advance.scheduled_for
             else:
                 logger.debug(
-                    "automation scheduled slot already existed "
-                    "automation_id=%s scheduled_for=%s",
+                    "automation scheduled slot already existed automation_id=%s scheduled_for=%s",
                     record.id,
                     advance.scheduled_for,
                 )
