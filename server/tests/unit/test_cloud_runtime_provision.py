@@ -59,7 +59,7 @@ def _make_workspace(user_id: uuid.UUID) -> CloudWorkspace:
 @pytest.fixture
 def _patched_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine) -> None:
     factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    monkeypatch.setattr(cloud_credential_session_loader, "async_session_factory", factory)
+    monkeypatch.setattr(cloud_credential_session_loader.db_engine, "async_session_factory", factory)
     monkeypatch.setattr(cloud_workspaces.db_engine, "async_session_factory", factory)
     monkeypatch.setattr(users.db_engine, "async_session_factory", factory)
 
