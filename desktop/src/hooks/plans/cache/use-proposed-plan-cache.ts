@@ -8,13 +8,18 @@ import {
   anyHarnessPlanKey,
   anyHarnessPlansKey,
 } from "@anyharness/sdk-react";
+import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";
+import {
+  getSessionRecord,
+  patchSessionRecord,
+} from "@/stores/sessions/session-records";
 
 interface ProposedPlanCacheOptions {
   runtimeUrl: string;
   selectedWorkspaceId: string | null;
 }
 
-// Owns query-cache writes needed by proposed-plan card actions.
+// Owns cache writes needed by proposed-plan card actions, including transcript projections.
 export function useProposedPlanCache({
   runtimeUrl,
   selectedWorkspaceId,
@@ -34,7 +39,31 @@ export function useProposedPlanCache({
     );
   }, [queryClient, runtimeUrl, selectedWorkspaceId]);
 
+  const applyPlanDecisionToCache = useCallback((plan: ProposedPlanDetail) => {
+    patchPlanDecisionQueries(plan);
+    patchCachedPlanTranscripts(plan);
+  }, [patchPlanDecisionQueries]);
+
   return {
-    patchPlanDecisionQueries,
+    applyPlanDecisionToCache,
   };
+}
+
+function patchCachedPlanTranscripts(plan: ProposedPlanDetail): void {
+  const candidateSessionIds = new Set([plan.sessionId, plan.sourceSessionId]);
+  candidateSessionIds.forEach((sessionId) => {
+    const slot = getSessionRecord(sessionId);
+    if (!slot) {
+      return;
+    }
+
+    const transcript = patchProposedPlanDecisionInTranscript(slot.transcript, plan);
+    if (transcript === slot.transcript) {
+      return;
+    }
+
+    patchSessionRecord(sessionId, {
+      transcript,
+    });
+  });
 }
