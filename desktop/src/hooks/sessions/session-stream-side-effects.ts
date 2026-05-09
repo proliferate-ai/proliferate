@@ -19,7 +19,7 @@ import {
 import type {
   SessionChildRelationship,
   SessionRelationship,
-} from "@/stores/sessions/session-types";
+} from "@/lib/domain/sessions/directory/relationship";
 import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,
