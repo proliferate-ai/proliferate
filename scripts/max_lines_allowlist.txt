@@ -41,7 +41,6 @@ desktop/src/components/ui/content/DiffViewer.tsx
 desktop/src/components/workspace/browser/WorkspaceBrowserPanel.tsx
 desktop/src/components/workspace/changes/AllChangesFrame.tsx
 desktop/src/components/workspace/chat/tool-calls/CollapsedActionRows.tsx
-desktop/src/hooks/sessions/use-session-control-actions.ts
 desktop/src/hooks/sessions/use-session-creation-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
