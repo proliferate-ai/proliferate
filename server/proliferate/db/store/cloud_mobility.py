@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,6 +15,15 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.mobility import CloudWorkspaceHandoffOp, CloudWorkspaceMobility
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
+
+
+class RetryableMobilityFailurePredicate(Protocol):
+    def __call__(
+        self,
+        *,
+        lifecycle_state: str,
+        has_active_handoff: bool,
+    ) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -138,11 +148,11 @@ def _clear_retryable_handoff_failure(
     *,
     owner_hint: str,
     active_lifecycle_state: str,
-    retryable_lifecycle_state: str,
+    is_retryable_failure: RetryableMobilityFailurePredicate,
 ) -> bool:
-    if (
-        record.lifecycle_state != retryable_lifecycle_state
-        or record.active_handoff_op_id is not None
+    if not is_retryable_failure(
+        lifecycle_state=record.lifecycle_state,
+        has_active_handoff=record.active_handoff_op_id is not None,
     ):
         return False
 
@@ -310,7 +320,7 @@ async def ensure_cloud_workspace_mobility(
     git_branch: str,
     owner_hint: str,
     active_lifecycle_state: str,
-    retryable_lifecycle_state: str,
+    is_retryable_failure: RetryableMobilityFailurePredicate,
     display_name: str | None,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceMobilityValue:
@@ -352,7 +362,7 @@ async def ensure_cloud_workspace_mobility(
         record,
         owner_hint=owner_hint,
         active_lifecycle_state=active_lifecycle_state,
-        retryable_lifecycle_state=retryable_lifecycle_state,
+        is_retryable_failure=is_retryable_failure,
     )
     if display_name is not None and display_name != record.display_name:
         record.display_name = display_name
@@ -380,7 +390,7 @@ async def backfill_cloud_workspace_mobility_from_workspace(
     *,
     workspace: CloudWorkspace,
     active_lifecycle_state: str,
-    retryable_lifecycle_state: str,
+    is_retryable_failure: RetryableMobilityFailurePredicate,
 ) -> CloudWorkspaceMobilityValue:
     return await ensure_cloud_workspace_mobility(
         db,
@@ -391,7 +401,7 @@ async def backfill_cloud_workspace_mobility_from_workspace(
         git_branch=workspace.git_branch,
         owner_hint="cloud",
         active_lifecycle_state=active_lifecycle_state,
-        retryable_lifecycle_state=retryable_lifecycle_state,
+        is_retryable_failure=is_retryable_failure,
         display_name=workspace.display_name,
         cloud_workspace_id=workspace.id,
     )
@@ -598,7 +608,7 @@ async def ensure_cloud_workspace_mobility_for_user(
     git_branch: str,
     owner_hint: str,
     active_lifecycle_state: str,
-    retryable_lifecycle_state: str,
+    is_retryable_failure: RetryableMobilityFailurePredicate,
     display_name: str | None,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceMobilityValue:
@@ -612,7 +622,7 @@ async def ensure_cloud_workspace_mobility_for_user(
             git_branch=git_branch,
             owner_hint=owner_hint,
             active_lifecycle_state=active_lifecycle_state,
-            retryable_lifecycle_state=retryable_lifecycle_state,
+            is_retryable_failure=is_retryable_failure,
             display_name=display_name,
             cloud_workspace_id=cloud_workspace_id,
         )
@@ -622,14 +632,14 @@ async def backfill_cloud_workspace_mobility_for_workspace(
     *,
     workspace: CloudWorkspace,
     active_lifecycle_state: str,
-    retryable_lifecycle_state: str,
+    is_retryable_failure: RetryableMobilityFailurePredicate,
 ) -> CloudWorkspaceMobilityValue:
     async with db_engine.async_session_factory() as db:
         return await backfill_cloud_workspace_mobility_from_workspace(
             db,
             workspace=workspace,
             active_lifecycle_state=active_lifecycle_state,
-            retryable_lifecycle_state=retryable_lifecycle_state,
+            is_retryable_failure=is_retryable_failure,
         )
 
 

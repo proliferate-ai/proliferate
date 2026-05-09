@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -11,8 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.cloud import (
     SETUP_RUN_ACTIVE_STATUSES,
     SETUP_RUN_STATUS_RUNNING,
-    bounded_setup_monitor_error,
-    classify_setup_run_finalization,
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.workspaces import CloudWorkspace, CloudWorkspaceSetupRun
@@ -20,6 +20,43 @@ from proliferate.utils.time import utcnow
 
 SETUP_MONITOR_CLAIM_TTL = timedelta(seconds=45)
 SETUP_MONITOR_POLL_INTERVAL = timedelta(seconds=5)
+SetupMonitorErrorBounder = Callable[[str | None], str | None]
+
+
+class _SetupRunFinalizationPhase(Protocol):
+    value: str
+
+
+class _SetupRunWorkspaceFinalization(Protocol):
+    phase: _SetupRunFinalizationPhase
+    status_detail: str
+    repo_setup_applied_version: int | None
+    repo_files_last_error: str | None
+
+
+class _SetupRunFinalizationDecision(Protocol):
+    run_status: str
+    run_last_error: str | None
+    should_update_workspace: bool
+    set_last_polled_at: bool
+    clear_next_poll_at: bool
+    workspace_update: _SetupRunWorkspaceFinalization | None
+
+
+class SetupRunFinalizationClassifier(Protocol):
+    def __call__(
+        self,
+        *,
+        workspace_exists: bool,
+        workspace_apply_token: str | None,
+        workspace_phase: str | None,
+        run_apply_token: str,
+        command_run_id: str | None,
+        final_status: str,
+        success: bool,
+        last_error: str | None,
+        setup_script_version: int,
+    ) -> _SetupRunFinalizationDecision: ...
 
 
 async def create_cloud_workspace_setup_run(
@@ -109,6 +146,7 @@ async def claim_due_setup_runs(
 async def release_setup_run_claim(
     setup_run_id: UUID,
     *,
+    bound_error: SetupMonitorErrorBounder,
     status: str = SETUP_RUN_STATUS_RUNNING,
     next_poll_at: datetime | None = None,
     last_error: str | None = None,
@@ -123,7 +161,7 @@ async def release_setup_run_claim(
         run.claim_until = None
         run.last_polled_at = now
         run.next_poll_at = next_poll_at or (now + SETUP_MONITOR_POLL_INTERVAL)
-        run.last_error = bounded_setup_monitor_error(last_error)
+        run.last_error = bound_error(last_error)
         run.updated_at = now
         await db.commit()
 
@@ -131,18 +169,27 @@ async def release_setup_run_claim(
 async def finalize_setup_run(
     setup_run_id: UUID,
     *,
+    classify_finalization: SetupRunFinalizationClassifier,
     final_status: str,
     success: bool,
     last_error: str | None = None,
 ) -> None:
     async with db_engine.async_session_factory() as db:
-        await _finalize_setup_run(db, setup_run_id, final_status, success, last_error)
+        await _finalize_setup_run(
+            db,
+            setup_run_id,
+            classify_finalization,
+            final_status,
+            success,
+            last_error,
+        )
         await db.commit()
 
 
 async def _finalize_setup_run(
     db: AsyncSession,
     setup_run_id: UUID,
+    classify_finalization: SetupRunFinalizationClassifier,
     final_status: str,
     success: bool,
     last_error: str | None,
@@ -152,7 +199,7 @@ async def _finalize_setup_run(
         return
     now = utcnow()
     workspace = await db.get(CloudWorkspace, run.workspace_id)
-    decision = classify_setup_run_finalization(
+    decision = classify_finalization(
         workspace_exists=workspace is not None,
         workspace_apply_token=(
             workspace.repo_post_ready_apply_token if workspace is not None else None
@@ -192,9 +239,14 @@ async def _finalize_setup_run(
     workspace.status_detail = workspace_update.status_detail
 
 
-async def mark_setup_run_timed_out(setup_run_id: UUID) -> None:
+async def mark_setup_run_timed_out(
+    setup_run_id: UUID,
+    *,
+    classify_finalization: SetupRunFinalizationClassifier,
+) -> None:
     await finalize_setup_run(
         setup_run_id,
+        classify_finalization=classify_finalization,
         final_status="timed_out",
         success=False,
         last_error="Repo setup monitor timed out.",
