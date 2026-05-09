@@ -2,7 +2,7 @@ import type {
   SessionMcpBindingSummary,
   SessionMcpServer,
 } from "@anyharness/sdk";
-import { finalizeLocalStdioCandidates } from "@/lib/domain/mcp/local-stdio-finalizer";
+import { finalizeLocalStdioCandidates } from "@/lib/workflows/mcp/finalize-local-stdio-candidates";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { materializeCloudMcpServers } from "@/lib/access/cloud/mcp_materialization";
 import {
