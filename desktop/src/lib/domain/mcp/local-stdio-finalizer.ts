@@ -44,118 +44,14 @@ export interface LocalStdioRuntimeReservation {
   launchId: string;
 }
 
-export interface LocalStdioFinalizerDependencies {
-  commandExists: (command: string) => Promise<boolean>;
-  resolveGoogleWorkspaceMcpRuntimeEnv: (input: {
-    connectionId: string;
-    userGoogleEmail: string;
-    launchId: string;
-  }) => Promise<{
-    status: "ready";
-    env: { name: string; value: string }[];
-  } | {
-    status: "not_ready";
-    code: string;
-  }>;
+export interface LocalStdioResolvedLaunchValues {
+  args: string[];
+  env: { name: string; value: string }[];
 }
 
-export async function finalizeLocalStdioCandidates(
-  candidates: LocalStdioCandidate[],
-  context: LocalStdioFinalizationContext,
-  dependencies: LocalStdioFinalizerDependencies,
-): Promise<{
-  mcpServers: SessionMcpServer[];
-  summaries: SessionMcpBindingSummary[];
-  warnings: ConnectorLaunchResolutionWarning[];
-  runtimeReservations: LocalStdioRuntimeReservation[];
-}> {
-  const mcpServers: SessionMcpServer[] = [];
-  const summaries: SessionMcpBindingSummary[] = [];
-  const warnings: ConnectorLaunchResolutionWarning[] = [];
-  const runtimeReservations: LocalStdioRuntimeReservation[] = [];
-  const commandAvailabilityCache = new Map<string, boolean>();
-
-  async function commandAvailable(command: string): Promise<boolean> {
-    const cached = commandAvailabilityCache.get(command);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const available = await dependencies.commandExists(command).catch(() => false);
-    commandAvailabilityCache.set(command, available);
-    return available;
-  }
-
-  for (const candidate of candidates) {
-    const localOauth = getLocalOauthMetadata(candidate);
-    const needsWorkspacePath = candidate.args.some(
-      (arg) => arg.source.kind === "workspace_path",
-    );
-    if (needsWorkspacePath && !context.workspacePath) {
-      summaries.push(buildNotAppliedSummary(candidate, "workspace_path_unresolved"));
-      warnings.push(buildWarning(candidate, "workspace_path_unresolved"));
-      continue;
-    }
-    if (!await commandAvailable(candidate.command)) {
-      summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
-      warnings.push(buildWarning(candidate, "command_missing"));
-      continue;
-    }
-    const resolved = resolveCandidateLaunchValues(candidate, context);
-    if (!resolved) {
-      summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
-      warnings.push(buildWarning(candidate, "resolver_error"));
-      continue;
-    }
-    let localOauthEnv: { name: string; value: string }[] = [];
-    if (candidate.setupKind === "local_oauth") {
-      if (!localOauth || localOauth.provider !== "google_workspace") {
-        summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
-        warnings.push(buildWarning(candidate, "resolver_error"));
-        continue;
-      }
-      const runtimeEnv = await dependencies.resolveGoogleWorkspaceMcpRuntimeEnv({
-        connectionId: candidate.connectionId,
-        userGoogleEmail: localOauth.userGoogleEmail,
-        launchId: context.launchId,
-      }).catch(() => ({ status: "not_ready" as const, code: "port_unavailable" as const }));
-      if (runtimeEnv.status === "not_ready") {
-        const warningKind = runtimeEnv.code === "port_unavailable"
-          ? "resolver_error"
-          : "needs_reconnect";
-        summaries.push(buildNotAppliedSummary(candidate, warningKind));
-        warnings.push(buildWarning(candidate, warningKind));
-        continue;
-      }
-      localOauthEnv = runtimeEnv.env;
-      runtimeReservations.push({
-        provider: "google_workspace",
-        connectionId: candidate.connectionId,
-        launchId: context.launchId,
-      });
-    }
-    resolved.env.push(...localOauthEnv);
-    mcpServers.push({
-      transport: "stdio",
-      connectionId: candidate.connectionId,
-      catalogEntryId: candidate.catalogEntryId,
-      serverName: candidate.serverName,
-      command: candidate.command,
-      args: resolved.args,
-      env: resolved.env,
-    });
-    summaries.push({
-      id: candidate.connectionId,
-      serverName: candidate.serverName,
-      displayName: candidate.connectorName,
-      transport: "stdio",
-      outcome: "applied",
-    });
-  }
-
-  return { mcpServers, summaries, warnings, runtimeReservations };
-}
-
-function getLocalOauthMetadata(candidate: LocalStdioCandidate): {
+export function getLocalStdioGoogleWorkspaceOAuthMetadata(
+  candidate: LocalStdioCandidate,
+): {
   provider: "google_workspace";
   userGoogleEmail: string;
   requiredScope: string;
@@ -171,10 +67,16 @@ function getLocalOauthMetadata(candidate: LocalStdioCandidate): {
   };
 }
 
-function resolveCandidateLaunchValues(
+export function localStdioCandidateNeedsWorkspacePath(
+  candidate: LocalStdioCandidate,
+): boolean {
+  return candidate.args.some((arg) => arg.source.kind === "workspace_path");
+}
+
+export function resolveLocalStdioCandidateLaunchValues(
   candidate: LocalStdioCandidate,
   context: LocalStdioFinalizationContext,
-): { args: string[]; env: { name: string; value: string }[] } | null {
+): LocalStdioResolvedLaunchValues | null {
   const args: string[] = [];
   for (const arg of candidate.args) {
     if (arg.source.kind === "workspace_path") {
@@ -198,7 +100,7 @@ function resolveCandidateLaunchValues(
   return { args, env };
 }
 
-function buildWarning(
+export function buildLocalStdioWarning(
   candidate: LocalStdioCandidate,
   kind: ConnectorLaunchResolutionWarning["kind"],
 ): ConnectorLaunchResolutionWarning {
@@ -210,7 +112,7 @@ function buildWarning(
   };
 }
 
-function buildNotAppliedSummary(
+export function buildLocalStdioNotAppliedSummary(
   candidate: LocalStdioCandidate,
   reason: SessionMcpBindingSummary["reason"],
 ): SessionMcpBindingSummary {
@@ -221,5 +123,43 @@ function buildNotAppliedSummary(
     transport: "stdio",
     outcome: "not_applied",
     reason,
+  };
+}
+
+export function buildLocalStdioAppliedSummary(
+  candidate: LocalStdioCandidate,
+): SessionMcpBindingSummary {
+  return {
+    id: candidate.connectionId,
+    serverName: candidate.serverName,
+    displayName: candidate.connectorName,
+    transport: "stdio",
+    outcome: "applied",
+  };
+}
+
+export function buildLocalStdioServer(
+  candidate: LocalStdioCandidate,
+  resolved: LocalStdioResolvedLaunchValues,
+): SessionMcpServer {
+  return {
+    transport: "stdio",
+    connectionId: candidate.connectionId,
+    catalogEntryId: candidate.catalogEntryId,
+    serverName: candidate.serverName,
+    command: candidate.command,
+    args: resolved.args,
+    env: resolved.env,
+  };
+}
+
+export function buildLocalStdioRuntimeReservation(
+  candidate: LocalStdioCandidate,
+  context: LocalStdioFinalizationContext,
+): LocalStdioRuntimeReservation {
+  return {
+    provider: "google_workspace",
+    connectionId: candidate.connectionId,
+    launchId: context.launchId,
   };
 }
