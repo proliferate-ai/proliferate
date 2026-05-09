@@ -5,15 +5,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from proliferate.db.store.automation_run_claim_values import (
-    AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
-    AutomationRunClaimValue,
-)
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automation_run_claim_transitions import (
     attach_anyharness_session_to_run,
     mark_run_creating_session,
     mark_run_dispatched,
     mark_run_dispatching,
+)
+from proliferate.db.store.automation_run_claim_values import (
+    AutomationRunClaimValue,
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.integrations.anyharness import (
@@ -24,6 +23,14 @@ from proliferate.integrations.anyharness import (
     close_runtime_session,
     create_runtime_session,
     prompt_runtime_session,
+)
+from proliferate.server.automations.domain.claim_lifecycle import (
+    ANYHARNESS_SESSION_ATTACHMENT_TRANSITION,
+    AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
+    CREATING_SESSION_TRANSITION,
+    DISPATCHED_TRANSITION,
+    DISPATCHING_TRANSITION,
+    claim_is_active,
 )
 from proliferate.server.automations.worker.cloud_executor_claims import (
     fail_claim,
@@ -86,6 +93,8 @@ async def create_or_load_session(
         claim_id=claim.claim_id,
         anyharness_workspace_id=target.anyharness_workspace_id,
         now=utcnow(),
+        transition=CREATING_SESSION_TRANSITION,
+        claim_is_active=claim_is_active,
     )
     if current is None:
         return None
@@ -115,6 +124,8 @@ async def create_or_load_session(
         anyharness_workspace_id=target.anyharness_workspace_id,
         anyharness_session_id=session.session_id,
         now=utcnow(),
+        transition=ANYHARNESS_SESSION_ATTACHMENT_TRANSITION,
+        claim_is_active=claim_is_active,
     )
     if not attached:
         try:
@@ -179,6 +190,8 @@ async def send_prompt(context: CloudRunSessionContext) -> None:
         run_id=claim.id,
         claim_id=claim.claim_id,
         now=utcnow(),
+        transition=DISPATCHING_TRANSITION,
+        claim_is_active=claim_is_active,
     )
     if dispatching is None:
         return
@@ -212,6 +225,8 @@ async def send_prompt(context: CloudRunSessionContext) -> None:
         anyharness_workspace_id=target_workspace_id,
         anyharness_session_id=session_id,
         now=utcnow(),
+        transition=DISPATCHED_TRANSITION,
+        claim_is_active=claim_is_active,
     )
     if dispatched:
         logger.info("automation cloud executor dispatched run_id=%s", claim.id)

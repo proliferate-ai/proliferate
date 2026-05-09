@@ -53,6 +53,10 @@ from proliferate.db.store.cloud_workspaces import (
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
+from proliferate.server.automations.domain.claim_lifecycle import (
+    CLOUD_WORKSPACE_CREATION_TRANSITION,
+    claim_is_active,
+)
 from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
 from proliferate.server.billing.service import (
     authorize_sandbox_start,
@@ -635,6 +639,8 @@ async def create_cloud_workspace_for_automation_run(
             origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
             template_version=get_configured_sandbox_provider().template_version,
             now=utcnow(),
+            transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
+            claim_is_active=claim_is_active,
             cloud_repo_limit=resolved.cloud_repo_limit,
         )
     except CloudRepoLimitExceededError as error:

@@ -8,6 +8,10 @@ import logging
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.automation_run_claims import claim_cloud_automation_runs
+from proliferate.server.automations.domain.claim_lifecycle import (
+    RECLAIMABLE_STATUSES,
+    unconfigured_agent_failure,
+)
 from proliferate.server.automations.worker.cloud_executor_claims import (
     fail_claim,
     heartbeat_loop,
@@ -119,6 +123,8 @@ async def run_cloud_executor_loop(
                     claim_ttl=resolved.claim_ttl,
                     limit=available,
                     now=utcnow(),
+                    reclaimable_statuses=RECLAIMABLE_STATUSES,
+                    unconfigured_agent_failure=unconfigured_agent_failure(),
                 )
                 for claim in claims:
                     tasks.add(

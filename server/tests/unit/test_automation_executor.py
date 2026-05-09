@@ -15,19 +15,10 @@ from proliferate.constants.automations import (
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
-from proliferate.db.store.automation_run_claim_values import (
+from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
     LocalAutomationRepoIdentity,
-)
-from proliferate.db.store.automation_run_claims import (
-    attach_anyharness_workspace_to_run,
-    claim_cloud_automation_runs,
-    claim_local_automation_runs,
-    heartbeat_run_claim,
-    mark_run_creating_workspace,
-    mark_run_provisioning_workspace,
-    sweep_expired_dispatching_runs,
 )
 from proliferate.db.store.automations import (
     create_manual_run_for_user,
@@ -36,6 +27,15 @@ from proliferate.server.automations.local_executor_service import (
     _normalize_local_error_code,
 )
 from proliferate.server.automations.worker.main import _parse_args
+from tests.unit.automation_claim_store_helpers import (
+    attach_anyharness_workspace_to_run,
+    claim_cloud_automation_runs,
+    claim_local_automation_runs,
+    heartbeat_run_claim,
+    mark_run_creating_workspace,
+    mark_run_provisioning_workspace,
+    sweep_expired_dispatching_runs,
+)
 
 
 def test_local_executor_service_caps_claims_and_allowlists_error_codes() -> None:

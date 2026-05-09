@@ -8,11 +8,14 @@ from uuid import UUID
 from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
-    AUTOMATION_RUN_STATUS_CREATING_WORKSPACE,
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.automation_run_claims import load_claimed_run_for_update
+from proliferate.db.store.automation_run_claims import (
+    ClaimActivePredicate,
+    ClaimTransitionRule,
+    load_claimed_run_for_update,
+)
 from proliferate.db.store.cloud_workspaces import create_cloud_workspace_record
 
 
@@ -30,6 +33,8 @@ async def create_cloud_workspace_for_claimed_run(
     origin_json: str | None,
     template_version: str,
     now: datetime,
+    transition: ClaimTransitionRule,
+    claim_is_active: ClaimActivePredicate,
     cloud_repo_limit: int | None = None,
 ) -> CloudWorkspace | None:
     async with db_engine.async_session_factory() as db:
@@ -38,9 +43,10 @@ async def create_cloud_workspace_for_claimed_run(
             run_id=run_id,
             claim_id=claim_id,
             now=now,
-            allowed_statuses=frozenset({AUTOMATION_RUN_STATUS_CREATING_WORKSPACE}),
+            allowed_statuses=transition.allowed_statuses,
             execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
             executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+            claim_is_active=claim_is_active,
             user_id=user_id,
         )
         if run is None:

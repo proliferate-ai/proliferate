@@ -17,27 +17,42 @@ from proliferate.constants.automations import (
     AUTOMATION_LOCAL_CLAIM_MAX_LIMIT,
     AUTOMATION_LOCAL_CLAIM_TTL_SECONDS,
     AUTOMATION_LOCAL_ERROR_CODE_MAX_LENGTH,
-    AUTOMATION_LOCAL_FALLBACK_ERROR_CODE,
     AUTOMATION_LOCAL_REPOSITORY_IDENTITIES_MAX_LIMIT,
-    AUTOMATION_LOCAL_SHARED_ERROR_CODES,
 )
-from proliferate.db.store.automation_run_claim_values import (
-    AUTOMATION_ERROR_MESSAGES,
-    AutomationRunClaimValue,
-    automation_error_message,
-    canonical_repo_identity,
-)
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automation_run_claim_transitions import (
     attach_anyharness_session_to_run,
     attach_anyharness_workspace_to_run,
-    claim_local_automation_runs,
-    heartbeat_run_claim,
     mark_run_creating_session,
     mark_run_creating_workspace,
     mark_run_dispatched,
     mark_run_dispatching,
     mark_run_failed,
     mark_run_provisioning_workspace,
+)
+from proliferate.db.store.automation_run_claim_values import (
+    AutomationRunClaimValue,
+)
+from proliferate.db.store.automation_run_claims import (
+    claim_local_automation_runs,
+    heartbeat_run_claim,
+)
+from proliferate.server.automations.domain.claim_lifecycle import (
+    ACTIVE_CLAIM_STATUSES,
+    ANYHARNESS_SESSION_ATTACHMENT_TRANSITION,
+    ANYHARNESS_WORKSPACE_ATTACHMENT_TRANSITION,
+    CREATING_SESSION_TRANSITION,
+    CREATING_WORKSPACE_TRANSITION,
+    DISPATCHED_TRANSITION,
+    DISPATCHING_TRANSITION,
+    RECLAIMABLE_STATUSES,
+    automation_error_message,
+    canonical_repo_identity,
+    claim_is_active,
+    provisioning_workspace_transition,
+    unconfigured_agent_failure,
+)
+from proliferate.server.automations.domain.claim_lifecycle import (
+    normalize_local_error_code as map_local_error_code,
 )
 from proliferate.server.automations.domain.validation import normalize_required_text
 from proliferate.server.automations.models import (
@@ -80,11 +95,7 @@ def _normalize_local_error_code(value: str) -> str:
         field_name="errorCode",
         max_length=AUTOMATION_LOCAL_ERROR_CODE_MAX_LENGTH,
     )
-    if error_code.startswith("local_") and error_code in AUTOMATION_ERROR_MESSAGES:
-        return error_code
-    if error_code in AUTOMATION_LOCAL_SHARED_ERROR_CODES:
-        return error_code
-    return AUTOMATION_LOCAL_FALLBACK_ERROR_CODE
+    return map_local_error_code(error_code)
 
 
 async def claim_local_runs(
@@ -106,6 +117,8 @@ async def claim_local_runs(
         claim_ttl=_local_claim_ttl(),
         limit=limit,
         now=utcnow(),
+        reclaimable_statuses=RECLAIMABLE_STATUSES,
+        unconfigured_agent_failure=unconfigured_agent_failure(),
     )
     return LocalAutomationClaimListResponse(runs=[local_claim_payload(value) for value in values])
 
@@ -121,6 +134,8 @@ async def heartbeat_local_run(
         claim_id=body.claim_id,
         claim_ttl=_local_claim_ttl(),
         now=utcnow(),
+        active_statuses=ACTIVE_CLAIM_STATUSES,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -138,6 +153,8 @@ async def mark_local_run_creating_workspace(
         run_id=run_id,
         claim_id=body.claim_id,
         now=utcnow(),
+        transition=CREATING_WORKSPACE_TRANSITION,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -160,6 +177,8 @@ async def attach_local_run_workspace(
             max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
+        transition=ANYHARNESS_WORKSPACE_ATTACHMENT_TRANSITION,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -177,6 +196,8 @@ async def mark_local_run_provisioning_workspace(
         run_id=run_id,
         claim_id=body.claim_id,
         now=utcnow(),
+        transition=provisioning_workspace_transition(AUTOMATION_EXECUTION_TARGET_LOCAL),
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -199,6 +220,8 @@ async def mark_local_run_creating_session(
             max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
+        transition=CREATING_SESSION_TRANSITION,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -226,6 +249,8 @@ async def attach_local_run_session(
             max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
+        transition=ANYHARNESS_SESSION_ATTACHMENT_TRANSITION,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -243,6 +268,8 @@ async def mark_local_run_dispatching(
         run_id=run_id,
         claim_id=body.claim_id,
         now=utcnow(),
+        transition=DISPATCHING_TRANSITION,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -270,6 +297,8 @@ async def mark_local_run_dispatched(
             max_length=AUTOMATION_EXTERNAL_ID_MAX_LENGTH,
         ),
         now=utcnow(),
+        transition=DISPATCHED_TRANSITION,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
@@ -290,6 +319,8 @@ async def mark_local_run_failed(
         error_code=error_code,
         message=automation_error_message(error_code),
         now=utcnow(),
+        active_statuses=ACTIVE_CLAIM_STATUSES,
+        claim_is_active=claim_is_active,
         execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
         executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
         user_id=user_id,
