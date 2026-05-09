@@ -33,17 +33,8 @@ anyharness/sdk/src/reducer/transcript.ts
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts
 anyharness/sdk-react/src/hooks/sessions.ts
 desktop/src/components/ui/icons.tsx
-desktop/src/components/playground/PlaygroundComposer.tsx
-desktop/src/components/plugins/detail/ConnectorDetailModal.tsx
-desktop/src/components/settings/panes/OrganizationPane.tsx
-desktop/src/components/settings/panes/review/ReviewDefaultsSection.tsx
-desktop/src/components/ui/content/DiffViewer.tsx
-desktop/src/components/workspace/browser/WorkspaceBrowserPanel.tsx
-desktop/src/components/workspace/changes/AllChangesFrame.tsx
-desktop/src/components/workspace/chat/tool-calls/CollapsedActionRows.tsx
 desktop/src/hooks/sessions/use-session-creation-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
-desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/lib/domain/chat/__fixtures__/playground.ts
 desktop/src/lib/infra/measurement/debug-measurement.ts

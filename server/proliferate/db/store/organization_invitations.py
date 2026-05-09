@@ -65,6 +65,9 @@ async def create_or_rotate_organization_invitation(
     invited_by_user_id: UUID,
     expires_at: datetime,
 ) -> InvitationCreateRecord | None:
+    # Intentionally isolated: invitation rows must commit before the service
+    # sends external email. Replace this only with an explicit delivery
+    # checkpoint/outbox design that preserves that ordering.
     normalized_email = normalize_invitation_email(email)
     now = utcnow()
     async with db_engine.async_session_factory() as db, db.begin():
@@ -210,6 +213,8 @@ async def rotate_organization_invitation(
     token_hash: str,
     expires_at: datetime,
 ) -> InvitationCreateRecord | None:
+    # Intentionally isolated for the same pre-email durability boundary as
+    # create_or_rotate_organization_invitation.
     async with db_engine.async_session_factory() as db, db.begin():
         invitation = (
             await db.execute(

@@ -9,9 +9,7 @@
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sandbox/daytona.py 1 transitional integration depends on product domain types/logic
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/sandbox/e2b.py 1 transitional integration depends on product domain types/logic
-SERVICE_ORM_IMPORT server/proliferate/server/ai_magic/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/repos/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 transitional service imports ORM/auth model
 STORE_COMMIT_ROLLBACK server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store owns transaction commit
@@ -36,9 +34,9 @@ STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_runtime_environment
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspace_setup_runs.py 5 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_workspaces.py 26 transitional store opens DB session
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 2 transitional invitation create/rotate commit before email delivery
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organization_invitations.py 2 intentional create/rotate transaction commits before external email delivery
 STORE_SESSION_FACTORY_CALL server/proliferate/db/store/organizations.py 4 transitional wrappers used by deferred billing/cloud callers
-STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 3 transitional store opens DB session
+STORE_SESSION_FACTORY_CALL server/proliferate/db/store/users.py 1 deferred runtime/mobility/worker callers still use isolated OAuth-account user load
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_cloud_workspace_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automation_run_claims.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/automations.py 1 worker/cloud workspace helper still imports DB session factory
@@ -51,6 +49,6 @@ STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_runtime_environme
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspace_setup_runs.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_workspaces.py 1 transitional store imports DB session factory
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/cloud_worktree_policy.py 1 deferred runtime policy sync still uses isolated policy read
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organization_invitations.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organization_invitations.py 1 intentional create/rotate transaction commits before external email delivery
 STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/organizations.py 1 transitional store imports DB session factory
-STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 1 transitional store imports DB session factory
+STORE_SESSION_FACTORY_IMPORT server/proliferate/db/store/users.py 1 deferred runtime/mobility/worker callers still use isolated OAuth-account user load
