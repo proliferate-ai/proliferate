@@ -3,7 +3,9 @@ import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-stat
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import {
+  type PendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   ensureRepoGroupExpanded,
@@ -12,6 +14,9 @@ import {
   elapsedSince,
   logLatency,
 } from "@/lib/infra/measurement/debug-latency";
+import {
+  usePendingWorkspaceSessionMaterialization,
+} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 
 interface FinalizeSelectionOptions {
   latencyFlowId?: string | null;
@@ -28,6 +33,7 @@ function requestChatInputFocus(): void {
 
 export function useWorkspaceEntryFlow() {
   const { selectWorkspace } = useWorkspaceSelection();
+  const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
   const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
   );
@@ -91,6 +97,8 @@ export function useWorkspaceEntryFlow() {
       return false;
     }
 
+    materializePendingWorkspaceSessions(entry, workspaceId);
+
     setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
       workspaceId,
       source: entry.source,
@@ -105,7 +113,12 @@ export function useWorkspaceEntryFlow() {
       totalElapsedMs: elapsedSince(entry.createdAt),
     });
     return true;
-  }, [selectWorkspace, setPendingWorkspaceEntry, setWorkspaceArrivalEvent]);
+  }, [
+    materializePendingWorkspaceSessions,
+    selectWorkspace,
+    setPendingWorkspaceEntry,
+    setWorkspaceArrivalEvent,
+  ]);
 
   const failPendingEntry = useCallback((
     entry: PendingWorkspaceEntry,

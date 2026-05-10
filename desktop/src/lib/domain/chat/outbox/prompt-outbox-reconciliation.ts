@@ -7,6 +7,7 @@ import {
   removePromptOutboxEntry,
   type PromptOutboxStateShape,
 } from "@/lib/domain/chat/outbox/prompt-outbox-state";
+import { isRenderableUserMessageEcho } from "@/lib/domain/chat/outbox/prompt-echo";
 
 export function reconcileOutboxFromEnvelopes(
   state: PromptOutboxStateShape,
@@ -59,7 +60,9 @@ export function reconcileOutboxFromEnvelopes(
       const clientPromptId = event.item.kind === "user_message"
         ? event.item.promptId ?? null
         : null;
-      if (clientPromptId) {
+      const canReplaceOutboxRow = event.type === "item_completed"
+        || isRenderableUserMessageEcho(event.item);
+      if (clientPromptId && canReplaceOutboxRow) {
         nextState = patchPromptOutboxEntry(nextState, clientPromptId, {
           deliveryState: "echoed_tombstone",
           echoedAt: envelope.timestamp,

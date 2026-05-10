@@ -57,6 +57,75 @@ describe("hot-session-ingest-manager", () => {
       .toBe("current");
   });
 
+  it("hydrates a selected hot target before opening its stream", async () => {
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    const deps = depsWithEnsure(async () => {
+      patchSessionRecord("session-a", { streamConnectionState: "open" });
+    });
+
+    reconcileHotSessions([target("session-a", "selected")], deps);
+    await Promise.resolve();
+
+    expect(deps.ensureSessionStreamConnected).toHaveBeenCalledWith(
+      "session-a",
+      expect.objectContaining({
+        awaitOpen: true,
+        hydrateBeforeStream: true,
+        skipInitialRefresh: true,
+      }),
+    );
+  });
+
+  it("keeps an existing stream current when only the hot target reason changes", async () => {
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    const deps = depsWithEnsure(async () => {
+      patchSessionRecord("session-a", { streamConnectionState: "open" });
+    });
+
+    reconcileHotSessions([target("session-a", "selected")], deps);
+    const options = vi.mocked(deps.ensureSessionStreamConnected).mock.calls[0]?.[1];
+    expect(options?.isCurrent?.()).toBe(true);
+
+    reconcileHotSessions([target("session-a", "running")], deps);
+
+    expect(options?.isCurrent?.()).toBe(true);
+    expect(deps.ensureSessionStreamConnected).toHaveBeenCalledTimes(1);
+  });
+
+  it("hydrates an existing open-tab stream when it becomes selected", async () => {
+    putSessionRecord(createEmptySessionRecord("session-a", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    const deps = depsWithEnsure(async () => {
+      patchSessionRecord("session-a", { streamConnectionState: "open" });
+    });
+
+    reconcileHotSessions([target("session-a", "open_tab")], deps);
+    await Promise.resolve();
+    reconcileHotSessions([target("session-a", "selected")], deps);
+    await Promise.resolve();
+
+    expect(deps.ensureSessionStreamConnected).toHaveBeenCalledTimes(2);
+    const firstOptions = vi.mocked(deps.ensureSessionStreamConnected).mock.calls[0]?.[1];
+    const secondOptions = vi.mocked(deps.ensureSessionStreamConnected).mock.calls[1]?.[1];
+    expect(firstOptions?.isCurrent?.()).toBe(true);
+    expect(secondOptions?.isCurrent?.()).toBe(true);
+    expect(deps.ensureSessionStreamConnected).toHaveBeenNthCalledWith(
+      1,
+      "session-a",
+      expect.objectContaining({ hydrateBeforeStream: false }),
+    );
+    expect(deps.ensureSessionStreamConnected).toHaveBeenNthCalledWith(
+      2,
+      "session-a",
+      expect.objectContaining({ hydrateBeforeStream: true }),
+    );
+  });
+
   it("closes and marks cold when a target is demoted", () => {
     putSessionRecord(createEmptySessionRecord("session-b", "codex", {
       workspaceId: "workspace-1",
@@ -71,7 +140,7 @@ describe("hot-session-ingest-manager", () => {
       .toBe("cold");
   });
 
-  it("blocks stale stream callbacks after the hot generation changes", async () => {
+  it("blocks stale stream callbacks after the hot target is removed", async () => {
     putSessionRecord(createEmptySessionRecord("session-b", "codex", {
       workspaceId: "workspace-1",
     }));
@@ -84,6 +153,46 @@ describe("hot-session-ingest-manager", () => {
     reconcileHotSessions([], deps);
 
     expect(options?.isCurrent?.()).toBe(false);
+  });
+
+  it("blocks stale stream callbacks after remove and re-add of the same target", async () => {
+    putSessionRecord(createEmptySessionRecord("session-b", "codex", {
+      workspaceId: "workspace-1",
+    }));
+    let resolveFirstOpen: () => void = () => {
+      throw new Error("first stream open was not started");
+    };
+    let openCallCount = 0;
+    const deps = depsWithEnsure(async () => {
+      openCallCount += 1;
+      if (openCallCount === 1) {
+        return new Promise<void>((resolve) => {
+          resolveFirstOpen = () => {
+            patchSessionRecord("session-b", { streamConnectionState: "open" });
+            resolve();
+          };
+        });
+      }
+      return new Promise<void>(() => {});
+    });
+
+    reconcileHotSessions([target("session-b", "open_tab")], deps);
+    const firstOptions = vi.mocked(deps.ensureSessionStreamConnected).mock.calls[0]?.[1];
+    expect(firstOptions?.isCurrent?.()).toBe(true);
+
+    reconcileHotSessions([], deps);
+    reconcileHotSessions([target("session-b", "open_tab")], deps);
+    const secondOptions = vi.mocked(deps.ensureSessionStreamConnected).mock.calls[1]?.[1];
+    expect(deps.ensureSessionStreamConnected).toHaveBeenCalledTimes(2);
+    expect(firstOptions?.isCurrent?.()).toBe(false);
+    expect(secondOptions?.isCurrent?.()).toBe(true);
+
+    resolveFirstOpen();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(useSessionIngestStore.getState().freshnessByClientSessionId["session-b"]?.freshness)
+      .toBe("warming");
   });
 
   it("routes hot stream reconnects through bounded manager backoff", async () => {
@@ -160,8 +269,8 @@ function depsWithEnsure(
       markCold: (clientSessionId) => useSessionIngestStore.getState().markCold(clientSessionId),
       getFreshness: (clientSessionId) =>
         useSessionIngestStore.getState().freshnessByClientSessionId[clientSessionId]?.freshness ?? null,
-      isTargetCurrent: (clientSessionId, generation, materializedSessionId) =>
-        isHotSessionTargetCurrent(clientSessionId, generation, materializedSessionId),
+      isTargetCurrent: (clientSessionId, materializedSessionId) =>
+        isHotSessionTargetCurrent(clientSessionId, materializedSessionId),
       getSessionRecord: (clientSessionId) => {
         const record = getSessionRecord(clientSessionId);
         return record

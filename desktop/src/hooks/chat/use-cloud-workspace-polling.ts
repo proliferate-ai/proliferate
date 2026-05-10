@@ -5,6 +5,9 @@ import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-work
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import {
+  usePendingWorkspaceSessionMaterialization,
+} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import {
   isCloudWorkspacePostReadyPending,
   shouldPollCloudWorkspaceForUpdates,
   shouldShowCloudWorkspaceStatusScreen,
@@ -27,6 +30,7 @@ export function useCloudWorkspacePolling() {
   const { data: workspaceCollections } = useWorkspaces();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
   const { selectWorkspace } = useWorkspaceSelection();
+  const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
@@ -79,6 +83,11 @@ export function useCloudWorkspacePolling() {
           const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
           const shouldPreservePending = pending?.workspaceId === selectedWorkspaceId
             && pending.stage === "awaiting-cloud-ready";
+          logLatency("workspace.cloud_polling.ready_selection.start", {
+            workspaceId: selectedWorkspaceId,
+            pendingAttemptId: pending?.attemptId ?? null,
+            shouldPreservePending,
+          });
 
           try {
             await selectWorkspace(selectedWorkspaceId, {
@@ -100,6 +109,11 @@ export function useCloudWorkspacePolling() {
                   : "Failed to connect the cloud workspace.",
               });
             }
+            logLatency("workspace.cloud_polling.ready_selection.failed", {
+              workspaceId: selectedWorkspaceId,
+              pendingAttemptId: pending?.attemptId ?? null,
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
             return;
           }
 
@@ -109,6 +123,11 @@ export function useCloudWorkspacePolling() {
             && currentPending.workspaceId === selectedWorkspaceId
             && currentPending.stage === "awaiting-cloud-ready"
           ) {
+            const projectedSessionMaterialization = materializePendingWorkspaceSessions(
+              currentPending,
+              selectedWorkspaceId,
+              { eventPrefix: "workspace.cloud_polling" },
+            );
             setPendingWorkspaceEntry(null);
             setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
               workspaceId: selectedWorkspaceId,
@@ -119,6 +138,8 @@ export function useCloudWorkspacePolling() {
             logLatency("workspace.cloud_polling.ready", {
               workspaceId: selectedWorkspaceId,
               totalElapsedMs: elapsedSince(currentPending.createdAt),
+              projectedSessionCount: projectedSessionMaterialization.projectedSessionCount,
+              projectedSessionIds: projectedSessionMaterialization.projectedSessionIds,
             });
           }
           return;
@@ -148,6 +169,7 @@ export function useCloudWorkspacePolling() {
     };
   }, [
     cloudWorkspaceId,
+    materializePendingWorkspaceSessions,
     pendingWorkspaceEntry,
     refreshCloudWorkspace,
     selectWorkspace,

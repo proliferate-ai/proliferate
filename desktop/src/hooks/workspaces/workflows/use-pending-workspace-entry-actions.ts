@@ -9,6 +9,9 @@ import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-clou
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import {
+  usePendingWorkspaceSessionMaterialization,
+} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {
@@ -35,6 +38,7 @@ export function usePendingWorkspaceEntryActions() {
   } = useWorkspaceEntryActions();
   const { retryCloudWorkspaceAndEnter } = useCreateCloudWorkspace();
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
+  const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
 
   const handleRetry = useCallback(async (entry: PendingWorkspaceEntry) => {
     switch (entry.request.kind) {
@@ -96,6 +100,9 @@ export function usePendingWorkspaceEntryActions() {
               });
               return;
             }
+            materializePendingWorkspaceSessions(current, entry.request.workspaceId, {
+              eventPrefix: "workspace.entry.retry",
+            });
             setPendingWorkspaceEntry(null);
             setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
               workspaceId: entry.request.workspaceId,
@@ -116,6 +123,7 @@ export function usePendingWorkspaceEntryActions() {
   }, [
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
+    materializePendingWorkspaceSessions,
     retryCloudWorkspaceAndEnter,
     selectWorkspace,
     setPendingWorkspaceEntry,

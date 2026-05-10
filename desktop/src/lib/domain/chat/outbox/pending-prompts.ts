@@ -10,6 +10,7 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import { isRenderableUserMessageEcho } from "@/lib/domain/chat/outbox/prompt-echo";
 
 export function createOptimisticPendingPrompt(
   text: string,
@@ -110,7 +111,7 @@ export function shouldClearOptimisticPendingPromptForEnvelope(
     (event.type === "item_started" || event.type === "item_completed")
     && event.item.kind === "user_message"
   ) {
-    return true;
+    return event.type === "item_completed" || isRenderableUserMessageEcho(event.item);
   }
 
   return false;
@@ -159,6 +160,8 @@ function isTranscriptItemRenderable(item: TranscriptItem | undefined): boolean {
   }
 
   switch (item.kind) {
+    case "user_message":
+      return isRenderableUserMessageEcho(item);
     case "assistant_prose":
       return !!item.text;
     case "plan":

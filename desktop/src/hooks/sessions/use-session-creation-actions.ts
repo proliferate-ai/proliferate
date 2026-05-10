@@ -68,6 +68,7 @@ import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
@@ -320,6 +321,19 @@ export function useSessionCreationActions() {
 
     putSessionRecord(optimisticRecord);
     activateSession(pendingSessionId);
+    logLatency("session.create.optimistic_record", {
+      clientSessionId: pendingSessionId,
+      workspaceId,
+      agentKind: options.agentKind,
+      modelId: options.modelId,
+      modeId: resolvedModeId ?? null,
+      hasExistingProjectedRecord: Boolean(existingProjectedRecord),
+      existingProjectedWorkspaceId: existingProjectedRecord?.workspaceId ?? null,
+      hasPrompt,
+      shouldEnqueueInitialPrompt,
+      skipInitialPromptEnqueue: options.skipInitialPromptEnqueue === true,
+      reuseInFlightEmptySession: options.reuseInFlightEmptySession ?? null,
+    });
     let initialShellIntent: WorkspaceShellIntentKey | null | undefined;
     let currentOwnedShellIntent: WorkspaceShellIntentKey | null = null;
     let currentOwnedShellEpoch: number | null = null;
@@ -635,6 +649,18 @@ export function useSessionCreationActions() {
         pendingSessionId,
         launchedSession.id,
       );
+      logLatency("session.create.materialized", {
+        clientSessionId: pendingSessionId,
+        materializedSessionId: launchedSession.id,
+        workspaceId,
+        agentKind: options.agentKind,
+        modelId: launchedSession.modelId ?? options.modelId,
+        modeId: launchedSession.modeId ?? resolvedModeId ?? null,
+        status: realRecord.status,
+        executionPhase: launchedSession.executionSummary?.phase ?? null,
+        pendingInteractionCount: launchedSession.executionSummary?.pendingInteractions?.length ?? 0,
+        activeSessionId: useSessionSelectionStore.getState().activeSessionId,
+      });
       if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
         rememberLastViewedSession(workspaceId, launchedSession.id);
       }
@@ -669,6 +695,15 @@ export function useSessionCreationActions() {
     }
 
     const cleanupCreateFailure = (error: unknown): void => {
+      logLatency("session.create.failed", {
+        clientSessionId: pendingSessionId,
+        workspaceId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        hasPrompt,
+        hasExistingProjectedRecord: Boolean(existingProjectedRecord),
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
       if (hasPrompt) {
         markProjectedSessionPromptCreateFailed(pendingSessionId, error);
         if (options.launchIntentId) {

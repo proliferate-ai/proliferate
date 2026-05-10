@@ -42,6 +42,11 @@ export interface StartingReviewState {
   startedAt: number;
 }
 
+export interface StartingReviewToken {
+  kind: ReviewKind;
+  startedAt: number;
+}
+
 interface ReviewUiState {
   setup: ReviewSetupState | null;
   critiqueTarget: ReviewCritiqueTarget | null;
@@ -51,6 +56,11 @@ interface ReviewUiState {
   closeSetup: () => void;
   beginStartingReview: (startingReview: StartingReviewState) => void;
   clearStartingReview: () => void;
+  clearStartingReviewForToken: (token: StartingReviewToken) => boolean;
+  patchStartingReviewParentSession: (
+    token: StartingReviewToken,
+    parentSessionId: string,
+  ) => boolean;
   openCritique: (target: ReviewCritiqueTarget) => void;
   closeCritique: () => void;
   dismissTerminalNotice: (runId: string) => void;
@@ -67,6 +77,33 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
   closeSetup: () => set({ setup: null }),
   beginStartingReview: (startingReview) => set({ startingReview }),
   clearStartingReview: () => set({ startingReview: null }),
+  clearStartingReviewForToken: (token) => {
+    let cleared = false;
+    set((state) => {
+      if (!matchesStartingReviewToken(state.startingReview, token)) {
+        return state;
+      }
+      cleared = true;
+      return { startingReview: null };
+    });
+    return cleared;
+  },
+  patchStartingReviewParentSession: (token, parentSessionId) => {
+    let patched = false;
+    set((state) => {
+      if (!matchesStartingReviewToken(state.startingReview, token)) {
+        return state;
+      }
+      patched = true;
+      return {
+        startingReview: {
+          ...state.startingReview,
+          parentSessionId,
+        },
+      };
+    });
+    return patched;
+  },
   openCritique: (target) => set({ critiqueTarget: target }),
   closeCritique: () => set({ critiqueTarget: null }),
   // Dismissal is intentionally app-lifetime-only; terminal review notices can
@@ -79,3 +116,12 @@ export const useReviewUiStore = create<ReviewUiState>((set) => ({
       ].slice(0, DISMISSED_TERMINAL_NOTICE_RUN_LIMIT),
     })),
 }));
+
+function matchesStartingReviewToken(
+  startingReview: StartingReviewState | null,
+  token: StartingReviewToken,
+): startingReview is StartingReviewState {
+  return !!startingReview
+    && startingReview.kind === token.kind
+    && startingReview.startedAt === token.startedAt;
+}

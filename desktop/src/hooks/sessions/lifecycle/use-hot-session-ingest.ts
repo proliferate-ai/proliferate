@@ -104,8 +104,8 @@ export function useHotSessionIngest(): void {
       markCold: (clientSessionId) => useSessionIngestStore.getState().markCold(clientSessionId),
       getFreshness: (clientSessionId) =>
         useSessionIngestStore.getState().freshnessByClientSessionId[clientSessionId]?.freshness ?? null,
-      isTargetCurrent: (clientSessionId, generation, materializedSessionId) =>
-        isHotSessionTargetCurrent(clientSessionId, generation, materializedSessionId),
+      isTargetCurrent: (clientSessionId, materializedSessionId) =>
+        isHotSessionTargetCurrent(clientSessionId, materializedSessionId),
       getSessionRecord: (clientSessionId) => {
         const record = getSessionRecord(clientSessionId);
         return record

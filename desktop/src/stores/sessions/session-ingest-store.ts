@@ -12,10 +12,9 @@ export interface SessionIngestFreshnessState {
 }
 
 interface SessionIngestStoreState {
-  hotSetGeneration: number;
   targetsByClientSessionId: Record<string, HotSessionTarget>;
   freshnessByClientSessionId: Record<string, SessionIngestFreshnessState>;
-  setHotTargets: (targets: readonly HotSessionTarget[]) => number;
+  setHotTargets: (targets: readonly HotSessionTarget[]) => void;
   markWarming: (clientSessionId: string) => void;
   markCurrentIfContiguous: (clientSessionId: string, lastAppliedSeq: number) => void;
   markStale: (
@@ -45,13 +44,11 @@ const COLD_FRESHNESS: SessionIngestFreshnessState = {
   lastErrorAt: null,
 };
 
-export const useSessionIngestStore = create<SessionIngestStoreState>((set, get) => ({
-  hotSetGeneration: 0,
+export const useSessionIngestStore = create<SessionIngestStoreState>((set) => ({
   targetsByClientSessionId: {},
   freshnessByClientSessionId: {},
 
   setHotTargets: (targets) => {
-    let nextGeneration = get().hotSetGeneration;
     set((state) => {
       const targetsByClientSessionId = Object.fromEntries(
         targets.map((target) => [target.clientSessionId, target]),
@@ -60,7 +57,6 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set, get) 
         return state;
       }
 
-      nextGeneration = state.hotSetGeneration + 1;
       const freshnessByClientSessionId = { ...state.freshnessByClientSessionId };
       for (const [sessionId, freshness] of Object.entries(freshnessByClientSessionId)) {
         if (!targetsByClientSessionId[sessionId] && freshness.freshness !== "cold") {
@@ -90,12 +86,10 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set, get) 
       }
 
       return {
-        hotSetGeneration: nextGeneration,
         targetsByClientSessionId,
         freshnessByClientSessionId,
       };
     });
-    return nextGeneration;
   },
 
   markWarming: (clientSessionId) => set((state) => ({
@@ -179,7 +173,6 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set, get) 
   }),
 
   clear: () => set({
-    hotSetGeneration: 0,
     targetsByClientSessionId: {},
     freshnessByClientSessionId: {},
   }),
@@ -187,13 +180,11 @@ export const useSessionIngestStore = create<SessionIngestStoreState>((set, get) 
 
 export function isHotSessionTargetCurrent(
   clientSessionId: string,
-  generation: number,
   materializedSessionId: string | null,
 ): boolean {
   const state = useSessionIngestStore.getState();
   const target = state.targetsByClientSessionId[clientSessionId];
-  return state.hotSetGeneration === generation
-    && !!target
+  return !!target
     && target.materializedSessionId === materializedSessionId
     && target.streamable;
 }

@@ -8,6 +8,7 @@ import {
 } from "@/lib/domain/reviews/review-runs";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import type { StartingReviewState } from "@/stores/reviews/review-ui-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export interface ActiveReviewRunState {
@@ -23,16 +24,23 @@ export interface ActiveReviewRunState {
 export function useActiveReviewRunState(): ActiveReviewRunState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const activeMaterializedSessionId = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.materializedSessionId ?? null : null
+  );
   const dismissedTerminalNoticeRunIds = useReviewUiStore(
     (state) => state.dismissedTerminalNoticeRunIds,
   );
   const startingReview = useReviewUiStore((state) => state.startingReview);
-  const activeStartingReview = startingReview?.parentSessionId === activeSessionId
+  const activeStartingReview = startingReview
+    && (
+      startingReview.parentSessionId === activeSessionId
+      || startingReview.parentSessionId === activeMaterializedSessionId
+    )
     ? startingReview
     : null;
-  const reviewsQuery = useSessionReviewsQuery(activeSessionId, {
+  const reviewsQuery = useSessionReviewsQuery(activeMaterializedSessionId, {
     workspaceId: selectedWorkspaceId,
-    enabled: !!activeSessionId,
+    enabled: !!activeMaterializedSessionId,
     refetchInterval: 5000,
   });
   const reviews = reviewsQuery.data?.reviews ?? null;

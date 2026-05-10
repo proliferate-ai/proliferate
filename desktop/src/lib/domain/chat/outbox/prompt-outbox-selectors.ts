@@ -9,6 +9,7 @@ import {
   type PromptOutboxPlacement,
 } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import type { PromptOutboxStateShape } from "@/lib/domain/chat/outbox/prompt-outbox-state";
+import { isRenderableUserMessageEcho } from "@/lib/domain/chat/outbox/prompt-echo";
 
 export function selectNextDispatchableOutboxEntry(
   state: PromptOutboxStateShape,
@@ -89,15 +90,16 @@ export function queuedOutboxEntriesForSession(
 
 export function resolvePromptOutboxPlacement(input: {
   isSessionBusy: boolean;
-  isSessionMaterialized?: boolean;
+  isSessionMaterialized: boolean;
   existingEntries: readonly PromptOutboxEntry[];
 }): PromptOutboxPlacement {
-  if (input.isSessionBusy && input.isSessionMaterialized !== false) {
+  if (input.existingEntries.some(isOutboxEntryBlockingNewTranscriptPrompt)) {
     return "queue";
   }
-  return input.existingEntries.some(isOutboxEntryBlockingNewTranscriptPrompt)
-    ? "queue"
-    : "transcript";
+  if (input.isSessionBusy && input.isSessionMaterialized) {
+    return "queue";
+  }
+  return "transcript";
 }
 
 export function outboxEntryToPendingPromptEntry(entry: PromptOutboxEntry): PendingPromptEntry {
@@ -145,6 +147,7 @@ function collectTranscriptPromptIds(
     if (
       item.kind === "user_message"
       && item.promptId
+      && isRenderableUserMessageEcho(item)
       && (!promptIdsToFind || promptIdsToFind.has(item.promptId))
     ) {
       promptIds.add(item.promptId);

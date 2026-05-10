@@ -166,7 +166,15 @@ describe("prompt outbox", () => {
     expect(selectNextDispatchableOutboxEntry(state, "session-1")).toBeNull();
   });
 
-  it("places a new prompt in the composer queue when the session is busy", () => {
+  it("places the first local prompt in the transcript", () => {
+    expect(resolvePromptOutboxPlacement({
+      isSessionBusy: false,
+      isSessionMaterialized: true,
+      existingEntries: [],
+    })).toBe("transcript");
+  });
+
+  it("places a busy materialized session prompt in the composer queue", () => {
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: true,
       isSessionMaterialized: true,
@@ -174,7 +182,7 @@ describe("prompt outbox", () => {
     })).toBe("queue");
   });
 
-  it("places the first prompt for a busy unmaterialized session in the transcript", () => {
+  it("places a busy unmaterialized session prompt in the transcript", () => {
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: true,
       isSessionMaterialized: false,
@@ -209,6 +217,7 @@ describe("prompt outbox", () => {
 
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: false,
+      isSessionMaterialized: true,
       existingEntries: [existing],
     })).toBe("queue");
   });
@@ -227,6 +236,7 @@ describe("prompt outbox", () => {
 
     expect(resolvePromptOutboxPlacement({
       isSessionBusy: false,
+      isSessionMaterialized: true,
       existingEntries: [failed],
     })).toBe("transcript");
   });
@@ -307,6 +317,43 @@ describe("prompt outbox", () => {
     expect(pruned.promptIdsByClientSessionId["session-1"]).toEqual([]);
   });
 
+  it("does not tombstone on an empty started user-message echo", () => {
+    const state = withEntry(emptyState(), createPromptOutboxEntry({
+      clientPromptId: "prompt-1",
+      clientSessionId: "session-1",
+      text: "hello",
+      blocks: [{ type: "text", text: "hello" }],
+      now: NOW,
+    }));
+
+    const next = reconcileOutboxFromEnvelopes(state, "session-1", [
+      envelope({
+        type: "item_started",
+        item: {
+          kind: "user_message",
+          status: "completed",
+          sourceAgentKind: "codex",
+          isTransient: false,
+          messageId: "message-1",
+          promptId: "prompt-1",
+          title: null,
+          toolCallId: null,
+          nativeToolName: null,
+          parentToolCallId: null,
+          rawInput: null,
+          rawOutput: null,
+          contentParts: [],
+          promptProvenance: null,
+        },
+      }),
+    ]);
+
+    expect(next.entriesByPromptId["prompt-1"]).toMatchObject({
+      deliveryState: "waiting_for_session",
+      echoedAt: null,
+    });
+  });
+
   it("keeps echoed tombstones while the matching runtime turn is in progress", () => {
     const echoedAt = "2026-01-01T00:00:01.000Z";
     const echoed = withEntry(emptyState(), {
@@ -354,6 +401,19 @@ describe("prompt outbox", () => {
     const transcript = transcriptWithUserPrompt("session-1", "prompt-1");
 
     expect(renderableOutboxEntriesForTranscript([entry], transcript)).toEqual([]);
+  });
+
+  it("keeps the local row until the runtime user-message echo has renderable content", () => {
+    const entry = createPromptOutboxEntry({
+      clientPromptId: "prompt-1",
+      clientSessionId: "session-1",
+      text: "hello",
+      blocks: [{ type: "text", text: "hello" }],
+      now: NOW,
+    });
+    const transcript = transcriptWithUserPrompt("session-1", "prompt-1", "");
+
+    expect(renderableOutboxEntriesForTranscript([entry], transcript)).toEqual([entry]);
   });
 
   it("does not render local queued prompts in the transcript", () => {
@@ -490,7 +550,11 @@ function envelope(
   };
 }
 
-function transcriptWithUserPrompt(sessionId: string, promptId: string): TranscriptState {
+function transcriptWithUserPrompt(
+  sessionId: string,
+  promptId: string,
+  text = "hello",
+): TranscriptState {
   const transcript = createTranscriptState(sessionId);
   transcript.turnOrder.push("turn-1");
   transcript.turnsById["turn-1"] = {
@@ -505,7 +569,7 @@ function transcriptWithUserPrompt(sessionId: string, promptId: string): Transcri
     itemId: "item-1",
     turnId: "turn-1",
     kind: "user_message",
-    text: "hello",
+    text,
     isStreaming: false,
     promptId,
     status: "completed",
@@ -514,7 +578,7 @@ function transcriptWithUserPrompt(sessionId: string, promptId: string): Transcri
     title: null,
     nativeToolName: null,
     parentToolCallId: null,
-    contentParts: [{ type: "text", text: "hello" }],
+    contentParts: text ? [{ type: "text", text }] : [],
     timestamp: NOW,
     startedSeq: 1,
     lastUpdatedSeq: 1,
