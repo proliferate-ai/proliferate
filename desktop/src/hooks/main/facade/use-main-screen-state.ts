@@ -17,7 +17,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useResize } from "@/hooks/ui/layout/use-resize";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { shouldMountWorkspaceShell } from "@/lib/domain/chat/surface/chat-surface";
@@ -27,7 +27,7 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,

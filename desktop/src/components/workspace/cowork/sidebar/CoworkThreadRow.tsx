@@ -1,8 +1,5 @@
 import type { CoworkThread } from "@anyharness/sdk";
-import {
-  ChevronDown,
-  ChevronRight,
-} from "@/components/ui/icons";
+import { ChevronDown, ChevronRight } from "@/components/ui/icons";
 import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";

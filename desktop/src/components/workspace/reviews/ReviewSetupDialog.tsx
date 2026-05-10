@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import { Plus } from "@/components/ui/icons";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayRegistration } from "@/hooks/ui/native/use-native-overlay-presence";
 import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { ReviewSetupLoopControls } from "./ReviewSetupLoopControls";
 import { ReviewSetupReviewerList } from "./ReviewSetupReviewerList";

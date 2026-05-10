@@ -5,7 +5,8 @@ import {
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
-import { Brain, Check, ChevronDown, Zap } from "@/components/ui/icons";
+import { Check, ChevronDown } from "@/components/ui/icons";
+import { Brain, Zap } from "@/components/ui/session-icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";

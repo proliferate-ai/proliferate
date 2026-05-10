@@ -63,7 +63,7 @@ vi.mock("@/components/ui/content/DiffViewer", () => ({
   DiffViewer: () => createElement("div", null, "diff rendered"),
 }));
 
-vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
+vi.mock("@/hooks/workspaces/files/workflows/use-workspace-file-actions", () => ({
   useWorkspaceFileActions: () => ({
     saveFile: vi.fn(),
     reloadFile: vi.fn(),

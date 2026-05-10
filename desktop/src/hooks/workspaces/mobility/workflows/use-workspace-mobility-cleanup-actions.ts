@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useCompleteCloudWorkspaceHandoffCleanup } from "@/hooks/access/cloud/use-complete-cloud-workspace-handoff-cleanup";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import type { WorkspaceMobilityState } from "./use-workspace-mobility-state";
+import type { WorkspaceMobilityState } from "../derived/use-workspace-mobility-state";
 
 export function useWorkspaceMobilityCleanupActions(state: WorkspaceMobilityState) {
   const {

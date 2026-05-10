@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useChatUserInputActions } from "@/hooks/chat/use-chat-user-input-actions";
+import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 
 const OTHER_OPTION_LABEL = "None of the above";

@@ -4,11 +4,8 @@ import type {
   TranscriptItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import {
-  ClipboardList,
-  FileText,
-  Settings,
-} from "@/components/ui/icons";
+import { ClipboardList, Settings } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 
 export function collectDescendantItems(
   itemIds: readonly string[],

@@ -3,11 +3,8 @@ import {
   CLOUD_SIDEBAR_STATUS_DEFINITIONS,
   type CloudSidebarStatus,
 } from "@/config/cloud-sidebar";
-import {
-  Archive,
-  GitMerge,
-  Pencil,
-} from "@/components/ui/icons";
+import { Archive, Pencil } from "@/components/ui/icons";
+import { GitMerge } from "@/components/ui/git-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";

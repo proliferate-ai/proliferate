@@ -1,9 +1,9 @@
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { StackedFiles } from "@/components/ui/icons";
+import { StackedFiles } from "@/components/ui/file-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
-import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
+import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/ui/use-workspace-tab-native-context-menu";
 import {
   FILE_TAB_CONTEXT_MENU_ITEMS,
   type WorkspaceTabContextMenuCommand,

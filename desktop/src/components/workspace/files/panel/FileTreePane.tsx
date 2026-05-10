@@ -9,21 +9,21 @@ import {
 } from "react";
 import { useWorkspaceFilesQuery } from "@anyharness/sdk-react";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { FilePlus, FolderPlus } from "@/components/ui/icons";
+import { FilePlus, FolderPlus } from "@/components/ui/file-icons";
 import {
   type OpenTarget,
   useTauriShellActions,
 } from "@/hooks/access/tauri/use-shell-actions";
 import { FileTreeNode } from "./FileTreeNode";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
-import { useNativeContextMenu } from "@/hooks/ui/use-native-context-menu";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
+import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,

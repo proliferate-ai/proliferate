@@ -104,6 +104,8 @@ desktop/src/
     domain/
       <domain>/
         <subdomain>/
+    integrations/
+      telemetry/
     workflows/
       <domain>/
     infra/
@@ -168,6 +170,7 @@ Use the lowest layer that can own the logic cleanly.
 | Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [guides/lib.md](guides/lib.md) |
 | Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [guides/lib.md](guides/lib.md) |
 | Raw external access | `lib/access/<system>/**` | `lib/access` owns raw cloud, AnyHarness desktop wiring, and Tauri native wrappers. | Product UI state, product branching, or components. | [guides/access.md](guides/access.md) |
+| Telemetry transport | `lib/integrations/telemetry/**` | It initializes and fans out vendor telemetry, Sentry, and anonymous telemetry transports. | Product workflow decisions, typed event catalogs, or generic cloud/Tauri access. | [guides/telemetry.md](guides/telemetry.md) |
 | Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [guides/lib.md](guides/lib.md) |
 | Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [guides/config.md](guides/config.md) |
 | Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [guides/copy.md](guides/copy.md) |
@@ -202,12 +205,14 @@ focused area doc explicitly marks the file as a transitional state adapter.
 
 Frontend ownership boundaries are enforced by
 `scripts/check_frontend_boundaries.py` in CI. The check is a ratchet: existing
-violations live in `scripts/frontend_boundaries_allowlist.txt`, and new
-violations fail the repo-shape job.
+violations, when present, live in
+`scripts/frontend_boundaries_allowlist.txt`, and new violations fail the
+repo-shape job.
 
-The allowlist is temporary migration debt. Cleanup PRs should remove allowlist
-entries whenever they move a path to the target architecture or reduce the
-number of violations in that file.
+The frontend boundary allowlist is empty as of this cleanup. If future
+temporary migration debt is allowlisted, cleanup PRs should remove entries
+whenever they move a path to the target architecture or reduce the number of
+violations in that file.
 
 React Query cache shape is owned by access hooks by default. The only
 product-domain exception is a product-composed cache under

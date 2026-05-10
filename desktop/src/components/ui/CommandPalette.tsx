@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayRegistration } from "@/hooks/ui/native/use-native-overlay-presence";
 
 export interface CommandPaletteCloseOptions {
   restoreFocus?: boolean;

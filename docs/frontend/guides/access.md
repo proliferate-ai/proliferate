@@ -38,9 +38,18 @@ hooks/access/
       use-connector-mutations.ts
 ```
 
-Existing code may still live under older transitional paths such as
-`lib/integrations/**` or domain hook folders. New code and cleanup work should
-move toward the access shape above.
+`lib/integrations/telemetry/**` is not transitional access debt. It is the
+first-class transport home for vendor telemetry, Sentry, and anonymous
+telemetry; see [telemetry.md](telemetry.md).
+
+The remaining `lib/integrations/auth/**` tree is a current auth integration
+carve-out used by cloud access and account auth flows. Treat it as migration
+debt toward `lib/access/cloud/**` or an explicitly documented auth access
+boundary when touched. Do not add unrelated `lib/integrations/**` folders.
+
+Existing access code may still live under older transitional paths such as
+domain hook folders. New code and cleanup work should move toward the access
+shape above.
 
 ## Query Key Ownership
 

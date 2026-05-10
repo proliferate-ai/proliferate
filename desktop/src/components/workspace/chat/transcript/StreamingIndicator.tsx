@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { BrailleSweepBadge } from "@/components/ui/icons";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 
 interface StreamingIndicatorProps {
   startedAt?: string | null;

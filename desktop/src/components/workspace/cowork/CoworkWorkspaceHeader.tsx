@@ -1,5 +1,6 @@
 import { IconButton } from "@/components/ui/IconButton";
-import { FileText, SplitPanel } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
+import { SplitPanel } from "@/components/ui/workspace-icons";
 
 interface CoworkWorkspaceHeaderProps {
   title: string;

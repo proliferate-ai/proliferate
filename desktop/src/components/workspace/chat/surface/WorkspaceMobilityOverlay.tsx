@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/Button";
 import {
   type WorkspaceMobilityOverlayMode,
   useWorkspaceMobilityOverlayState,
-} from "@/hooks/workspaces/mobility/use-workspace-mobility-overlay-state";
+} from "@/hooks/workspaces/mobility/ui/use-workspace-mobility-overlay-state";
 import {
   CheckCircleFilled,
   CircleAlert,

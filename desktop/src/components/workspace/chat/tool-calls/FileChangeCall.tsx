@@ -5,12 +5,8 @@ import {
   FileDiffCard,
 } from "@/components/ui/content/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
-import {
-  ArrowRight,
-  FilePen,
-  FilePlus,
-  Minus,
-} from "@/components/ui/icons";
+import { ArrowRight, Minus } from "@/components/ui/icons";
+import { FilePen, FilePlus } from "@/components/ui/file-icons";
 import { useOpenInDefaultEditor } from "@/hooks/editor/workflows/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";

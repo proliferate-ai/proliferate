@@ -20,14 +20,14 @@ import {
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatComposerKeyboard } from "@/hooks/chat/ui/use-chat-composer-keyboard";
-import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
+import { useChatDraftState } from "@/hooks/chat/ui/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/facade/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/workflows/use-chat-prompt-actions";
 import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt-attachments";
 import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate";
 import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
-import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
-import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
+import { useChatSessionControls } from "@/hooks/chat/facade/use-chat-session-controls";
+import { useQueuedPromptEdit } from "@/hooks/chat/workflows/use-queued-prompt-edit";
 import { useActiveReviewRun } from "@/hooks/reviews/facade/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/workflows/use-review-actions";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
@@ -50,7 +50,7 @@ import { ChatInputControlRow } from "./ChatInputControlRow";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatInputHiddenFileInput } from "./ChatInputHiddenFileInput";
 import { ChatComposerSurface } from "./ChatComposerSurface";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +

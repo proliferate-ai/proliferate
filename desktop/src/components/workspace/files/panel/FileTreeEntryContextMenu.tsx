@@ -3,7 +3,8 @@ import type { WorkspaceFileEntry } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { FilePlus, FolderPlus, Pencil, Trash } from "@/components/ui/icons";
+import { Pencil, Trash } from "@/components/ui/icons";
+import { FilePlus, FolderPlus } from "@/components/ui/file-icons";
 import {
   TargetIcon,
 } from "@/components/workspace/open-target/OpenTargetMenu";

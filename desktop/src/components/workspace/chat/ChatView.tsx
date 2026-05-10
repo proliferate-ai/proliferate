@@ -18,15 +18,15 @@ import {
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
 import { useChatPromptAttachments } from "@/hooks/chat/ui/use-chat-prompt-attachments";
-import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
+import { useCloudWorkspacePolling } from "@/hooks/chat/lifecycle/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
-import { useQueuedPromptEditStatus } from "@/hooks/chat/use-queued-prompt-edit";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useQueuedPromptEditStatus } from "@/hooks/chat/workflows/use-queued-prompt-edit";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import { useSessionErrorAcknowledgement } from "@/hooks/sessions/lifecycle/use-session-error-acknowledgement";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/lifecycle/use-selected-cloud-runtime-rehydration";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/use-workspace-mobility-lifecycle";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
+import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/lifecycle/use-workspace-mobility-lifecycle";
 import { canAttachPromptContent } from "@/lib/domain/chat/composer/prompt-attachment-rules";
 import {
   canAcceptChatFileDrop,

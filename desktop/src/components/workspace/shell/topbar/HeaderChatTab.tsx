@@ -7,7 +7,7 @@ import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/she
 import {
   isPrimaryMultiSelectClick,
   isPrimaryMultiSelectPointer,
-} from "@/hooks/workspaces/tabs/use-header-tabs-multi-select";
+} from "@/hooks/workspaces/tabs/ui/use-header-tabs-multi-select";
 import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 
 interface HeaderChatTabProps {

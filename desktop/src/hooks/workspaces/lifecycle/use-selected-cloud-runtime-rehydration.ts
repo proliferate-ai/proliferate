@@ -5,7 +5,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/use-workspace-bootstrap-actions";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
-import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,

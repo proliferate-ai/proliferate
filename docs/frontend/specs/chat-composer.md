@@ -9,11 +9,11 @@ Scope:
 - `desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
 - `desktop/src/components/workspace/chat/plans/**`
 - `desktop/src/components/workspace/reviews/**`
-- `desktop/src/hooks/chat/use-composer-dock-slots.tsx`
-- `desktop/src/hooks/chat/use-active-todo-tracker.ts`
+- `desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`
+- `desktop/src/hooks/chat/derived/use-active-todo-tracker.ts`
 - `desktop/src/hooks/reviews/**`
-- `desktop/src/lib/domain/chat/active-todo-tracker.ts`
-- `desktop/src/lib/domain/chat/claude-plan-tool-call.ts`
+- `desktop/src/lib/domain/chat/tools/active-todo-tracker.ts`
+- `desktop/src/lib/domain/chat/tools/claude-plan-tool-call.ts`
 - `desktop/src/lib/domain/reviews/**`
 - `desktop/src/stores/reviews/**`
 
@@ -54,7 +54,7 @@ Non-negotiable:
 
 ## 2. Dock Regions
 
-`useComposerDockSlots` (`desktop/src/hooks/chat/use-composer-dock-slots.tsx`)
+`useComposerDockSlots` (`desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`)
 derives the named regions above the composer. Classify each inhabitant by state
 role first, not by component family. They always render in this order:
 
@@ -85,7 +85,7 @@ finished result notice.
 
 If you need to introduce another dock-region inhabitant, classify it by state
 role first: outbound work, active agent state, or attached context/parallel
-work. Add it to `use-composer-dock-slots.tsx` — do not compute it inline in
+work. Add it to `hooks/chat/ui/use-composer-dock-slots.tsx` — do not compute it inline in
 `ChatView` and do not introduce a parallel arbiter elsewhere.
 
 `attachedSlot` renders one shared `DelegatedWorkComposerPanel` containing one
@@ -238,7 +238,9 @@ Rules that apply everywhere in `desktop/src/**` but are easy to violate in this 
 
 - **No raw `<button>`.** Use `Button` from `components/ui/Button.tsx`. If the existing variants don't fit, add a new size/variant to the primitive table — don't hand-roll.
 - **No inline SVG icons.** Status icons (`Circle`, `CheckCircleFilled`, etc.) live in `components/ui/icons.tsx`. If you need a new one, add it there and import it.
-- **No inline constants in `.tsx` files** for fixture data. Playground fixtures live in `lib/domain/chat/__fixtures__/playground.ts`. Scenario config lives in `config/playground.ts`.
+- **No inline constants in `.tsx` files** for fixture data. Playground fixtures
+  live in `lib/domain/chat/__fixtures__/playground/**`. Scenario config lives
+  in `config/playground.ts`.
 
 ## 6. Things that are explicitly forbidden
 
@@ -284,7 +286,7 @@ Thin page → fat components, per the `pages/**` orchestration-only rule:
 
 - `pages/ChatPlaygroundPage.tsx` — reads the scenario query param, renders layout, delegates
 - `config/playground.ts` — `ScenarioKey`, `SCENARIOS`, `resolveScenarioKey`
-- `lib/domain/chat/__fixtures__/playground.ts` — fixture data (`TODOS_*`, `CLAUDE_PLAN_*`, `*_OPTIONS`)
+- `lib/domain/chat/__fixtures__/playground/**` — fixture data (`TODOS_*`, `CLAUDE_PLAN_*`, `*_OPTIONS`)
 - `components/playground/PlaygroundScenarioBar.tsx` — top-bar scenario picker
 - `components/playground/PlaygroundTranscript.tsx` — transcript area (renders `ProposedPlanCard` when applicable)
 - `components/playground/PlaygroundComposer.tsx` — `ChatComposerDock` + scenario-driven dock slots + read-only composer surface

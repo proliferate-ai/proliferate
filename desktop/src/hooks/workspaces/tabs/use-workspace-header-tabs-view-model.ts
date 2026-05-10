@@ -53,7 +53,7 @@ import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/select
 import {
   resolveWithWorkspaceFallback,
 } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { useDebugValueChange } from "@/hooks/ui/debug/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
 

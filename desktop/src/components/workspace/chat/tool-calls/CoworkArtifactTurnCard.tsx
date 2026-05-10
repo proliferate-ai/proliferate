@@ -1,6 +1,6 @@
 import type { ToolCallItem } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
-import { FileText } from "@/components/ui/icons";
+import { FileText } from "@/components/ui/file-icons";
 import { deriveCoworkArtifactToolPresentation } from "@/lib/domain/chat/tools/cowork-artifact-tool-presentation";
 import { resolveCoworkArtifactTitle } from "@/lib/domain/cowork/artifacts";
 

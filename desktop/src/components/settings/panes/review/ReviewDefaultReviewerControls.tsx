@@ -1,9 +1,6 @@
 import type { ReviewKind } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
-import {
-  Plus,
-  X,
-} from "@/components/ui/icons";
+import { Plus, X } from "@/components/ui/icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   MAX_REVIEWERS_PER_RUN,

@@ -14,18 +14,18 @@ import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-han
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
-import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";
-import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/use-header-tabs-group-editor";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useResizeObserverWidth } from "@/hooks/ui/layout/use-resize-observer-width";
+import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/workflows/use-header-tabs-close-actions";
+import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/ui/use-header-tabs-group-editor";
 import {
   useHeaderTabsLayout,
-} from "@/hooks/workspaces/tabs/use-header-tabs-layout";
-import { useHeaderTabsMultiSelect } from "@/hooks/workspaces/tabs/use-header-tabs-multi-select";
-import { useManualChatGroupActions } from "@/hooks/workspaces/tabs/use-manual-chat-group-actions";
+} from "@/hooks/workspaces/tabs/derived/use-header-tabs-layout";
+import { useHeaderTabsMultiSelect } from "@/hooks/workspaces/tabs/ui/use-header-tabs-multi-select";
+import { useManualChatGroupActions } from "@/hooks/workspaces/tabs/workflows/use-manual-chat-group-actions";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
-import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-actions";
-import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
+import { useTabGroupActions } from "@/hooks/workspaces/tabs/workflows/use-tab-group-actions";
+import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/workflows/use-shell-tab-order-actions";
 import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";

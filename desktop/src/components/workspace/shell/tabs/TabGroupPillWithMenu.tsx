@@ -3,7 +3,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
 import { TabGroupPill } from "@/components/workspace/shell/tabs/TabGroupPill";
-import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
+import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/ui/use-workspace-tab-native-context-menu";
 import {
   buildGroupPillContextMenuItems,
   type WorkspaceTabContextMenuCommand,

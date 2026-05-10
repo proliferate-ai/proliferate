@@ -7,12 +7,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
-import {
-  Check,
-  Pencil,
-  Terminal as TerminalIcon,
-  X,
-} from "@/components/ui/icons";
+import { Check, Pencil, Terminal as TerminalIcon, X } from "@/components/ui/icons";
 
 const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
 const HEADER_TAB_EDIT_CLASS =

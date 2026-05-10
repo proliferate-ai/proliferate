@@ -3,7 +3,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayOpen } from "@/hooks/ui/native/use-native-overlay-presence";
 
 afterEach(() => {
   cleanup();

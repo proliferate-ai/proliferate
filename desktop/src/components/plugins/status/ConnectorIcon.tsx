@@ -15,17 +15,10 @@ import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { selectConnectorIconTileClass } from "@/lib/domain/mcp/connector-icon-tile";
-import {
-  Calendar,
-  Folder,
-  GitHub,
-  Globe,
-  Mail,
-  MessageSquare,
-  Search,
-  Sun,
-  Terminal,
-} from "@/components/ui/icons";
+import { Calendar, Globe, Mail, Search, Sun, Terminal } from "@/components/ui/icons";
+import { Folder } from "@/components/ui/file-icons";
+import { GitHub } from "@/components/ui/git-icons";
+import { MessageSquare } from "@/components/ui/session-icons";
 
 function LinearGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (

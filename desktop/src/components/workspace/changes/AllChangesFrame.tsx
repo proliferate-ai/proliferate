@@ -21,8 +21,8 @@ import { viewerTargetKey } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { recordMeasurementDiagnostic } from "@/lib/infra/measurement/debug-measurement";
-import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/lifecycle/use-diff-review-measurement";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-actions";
 
 type DiffReviewMeasurementState = ReturnType<typeof useDiffReviewMeasurement>;
 

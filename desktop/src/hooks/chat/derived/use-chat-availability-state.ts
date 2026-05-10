@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/derived/use-workspace-mobility-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/derived/use-selected-cloud-runtime-state";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   resolveChatInputAvailability,

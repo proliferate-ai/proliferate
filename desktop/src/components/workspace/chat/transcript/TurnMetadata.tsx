@@ -1,5 +1,6 @@
 import { IconButton } from "@/components/ui/IconButton";
-import { Copy, Fork, Undo, FileIcon } from "@/components/ui/icons";
+import { Copy, Fork, Undo } from "@/components/ui/icons";
+import { FileIcon } from "@/components/ui/file-icons";
 
 interface FileBadge {
   filename: string;

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { useHighlightedCode } from "@/hooks/ui/use-highlighted-code";
+import { useHighlightedCode } from "@/hooks/ui/highlighting/use-highlighted-code";
 
 interface HighlightedCodePanelProps {
   code: string;

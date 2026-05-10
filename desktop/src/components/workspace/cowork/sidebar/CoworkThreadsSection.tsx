@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { BrailleSweepBadge, CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
+import { BrailleSweepBadge, Plus } from "@/components/ui/icons";
+import { CollapseAll, ExpandAll } from "@/components/ui/workspace-icons";
 import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";

@@ -33,7 +33,7 @@ import {
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workflows/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";

@@ -2,10 +2,7 @@ import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import {
-  Check,
-  Sparkles,
-} from "@/components/ui/icons";
+import { Check, Sparkles } from "@/components/ui/icons";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import type {
   HomeNextModelGroup,

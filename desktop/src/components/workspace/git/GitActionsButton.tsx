@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
-import { GitCommit, CloudUpload, GitHub, ChevronDown } from "@/components/ui/icons";
+import { ChevronDown } from "@/components/ui/icons";
+import { GitCommit, GitHub } from "@/components/ui/git-icons";
+import { CloudUpload } from "@/components/ui/workspace-icons";
 import { Button } from "@/components/ui/Button";
 import type { GitStatusSnapshot } from "@anyharness/sdk";
 

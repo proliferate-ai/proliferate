@@ -56,7 +56,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
     selector(harnessMocks.state),
 }));
 
-vi.mock("@/hooks/workspaces/mobility/use-workspace-mobility-state", () => ({
+vi.mock("@/hooks/workspaces/mobility/derived/use-workspace-mobility-state", () => ({
   useWorkspaceMobilityState: () => mobilityMocks.state,
 }));
 

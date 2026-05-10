@@ -1,5 +1,5 @@
 import type { ReviewRunDetail } from "@anyharness/sdk";
-import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
+import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/facade/use-delegated-work-composer";
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
   type PlaygroundReviewComposerRow,

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/Button";
-import { RefreshCw, SplitPanel } from "@/components/ui/icons";
+import { RefreshCw } from "@/components/ui/icons";
+import { SplitPanel } from "@/components/ui/workspace-icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 export function AllChangesToolbar({

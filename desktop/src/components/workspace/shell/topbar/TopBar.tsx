@@ -3,13 +3,8 @@ import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import { IconButton } from "@/components/ui/IconButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import {
-  Copy,
-  Check,
-  Pencil,
-  SplitPanel,
-  SplitPanelRight,
-} from "@/components/ui/icons";
+import { Copy, Check, Pencil } from "@/components/ui/icons";
+import { SplitPanel, SplitPanelRight } from "@/components/ui/workspace-icons";
 import {
   type OpenTarget,
   useTauriShellActions,

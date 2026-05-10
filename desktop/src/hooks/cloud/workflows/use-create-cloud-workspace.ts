@@ -22,7 +22,7 @@ import { useCloudCredentialCache } from "@/hooks/access/cloud/use-cloud-credenti
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-billing";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
+import { useWorkspaceEntryFlow } from "@/hooks/workspaces/workflows/use-workspace-entry-flow";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";

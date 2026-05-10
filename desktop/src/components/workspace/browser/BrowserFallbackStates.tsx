@@ -1,9 +1,5 @@
 import { Button } from "@/components/ui/Button";
-import {
-  CircleAlert,
-  ExternalLink,
-  Globe,
-} from "@/components/ui/icons";
+import { CircleAlert, ExternalLink, Globe } from "@/components/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 export function BrowserUnavailableOverlay({

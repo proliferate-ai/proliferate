@@ -2,17 +2,14 @@ import type { ToolCallItem } from "@anyharness/sdk";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
-import {
-  ChevronRight,
-  ExternalLink,
-  FolderPlus,
-  GitBranch,
-} from "@/components/ui/icons";
+import { ChevronRight, ExternalLink } from "@/components/ui/icons";
+import { FolderPlus } from "@/components/ui/file-icons";
+import { GitBranch } from "@/components/ui/git-icons";
 import { ProliferateIcon } from "@/components/ui/proliferate-icons";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
-import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
+import { useBrailleFillsweep } from "@/hooks/ui/animation/use-braille-sweep";
 import {
   deriveCoworkCodingToolPresentation,
   type CoworkCodingAction,
