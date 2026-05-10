@@ -21,14 +21,23 @@ Current names:
 ```text
 SessionRuntime      anyharness-lib/src/sessions/runtime/
 SessionService      anyharness-lib/src/sessions/service.rs
-SessionStore        anyharness-lib/src/sessions/store.rs
+SessionStore        anyharness-lib/src/sessions/store/**
 AcpManager          target name: LiveSessionManager
 LiveSessionHandle   currently inside acp/session_actor.rs
 SessionActor        currently acp/session_actor.rs
 RuntimeClient       target name: AcpClient
-SessionEventSink    currently acp/event_sink.rs
-InteractionBroker   currently acp/permission_broker.rs
+SessionEventSink    currently acp/event_sink/**
+InteractionBroker   currently acp/permission_broker/**
 ```
+
+Implementation reality after the completed migration phases:
+
+- session MCP assembly lives under `sessions/mcp_bindings/**`.
+- `SessionStore` is split under `sessions/store/**`.
+- `SessionRuntime` is split under `sessions/runtime/**`.
+- `SessionEventSink` is split under `acp/event_sink/**`.
+- `acp/session_actor.rs` remains the current actor implementation; the actor
+  loop rewrite is deferred/manual.
 
 ## Role Map
 
@@ -73,7 +82,9 @@ High-level session use cases:
 - edit/remove pending prompts
 - inject/replay events
 
-This is the bridge between durable sessions and live execution.
+This is the bridge between durable sessions and live execution. The
+implementation is split under `sessions/runtime/**` by API-facing operation
+family; callers should continue to use the public `SessionRuntime` type.
 
 ### LiveSessionManager
 
@@ -111,6 +122,10 @@ One running agent session state machine:
 - interaction registration
 - event sink calls
 - shutdown/error handling
+
+The current implementation remains a single `acp/session_actor.rs` file. The
+rewrite into an actor folder requires a dedicated actor spec and is explicitly
+deferred.
 
 ### AcpClient
 

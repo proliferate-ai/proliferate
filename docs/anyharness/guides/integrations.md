@@ -7,7 +7,7 @@ Status: authoritative for external protocol/vendor mechanics.
 `integrations/**` owns how AnyHarness speaks external protocols and vendor
 surfaces. It does not own product semantics.
 
-Target examples:
+Current and target examples:
 
 ```text
 integrations/mcp/
@@ -19,6 +19,11 @@ integrations/agent_cli/
 integrations/acp/
   low-level ACP protocol helpers if they become reusable outside live sessions
 ```
+
+`integrations/mcp/**` and `integrations/agent_cli/**` are present in the
+current code. Reusable ACP protocol helpers have not earned a separate
+`integrations/acp/**` folder yet; live ACP execution remains under the
+transitional `acp/**` path.
 
 ## MCP
 
@@ -33,7 +38,8 @@ Generic MCP code belongs here:
 Product tool behavior does not belong here.
 Session MCP launch assembly also does not belong here; that is session-domain
 composition because it decides which user and product MCP servers a session
-launches with.
+launches with. The current implementation is `sessions/mcp_bindings/**`; the
+final topology target is `domains/sessions/mcp_bindings/**`.
 
 Examples:
 

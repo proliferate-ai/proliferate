@@ -11,7 +11,11 @@ thing.
 
 MCP servers explicitly attached to a session by a client/user.
 
-Current owner: `sessions/mcp.rs`.
+Current implementation owner:
+
+```text
+sessions/mcp_bindings/
+```
 
 Target owner:
 
@@ -28,12 +32,14 @@ Responsibilities:
 - conversion to ACP MCP server config
 
 This folder also owns the central session MCP assembly path described below.
+The current path is still under transitional `sessions/**` topology; the final
+`domains/sessions/**` rename is a later topology phase.
 
 ### 2. Session Extensions
 
 Product features can inject MCP servers into a session launch.
 
-Current trait: `SessionExtension`.
+Current trait: `sessions/extensions.rs::SessionExtension`.
 
 Target owner:
 
@@ -41,13 +47,13 @@ Target owner:
 domains/sessions/extensions/
 ```
 
-Implementations:
+Current implementations:
 
 ```text
-domains/cowork/session_extension.rs
-domains/reviews/session_extension.rs
-domains/sessions/subagents/session_extension.rs
-domains/sessions/workspace_naming/session_extension.rs
+domains/cowork/runtime.rs
+domains/reviews/hooks.rs
+sessions/subagents/hooks.rs
+sessions/workspace_naming/hooks.rs
 ```
 
 The extension returns launch extras:
@@ -68,13 +74,13 @@ Examples:
 - review tools
 - workspace naming tool
 
-Target shape:
+Current implementation shape:
 
 ```text
-domains/cowork/mcp_server.rs
-domains/reviews/mcp_server.rs
-domains/sessions/subagents/mcp_server.rs
-domains/sessions/workspace_naming/mcp_server.rs
+domains/cowork/mcp_server/
+domains/reviews/mcp_server/
+sessions/subagents/mcp_server/
+sessions/workspace_naming/mcp_server/
 ```
 
 Product tool behavior stays with the product domain.
@@ -82,6 +88,12 @@ Product tool behavior stays with the product domain.
 ### 4. MCP Elicitation
 
 Live ACP interaction type where an agent asks for an MCP form or URL reveal.
+
+Current implementation owner:
+
+```text
+acp/mcp_elicitation/
+```
 
 Target owner:
 
@@ -108,6 +120,12 @@ SessionRuntime starts a session
 Session launch needs one central assembly boundary. Do not spread MCP launch
 composition across session runtime, product domains, and actor startup.
 
+Current implementation owner:
+
+```text
+sessions/mcp_bindings/assembly.rs
+```
+
 Target owner:
 
 ```text
@@ -121,10 +139,10 @@ Which MCP servers, prompt additions, and binding summaries should this session
 launch with?
 ```
 
-Expected shape:
+Current transitional shape:
 
 ```text
-domains/sessions/mcp_bindings/
+sessions/mcp_bindings/
   model.rs       # SessionMcpServer, headers/env, policies, summaries
   crypto.rs      # binding encryption/decryption and data-key loading
   contract.rs    # contract <-> domain mapping
@@ -132,6 +150,9 @@ domains/sessions/mcp_bindings/
   acp.rs         # SessionMcpServer -> ACP MCP server config
   assembly.rs    # assemble_session_mcp_launch(...)
 ```
+
+The final topology target keeps the same files under
+`domains/sessions/mcp_bindings/`.
 
 The assembly function owns:
 
@@ -228,6 +249,10 @@ integrations/mcp/
   json_rpc.rs
   tools.rs
 ```
+
+The shared `integrations/mcp/**` helpers are present. Per-feature HTTP endpoint
+wrappers may remain until a focused transport cleanup moves common endpoint
+scaffolding behind one wrapper.
 
 ## Consolidation Rule
 
