@@ -125,6 +125,12 @@ export function useSessionSelectionWorkflowActions({
       sessionId,
       flowId: options?.latencyFlowId ?? null,
       hasExistingSlot: existingSlot !== null,
+      existingSlotWorkspaceId: existingSlot?.workspaceId ?? null,
+      existingSlotMaterializedSessionId: existingSlot?.materializedSessionId ?? null,
+      existingSlotTranscriptHydrated: existingSlot?.transcriptHydrated ?? null,
+      existingSlotStatus: existingSlot?.status ?? null,
+      existingSlotStreamConnectionState: existingSlot?.streamConnectionState ?? null,
+      existingSlotPendingInteractionCount: existingSlot?.transcript.pendingInteractions.length ?? null,
       selectedWorkspaceId: current.selectedWorkspaceId,
     });
     if (guard && !isSessionActivationCurrent(guard)) {
@@ -197,6 +203,16 @@ export function useSessionSelectionWorkflowActions({
           step: "session.select.hot_slot_activate",
           startedAt: hotStartedAt,
           outcome: existingSlot.transcriptHydrated ? "cache_hit" : "cache_miss",
+        });
+        logLatency("session.select.hot_slot_activate", {
+          sessionId,
+          workspaceId: existingSlot.workspaceId,
+          materializedSessionId: existingSlot.materializedSessionId,
+          transcriptHydrated: existingSlot.transcriptHydrated,
+          status: existingSlot.status,
+          streamConnectionState: existingSlot.streamConnectionState,
+          pendingInteractionCount: existingSlot.transcript.pendingInteractions.length,
+          flowId: options?.latencyFlowId ?? null,
         });
         if (hotOperationId) {
           markOperationForNextCommit(hotOperationId, [
@@ -381,10 +397,16 @@ export function useSessionSelectionWorkflowActions({
       });
     }
 
+    const completedSlot = getSessionRecord(sessionId);
     logLatency("session.select.completed", {
       sessionId,
       workspaceId,
       flowId: options?.latencyFlowId ?? null,
+      materializedSessionId: completedSlot?.materializedSessionId ?? null,
+      transcriptHydrated: completedSlot?.transcriptHydrated ?? null,
+      status: completedSlot?.status ?? null,
+      streamConnectionState: completedSlot?.streamConnectionState ?? null,
+      pendingInteractionCount: completedSlot?.transcript.pendingInteractions.length ?? null,
       totalElapsedMs: elapsedMs(startedAt),
     });
     if (measurementOperationId) {

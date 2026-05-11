@@ -21,6 +21,7 @@ import { outboxEntriesForSession } from "@/lib/domain/chat/outbox/prompt-outbox-
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
 interface PromptSessionInput {
   sessionId: string;
@@ -65,6 +66,11 @@ export function useSessionPromptWorkflow() {
         PROMPT_SUBMIT_MEASUREMENT_SURFACES,
       );
     }
+    const outboxPlacement = resolvePromptOutboxPlacement({
+      isSessionBusy: isSessionSlotBusy(slot),
+      isSessionMaterialized: Boolean(slot?.materializedSessionId),
+      existingEntries: existingOutboxEntries,
+    });
     flushSync(() => {
       outboxStore.enqueue({
         clientPromptId,
@@ -75,13 +81,25 @@ export function useSessionPromptWorkflow() {
         blocks: blocks ?? [{ type: "text", text }],
         attachmentSnapshots,
         contentParts: optimisticContentParts,
-        placement: resolvePromptOutboxPlacement({
-          isSessionBusy: isSessionSlotBusy(slot),
-          isSessionMaterialized: Boolean(slot?.materializedSessionId),
-          existingEntries: existingOutboxEntries,
-        }),
+        placement: outboxPlacement,
         latencyFlowId,
       });
+    });
+    logLatency("prompt.outbox.enqueue", {
+      clientPromptId,
+      clientSessionId: sessionId,
+      workspaceId: resolvedWorkspaceId,
+      materializedSessionId: slot?.materializedSessionId ?? null,
+      deliveryState: "waiting_for_session",
+      placement: outboxPlacement,
+      hasSlot: Boolean(slot),
+      slotStatus: slot?.status ?? null,
+      transcriptHydrated: slot?.transcriptHydrated ?? null,
+      streamConnectionState: slot?.streamConnectionState ?? null,
+      existingOutboxEntryCount: existingOutboxEntries.length,
+      blockTypes: (blocks ?? [{ type: "text" as const, text }]).map((block) => block.type),
+      attachmentCount: attachmentSnapshots?.length ?? 0,
+      hasOptimisticContentParts: Boolean(optimisticContentParts?.length),
     });
     recordMeasurementWorkflowStep({
       operationId: measurementOperationId,

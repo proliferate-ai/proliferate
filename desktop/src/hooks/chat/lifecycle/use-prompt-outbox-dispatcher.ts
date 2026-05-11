@@ -3,6 +3,7 @@ import { usePromptSessionMutation } from "@anyharness/sdk-react";
 import {
   selectNextDispatchableOutboxEntry,
 } from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
+import { transcriptHasRenderablePromptEcho } from "@/lib/domain/chat/outbox/prompt-echo";
 import { classifyPromptDispatchFailure } from "@/lib/domain/chat/outbox/prompt-dispatch-failure";
 import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
 import {
@@ -13,18 +14,19 @@ import {
   failLatencyFlow,
   finishLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";
 import {
   waitForSessionMaterialization,
-  type SessionMaterializationDeps,
 } from "@/lib/workflows/sessions/session-materialization";
 import {
-  getMaterializedSessionId,
+  sessionMaterializationDeps,
+} from "@/hooks/sessions/workflows/session-materialization-deps";
+import {
   getSessionRecord,
 } from "@/stores/sessions/session-records";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
@@ -36,14 +38,6 @@ const ACCEPTED_RUNNING_RECONCILE_DELAYS_MS = [250, 1_000, 2_500, 5_000, 10_000] 
 const ACCEPTED_RUNNING_RECONCILE_TIMEOUT_MS = 3_000;
 
 let activeDispatcherOwner: symbol | null = null;
-
-const sessionMaterializationDeps: SessionMaterializationDeps = {
-  getMaterializedSessionId,
-  subscribeToMaterializedSessionId: (clientSessionId, onChange) =>
-    useSessionDirectoryStore.subscribe((state) => {
-      onChange(state.entriesById[clientSessionId]?.materializedSessionId ?? null);
-    }),
-};
 
 export function usePromptOutboxDispatcher(): void {
   const dispatchVersion = usePromptOutboxStore((state) => state.dispatchVersion);
@@ -89,12 +83,26 @@ export function usePromptOutboxDispatcher(): void {
         deliveryState: "preparing",
         errorMessage: null,
       });
+      logLatency("prompt.outbox.dispatch.prepare", {
+        clientPromptId: entry.clientPromptId,
+        clientSessionId: entry.clientSessionId,
+        entryWorkspaceId: entry.workspaceId,
+        entryMaterializedSessionId: entry.materializedSessionId,
+        placement: entry.placement,
+        blockTypes: entry.blocks.map((block) => block.type),
+        attachmentCount: entry.attachmentSnapshots.length,
+      });
 
       const materializedSessionId = await waitForSessionMaterialization(
         entry.clientSessionId,
         sessionMaterializationDeps,
         { timeoutMs: CONFIG_READY_TIMEOUT_MS },
       );
+      logLatency("prompt.outbox.dispatch.materialized", {
+        clientPromptId: entry.clientPromptId,
+        clientSessionId: entry.clientSessionId,
+        materializedSessionId,
+      });
       usePromptOutboxStore.getState().bindMaterializedSession(
         entry.clientSessionId,
         materializedSessionId,
@@ -103,6 +111,12 @@ export function usePromptOutboxDispatcher(): void {
         .getState()
         .entriesByPromptId[entry.clientPromptId];
       if (!latestBeforeDispatch || latestBeforeDispatch.deliveryState !== "preparing") {
+        logLatency("prompt.outbox.dispatch.aborted", {
+          reason: "entry_not_preparing_after_materialization",
+          clientPromptId: entry.clientPromptId,
+          clientSessionId: entry.clientSessionId,
+          latestDeliveryState: latestBeforeDispatch?.deliveryState ?? null,
+        });
         return;
       }
 
@@ -113,6 +127,12 @@ export function usePromptOutboxDispatcher(): void {
         .getState()
         .entriesByPromptId[entry.clientPromptId];
       if (!latestAfterPrepare || latestAfterPrepare.deliveryState !== "preparing") {
+        logLatency("prompt.outbox.dispatch.aborted", {
+          reason: "entry_not_preparing_after_block_prepare",
+          clientPromptId: entry.clientPromptId,
+          clientSessionId: entry.clientSessionId,
+          latestDeliveryState: latestAfterPrepare?.deliveryState ?? null,
+        });
         return;
       }
       const {
@@ -129,6 +149,13 @@ export function usePromptOutboxDispatcher(): void {
         dispatchedAt: new Date().toISOString(),
       });
       requestStarted = true;
+      logLatency("prompt.outbox.dispatch.request", {
+        clientPromptId: entry.clientPromptId,
+        clientSessionId: entry.clientSessionId,
+        workspaceId,
+        materializedSessionId: resolvedSessionId,
+        shouldGenerateTitle,
+      });
       const response = await promptSessionMutation.mutateAsync({
         workspaceId,
         sessionId: resolvedSessionId,
@@ -150,6 +177,14 @@ export function usePromptOutboxDispatcher(): void {
         acceptedAt: new Date().toISOString(),
         errorMessage: null,
       });
+      logLatency("prompt.outbox.dispatch.accepted", {
+        clientPromptId: entry.clientPromptId,
+        clientSessionId: entry.clientSessionId,
+        workspaceId,
+        materializedSessionId: response.session.id,
+        responseStatus: response.status,
+        queuedSeq: response.queuedSeq ?? null,
+      });
       finishLatencyFlow(entry.latencyFlowId, "processing_started", {
         keepActive: true,
       });
@@ -170,6 +205,13 @@ export function usePromptOutboxDispatcher(): void {
       }
     } catch (error) {
       const failure = classifyPromptDispatchFailure(error, requestStarted);
+      logLatency("prompt.outbox.dispatch.failed", {
+        clientPromptId: entry.clientPromptId,
+        clientSessionId: entry.clientSessionId,
+        requestStarted,
+        deliveryState: failure.deliveryState,
+        errorMessage: failure.message,
+      });
       usePromptOutboxStore.getState().patchEntry(entry.clientPromptId, {
         deliveryState: failure.deliveryState,
         errorMessage: failure.message,
@@ -212,6 +254,16 @@ export function usePromptOutboxDispatcher(): void {
       }
       const record = getSessionRecord(clientSessionId);
       if (!record?.materializedSessionId) {
+        logLatency("prompt.outbox.dispatch.waiting_unmaterialized", {
+          clientSessionId,
+          nextPromptId: entry.clientPromptId,
+          hasRecord: Boolean(record),
+          workspaceId: record?.workspaceId ?? entry.workspaceId,
+          status: record?.status ?? null,
+          transcriptHydrated: record?.transcriptHydrated ?? null,
+          outboxWorkspaceId: entry.workspaceId,
+          promptCount: state.promptIdsByClientSessionId[clientSessionId]?.length ?? 0,
+        });
         continue;
       }
       inFlightSessionIdsRef.current.add(clientSessionId);
@@ -276,7 +328,5 @@ function transcriptHasPromptId(clientSessionId: string, clientPromptId: string):
   if (!transcript) {
     return false;
   }
-  return Object.values(transcript.itemsById).some((item) =>
-    item.kind === "user_message" && item.promptId === clientPromptId
-  );
+  return transcriptHasRenderablePromptEcho(transcript, clientPromptId);
 }

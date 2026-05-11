@@ -13,6 +13,13 @@ import {
   resolveOneClickReviewRequest,
 } from "@/lib/domain/reviews/review-launch";
 import {
+  materializeReviewParentSession,
+  waitForReviewParentSessionMaterialization,
+} from "@/lib/workflows/reviews/review-parent-materialization";
+import {
+  sessionMaterializationDeps,
+} from "@/hooks/sessions/workflows/session-materialization-deps";
+import {
   type ReviewSetupAnchorRect,
   useReviewUiStore,
 } from "@/stores/reviews/review-ui-store";
@@ -35,7 +42,10 @@ export function useReviewActions() {
   const showToast = useToastStore((state) => state.show);
   const openReviewSetup = useReviewUiStore((state) => state.openSetup);
   const beginStartingReview = useReviewUiStore((state) => state.beginStartingReview);
-  const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
+  const clearStartingReviewForToken = useReviewUiStore((state) => state.clearStartingReviewForToken);
+  const patchStartingReviewParentSession = useReviewUiStore(
+    (state) => state.patchStartingReviewParentSession,
+  );
   const startPlanReviewMutation = useStartPlanReviewMutation({ workspaceId: selectedWorkspaceId });
   const startCodeReviewMutation = useStartCodeReviewMutation({ workspaceId: selectedWorkspaceId });
   const stopReviewMutation = useStopReviewMutation({ workspaceId: selectedWorkspaceId });
@@ -97,18 +107,43 @@ export function useReviewActions() {
       openReviewSetup({ kind: "plan", plan }, null);
       return;
     }
-    beginStartingReview(buildStartingReview(plan.sourceSessionId, "plan", request.request));
-    void startPlanReviewMutation.mutateAsync({
-      planId: plan.planId,
-      request: request.request,
-    }).catch((error) => {
-      clearStartingReview();
-      showToast(`Failed to start review: ${errorMessage(error)}`);
+    const reviewRequest = request.request;
+    const startingReview = buildStartingReview(plan.sourceSessionId, "plan", reviewRequest);
+    const startingReviewToken = {
+      kind: startingReview.kind,
+      startedAt: startingReview.startedAt,
+    };
+    beginStartingReview(startingReview);
+    void (async () => {
+      const materializedParentSessionId = await waitForReviewParentSessionMaterialization(
+        plan.sourceSessionId,
+        sessionMaterializationDeps,
+      );
+      const materializedRequest = materializeReviewParentSession(
+        reviewRequest,
+        materializedParentSessionId,
+      );
+      const didPatchStartingReview = patchStartingReviewParentSession(
+        startingReviewToken,
+        materializedParentSessionId,
+      );
+      if (!didPatchStartingReview) {
+        return;
+      }
+      await startPlanReviewMutation.mutateAsync({
+        planId: plan.planId,
+        request: materializedRequest,
+      });
+    })().catch((error) => {
+      if (clearStartingReviewForToken(startingReviewToken)) {
+        showToast(`Failed to start review: ${errorMessage(error)}`);
+      }
     });
   }, [
     beginStartingReview,
-    clearStartingReview,
+    clearStartingReviewForToken,
     openReviewSetup,
+    patchStartingReviewParentSession,
     reviewDefaultsByKind,
     reviewPersonalitiesByKind,
     showToast,
@@ -132,17 +167,42 @@ export function useReviewActions() {
       openReviewSetup({ kind: "code", parentSessionId: activeSessionId }, null);
       return;
     }
-    beginStartingReview(buildStartingReview(activeSessionId, "code", request.request));
-    void startCodeReviewMutation.mutateAsync(request.request).catch((error) => {
-      clearStartingReview();
-      showToast(`Failed to start review: ${errorMessage(error)}`);
+    const reviewRequest = request.request;
+    const startingReview = buildStartingReview(activeSessionId, "code", reviewRequest);
+    const startingReviewToken = {
+      kind: startingReview.kind,
+      startedAt: startingReview.startedAt,
+    };
+    beginStartingReview(startingReview);
+    void (async () => {
+      const materializedParentSessionId = await waitForReviewParentSessionMaterialization(
+        activeSessionId,
+        sessionMaterializationDeps,
+      );
+      const materializedRequest = materializeReviewParentSession(
+        reviewRequest,
+        materializedParentSessionId,
+      );
+      const didPatchStartingReview = patchStartingReviewParentSession(
+        startingReviewToken,
+        materializedParentSessionId,
+      );
+      if (!didPatchStartingReview) {
+        return;
+      }
+      await startCodeReviewMutation.mutateAsync(materializedRequest);
+    })().catch((error) => {
+      if (clearStartingReviewForToken(startingReviewToken)) {
+        showToast(`Failed to start review: ${errorMessage(error)}`);
+      }
     });
   }, [
     activeSessionId,
     activeSlot,
     beginStartingReview,
-    clearStartingReview,
+    clearStartingReviewForToken,
     openReviewSetup,
+    patchStartingReviewParentSession,
     reviewDefaultsByKind,
     reviewPersonalitiesByKind,
     showToast,

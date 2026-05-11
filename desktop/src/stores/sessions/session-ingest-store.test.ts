@@ -16,22 +16,29 @@ describe("session ingest store invariants", () => {
     vi.useRealTimers();
   });
 
-  it("increments hot set generation only when target identity changes", () => {
+  it("tracks hot targets by client session id", () => {
     const store = useSessionIngestStore.getState();
-    const generation = store.setHotTargets([
+    store.setHotTargets([
       target("session-b", { priority: 4 }),
       target("session-a", { priority: 0 }),
     ]);
 
-    expect(generation).toBe(1);
-    expect(store.setHotTargets([
+    expect(Object.keys(useSessionIngestStore.getState().targetsByClientSessionId).sort())
+      .toEqual(["session-a", "session-b"]);
+
+    store.setHotTargets([
       target("session-a", { priority: 0 }),
       target("session-b", { priority: 4 }),
-    ])).toBe(1);
-    expect(store.setHotTargets([
+    ]);
+    expect(useSessionIngestStore.getState().targetsByClientSessionId["session-b"]?.priority)
+      .toBe(4);
+
+    store.setHotTargets([
       target("session-a", { priority: 0 }),
       target("session-b", { priority: 3, reason: "running" }),
-    ])).toBe(2);
+    ]);
+    expect(useSessionIngestStore.getState().targetsByClientSessionId["session-b"])
+      .toMatchObject({ priority: 3, reason: "running" });
   });
 
   it("keeps removed hot targets cold while preserving their sequence history", () => {
@@ -55,16 +62,29 @@ describe("session ingest store invariants", () => {
       });
   });
 
-  it("guards currentness by generation, materialized id, and streamability", () => {
-    const generation = useSessionIngestStore.getState().setHotTargets([
+  it("keeps currentness across reason-only target changes", () => {
+    useSessionIngestStore.getState().setHotTargets([
       target("session-a", { materializedSessionId: "runtime-a", streamable: true }),
       target("session-b", { materializedSessionId: null, streamable: false }),
     ]);
 
-    expect(isHotSessionTargetCurrent("session-a", generation, "runtime-a")).toBe(true);
-    expect(isHotSessionTargetCurrent("session-a", generation - 1, "runtime-a")).toBe(false);
-    expect(isHotSessionTargetCurrent("session-a", generation, "runtime-old")).toBe(false);
-    expect(isHotSessionTargetCurrent("session-b", generation, null)).toBe(false);
+    expect(isHotSessionTargetCurrent("session-a", "runtime-a")).toBe(true);
+    useSessionIngestStore.getState().setHotTargets([
+      target("session-a", {
+        materializedSessionId: "runtime-a",
+        priority: 3,
+        reason: "running",
+        streamable: true,
+      }),
+      target("session-b", { materializedSessionId: null, streamable: false }),
+    ]);
+
+    expect(isHotSessionTargetCurrent("session-a", "runtime-a")).toBe(true);
+    expect(isHotSessionTargetCurrent("session-a", "runtime-old")).toBe(false);
+    expect(isHotSessionTargetCurrent("session-b", null)).toBe(false);
+
+    useSessionIngestStore.getState().setHotTargets([]);
+    expect(isHotSessionTargetCurrent("session-a", "runtime-a")).toBe(false);
   });
 
   it("does not mark gapped progress current until the gap clears", () => {

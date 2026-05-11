@@ -67,6 +67,39 @@ describe("buildTranscriptRowModel", () => {
     ]);
   });
 
+  it("hides an empty in-progress latest turn behind the visible outbox prompt", () => {
+    const transcript = createTranscriptState("session-1");
+    addTurn(transcript, "turn-complete", true);
+    addTurn(transcript, "turn-live", false);
+
+    const rows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      visibleOutboxEntries: [
+        createPromptOutboxEntry({
+          clientPromptId: "prompt-1",
+          clientSessionId: "session-1",
+          text: "hello",
+          blocks: [{ type: "text", text: "hello" }],
+          now: "2026-01-01T00:00:00.000Z",
+        }),
+      ],
+      latestTurnId: "turn-live",
+      latestTurnHasAssistantRenderableContent: false,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        kind: "turn",
+        key: "turn:turn-complete:block:content",
+        turnId: "turn-complete",
+        blockKey: "content",
+      }),
+      { kind: "outbox_prompt", key: "prompt:prompt-1", clientPromptId: "prompt-1" },
+    ]);
+  });
+
   it("keeps an in-progress latest turn when it already has renderable content", () => {
     const transcript = createTranscriptState("session-1");
     addTurn(transcript, "turn-live", false);

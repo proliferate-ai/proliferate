@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import {
+  buildSubmittingPendingWorkspaceEntry,
+  type PendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 const mocks = vi.hoisted(() => ({
@@ -9,8 +12,9 @@ const mocks = vi.hoisted(() => ({
   setWorkspaceArrivalEvent: vi.fn(),
   resetWorkspaceFiles: vi.fn(),
   requestChatInputFocus: vi.fn(),
+  materializePendingWorkspaceSessions: vi.fn(),
   harnessState: {
-    pendingWorkspaceEntry: null,
+    pendingWorkspaceEntry: null as PendingWorkspaceEntry | null,
     enterPendingWorkspaceShell: vi.fn(),
     setPendingWorkspaceEntry: vi.fn(),
     setWorkspaceArrivalEvent: vi.fn(),
@@ -50,6 +54,10 @@ vi.mock("@/stores/sessions/session-selection-store", () => {
   return { useSessionSelectionStore };
 });
 
+vi.mock("@/hooks/workspaces/workflows/use-pending-workspace-session-materialization", () => ({
+  usePendingWorkspaceSessionMaterialization: () => mocks.materializePendingWorkspaceSessions,
+}));
+
 vi.mock("@/lib/infra/measurement/debug-latency", () => ({
   elapsedSince: () => 0,
   logLatency: vi.fn(),
@@ -63,6 +71,8 @@ describe("useWorkspaceEntryFlow", () => {
     mocks.setWorkspaceArrivalEvent.mockReset();
     mocks.resetWorkspaceFiles.mockReset();
     mocks.requestChatInputFocus.mockReset();
+    mocks.materializePendingWorkspaceSessions.mockReset();
+    mocks.harnessState.pendingWorkspaceEntry = null;
     mocks.harnessState.enterPendingWorkspaceShell = mocks.enterPendingWorkspaceShell;
     mocks.harnessState.setPendingWorkspaceEntry = mocks.setPendingWorkspaceEntry;
     mocks.harnessState.setWorkspaceArrivalEvent = mocks.setWorkspaceArrivalEvent;
@@ -117,5 +127,35 @@ describe("useWorkspaceEntryFlow", () => {
     expect(mocks.resetWorkspaceFiles).toHaveBeenCalledTimes(1);
     expect(mocks.enterPendingWorkspaceShell).toHaveBeenCalledWith(entry);
     expect(mocks.requestChatInputFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it("materializes projected sessions before clearing a finalized pending workspace", async () => {
+    const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
+    const entry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "cloud-created",
+      displayName: "feature-branch",
+      request: {
+        kind: "select-existing",
+        workspaceId: "cloud-workspace-1",
+      },
+    });
+    mocks.harnessState.pendingWorkspaceEntry = entry;
+
+    const flow = useWorkspaceEntryFlow();
+    await expect(flow.finalizeSelection(entry, "cloud-workspace-1")).resolves.toBe(true);
+
+    expect(mocks.materializePendingWorkspaceSessions).toHaveBeenCalledWith(
+      entry,
+      "cloud-workspace-1",
+    );
+    expect(mocks.setPendingWorkspaceEntry).toHaveBeenLastCalledWith(null);
+    expect(mocks.setWorkspaceArrivalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "cloud-workspace-1",
+        source: "cloud-created",
+      }),
+    );
   });
 });

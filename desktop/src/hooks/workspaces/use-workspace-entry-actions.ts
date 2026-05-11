@@ -11,7 +11,6 @@ import {
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
-  buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
 } from "@/lib/domain/workspaces/creation/pending-entry";
@@ -37,10 +36,8 @@ import {
   failLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 import {
-  getWorkspaceSessionRecords,
-  patchSessionRecord,
-} from "@/stores/sessions/session-records";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+  usePendingWorkspaceSessionMaterialization,
+} from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 
 function resolveDisplayNameFromPath(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? "workspace";
@@ -118,7 +115,7 @@ export function useWorkspaceEntryActions() {
   } = useWorkspaceActions();
   const { selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
   const { selectWorkspace } = useWorkspaceSelection();
-  const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
+  const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
   const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
   );
@@ -187,12 +184,7 @@ export function useWorkspaceEntryActions() {
       return false;
     }
 
-    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
-    const projectedSessions = Object.values(getWorkspaceSessionRecords(pendingWorkspaceUiKey))
-      .filter((session) => !session.materializedSessionId);
-    for (const session of projectedSessions) {
-      patchSessionRecord(session.sessionId, { workspaceId });
-    }
+    materializePendingWorkspaceSessions(entry, workspaceId);
 
     setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
       workspaceId,
@@ -201,24 +193,6 @@ export function useWorkspaceEntryActions() {
       baseBranchName: entry.baseBranchName,
     }));
     setPendingWorkspaceEntry(null);
-    for (const session of projectedSessions) {
-      void createEmptySessionWithResolvedConfig({
-        clientSessionId: session.sessionId,
-        workspaceId,
-        agentKind: session.agentKind,
-        modelId: session.modelId ?? session.agentKind,
-        modeId: session.modeId ?? undefined,
-        reuseInFlightEmptySession: false,
-      }).catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to start projected chat session.";
-        logLatency("workspace.entry.projected_session_create_failed", {
-          attemptId: entry.attemptId,
-          workspaceId,
-          sessionId: session.sessionId,
-          errorMessage: message,
-        });
-      });
-    }
     logLatency("workspace.entry.selection.success", {
       attemptId: entry.attemptId,
       source: entry.source,
@@ -228,7 +202,7 @@ export function useWorkspaceEntryActions() {
     });
     return true;
   }, [
-    createEmptySessionWithResolvedConfig,
+    materializePendingWorkspaceSessions,
     selectWorkspace,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,

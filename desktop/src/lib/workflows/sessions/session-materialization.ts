@@ -1,3 +1,5 @@
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
+
 const SESSION_MATERIALIZATION_ERROR = "Session is still starting. Try again in a moment.";
 
 export interface SessionMaterializationDeps {
@@ -21,6 +23,10 @@ export function waitForSessionMaterialization(
   }
 
   const timeoutMs = options?.timeoutMs ?? 15_000;
+  logLatency("session.materialization.wait.start", {
+    clientSessionId,
+    timeoutMs,
+  });
   return new Promise((resolve, reject) => {
     let settled = false;
     let unsubscribe: (() => void) | null = null;
@@ -42,6 +48,10 @@ export function waitForSessionMaterialization(
       }
       settled = true;
       cleanupSubscription();
+      logLatency("session.materialization.wait.timeout", {
+        clientSessionId,
+        timeoutMs,
+      });
       reject(new Error(SESSION_MATERIALIZATION_ERROR));
     }, timeoutMs);
 
@@ -52,6 +62,10 @@ export function waitForSessionMaterialization(
       settled = true;
       globalThis.clearTimeout(timeout);
       cleanupSubscription();
+      logLatency("session.materialization.wait.resolved", {
+        clientSessionId,
+        materializedSessionId,
+      });
       resolve(materializedSessionId);
     };
 

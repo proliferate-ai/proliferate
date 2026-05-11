@@ -5,6 +5,7 @@ import type {
 import { useCallback } from "react";
 import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
 import { logDevSSEEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -217,7 +218,17 @@ export function createSessionStreamFlushController(
     const envelopes = queue;
     queue = [];
 
-    if (!input.isStillCurrent() || !input.isCurrentStream()) {
+    const stillCurrent = input.isStillCurrent();
+    const currentStream = input.isCurrentStream();
+    if (!stillCurrent || !currentStream) {
+      logLatency("session.stream.flush.dropped_stale", {
+        sessionId: input.sessionId,
+        envelopeCount: envelopes.length,
+        firstSeq: envelopes[0]?.seq ?? null,
+        lastSeq: envelopes[envelopes.length - 1]?.seq ?? null,
+        stillCurrent,
+        currentStream,
+      });
       return;
     }
 
@@ -275,6 +286,19 @@ export function createSessionStreamFlushController(
     }
 
     const lastObservedSeq = maxEnvelopeSeq(envelopes, slotState.transcript.lastSeq);
+    logLatency("session.stream.flush.batch", {
+      sessionId: input.sessionId,
+      envelopeCount: envelopes.length,
+      appliedCount: result.appliedEnvelopes.length,
+      duplicateCount: result.duplicateEnvelopes.length,
+      gapSeq: result.gapEnvelope?.seq ?? null,
+      gapType: result.gapEnvelope?.event.type ?? null,
+      lastSeqBefore: slotState.transcript.lastSeq,
+      lastSeqAfter: result.state.transcript.lastSeq,
+      lastObservedSeq,
+      streamConnectionState: slotState.streamConnectionState,
+      transcriptHydrated: slotState.transcriptHydrated,
+    });
     if (result.appliedEnvelopes.length === 0 && !result.gapEnvelope) {
       useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
         lastAppliedSeq: slotState.transcript.lastSeq,

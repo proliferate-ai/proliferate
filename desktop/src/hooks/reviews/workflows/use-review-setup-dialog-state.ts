@@ -18,6 +18,14 @@ import {
   type ReviewSessionDefaults,
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
+import { buildStartingReview } from "@/lib/domain/reviews/review-launch";
+import {
+  materializeReviewParentSession,
+  waitForReviewParentSessionMaterialization,
+} from "@/lib/workflows/reviews/review-parent-materialization";
+import {
+  sessionMaterializationDeps,
+} from "@/hooks/sessions/workflows/session-materialization-deps";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
@@ -36,7 +44,10 @@ export function useReviewSetupDialogState() {
   const setup = useReviewUiStore((state) => state.setup);
   const closeSetup = useReviewUiStore((state) => state.closeSetup);
   const beginStartingReview = useReviewUiStore((state) => state.beginStartingReview);
-  const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
+  const clearStartingReviewForToken = useReviewUiStore((state) => state.clearStartingReviewForToken);
+  const patchStartingReviewParentSession = useReviewUiStore(
+    (state) => state.patchStartingReviewParentSession,
+  );
   const reviewDefaultsByKind = useUserPreferencesStore((state) => state.reviewDefaultsByKind);
   const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
   const setPreference = useUserPreferencesStore((state) => state.set);
@@ -126,37 +137,49 @@ export function useReviewSetupDialogState() {
       };
       setPreference("reviewDefaultsByKind", nextDefaults);
     }
-    beginStartingReview({
-      parentSessionId,
-      kind: draft.kind,
-      maxRounds: draft.maxRounds,
-      autoIterate: draft.autoIterate,
-      reviewers: request.reviewers.map((reviewer) => ({
-        id: reviewer.personaId,
-        label: reviewer.label,
-        agentKind: reviewer.agentKind,
-        modelId: reviewer.modelId ?? "",
-      })),
-      startedAt: Date.now(),
-    });
+    const startingReview = buildStartingReview(parentSessionId, draft.kind, request);
+    const startingReviewToken = {
+      kind: startingReview.kind,
+      startedAt: startingReview.startedAt,
+    };
+    beginStartingReview(startingReview);
     closeSetup();
-    const mutation = setupTarget.kind === "plan"
-      ? startPlanReviewMutation.mutateAsync({
-        planId: setupTarget.plan.planId,
+    void (async () => {
+      const materializedParentSessionId = await waitForReviewParentSessionMaterialization(
+        parentSessionId,
+        sessionMaterializationDeps,
+      );
+      const materializedRequest = materializeReviewParentSession(
         request,
-      })
-      : startCodeReviewMutation.mutateAsync(request);
-
-    void mutation.catch((errorValue) => {
-      clearStartingReview();
-      showToast(`Failed to start review: ${errorMessage(errorValue)}`);
+        materializedParentSessionId,
+      );
+      const didPatchStartingReview = patchStartingReviewParentSession(
+        startingReviewToken,
+        materializedParentSessionId,
+      );
+      if (!didPatchStartingReview) {
+        return;
+      }
+      if (setupTarget.kind === "plan") {
+        await startPlanReviewMutation.mutateAsync({
+          planId: setupTarget.plan.planId,
+          request: materializedRequest,
+        });
+        return;
+      }
+      await startCodeReviewMutation.mutateAsync(materializedRequest);
+    })().catch((errorValue) => {
+      if (clearStartingReviewForToken(startingReviewToken)) {
+        showToast(`Failed to start review: ${errorMessage(errorValue)}`);
+      }
     });
   }, [
     beginStartingReview,
-    clearStartingReview,
+    clearStartingReviewForToken,
     closeSetup,
     draft,
     parentSessionId,
+    patchStartingReviewParentSession,
     personalityTemplates,
     reviewDefaultsByKind,
     saveAsDefault,

@@ -82,8 +82,10 @@ export function buildTranscriptRowModel({
 
     const isLatestTurn = turnId === latestTurnId;
     const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
+    const hasVisibleLocalPrompt =
+      visibleOptimisticPrompt !== null || visibleOutboxEntries.length > 0;
     if (
-      visibleOptimisticPrompt !== null
+      hasVisibleLocalPrompt
       && isLatestTurnInProgress
       && !latestTurnHasAssistantRenderableContent
       && !turnHasRenderableTranscriptContent(turn, transcript)

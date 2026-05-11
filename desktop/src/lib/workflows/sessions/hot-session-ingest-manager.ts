@@ -1,4 +1,5 @@
 import type { HotSessionTarget } from "@/lib/domain/sessions/hot-session-policy";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
 
 interface EnsureSessionStreamOptions {
@@ -15,7 +16,7 @@ interface EnsureSessionStreamOptions {
 }
 
 interface HotSessionIngestStateDeps {
-  setHotTargets: (targets: readonly HotSessionTarget[]) => number;
+  setHotTargets: (targets: readonly HotSessionTarget[]) => void;
   markWarming: (clientSessionId: string) => void;
   markCurrentIfContiguous: (clientSessionId: string, lastAppliedSeq: number) => void;
   markStale: (
@@ -29,11 +30,7 @@ interface HotSessionIngestStateDeps {
   ) => void;
   markCold: (clientSessionId: string) => void;
   getFreshness: (clientSessionId: string) => "current" | "warming" | "stale" | "cold" | null;
-  isTargetCurrent: (
-    clientSessionId: string,
-    generation: number,
-    materializedSessionId: string | null,
-  ) => boolean;
+  isTargetCurrent: (clientSessionId: string, materializedSessionId: string | null) => boolean;
   getSessionRecord: (clientSessionId: string) => {
     streamConnectionState: string | null;
     lastSeq: number;
@@ -52,7 +49,8 @@ export interface HotSessionIngestManagerDeps {
 interface ActiveHotStream {
   clientSessionId: string;
   materializedSessionId: string;
-  generation: number;
+  openToken: symbol;
+  reason: HotSessionTarget["reason"];
   retryAttempt: number;
   opening: boolean;
   retryTimer: ReturnType<typeof setTimeout> | null;
@@ -66,7 +64,7 @@ export function reconcileHotSessions(
   targets: readonly HotSessionTarget[],
   deps: HotSessionIngestManagerDeps,
 ): void {
-  const generation = deps.state.setHotTargets(targets);
+  deps.state.setHotTargets(targets);
   const nextTargetIds = new Set(targets.map((target) => target.clientSessionId));
 
   for (const clientSessionId of activeStreamsByClientSessionId.keys()) {
@@ -90,25 +88,17 @@ export function reconcileHotSessions(
     if (
       existing
       && existing.materializedSessionId === target.materializedSessionId
-      && existing.generation === generation
-      && (existing.opening || existing.retryTimer)
+      && deps.state.isTargetCurrent(target.clientSessionId, target.materializedSessionId)
     ) {
-      continue;
-    }
-    if (
-      existing
-      && existing.materializedSessionId === target.materializedSessionId
-      && existing.generation === generation
-      && deps.state.isTargetCurrent(
-        target.clientSessionId,
-        generation,
-        target.materializedSessionId,
-      )
-    ) {
+      if (target.reason === "selected" && existing.reason !== "selected") {
+        connectHotTarget(streamableTarget, deps, existing.retryAttempt, existing.openToken);
+        continue;
+      }
+      existing.reason = target.reason;
       continue;
     }
 
-    connectHotTarget(streamableTarget, generation, deps, existing?.retryAttempt ?? 0);
+    connectHotTarget(streamableTarget, deps, existing?.retryAttempt ?? 0);
   }
 }
 
@@ -128,9 +118,9 @@ export function resetHotSessionIngestManagerForTest(): void {
 
 function connectHotTarget(
   target: HotSessionTarget & { materializedSessionId: string },
-  generation: number,
   deps: HotSessionIngestManagerDeps,
   retryAttempt: number,
+  preservedOpenToken?: symbol,
 ): void {
   clearRetry(target.clientSessionId);
   deps.state.markWarming(target.clientSessionId);
@@ -138,37 +128,42 @@ function connectHotTarget(
   const stream: ActiveHotStream = {
     clientSessionId: target.clientSessionId,
     materializedSessionId: target.materializedSessionId,
-    generation,
+    openToken: preservedOpenToken ?? Symbol("hot-session-open"),
+    reason: target.reason,
     retryAttempt,
     opening: true,
     retryTimer: null,
   };
   activeStreamsByClientSessionId.set(target.clientSessionId, stream);
 
+  const shouldHydrateBeforeStream = target.reason === "selected";
+  logLatency("session.hot_stream.connect", {
+    clientSessionId: target.clientSessionId,
+    materializedSessionId: target.materializedSessionId,
+    reason: target.reason,
+    hydrateBeforeStream: shouldHydrateBeforeStream,
+    retryAttempt,
+  });
+
   void deps.ensureSessionStreamConnected(target.clientSessionId, {
     awaitOpen: true,
     openTimeoutMs: 2_500,
     resumeIfActive: true,
-    hydrateBeforeStream: false,
+    hydrateBeforeStream: shouldHydrateBeforeStream,
     skipInitialRefresh: true,
     refreshOnStartupReady: true,
     reconnectOwner: "external",
     onReconnectNeeded: () => {
+      if (!isOpenAttemptCurrent(target, stream.openToken, deps)) {
+        return;
+      }
       const current = activeStreamsByClientSessionId.get(target.clientSessionId);
-      scheduleRetry(target, generation, deps, current?.retryAttempt ?? retryAttempt);
+      scheduleRetry(target, deps, current?.retryAttempt ?? retryAttempt, stream.openToken);
     },
     isCurrent: () =>
-      deps.state.isTargetCurrent(
-        target.clientSessionId,
-        generation,
-        target.materializedSessionId,
-      ),
+      isOpenAttemptCurrent(target, stream.openToken, deps),
   }).then(() => {
-    if (!deps.state.isTargetCurrent(
-      target.clientSessionId,
-      generation,
-      target.materializedSessionId,
-    )) {
+    if (!isOpenAttemptCurrent(target, stream.openToken, deps)) {
       return;
     }
     const current = activeStreamsByClientSessionId.get(target.clientSessionId);
@@ -188,11 +183,7 @@ function connectHotTarget(
       deps.state.markWarming(target.clientSessionId);
     }
   }).catch(() => {
-    if (!deps.state.isTargetCurrent(
-      target.clientSessionId,
-      generation,
-      target.materializedSessionId,
-    )) {
+    if (!isOpenAttemptCurrent(target, stream.openToken, deps)) {
       return;
     }
     const record = deps.state.getSessionRecord(target.clientSessionId);
@@ -202,21 +193,17 @@ function connectHotTarget(
       gapAfterSeq: null,
       lastErrorAt: new Date().toISOString(),
     });
-    scheduleRetry(target, generation, deps, retryAttempt);
+    scheduleRetry(target, deps, retryAttempt, stream.openToken);
   });
 }
 
 function scheduleRetry(
   target: HotSessionTarget & { materializedSessionId: string },
-  generation: number,
   deps: HotSessionIngestManagerDeps,
   retryAttempt: number,
+  openToken: symbol,
 ): void {
-  if (!deps.state.isTargetCurrent(
-    target.clientSessionId,
-    generation,
-    target.materializedSessionId,
-  )) {
+  if (!isOpenAttemptCurrent(target, openToken, deps)) {
     return;
   }
 
@@ -229,18 +216,25 @@ function scheduleRetry(
   stream.retryAttempt = retryAttempt + 1;
   stream.retryTimer = setTimeout(() => {
     const current = activeStreamsByClientSessionId.get(target.clientSessionId);
-    if (current?.retryTimer) {
+    if (current?.openToken === openToken && current.retryTimer) {
       current.retryTimer = null;
     }
-    if (!deps.state.isTargetCurrent(
-      target.clientSessionId,
-      generation,
-      target.materializedSessionId,
-    )) {
+    if (!isOpenAttemptCurrent(target, openToken, deps)) {
       return;
     }
-    connectHotTarget(target, generation, deps, retryAttempt + 1);
+    connectHotTarget(target, deps, retryAttempt + 1);
   }, delayMs);
+}
+
+function isOpenAttemptCurrent(
+  target: HotSessionTarget & { materializedSessionId: string },
+  openToken: symbol,
+  deps: HotSessionIngestManagerDeps,
+): boolean {
+  const current = activeStreamsByClientSessionId.get(target.clientSessionId);
+  return current?.openToken === openToken
+    && current.materializedSessionId === target.materializedSessionId
+    && deps.state.isTargetCurrent(target.clientSessionId, target.materializedSessionId);
 }
 
 function closeHotStream(

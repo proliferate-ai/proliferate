@@ -149,6 +149,29 @@ describe("pending prompt visibility", () => {
     ))).toBe(true);
   });
 
+  it("keeps optimistic prompt during an empty started user-message echo", () => {
+    expect(shouldClearOptimisticPendingPromptForEnvelope({
+      sessionId: "session-1",
+      seq: 1,
+      timestamp: "2026-04-13T12:00:01.000Z",
+      turnId: "turn-1",
+      itemId: "item-1",
+      event: {
+        type: "item_started",
+        item: {
+          kind: "user_message",
+          status: "completed",
+          sourceAgentKind: "codex",
+          contentParts: [],
+        },
+      },
+    } satisfies SessionEventEnvelope, createOptimisticPendingPrompt(
+      "Ship it",
+      "prompt-1",
+      "2026-04-13T12:00:00.000Z",
+    ))).toBe(false);
+  });
+
   it("treats plan-only turns as not yet renderable", () => {
     const transcript = createTranscriptState("session-1");
     transcript.turnOrder = ["turn-1"];

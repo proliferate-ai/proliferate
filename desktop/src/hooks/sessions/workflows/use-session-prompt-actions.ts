@@ -7,6 +7,8 @@ import {
   isPendingSessionId,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { canPromptSessionSlot } from "@/lib/domain/sessions/prompt-readiness";
 
 export function useSessionPromptActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -24,10 +26,40 @@ export function useSessionPromptActions() {
 
     const slot = getSessionRecord(sessionId);
     if (!isPendingSessionId(sessionId) && !slot) {
+      logLatency("session.prompt.active.blocked", {
+        reason: "missing_slot",
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+      });
       throw new Error("No active session");
     }
-    if (!isPendingSessionId(sessionId) && slot && !slot.transcriptHydrated) {
+    if (!isPendingSessionId(sessionId) && slot && !canPromptSessionSlot(slot)) {
+      logLatency("session.prompt.active.blocked", {
+        reason: "transcript_not_hydrated",
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+        slotWorkspaceId: slot.workspaceId,
+        materializedSessionId: slot.materializedSessionId,
+        status: slot.status,
+        streamConnectionState: slot.streamConnectionState,
+        transcriptLastSeq: slot.transcript.lastSeq,
+        turnCount: slot.transcript.turnOrder.length,
+        pendingInteractionCount: slot.transcript.pendingInteractions.length,
+      });
       throw new Error("Session is still loading. Try again in a moment.");
+    }
+    if (!isPendingSessionId(sessionId) && slot && !slot.transcriptHydrated) {
+      logLatency("session.prompt.active.unhydrated_open_stream_allowed", {
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+        slotWorkspaceId: slot.workspaceId,
+        materializedSessionId: slot.materializedSessionId,
+        status: slot.status,
+        streamConnectionState: slot.streamConnectionState,
+        transcriptLastSeq: slot.transcript.lastSeq,
+        turnCount: slot.transcript.turnOrder.length,
+        pendingInteractionCount: slot.transcript.pendingInteractions.length,
+      });
     }
 
     const workspaceId = slot?.workspaceId ?? null;

@@ -39,6 +39,7 @@ import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
 import { finishOrCancelMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -143,6 +144,17 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
         });
       } else if (!selectedWorkspaceId && pendingWorkspaceEntry && pendingWorkspaceUiKey && launchSelection) {
         const clientSessionId = createPendingSessionId(launchSelection.kind);
+        logLatency("chat.prompt.projected_session.create", {
+          clientSessionId,
+          pendingWorkspaceUiKey,
+          attemptId: pendingWorkspaceEntry.attemptId,
+          source: pendingWorkspaceEntry.source,
+          stage: pendingWorkspaceEntry.stage,
+          requestKind: pendingWorkspaceEntry.request.kind,
+          agentKind: launchSelection.kind,
+          modelId: launchSelection.modelId,
+          promptId,
+        });
         putSessionRecord({
           ...createEmptySessionRecord(clientSessionId, launchSelection.kind, {
             workspaceId: pendingWorkspaceUiKey,
@@ -168,6 +180,12 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
           optimisticContentParts: input?.optimisticContentParts,
           workspaceId: pendingWorkspaceUiKey,
           measurementOperationId: input?.measurementOperationId,
+          promptId,
+        });
+        logLatency("chat.prompt.projected_session.enqueued", {
+          clientSessionId,
+          pendingWorkspaceUiKey,
+          attemptId: pendingWorkspaceEntry.attemptId,
           promptId,
         });
       } else if (launchSelection) {
