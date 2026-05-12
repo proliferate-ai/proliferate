@@ -84,6 +84,9 @@ at the start of the task, not halfway through implementation.
      panels, workspace review panels/defaults, or Claude plan card
    - `docs/frontend/specs/chat-transcript.md` for transcript streaming,
      replay, transcript row models, or long-history rendering
+   - `docs/frontend/specs/pending-workspace-shell.md` for pending workspace
+     entry, projected session shell, optimistic prompts, or
+     workspace/session materialization handoff
    - `docs/frontend/specs/workspace-files.md` for workspace file browsing,
      file viewing, diff viewing, Changes, or all-changes review
 
