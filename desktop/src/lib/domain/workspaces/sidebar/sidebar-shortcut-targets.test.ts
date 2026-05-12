@@ -158,6 +158,37 @@ describe("visibleSidebarShortcutTargetIds", () => {
     ]);
   });
 
+  it("keeps the active row visible while a large group waits for auto show-more", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        ...Array.from({ length: 8 }, (_, index) =>
+          makeLocalLogicalWorkspace({
+            id: `repo-a-${index + 1}`,
+            repoKey: "/tmp/repo-a",
+            repoName: "repo-a",
+            kind: "worktree",
+            updatedAt: `2026-04-13T10:0${index}:00.000Z`,
+          })),
+      ],
+      selectedLogicalWorkspaceId: "repo-a-8",
+    });
+
+    expect(visibleSidebarShortcutTargetIds({
+      groups,
+      collapsedRepoGroupKeys: new Set(),
+      repoGroupsShownMore: new Set(),
+      itemLimit: 6,
+    })).toEqual([
+      "repo-a-1",
+      "repo-a-2",
+      "repo-a-3",
+      "repo-a-4",
+      "repo-a-5",
+      "repo-a-6",
+      "repo-a-8",
+    ]);
+  });
+
   it("does not change target ids when visual-only sidebar inputs change", () => {
     const logicalWorkspaces = [
       makeLocalLogicalWorkspace({

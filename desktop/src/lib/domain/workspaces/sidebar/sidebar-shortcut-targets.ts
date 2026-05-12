@@ -1,5 +1,6 @@
 import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
 import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
 
 export function visibleSidebarShortcutTargetIds(args: {
   groups: readonly SidebarGroupState[];
@@ -14,9 +15,11 @@ export function visibleSidebarShortcutTargetIds(args: {
       continue;
     }
 
-    const visibleItems = args.repoGroupsShownMore.has(group.sourceRoot)
-      ? group.items
-      : group.items.slice(0, args.itemLimit);
+    const visibleItems = visibleSidebarGroupItems({
+      group,
+      isShownMore: args.repoGroupsShownMore.has(group.sourceRoot),
+      itemLimit: args.itemLimit,
+    });
     for (const item of visibleItems) {
       ids.push(item.id);
     }
