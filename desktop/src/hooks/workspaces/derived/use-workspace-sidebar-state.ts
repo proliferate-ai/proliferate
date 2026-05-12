@@ -1,10 +1,11 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
 import type { Workspace } from "@anyharness/sdk";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   type SidebarSessionActivityState,
 } from "@/lib/domain/sessions/activity";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
   buildSidebarGroupStates,
   resolveSidebarEmptyState,
@@ -45,6 +46,22 @@ const EMPTY_WORKSPACES: Workspace[] = [];
 
 const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};
 
+function logicalWorkspacesContainMaterializedWorkspace(
+  logicalWorkspaces: readonly LogicalWorkspace[],
+  workspaceId: string | null,
+): boolean {
+  if (!workspaceId) {
+    return false;
+  }
+
+  return logicalWorkspaces.some((entry) =>
+    entry.localWorkspace?.id === workspaceId
+    || entry.cloudWorkspace?.id === workspaceId
+    || entry.preferredMaterializationId === workspaceId
+    || entry.preferredMaterializationId === `cloud:${workspaceId}`
+  );
+}
+
 export function useWorkspaceSidebarState({
   showArchived,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
@@ -82,6 +99,24 @@ export function useWorkspaceSidebarState({
   })));
 
   const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
+  const pendingWorkspaceIsMaterialized = logicalWorkspacesContainMaterializedWorkspace(
+    logicalWorkspaces,
+    pendingWorkspaceEntry?.workspaceId ?? null,
+  );
+  const pendingWorkspaceEntryForSidebar = pendingWorkspaceIsMaterialized
+    ? null
+    : pendingWorkspaceEntry;
+
+  useEffect(() => {
+    if (!pendingWorkspaceEntry?.workspaceId || !pendingWorkspaceIsMaterialized) {
+      return;
+    }
+
+    // Clear only after the sidebar can see the materialized logical row. Clearing
+    // during selection creates a one-render gap between pending and real rows.
+    useSessionSelectionStore.getState().setPendingWorkspaceEntry(null);
+  }, [pendingWorkspaceEntry, pendingWorkspaceIsMaterialized]);
+
   const { data: workspaceCollections } = useWorkspaces();
   const cleanupAttentionWorkspaces =
     workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
@@ -119,7 +154,7 @@ export function useWorkspaceSidebarState({
     hiddenRepoRootIds: hiddenRepoRootSet,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
-    pendingWorkspaceEntry,
+    pendingWorkspaceEntry: pendingWorkspaceEntryForSidebar,
     workspaceActivities,
     pendingPromptCounts,
     gitStatus,
@@ -134,7 +169,7 @@ export function useWorkspaceSidebarState({
     hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,
-    pendingWorkspaceEntry,
+    pendingWorkspaceEntryForSidebar,
     pendingPromptCounts,
     repoRoots,
     workspaceTypes,
