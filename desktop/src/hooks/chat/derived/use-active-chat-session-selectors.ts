@@ -125,6 +125,7 @@ export function useActiveTranscriptPaneState(): {
 export function useActiveSessionSurfaceSnapshot(): {
   activeSessionId: string | null;
   hasContent: boolean;
+  hasTranscriptEntry: boolean;
   hasSlot: boolean;
   transcriptHydrated: boolean;
   isEmpty: boolean;
@@ -153,6 +154,7 @@ export function useActiveSessionSurfaceSnapshot(): {
     return {
       activeSessionId,
       hasContent,
+      hasTranscriptEntry: transcriptEntry !== null,
       transcript,
     };
   }));
@@ -169,6 +171,7 @@ export function useActiveSessionSurfaceSnapshot(): {
   return {
     activeSessionId: transcriptState.activeSessionId,
     hasContent,
+    hasTranscriptEntry: transcriptState.hasTranscriptEntry,
     ...directoryState,
     isEmpty: transcriptState.activeSessionId !== null
       && directoryState.hasSlot

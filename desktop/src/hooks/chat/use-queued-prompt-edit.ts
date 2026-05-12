@@ -77,7 +77,8 @@ export function useQueuedPromptEditStatus(): {
   isEditing: boolean;
 } {
   const { editingSeq } = useDerivedEditingState();
-  return { isEditing: editingSeq != null };
+  const isEditing = editingSeq != null;
+  return useMemo(() => ({ isEditing }), [isEditing]);
 }
 
 /**

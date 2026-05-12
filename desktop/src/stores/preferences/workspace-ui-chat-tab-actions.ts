@@ -10,6 +10,7 @@ import {
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
 import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
+import { recordDebugActionDiagnostic } from "@/lib/infra/measurement/debug-action-diagnostic";
 import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiChatTabActions = Pick<
@@ -35,6 +36,25 @@ export function createWorkspaceUiChatTabActions(
 ): WorkspaceUiChatTabActions {
   return {
     setUrgentHighlightedChatSessionForWorkspace: (workspaceId, sessionId) => {
+      if (get().urgentHighlightedChatSessionByWorkspace[workspaceId] === sessionId) {
+        recordDebugActionDiagnostic({
+          category: "workspace_ui_store.action",
+          label: "set_urgent_highlight_skipped",
+          keys: [workspaceId, sessionId],
+          detail: { workspaceId, sessionId },
+        });
+        return;
+      }
+      recordDebugActionDiagnostic({
+        category: "workspace_ui_store.action",
+        label: "set_urgent_highlight",
+        keys: [workspaceId, sessionId],
+        detail: {
+          workspaceId,
+          sessionId,
+          previousSessionId: get().urgentHighlightedChatSessionByWorkspace[workspaceId] ?? null,
+        },
+      });
       set({
         urgentHighlightedChatSessionByWorkspace: {
           ...get().urgentHighlightedChatSessionByWorkspace,
@@ -46,8 +66,28 @@ export function createWorkspaceUiChatTabActions(
     clearUrgentHighlightedChatSessionForWorkspace: (workspaceId, sessionId) => {
       const current = get().urgentHighlightedChatSessionByWorkspace[workspaceId] ?? null;
       if (!current || (sessionId !== undefined && current !== sessionId)) {
+        recordDebugActionDiagnostic({
+          category: "workspace_ui_store.action",
+          label: "clear_urgent_highlight_skipped",
+          keys: [workspaceId, sessionId ?? "any"],
+          detail: {
+            workspaceId,
+            sessionId: sessionId ?? null,
+            current,
+          },
+        });
         return;
       }
+      recordDebugActionDiagnostic({
+        category: "workspace_ui_store.action",
+        label: "clear_urgent_highlight",
+        keys: [workspaceId, current],
+        detail: {
+          workspaceId,
+          sessionId: current,
+          requestedSessionId: sessionId ?? null,
+        },
+      });
       set({
         urgentHighlightedChatSessionByWorkspace: {
           ...get().urgentHighlightedChatSessionByWorkspace,
@@ -67,6 +107,16 @@ export function createWorkspaceUiChatTabActions(
         if (hasCurrent && sameStringArray(current, nextSessionIds)) {
           return state;
         }
+        recordDebugActionDiagnostic({
+          category: "workspace_ui_store.action",
+          label: "set_visible_chat_session_ids",
+          keys: [workspaceId],
+          detail: {
+            workspaceId,
+            previousCount: current.length,
+            nextCount: nextSessionIds.length,
+          },
+        });
         return {
           visibleChatSessionIdsByWorkspace: {
             ...state.visibleChatSessionIdsByWorkspace,

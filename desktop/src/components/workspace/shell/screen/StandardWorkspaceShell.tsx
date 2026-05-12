@@ -23,12 +23,14 @@ import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-act
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
+import { useProliferatePerfFlag } from "@/hooks/ui/use-proliferate-perf-flag";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -36,6 +38,9 @@ import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+
+const CHAT_SHELL_RENDER_SURFACE: WorkspaceRenderSurface = { kind: "chat-shell" };
 
 export function StandardWorkspaceShell() {
   useDebugRenderCount("workspace-shell");
@@ -79,10 +84,13 @@ export function StandardWorkspaceShell() {
     onRightSeparatorDown,
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
-  const chromeClasses = resolveStandardWorkspaceChromeClasses({
-    transparent: transparentChromeEnabled,
-    sidebarOpen,
-  });
+  const chromeClasses = useMemo(
+    () => resolveStandardWorkspaceChromeClasses({
+      transparent: transparentChromeEnabled,
+      sidebarOpen,
+    }),
+    [sidebarOpen, transparentChromeEnabled],
+  );
   const activePublishWorkspaceId = selectedWorkspaceId;
   const publishSourceRootPath = publishDialog.open
     ? selectedWorkspace?.sourceRepoRootPath?.trim() || null
@@ -135,6 +143,10 @@ export function StandardWorkspaceShell() {
   const nativeWorkspaceOverlaysHidden = commandPaletteOpen
     || publishDialog.open
     || nativePortalOverlayOpen;
+  const freezeSidebar = useProliferatePerfFlag("freezeSidebar");
+  const freezeRightPanel = useProliferatePerfFlag("freezeRightPanel");
+  const freezeWorkspaceContent = useProliferatePerfFlag("freezeWorkspaceContent");
+  const freezeHeaderTabsViewModel = useProliferatePerfFlag("freezeHeaderTabsViewModel");
   useDebugValueChange("workspace_shell.inputs", "shell_refs", {
     selectedWorkspaceId,
     selectedWorkspace,
@@ -163,6 +175,34 @@ export function StandardWorkspaceShell() {
     runtimeBlockedReason,
     repoSettingsHref,
     canOpenRepositorySettings,
+    nativeWorkspaceOverlaysHidden,
+  });
+  useDebugRenderReason("StandardWorkspaceShell", {
+    pendingWorkspaceEntry,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+    selectedWorkspace,
+    selectedCloudWorkspace,
+    gitStatus,
+    existingPr,
+    hasRuntimeReadyWorkspace,
+    shouldKeepRuntimePanelsVisible,
+    hasWorkspaceShell,
+    hasLaunchIntentOnlyShell,
+    isCloudWorkspaceSelected,
+    sidebarOpen,
+    sidebarWidth,
+    rightPanelOpen,
+    rightPanelState,
+    rightPanelWidth,
+    terminalActivationRequest,
+    publishDialog,
+    commandPaletteOpen,
+    chromeClasses,
+    runCanRun: runCommand.canRun,
+    runIsLaunching: runCommand.isLaunching,
+    runtimeBlockedReason,
+    repoSettingsHref,
     nativeWorkspaceOverlaysHidden,
   });
   const handleTerminalActivationRequestHandled = useCallback(
@@ -209,7 +249,7 @@ export function StandardWorkspaceShell() {
       <WorkspaceShellActionsProvider value={shellActions}>
         <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
           <WorkspaceHeaderTabsViewModelProvider
-            enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
+            enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell && !freezeHeaderTabsViewModel}
           >
             <div
               className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
@@ -224,28 +264,36 @@ export function StandardWorkspaceShell() {
                 className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
                 style={{ width: sidebarOpen ? sidebarWidth : 0 }}
               >
-                <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-                  <div className="flex h-full items-center gap-2 pl-[82px]">
-                    <IconButton
-                      tone="sidebar"
-                      size="sm"
-                      onClick={actions.onToggleSidebar}
-                      title="Hide sidebar"
-                      className="rounded-md"
-                    >
-                      <SplitPanel className="size-4" />
-                    </IconButton>
-                    <SidebarUpdatePill
-                      phase={updaterPhase}
-                      downloadProgress={downloadProgress}
-                      onDownloadUpdate={downloadUpdate}
-                      onOpenRestartPrompt={openRestartPrompt}
-                    />
+                <DebugProfiler id="workspace-sidebar-frame">
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+                      <div className="flex h-full items-center gap-2 pl-[82px]">
+                        <IconButton
+                          tone="sidebar"
+                          size="sm"
+                          onClick={actions.onToggleSidebar}
+                          title="Hide sidebar"
+                          className="rounded-md"
+                        >
+                          <SplitPanel className="size-4" />
+                        </IconButton>
+                        <SidebarUpdatePill
+                          phase={updaterPhase}
+                          downloadProgress={downloadProgress}
+                          onDownloadUpdate={downloadUpdate}
+                          onOpenRestartPrompt={openRestartPrompt}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                      {freezeSidebar ? (
+                        <PerfFrozenPanel label="Sidebar frozen" surface="sidebar" />
+                      ) : (
+                        <MainSidebar />
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <MainSidebar />
-                </div>
+                </DebugProfiler>
               </div>
               {sidebarOpen && (
                 <div
@@ -264,56 +312,72 @@ export function StandardWorkspaceShell() {
                   className={chromeClasses.header}
                   data-tauri-drag-region="true"
                 >
-                  {!sidebarOpen && (
-                    <div className="flex items-center gap-2 pl-[82px] pr-2">
-                      <IconButton
-                        size="sm"
-                        onClick={actions.onToggleSidebar}
-                        title="Show sidebar"
-                        className="rounded-md"
-                      >
-                        <SplitPanel className="size-4" />
-                      </IconButton>
-                      <SidebarUpdatePill
-                        phase={updaterPhase}
-                        downloadProgress={downloadProgress}
-                        onDownloadUpdate={downloadUpdate}
-                        onOpenRestartPrompt={openRestartPrompt}
-                      />
-                    </div>
-                  )}
-                  {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
-                    <GlobalHeader
-                      existingPr={existingPr}
-                      selectedWorkspace={selectedWorkspace}
-                      rightPanelOpen={rightPanelOpen}
-                      disableGitActions={!hasRuntimeReadyWorkspace}
-                      runDisabled={!runCommand.canRun}
-                      runLoading={runCommand.isLaunching}
-                      runLabel={runCommand.runLabel}
-                      runTitle={runCommand.runTitle}
-                      onRun={runCommand.onRun}
-                      onTogglePanel={actions.toggleRightPanel}
-                      onCommit={actions.handleCommitOpen}
-                      onPush={actions.handlePushOpen}
-                      onCreatePr={actions.handlePrOpen}
-                      onViewPr={actions.handleViewPr}
-                      onRenameBranch={hasRuntimeReadyWorkspace ? actions.renameBranch : undefined}
-                      gitStatus={gitStatus ?? null}
-                    />
-                  )}
+                  <DebugProfiler id="workspace-header-frame">
+                    <>
+                      {!sidebarOpen && (
+                        <div className="flex items-center gap-2 pl-[82px] pr-2">
+                          <IconButton
+                            size="sm"
+                            onClick={actions.onToggleSidebar}
+                            title="Show sidebar"
+                            className="rounded-md"
+                          >
+                            <SplitPanel className="size-4" />
+                          </IconButton>
+                          <SidebarUpdatePill
+                            phase={updaterPhase}
+                            downloadProgress={downloadProgress}
+                            onDownloadUpdate={downloadUpdate}
+                            onOpenRestartPrompt={openRestartPrompt}
+                          />
+                        </div>
+                      )}
+                      {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
+                        <GlobalHeader
+                          existingPr={existingPr}
+                          selectedWorkspace={selectedWorkspace}
+                          rightPanelOpen={rightPanelOpen}
+                          disableGitActions={!hasRuntimeReadyWorkspace}
+                          runDisabled={!runCommand.canRun}
+                          runLoading={runCommand.isLaunching}
+                          runLabel={runCommand.runLabel}
+                          runTitle={runCommand.runTitle}
+                          onRun={runCommand.onRun}
+                          onTogglePanel={actions.toggleRightPanel}
+                          onCommit={actions.handleCommitOpen}
+                          onPush={actions.handlePushOpen}
+                          onCreatePr={actions.handlePrOpen}
+                          onViewPr={actions.handleViewPr}
+                          onRenameBranch={hasRuntimeReadyWorkspace ? actions.renameBranch : undefined}
+                          gitStatus={gitStatus ?? null}
+                        />
+                      )}
+                    </>
+                  </DebugProfiler>
                 </div>
 
                 <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
                   {hasLaunchIntentOnlyShell ? (
-                    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      <ChatView shellRenderSurface={{ kind: "chat-shell" }} />
-                    </div>
+                    <DebugProfiler id="workspace-content-frame">
+                      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                        {freezeWorkspaceContent ? (
+                          <PerfFrozenPanel label="Workspace content frozen" surface="workspace-content" />
+                        ) : (
+                          <ChatView shellRenderSurface={CHAT_SHELL_RENDER_SURFACE} />
+                        )}
+                      </div>
+                    </DebugProfiler>
                   ) : hasWorkspaceShell ? (
                     <>
-                      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                        <WorkspaceContentView />
-                      </div>
+                      <DebugProfiler id="workspace-content-frame">
+                        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                        {freezeWorkspaceContent || freezeHeaderTabsViewModel ? (
+                          <PerfFrozenPanel label="Workspace content frozen" surface="workspace-content" />
+                        ) : (
+                          <WorkspaceContentView />
+                          )}
+                        </div>
+                      </DebugProfiler>
 
                       {rightPanelOpen && (
                         <div
@@ -327,42 +391,50 @@ export function StandardWorkspaceShell() {
                         className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
                         style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
                       >
-                        <div className="h-full" style={{ minWidth: 260 }}>
-                          <RightPanel
-                            workspaceId={selectedWorkspaceId}
-                            isWorkspaceReady={hasRuntimeReadyWorkspace}
-                            isOpen={rightPanelOpen}
-                            shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
-                            isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                            state={rightPanelState}
-                            repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
-                              section: "repo",
-                              repo: null,
-                            })}
-                            onStateChange={layout.setRightPanelState}
-                            terminalActivationRequest={terminalActivationRequest}
-                            focusRequestToken={rightPanelFocusRequestToken}
-                            nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                            onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
-                          />
-                        </div>
+                        <DebugProfiler id="workspace-right-panel">
+                          <div className="h-full" style={{ minWidth: 260 }}>
+                            {freezeRightPanel ? (
+                              <PerfFrozenPanel label="Right panel frozen" surface="right-panel" />
+                            ) : (
+                              <RightPanel
+                                workspaceId={selectedWorkspaceId}
+                                isWorkspaceReady={hasRuntimeReadyWorkspace}
+                                isOpen={rightPanelOpen}
+                                shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
+                                isCloudWorkspaceSelected={isCloudWorkspaceSelected}
+                                state={rightPanelState}
+                                repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
+                                  section: "repo",
+                                  repo: null,
+                                })}
+                                onStateChange={layout.setRightPanelState}
+                                terminalActivationRequest={terminalActivationRequest}
+                                focusRequestToken={rightPanelFocusRequestToken}
+                                nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
+                                onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
+                              />
+                            )}
+                          </div>
+                        </DebugProfiler>
                       </div>
 
-                      <WorkspaceCommandPalette
-                        open={commandPaletteOpen}
-                        onClose={actions.onCommandPaletteClose}
-                        hasWorkspaceShell={hasWorkspaceShell}
-                        selectedWorkspaceId={selectedWorkspaceId}
-                        hasRuntimeReadyWorkspace={hasRuntimeReadyWorkspace}
-                        runtimeBlockedReason={runtimeBlockedReason}
-                        repoSettingsHref={repoSettingsHref}
-                        canOpenRepositorySettings={canOpenRepositorySettings}
-                        repositorySettingsDisabledReason={repositorySettingsDisabledReason}
-                        runCommand={runCommand}
-                        openTerminalPanel={actions.openTerminalPanel}
-                        onToggleLeftSidebar={actions.onToggleSidebar}
-                        onToggleRightPanel={actions.toggleRightPanel}
-                      />
+                      <DebugProfiler id="workspace-command-palette">
+                        <WorkspaceCommandPalette
+                          open={commandPaletteOpen}
+                          onClose={actions.onCommandPaletteClose}
+                          hasWorkspaceShell={hasWorkspaceShell}
+                          selectedWorkspaceId={selectedWorkspaceId}
+                          hasRuntimeReadyWorkspace={hasRuntimeReadyWorkspace}
+                          runtimeBlockedReason={runtimeBlockedReason}
+                          repoSettingsHref={repoSettingsHref}
+                          canOpenRepositorySettings={canOpenRepositorySettings}
+                          repositorySettingsDisabledReason={repositorySettingsDisabledReason}
+                          runCommand={runCommand}
+                          openTerminalPanel={actions.openTerminalPanel}
+                          onToggleLeftSidebar={actions.onToggleSidebar}
+                          onToggleRightPanel={actions.toggleRightPanel}
+                        />
+                      </DebugProfiler>
 
                       {hasRuntimeReadyWorkspace && (
                         <>
@@ -390,5 +462,22 @@ export function StandardWorkspaceShell() {
         </WorkspacePathProvider>
       </WorkspaceShellActionsProvider>
     </DebugProfiler>
+  );
+}
+
+function PerfFrozenPanel({
+  label,
+  surface,
+}: {
+  label: string;
+  surface: string;
+}) {
+  return (
+    <div
+      className="flex h-full min-h-0 w-full items-center justify-center border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground"
+      data-perf-frozen={surface}
+    >
+      {label}
+    </div>
   );
 }

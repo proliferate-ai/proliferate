@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
+import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import {
@@ -7,6 +7,7 @@ import {
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "@/config/chat-layout";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
@@ -31,7 +32,7 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
  * Consumed by `ChatView` (production) and `ChatPlaygroundPage` (dev) so
  * both surfaces stay in sync automatically.
  */
-export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps>(
+export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDockProps>(
   function ChatComposerDock({
     backdrop = true,
     outboundSlot,
@@ -45,6 +46,17 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
     ...rest
   }, ref) {
     useDebugRenderCount("chat-composer-dock");
+    useDebugRenderReason("ChatComposerDock", {
+      backdrop,
+      outboundSlot,
+      activeSlot,
+      attachedSlot,
+      footerSlot,
+      lowerBackdropTopPx,
+      shellClassName,
+      children,
+      className,
+    });
     const baseShellClassName = shellClassName
       ? "z-10 shrink-0"
       : "relative z-10 mt-auto shrink-0";
@@ -111,4 +123,4 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
       </DebugProfiler>
     );
   },
-);
+));

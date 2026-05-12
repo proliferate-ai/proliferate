@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createEmptySessionRecord,
   putSessionRecord,
@@ -60,6 +60,7 @@ vi.mock("@/lib/infra/measurement/debug-measurement", () => ({
 }));
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.clearAllMocks();
   measurementMocks.nextOperation = 0;
   hookMocks.scheduledCallbacks = [];
@@ -98,6 +99,10 @@ beforeEach(() => {
   }));
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("useWorkspaceShellActivation", () => {
   it("sets pending chat activation before durable shell intent or real selection", async () => {
     const { result } = renderHook(() => useWorkspaceShellActivation());
@@ -120,6 +125,11 @@ describe("useWorkspaceShellActivation", () => {
     expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["workspace-1"])
       .toBeUndefined();
     expect(hookMocks.selectSession).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+    });
+
     expect(hookMocks.scheduledCallbacks).toHaveLength(1);
     expect(measurementMocks.recordMeasurementWorkflowStep).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -159,6 +169,7 @@ describe("useWorkspaceShellActivation", () => {
 
     let outcome: any;
     await act(async () => {
+      vi.advanceTimersByTime(180);
       hookMocks.scheduledCallbacks.shift()?.();
       outcome = await activationPromise;
     });
@@ -198,8 +209,11 @@ describe("useWorkspaceShellActivation", () => {
       intent: "chat:session-2",
     });
 
+    expect(hookMocks.scheduledCallbacks).toHaveLength(0);
+
     await act(async () => {
-      hookMocks.scheduledCallbacks.shift()?.();
+      vi.advanceTimersByTime(180);
+      expect(hookMocks.scheduledCallbacks).toHaveLength(1);
       hookMocks.scheduledCallbacks.shift()?.();
       await Promise.all([firstPromise, secondPromise]);
     });
@@ -227,6 +241,7 @@ describe("useWorkspaceShellActivation", () => {
     });
 
     await act(async () => {
+      vi.advanceTimersByTime(180);
       hookMocks.scheduledCallbacks.shift()?.();
       await activationPromise;
     });

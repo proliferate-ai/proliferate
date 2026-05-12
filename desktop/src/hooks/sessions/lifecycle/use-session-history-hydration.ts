@@ -35,6 +35,7 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 
 const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "session-transcript-pane",
@@ -71,6 +72,15 @@ export function useSessionHistoryHydration() {
     options?: SessionHistoryHydrationOptions,
   ): Promise<boolean> => {
     const startedAt = performance.now();
+    if (isProliferatePerfFlagEnabled("pauseSessionHistoryHydration")) {
+      logLatency("session.history.rehydrate.paused_by_perf_flag", {
+        sessionId,
+        afterSeq: options?.afterSeq ?? null,
+        beforeSeq: options?.beforeSeq ?? null,
+        replace: options?.replace ?? false,
+      });
+      return false;
+    }
     let standaloneMeasurementOperationId: MeasurementOperationId | null = null;
     try {
       if (options?.isCurrent && !options.isCurrent()) {

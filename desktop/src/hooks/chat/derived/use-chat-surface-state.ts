@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import {
@@ -28,6 +29,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   const {
     activeSessionId,
     hasContent,
+    hasTranscriptEntry,
     hasSlot,
     transcriptHydrated,
     isEmpty,
@@ -36,38 +38,72 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
   } = useActiveSessionSurfaceSnapshot();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
-  const selectedCloudWorkspace =
-    workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === selectedCloudWorkspaceId)
-    ?? null;
-  const selectedLocalWorkspace = selectedWorkspaceId
-    ? workspaceCollections?.localWorkspaces?.find((w) => w.id === selectedWorkspaceId)
-    : null;
-
-  return {
-    mode: resolveChatSurfaceState({
-      selectedWorkspaceId,
-      hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
-      activeLaunchIntentId: activeLaunchIntent?.id ?? null,
-      launchIntentSessionId: activeLaunchIntent?.materializedSessionId ?? null,
-      selectedLocalWorkspace: selectedLocalWorkspace ?? null,
-      isArrivalWorkspace: workspaceArrivalEvent?.workspaceId === selectedWorkspaceId,
-      shouldShowSelectedCloudWorkspaceStatus: selectedCloudWorkspace
-        ? shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace)
-        : false,
-      shouldPreserveVisibleCloudContent: selectedCloudRuntime.state?.preserveVisibleContent === true,
-      shellRenderScope: shellRenderSurface
-        ? shellRenderSurface.kind === "chat-session-pending"
-          ? { kind: "chat-session-pending", sessionId: shellRenderSurface.sessionId }
-          : { kind: shellRenderSurface.kind === "chat-shell" ? "chat-shell" : "other" }
-        : null,
-      activeSessionId,
-      hasContent,
-      hasSlot,
-      transcriptHydrated,
-      isEmpty,
-      isRunning,
-      streamConnectionState,
-    }),
+  const selectedCloudWorkspace = useMemo(() => (
+    workspaceCollections?.cloudWorkspaces.find((workspace) =>
+      workspace.id === selectedCloudWorkspaceId
+    ) ?? null
+  ), [selectedCloudWorkspaceId, workspaceCollections?.cloudWorkspaces]);
+  const selectedLocalWorkspace = useMemo(() => (
+    selectedWorkspaceId
+      ? workspaceCollections?.localWorkspaces?.find((workspace) =>
+          workspace.id === selectedWorkspaceId
+        ) ?? null
+      : null
+  ), [selectedWorkspaceId, workspaceCollections?.localWorkspaces]);
+  const shellRenderScope = useMemo(() => {
+    if (!shellRenderSurface) {
+      return null;
+    }
+    if (shellRenderSurface.kind === "chat-session-pending") {
+      return { kind: "chat-session-pending" as const, sessionId: shellRenderSurface.sessionId };
+    }
+    if (shellRenderSurface.kind === "chat-session") {
+      return {
+        kind: "chat-session" as const,
+        sessionId: shellRenderSurface.sessionId,
+      };
+    }
+    return { kind: shellRenderSurface.kind === "chat-shell" ? "chat-shell" as const : "other" as const };
+  }, [shellRenderSurface]);
+  const mode = useMemo(() => resolveChatSurfaceState({
     selectedWorkspaceId,
-  };
+    hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
+    activeLaunchIntentId: activeLaunchIntent?.id ?? null,
+    launchIntentSessionId: activeLaunchIntent?.materializedSessionId ?? null,
+    selectedLocalWorkspace,
+    isArrivalWorkspace: workspaceArrivalEvent?.workspaceId === selectedWorkspaceId,
+    shouldShowSelectedCloudWorkspaceStatus: selectedCloudWorkspace
+      ? shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace)
+      : false,
+    shouldPreserveVisibleCloudContent: selectedCloudRuntime.state?.preserveVisibleContent === true,
+    shellRenderScope,
+    activeSessionId,
+    hasContent,
+    hasTranscriptEntry,
+    hasSlot,
+    transcriptHydrated,
+    isEmpty,
+    isRunning,
+    streamConnectionState,
+  }), [
+    activeLaunchIntent?.id,
+    activeLaunchIntent?.materializedSessionId,
+    activeSessionId,
+    hasContent,
+    hasTranscriptEntry,
+    hasSlot,
+    isEmpty,
+    isRunning,
+    pendingWorkspaceEntry,
+    selectedCloudRuntime.state?.preserveVisibleContent,
+    selectedCloudWorkspace,
+    selectedLocalWorkspace,
+    selectedWorkspaceId,
+    shellRenderScope,
+    streamConnectionState,
+    transcriptHydrated,
+    workspaceArrivalEvent?.workspaceId,
+  ]);
+
+  return useMemo(() => ({ mode, selectedWorkspaceId }), [mode, selectedWorkspaceId]);
 }

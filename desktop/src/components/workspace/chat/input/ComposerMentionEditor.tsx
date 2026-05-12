@@ -85,11 +85,11 @@ export function ComposerMentionEditor({
 
   const updateSelection = useCallback(() => {
     const next = textareaRef.current?.selectionStart ?? text.length;
-    setSelectionOffset(next);
-    setSearchSuppressed(false);
+    setSelectionOffset((current) => current === next ? current : next);
+    setSearchSuppressed((current) => current ? false : current);
     return next;
   }, [text.length]);
-  const { resizeTextarea } = useComposerTextareaAutosize({
+  useComposerTextareaAutosize({
     textareaRef,
     value: text,
     lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
@@ -145,9 +145,8 @@ export function ComposerMentionEditor({
     setSearchSuppressed(false);
     window.requestAnimationFrame(() => {
       updateSelection();
-      resizeTextarea();
     });
-  }, [onDraftChange, resizeTextarea, updateSelection]);
+  }, [onDraftChange, updateSelection]);
 
   useEffect(() => () => {
     finishOrCancelMeasurementOperation(typingOperationRef.current, "unmount");

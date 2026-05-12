@@ -6,6 +6,7 @@ import type {
   MeasurementSurface,
 } from "./debug-measurement-catalog-types";
 import type { MeasurementMetricSnapshot } from "./debug-measurement-metric-types";
+import type { ProliferatePerfFlags } from "@/lib/infra/perf/perf-isolation-flags";
 
 export type MeasurementSummaryValue = string | number | boolean | null;
 export type MeasurementSummaryRow = Record<string, MeasurementSummaryValue>;
@@ -111,6 +112,7 @@ export interface MeasurementDebugDump {
     mainThread: boolean;
     anyHarnessTiming: boolean;
   };
+  perfFlags: ProliferatePerfFlags;
   longTaskObserverSupported: boolean;
   memory: MeasurementMemorySnapshot;
   counts: {
@@ -137,6 +139,7 @@ export interface MeasurementDebugStatus {
 export interface MeasurementDebugApi {
   dump: () => MeasurementDebugDump;
   export: (fileName?: string) => MeasurementDebugDump;
+  save: (outputPath: string) => Promise<string | null>;
   clear: () => void;
   status: () => MeasurementDebugStatus;
 }

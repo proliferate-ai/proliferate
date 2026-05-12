@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { CloudRuntimeAttachedPanel } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
@@ -45,46 +45,61 @@ export function useComposerDockSlots(options?: {
     selectedCloudRuntimeState: selectedCloudRuntime.state,
   });
 
-  const interactionPanel: ReactNode | null = primaryPendingInteraction?.kind === "permission"
-    ? <ConnectedApprovalCard />
-    : primaryPendingInteraction?.kind === "user_input"
-      ? <ConnectedUserInputCard />
-      : primaryPendingInteraction?.kind === "mcp_elicitation"
-        ? <ConnectedMcpElicitationCard />
-        : null;
+  const interactionPanel = useMemo<ReactNode | null>(() => (
+    primaryPendingInteraction?.kind === "permission"
+      ? <ConnectedApprovalCard />
+      : primaryPendingInteraction?.kind === "user_input"
+        ? <ConnectedUserInputCard />
+        : primaryPendingInteraction?.kind === "mcp_elicitation"
+          ? <ConnectedMcpElicitationCard />
+          : null
+  ), [primaryPendingInteraction?.kind]);
 
-  const ambientContextSlot: ReactNode | null = workspaceStatusPanel
-    ? <WorkspaceArrivalAttachedPanel />
-    : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
-      ? <CloudRuntimeAttachedPanel />
-      : null;
-  const activeAgentSlot: ReactNode | null = suppressSessionSlots
-    ? null
-    : interactionPanel || (activeTodoTracker
-      ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
-      : null);
-  const delegatedWorkSlot: ReactNode | null = delegatedWorkComposer
-    ? (
+  const ambientContextSlot = useMemo<ReactNode | null>(() => (
+    workspaceStatusPanel
+      ? <WorkspaceArrivalAttachedPanel />
+      : selectedCloudRuntime.state && selectedCloudRuntime.state.phase !== "ready"
+        ? <CloudRuntimeAttachedPanel />
+        : null
+  ), [selectedCloudRuntime.state, workspaceStatusPanel]);
+  const activeAgentSlot = useMemo<ReactNode | null>(() => (
+    suppressSessionSlots
+      ? null
+      : interactionPanel || (activeTodoTracker
+        ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
+        : null)
+  ), [activeTodoTracker, interactionPanel, suppressSessionSlots]);
+  const delegatedWorkSlot = useMemo<ReactNode | null>(() => (
+    delegatedWorkComposer
+      ? (
       <DelegatedWorkComposerPanel>
         <DelegatedWorkComposerControl viewModel={delegatedWorkComposer} />
       </DelegatedWorkComposerPanel>
-    )
-    : null;
+      )
+      : null
+  ), [delegatedWorkComposer]);
   const attachedDelegatedWorkSlot = suppressSessionSlots ? null : delegatedWorkSlot;
-  const attachedSlot: ReactNode | null = ambientContextSlot || attachedDelegatedWorkSlot
-    ? (
+  const attachedSlot = useMemo<ReactNode | null>(() => (
+    ambientContextSlot || attachedDelegatedWorkSlot
+      ? (
       <>
         {ambientContextSlot}
         {attachedDelegatedWorkSlot}
       </>
-    )
-    : null;
+      )
+      : null
+  ), [ambientContextSlot, attachedDelegatedWorkSlot]);
 
-  return {
+  return useMemo(() => ({
     outboundSlot: !suppressSessionSlots && pendingPrompts.length > 0
       ? <ConnectedPendingPromptList />
       : null,
     activeSlot: activeAgentSlot,
     attachedSlot,
-  };
+  }), [
+    activeAgentSlot,
+    attachedSlot,
+    pendingPrompts.length,
+    suppressSessionSlots,
+  ]);
 }

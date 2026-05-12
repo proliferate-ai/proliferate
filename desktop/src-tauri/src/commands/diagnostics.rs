@@ -1,5 +1,6 @@
 use rfd::FileDialog;
 use serde::Deserialize;
+use std::path::PathBuf;
 use tauri::State;
 
 use crate::{
@@ -28,6 +29,13 @@ pub struct RendererEventInput {
     pub message: String,
     pub route: Option<String>,
     pub elapsed_ms: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveDiagnosticJsonToPathInput {
+    pub output_path: String,
+    pub contents: String,
 }
 
 fn runtime_status_label(status: &RuntimeStatus) -> &'static str {
@@ -111,4 +119,40 @@ pub async fn save_diagnostic_json(
         contents,
     })
     .map(Some)
+}
+
+#[tauri::command]
+pub fn save_diagnostic_json_to_absolute_path(
+    input: SaveDiagnosticJsonToPathInput,
+) -> Result<SaveDiagnosticJsonResult, String> {
+    if !cfg!(debug_assertions) {
+        return Err("save_diagnostic_json_to_absolute_path is dev-only".to_string());
+    }
+
+    let output_path = expand_home_path(&input.output_path)?;
+    if !output_path.is_absolute() {
+        return Err("output_path must be absolute".to_string());
+    }
+
+    save_diagnostic_json_to_path(SaveDiagnosticJsonOptions {
+        output_path,
+        contents: input.contents,
+    })
+}
+
+fn expand_home_path(path: &str) -> Result<PathBuf, String> {
+    if path == "~" {
+        return std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| "HOME is not set".to_string());
+    }
+
+    if let Some(rest) = path.strip_prefix("~/") {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .ok_or_else(|| "HOME is not set".to_string())?;
+        return Ok(home.join(rest));
+    }
+
+    Ok(PathBuf::from(path))
 }

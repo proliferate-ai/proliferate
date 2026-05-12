@@ -20,9 +20,9 @@ import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/derived/use-wo
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -35,7 +35,6 @@ interface WorkspaceSidebarState {
   selectedWorkspaceId: string | null;
   selectedLogicalWorkspaceId: string | null;
   gitStatus: GitStatusSnapshot | undefined;
-  transcriptTitle: string | null;
   emptyState: SidebarEmptyState;
   cleanupAttentionWorkspaces: Workspace[];
   isLoading: boolean;
@@ -50,7 +49,6 @@ export function useWorkspaceSidebarState({
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
-  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const lastViewedSessionErrorAtBySession = useWorkspaceUiStore((state) =>
     state.lastViewedSessionErrorAtBySession
     ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION
@@ -59,12 +57,6 @@ export function useWorkspaceSidebarState({
     lastViewedSessionErrorAtBySession,
   );
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
-  const activeSessionTitle = useSessionDirectoryStore((state) => {
-    const entry = activeSessionId ? state.entriesById[activeSessionId] : null;
-    return entry
-      ? entry.title?.trim() || entry.activity.transcriptTitle?.trim() || null
-      : null;
-  });
 
   const {
     archivedWorkspaceIds,
@@ -121,12 +113,11 @@ export function useWorkspaceSidebarState({
     workspaceActivities,
     pendingPromptCounts,
     gitStatus,
-    activeSessionTitle,
+    activeSessionTitle: null,
     lastViewedAt,
     workspaceLastInteracted,
     finishSuggestionsByWorkspaceId,
   }), [
-    activeSessionTitle,
     archivedSet,
     gitStatus,
     hiddenRepoRootSet,
@@ -143,6 +134,31 @@ export function useWorkspaceSidebarState({
     finishSuggestionsByWorkspaceId,
   ]);
   const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
+  useDebugValueChange("workspace_sidebar_state.inputs", "state_refs", {
+    selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
+    lastViewedSessionErrorAtBySession,
+    workspaceActivities,
+    deferredLaunchesById,
+    archivedWorkspaceIds,
+    hiddenRepoRootIds,
+    lastViewedAt,
+    workspaceLastInteracted,
+    workspaceTypes,
+    logicalWorkspaces,
+    workspaceCollections,
+    cleanupAttentionWorkspaces,
+    finishSuggestionsByWorkspaceId,
+    repoRoots,
+    gitStatus,
+    archivedSet,
+    hiddenRepoRootSet,
+    pendingPromptCounts,
+    groups,
+    emptyState,
+    showArchived,
+    workspacesLoading,
+  });
 
   return {
     groups,
@@ -151,7 +167,6 @@ export function useWorkspaceSidebarState({
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
     gitStatus,
-    transcriptTitle: activeSessionTitle,
     emptyState,
     cleanupAttentionWorkspaces,
     isLoading: workspacesLoading,

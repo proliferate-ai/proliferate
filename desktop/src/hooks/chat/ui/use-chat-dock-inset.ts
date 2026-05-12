@@ -5,6 +5,8 @@ import {
   computeChatSurfaceBottomInsetPx,
 } from "@/config/chat-layout";
 
+const CHAT_DOCK_RESIZE_SETTLE_MS = 90;
+
 export function useChatDockInset() {
   const dockRef = useRef<HTMLDivElement>(null);
   const [metrics, setMetrics] = useState({
@@ -29,12 +31,12 @@ export function useChatDockInset() {
       const surfaceRect = composerSurface?.getBoundingClientRect() ?? null;
       const footerRect = composerFooter?.getBoundingClientRect() ?? null;
       const nextMetrics = {
-        composerSurfaceHeightPx: surfaceRect ? Math.max(0, surfaceRect.height) : 0,
+        composerSurfaceHeightPx: surfaceRect ? Math.max(0, Math.ceil(surfaceRect.height)) : 0,
         composerSurfaceOffsetTopPx: surfaceRect
-          ? Math.max(0, surfaceRect.top - dockRect.top)
+          ? Math.max(0, Math.ceil(surfaceRect.top - dockRect.top))
           : 0,
-        composerFooterHeightPx: footerRect ? Math.max(0, footerRect.height) : 0,
-        dockHeightPx: Math.max(0, dockRect.height),
+        composerFooterHeightPx: footerRect ? Math.max(0, Math.ceil(footerRect.height)) : 0,
+        dockHeightPx: Math.max(0, Math.ceil(dockRect.height)),
       };
       setMetrics((current) =>
         current.composerSurfaceHeightPx === nextMetrics.composerSurfaceHeightPx
@@ -52,14 +54,25 @@ export function useChatDockInset() {
       return;
     }
 
-    const observer = new ResizeObserver(() => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
+    let settleTimer: number | null = null;
+    const scheduleMeasure = () => {
+      if (settleTimer !== null) {
+        window.clearTimeout(settleTimer);
       }
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        measure();
-      });
+      settleTimer = window.setTimeout(() => {
+        settleTimer = null;
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+        }
+        frameId = window.requestAnimationFrame(() => {
+          frameId = null;
+          measure();
+        });
+      }, CHAT_DOCK_RESIZE_SETTLE_MS);
+    };
+
+    const observer = new ResizeObserver(() => {
+      scheduleMeasure();
     });
 
     observer.observe(dock);
@@ -74,6 +87,9 @@ export function useChatDockInset() {
 
     return () => {
       observer.disconnect();
+      if (settleTimer !== null) {
+        window.clearTimeout(settleTimer);
+      }
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }
