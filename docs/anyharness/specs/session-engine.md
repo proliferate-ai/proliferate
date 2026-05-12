@@ -20,7 +20,7 @@ Current names:
 
 ```text
 SessionRuntime      anyharness-lib/src/sessions/runtime/
-SessionService      anyharness-lib/src/sessions/service.rs
+SessionService      anyharness-lib/src/sessions/service/
 SessionStore        anyharness-lib/src/sessions/store/**
 AcpManager          target name: LiveSessionManager
 LiveSessionHandle   currently inside acp/session_actor.rs
@@ -34,7 +34,9 @@ Implementation reality after the completed migration phases:
 
 - session MCP assembly lives under `sessions/mcp_bindings/**`.
 - `SessionStore` is split under `sessions/store/**`.
+- `SessionService` is split under `sessions/service/**`.
 - `SessionRuntime` is split under `sessions/runtime/**`.
+- prompt preparation is split under `sessions/prompt/**`.
 - `SessionEventSink` is split under `acp/event_sink/**`.
 - `acp/session_actor.rs` remains the current actor implementation; the actor
   loop rewrite is deferred/manual.
@@ -67,6 +69,19 @@ Durable session business logic:
 - summarize durable session/workspace state
 
 It does not talk to a live ACP actor.
+
+Current service files:
+
+```text
+sessions/service/
+  mod.rs             # service type, constructor, public error surface
+  creation.rs        # durable session validation and record creation
+  queries.rs         # session reads, title updates, live-config snapshots
+  import_export.rs   # mobility import and durable delete cleanup
+  launch_catalog.rs  # workspace/effective launch catalog projection
+  model_resolution.rs
+  attachments.rs     # prompt attachment read fallback and migration
+```
 
 ### SessionRuntime
 
@@ -167,6 +182,22 @@ Prompt preparation turns user intent into a protocol-safe prompt payload:
 - capabilities
 - provenance
 - validation
+
+Current prompt files:
+
+```text
+sessions/prompt/
+  mod.rs          # public prompt API, limits, prepare context
+  payload.rs      # persisted prompt payload and ACP content conversion
+  blocks.rs       # stored block schema and transcript content projection
+  prepare.rs      # request block validation and PreparedPrompt assembly
+  attachments.rs  # prepared attachment records, storage cleanup/persist helpers
+  provenance.rs   # internal provenance schema and public-safe projection
+  capabilities.rs # ACP/live-config prompt capability mapping
+```
+
+Keep new prompt block validation in `prepare.rs`, new persisted block shape in
+`blocks.rs`, and ACP conversion in `payload.rs`.
 
 ## Prompt Flow
 
