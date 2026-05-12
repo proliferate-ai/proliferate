@@ -49,33 +49,38 @@ export function GitActionsButton({
       canCommit: false,
       canPush: false,
       canCreatePullRequest: false,
-      pushLabel: "Push",
+      pushLabel: "Publish branch",
     },
   };
   const effectiveDisabled = disabled || !gitStatus;
 
   // Primary action for button face
-  let primaryLabel = "Commit";
-  let primaryIcon = <GitCommit className="size-3.5" />;
-  let primaryOnClick = onCommit;
+  let primaryLabel = gitStatus ? "Commit" : actions.pushLabel;
+  let primaryIcon = gitStatus
+    ? <GitCommit className="size-3.5" />
+    : <CloudUpload className="size-3.5" />;
+  let primaryOnClick = gitStatus ? onCommit : onPush;
   let primaryDisabled = effectiveDisabled;
 
   if (!effectiveDisabled && !clean && actions.canCommit) {
     primaryLabel = "Commit";
     primaryIcon = <GitCommit className="size-3.5" />;
     primaryOnClick = onCommit;
-  } else if (!effectiveDisabled && clean && actions.canPush) {
+  } else if (clean && actions.canPush) {
     primaryLabel = actions.pushLabel;
     primaryIcon = <CloudUpload className="size-3.5" />;
     primaryOnClick = onPush;
-  } else if (!effectiveDisabled && existingPr) {
+    primaryDisabled = effectiveDisabled;
+  } else if (existingPr) {
     primaryLabel = "View PR";
     primaryIcon = <GitHub className="size-3.5" />;
     primaryOnClick = onViewPr;
-  } else if (!effectiveDisabled && clean && actions.canCreatePullRequest) {
+    primaryDisabled = effectiveDisabled;
+  } else if (clean && actions.canCreatePullRequest) {
     primaryLabel = "Create PR";
     primaryIcon = <GitHub className="size-3.5" />;
     primaryOnClick = onCreatePr;
+    primaryDisabled = effectiveDisabled;
   } else {
     primaryDisabled = true;
   }

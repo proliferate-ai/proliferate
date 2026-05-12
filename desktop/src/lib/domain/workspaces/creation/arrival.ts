@@ -1,5 +1,6 @@
 import type { SetupScriptExecution, Workspace, WorkspaceKind } from "@anyharness/sdk";
 import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
+import { workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import {
@@ -231,7 +232,7 @@ export function buildWorkspaceArrivalViewModel(args: {
 }): WorkspaceArrivalViewModel {
   const { event, workspace } = args;
   const workspaceName = workspace.kind === "worktree"
-    ? workspaceDisplayName(workspace)
+    ? worktreeArrivalName(workspace)
     : workspace.path.split("/").pop()
       ?? workspace.gitRepoName
       ?? "workspace";
@@ -311,7 +312,7 @@ export function buildWorkspaceArrivalViewModel(args: {
     return {
       ...baseViewModel,
       kind: "worktree",
-      branchName: workspaceBranchLabel(workspace),
+      branchName: worktreeArrivalBranchName(workspace),
       baseBranchName: event.baseBranchName?.trim() || null,
     };
   }
@@ -320,6 +321,18 @@ export function buildWorkspaceArrivalViewModel(args: {
     ...baseViewModel,
     kind: "workspace",
   };
+}
+
+function worktreeArrivalName(workspace: Workspace): string {
+  return workspace.path.split("/").filter(Boolean).pop()
+    || workspace.displayName?.trim()
+    || workspaceCurrentBranchName(workspace)
+    || workspaceDisplayName(workspace);
+}
+
+function worktreeArrivalBranchName(workspace: Workspace): string {
+  return workspaceCurrentBranchName(workspace)
+    || workspaceBranchLabel(workspace);
 }
 
 function resolveWorkspaceArrivalSubtitle(

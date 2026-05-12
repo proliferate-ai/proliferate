@@ -53,6 +53,28 @@ describe("workspace arrival view model", () => {
     expect(view.badgeLabel).toBe("New worktree");
   });
 
+  it("keeps generated worktree names stable after materialization", () => {
+    const view = buildWorkspaceArrivalViewModel({
+      event: buildWorkspaceArrivalEvent({
+        workspaceId: "workspace-1",
+        source: "worktree-created",
+        baseBranchName: "main",
+      }),
+      workspace: makeWorkspace({
+        path: "/Users/pablo/.proliferate/worktrees/landing/gulch",
+        currentBranch: "gulch",
+        displayName: undefined,
+      }),
+      configuredSetupScript: "",
+    });
+
+    expect(view.title).toBe("gulch");
+    expect(view.workspaceName).toBe("gulch");
+    if (view.kind === "worktree") {
+      expect(view.branchName).toBe("gulch");
+    }
+  });
+
   it("projects pending worktrees with the final arrival copy before materialization", () => {
     const view = buildPendingWorkspaceArrivalViewModel({
       entry: buildSubmittingPendingWorkspaceEntry({
