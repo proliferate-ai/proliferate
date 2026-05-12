@@ -1,30 +1,26 @@
-use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use acp::Agent as _;
 use agent_client_protocol as acp;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate};
-use super::event_sink::{
-    AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSink,
-    SessionEventSinkDebugSnapshot,
-};
+use super::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use super::mcp_elicitation::McpElicitationOutcome;
 use super::permission_broker::{
-    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionDecision,
-    PermissionOutcome, ResolveInteractionError, UserInputOutcome,
+    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionOutcome,
+    ResolveInteractionError, UserInputOutcome,
 };
 use super::persistence_sanitizer::sanitize_raw_notification_for_sqlite;
 use super::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
 use super::runtime_client::RuntimeClient;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
-use crate::domains::plans::model::{NewPlan, PlanRecord};
-use crate::domains::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
+use crate::domains::plans::model::PlanRecord;
+use crate::domains::plans::service::{PlanDecisionError, PlanService};
 use crate::domains::reviews::service::ReviewService;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::extensions::SessionTurnOutcome;
@@ -36,194 +32,51 @@ use crate::sessions::live_config::{
 use crate::sessions::mcp_bindings::acp::to_acp_servers;
 use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::{
-    serialize_action_capabilities, PendingConfigChangeRecord, PromptAttachmentRecord,
-    PromptAttachmentState, SessionRecord,
+    serialize_action_capabilities, PendingConfigChangeRecord, SessionRecord,
 };
-use crate::sessions::prompt::{capabilities_from_acp, PromptPayload};
-use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
+use crate::sessions::prompt::capabilities_from_acp;
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
     CurrentModeUpdatePayload, ErrorEventDetails, InteractionKind, InteractionOutcome,
-    McpElicitationSubmittedField, NormalizedSessionControl, PendingInteractionSummary,
-    PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
-    PendingPromptUpdatedPayload, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
+    NormalizedSessionControl, PendingPromptAddedPayload, PendingPromptRemovalReason,
+    PendingPromptRemovedPayload, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
     SessionActionCapabilities, SessionEndReason, SessionEventEnvelope, SessionExecutionPhase,
-    SessionExecutionSummary, SessionInfoUpdatePayload, SessionLiveConfigSnapshot,
-    SessionStateUpdatePayload, StopReason, UsageUpdatePayload, UserInputSubmittedAnswer,
+    SessionInfoUpdatePayload, SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason,
+    UsageUpdatePayload,
 };
 
-#[derive(Debug)]
-pub enum PromptAcceptError {
-    ActorDead,
-    EnqueueFailed(String),
-}
+mod command;
+mod diagnostics;
+mod handle;
+mod plans;
+mod prompt_queue;
+mod startup;
+mod stderr;
 
-#[derive(Debug, Clone)]
-pub enum PromptAcceptance {
-    Started { turn_id: String },
-    Queued { seq: i64 },
-}
-
-#[derive(Debug)]
-pub enum QueueMutationError {
-    NotFound,
-    ActorDead,
-}
-
-#[derive(Debug)]
-pub enum SetConfigOptionCommandError {
-    Rejected(String),
-}
-
-#[derive(Debug)]
-pub struct ForkSessionCommandResult {
-    pub native_session_id: String,
-    pub supports_close: bool,
-}
-
-#[derive(Debug)]
-pub enum ForkSessionCommandError {
-    Busy,
-    Unsupported(String),
-    Failed(String),
-}
-
-#[derive(Clone, PartialEq)]
-pub enum InteractionResolution {
-    Selected {
-        option_id: String,
-    },
-    Decision(PermissionDecision),
-    Submitted {
-        answers: Vec<UserInputSubmittedAnswer>,
-    },
-    Accepted {
-        fields: Vec<McpElicitationSubmittedField>,
-    },
-    Declined,
-    Cancelled,
-    Dismissed,
-}
-
-impl fmt::Debug for InteractionResolution {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Selected { option_id } => f
-                .debug_struct("Selected")
-                .field("option_id", option_id)
-                .finish(),
-            Self::Decision(decision) => f.debug_tuple("Decision").field(decision).finish(),
-            Self::Submitted { answers } => f
-                .debug_struct("Submitted")
-                .field("answer_count", &answers.len())
-                .field(
-                    "question_ids",
-                    &answers
-                        .iter()
-                        .map(|answer| answer.question_id.as_str())
-                        .collect::<Vec<_>>(),
-                )
-                .finish(),
-            Self::Accepted { fields } => f
-                .debug_struct("Accepted")
-                .field("field_count", &fields.len())
-                .field(
-                    "field_ids",
-                    &fields
-                        .iter()
-                        .map(|field| field.field_id.as_str())
-                        .collect::<Vec<_>>(),
-                )
-                .finish(),
-            Self::Declined => f.write_str("Declined"),
-            Self::Cancelled => f.write_str("Cancelled"),
-            Self::Dismissed => f.write_str("Dismissed"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ResolveInteractionCommandError {
-    NotFound,
-    KindMismatch,
-    InvalidOptionId,
-    InvalidQuestionId,
-    DuplicateQuestionAnswer,
-    MissingQuestionAnswer,
-    InvalidSelectedOptionLabel,
-    InvalidMcpFieldId,
-    DuplicateMcpField,
-    MissingMcpField,
-    InvalidMcpFieldValue,
-    NotMcpUrlElicitation,
-    ActorDead,
-}
-
-pub(crate) enum SessionCommand {
-    Prompt {
-        payload: PromptPayload,
-        prompt_id: Option<String>,
-        latency: Option<LatencyRequestContext>,
-        /// Set by the actor's own startup-drain path when self-dispatching a
-        /// queue head. External callers pass `None` unless they have already
-        /// durably inserted a queue row and only need the actor to drain it.
-        /// When `Some`, the first iteration of the drain loop will delete this
-        /// row and emit `PendingPromptRemoved { Executed }` right after
-        /// `begin_turn`.
-        from_queue_seq: Option<i64>,
-        respond_to: oneshot::Sender<Result<PromptAcceptance, PromptAcceptError>>,
-    },
-    EditPendingPrompt {
-        seq: i64,
-        payload: PromptPayload,
-        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
-    },
-    DeletePendingPrompt {
-        seq: i64,
-        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
-    },
-    SetConfigOption {
-        config_id: String,
-        value: String,
-        respond_to: oneshot::Sender<Result<ConfigApplyState, SetConfigOptionCommandError>>,
-    },
-    ResolveInteraction {
-        request_id: String,
-        resolution: InteractionResolution,
-        respond_to: oneshot::Sender<Result<(), ResolveInteractionCommandError>>,
-    },
-    ApplyPlanDecision {
-        plan_id: String,
-        expected_version: i64,
-        decision: ProposedPlanDecisionState,
-        respond_to: oneshot::Sender<Result<PlanRecord, PlanDecisionError>>,
-    },
-    VerifyForkReady {
-        respond_to: oneshot::Sender<Result<(), ForkSessionCommandError>>,
-    },
-    Fork {
-        respond_to: oneshot::Sender<Result<ForkSessionCommandResult, ForkSessionCommandError>>,
-    },
-    CloseNativeSession {
-        native_session_id: String,
-        respond_to: oneshot::Sender<anyhow::Result<()>>,
-    },
-    InjectRuntimeEvent {
-        event: RuntimeInjectedSessionEvent,
-        respond_to: oneshot::Sender<RuntimeEventInjectionResult>,
-    },
-    Cancel,
-    Dismiss {
-        respond_to: oneshot::Sender<anyhow::Result<()>>,
-    },
-    Close {
-        respond_to: oneshot::Sender<anyhow::Result<()>>,
-    },
-    ReplayAdvance {
-        respond_to: oneshot::Sender<anyhow::Result<()>>,
-    },
-}
+pub(crate) use command::SessionCommand;
+pub use command::{
+    ForkSessionCommandError, ForkSessionCommandResult, InteractionResolution, PromptAcceptError,
+    PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
+    SetConfigOptionCommandError,
+};
+use diagnostics::{
+    age_ms, should_emit_empty_turn_error, PromptDiagnostics, EMPTY_TURN_ERROR_CODE,
+    EMPTY_TURN_ERROR_MESSAGE,
+};
+pub use handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+#[cfg(test)]
+use plans::{extract_tagged_proposed_plan, title_from_markdown};
+use plans::{
+    maybe_ingest_claude_exit_plan, maybe_ingest_codex_completed_plan,
+    maybe_ingest_tagged_completed_plan,
+};
+use prompt_queue::{handle_delete_pending_prompt, handle_edit_pending_prompt};
+pub use startup::SessionStartupStrategy;
+#[cfg(test)]
+use startup::IDLE_RESUME_REPLAY_QUIET_WINDOW;
+use startup::{NativeSessionStartupDisposition, ResumeReplayFilter};
+use stderr::{classify_agent_stderr_line, sanitize_agent_stderr_line, AgentStderrSeverity};
 
 #[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
@@ -234,407 +87,6 @@ enum ActorExitDisposition {
     },
     Close,
     Dismiss,
-}
-
-const IDLE_RESUME_REPLAY_QUIET_WINDOW: Duration = Duration::from_millis(100);
-const EMPTY_TURN_ERROR_CODE: &str = "empty_turn";
-const EMPTY_TURN_ERROR_MESSAGE: &str = "The agent ended the turn without producing a response. The selected model or provider may need additional configuration or credentials.";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResumeReplayNotificationClass {
-    UserEcho,
-    Transcript,
-    ConfigState,
-    Other,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum ResumeReplayFilterState {
-    Monitoring,
-    Suppressing { last_transcript_at: Instant },
-    Disabled,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ResumeReplayFilter {
-    state: ResumeReplayFilterState,
-}
-
-#[derive(Debug, Clone)]
-struct PromptDiagnostics {
-    prompt_started_at: Instant,
-    prompt_id: Option<String>,
-    last_raw_kind: Option<&'static str>,
-    last_raw_at: Option<Instant>,
-    last_agent_chunk_at: Option<Instant>,
-    last_agent_thought_at: Option<Instant>,
-    last_agent_preview: Option<String>,
-    last_tool_event_at: Option<Instant>,
-    last_plan_at: Option<Instant>,
-    last_usage_at: Option<Instant>,
-}
-
-impl PromptDiagnostics {
-    fn new(prompt_id: Option<String>) -> Self {
-        Self {
-            prompt_started_at: Instant::now(),
-            prompt_id,
-            last_raw_kind: None,
-            last_raw_at: None,
-            last_agent_chunk_at: None,
-            last_agent_thought_at: None,
-            last_agent_preview: None,
-            last_tool_event_at: None,
-            last_plan_at: None,
-            last_usage_at: None,
-        }
-    }
-
-    fn observe_notification(&mut self, notif: &acp::SessionNotification) {
-        let kind = super::runtime_client::session_update_kind(&notif.update);
-        let now = Instant::now();
-        self.last_raw_kind = Some(kind);
-        self.last_raw_at = Some(now);
-
-        match &notif.update {
-            acp::SessionUpdate::AgentMessageChunk(chunk) => {
-                let preview = content_block_preview(&chunk.content);
-                if !preview.trim().is_empty() {
-                    self.last_agent_chunk_at = Some(now);
-                    self.last_agent_preview = Some(preview);
-                }
-            }
-            acp::SessionUpdate::AgentThoughtChunk(chunk) => {
-                if !content_block_preview(&chunk.content).trim().is_empty() {
-                    self.last_agent_thought_at = Some(now);
-                }
-            }
-            acp::SessionUpdate::ToolCall(_) | acp::SessionUpdate::ToolCallUpdate(_) => {
-                self.last_tool_event_at = Some(now);
-            }
-            acp::SessionUpdate::Plan(_) => {
-                self.last_plan_at = Some(now);
-            }
-            acp::SessionUpdate::UsageUpdate(_) => {
-                self.last_usage_at = Some(now);
-            }
-            _ => {}
-        }
-    }
-}
-
-fn should_emit_empty_turn_error(
-    stop: &StopReason,
-    diagnostics: &PromptDiagnostics,
-    sink_snapshot: &SessionEventSinkDebugSnapshot,
-) -> bool {
-    matches!(stop, StopReason::EndTurn)
-        && diagnostics.last_agent_chunk_at.is_none()
-        && diagnostics.last_agent_thought_at.is_none()
-        && diagnostics.last_tool_event_at.is_none()
-        && diagnostics.last_plan_at.is_none()
-        && sink_snapshot.open_assistant_item_id.is_none()
-        && sink_snapshot.open_assistant_chars == 0
-        && sink_snapshot.open_reasoning_item_id.is_none()
-        && sink_snapshot.open_reasoning_chars == 0
-        && sink_snapshot.open_plan_item_id.is_none()
-        && sink_snapshot.open_tool_call_ids.is_empty()
-}
-
-fn content_block_preview(content: &acp::ContentBlock) -> String {
-    let value = serde_json::to_value(content).unwrap_or_else(|_| serde_json::json!({}));
-    if let Some(text) = value.get("text").and_then(|text| text.as_str()) {
-        return truncate_preview(text, 120);
-    }
-    truncate_preview(&value.to_string(), 120)
-}
-
-fn truncate_preview(text: &str, max_chars: usize) -> String {
-    let mut preview = String::new();
-    for ch in text.chars().take(max_chars) {
-        preview.push(ch);
-    }
-    if text.chars().count() > max_chars {
-        preview.push_str("...");
-    }
-    preview
-}
-
-fn age_ms(since: Option<Instant>) -> u64 {
-    since
-        .map(|instant| instant.elapsed().as_millis() as u64)
-        .unwrap_or(0)
-}
-
-impl ResumeReplayFilter {
-    fn new(
-        source_agent_kind: &str,
-        startup_disposition: NativeSessionStartupDisposition,
-        _session_status: &str,
-    ) -> Self {
-        let state = if startup_disposition == NativeSessionStartupDisposition::LoadedExisting
-            && matches!(
-                source_agent_kind,
-                kind if kind == AgentKind::Claude.as_str() || kind == AgentKind::Codex.as_str()
-            ) {
-            ResumeReplayFilterState::Monitoring
-        } else {
-            ResumeReplayFilterState::Disabled
-        };
-
-        Self { state }
-    }
-
-    #[cfg(test)]
-    fn disabled() -> Self {
-        Self {
-            state: ResumeReplayFilterState::Disabled,
-        }
-    }
-
-    fn disable(&mut self) {
-        self.state = ResumeReplayFilterState::Disabled;
-    }
-
-    fn should_suppress(&mut self, notification: &acp::SessionNotification, now: Instant) -> bool {
-        if let ResumeReplayFilterState::Suppressing { last_transcript_at } = self.state {
-            if now.duration_since(last_transcript_at) >= IDLE_RESUME_REPLAY_QUIET_WINDOW {
-                self.state = ResumeReplayFilterState::Monitoring;
-            }
-        }
-
-        let class = classify_resume_replay_notification(&notification.update);
-        match (self.state, class) {
-            (ResumeReplayFilterState::Monitoring, ResumeReplayNotificationClass::UserEcho) => {
-                self.state = ResumeReplayFilterState::Suppressing {
-                    last_transcript_at: now,
-                };
-                true
-            }
-            (
-                ResumeReplayFilterState::Suppressing { .. },
-                ResumeReplayNotificationClass::UserEcho
-                | ResumeReplayNotificationClass::Transcript
-                | ResumeReplayNotificationClass::ConfigState,
-            ) => {
-                self.state = ResumeReplayFilterState::Suppressing {
-                    last_transcript_at: now,
-                };
-                true
-            }
-            _ => false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionStartupStrategy {
-    Fresh,
-    ResumeSeqFreshNative,
-    LoadNative(String),
-    LoadNativeNoFallback(String),
-    ForkFromNative { parent_native_session_id: String },
-}
-
-impl SessionStartupStrategy {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Fresh => "fresh",
-            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
-            Self::LoadNative(_) => "load_native",
-            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
-            Self::ForkFromNative { .. } => "fork_from_native",
-        }
-    }
-
-    pub fn resumes_durable_history(&self) -> bool {
-        !matches!(self, Self::Fresh)
-    }
-
-    fn allows_missing_load_fallback(&self) -> bool {
-        matches!(self, Self::LoadNative(_))
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NativeSessionStartupDisposition {
-    CreatedFresh,
-    LoadedExisting,
-}
-
-impl NativeSessionStartupDisposition {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::CreatedFresh => "created_fresh_native",
-            Self::LoadedExisting => "loaded_existing_native",
-        }
-    }
-}
-
-fn classify_resume_replay_notification(
-    update: &acp::SessionUpdate,
-) -> ResumeReplayNotificationClass {
-    use acp::SessionUpdate::*;
-    match update {
-        UserMessageChunk(_) => ResumeReplayNotificationClass::UserEcho,
-        AgentMessageChunk(_) | AgentThoughtChunk(_) | ToolCall(_) | ToolCallUpdate(_) | Plan(_) => {
-            ResumeReplayNotificationClass::Transcript
-        }
-        CurrentModeUpdate(_) | ConfigOptionUpdate(_) => ResumeReplayNotificationClass::ConfigState,
-        _ => ResumeReplayNotificationClass::Other,
-    }
-}
-
-pub struct LiveSessionHandle {
-    pub session_id: String,
-    pub(crate) command_tx: mpsc::Sender<SessionCommand>,
-    pub event_tx: broadcast::Sender<SessionEventEnvelope>,
-    pub busy: Arc<AtomicBool>,
-    execution: Arc<RwLock<LiveSessionExecutionSnapshot>>,
-    native_session_id: Arc<std::sync::RwLock<Option<String>>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct LiveSessionExecutionSnapshot {
-    pub phase: SessionExecutionPhase,
-    pub pending_interactions: Vec<PendingInteractionSummary>,
-    pub updated_at: String,
-}
-
-impl LiveSessionExecutionSnapshot {
-    pub fn new(phase: SessionExecutionPhase) -> Self {
-        Self {
-            phase,
-            pending_interactions: Vec::new(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
-        }
-    }
-
-    pub fn to_contract_summary(&self, has_live_handle: bool) -> SessionExecutionSummary {
-        SessionExecutionSummary {
-            phase: self.phase.clone(),
-            has_live_handle,
-            pending_interactions: self.pending_interactions.clone(),
-            updated_at: self.updated_at.clone(),
-        }
-    }
-}
-
-impl LiveSessionHandle {
-    pub(crate) fn new(
-        session_id: impl Into<String>,
-        command_tx: mpsc::Sender<SessionCommand>,
-        event_tx: broadcast::Sender<SessionEventEnvelope>,
-        native_session_id: Option<String>,
-        phase: SessionExecutionPhase,
-    ) -> Self {
-        Self {
-            session_id: session_id.into(),
-            command_tx,
-            event_tx,
-            busy: Arc::new(AtomicBool::new(false)),
-            execution: Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(phase))),
-            native_session_id: Arc::new(std::sync::RwLock::new(native_session_id)),
-        }
-    }
-
-    pub fn subscribe(&self) -> broadcast::Receiver<SessionEventEnvelope> {
-        self.event_tx.subscribe()
-    }
-
-    pub fn try_begin_prompt(&self) -> bool {
-        self.busy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    }
-
-    pub fn finish_prompt(&self) {
-        self.busy.store(false, Ordering::Release);
-    }
-
-    pub async fn set_execution_phase(&self, phase: SessionExecutionPhase) {
-        let mut execution = self.execution.write().await;
-        execution.phase = phase;
-        execution.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    pub async fn add_pending_interaction(&self, pending_interaction: PendingInteractionSummary) {
-        let mut execution = self.execution.write().await;
-        execution.phase = SessionExecutionPhase::AwaitingInteraction;
-        execution
-            .pending_interactions
-            .retain(|pending| pending.request_id != pending_interaction.request_id);
-        execution.pending_interactions.push(pending_interaction);
-        execution.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    pub async fn remove_pending_interaction(&self, request_id: &str) {
-        let mut execution = self.execution.write().await;
-        execution
-            .pending_interactions
-            .retain(|pending| pending.request_id != request_id);
-        if execution.pending_interactions.is_empty()
-            && matches!(execution.phase, SessionExecutionPhase::AwaitingInteraction)
-        {
-            execution.phase = SessionExecutionPhase::Running;
-        }
-        execution.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    pub async fn clear_pending_interactions_for_terminal_state(
-        &self,
-        phase: SessionExecutionPhase,
-    ) {
-        let mut execution = self.execution.write().await;
-        execution.phase = phase;
-        execution.pending_interactions.clear();
-        execution.updated_at = chrono::Utc::now().to_rfc3339();
-    }
-
-    pub async fn mark_activity_at(&self, updated_at: String) {
-        let mut execution = self.execution.write().await;
-        execution.updated_at = updated_at;
-    }
-
-    pub async fn execution_snapshot(&self) -> LiveSessionExecutionSnapshot {
-        self.execution.read().await.clone()
-    }
-
-    pub async fn resolve_interaction(
-        &self,
-        request_id: String,
-        resolution: InteractionResolution,
-    ) -> Result<(), ResolveInteractionCommandError> {
-        let (tx, rx) = oneshot::channel();
-        self.command_tx
-            .send(SessionCommand::ResolveInteraction {
-                request_id,
-                resolution,
-                respond_to: tx,
-            })
-            .await
-            .map_err(|_| ResolveInteractionCommandError::ActorDead)?;
-        rx.await
-            .map_err(|_| ResolveInteractionCommandError::ActorDead)?
-    }
-
-    pub fn native_session_id(&self) -> Option<String> {
-        self.native_session_id
-            .read()
-            .expect("native session id lock poisoned")
-            .clone()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_for_test(
-        session_id: impl Into<String>,
-        command_tx: mpsc::Sender<SessionCommand>,
-        event_tx: broadcast::Sender<SessionEventEnvelope>,
-        native_session_id: Option<String>,
-        phase: SessionExecutionPhase,
-    ) -> Self {
-        Self::new(session_id, command_tx, event_tx, native_session_id, phase)
-    }
 }
 
 pub struct SessionActorConfig {
@@ -691,11 +143,7 @@ impl PendingSessionActor {
                     anyhow::anyhow!("actor thread died before ACP init completed")
                 }
             })??;
-        self.handle
-            .native_session_id
-            .write()
-            .expect("native session id lock poisoned")
-            .replace(native_session_id.clone());
+        self.handle.set_native_session_id(native_session_id.clone());
 
         let latency_fields = latency_trace_fields(self.latency.as_ref());
         tracing::info!(
@@ -1006,19 +454,13 @@ pub fn spawn_session_actor_pending(
     );
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
     let event_tx = config.event_tx.clone();
-    let busy = Arc::new(AtomicBool::new(false));
-    let execution = Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(
-        SessionExecutionPhase::Starting,
-    )));
-
-    let handle = Arc::new(LiveSessionHandle {
-        session_id: session_id.clone(),
+    let handle = Arc::new(LiveSessionHandle::new(
+        session_id.clone(),
         command_tx,
-        event_tx: event_tx.clone(),
-        busy: busy.clone(),
-        execution,
-        native_session_id: Arc::new(std::sync::RwLock::new(None)),
-    });
+        event_tx,
+        None,
+        SessionExecutionPhase::Starting,
+    ));
     let actor_handle = handle.clone();
 
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
@@ -2988,64 +2430,6 @@ fn merge_spawn_env(
     merged
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AgentStderrSeverity {
-    Error,
-    Warn,
-    Debug,
-}
-
-fn sanitize_agent_stderr_line(line: &str) -> String {
-    strip_ansi_escape_codes(line).trim().to_string()
-}
-
-fn classify_agent_stderr_line(line: &str) -> AgentStderrSeverity {
-    let upper = line.to_ascii_uppercase();
-
-    if has_log_level_token(&upper, "ERROR") {
-        AgentStderrSeverity::Error
-    } else if has_log_level_token(&upper, "WARN") || has_log_level_token(&upper, "WARNING") {
-        AgentStderrSeverity::Warn
-    } else if has_log_level_token(&upper, "INFO")
-        || has_log_level_token(&upper, "DEBUG")
-        || has_log_level_token(&upper, "TRACE")
-    {
-        AgentStderrSeverity::Debug
-    } else {
-        AgentStderrSeverity::Warn
-    }
-}
-
-fn has_log_level_token(line: &str, level: &str) -> bool {
-    line.starts_with(level)
-        || line.contains(&format!(" {level} "))
-        || line.contains(&format!(":{level} "))
-        || line.contains(&format!(" {level}:"))
-}
-
-fn strip_ansi_escape_codes(input: &str) -> String {
-    let mut cleaned = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            if matches!(chars.peek(), Some('[')) {
-                chars.next();
-                for escape_char in chars.by_ref() {
-                    if ('@'..='~').contains(&escape_char) {
-                        break;
-                    }
-                }
-            }
-            continue;
-        }
-
-        cleaned.push(ch);
-    }
-
-    cleaned
-}
-
 #[cfg(test)]
 async fn handle_notification(
     notif: &acp::SessionNotification,
@@ -3420,247 +2804,6 @@ async fn normalize_notification(
             tracing::debug!("unrecognized ACP SessionUpdate variant: {other:?}");
         }
     }
-}
-
-#[derive(Debug, Default, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProposedPlanChunkAnyHarnessMeta {
-    transcript_event: Option<String>,
-    source_item_id: Option<String>,
-    title: Option<String>,
-}
-
-#[derive(Debug, Default, serde::Deserialize)]
-struct ProposedPlanChunkMeta {
-    #[serde(default)]
-    anyharness: Option<ProposedPlanChunkAnyHarnessMeta>,
-    #[serde(rename = "claudeCode")]
-    claude_code: Option<ProposedPlanClaudeMeta>,
-}
-
-#[derive(Debug, Default, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProposedPlanClaudeMeta {
-    tool_name: Option<String>,
-}
-
-async fn maybe_ingest_codex_completed_plan(
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    plan_service: &PlanService,
-    review_service: Option<&ReviewService>,
-    session_id: &str,
-    workspace_id: &str,
-    source_agent_kind: &str,
-    payload: &AcpChunkPayload,
-) -> bool {
-    let meta = parse_proposed_plan_meta(payload.meta.as_ref());
-    let Some(anyharness_meta) = meta.anyharness else {
-        return false;
-    };
-    if anyharness_meta.transcript_event.as_deref() == Some("proposed_plan_delta") {
-        // V1 treats Codex plan deltas as non-canonical preview evidence. A later
-        // version can surface these as a transient proposed-plan item.
-        return true;
-    }
-    if anyharness_meta.transcript_event.as_deref() != Some("proposed_plan_completed") {
-        return false;
-    }
-    let Some(body) = extract_text_from_value(&payload.content) else {
-        return true;
-    };
-    let title = anyharness_meta
-        .title
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| title_from_markdown(&body))
-        .unwrap_or_else(|| "Plan".to_string());
-    let source_item_id = anyharness_meta
-        .source_item_id
-        .or_else(|| payload.message_id.clone());
-    ingest_completed_plan(
-        event_sink,
-        plan_service,
-        review_service,
-        NewPlan {
-            workspace_id: workspace_id.to_string(),
-            session_id: session_id.to_string(),
-            title,
-            body_markdown: body,
-            source_agent_kind: source_agent_kind.to_string(),
-            source_kind: "codex_turn_plan".to_string(),
-            source_turn_id: None,
-            source_item_id,
-            source_tool_call_id: None,
-        },
-    )
-    .await;
-    true
-}
-
-async fn maybe_ingest_tagged_completed_plan(
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    plan_service: &PlanService,
-    review_service: Option<&ReviewService>,
-    session_id: &str,
-    workspace_id: &str,
-    source_agent_kind: &str,
-    completed: Option<CompletedAssistantMessage>,
-) -> bool {
-    let Some(completed) = completed else {
-        return false;
-    };
-    let Some(body) = extract_tagged_proposed_plan(&completed.text) else {
-        return false;
-    };
-    let title = title_from_markdown(&body).unwrap_or_else(|| "Plan".to_string());
-    ingest_completed_plan(
-        event_sink,
-        plan_service,
-        review_service,
-        NewPlan {
-            workspace_id: workspace_id.to_string(),
-            session_id: session_id.to_string(),
-            title,
-            body_markdown: body,
-            source_agent_kind: source_agent_kind.to_string(),
-            source_kind: "tagged_proposed_plan".to_string(),
-            source_turn_id: None,
-            source_item_id: completed.message_id,
-            source_tool_call_id: None,
-        },
-    )
-    .await;
-    true
-}
-
-async fn maybe_ingest_claude_exit_plan(
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    plan_service: &PlanService,
-    review_service: Option<&ReviewService>,
-    session_id: &str,
-    workspace_id: &str,
-    source_agent_kind: &str,
-    turn_id: Option<String>,
-    payload: &AcpToolPayload,
-) {
-    if source_agent_kind != "claude" {
-        return;
-    }
-    let meta = parse_proposed_plan_meta(payload.meta.as_ref());
-    let is_exit_plan =
-        meta.claude_code.and_then(|meta| meta.tool_name).as_deref() == Some("ExitPlanMode");
-    if !is_exit_plan {
-        return;
-    }
-    let body = payload
-        .content
-        .as_ref()
-        .and_then(|values| extract_text_from_values(values))
-        .or_else(|| extract_string_field(payload.raw_input.as_ref(), "plan"))
-        .or_else(|| extract_string_field(payload.raw_output.as_ref(), "plan"));
-    let Some(body) = body else {
-        return;
-    };
-    let title = title_from_markdown(&body).unwrap_or_else(|| "Plan".to_string());
-    ingest_completed_plan(
-        event_sink,
-        plan_service,
-        review_service,
-        NewPlan {
-            workspace_id: workspace_id.to_string(),
-            session_id: session_id.to_string(),
-            title,
-            body_markdown: body,
-            source_agent_kind: source_agent_kind.to_string(),
-            source_kind: "claude_exit_plan_mode".to_string(),
-            source_turn_id: turn_id,
-            source_item_id: Some(payload.tool_call_id.clone()),
-            source_tool_call_id: Some(payload.tool_call_id.clone()),
-        },
-    )
-    .await;
-}
-
-async fn ingest_completed_plan(
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    plan_service: &PlanService,
-    review_service: Option<&ReviewService>,
-    input: NewPlan,
-) {
-    let mut sink = event_sink.lock().await;
-    sink.close_open_transcript_items();
-    let context = sink.plan_event_context();
-    let input = NewPlan {
-        source_turn_id: input.source_turn_id.or_else(|| context.turn_id.clone()),
-        ..input
-    };
-    match plan_service.create_completed_plan(input, context) {
-        Ok(batch) => {
-            if let Some(review_service) = review_service {
-                review_service.record_candidate_plan(&batch.plan);
-            }
-            sink.publish_persisted_events(batch.envelopes);
-        }
-        Err(PlanCreateError::EmptyBody) => {}
-        Err(error) => {
-            tracing::warn!(error = %error, "failed to ingest proposed plan");
-        }
-    }
-}
-
-fn parse_proposed_plan_meta(meta: Option<&serde_json::Value>) -> ProposedPlanChunkMeta {
-    meta.and_then(|value| serde_json::from_value(value.clone()).ok())
-        .unwrap_or_default()
-}
-
-fn extract_text_from_values(values: &[serde_json::Value]) -> Option<String> {
-    let text = values
-        .iter()
-        .filter_map(extract_text_from_value)
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    (!text.trim().is_empty()).then(|| text.trim().to_string())
-}
-
-fn extract_text_from_value(value: &serde_json::Value) -> Option<String> {
-    value
-        .get("text")
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| value.get("content").and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn extract_string_field(value: Option<&serde_json::Value>, key: &str) -> Option<String> {
-    value?
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn extract_tagged_proposed_plan(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    let body = trimmed.strip_prefix("<proposed_plan>")?;
-    let body = body.strip_suffix("</proposed_plan>")?;
-    let body = body.trim();
-    (!body.is_empty()).then(|| body.to_string())
-}
-
-fn title_from_markdown(value: &str) -> Option<String> {
-    value
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .find_map(|line| {
-            line.strip_prefix("# ")
-                .or_else(|| line.strip_prefix("## "))
-                .or(Some(line))
-                .map(str::trim)
-                .filter(|title| !title.is_empty())
-                .map(|title| title.chars().take(80).collect())
-        })
 }
 
 fn persist_raw_notification(
@@ -4514,142 +3657,6 @@ fn config_request_matches_current_state(
         .is_some_and(|current| current == desired_value)
         || (is_model_request && startup_state.current_model_id.as_deref() == Some(desired_value))
         || (is_mode_request && startup_state.current_mode_id.as_deref() == Some(desired_value))
-}
-
-async fn handle_edit_pending_prompt(
-    store: &SessionStore,
-    attachment_storage: &PromptAttachmentStorage,
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    session_id: &str,
-    seq: i64,
-    payload: PromptPayload,
-) -> Result<(), QueueMutationError> {
-    let old_attachment_ids = match store.find_pending_prompt(session_id, seq) {
-        Ok(Some(record)) => record.attachment_ids(),
-        _ => Vec::new(),
-    };
-    match store.update_pending_prompt_payload(session_id, seq, &payload) {
-        Ok(true) => {
-            let updated_record = store.find_pending_prompt(session_id, seq).ok().flatten();
-            let new_attachment_ids = payload.attachment_ids();
-            let removed = old_attachment_ids
-                .iter()
-                .filter(|old_id| !new_attachment_ids.contains(old_id))
-                .map(String::as_str)
-                .collect::<Vec<_>>();
-            let removed_records = pending_attachment_records(store, session_id, &removed);
-            if let Err(error) = store.delete_prompt_attachments(session_id, &removed) {
-                tracing::warn!(
-                    session_id = %session_id,
-                    seq,
-                    error = %error,
-                    "failed to delete removed pending prompt attachments",
-                );
-            }
-            delete_pending_attachment_files(attachment_storage, &removed_records);
-            let mut sink = event_sink.lock().await;
-            let content_parts = payload.content_parts();
-            sink.pending_prompt_updated(PendingPromptUpdatedPayload {
-                seq,
-                prompt_id: updated_record
-                    .as_ref()
-                    .and_then(|record| record.prompt_id.clone()),
-                text: payload.text_summary,
-                content_parts,
-                prompt_provenance: updated_record
-                    .and_then(|record| record.prompt_payload().public_provenance()),
-            });
-            Ok(())
-        }
-        Ok(false) => Err(QueueMutationError::NotFound),
-        Err(error) => {
-            tracing::warn!(
-                session_id = %session_id,
-                seq,
-                error = %error,
-                "failed to update pending prompt",
-            );
-            Err(QueueMutationError::NotFound)
-        }
-    }
-}
-
-async fn handle_delete_pending_prompt(
-    store: &SessionStore,
-    attachment_storage: &PromptAttachmentStorage,
-    event_sink: &Arc<Mutex<SessionEventSink>>,
-    session_id: &str,
-    seq: i64,
-) -> Result<(), QueueMutationError> {
-    match store.delete_pending_prompt_record(session_id, seq) {
-        Ok(Some(record)) => {
-            let attachment_ids = record.attachment_ids();
-            let attachment_refs = attachment_ids
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>();
-            let removed_records = pending_attachment_records(store, session_id, &attachment_refs);
-            if let Err(error) = store.delete_prompt_attachments(session_id, &attachment_refs) {
-                tracing::warn!(
-                    session_id = %session_id,
-                    seq,
-                    error = %error,
-                    "failed to delete pending prompt attachments",
-                );
-            }
-            delete_pending_attachment_files(attachment_storage, &removed_records);
-            let mut sink = event_sink.lock().await;
-            sink.pending_prompt_removed(PendingPromptRemovedPayload {
-                seq,
-                prompt_id: record.prompt_id.clone(),
-                reason: PendingPromptRemovalReason::Deleted,
-            });
-            Ok(())
-        }
-        Ok(None) => Err(QueueMutationError::NotFound),
-        Err(error) => {
-            tracing::warn!(
-                session_id = %session_id,
-                seq,
-                error = %error,
-                "failed to delete pending prompt",
-            );
-            Err(QueueMutationError::NotFound)
-        }
-    }
-}
-
-fn pending_attachment_records(
-    store: &SessionStore,
-    session_id: &str,
-    attachment_ids: &[&str],
-) -> Vec<PromptAttachmentRecord> {
-    attachment_ids
-        .iter()
-        .filter_map(|attachment_id| {
-            store
-                .find_prompt_attachment(session_id, attachment_id)
-                .ok()
-                .flatten()
-                .filter(|record| record.state == PromptAttachmentState::Pending)
-        })
-        .collect()
-}
-
-fn delete_pending_attachment_files(
-    attachment_storage: &PromptAttachmentStorage,
-    records: &[PromptAttachmentRecord],
-) {
-    for record in records {
-        if let Err(error) = attachment_storage.delete_record(record) {
-            tracing::warn!(
-                session_id = %record.session_id,
-                attachment_id = %record.attachment_id,
-                error = %error,
-                "failed to delete pending prompt attachment file"
-            );
-        }
-    }
 }
 
 async fn apply_pending_config_changes_if_idle(
