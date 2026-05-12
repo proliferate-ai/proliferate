@@ -311,6 +311,7 @@ export function useSessionCreationActions() {
         materializedSessionId: null,
         modelId: options.modelId,
         modeId: resolvedModeId ?? null,
+        title: existingProjectedRecord?.title ?? null,
         optimisticPrompt: null,
         pendingConfigChanges: existingProjectedRecord?.pendingConfigChanges ?? {},
         sessionRelationship: { kind: "root" },
@@ -419,6 +420,7 @@ export function useSessionCreationActions() {
             workspaceId,
             fallbackModelId: options.modelId,
             fallbackModeId: resolvedModeId ?? null,
+            fallbackTitle: existingProjectedRecord?.title ?? null,
             pendingConfigChanges: getSessionRecord(pendingSessionId)?.pendingConfigChanges ?? {},
           });
           materializeSessionRecord(pendingSessionId, existingSession.id, realRecord);
@@ -627,7 +629,7 @@ export function useSessionCreationActions() {
           materializedSessionId: launchedSession.id,
           modelId: launchedSession.modelId ?? options.modelId,
           modeId: launchedSession.modeId ?? resolvedModeId ?? null,
-          title: launchedSession.title ?? null,
+          title: launchedSession.title ?? existingProjectedRecord?.title ?? null,
           actionCapabilities: launchedSession.actionCapabilities,
           liveConfig: launchedLiveConfig,
           executionSummary: launchedSession.executionSummary ?? null,
@@ -812,6 +814,7 @@ function materializedRecordFromExistingSession({
   workspaceId,
   fallbackModelId,
   fallbackModeId,
+  fallbackTitle,
   pendingConfigChanges,
 }: {
   clientSessionId: string;
@@ -819,6 +822,7 @@ function materializedRecordFromExistingSession({
   workspaceId: string;
   fallbackModelId: string;
   fallbackModeId: string | null;
+  fallbackTitle: string | null;
   pendingConfigChanges: SessionRuntimeRecord["pendingConfigChanges"];
 }): SessionRuntimeRecord {
   return {
@@ -827,7 +831,7 @@ function materializedRecordFromExistingSession({
       materializedSessionId: session.id,
       modelId: session.modelId ?? fallbackModelId,
       modeId: session.modeId ?? fallbackModeId,
-      title: session.title ?? null,
+      title: session.title ?? fallbackTitle,
       actionCapabilities: session.actionCapabilities,
       liveConfig: session.liveConfig ?? null,
       executionSummary: session.executionSummary ?? null,

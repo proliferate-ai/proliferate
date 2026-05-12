@@ -118,7 +118,6 @@ export function useWorkspaceEntryFlow() {
     setPendingWorkspaceEntry({
       ...entry,
       workspaceId,
-      request: { kind: "select-existing", workspaceId },
       errorMessage: null,
     });
 

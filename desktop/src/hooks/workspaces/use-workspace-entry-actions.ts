@@ -276,7 +276,6 @@ export function useWorkspaceEntryActions() {
     setPendingWorkspaceEntry({
       ...entry,
       workspaceId,
-      request: { kind: "select-existing", workspaceId },
       errorMessage: null,
     });
     annotateLatencyFlow(options?.latencyFlowId, {
@@ -417,7 +416,6 @@ export function useWorkspaceEntryActions() {
       const selectionEntry: PendingWorkspaceEntry = {
         ...entry,
         workspaceId: workspace.id,
-        request: { kind: "select-existing", workspaceId: workspace.id },
       };
       const selectionFinalized = await finalizeSelection(selectionEntry, workspace.id, {
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
@@ -595,7 +593,6 @@ export function useWorkspaceEntryActions() {
       const selectionEntry: PendingWorkspaceEntry = {
         ...entry,
         workspaceId: result.workspace.id,
-        request: { kind: "select-existing", workspaceId: result.workspace.id },
         baseBranchName: resolved.params.baseRef,
         setupScript: result.setupScript ?? null,
       };
