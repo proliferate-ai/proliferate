@@ -18,25 +18,25 @@ Use this map to decide whether this spec applies and where to look first.
 
 | Path | Owns |
 | --- | --- |
-| `desktop/src/lib/domain/workspaces/creation/pending-entry.ts` | The pending workspace data model, pending UI key, request kinds, and pending path helpers. |
-| `desktop/src/hooks/workspaces/use-workspace-entry-flow.ts` | Shared begin/finalize/fail workflow for entering a pending workspace and handing it off to a real workspace. |
-| `desktop/src/hooks/workspaces/use-workspace-entry-actions.ts` | UI-facing workspace creation actions for local/worktree entry, including deterministic worktree projection and pending shell entry. |
-| `desktop/src/hooks/workspaces/workflows/pending-workspace-session-shell.ts` | Creation of projected client session records under a pending workspace key. |
-| `desktop/src/hooks/workspaces/workflows/use-pending-workspace-session-materialization.ts` | Remapping projected sessions to the real workspace and starting real AnyHarness sessions after workspace materialization. |
-| `desktop/src/hooks/home/workflows/use-home-next-launch.ts` | Home launch orchestration: create pending workspace, enqueue the initial prompt, and avoid second-session fallback. |
-| `desktop/src/lib/domain/workspaces/sidebar/**` | Pure sidebar group/item projection, including pending sidebar rows and pending-to-real row handoff. |
-| `desktop/src/lib/domain/workspaces/mobility/**` | Pure composer footer projection for local/cloud/worktree identity, including pending workspace footer context. |
-| `desktop/src/lib/domain/workspaces/tabs/**` | Pure shell tab projection and ordering, including projected chat tabs for pending workspace keys. |
-| `desktop/src/lib/domain/chat/surface/**` | Pure chat surface arbitration: launch intent, pending projected session, empty session, transcript, and loading states. |
-| `desktop/src/components/workspace/chat/input/PendingPromptList.tsx` | Queued prompt list rendering, including stable disabled/enabled action controls. |
-| `desktop/src/components/workspace/chat/transcript/**` | Transcript rows, including projected prompt rows rendered from session intents. |
-| `desktop/src/components/workspace/shell/screen/StandardWorkspaceShell.tsx` | Shell composition point that passes pending path/header/footer/sidebar state into the workspace surface. |
-| `desktop/src/components/workspace/shell/sidebar/**` | Sidebar UI for projected pending rows and handoff to materialized workspace rows. |
-| `desktop/src/lib/domain/sessions/intents/**` | Pure session intent model, ordering, projection, dispatch predicates, attachment conversion rules, and reconciliation rules. |
-| `desktop/src/stores/sessions/session-intent-store.ts` | Client-owned ordered session intents. No dispatch, timers, or API calls. |
-| `desktop/src/hooks/sessions/workflows/use-session-intent-actions.ts` | UI-facing enqueue workflows for prompts, config updates, and interaction responses. |
-| `desktop/src/hooks/sessions/lifecycle/use-session-intent-dispatcher.ts` | App-mounted ordered dispatcher for materialized sessions. |
-| `desktop/src/stores/sessions/session-selection-store.ts` | Selected workspace/session ids, pending workspace entry, arrival event, and local selection transactions. |
+| `desktop/src/lib/domain/workspaces/creation/pending-entry.ts` | Pending workspace model and path helpers. |
+| `desktop/src/hooks/workspaces/use-workspace-entry-flow.ts` | Begin/finalize/fail handoff workflow. |
+| `desktop/src/hooks/workspaces/use-workspace-entry-actions.ts` | Local/worktree entry actions. |
+| `desktop/src/hooks/workspaces/workflows/pending-workspace-session-shell.ts` | Projected session creation. |
+| `desktop/src/hooks/workspaces/workflows/use-pending-workspace-session-materialization.ts` | Projected-to-real session remap. |
+| `desktop/src/hooks/home/workflows/use-home-next-launch.ts` | Home launch and first prompt flow. |
+| `desktop/src/lib/domain/workspaces/sidebar/**` | Pending sidebar projection and handoff. |
+| `desktop/src/lib/domain/workspaces/mobility/**` | Pending composer footer projection. |
+| `desktop/src/lib/domain/workspaces/tabs/**` | Projected tab projection and ordering. |
+| `desktop/src/lib/domain/chat/surface/**` | Chat surface arbitration. |
+| `desktop/src/components/workspace/chat/input/PendingPromptList.tsx` | Queued prompt action rendering. |
+| `desktop/src/components/workspace/chat/transcript/**` | Transcript and projected prompt rows. |
+| `desktop/src/components/workspace/shell/screen/StandardWorkspaceShell.tsx` | Shell composition. |
+| `desktop/src/components/workspace/shell/sidebar/**` | Sidebar UI. |
+| `desktop/src/lib/domain/sessions/intents/**` | Intent types, ordering, projection, reconciliation. |
+| `desktop/src/stores/sessions/session-intent-store.ts` | Ordered client session intents. |
+| `desktop/src/hooks/sessions/workflows/use-session-intent-actions.ts` | Prompt/config/interaction enqueue actions. |
+| `desktop/src/hooks/sessions/lifecycle/use-session-intent-dispatcher.ts` | Ordered runtime dispatcher. |
+| `desktop/src/stores/sessions/session-selection-store.ts` | Selected ids and pending entry. |
 
 ### Where To Start
 
