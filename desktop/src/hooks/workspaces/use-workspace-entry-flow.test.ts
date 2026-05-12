@@ -178,7 +178,7 @@ describe("useWorkspaceEntryFlow", () => {
     });
   });
 
-  it("materializes projected sessions while retaining pending handoff state", async () => {
+  it("materializes projected sessions before clearing finalized pending workspace", async () => {
     const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
     const entry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-1",
@@ -199,11 +199,12 @@ describe("useWorkspaceEntryFlow", () => {
       entry,
       "cloud-workspace-1",
     );
-    expect(mocks.setPendingWorkspaceEntry).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mocks.setPendingWorkspaceEntry).toHaveBeenCalledWith(expect.objectContaining({
       attemptId: "attempt-1",
       workspaceId: "cloud-workspace-1",
       errorMessage: null,
     }));
+    expect(mocks.setPendingWorkspaceEntry).toHaveBeenLastCalledWith(null);
     expect(mocks.setWorkspaceArrivalEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "cloud-workspace-1",

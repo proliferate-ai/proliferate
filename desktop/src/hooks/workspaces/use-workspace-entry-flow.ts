@@ -152,6 +152,7 @@ export function useWorkspaceEntryFlow() {
       setupScript: entry.setupScript,
       baseBranchName: entry.baseBranchName,
     }));
+    setPendingWorkspaceEntry(null);
     logLatency("workspace.entry.selection.success", {
       attemptId: entry.attemptId,
       source: entry.source,

@@ -114,6 +114,7 @@ export function buildSidebarGroupStates(args: {
       entry: args.pendingWorkspaceEntry,
       repoRootsById,
       selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId,
+      selectedWorkspaceId: args.selectedWorkspaceId,
       activeSessionTitle: args.activeSessionTitle,
     })
     : null;
@@ -206,7 +207,12 @@ export function buildSidebarGroupStates(args: {
           needsReview,
         };
       });
-      const items = pendingItem ? [pendingItem, ...workspaceItems] : workspaceItems;
+      const visibleWorkspaceItems = pendingItem
+        ? workspaceItems.filter((item) => item.id !== pendingItem.id)
+        : workspaceItems;
+      const items = pendingItem
+        ? [pendingItem, ...visibleWorkspaceItems]
+        : visibleWorkspaceItems;
       const visibleItems = items.filter((item) =>
         item.active
         || ((args.showArchived || !item.archived) && visibleWorkspaceTypes.has(item.variant))
@@ -262,7 +268,9 @@ export function buildSidebarGroupStates(args: {
           name,
           allLogicalWorkspaceIds: [
             ...(pendingItem ? [pendingItem.id] : []),
-            ...groupWorkspaces.map((entry) => entry.id),
+            ...groupWorkspaces
+              .map((entry) => entry.id)
+              .filter((id) => id !== pendingItem?.id),
           ],
           repoRootId:
             repoRoot?.id

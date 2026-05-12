@@ -135,6 +135,66 @@ describe("repo-root seeded groups", () => {
       renameSupported: false,
     });
   });
+
+  it("uses the real logical id for a pending worktree during materialization handoff", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "papaya",
+        repoLabel: "landing",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree" as const,
+          input: {
+            repoRootId: "landing-root",
+            workspaceName: "papaya",
+            branchName: "papaya",
+            baseBranch: "main",
+            targetPath: "/tmp/landing/papaya",
+          },
+        },
+      }),
+      workspaceId: "workspace-real",
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "real-logical",
+          workspaceId: "workspace-real",
+          repoKey: "github:proliferate-ai:landing",
+          repoName: "landing",
+          kind: "worktree",
+          branch: "papaya",
+        }),
+      ],
+      repoRoots: [
+        makeRepoRoot({
+          id: "landing-root",
+          repoName: "landing",
+          sourceRoot: "/tmp/landing",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      selectedWorkspaceId: "workspace-real",
+      selectedLogicalWorkspaceId: "real-logical",
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual(["real-logical"]);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: "real-logical",
+      name: "papaya",
+      defaultName: "papaya",
+      active: true,
+      variant: "worktree",
+      localWorkspaceId: null,
+      renameSupported: false,
+    });
+  });
 });
 
 describe("sidebar workspace filters", () => {

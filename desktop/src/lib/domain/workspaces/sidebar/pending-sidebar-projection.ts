@@ -2,6 +2,7 @@ import type { RepoRoot } from "@anyharness/sdk";
 import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildPendingWorkspaceUiKey,
+  isPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { LogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
@@ -24,10 +25,19 @@ export function buildPendingSidebarProjection(args: {
   entry: PendingWorkspaceEntry;
   repoRootsById: Map<string, RepoRoot>;
   selectedLogicalWorkspaceId: string | null;
+  selectedWorkspaceId: string | null;
   activeSessionTitle: string | null;
 }): PendingSidebarProjection | null {
   const { entry, repoRootsById } = args;
-  const id = buildPendingWorkspaceUiKey(entry);
+  const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+  const materializedSelectedLogicalId =
+    entry.workspaceId
+    && args.selectedWorkspaceId === entry.workspaceId
+    && args.selectedLogicalWorkspaceId
+    && !isPendingWorkspaceUiKey(args.selectedLogicalWorkspaceId)
+      ? args.selectedLogicalWorkspaceId
+      : null;
+  const id = materializedSelectedLogicalId ?? pendingWorkspaceUiKey;
   const createdAt = new Date(entry.createdAt).toISOString();
   const variant = pendingSidebarVariant(entry);
   const repoRoot = entry.request.kind === "worktree"
@@ -38,7 +48,9 @@ export function buildPendingSidebarProjection(args: {
     return null;
   }
 
-  const active = id === args.selectedLogicalWorkspaceId;
+  const active = id === args.selectedLogicalWorkspaceId
+    || pendingWorkspaceUiKey === args.selectedLogicalWorkspaceId
+    || (!!entry.workspaceId && args.selectedWorkspaceId === entry.workspaceId);
   const sourceRoot = repoRoot?.path
     ?? pendingSidebarSourceRoot(entry)
     ?? repoKey;
