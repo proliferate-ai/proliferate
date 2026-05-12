@@ -23,6 +23,7 @@ EXTENSIONS = {".py", ".rs", ".ts", ".tsx"}
 EXCLUDED_PATH_PREFIXES = {
     "anyharness/sdk/src/generated/",
     "desktop/src/lib/access/cloud/generated/",
+    "desktop/src/lib/integrations/cloud/generated/",
 }
 
 

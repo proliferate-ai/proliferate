@@ -23,6 +23,26 @@ Read this doc before changing new-workspace launch, pending workspace UI,
 optimistic session creation, queued prompts, projected chat tabs, workspace
 arrival panels, or sidebar/footer/header state during workspace materialization.
 
+## Scope Map
+
+Use this map to decide where to look first.
+
+| Path | Owns |
+| --- | --- |
+| `lib/domain/workspaces/creation/pending-entry.ts` | The pending workspace data model, pending UI key, request kinds, and pending path helpers. |
+| `hooks/workspaces/use-workspace-entry-flow.ts` | Shared begin/finalize/fail workflow for entering a pending workspace and handing it off to a real workspace. |
+| `hooks/workspaces/use-workspace-entry-actions.ts` | UI-facing workspace creation actions for local/worktree entry, including deterministic worktree projection and pending shell entry. |
+| `hooks/workspaces/workflows/pending-workspace-session-shell.ts` | Creation of projected client session records under a pending workspace key. |
+| `hooks/workspaces/workflows/use-pending-workspace-session-materialization.ts` | Remapping projected sessions to the real workspace and starting real AnyHarness sessions after workspace materialization. |
+| `hooks/home/workflows/use-home-next-launch.ts` | Home launch orchestration: create pending workspace, enqueue the initial prompt, and avoid second-session fallback. |
+| `lib/domain/workspaces/sidebar/**` | Pure sidebar group/item projection, including pending sidebar rows and pending-to-real row handoff. |
+| `lib/domain/workspaces/mobility/**` | Pure composer footer projection for local/cloud/worktree identity, including pending workspace footer context. |
+| `lib/domain/workspaces/tabs/**` | Pure shell tab projection and ordering, including projected chat tabs for pending workspace keys. |
+| `lib/domain/chat/surface/**` | Pure chat surface arbitration: launch intent, pending projected session, empty session, transcript, and loading states. |
+| `lib/domain/chat/outbox/**` | Pure prompt outbox model, selectors, projection, dispatch predicates, and reconciliation rules. |
+| `stores/chat/prompt-outbox-store.ts` | Client-owned queued prompt records and local prompt outbox mutations. No dispatch. |
+| `stores/sessions/session-selection-store.ts` | Selected workspace/session ids, pending workspace entry, arrival event, and local selection transactions. |
+
 ## 1. Purpose
 
 Workspace and session creation has hard latency:
