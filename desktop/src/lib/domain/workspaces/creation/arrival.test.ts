@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
 import {
+  buildPendingWorkspaceArrivalViewModel,
   buildWorkspaceArrivalEvent,
   buildWorkspaceArrivalViewModel,
 } from "@/lib/domain/workspaces/creation/arrival";
+import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -49,5 +51,37 @@ describe("workspace arrival view model", () => {
     });
 
     expect(view.badgeLabel).toBe("New worktree");
+  });
+
+  it("projects pending worktrees with the final arrival copy before materialization", () => {
+    const view = buildPendingWorkspaceArrivalViewModel({
+      entry: buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "landing",
+        repoLabel: "proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree",
+          input: {
+            repoRootId: "repo-root-1",
+            workspaceName: "landing",
+            branchName: "pablo/landing",
+            baseBranch: "main",
+            targetPath: "/Users/pablo/.proliferate/worktrees/proliferate/landing",
+          },
+        },
+      }),
+      configuredSetupScript: "",
+    });
+
+    expect(view).toMatchObject({
+      badgeLabel: "New worktree",
+      title: "landing",
+      subtitle: "Created in proliferate from main",
+      setupStatusLabel: "Optional",
+      setupSummary: "No setup script configured yet",
+    });
   });
 });

@@ -5,6 +5,8 @@ import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import {
   type PendingWorkspaceEntry,
+  type PendingWorkspaceInitialSession,
+  buildPendingWorkspaceUiKey,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
@@ -17,10 +19,20 @@ import {
 import {
   usePendingWorkspaceSessionMaterialization,
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
+import {
+  ensurePendingWorkspaceSessionShell,
+} from "@/hooks/workspaces/workflows/pending-workspace-session-shell";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 
 interface FinalizeSelectionOptions {
   latencyFlowId?: string | null;
   repoGroupKeyToExpand?: string | null;
+}
+
+interface BeginPendingWorkspaceOptions {
+  initialSession?: PendingWorkspaceInitialSession | null;
 }
 
 function isAttemptCurrent(attemptId: string): boolean {
@@ -33,6 +45,7 @@ function requestChatInputFocus(): void {
 
 export function useWorkspaceEntryFlow() {
   const { selectWorkspace } = useWorkspaceSelection();
+  const configuredLaunch = useConfiguredLaunchReadiness();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
   const enterPendingWorkspaceShell = useSessionSelectionStore(
     (state) => state.enterPendingWorkspaceShell,
@@ -44,7 +57,24 @@ export function useWorkspaceEntryFlow() {
     (state) => state.setWorkspaceArrivalEvent,
   );
 
-  const beginPendingWorkspace = useCallback((entry: PendingWorkspaceEntry) => {
+  const beginPendingWorkspace = useCallback((
+    entry: PendingWorkspaceEntry,
+    options?: BeginPendingWorkspaceOptions,
+  ): string | null => {
+    const initialSession = options?.initialSession === undefined
+      ? configuredLaunch.selection
+        ? {
+          kind: "session" as const,
+          agentKind: configuredLaunch.selection.kind,
+          modelId: configuredLaunch.selection.modelId,
+          displayTitle: configuredLaunch.displayName ?? configuredLaunch.selection.modelId,
+        }
+        : null
+      : options.initialSession;
+    const projectedSessionId = ensurePendingWorkspaceSessionShell({
+      entry,
+      initialSession: initialSession ?? null,
+    });
     logLatency("workspace.entry.pending_shell", {
       attemptId: entry.attemptId,
       source: entry.source,
@@ -53,11 +83,21 @@ export function useWorkspaceEntryFlow() {
       repoLabel: entry.repoLabel,
       baseBranchName: entry.baseBranchName,
       originKind: entry.originTarget.kind,
+      projectedSessionId,
     });
     resetWorkspaceEditorState();
-    enterPendingWorkspaceShell(entry);
+    enterPendingWorkspaceShell(entry, {
+      initialActiveSessionId: projectedSessionId,
+    });
+    if (projectedSessionId) {
+      writeChatShellIntentForSession({
+        workspaceId: buildPendingWorkspaceUiKey(entry),
+        sessionId: projectedSessionId,
+      });
+    }
     requestChatInputFocus();
-  }, [enterPendingWorkspaceShell]);
+    return projectedSessionId;
+  }, [configuredLaunch.displayName, configuredLaunch.selection, enterPendingWorkspaceShell]);
 
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,
@@ -82,9 +122,17 @@ export function useWorkspaceEntryFlow() {
       errorMessage: null,
     });
 
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+    const currentActiveSessionId = useSessionSelectionStore.getState().activeSessionId;
+    const projectedActiveSessionId = currentActiveSessionId
+      && getSessionRecord(currentActiveSessionId)?.workspaceId === pendingWorkspaceUiKey
+      ? currentActiveSessionId
+      : null;
+
     await selectWorkspace(workspaceId, {
       force: true,
       preservePending: true,
+      initialActiveSessionId: projectedActiveSessionId,
       latencyFlowId: options?.latencyFlowId,
     });
 

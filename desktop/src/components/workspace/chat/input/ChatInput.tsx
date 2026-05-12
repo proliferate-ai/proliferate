@@ -100,9 +100,7 @@ export function ChatInput({
       ?? effectiveSessionConfigControls.find((control) => control.key === "mode")
       ?? modeControl
       ?? null;
-  const { handleSubmit, handleCancel } = useChatPromptActions({
-    forceNewSession: suppressActiveSessionState,
-  });
+  const { handleSubmit, handleCancel } = useChatPromptActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const reviewActions = useReviewActions();
   const activeReview = useActiveReviewRun();

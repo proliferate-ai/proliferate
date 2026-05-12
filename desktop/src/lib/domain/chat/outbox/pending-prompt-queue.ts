@@ -73,6 +73,9 @@ export function derivePendingPromptQueueRow(
   }
 
   const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
+  const canEditLocalPrompt =
+    entry.localOutboxDeliveryState === "waiting_for_session"
+    && !!entry.promptId;
   return {
     key,
     seq: entry.seq,
@@ -80,7 +83,7 @@ export function derivePendingPromptQueueRow(
     label: collapseQueueLabel(summarizeContentParts(entry.contentParts, entry.text)) || "Queued message",
     kind: "plain",
     isBeingEdited: entry.isBeingEdited,
-    canEdit: isRuntimeConfirmed && !hasStructuredAttachments,
+    canEdit: (isRuntimeConfirmed || canEditLocalPrompt) && !hasStructuredAttachments,
     canDelete: deleteAction !== null,
     deleteAction,
   };

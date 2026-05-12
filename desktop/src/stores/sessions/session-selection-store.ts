@@ -19,6 +19,10 @@ interface ActivateSessionOptions {
   hotPaintGate?: HotPaintGate | null;
 }
 
+interface EnterPendingWorkspaceShellOptions {
+  initialActiveSessionId?: string | null;
+}
+
 interface SessionSelectionState {
   _hydrated: boolean;
   pendingWorkspaceEntry: PendingWorkspaceEntry | null;
@@ -31,7 +35,10 @@ interface SessionSelectionState {
   sessionActivationIntentEpochByWorkspace: Record<string, number>;
   hotPaintGate: HotPaintGate | null;
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
-  enterPendingWorkspaceShell: (entry: PendingWorkspaceEntry) => void;
+  enterPendingWorkspaceShell: (
+    entry: PendingWorkspaceEntry,
+    options?: EnterPendingWorkspaceShellOptions,
+  ) => void;
   setPendingWorkspaceEntry: (entry: PendingWorkspaceEntry | null) => void;
   setWorkspaceArrivalEvent: (event: WorkspaceArrivalEvent | null) => void;
   activateWorkspace: (options: ActivateWorkspaceOptions) => void;
@@ -59,20 +66,23 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
 
   setSelectedLogicalWorkspaceId: (selectedLogicalWorkspaceId) => set({ selectedLogicalWorkspaceId }),
 
-  enterPendingWorkspaceShell: (pendingWorkspaceEntry) => set((state) => ({
-    pendingWorkspaceEntry,
-    selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
-    selectedWorkspaceId: null,
-    workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
-    workspaceArrivalEvent: null,
-    activeSessionId: null,
-    activeSessionVersion: bumpVersionIfChanged(
-      state.activeSessionVersion,
-      state.activeSessionId,
-      null,
-    ),
-    hotPaintGate: null,
-  })),
+  enterPendingWorkspaceShell: (pendingWorkspaceEntry, options) => set((state) => {
+    const activeSessionId = options?.initialActiveSessionId ?? null;
+    return {
+      pendingWorkspaceEntry,
+      selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+      selectedWorkspaceId: null,
+      workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
+      workspaceArrivalEvent: null,
+      activeSessionId,
+      activeSessionVersion: bumpVersionIfChanged(
+        state.activeSessionVersion,
+        state.activeSessionId,
+        activeSessionId,
+      ),
+      hotPaintGate: null,
+    };
+  }),
 
   setPendingWorkspaceEntry: (pendingWorkspaceEntry) => set({ pendingWorkspaceEntry }),
 

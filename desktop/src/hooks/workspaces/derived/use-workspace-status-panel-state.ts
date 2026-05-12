@@ -6,7 +6,10 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
 import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { summarizeSetupFailure } from "@/lib/domain/workspaces/creation/arrival";
+import {
+  buildPendingWorkspaceArrivalViewModel,
+  summarizeSetupFailure,
+} from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaceArrivalState } from "@/hooks/workspaces/derived/use-workspace-arrival-state";
@@ -27,6 +30,9 @@ export type WorkspaceStatusPanelState =
     subtitle: string;
     detail: string | null;
     isFailed: boolean;
+    arrivalViewModel: WorkspaceArrivalViewModel | null;
+    workspacePath: string | null;
+    sourceRepoRootPath: string | null;
   }
   | {
     kind: "cloud-status";
@@ -108,6 +114,27 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const { data: workspaceCollections } = useWorkspaces();
   const arrival = useWorkspaceArrivalState();
   const dismissedSetupFailures = useWorkspaceUiStore((s) => s.dismissedSetupFailures);
+  const pendingSourceRepoRootPath = useMemo(() => {
+    if (!pendingWorkspaceEntry) {
+      return null;
+    }
+    const { request } = pendingWorkspaceEntry;
+    if (request.kind === "local") {
+      return request.sourceRoot;
+    }
+    if (request.kind !== "worktree") {
+      return null;
+    }
+    return workspaceCollections?.repoRoots.find(
+      (repoRoot) => repoRoot.id === request.input.repoRootId,
+    )?.path ?? null;
+  }, [pendingWorkspaceEntry, workspaceCollections?.repoRoots]);
+  const pendingConfiguredSetupScript = useRepoPreferencesStore((state) => {
+    if (!pendingSourceRepoRootPath) {
+      return "";
+    }
+    return state.repoConfigs[pendingSourceRepoRootPath]?.setupScript?.trim() ?? "";
+  });
   const selectedWorkspace = workspaceCollections?.workspaces.find(
     (workspace) => workspace.id === selectedWorkspaceId,
   ) ?? null;
@@ -138,10 +165,6 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
 
   return useMemo(() => {
     if (pendingWorkspaceEntry) {
-      if (pendingWorkspaceEntry.stage !== "failed") {
-        return null;
-      }
-
       return {
         kind: "pending",
         entry: pendingWorkspaceEntry,
@@ -149,7 +172,17 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         title: pendingWorkspaceEntry.displayName,
         subtitle: buildPendingSubtitle(pendingWorkspaceEntry),
         detail: buildPendingDetail(pendingWorkspaceEntry),
-        isFailed: true,
+        isFailed: pendingWorkspaceEntry.stage === "failed",
+        arrivalViewModel: buildPendingWorkspaceArrivalViewModel({
+          entry: pendingWorkspaceEntry,
+          configuredSetupScript: pendingConfiguredSetupScript,
+        }),
+        workspacePath: pendingWorkspaceEntry.request.kind === "local"
+          ? pendingWorkspaceEntry.request.sourceRoot
+          : pendingWorkspaceEntry.request.kind === "worktree"
+            ? pendingWorkspaceEntry.request.input.targetPath?.trim() || null
+            : null,
+        sourceRepoRootPath: pendingSourceRepoRootPath,
       };
     }
 
@@ -213,6 +246,8 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     arrival.viewModel,
     arrival.workspacePath,
     dismissedSetupFailures,
+    pendingConfiguredSetupScript,
+    pendingSourceRepoRootPath,
     pendingWorkspaceEntry,
     selectedCloudWorkspace,
     selectedWorkspace,

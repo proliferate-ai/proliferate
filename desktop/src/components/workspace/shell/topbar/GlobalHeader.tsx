@@ -29,6 +29,7 @@ interface GlobalHeaderProps {
   gitStatus: GitStatusSnapshot | null;
   existingPr: NonNullable<CurrentPullRequestResponse["pullRequest"]> | null;
   selectedWorkspace: Workspace | undefined;
+  workspacePath?: string | null;
   rightPanelOpen: boolean;
   disableGitActions?: boolean;
   runDisabled?: boolean;
@@ -48,6 +49,7 @@ export const GlobalHeader = memo(function GlobalHeader({
   gitStatus,
   existingPr,
   selectedWorkspace,
+  workspacePath: workspacePathProp,
   rightPanelOpen,
   disableGitActions = false,
   runDisabled = false,
@@ -73,7 +75,7 @@ export const GlobalHeader = memo(function GlobalHeader({
   } = useTauriShellActions();
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
   const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
-  const workspacePath = selectedWorkspace?.path;
+  const workspacePath = workspacePathProp ?? selectedWorkspace?.path;
   useDebugRenderReason("GlobalHeader", {
     gitStatus,
     existingPr,

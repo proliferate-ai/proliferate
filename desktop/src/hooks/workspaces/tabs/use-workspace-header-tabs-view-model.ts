@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
 import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
@@ -54,7 +54,9 @@ import {
 } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 
@@ -70,6 +72,7 @@ export function useWorkspaceHeaderTabsViewModel() {
   );
 
   const selectedWorkspaceId = useSessionSelectionStore((s) => s.selectedWorkspaceId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((s) => s.pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (s) => s.selectedLogicalWorkspaceId,
   );
@@ -78,7 +81,18 @@ export function useWorkspaceHeaderTabsViewModel() {
     materializedWorkspaceId: selectedWorkspaceId,
   });
   const { workspaceUiKey, materializedWorkspaceId } = selectedIdentity;
-  const sessionWorkspaceId = materializedWorkspaceId ?? workspaceUiKey;
+  const activeSessionId = useSessionSelectionStore((s) => s.activeSessionId);
+  const pendingWorkspaceUiKey = pendingWorkspaceEntry
+    ? buildPendingWorkspaceUiKey(pendingWorkspaceEntry)
+    : null;
+  const activeSessionWorkspaceId = useSessionDirectoryStore((state) =>
+    activeSessionId ? state.entriesById[activeSessionId]?.workspaceId ?? null : null
+  );
+  const resolvedSessionWorkspaceId = materializedWorkspaceId ?? workspaceUiKey;
+  const sessionWorkspaceId =
+    pendingWorkspaceUiKey && activeSessionWorkspaceId === pendingWorkspaceUiKey
+      ? pendingWorkspaceUiKey
+      : resolvedSessionWorkspaceId;
   const isViewerStoreCurrent = Boolean(
     materializedWorkspaceId
       && viewerStoreMaterializedWorkspaceId === materializedWorkspaceId,
@@ -87,7 +101,6 @@ export function useWorkspaceHeaderTabsViewModel() {
   const buffersByPath = isViewerStoreCurrent ? rawBuffersByPath : EMPTY_BUFFERS_BY_PATH;
   const tabModes = isViewerStoreCurrent ? rawTabModes : EMPTY_TAB_MODES;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
-  const activeSessionId = useSessionSelectionStore((s) => s.activeSessionId);
   const liveSlotsSelector = useMemo(
     () => createWorkspaceHeaderLiveSlotsSelector(sessionWorkspaceId),
     [sessionWorkspaceId],
@@ -385,6 +398,63 @@ export function useWorkspaceHeaderTabsViewModel() {
       visibleChatSessionIds,
     ],
   );
+
+  useEffect(() => {
+    if (!pendingWorkspaceEntry) {
+      return;
+    }
+    logLatency("workspace.pending_shell.header_tabs_state", {
+      attemptId: pendingWorkspaceEntry.attemptId,
+      selectedWorkspaceId,
+      selectedLogicalWorkspaceId,
+      workspaceUiKey,
+      materializedWorkspaceId,
+      sessionWorkspaceId,
+      resolvedSessionWorkspaceId,
+      pendingWorkspaceUiKey,
+      activeSessionWorkspaceId,
+      activeSessionId,
+      liveSlotIds: liveSlots.map((slot) => slot.sessionId),
+      knownSessionIds,
+      visibleChatSessionIds,
+      stripVisibleChatSessionIds,
+      orderedShellTabKeys,
+      activeShellTabKey,
+      shellRowsCount: displayShellRows.length,
+      menuChatTabsCount: menuChatTabs.length,
+      workspaceSessionsLoaded,
+      activationRenderSurface: activation.renderSurface,
+      storedActiveShellTabKey:
+        workspaceUiKey
+          ? useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace[workspaceUiKey] ?? null
+          : null,
+      storedShellTabOrder:
+        workspaceUiKey
+          ? useWorkspaceUiStore.getState().shellTabOrderByWorkspace[workspaceUiKey] ?? []
+          : [],
+    });
+  }, [
+    activeSessionId,
+    activeShellTabKey,
+    activeSessionWorkspaceId,
+    activation.renderSurface,
+    displayShellRows.length,
+    knownSessionIds,
+    liveSlots,
+    materializedWorkspaceId,
+    menuChatTabs.length,
+    orderedShellTabKeys,
+    pendingWorkspaceEntry,
+    pendingWorkspaceUiKey,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+    sessionWorkspaceId,
+    resolvedSessionWorkspaceId,
+    stripVisibleChatSessionIds,
+    visibleChatSessionIds,
+    workspaceSessionsLoaded,
+    workspaceUiKey,
+  ]);
 
   useDebugValueChange("header_tabs.model", "view_model_refs", {
     selectedWorkspaceId,

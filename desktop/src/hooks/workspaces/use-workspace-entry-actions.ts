@@ -1,26 +1,32 @@
 import { useCallback } from "react";
+import { useShallow } from "zustand/react/shallow";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   buildWorkspaceArrivalEvent,
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
 } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import type {
+  PendingWorkspaceEntry,
+  PendingWorkspaceInitialSession,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import {
+  buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   type CreateWorktreeWorkspaceInput,
-  type WorktreeCreationParams,
 } from "@/lib/domain/workspaces/creation/workspace-creation";
 import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
 import {
   ensureRepoGroupExpanded,
+  useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
 import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
@@ -38,6 +44,19 @@ import {
 import {
   usePendingWorkspaceSessionMaterialization,
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
+import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
+import {
+  ensurePendingWorkspaceSessionShell,
+} from "@/hooks/workspaces/workflows/pending-workspace-session-shell";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import {
+  useActiveSessionLaunchState,
+  useActiveSessionModeState,
+} from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
 
 function resolveDisplayNameFromPath(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? "workspace";
@@ -80,9 +99,39 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function displayTitleForPendingSession(agentKind: string, modelId: string): string {
+  return resolveModelDisplayName({
+    agentKind,
+    modelId,
+    preferKnownAlias: true,
+  }) ?? modelId;
+}
+
+function buildPendingInitialSession(input: {
+  agentKind: string | null | undefined;
+  modelId: string | null | undefined;
+  modeId?: string | null;
+  displayTitle?: string | null;
+}): PendingWorkspaceInitialSession | null {
+  const agentKind = input.agentKind?.trim();
+  const modelId = input.modelId?.trim();
+  if (!agentKind || !modelId) {
+    return null;
+  }
+
+  return {
+    kind: "session",
+    agentKind,
+    modelId,
+    modeId: input.modeId ?? null,
+    displayTitle: input.displayTitle ?? displayTitleForPendingSession(agentKind, modelId),
+  };
+}
+
 interface CreateLocalWorkspaceAndEnterOptions {
   lightweight?: boolean;
   repoGroupKeyToExpand?: string | null;
+  initialSession?: PendingWorkspaceInitialSession | null;
 }
 
 interface CreateLocalWorkspaceAndEnterInternalOptions extends CreateLocalWorkspaceAndEnterOptions {
@@ -93,6 +142,7 @@ interface CreateWorktreeAndEnterOptions {
   lightweight?: boolean;
   latencyFlowId?: string | null;
   repoGroupKeyToExpand?: string | null;
+  initialSession?: PendingWorkspaceInitialSession | null;
 }
 
 interface CreateWorktreeAndEnterInternalOptions extends CreateWorktreeAndEnterOptions {
@@ -101,6 +151,7 @@ interface CreateWorktreeAndEnterInternalOptions extends CreateWorktreeAndEnterOp
 
 interface WorkspaceEntryResult {
   workspaceId: string;
+  projectedSessionId: string | null;
 }
 
 export function useWorkspaceEntryActions() {
@@ -114,6 +165,14 @@ export function useWorkspaceEntryActions() {
     isCreatingWorktreeWorkspace,
   } = useWorkspaceActions();
   const { selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
+  const configuredLaunch = useConfiguredLaunchReadiness();
+  const launchDefaults = useUserPreferencesStore(useShallow((state) => ({
+    defaultChatAgentKind: state.defaultChatAgentKind,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
+  })));
+  const activeLaunchState = useActiveSessionLaunchState();
+  const activeModeState = useActiveSessionModeState();
   const { selectWorkspace } = useWorkspaceSelection();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
   const enterPendingWorkspaceShell = useSessionSelectionStore(
@@ -126,7 +185,53 @@ export function useWorkspaceEntryActions() {
     (state) => state.setWorkspaceArrivalEvent,
   );
 
-  const beginPendingWorkspace = useCallback((entry: PendingWorkspaceEntry) => {
+  const beginPendingWorkspace = useCallback((
+    entry: PendingWorkspaceEntry,
+    options?: { initialSession?: PendingWorkspaceInitialSession | null },
+  ): string | null => {
+    const preferredAgentKind = launchDefaults.defaultChatAgentKind;
+    const preferredModelId = preferredAgentKind
+      ? launchDefaults.defaultChatModelIdByAgentKind[preferredAgentKind] ?? null
+      : null;
+    const initialSession = options?.initialSession === undefined
+      ? buildPendingInitialSession({
+        agentKind: configuredLaunch.selection?.kind,
+        modelId: configuredLaunch.selection?.modelId,
+        modeId: configuredLaunch.selection?.kind
+          ? launchDefaults.defaultSessionModeByAgentKind[configuredLaunch.selection.kind] ?? null
+          : null,
+        displayTitle: configuredLaunch.displayName,
+      }) ?? buildPendingInitialSession({
+        agentKind: preferredAgentKind,
+        modelId: preferredModelId,
+        modeId: preferredAgentKind
+          ? launchDefaults.defaultSessionModeByAgentKind[preferredAgentKind] ?? null
+          : null,
+      }) ?? buildPendingInitialSession({
+        agentKind: activeLaunchState.currentLaunchIdentity?.kind,
+        modelId: activeLaunchState.currentLaunchIdentity?.modelId,
+        modeId: activeModeState.currentModeId,
+      })
+      : options.initialSession;
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+    let projectedSessionId: string | null = null;
+    batchSessionStoreWrites(() => {
+      projectedSessionId = ensurePendingWorkspaceSessionShell({
+        entry,
+        initialSession: initialSession ?? null,
+      });
+      resetWorkspaceEditorState();
+      if (projectedSessionId) {
+        writeChatShellIntentForSession({
+          workspaceId: pendingWorkspaceUiKey,
+          shellWorkspaceId: pendingWorkspaceUiKey,
+          sessionId: projectedSessionId,
+        });
+      }
+      enterPendingWorkspaceShell(entry, {
+        initialActiveSessionId: projectedSessionId,
+      });
+    });
     logLatency("workspace.entry.pending_shell", {
       attemptId: entry.attemptId,
       source: entry.source,
@@ -135,11 +240,25 @@ export function useWorkspaceEntryActions() {
       repoLabel: entry.repoLabel,
       baseBranchName: entry.baseBranchName,
       originKind: entry.originTarget.kind,
+      projectedSessionId,
+      pendingWorkspaceUiKey,
+      selectedLogicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+      activeSessionId: useSessionSelectionStore.getState().activeSessionId,
+      storedActiveShellTabKey:
+        useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace[pendingWorkspaceUiKey] ?? null,
+      directorySessionIds:
+        useSessionDirectoryStore.getState().sessionIdsByWorkspaceId[pendingWorkspaceUiKey] ?? [],
     });
-    resetWorkspaceEditorState();
-    enterPendingWorkspaceShell(entry);
     requestChatInputFocus();
-  }, [enterPendingWorkspaceShell]);
+    return projectedSessionId;
+  }, [
+    activeLaunchState.currentLaunchIdentity,
+    activeModeState.currentModeId,
+    configuredLaunch.displayName,
+    configuredLaunch.selection,
+    enterPendingWorkspaceShell,
+    launchDefaults,
+  ]);
 
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,
@@ -168,9 +287,17 @@ export function useWorkspaceEntryActions() {
       ensureRepoGroupExpanded(options.repoGroupKeyToExpand);
     }
 
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+    const currentActiveSessionId = useSessionSelectionStore.getState().activeSessionId;
+    const projectedActiveSessionId = currentActiveSessionId
+      && getSessionRecord(currentActiveSessionId)?.workspaceId === pendingWorkspaceUiKey
+      ? currentActiveSessionId
+      : null;
+
     await selectWorkspace(workspaceId, {
       force: true,
       preservePending: true,
+      initialActiveSessionId: projectedActiveSessionId,
       latencyFlowId: options?.latencyFlowId,
     });
 
@@ -257,7 +384,7 @@ export function useWorkspaceEntryActions() {
           baseBranchName: null,
           repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
         });
-        return { workspaceId: workspace.id };
+        return { workspaceId: workspace.id, projectedSessionId: null };
       } catch (error) {
         throw error;
       }
@@ -271,7 +398,7 @@ export function useWorkspaceEntryActions() {
       request: { kind: "local", sourceRoot },
     });
 
-    beginPendingWorkspace(entry);
+    const projectedSessionId = beginPendingWorkspace(entry, { initialSession: options?.initialSession });
 
     try {
       logLatency("workspace.local_create.request.start", {
@@ -295,7 +422,7 @@ export function useWorkspaceEntryActions() {
       const selectionFinalized = await finalizeSelection(selectionEntry, workspace.id, {
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
       });
-      return selectionFinalized ? { workspaceId: workspace.id } : null;
+      return selectionFinalized ? { workspaceId: workspace.id, projectedSessionId } : null;
     } catch (error) {
       const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       const workspaceId = currentPending?.attemptId === entry.attemptId
@@ -388,37 +515,47 @@ export function useWorkspaceEntryActions() {
           repoGroupKeyToExpand,
           latencyFlowId: options.latencyFlowId,
         });
-        return { workspaceId: result.workspace.id };
+        return { workspaceId: result.workspace.id, projectedSessionId: null };
       } catch (error) {
         failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
         throw error;
       }
     }
 
-    const entry = buildSubmittingPendingEntry({
-      attemptId: createAttemptId(),
-      selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
-      source: "worktree-created",
-      displayName: normalizedInput.workspaceName?.trim() || "worktree",
-      request: { kind: "worktree", input: normalizedInput },
-    });
-    annotateLatencyFlow(options?.latencyFlowId, {
-      attemptId: entry.attemptId,
-    });
-
-    beginPendingWorkspace(entry);
-
-    let params: WorktreeCreationParams | null = null;
+    const attemptId = createAttemptId();
+    let entry: PendingWorkspaceEntry | null = null;
+    let projectedSessionId: string | null = null;
 
     try {
       const resolveStartedAt = startLatencyTimer();
       logLatency("workspace.worktree.resolve.start", {
-        attemptId: entry.attemptId,
+        attemptId,
         repoRootId: normalizedInput.repoRootId,
         sourceWorkspaceId: normalizedInput.sourceWorkspaceId ?? null,
       });
       const resolved = await resolveWorktreeCreationInput(normalizedInput);
-      params = resolved.params;
+      const resolvedInput: CreateWorktreeWorkspaceInput = {
+        ...normalizedInput,
+        workspaceName: resolved.params.workspaceName,
+        branchName: resolved.params.branchName,
+        baseBranch: resolved.params.baseRef,
+        targetPath: resolved.params.targetPath,
+      };
+      entry = buildSubmittingPendingEntry({
+        attemptId,
+        selectedWorkspaceId: useSessionSelectionStore.getState().selectedWorkspaceId,
+        source: "worktree-created",
+        displayName: resolved.params.workspaceName,
+        repoLabel: resolved.repoName,
+        baseBranchName: resolved.params.baseRef,
+        request: { kind: "worktree", input: resolvedInput },
+      });
+      projectedSessionId = beginPendingWorkspace(entry, {
+        initialSession: options?.initialSession,
+      });
+      annotateLatencyFlow(options?.latencyFlowId, {
+        attemptId: entry.attemptId,
+      });
       logLatency("workspace.worktree.resolve.success", {
         attemptId: entry.attemptId,
         repoRootId: normalizedInput.repoRootId,
@@ -428,18 +565,6 @@ export function useWorkspaceEntryActions() {
         baseRef: resolved.params.baseRef,
         resolveElapsedMs: elapsedMs(resolveStartedAt),
       });
-
-      if (!isAttemptCurrent(entry.attemptId)) {
-        return null;
-      }
-
-      const updatedEntry: PendingWorkspaceEntry = {
-        ...entry,
-        repoLabel: resolved.repoName,
-        baseBranchName: resolved.params.baseRef,
-        request: { kind: "worktree", input: normalizedInput },
-      };
-      setPendingWorkspaceEntry(updatedEntry);
 
       const createStartedAt = startLatencyTimer();
       logLatency("workspace.worktree.create.request.start", {
@@ -468,7 +593,7 @@ export function useWorkspaceEntryActions() {
       }
 
       const selectionEntry: PendingWorkspaceEntry = {
-        ...updatedEntry,
+        ...entry,
         workspaceId: result.workspace.id,
         request: { kind: "select-existing", workspaceId: result.workspace.id },
         baseBranchName: resolved.params.baseRef,
@@ -482,17 +607,16 @@ export function useWorkspaceEntryActions() {
       if (!selectionFinalized) {
         return null;
       }
-      return { workspaceId: result.workspace.id };
+      return { workspaceId: result.workspace.id, projectedSessionId };
     } catch (error) {
       const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
       failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
-      failPendingEntry(
-        currentPending?.attemptId === entry.attemptId
-          ? currentPending
-          : entry,
-        resolveErrorMessage(error, "Failed to create worktree."),
-        params ? { request: { kind: "worktree", input: normalizedInput } } : undefined,
-      );
+      if (entry && currentPending?.attemptId === attemptId) {
+        failPendingEntry(
+          currentPending,
+          resolveErrorMessage(error, "Failed to create worktree."),
+        );
+      }
       if (options?.throwOnFailure) {
         throw error;
       }

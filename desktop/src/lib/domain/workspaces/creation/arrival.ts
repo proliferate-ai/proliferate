@@ -2,6 +2,11 @@ import type { SetupScriptExecution, Workspace, WorkspaceKind } from "@anyharness
 import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import {
+  buildPendingWorkspaceUiKey,
+  resolvePendingWorkspacePath,
+  type PendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 
 export interface WorkspaceArrivalEvent {
   workspaceId: string;
@@ -369,4 +374,66 @@ function resolveWorkspaceArrivalEyebrow(
   }
 
   return WORKSPACE_ARRIVAL_LABELS.workspaceCreatedEyebrow;
+}
+
+export function buildPendingWorkspaceArrivalViewModel(args: {
+  entry: PendingWorkspaceEntry;
+  configuredSetupScript?: string | null;
+}): WorkspaceArrivalViewModel | null {
+  const { entry } = args;
+  if (entry.stage === "failed") {
+    return null;
+  }
+  if (entry.source !== "local-created" && entry.source !== "worktree-created") {
+    return null;
+  }
+
+  const pendingWorkspaceId = buildPendingWorkspaceUiKey(entry);
+  const workspacePath = resolvePendingWorkspacePath(entry) ?? entry.displayName;
+  const now = new Date(entry.createdAt).toISOString();
+  const repoName =
+    entry.repoLabel?.trim()
+    || workspacePath.split("/").filter(Boolean).pop()
+    || entry.displayName
+    || "workspace";
+  const { request } = entry;
+  const isWorktree = request.kind === "worktree";
+  const branchName = isWorktree
+    ? request.input.branchName?.trim()
+      || entry.displayName
+    : entry.baseBranchName?.trim()
+      || "HEAD";
+  const sourceRepoRootPath = request.kind === "local"
+    ? request.sourceRoot
+    : undefined;
+  const workspace: Workspace = {
+    id: pendingWorkspaceId,
+    kind: isWorktree ? "worktree" : "repo",
+    repoRootId: isWorktree ? request.input.repoRootId : undefined,
+    path: workspacePath,
+    sourceRepoRootPath,
+    sourceWorkspaceId: isWorktree ? request.input.sourceWorkspaceId ?? null : null,
+    gitProvider: null,
+    gitOwner: null,
+    gitRepoName: repoName,
+    currentBranch: branchName,
+    originalBranch: entry.baseBranchName,
+    displayName: entry.displayName,
+    surface: "standard",
+    lifecycleState: "active",
+    cleanupState: "none",
+    createdAt: now,
+    updatedAt: now,
+  } as Workspace;
+
+  return buildWorkspaceArrivalViewModel({
+    event: buildWorkspaceArrivalEvent({
+      workspaceId: pendingWorkspaceId,
+      source: entry.source,
+      setupScript: entry.setupScript,
+      baseBranchName: entry.baseBranchName,
+    }),
+    workspace,
+    configuredSetupScript: args.configuredSetupScript ?? "",
+  });
 }

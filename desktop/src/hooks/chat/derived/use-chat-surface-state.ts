@@ -69,7 +69,10 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
-    launchIntentSessionId: activeLaunchIntent?.materializedSessionId ?? null,
+    launchIntentSessionId:
+      activeLaunchIntent?.materializedSessionId
+      ?? activeLaunchIntent?.clientSessionId
+      ?? null,
     selectedLocalWorkspace,
     isArrivalWorkspace: workspaceArrivalEvent?.workspaceId === selectedWorkspaceId,
     shouldShowSelectedCloudWorkspaceStatus: selectedCloudWorkspace
@@ -86,6 +89,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     isRunning,
     streamConnectionState,
   }), [
+    activeLaunchIntent?.clientSessionId,
     activeLaunchIntent?.id,
     activeLaunchIntent?.materializedSessionId,
     activeSessionId,

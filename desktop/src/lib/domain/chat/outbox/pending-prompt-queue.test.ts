@@ -55,6 +55,7 @@ describe("derivePendingPromptQueueRow", () => {
       promptId: "prompt-local",
       localOutboxDeliveryState: "waiting_for_session",
     }))).toMatchObject({
+      canEdit: true,
       canDelete: true,
       deleteAction: "cancel_local",
     });

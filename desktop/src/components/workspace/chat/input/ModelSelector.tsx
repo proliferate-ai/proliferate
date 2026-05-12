@@ -61,11 +61,19 @@ export function ModelSelector({
         label={
           connectionState === "connecting"
             ? "Connecting…"
-            : isLoading
+            : isLoading && !currentModel
               ? "Loading agents…"
-              : !hasAgents
-                ? "No agents"
-                : "No runtime"
+              : currentModel?.displayName
+                ?? (
+                  hasAgents
+                    ? CHAT_MODEL_SELECTOR_LABELS.empty
+                    : null
+                )
+              ?? (
+                !hasAgents
+                  ? "No agents"
+                  : "No runtime"
+              )
         }
       />
     );

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildWorkspaceShellTabs,
   chatWorkspaceShellTabKey,
   fileWorkspaceShellTabKey,
   getWorkspaceShellTabKey,
@@ -112,5 +113,21 @@ describe("workspace shell tab ordering", () => {
       .toBe(chatWorkspaceShellTabKey("a"));
     expect(getWorkspaceShellTabKey({ kind: "viewer", target: fileViewerTarget("src/a.ts") }))
       .toBe(fileWorkspaceShellTabKey("src/a.ts"));
+  });
+
+  it("includes projected chat tabs for pending workspace keys", () => {
+    expect(buildWorkspaceShellTabs({
+      selectedWorkspaceId: "pending-workspace:attempt-1",
+      sessionSlots: {
+        "client-session:codex:1": {
+          sessionId: "client-session:codex:1",
+          workspaceId: "pending-workspace:attempt-1",
+        },
+      },
+      visibleChatSessionIds: ["client-session:codex:1"],
+      openTargets: [],
+    })).toEqual([
+      { kind: "chat", sessionId: "client-session:codex:1" },
+    ]);
   });
 });

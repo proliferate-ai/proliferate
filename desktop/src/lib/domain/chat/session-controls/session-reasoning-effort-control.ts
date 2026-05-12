@@ -16,12 +16,17 @@ export function resolveReasoningEffortPresentation(
   value: string | null,
   label?: string | null,
 ): SessionReasoningEffortPresentation {
-  const normalizedValue = value?.toLowerCase() ?? null;
+  const normalizedValue = normalizeReasoningEffortValue(value);
 
   return {
     tone: resolveTone(normalizedValue),
     shortLabel: resolveShortLabel(normalizedValue, label),
   };
+}
+
+function normalizeReasoningEffortValue(value: string | null): string | null {
+  const normalizedValue = value?.toLowerCase() ?? null;
+  return normalizedValue === "max" ? "xhigh" : normalizedValue;
 }
 
 function resolveTone(value: string | null): SessionReasoningEffortTone {
@@ -32,8 +37,6 @@ function resolveTone(value: string | null): SessionReasoningEffortTone {
       return "primary";
     case "xhigh":
       return "warning";
-    case "max":
-      return "destructive";
     case "low":
     default:
       return "neutral";
@@ -41,6 +44,9 @@ function resolveTone(value: string | null): SessionReasoningEffortTone {
 }
 
 function resolveShortLabel(value: string | null, label?: string | null): string | null {
+  if (value === "xhigh") {
+    return "Xhigh";
+  }
   if (label && label.trim().length > 0) {
     return label;
   }

@@ -57,12 +57,41 @@ export interface PendingWorkspaceEntry {
   createdAt: number;
 }
 
+export type PendingWorkspaceInitialSession =
+  | { kind: "none" }
+  | {
+    kind: "session";
+    agentKind: string;
+    modelId: string;
+    modeId?: string | null;
+    displayTitle?: string | null;
+  };
+
 export function createPendingWorkspaceAttemptId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function buildPendingWorkspaceUiKey(entry: Pick<PendingWorkspaceEntry, "attemptId">): string {
   return `pending-workspace:${entry.attemptId}`;
+}
+
+export function resolvePendingWorkspacePath(
+  entry: PendingWorkspaceEntry | null | undefined,
+): string | null {
+  if (!entry) {
+    return null;
+  }
+
+  switch (entry.request.kind) {
+    case "local":
+      return entry.request.sourceRoot.trim() || null;
+    case "worktree":
+      return entry.request.input.targetPath?.trim() || null;
+    case "cloud":
+    case "cowork":
+    case "select-existing":
+      return null;
+  }
 }
 
 export function isPendingWorkspaceUiKey(value: string | null | undefined): boolean {

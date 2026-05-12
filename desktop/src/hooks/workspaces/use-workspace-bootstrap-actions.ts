@@ -51,6 +51,7 @@ import {
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -77,6 +78,24 @@ const EMPTY_WORKSPACES = [] as const;
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
+
+function activeProjectedSessionForPendingWorkspace(workspaceId: string): string | null {
+  const selection = useSessionSelectionStore.getState();
+  const activeSessionId = selection.activeSessionId;
+  const pendingEntry = selection.pendingWorkspaceEntry;
+  if (!activeSessionId || pendingEntry?.workspaceId !== workspaceId) {
+    return null;
+  }
+
+  const activeSession = getSessionRecord(activeSessionId);
+  if (!activeSession || activeSession.materializedSessionId) {
+    return null;
+  }
+
+  return activeSession.workspaceId === buildPendingWorkspaceUiKey(pendingEntry)
+    ? activeSessionId
+    : null;
+}
 
 export function useWorkspaceBootstrapActions() {
   const {
@@ -327,6 +346,20 @@ export function useWorkspaceBootstrapActions() {
 
       if (hasDismissedSessions) {
         useSessionSelectionStore.getState().setActiveSessionId(null);
+        if (isCurrent()) {
+          markWorkspaceBootstrappedInSession(workspaceId);
+        }
+        return { sessions };
+      }
+
+      const activeProjectedSessionId = activeProjectedSessionForPendingWorkspace(workspaceId);
+      if (activeProjectedSessionId) {
+        logLatency("workspace.select.initial_session_open.skipped", {
+          workspaceId,
+          sessionId: activeProjectedSessionId,
+          reason: "projected_pending_session",
+          totalElapsedMs: elapsedMs(startedAt),
+        });
         if (isCurrent()) {
           markWorkspaceBootstrappedInSession(workspaceId);
         }

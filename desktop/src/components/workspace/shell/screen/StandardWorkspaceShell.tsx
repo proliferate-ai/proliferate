@@ -39,6 +39,7 @@ import {
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+import { resolvePendingWorkspacePath } from "@/lib/domain/workspaces/creation/pending-entry";
 
 const CHAT_SHELL_RENDER_SURFACE: WorkspaceRenderSurface = { kind: "chat-shell" };
 
@@ -50,6 +51,7 @@ export function StandardWorkspaceShell() {
   // transcript-scoped and need the chat surface for context.
   useWorkspaceActivityAcknowledgement();
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const pendingWorkspacePath = resolvePendingWorkspacePath(pendingWorkspaceEntry);
   const selectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
@@ -247,7 +249,7 @@ export function StandardWorkspaceShell() {
   return (
     <DebugProfiler id="workspace-shell">
       <WorkspaceShellActionsProvider value={shellActions}>
-        <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
+        <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}>
           <WorkspaceHeaderTabsViewModelProvider
             enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell && !freezeHeaderTabsViewModel}
           >
@@ -336,6 +338,7 @@ export function StandardWorkspaceShell() {
                         <GlobalHeader
                           existingPr={existingPr}
                           selectedWorkspace={selectedWorkspace}
+                          workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
                           rightPanelOpen={rightPanelOpen}
                           disableGitActions={!hasRuntimeReadyWorkspace}
                           runDisabled={!runCommand.canRun}

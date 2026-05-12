@@ -36,7 +36,7 @@ interface WorkspaceArrivalAttachedPanelViewProps {
   viewModel: WorkspaceArrivalViewModel;
   expanded: boolean;
   onToggleExpanded: () => void;
-  onDismiss: () => void;
+  onDismiss?: (() => void) | null;
   onSetupAction: () => void;
 }
 
@@ -67,11 +67,13 @@ export function WorkspaceArrivalAttachedPanelView({
           <span className="truncate text-sm text-muted-foreground">
             {viewModel.subtitle}
           </span>
-          <div className="ml-auto shrink-0">
-            <IconButton title="Dismiss" size="sm" onClick={onDismiss}>
-              <X className="size-3.5" />
-            </IconButton>
-          </div>
+          {onDismiss && (
+            <div className="ml-auto shrink-0">
+              <IconButton title="Dismiss" size="sm" onClick={onDismiss}>
+                <X className="size-3.5" />
+              </IconButton>
+            </div>
+          )}
         </>
       )}
       expanded={expanded}
@@ -130,8 +132,16 @@ export function WorkspaceArrivalAttachedPanel() {
   }, [deferredLaunchesById, deferredWorkspaceId]);
 
   const arrivalActions = useWorkspaceArrivalActions({
-    workspacePath: panelState?.kind === "arrival" ? panelState.workspacePath : null,
-    sourceRepoRootPath: panelState?.kind === "arrival" ? panelState.sourceRepoRootPath : null,
+    workspacePath: panelState?.kind === "arrival"
+      ? panelState.workspacePath
+      : panelState?.kind === "pending"
+        ? panelState.workspacePath
+        : null,
+    sourceRepoRootPath: panelState?.kind === "arrival"
+      ? panelState.sourceRepoRootPath
+      : panelState?.kind === "pending"
+        ? panelState.sourceRepoRootPath
+        : null,
   });
   const cloudActions = useCloudWorkspaceStatusScreenActions({
     workspaceId: panelState?.kind === "cloud-status" ? panelState.workspaceId : "",
@@ -225,6 +235,19 @@ export function WorkspaceArrivalAttachedPanel() {
   }
 
   if (panelState.kind === "pending") {
+    if (panelState.arrivalViewModel) {
+      const { arrivalViewModel } = panelState;
+      return (
+        <WorkspaceArrivalAttachedPanelView
+          viewModel={arrivalViewModel}
+          expanded={expanded}
+          onToggleExpanded={() => setExpanded((v) => !v)}
+          onDismiss={null}
+          onSetupAction={arrivalActions.handleOpenRepositorySettings}
+        />
+      );
+    }
+
     const isBusy = !panelState.isFailed;
 
     return (

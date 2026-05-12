@@ -291,15 +291,15 @@ export function useMainScreenState(): MainScreenState {
     enabled: !freezeMainScreenDataQueries,
   });
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
-  const hasLaunchIntentOnlyShell = Boolean(
-    activeLaunchIntent
-    && !selectedWorkspaceId
-    && pendingWorkspaceEntry === null,
-  );
+  const activeLaunchIntentIdForShell =
+    selectedWorkspaceId || pendingWorkspaceEntry
+      ? activeLaunchIntent?.id ?? null
+      : null;
+  const hasLaunchIntentOnlyShell = false;
   const hasWorkspaceShell = shouldMountWorkspaceShell({
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
-    activeLaunchIntentId: activeLaunchIntent?.id ?? null,
+    activeLaunchIntentId: activeLaunchIntentIdForShell,
   });
   const hasRuntimeReadyWorkspace = Boolean(selectedWorkspaceId) && (
     selectedCloudWorkspaceId !== null
