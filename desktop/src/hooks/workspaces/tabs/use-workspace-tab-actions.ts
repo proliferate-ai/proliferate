@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
-import { flushSync } from "react-dom";
+import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/tabs/use-close-active-workspace-tab";
@@ -21,8 +20,6 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 
-const URGENT_CHAT_HIGHLIGHT_FALLBACK_TIMEOUT_MS = 1_500;
-
 export interface WorkspaceTabActionsContext {
   workspaceUiKey: string | null;
   materializedWorkspaceId: string | null;
@@ -38,12 +35,6 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   const { activateViewerTarget } = useWorkspaceShellActivation();
   const showToast = useToastStore((state) => state.show);
   const closeActiveWorkspaceTab = useCloseActiveWorkspaceTab(headerTabs);
-  const setUrgentHighlightedChatSessionForWorkspace = useWorkspaceUiStore(
-    (state) => state.setUrgentHighlightedChatSessionForWorkspace,
-  );
-  const clearUrgentHighlightedChatSessionForWorkspace = useWorkspaceUiStore(
-    (state) => state.clearUrgentHighlightedChatSessionForWorkspace,
-  );
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: headerTabs.workspaceUiKey,
     materializedWorkspaceId: headerTabs.materializedWorkspaceId,
@@ -58,61 +49,8 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
 
   const orderedTabs = headerTabs.orderedTabs;
   const activeTab = headerTabs.activeShellTab;
-  const urgentHighlightTimeoutRef = useRef<number | null>(null);
-  const clearUrgentHighlightTimeout = useCallback(() => {
-    if (urgentHighlightTimeoutRef.current === null) {
-      return;
-    }
-    window.clearTimeout(urgentHighlightTimeoutRef.current);
-    urgentHighlightTimeoutRef.current = null;
-  }, []);
-  const scheduleUrgentHighlightClear = useCallback((
-    workspaceUiKey: string,
-    sessionId: string,
-  ) => {
-    clearUrgentHighlightTimeout();
-    urgentHighlightTimeoutRef.current = window.setTimeout(() => {
-      urgentHighlightTimeoutRef.current = null;
-      clearUrgentHighlightedChatSessionForWorkspace(workspaceUiKey, sessionId);
-    }, URGENT_CHAT_HIGHLIGHT_FALLBACK_TIMEOUT_MS);
-  }, [
-    clearUrgentHighlightTimeout,
-    clearUrgentHighlightedChatSessionForWorkspace,
-  ]);
-
-  const previewWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
-    const workspaceUiKey = headerTabs.workspaceUiKey;
-    if (!workspaceUiKey) {
-      return;
-    }
-    clearUrgentHighlightTimeout();
-    flushSync(() => {
-      if (tab.kind === "chat") {
-        setUrgentHighlightedChatSessionForWorkspace(
-          workspaceUiKey,
-          tab.sessionId,
-        );
-        return;
-      }
-      clearUrgentHighlightedChatSessionForWorkspace(workspaceUiKey);
-    });
-    if (tab.kind === "chat") {
-      scheduleUrgentHighlightClear(workspaceUiKey, tab.sessionId);
-    }
-  }, [
-    clearUrgentHighlightedChatSessionForWorkspace,
-    clearUrgentHighlightTimeout,
-    headerTabs.workspaceUiKey,
-    scheduleUrgentHighlightClear,
-    setUrgentHighlightedChatSessionForWorkspace,
-  ]);
-
-  useEffect(() => () => {
-    clearUrgentHighlightTimeout();
-  }, [clearUrgentHighlightTimeout]);
 
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
-    previewWorkspaceTab(tab);
     if (tab.kind === "chat") {
       return chatVisibilityActions.showChatSessionTab(tab.sessionId, { select: true });
     }
@@ -131,7 +69,6 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     chatVisibilityActions,
     headerTabs.workspaceUiKey,
     headerTabs.selectedWorkspaceId,
-    previewWorkspaceTab,
   ]);
 
   const activateRelativeTab = useCallback((delta: number) => {

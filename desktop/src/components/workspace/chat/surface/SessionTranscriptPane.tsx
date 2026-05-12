@@ -217,11 +217,15 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   ]);
 
   if (transcriptDeferred) {
-    return <TranscriptSwitchingPlaceholder />;
+    return <TranscriptSwitchingPlaceholder label="Switching chat" />;
   }
 
-  if (!activeSessionId || !transcript) {
+  if (!activeSessionId) {
     return null;
+  }
+
+  if (!transcript) {
+    return <TranscriptSwitchingPlaceholder label="Loading chat" />;
   }
 
   return (

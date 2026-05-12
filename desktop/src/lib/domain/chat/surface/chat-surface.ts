@@ -16,7 +16,8 @@ export type LaunchIntentSurfaceOverride =
   | { kind: "session-transcript"; sessionId: string };
 
 export interface ChatSurfaceRenderScope {
-  kind: "chat-shell" | "other";
+  kind: "chat-shell" | "chat-session" | "other";
+  sessionId?: string;
 }
 
 export interface ChatSessionPendingRenderScope {
@@ -36,6 +37,7 @@ export interface ResolveChatSurfaceStateInput {
   shellRenderScope: ChatSurfaceRenderScope | ChatSessionPendingRenderScope | null;
   activeSessionId: string | null;
   hasContent: boolean;
+  hasTranscriptEntry: boolean;
   hasSlot: boolean;
   transcriptHydrated: boolean;
   isEmpty: boolean;
@@ -140,6 +142,14 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
       kind: "session-switching",
       sessionId: input.shellRenderScope.sessionId,
     };
+  }
+
+  if (
+    input.shellRenderScope?.kind === "chat-session"
+    && input.shellRenderScope.sessionId === scopedActiveSessionId
+    && !input.hasTranscriptEntry
+  ) {
+    return { kind: "session-switching", sessionId: input.shellRenderScope.sessionId };
   }
 
   if (!scopedActiveSessionId) {

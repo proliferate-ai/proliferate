@@ -92,7 +92,7 @@ export interface WorkspaceUiState {
   setPendingChatActivation: (input: {
     workspaceId: string;
     pending: PendingChatActivation;
-  }) => { set: true };
+  }) => { set: boolean };
   clearPendingChatActivation: (input: {
     workspaceId: string;
     attemptId: string;

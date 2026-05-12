@@ -58,6 +58,7 @@ import {
   closeSessionStreamHandle,
   setSessionStreamHandle,
 } from "@/lib/access/anyharness/session-stream-handles";
+import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 
 const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;
 
@@ -534,6 +535,9 @@ export function useSessionRuntimeActions() {
         finishStreamConnectMeasurement("completed");
       },
       onEvent: (envelope) => {
+        if (isProliferatePerfFlagEnabled("pauseSessionStreamUi")) {
+          return;
+        }
         const materializedSessionId = getMaterializedSessionId(sessionId);
         if (!isStillCurrent() || !handle || !materializedSessionId || !isCurrentStreamHandle(materializedSessionId, handle)) {
           return;

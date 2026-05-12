@@ -32,7 +32,13 @@ export type MeasurementOperationKind =
 
 export type MeasurementSurface =
   | "workspace-shell"
+  | "workspace-sidebar-frame"
   | "workspace-sidebar"
+  | "workspace-header-frame"
+  | "workspace-content-frame"
+  | "workspace-content-view"
+  | "workspace-right-panel"
+  | "workspace-command-palette"
   | "global-header"
   | "header-tabs"
   | "chat-surface"

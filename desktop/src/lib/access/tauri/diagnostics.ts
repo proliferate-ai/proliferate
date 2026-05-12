@@ -61,3 +61,23 @@ export async function saveDiagnosticJson(
   );
   return result?.outputPath ?? null;
 }
+
+export async function saveDiagnosticJsonToPath(
+  outputPath: string,
+  contents: string,
+): Promise<string | null> {
+  if (!isTauriDesktop()) {
+    return null;
+  }
+
+  const result = await invoke<{ outputPath: string }>(
+    "save_diagnostic_json_to_absolute_path",
+    {
+      input: {
+        outputPath,
+        contents,
+      },
+    },
+  );
+  return result.outputPath;
+}

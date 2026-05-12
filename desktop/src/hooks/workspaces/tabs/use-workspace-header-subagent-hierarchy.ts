@@ -67,7 +67,6 @@ export interface WorkspaceHeaderSubagentHierarchy {
 export function useWorkspaceHeaderSubagentHierarchy(args: {
   workspaceId: string | null;
   sessionIds: string[];
-  activeSessionId: string | null;
 }): WorkspaceHeaderSubagentHierarchy {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -172,6 +171,24 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [reviewRelationshipHintSignature],
   );
+  const hierarchyQuerySignature = buildHierarchyQuerySignature({
+    sessionIds: uniqueSessionIds,
+    subagentQueries,
+    reviewQueries,
+  });
+  const hierarchyQueryRows = useMemo(
+    () => uniqueSessionIds.map((sessionId, index) => ({
+      sessionId,
+      subagentSuccess: subagentQueries[index]?.isSuccess === true,
+      subagentData: subagentQueries[index]?.data ?? null,
+      reviewSuccess: reviewQueries[index]?.isSuccess === true,
+      reviewData: reviewQueries[index]?.data ?? null,
+    })),
+    // useQueries returns new wrapper arrays every render. The signature captures
+    // the response fields that affect the header hierarchy model.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hierarchyQuerySignature, uniqueSessionIds],
+  );
 
   useEffect(() => {
     for (const hint of subagentRelationshipHints) {
@@ -199,10 +216,8 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
 
   useDebugValueChange("header_subagent_hierarchy.inputs", "query_refs", {
     workspaceId: args.workspaceId,
-    activeSessionId: args.activeSessionId,
     uniqueSessionIds,
-    subagentQueries,
-    reviewQueries,
+    hierarchyQuerySignature,
   });
 
   return useMemo(() => measureDebugComputation({
@@ -216,11 +231,10 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     const childrenByParentSessionId = new Map<string, HeaderSubagentChildRow[]>();
     const resolvedSessionIds = new Set<string>();
 
-    for (let index = 0; index < uniqueSessionIds.length; index += 1) {
-      const sessionId = uniqueSessionIds[index];
-      const query = subagentQueries[index];
-      const data = query?.data;
-      if (query?.isSuccess) {
+    for (const row of hierarchyQueryRows) {
+      const { sessionId } = row;
+      const data = row.subagentData;
+      if (row.subagentSuccess) {
         resolvedSessionIds.add(sessionId);
       }
       if (!data) {
@@ -245,7 +259,6 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
               parentSessionId: sessionId,
               childSessionId: resolveClientSessionId(child.childSessionId),
               ordinal: childIndex + 1,
-              activeSessionId: args.activeSessionId,
             })
           ),
         );
@@ -254,13 +267,12 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
         }
       }
 
-      const reviewQuery = reviewQueries[index];
-      const reviewData = reviewQuery?.data;
-      if (reviewQuery?.isSuccess) {
+      const reviewData = row.reviewData;
+      if (row.reviewSuccess) {
         resolvedSessionIds.add(sessionId);
       }
       const reviewChildren = reviewData
-        ? buildReviewChildRows(reviewData.reviews, args.activeSessionId, resolveClientSessionId)
+        ? buildReviewChildRows(reviewData.reviews, resolveClientSessionId)
         : [];
       if (reviewChildren.length > 0) {
         const existing = childrenByParentSessionId.get(sessionId) ?? [];
@@ -278,12 +290,85 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       resolvedSessionIds,
     };
   }), [
-    args.activeSessionId,
+    hierarchyQueryRows,
     resolveClientSessionId,
-    reviewQueries,
-    subagentQueries,
-    uniqueSessionIds,
   ]);
+}
+
+function buildHierarchyQuerySignature({
+  sessionIds,
+  subagentQueries,
+  reviewQueries,
+}: {
+  sessionIds: readonly string[];
+  subagentQueries: readonly {
+    data?: SessionSubagentsResponse;
+    isSuccess: boolean;
+  }[];
+  reviewQueries: readonly {
+    data?: SessionReviewsResponse;
+    isSuccess: boolean;
+  }[];
+}): string {
+  return sessionIds.map((sessionId, index) => [
+    sessionId,
+    subagentQueries[index]?.isSuccess ? "subagents:ok" : "subagents:pending",
+    subagentResponseSignature(subagentQueries[index]?.data),
+    reviewQueries[index]?.isSuccess ? "reviews:ok" : "reviews:pending",
+    reviewResponseSignature(reviewQueries[index]?.data),
+  ].join("\u001f")).join("\u001e");
+}
+
+function subagentResponseSignature(
+  response: SessionSubagentsResponse | null | undefined,
+): string {
+  if (!response) {
+    return "";
+  }
+  return [
+    response.parent
+      ? [
+        response.parent.parentSessionId,
+        response.parent.parentTitle ?? "",
+        response.parent.label ?? "",
+        response.parent.parentAgentKind,
+      ].join(":")
+      : "",
+    response.children.map((child) => [
+      child.sessionLinkId,
+      child.childSessionId,
+      child.title ?? "",
+      child.label ?? "",
+      child.agentKind,
+      child.status,
+      child.wakeScheduled ? "wake" : "",
+    ].join(":")).join("|"),
+  ].join("\u001f");
+}
+
+function reviewResponseSignature(
+  response: SessionReviewsResponse | null | undefined,
+): string {
+  if (!response) {
+    return "";
+  }
+  return response.reviews.map((run) => [
+    run.id,
+    run.kind,
+    run.parentSessionId,
+    run.rounds.map((round) => [
+      round.id,
+      round.status,
+      round.assignments.map((assignment) => [
+        assignment.id,
+        assignment.sessionLinkId ?? "",
+        assignment.reviewerSessionId ?? "",
+        assignment.personaLabel,
+        assignment.agentKind,
+        assignment.status,
+      ].join(":")).join(","),
+    ].join(":")).join("|"),
+  ].join("\u001f")).join("\u001e");
 }
 
 function buildParentRow(
@@ -305,13 +390,11 @@ function buildChildRow({
   parentSessionId,
   childSessionId,
   ordinal,
-  activeSessionId,
 }: {
   child: ChildSubagentSummary;
   parentSessionId: string;
   childSessionId: string;
   ordinal: number;
-  activeSessionId: string | null;
 }): HeaderSubagentChildRow {
   return {
     sessionLinkId: child.sessionLinkId,
@@ -323,13 +406,12 @@ function buildChildRow({
     meta: null,
     statusLabel: formatSessionStatus(child.status),
     wakeScheduled: child.wakeScheduled,
-    isActive: childSessionId === activeSessionId,
+    isActive: false,
   };
 }
 
 function buildReviewChildRows(
   reviews: readonly ReviewRunDetail[],
-  activeSessionId: string | null,
   resolveClientSessionId: (sessionId: string) => string,
 ): HeaderSubagentChildRow[] {
   const rowsBySessionId = new Map<string, HeaderSubagentChildRow>();
@@ -349,7 +431,7 @@ function buildReviewChildRows(
           meta: reviewKindLabel(run.kind),
           statusLabel: reviewAssignmentHeaderStatusLabel(assignment),
           wakeScheduled: false,
-          isActive: clientSessionId === activeSessionId,
+          isActive: false,
         });
       }
     }

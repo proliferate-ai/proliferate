@@ -39,6 +39,7 @@ function surfaceInput(
     shellRenderScope: null,
     activeSessionId: "session-1",
     hasContent: true,
+    hasTranscriptEntry: true,
     hasSlot: true,
     transcriptHydrated: true,
     isEmpty: false,
@@ -164,6 +165,28 @@ describe("chat surface", () => {
     expect(resolveChatSurfaceState(surfaceInput({
       shellRenderScope: { kind: "chat-session-pending", sessionId: "session-2" },
     }))).toEqual({ kind: "session-switching", sessionId: "session-2" });
+  });
+
+  it("keeps a selected chat tab on the switching skeleton until its transcript entry exists", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      shellRenderScope: { kind: "chat-session", sessionId: "session-1" },
+      hasContent: false,
+      hasTranscriptEntry: false,
+      transcriptHydrated: true,
+      isEmpty: true,
+      streamConnectionState: "open",
+    }))).toEqual({ kind: "session-switching", sessionId: "session-1" });
+  });
+
+  it("shows the empty session state once a selected chat tab has an empty transcript entry", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      shellRenderScope: { kind: "chat-session", sessionId: "session-1" },
+      hasContent: false,
+      hasTranscriptEntry: true,
+      transcriptHydrated: true,
+      isEmpty: true,
+      streamConnectionState: "open",
+    }))).toEqual({ kind: "session-empty", sessionId: "session-1" });
   });
 
   it("keeps existing content visible during an unhydrated loading window", () => {

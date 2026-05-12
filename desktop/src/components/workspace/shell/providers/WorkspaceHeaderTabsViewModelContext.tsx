@@ -1,14 +1,30 @@
 import {
   createContext,
   useContext,
+  useMemo,
   type ReactNode,
 } from "react";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 
 type WorkspaceHeaderTabsViewModel = ReturnType<typeof useWorkspaceHeaderTabsViewModel>;
+type WorkspaceContentTabsViewModel = Pick<
+  WorkspaceHeaderTabsViewModel,
+  | "activeShellTab"
+  | "activeShellTabKey"
+  | "activation"
+  | "selectedWorkspaceId"
+  | "workspaceUiKey"
+  | "materializedWorkspaceId"
+  | "visibleChatSessionIds"
+  | "liveChatSessionIds"
+  | "childToParent"
+  | "orderedTabs"
+>;
 
 const WorkspaceHeaderTabsViewModelContext =
   createContext<WorkspaceHeaderTabsViewModel | null>(null);
+const WorkspaceContentTabsViewModelContext =
+  createContext<WorkspaceContentTabsViewModel | null>(null);
 
 interface WorkspaceHeaderTabsViewModelProviderProps {
   children: ReactNode;
@@ -36,10 +52,35 @@ function EnabledWorkspaceHeaderTabsViewModelProvider({
   children: ReactNode;
 }) {
   const viewModel = useWorkspaceHeaderTabsViewModel();
+  const contentViewModel = useMemo<WorkspaceContentTabsViewModel>(() => ({
+    activeShellTab: viewModel.activeShellTab,
+    activeShellTabKey: viewModel.activeShellTabKey,
+    activation: viewModel.activation,
+    selectedWorkspaceId: viewModel.selectedWorkspaceId,
+    workspaceUiKey: viewModel.workspaceUiKey,
+    materializedWorkspaceId: viewModel.materializedWorkspaceId,
+    visibleChatSessionIds: viewModel.visibleChatSessionIds,
+    liveChatSessionIds: viewModel.liveChatSessionIds,
+    childToParent: viewModel.childToParent,
+    orderedTabs: viewModel.orderedTabs,
+  }), [
+    viewModel.activeShellTab,
+    viewModel.activeShellTabKey,
+    viewModel.activation,
+    viewModel.childToParent,
+    viewModel.liveChatSessionIds,
+    viewModel.materializedWorkspaceId,
+    viewModel.orderedTabs,
+    viewModel.selectedWorkspaceId,
+    viewModel.visibleChatSessionIds,
+    viewModel.workspaceUiKey,
+  ]);
 
   return (
     <WorkspaceHeaderTabsViewModelContext.Provider value={viewModel}>
-      {children}
+      <WorkspaceContentTabsViewModelContext.Provider value={contentViewModel}>
+        {children}
+      </WorkspaceContentTabsViewModelContext.Provider>
     </WorkspaceHeaderTabsViewModelContext.Provider>
   );
 }
@@ -49,6 +90,16 @@ export function useWorkspaceHeaderTabsViewModelContext(): WorkspaceHeaderTabsVie
   if (!viewModel) {
     throw new Error(
       "useWorkspaceHeaderTabsViewModelContext must be used inside WorkspaceHeaderTabsViewModelProvider",
+    );
+  }
+  return viewModel;
+}
+
+export function useWorkspaceContentTabsViewModelContext(): WorkspaceContentTabsViewModel {
+  const viewModel = useContext(WorkspaceContentTabsViewModelContext);
+  if (!viewModel) {
+    throw new Error(
+      "useWorkspaceContentTabsViewModelContext must be used inside WorkspaceHeaderTabsViewModelProvider",
     );
   }
   return viewModel;

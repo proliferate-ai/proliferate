@@ -17,6 +17,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useResize } from "@/hooks/ui/layout/use-resize";
+import { useProliferatePerfFlag } from "@/hooks/ui/use-proliferate-perf-flag";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -101,6 +102,7 @@ export interface MainScreenState {
 // Owns the Main screen view-model: local layout state plus selected workspace
 // data needed by the shell. User actions live in main/workflows.
 export function useMainScreenState(): MainScreenState {
+  const freezeMainScreenDataQueries = useProliferatePerfFlag("freezeMainScreenDataQueries");
   const [rightPanelUserOpenOverride, setRightPanelUserOpenOverride] = useState<{
     materializedWorkspaceId: string;
     nonce: number;
@@ -143,13 +145,19 @@ export function useMainScreenState(): MainScreenState {
   const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelMaterializedForWorkspace,
   );
-  const rightPanelDurableFallback = resolveWithWorkspaceFallback(
-    rightPanelDurableByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
+  const rightPanelDurableFallback = useMemo(
+    () => resolveWithWorkspaceFallback(
+      rightPanelDurableByWorkspace,
+      workspaceUiKey,
+      materializedWorkspaceId,
+    ),
+    [materializedWorkspaceId, rightPanelDurableByWorkspace, workspaceUiKey],
   );
-  const persistedRightPanelDurableState = normalizeRightPanelDurableState(
-    rightPanelDurableFallback.value ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+  const persistedRightPanelDurableState = useMemo(
+    () => normalizeRightPanelDurableState(
+      rightPanelDurableFallback.value ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+    ),
+    [rightPanelDurableFallback.value],
   );
   const rightPanelDurableState = rightPanelSessionDurableState
     ?? persistedRightPanelDurableState;
@@ -279,7 +287,9 @@ export function useMainScreenState(): MainScreenState {
 
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const { data: workspaceCollections } = useWorkspaces();
+  const { data: workspaceCollections } = useWorkspaces({
+    enabled: !freezeMainScreenDataQueries,
+  });
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const hasLaunchIntentOnlyShell = Boolean(
     activeLaunchIntent
@@ -303,10 +313,13 @@ export function useMainScreenState(): MainScreenState {
   );
   const { data: gitStatus } = useGitStatusQuery({
     workspaceId: materializedWorkspaceId,
-    enabled: hasRuntimeReadyWorkspace && !hotPaintPending,
+    enabled: hasRuntimeReadyWorkspace && !hotPaintPending && !freezeMainScreenDataQueries,
   });
   const shouldQueryCurrentPullRequest =
-    hasRuntimeReadyWorkspace && !hotPaintPending && Boolean(gitStatus?.currentBranch?.trim());
+    hasRuntimeReadyWorkspace
+    && !hotPaintPending
+    && !freezeMainScreenDataQueries
+    && Boolean(gitStatus?.currentBranch?.trim());
   const { data: currentPullRequest } = useCurrentPullRequestQuery({
     workspaceId: materializedWorkspaceId,
     enabled: shouldQueryCurrentPullRequest,

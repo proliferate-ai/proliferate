@@ -34,7 +34,6 @@ export function buildManualGroupByTopLevelSessionId(
 }
 
 export function buildHeaderChatTabs(args: {
-  activeChatSessionIdForTabs: string | null;
   groupedTabs: readonly GroupedChatTab[];
   rowsBySessionId: ReadonlyMap<string, HeaderHierarchyChildRow>;
   childrenByParentSessionId: ReadonlyMap<string, readonly HeaderHierarchyChildRow[]>;
@@ -67,7 +66,7 @@ export function buildHeaderChatTabs(args: {
           : getLinkedChildViewState(hierarchyChild!),
         canFork: known ? getKnownSessionCanFork(known) : false,
         isReviewAgentChild: hierarchyChild?.source === "review",
-        isActive: grouped.sessionId === args.activeChatSessionIdForTabs,
+        isActive: false as boolean,
         groupColor,
         visualGroupId: manualGroup?.id ?? (isSubagentGrouped ? grouped.groupRootSessionId : null),
         manualGroupId: manualGroup?.id ?? null,

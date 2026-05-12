@@ -210,6 +210,7 @@ pub fn run() {
             diagnostics_commands::log_renderer_diagnostic,
             diagnostics_commands::log_renderer_event,
             diagnostics_commands::save_diagnostic_json,
+            diagnostics_commands::save_diagnostic_json_to_absolute_path,
             runtime::get_runtime_info,
             runtime::restart_runtime,
             quit_flow::set_running_agent_count,

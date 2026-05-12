@@ -22,6 +22,7 @@ import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt
 import { isSessionSlotBusy } from "@/lib/domain/sessions/activity";
 import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 
 interface PromptSessionInput {
   sessionId: string;
@@ -60,6 +61,24 @@ export function useSessionPromptWorkflow() {
     const outboxStore = usePromptOutboxStore.getState();
     const existingOutboxEntries = outboxEntriesForSession(outboxStore, sessionId);
     const enqueueStartedAt = performance.now();
+    if (isProliferatePerfFlagEnabled("pausePromptOutboxUi")) {
+      logLatency("prompt.outbox.enqueue.paused_by_perf_flag", {
+        clientPromptId,
+        clientSessionId: sessionId,
+        workspaceId: resolvedWorkspaceId,
+      });
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "prompt.submit.enqueue",
+        startedAt: enqueueStartedAt,
+        outcome: "skipped",
+        count: existingOutboxEntries.length,
+      });
+      finishLatencyFlow(latencyFlowId, "optimistic_visible", {
+        keepActive: true,
+      });
+      return;
+    }
     if (measurementOperationId) {
       markOperationForNextCommit(
         measurementOperationId,
@@ -71,7 +90,7 @@ export function useSessionPromptWorkflow() {
       isSessionMaterialized: Boolean(slot?.materializedSessionId),
       existingEntries: existingOutboxEntries,
     });
-    flushSync(() => {
+    const enqueuePrompt = () => {
       outboxStore.enqueue({
         clientPromptId,
         clientSessionId: sessionId,
@@ -84,7 +103,12 @@ export function useSessionPromptWorkflow() {
         placement: outboxPlacement,
         latencyFlowId,
       });
-    });
+    };
+    if (isProliferatePerfFlagEnabled("disablePromptFlushSync")) {
+      enqueuePrompt();
+    } else {
+      flushSync(enqueuePrompt);
+    }
     logLatency("prompt.outbox.enqueue", {
       clientPromptId,
       clientSessionId: sessionId,
