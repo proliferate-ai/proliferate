@@ -126,7 +126,7 @@ periods.
 
 ### Internal Prompt Provenance
 
-`PromptPayload` (`anyharness/crates/anyharness-lib/src/sessions/prompt.rs`)
+`PromptPayload` (`anyharness/crates/anyharness-lib/src/sessions/prompt/payload.rs`)
 can carry internal prompt provenance while it moves through the runtime.
 
 Current producers are internal only. Public prompt requests do not expose a
@@ -315,7 +315,8 @@ make the completed turn fail.
 ### Create
 
 `SessionService::create_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/service.rs`)
+(`anyharness/crates/anyharness-lib/src/sessions/service/mod.rs` and
+`sessions/service/model_resolution.rs`)
 does the durable validation path.
 
 It:
