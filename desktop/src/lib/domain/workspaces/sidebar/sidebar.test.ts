@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildPendingWorkspaceUiKey,
+  buildSubmittingPendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
+import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
 } from "./sidebar-model";
 import {
@@ -83,6 +87,53 @@ describe("repo-root seeded groups", () => {
     });
 
     expect(groups).toHaveLength(0);
+  });
+
+  it("projects a pending worktree into its repo group before materialization", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "gulch",
+      repoLabel: "landing",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "landing-root",
+          workspaceName: "gulch",
+          branchName: "gulch",
+          baseBranch: "main",
+          targetPath: "/tmp/landing/gulch",
+        },
+      },
+    });
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(pendingWorkspaceEntry);
+    const groups = buildGroups({
+      logicalWorkspaces: [],
+      repoRoots: [
+        makeRepoRoot({
+          id: "landing-root",
+          repoName: "landing",
+          sourceRoot: "/tmp/landing",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      selectedLogicalWorkspaceId: pendingWorkspaceUiKey,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sourceRoot).toBe("/tmp/landing");
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: pendingWorkspaceUiKey,
+      name: "gulch",
+      defaultName: "gulch",
+      active: true,
+      variant: "worktree",
+      localWorkspaceId: null,
+      renameSupported: false,
+    });
   });
 });
 

@@ -5,6 +5,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
 import { workspaceDefaultDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import {
@@ -16,6 +17,7 @@ import {
 import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
 import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
 import type { SidebarGroupState } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import { buildPendingSidebarProjection } from "@/lib/domain/workspaces/sidebar/pending-sidebar-projection";
 import {
   resolveSidebarWorkspaceTypes,
 } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
@@ -83,6 +85,7 @@ export function buildSidebarGroupStates(args: {
   hiddenRepoRootIds: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
+  pendingWorkspaceEntry?: PendingWorkspaceEntry | null;
   workspaceActivities: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   gitStatus: GitStatusSnapshot | undefined;
@@ -95,6 +98,7 @@ export function buildSidebarGroupStates(args: {
   const repoRootsByKey = new Map(
     args.repoRoots.map((repoRoot) => [repoRootGroupKey(repoRoot), repoRoot]),
   );
+  const repoRootsById = new Map(args.repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
   const groups = new Map<string, LogicalWorkspace[]>();
   for (const workspace of args.logicalWorkspaces) {
     const entries = groups.get(workspace.repoKey);
@@ -105,14 +109,26 @@ export function buildSidebarGroupStates(args: {
     }
   }
 
+  const pendingProjection = args.pendingWorkspaceEntry
+    ? buildPendingSidebarProjection({
+      entry: args.pendingWorkspaceEntry,
+      repoRootsById,
+      selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId,
+      activeSessionTitle: args.activeSessionTitle,
+    })
+    : null;
+
   const groupKeys = new Set<string>([
     ...repoRootsByKey.keys(),
     ...groups.keys(),
+    ...(pendingProjection ? [pendingProjection.repoKey] : []),
   ]);
 
   return Array.from(groupKeys)
     .map((repoKey): { group: SidebarGroupState; sortRecency: LogicalWorkspaceRecency } | null => {
       const rawGroupWorkspaces = groups.get(repoKey) ?? [];
+      const pendingItem =
+        pendingProjection?.repoKey === repoKey ? pendingProjection.item : null;
       const groupWorkspaces = groupHasWorkActivity(
         rawGroupWorkspaces,
         args.workspaceLastInteracted,
@@ -126,7 +142,7 @@ export function buildSidebarGroupStates(args: {
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
         return null;
       }
-      const items = groupWorkspaces.map((entry) => {
+      const workspaceItems = groupWorkspaces.map((entry) => {
         const active = entry.id === args.selectedLogicalWorkspaceId;
         const archived = args.archivedSet.has(entry.id);
         const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
@@ -190,6 +206,7 @@ export function buildSidebarGroupStates(args: {
           needsReview,
         };
       });
+      const items = pendingItem ? [pendingItem, ...workspaceItems] : workspaceItems;
       const visibleItems = items.filter((item) =>
         item.active
         || ((args.showArchived || !item.archived) && visibleWorkspaceTypes.has(item.variant))
@@ -205,22 +222,33 @@ export function buildSidebarGroupStates(args: {
         }
       }
       const visibleItemIds = new Set(visibleItems.map((item) => item.id));
-      const sortRecency = latestVisibleWorkspaceRecency(
+      const latestWorkspaceRecency = latestVisibleWorkspaceRecency(
         groupWorkspaces,
         visibleItemIds,
         args.workspaceLastInteracted,
-      ) ?? {
+      );
+      const latestPendingRecency =
+        pendingItem && visibleItemIds.has(pendingItem.id) ? pendingProjection!.sortRecency : null;
+      const sortRecency = latestPendingRecency && (
+        !latestWorkspaceRecency
+        || compareResolvedLogicalWorkspaceRecency(latestPendingRecency, latestWorkspaceRecency) < 0
+      )
+        ? latestPendingRecency
+        : latestWorkspaceRecency ?? {
         activityAt: null,
         recordUpdatedAt: repoRoot?.updatedAt ?? "",
         sortAt: repoRoot?.updatedAt ?? "",
         displayAt: null,
       };
 
-      const sourceRoot = repoRoot?.path
+      const sourceRoot = pendingProjection?.repoKey === repoKey && !repoRoot
+        ? pendingProjection.sourceRoot
+        : repoRoot?.path
         ?? representative?.sourceRoot
         ?? repoKey;
       const name = repoRoot?.displayName?.trim()
         || repoRoot?.remoteRepoName?.trim()
+        || (pendingProjection?.repoKey === repoKey ? pendingProjection.name : null)
         || (representative ? logicalGroupName(representative) : sourceRoot.split("/").filter(Boolean).pop())
         || sourceRoot;
       const provider = repoRoot?.remoteProvider ?? representative?.provider ?? null;
@@ -232,14 +260,19 @@ export function buildSidebarGroupStates(args: {
         group: {
           sourceRoot,
           name,
-          allLogicalWorkspaceIds: groupWorkspaces.map((entry) => entry.id),
+          allLogicalWorkspaceIds: [
+            ...(pendingItem ? [pendingItem.id] : []),
+            ...groupWorkspaces.map((entry) => entry.id),
+          ],
           repoRootId:
             repoRoot?.id
             ?? representative?.repoRoot?.id
+            ?? (pendingProjection?.repoKey === repoKey ? pendingProjection.repoRoot?.id : null)
             ?? null,
           localSourceRoot:
             repoRoot?.path
             ?? groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.sourceRepoRootPath
+            ?? (pendingProjection?.repoKey === repoKey ? pendingProjection.repoRoot?.path : null)
             ?? null,
           cloudRepoTarget:
             provider === "github" && owner && repoName

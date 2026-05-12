@@ -1,6 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 import {
   buildSidebarGroupStates,
@@ -258,6 +259,7 @@ export function buildGroups(args: {
   archivedIds?: string[];
   hiddenRepoRootIds?: string[];
   selectedLogicalWorkspaceId?: string | null;
+  pendingWorkspaceEntry?: PendingWorkspaceEntry | null;
   workspaceActivities?: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
@@ -276,6 +278,7 @@ export function buildGroups(args: {
     hiddenRepoRootIds: new Set(args.hiddenRepoRootIds ?? []),
     selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId ?? null,
     selectedWorkspaceId: null,
+    pendingWorkspaceEntry: args.pendingWorkspaceEntry ?? null,
     workspaceActivities: args.workspaceActivities ?? {},
     pendingPromptCounts: args.pendingPromptCounts,
     gitStatus: undefined,
