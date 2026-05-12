@@ -21,7 +21,7 @@ import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/lifecycle/use-runtime-
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
 import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle"
-import { usePromptOutboxDispatcher } from "@/hooks/chat/lifecycle/use-prompt-outbox-dispatcher"
+import { useSessionIntentDispatcher } from "@/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
@@ -159,7 +159,7 @@ function AppRuntime() {
   useUserPreferencesLifecycle()
   useRepoPreferencesLifecycle()
   useWorkspaceUiLifecycle()
-  usePromptOutboxDispatcher()
+  useSessionIntentDispatcher()
   useSessionSelectionLifecycle()
 
   useEffect(() => {

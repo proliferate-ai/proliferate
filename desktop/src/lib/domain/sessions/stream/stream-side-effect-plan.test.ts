@@ -26,7 +26,6 @@ describe("planBatchedStreamSideEffects", () => {
     expect(plan.lastActivityTimestamp).toBe("2026-04-04T00:00:03Z");
     expect(plan.orderedEffects).toEqual([
       { kind: "clear_active_summary_refresh" },
-      { kind: "schedule_pending_config_rollback" },
       { kind: "notify_turn_end", eventType: "turn_ended" },
       { kind: "clear_pending_config_rollback" },
       { kind: "schedule_active_summary_refresh" },

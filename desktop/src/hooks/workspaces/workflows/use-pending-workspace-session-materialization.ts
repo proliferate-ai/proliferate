@@ -56,7 +56,7 @@ export function usePendingWorkspaceSessionMaterialization() {
     }
 
     for (const session of projectedSessions) {
-      // The prompt outbox remains the user-visible owner while this background
+      // Session intents remain the user-visible owner while this background
       // create binds the projected client session to a real runtime session.
       void createEmptySessionWithResolvedConfig({
         clientSessionId: session.sessionId,

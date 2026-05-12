@@ -4,22 +4,25 @@ import {
   canCancelPromptOutboxEntryLocally,
   canDismissPromptOutboxEntry,
   canRetryPromptOutboxEntry,
-} from "@/lib/domain/chat/outbox/prompt-outbox-actions";
+} from "@/lib/domain/sessions/intents/session-intent-actions";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { getSessionRecord } from "@/stores/sessions/session-records";
-import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 export function usePromptOutboxActions() {
   const { createSessionWithResolvedConfig } = useSessionCreationActions();
   const retryPrompt = useCallback((clientPromptId: string) => {
-    const store = usePromptOutboxStore.getState();
-    const entry = store.entriesByPromptId[clientPromptId];
+    const store = useSessionIntentStore.getState();
+    const entry = store.entriesById[clientPromptId];
+    if (entry?.kind !== "send_prompt") {
+      return;
+    }
     if (!entry || !canRetryPromptOutboxEntry(entry)) {
       return;
     }
     const retryPromptId = createPromptId();
-    store.removeEntry(clientPromptId);
-    const retryEntry = store.enqueue({
+    store.removeIntent(clientPromptId);
+    const retryEntry = store.enqueuePrompt({
       clientPromptId: retryPromptId,
       retryOfPromptId: entry.clientPromptId,
       clientSessionId: entry.clientSessionId,
@@ -52,11 +55,11 @@ export function usePromptOutboxActions() {
       skipInitialPromptEnqueue: true,
       preferExistingCompatibleSession: true,
     }).catch((error) => {
-      const latest = usePromptOutboxStore.getState().entriesByPromptId[retryPromptId];
-      if (!latest || latest.deliveryState !== "waiting_for_session") {
+      const latest = useSessionIntentStore.getState().entriesById[retryPromptId];
+      if (!latest || latest.kind !== "send_prompt" || latest.deliveryState !== "waiting_for_session") {
         return;
       }
-      usePromptOutboxStore.getState().patchEntry(retryPromptId, {
+      useSessionIntentStore.getState().patchIntent(retryPromptId, {
         deliveryState: "failed_before_dispatch",
         errorMessage: error instanceof Error ? error.message : "Session creation failed.",
       });
@@ -64,21 +67,27 @@ export function usePromptOutboxActions() {
   }, [createSessionWithResolvedConfig]);
 
   const dismissPrompt = useCallback((clientPromptId: string) => {
-    const store = usePromptOutboxStore.getState();
-    const entry = store.entriesByPromptId[clientPromptId];
+    const store = useSessionIntentStore.getState();
+    const entry = store.entriesById[clientPromptId];
+    if (entry?.kind !== "send_prompt") {
+      return;
+    }
     if (!entry || !canDismissPromptOutboxEntry(entry)) {
       return;
     }
-    store.removeEntry(clientPromptId);
+    store.removeIntent(clientPromptId);
   }, []);
 
   const cancelBeforeDispatch = useCallback((clientPromptId: string) => {
-    const store = usePromptOutboxStore.getState();
-    const entry = store.entriesByPromptId[clientPromptId];
+    const store = useSessionIntentStore.getState();
+    const entry = store.entriesById[clientPromptId];
+    if (entry?.kind !== "send_prompt") {
+      return;
+    }
     if (!entry || !canCancelPromptOutboxEntryLocally(entry)) {
       return;
     }
-    store.removeEntry(clientPromptId);
+    store.removeIntent(clientPromptId);
   }, []);
 
   return {

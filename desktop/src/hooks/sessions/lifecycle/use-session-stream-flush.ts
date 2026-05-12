@@ -24,6 +24,12 @@ import type {
 import { markWorkspaceViewedAt } from "@/stores/preferences/workspace-ui-store";
 import { isDocumentVisibleAndFocused } from "@/hooks/ui/use-document-focus-visibility";
 import {
+  pendingConfigChangesForSessionIntents,
+} from "@/lib/domain/sessions/intents/session-intent-selectors";
+import {
+  sessionIntentsForSession,
+} from "@/lib/domain/sessions/intents/session-intent-state";
+import {
   reconcilePendingConfigChanges,
   type PendingSessionConfigChange,
   type PendingSessionConfigChanges,
@@ -32,11 +38,14 @@ import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch
 import {
   pruneEchoedOutboxTombstonesForTranscript,
   reconcileOutboxFromEnvelopes,
-} from "@/lib/domain/chat/outbox/prompt-outbox-reconciliation";
-import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/outbox/pending-prompts";
+} from "@/lib/domain/sessions/intents/session-intent-reconciliation";
+import { shouldClearOptimisticPendingPromptForEnvelope } from "@/lib/domain/chat/pending-prompts/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
 } from "@/hooks/sessions/lifecycle/session-stream-side-effects";
+import {
+  createLatestTimestampThrottle,
+} from "@/lib/domain/sessions/stream/latest-timestamp-throttle";
 import type { ReconciledStreamConfigIntent } from "@/lib/domain/sessions/stream/stream-side-effect-plan";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
@@ -47,11 +56,12 @@ import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionIngestStore } from "@/stores/sessions/session-ingest-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
 const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
 const SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS = 50;
+const STREAM_WORKSPACE_VIEWED_WRITE_INTERVAL_MS = 1_000;
 const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "session-transcript-pane",
   "transcript-list",
@@ -61,6 +71,11 @@ const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "global-header",
   "chat-composer-dock",
 ];
+
+const streamWorkspaceViewedThrottle = createLatestTimestampThrottle({
+  intervalMs: STREAM_WORKSPACE_VIEWED_WRITE_INTERVAL_MS,
+  write: markWorkspaceViewedAt,
+});
 
 export interface SessionStreamFlushScheduler {
   schedule(callback: () => void): () => void;
@@ -309,9 +324,12 @@ export function createSessionStreamFlushController(
       return;
     }
 
+    const intentPendingConfigChanges = pendingConfigChangesForSessionIntents(
+      sessionIntentsForSession(useSessionIntentStore.getState(), input.sessionId),
+    );
     const configReconcileResult = reconcileBatchPendingConfigChanges(
       result.appliedEnvelopes,
-      slotState.pendingConfigChanges,
+      intentPendingConfigChanges,
     );
     const streamPatch = result.appliedEnvelopes.length > 0
       ? buildSessionStreamBatchPatch({
@@ -334,7 +352,7 @@ export function createSessionStreamFlushController(
         transcript: streamPatch.transcript,
         optimisticPrompt: shouldClearOptimisticPrompt ? null : slotState.optimisticPrompt,
       });
-      usePromptOutboxStore.setState((state) => {
+      useSessionIntentStore.setState((state) => {
         const reconciled = reconcileOutboxFromEnvelopes(
           state,
           input.sessionId,
@@ -372,7 +390,7 @@ export function createSessionStreamFlushController(
         status: streamPatch.status !== undefined
           ? streamPatch.status
           : slotState.status,
-        pendingConfigChanges: configReconcileResult.pendingConfigChanges,
+        pendingConfigChanges: {},
         activity: activityFromTranscript(streamPatch.transcript, {
           status: streamPatch.status !== undefined
             ? streamPatch.status
@@ -432,7 +450,10 @@ export function createSessionStreamFlushController(
         if (workspaceId !== selection.selectedWorkspaceId) {
           return;
         }
-        markWorkspaceViewedAt(selection.selectedLogicalWorkspaceId ?? workspaceId, timestamp);
+        markWorkspaceViewedAtFromStream(
+          selection.selectedLogicalWorkspaceId ?? workspaceId,
+          timestamp,
+        );
       },
     });
 
@@ -469,6 +490,10 @@ export function createSessionStreamFlushController(
       }
     },
   };
+}
+
+function markWorkspaceViewedAtFromStream(workspaceKey: string, timestamp: string) {
+  streamWorkspaceViewedThrottle.record(workspaceKey, timestamp);
 }
 
 function reconcileBatchPendingConfigChanges(

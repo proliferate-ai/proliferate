@@ -4,10 +4,9 @@ import type {
   ToolCallItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import {
-  hasQueuedPendingConfigChanges,
-  type PendingSessionConfigChange,
-  type PendingSessionConfigChanges,
+import type {
+  PendingSessionConfigChange,
+  PendingSessionConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
 import {
   parseSubagentLaunchResult,
@@ -66,7 +65,6 @@ export type OrderedStreamSideEffect =
   | { kind: "clear_pending_config_rollback" }
   | { kind: "schedule_active_summary_refresh" }
   | { kind: "clear_active_summary_refresh" }
-  | { kind: "schedule_pending_config_rollback" }
   | {
     kind: "notify_turn_end";
     eventType: "turn_ended" | "error";
@@ -138,9 +136,6 @@ export function planBatchedStreamSideEffects(input: {
     }
     if (event.type === "turn_ended" || event.type === "error") {
       invalidateGitStatus = !!input.workspaceId;
-      if (hasQueuedPendingConfigChanges(input.pendingConfigChanges)) {
-        appendOrderedEffect(orderedEffects, { kind: "schedule_pending_config_rollback" });
-      }
       orderedEffects.push({
         kind: "notify_turn_end",
         eventType: event.type,
@@ -239,9 +234,7 @@ export function planBatchedStreamSideEffects(input: {
     }
   }
 
-  if (!hasQueuedPendingConfigChanges(input.pendingConfigChanges)) {
-    appendOrderedEffect(orderedEffects, { kind: "clear_pending_config_rollback" });
-  }
+  appendFinalPendingConfigRollbackClear(orderedEffects);
 
   return {
     eventEffects,
@@ -254,6 +247,15 @@ export function planBatchedStreamSideEffects(input: {
     reviewParentSessionIds: [...reviewParentSessionIds],
     orderedEffects,
   };
+}
+
+function appendFinalPendingConfigRollbackClear(
+  effects: OrderedStreamSideEffect[],
+): void {
+  if (effects.some((effect) => effect.kind === "clear_pending_config_rollback")) {
+    return;
+  }
+  effects.push({ kind: "clear_pending_config_rollback" });
 }
 
 function appendOrderedEffect(

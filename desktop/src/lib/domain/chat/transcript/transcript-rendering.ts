@@ -8,7 +8,7 @@ import {
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "@/lib/domain/chat/transcript/transcript-presentation";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
+import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
 
 const EMPTY_OUTBOX_STARTED_AT_BY_PROMPT_ID = new Map<string, string>();
 

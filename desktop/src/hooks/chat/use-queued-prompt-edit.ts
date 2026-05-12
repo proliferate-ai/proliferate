@@ -3,14 +3,14 @@ import type { PendingPromptEntry } from "@anyharness/sdk";
 import type {
   PromptOutboxDeliveryState,
   PromptOutboxEntry,
-} from "@/lib/domain/chat/outbox/prompt-outbox-model";
+} from "@/lib/domain/sessions/intents/session-intent-model";
 import {
   useActivePendingPrompts,
   useActiveSessionId,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useEditPendingPrompt } from "@/hooks/sessions/workflows/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 export interface VisiblePendingPromptEntry extends PendingPromptEntry {
   isBeingEdited: boolean;
@@ -194,13 +194,13 @@ function isLocallyEditableOutboxPrompt(
 }
 
 function patchLocalOutboxPrompt(clientPromptId: string, text: string): void {
-  const store = usePromptOutboxStore.getState();
-  const entry = store.entriesByPromptId[clientPromptId];
-  if (!entry || entry.deliveryState !== "waiting_for_session") {
+  const store = useSessionIntentStore.getState();
+  const entry = store.entriesById[clientPromptId];
+  if (!entry || entry.kind !== "send_prompt" || entry.deliveryState !== "waiting_for_session") {
     return;
   }
 
-  store.patchEntry(clientPromptId, {
+  store.patchIntent(clientPromptId, {
     text,
     blocks: updateOutboxTextBlocks(entry, text),
     contentParts: updateOutboxTextContentParts(entry, text),

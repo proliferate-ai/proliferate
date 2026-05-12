@@ -8,7 +8,7 @@ import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pe
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueRow,
-} from "@/lib/domain/chat/outbox/pending-prompt-queue";
+} from "@/lib/domain/chat/pending-prompts/pending-prompt-queue";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];

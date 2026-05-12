@@ -23,8 +23,10 @@ Use this map to decide whether this spec applies and where to look first.
 | `desktop/src/lib/domain/workspaces/mobility/**` | Pure composer footer projection for local/cloud/worktree identity, including pending workspace footer context. |
 | `desktop/src/lib/domain/workspaces/tabs/**` | Pure shell tab projection and ordering, including projected chat tabs for pending workspace keys. |
 | `desktop/src/lib/domain/chat/surface/**` | Pure chat surface arbitration: launch intent, pending projected session, empty session, transcript, and loading states. |
-| `desktop/src/lib/domain/chat/outbox/**` | Pure prompt outbox model, selectors, projection, dispatch predicates, and reconciliation rules. |
-| `desktop/src/stores/chat/prompt-outbox-store.ts` | Client-owned queued prompt records and local prompt outbox mutations. No dispatch. |
+| `desktop/src/lib/domain/sessions/intents/**` | Pure session intent model, ordering, projection, dispatch predicates, attachment conversion rules, and reconciliation rules. |
+| `desktop/src/stores/sessions/session-intent-store.ts` | Client-owned ordered session intents. No dispatch, timers, or API calls. |
+| `desktop/src/hooks/sessions/workflows/use-session-intent-actions.ts` | UI-facing enqueue workflows for prompts, config updates, and interaction responses. |
+| `desktop/src/hooks/sessions/lifecycle/use-session-intent-dispatcher.ts` | App-mounted ordered dispatcher for materialized sessions. |
 | `desktop/src/stores/sessions/session-selection-store.ts` | Selected workspace/session ids, pending workspace entry, arrival event, and local selection transactions. |
 
 ## 1. Purpose
@@ -79,12 +81,12 @@ A transient marker for a home/new-workspace launch. It can help the UI know
 that a launch is underway, but it is not the source of shell truth once a
 pending workspace entry or projected session exists.
 
-**Outbox**
+**Session intent**
 
-Client-owned outbound work that must render immediately and dispatch once the
-target session can accept it. Today this is prompt-specific
-(`prompt-outbox-store`). If generalized to session intents, keep the same
-projection, dispatch, and reconciliation split described here.
+Client-owned outbound session work that must preserve user order, render
+immediately when it affects visible UI, and dispatch once the target session can
+accept it. Session intents include prompt sends, config updates, interaction
+responses, and queued prompt edit/delete actions.
 
 ## 3. Core Invariants
 
@@ -109,8 +111,9 @@ projection, dispatch, and reconciliation split described here.
    a projected session shell.
 
 5. Outbound user work renders before runtime acknowledgement.
-   Submitted prompts are added to the outbox synchronously. Dispatch may wait
-   for materialization, but rendering does not.
+   Submitted prompts, config changes, and visible interaction responses are
+   added to session intents synchronously. Dispatch may wait for
+   materialization, but rendering does not.
 
 6. Materialization remaps, it does not recreate.
    A projected session is remapped from the pending workspace key to the real
@@ -137,7 +140,7 @@ Use these owners. Do not introduce another general-purpose pending state owner.
 | Current selected ids and pending workspace entry | `session-selection-store` | Client-only local state. No APIs or persistence. |
 | Projected and materialized session directory rows | session directory/session records stores | Records may initially point at a pending workspace key. |
 | Shell tab intent | workspace UI shell-tab state | Written immediately for projected sessions. |
-| Queued outbound prompts | `prompt-outbox-store` | Renders immediately, dispatches after session readiness. |
+| Queued outbound session work | `session-intent-store` | Ordered prompts, config updates, interaction responses, and queued prompt edits/deletes. |
 | Pending workspace request/path/branch helpers | `lib/domain/workspaces/creation/**` | Pure logic only. |
 | Footer/header/sidebar/tabs projections | `lib/domain/workspaces/**` | Pure view-model helpers. No stores or access. |
 | Beginning/finalizing workspace entry | `hooks/workspaces/**` workflow hooks | Coordinates stores, selection, focus, materialization. |
@@ -170,7 +173,7 @@ All workspace creation entrypoints should converge on this shape:
    Header tabs should see the projected session on the first shell render.
 
 6. Queue initial outbound prompt against the projected session.
-   Prompt enqueue success and projected-session existence are distinct. If the
+   Session intent enqueue success and projected-session existence are distinct. If the
    projected session exists, the fallback path must not create a second session.
 
 7. Start the real workspace creation/select work in the background.
@@ -191,9 +194,9 @@ When the real workspace id is known:
    initial active session for real workspace selection.
 
 4. Remap projected sessions to the real workspace.
-   `usePendingWorkspaceSessionMaterialization` owns this. The prompt outbox
-   remains the visible owner while the real AnyHarness session is created in
-   the background.
+   `usePendingWorkspaceSessionMaterialization` owns this. Session intents
+   remain the visible owner while the real AnyHarness session is created in the
+   background.
 
 5. Set the workspace arrival event.
    Arrival panels use this event to show the final "new worktree/workspace"
@@ -214,7 +217,7 @@ projection path.
   `session-transcript`.
 - Launch intent may supply launch context only before a projected session
   exists.
-- If outbox/transcript content exists, content wins over launch copy.
+- If session-intent or transcript content exists, content wins over launch copy.
 
 ### Header Tabs
 
@@ -261,13 +264,12 @@ projection path.
 - It should not be the only source of workspace identity. Header, tabs, footer,
   and sidebar each need their own pending projection.
 
-## 8. Outbound Work And Future Session Intents
+## 8. Session Intents
 
-The current implementation has a prompt outbox. The target mental model is a
-session-intent system, but do not prematurely replace the prompt outbox with a
-large generic queue.
+The current implementation uses one ordered per-session intent system. It
+replaces the old prompt-only outbox and the separate pending-config path.
 
-Use this split for current and future outbound work:
+Use this split for outbound session work:
 
 | Layer | Responsibility |
 | --- | --- |
@@ -277,30 +279,39 @@ Use this split for current and future outbound work:
 | Dispatcher lifecycle | Finds dispatchable records and calls runtime access. |
 | Reconciliation | Removes, settles, or retries records when runtime state catches up. |
 
-Prompt intents are already real:
+Session intents are:
 
-- enqueue synchronously on submit
-- render as queued/outbox prompt rows
-- dispatch after materialized session id exists
-- reconcile when a renderable user-message echo appears in the transcript
-
-Future intents should follow the same shape:
-
+- `send_prompt`
 - `update_config`
 - `resolve_interaction`
-- `edit_queued_prompt`
-- `delete_queued_prompt`
-- `cancel_queued_intent`
+- `edit_pending_prompt`
+- `delete_pending_prompt`
 
-Keep payloads typed. A shared dispatcher may process ordered records, but each
-intent kind owns its own projection and reconciliation rules.
+Rules:
+
+- Dispatch in client order. Do not coalesce config changes in v1.
+- A session with no materialized AnyHarness id keeps intents queued.
+- A config update may unblock later intents after AnyHarness accepts it as
+  `applied` or `queued`; runtime config ordering is authoritative after that.
+- A prompt intent renders immediately, dispatches after materialization, and
+  reconciles when a renderable user-message echo appears in the transcript.
+- A config intent projects pending config over live config until the stream or
+  API response reconciles it. Normal queued config must not produce rollback
+  toasts.
+- Interaction response intents are valid only for interactions the UI has
+  already seen. If the request is gone by dispatch time, mark the intent stale
+  instead of showing a user-visible failure.
+- Queued prompt edit/delete intents mutate local not-yet-dispatched prompt
+  intents directly; after a runtime queue seq exists, they dispatch through the
+  ordered session intent dispatcher.
 
 ## 9. Action Routing Rules
 
 Use these rules when deciding whether a user action can happen before
 materialization:
 
-- If the action affects visible chat history, enqueue and render immediately.
+- If the action affects visible chat history, enqueue a session intent and
+  render immediately.
 - If the action affects session launch/config and the projected session exists,
   update the projected session state immediately and dispatch when materialized.
 - If the action resolves a visible runtime interaction, it may be queued only if
@@ -316,7 +327,7 @@ materialization:
 Pending failures must preserve enough state to retry or exit cleanly:
 
 - the pending workspace entry remains selected
-- queued prompts remain visible and owned by the projected session
+- queued session intents remain visible and owned by the projected session
 - setup/create errors render in the workspace status panel
 - retry uses the original deterministic request unless the user explicitly
   changes it
@@ -344,8 +355,8 @@ Minimum coverage by concern:
 - finalization: projected sessions materialize before pending state clears
 - home launch: initial prompt remains attached to the projected session and
   does not create a second fresh session
-- outbox: queued prompt renders immediately and dispatch waits for materialized
-  session id
+- session intents: prompts/config/interaction responses preserve order, render
+  immediately where visible, and dispatch only after materialized session id
 
 ## 12. Anti-Patterns
 
@@ -358,6 +369,8 @@ Do not:
 - clear pending state when the real workspace merely appears in cache
 - create a fresh session after a projected session exists
 - hide queued user messages until AnyHarness acknowledges them
+- write pending config changes directly into session directory records
+- show config rollback toasts for normal queued config
 - put dispatch loops or wait/retry behavior in stores
 - add component-local fixes for one shell surface when the same data belongs in
   a pure projection helper
@@ -381,6 +394,6 @@ When a pending workspace appears in stages, inspect in this order:
    `logicalWorkspaces`?
 8. During handoff, did the pending projection remain until selection
    finalization completed?
-9. Did the outbox attach queued prompts to the projected session id?
+9. Did session intents attach queued work to the projected session id?
 10. Did any fallback path create a fresh session despite a projected session
     already existing?

@@ -23,12 +23,12 @@ import {
   turnHasAssistantRenderableTranscriptContent,
   resolveVisibleOptimisticPrompt,
   shouldShowPendingPromptActivity,
-} from "@/lib/domain/chat/outbox/pending-prompts";
+} from "@/lib/domain/chat/pending-prompts/pending-prompts";
 import {
   outboxEntryToPendingPromptEntry,
   renderableOutboxEntriesForTranscript,
-} from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
+} from "@/lib/domain/sessions/intents/session-intent-selectors";
+import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import { useTranscriptRowModel } from "@/hooks/chat/derived/use-transcript-row-model";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";

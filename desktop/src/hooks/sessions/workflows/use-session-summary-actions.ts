@@ -3,7 +3,7 @@ import {
   type Session,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/outbox/pending-prompts";
+import { shouldClearOptimisticPromptAfterSessionSummary } from "@/lib/domain/chat/pending-prompts/pending-prompts";
 import {
   resolveSessionStatus,
 } from "@/lib/domain/sessions/activity";
@@ -14,6 +14,12 @@ import {
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
 } from "@/lib/domain/sessions/pending-config";
+import {
+  pendingConfigChangesForSessionIntents,
+} from "@/lib/domain/sessions/intents/session-intent-selectors";
+import {
+  sessionIntentsForSession,
+} from "@/lib/domain/sessions/intents/session-intent-state";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
@@ -23,6 +29,7 @@ import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-worksp
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { trackWorkspaceInteraction } from "@/stores/preferences/workspace-ui-store";
 
 /**
@@ -80,9 +87,12 @@ export function useSessionSummaryActions() {
         ? patch.transcript.currentModeId
         : existing.transcript.currentModeId,
     };
+    const intentPendingConfigChanges = pendingConfigChangesForSessionIntents(
+      sessionIntentsForSession(useSessionIntentStore.getState(), sessionId),
+    );
     const reconcileResult = reconcilePendingConfigChanges(
       effectiveLiveConfig,
-      existing.pendingConfigChanges,
+      intentPendingConfigChanges,
     );
 
     const resolvedWorkspaceId = existing.workspaceId ?? workspaceId;
@@ -103,7 +113,7 @@ export function useSessionSummaryActions() {
         liveConfig: effectiveLiveConfig,
         executionSummary: patch.executionSummary,
         mcpBindingSummaries: patch.mcpBindingSummaries,
-        pendingConfigChanges: reconcileResult.pendingConfigChanges,
+        pendingConfigChanges: {},
         status: nextStatus,
         lastPromptAt: patch.lastPromptAt,
         activity: activityFromTranscript(nextTranscript, {
