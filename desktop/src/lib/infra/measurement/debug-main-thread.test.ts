@@ -8,7 +8,10 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { getDebugMeasurementDump } from "@/lib/infra/measurement/debug-measurement-dump";
 import { installDebugMainThreadDetectors } from "@/lib/infra/measurement/debug-main-thread";
-import { recordJankIncident } from "@/lib/infra/measurement/debug-jank-activity";
+import {
+  recordJankIncident,
+  recordStoreActionDebugActivity,
+} from "@/lib/infra/measurement/debug-jank-activity";
 
 describe("debug main-thread detectors", () => {
   afterEach(() => {
@@ -74,6 +77,15 @@ describe("debug main-thread detectors", () => {
       startedAtMs: 90,
       endedAtMs: 182,
     });
+    recordStoreActionDebugActivity({
+      label: "session-intent-store.enqueuePrompt",
+      startedAtMs: 95,
+      endedAtMs: 100,
+      metadata: {
+        afterCount: 1,
+        beforeCount: 0,
+      },
+    });
     recordJankIncident({
       previousFrameAtMs: 90,
       frameAtMs: 182,
@@ -98,9 +110,108 @@ describe("debug main-thread detectors", () => {
           label: "chat-surface.react_commit",
         }),
       ]),
+      likelyCauses: expect.arrayContaining([
+        "store_action:session-intent-store.enqueuePrompt",
+      ]),
     });
 
     finishMeasurementOperation(operationId!, "completed");
     expect(table).toHaveBeenCalled();
+  });
+
+  it("records long task timing windows for jank overlap attribution", () => {
+    vi.stubEnv("VITE_PROLIFERATE_DEBUG_MAIN_THREAD", "1");
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    let observerCallback: PerformanceObserverCallback | null = null;
+    class MockPerformanceObserver {
+      static supportedEntryTypes = ["longtask"];
+
+      constructor(callback: PerformanceObserverCallback) {
+        observerCallback = callback;
+      }
+
+      disconnect = vi.fn();
+      observe = vi.fn();
+    }
+    vi.stubGlobal("PerformanceObserver", MockPerformanceObserver);
+
+    const uninstall = installDebugMainThreadDetectors();
+    const emitLongTask = observerCallback as unknown as PerformanceObserverCallback;
+    expect(emitLongTask).toBeTypeOf("function");
+    emitLongTask({
+      getEntries: () => [{ duration: 64, startTime: 120 }] as PerformanceEntry[],
+    } as PerformanceObserverEntryList, {} as PerformanceObserver);
+
+    const dump = getDebugMeasurementDump();
+    expect(dump.recentDebugActivities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "long_task",
+        startedAtMs: 120,
+        endedAtMs: 184,
+        durationMs: 64,
+      }),
+    ]));
+    uninstall();
+  });
+
+  it("ignores frame gaps while the document is hidden and resets on visibility changes", () => {
+    vi.stubEnv("VITE_PROLIFERATE_DEBUG_MAIN_THREAD", "1");
+    let nowMs = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => nowMs);
+
+    let rafCallback: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
+      rafCallback = callback;
+      return 1;
+    }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    let visibilityState: DocumentVisibilityState = "hidden";
+    const visibilityListeners = new Set<EventListenerOrEventListenerObject>();
+    vi.stubGlobal("document", {
+      get visibilityState() {
+        return visibilityState;
+      },
+      addEventListener: vi.fn((
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+      ) => {
+        if (type === "visibilitychange") {
+          visibilityListeners.add(listener);
+        }
+      }),
+      removeEventListener: vi.fn((
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+      ) => {
+        if (type === "visibilitychange") {
+          visibilityListeners.delete(listener);
+        }
+      }),
+    });
+
+    const uninstall = installDebugMainThreadDetectors();
+    const tickWhileHidden = rafCallback as unknown as FrameRequestCallback;
+    expect(tickWhileHidden).toBeTypeOf("function");
+    tickWhileHidden(1_000);
+    expect(getDebugMeasurementDump().recentJankIncidents).toHaveLength(0);
+
+    visibilityState = "visible";
+    nowMs = 1_098;
+    for (const listener of visibilityListeners) {
+      if (typeof listener === "function") {
+        listener({ type: "visibilitychange" } as Event);
+      } else {
+        listener.handleEvent({ type: "visibilitychange" } as Event);
+      }
+    }
+    const tickAfterVisible = rafCallback as unknown as FrameRequestCallback;
+    expect(tickAfterVisible).toBeTypeOf("function");
+    tickAfterVisible(1_100);
+
+    expect(getDebugMeasurementDump().recentJankIncidents).toHaveLength(0);
+    uninstall();
   });
 });

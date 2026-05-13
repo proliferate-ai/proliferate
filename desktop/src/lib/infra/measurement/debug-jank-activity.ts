@@ -16,6 +16,7 @@ import {
   recentJankIncidents,
 } from "./debug-measurement-state";
 import { getTimeOrigin, now, pushBounded, round } from "./debug-measurement-utils";
+import { isDebugMeasurementEnabled } from "./debug-measurement-env";
 
 const JANK_OVERLAP_LOOKBACK_MS = 75;
 const JANK_OVERLAP_LOOKAHEAD_MS = 25;
@@ -52,6 +53,26 @@ export function recordDebugActivity(input: {
   };
   pushBounded(recentDebugActivities, event, RECENT_DEBUG_ACTIVITY_LIMIT);
   return event;
+}
+
+export function recordStoreActionDebugActivity(input: {
+  label: string;
+  startedAtMs?: number | null;
+  endedAtMs?: number | null;
+  durationMs?: number | null;
+  metadata?: Record<string, unknown>;
+}): DebugActivityEvent | null {
+  if (!isDebugMeasurementEnabled()) {
+    return null;
+  }
+  return recordDebugActivity({
+    kind: "store_action",
+    label: input.label,
+    startedAtMs: input.startedAtMs,
+    endedAtMs: input.endedAtMs,
+    durationMs: input.durationMs,
+    metadata: input.metadata,
+  });
 }
 
 export function recordMetricDebugActivity(

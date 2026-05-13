@@ -10,6 +10,7 @@ const FRAME_GAP_THRESHOLD_MS = 50;
 let installed = false;
 let frameHandle: number | null = null;
 let longTaskObserver: PerformanceObserver | null = null;
+let removeVisibilityResetListener: (() => void) | null = null;
 
 export function installDebugMainThreadDetectors(): () => void {
   if (installed || !isMainThreadMeasurementEnabled()) {
@@ -31,6 +32,10 @@ export function uninstallDebugMainThreadDetectors(): void {
     longTaskObserver.disconnect();
     longTaskObserver = null;
   }
+  if (removeVisibilityResetListener) {
+    removeVisibilityResetListener();
+    removeVisibilityResetListener = null;
+  }
 }
 
 function installLongTaskObserver(): void {
@@ -45,11 +50,15 @@ function installLongTaskObserver(): void {
   setLongTaskObserverSupportedForMeasurement(true);
   longTaskObserver = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
+      const startedAtMs = entry.startTime;
+      const endedAtMs = startedAtMs + entry.duration;
       recordMeasurementMetric({
         type: "main_thread",
         surface: "workspace-shell",
         metric: "long_task",
         durationMs: entry.duration,
+        startedAtMs,
+        endedAtMs,
       });
     }
   });
@@ -58,7 +67,22 @@ function installLongTaskObserver(): void {
 
 function installFrameGapDetector(): void {
   let previous = performance.now();
+  const resetPreviousFrame = () => {
+    previous = performance.now();
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", resetPreviousFrame);
+    removeVisibilityResetListener = () => {
+      document.removeEventListener("visibilitychange", resetPreviousFrame);
+    };
+  }
   const tick = (timestamp: number) => {
+    if (!isDocumentVisibleForFrameDetection()) {
+      previous = timestamp;
+      frameHandle = requestAnimationFrame(tick);
+      return;
+    }
+
     const gap = timestamp - previous;
     const previousFrameAtMs = previous;
     previous = timestamp;
@@ -100,6 +124,10 @@ function installFrameGapDetector(): void {
     frameHandle = requestAnimationFrame(tick);
   };
   frameHandle = requestAnimationFrame(tick);
+}
+
+function isDocumentVisibleForFrameDetection(): boolean {
+  return typeof document === "undefined" || document.visibilityState === "visible";
 }
 
 function getVisibleJankCanaries(): JankIncidentCanarySnapshot[] {
