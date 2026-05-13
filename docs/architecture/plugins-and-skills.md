@@ -635,6 +635,44 @@ The current implementation keeps old `Connector*` component names where they
 still wrap connector state, but the user-facing page and view model must treat
 each connector as a plugin package.
 
+## Desktop Transcript Formatting
+
+The chat transcript should make plugin and skills MCP activity readable without
+showing raw JSON unless there is no product-specific renderer.
+
+```text
+desktop/src/lib/domain/chat/tools/tool-call-display.ts
+  labels MCP calls such as list skills, activate skill, and load skill resource
+
+desktop/src/lib/domain/chat/tools/skills-tool-result.ts
+  parses proliferate_skills JSON results into display models
+
+desktop/src/components/workspace/chat/tool-calls/SkillsToolResultRow.tsx
+  renders skills results with metadata and markdown instructions/resources
+
+desktop/src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.tsx
+  routes proliferate_skills results before falling back to GenericToolResultRow
+```
+
+Required labels:
+
+```text
+mcp__proliferate_skills__list_available_skills
+  label: List skills
+  result: listed skill rows with id, description, required MCPs, resource count
+
+mcp__proliferate_skills__activate_skill
+  label: Activate skill
+  result: activated skill card with markdown instructions
+
+mcp__proliferate_skills__get_skill_resource
+  label: Load skill resource
+  result: markdown resource body when content type is markdown, otherwise text
+```
+
+This formatting is Desktop UI only. It does not change the AnyHarness contract
+or the `proliferate_skills` MCP tool payloads.
+
 ## User Preference
 
 Plugins are not injected into coding sessions unless the user preference is
@@ -978,6 +1016,9 @@ activate_skill
 get_skill_resource
   returns one inline resource attached to a skill
 ```
+
+Desktop must render these tool results as structured skill rows/cards. It
+should not show the raw JSON blob for successful `proliferate_skills` results.
 
 The skills MCP server is a product MCP. It is routed through the same product
 MCP infrastructure as other AnyHarness product MCPs and uses a session-scoped
