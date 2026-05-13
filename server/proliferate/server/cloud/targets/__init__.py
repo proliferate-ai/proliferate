@@ -1,0 +1,2 @@
+"""Cloud target registry domain."""
+

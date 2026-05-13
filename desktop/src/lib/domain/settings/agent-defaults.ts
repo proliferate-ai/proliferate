@@ -13,6 +13,11 @@ import type {
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
 } from "@/lib/domain/preferences/user/session-defaults";
+import {
+  isChatModelIdVisible,
+  isDefaultVisibleChatModel,
+  type ChatModelVisibilityOverridesByAgentKind,
+} from "@/lib/domain/chat/models/model-visibility";
 
 export type SessionDefaultControlMetadata =
   DesktopSessionDefaultControl;
@@ -22,6 +27,7 @@ export type SessionDefaultControlValueMetadata =
 export interface SettingsAgentDefaultPreferences {
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
+  chatModelVisibilityOverridesByAgentKind: ChatModelVisibilityOverridesByAgentKind;
   defaultSessionModeByAgentKind: Record<string, string>;
   defaultLiveSessionControlValuesByAgentKind: DefaultLiveSessionControlValuesByAgentKind;
 }
@@ -44,6 +50,16 @@ export interface SettingsAgentDefaultRow {
   modeOptions: ConfiguredSessionControlValue[];
   selectedMode: ConfiguredSessionControlValue | null;
   liveDefaultControls: SettingsAgentLiveDefaultControlRow[];
+  modelVisibilityOptions: SettingsAgentModelVisibilityOption[];
+  hasModelVisibilityOverrides: boolean;
+}
+
+export interface SettingsAgentModelVisibilityOption {
+  id: string;
+  displayName: string;
+  description: string | null;
+  isVisible: boolean;
+  isDefaultVisible: boolean;
 }
 
 const SUPPORTED_LIVE_DEFAULT_KEYS = new Set<DefaultLiveSessionControlKey>([
@@ -96,6 +112,12 @@ export function buildSettingsAgentDefaultRows({
         selectedModel,
         preferences.defaultLiveSessionControlValuesByAgentKind[registry.kind] ?? {},
       ),
+      modelVisibilityOptions: buildModelVisibilityOptions(
+        registry,
+        preferences.chatModelVisibilityOverridesByAgentKind,
+      ),
+      hasModelVisibilityOverrides:
+        Boolean(preferences.chatModelVisibilityOverridesByAgentKind[registry.kind]),
     }];
   });
 }
@@ -142,6 +164,32 @@ function buildLiveDefaultControlsForModel(
       storedValue,
       staleStoredValue: storedValue && !storedOption ? storedValue : null,
     }];
+  });
+}
+
+function buildModelVisibilityOptions(
+  registry: SettingsAgentModelRegistry,
+  overrides: ChatModelVisibilityOverridesByAgentKind,
+): SettingsAgentModelVisibilityOption[] {
+  if (!registry.modelDisplayPolicy?.allowUserVisibleModelSelection) {
+    return [];
+  }
+
+  return registry.models.map((model) => {
+    const isDefaultVisible = isDefaultVisibleChatModel(registry, model);
+    return {
+      id: model.id,
+      displayName: model.displayName,
+      description: model.description ?? null,
+      isDefaultVisible,
+      isVisible: isChatModelIdVisible({
+        agent: registry,
+        agentKind: registry.kind,
+        modelId: model.id,
+        catalogModel: model,
+        overrides,
+      }),
+    };
   });
 }
 

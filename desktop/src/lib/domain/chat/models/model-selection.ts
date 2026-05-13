@@ -9,6 +9,10 @@ import {
   type DesktopAgentLaunchAgent,
   type DesktopAgentLaunchModel,
 } from "@/lib/domain/agents/cloud-launch-catalog";
+import {
+  isChatModelIdVisible,
+  type ChatModelVisibilityOverridesByAgentKind,
+} from "@/lib/domain/chat/models/model-visibility";
 
 export interface ModelSelectorSelection {
   kind: string;
@@ -165,11 +169,17 @@ export function buildModelSelectorGroups(
   selected: ModelSelectorSelection | null,
   activeSelection: ModelSelectorSelection | null | undefined,
   activeModelControl?: ActiveModelSelectorControl | null,
+  modelVisibilityOverrides?: ChatModelVisibilityOverridesByAgentKind | null,
 ): ModelSelectorGroup[] {
   return agents.map((agent) => ({
     kind: agent.kind,
     providerDisplayName: agent.displayName,
-    models: resolveSelectorModels(agent, activeModelControl, selected).map((model) => ({
+    models: resolveSelectorModels(
+      agent,
+      activeModelControl,
+      selected,
+      modelVisibilityOverrides,
+    ).map((model) => ({
       kind: agent.kind,
       modelId: model.id,
       displayName: model.displayName,
@@ -184,12 +194,24 @@ function resolveSelectorModels(
   agent: DesktopAgentLaunchAgent,
   activeModelControl: ActiveModelSelectorControl | null | undefined,
   selected: ModelSelectorSelection | null,
+  modelVisibilityOverrides: ChatModelVisibilityOverridesByAgentKind | null | undefined,
 ): Array<{ id: string; displayName: string }> {
   if (activeModelControl?.kind === agent.kind && activeModelControl.values.length > 0) {
+    const catalogModelsById = new Map(agent.models.map((model) => [model.id, model]));
     return activeModelControl.values.flatMap((value) => {
       const isSelected = selected?.kind === agent.kind && selected.modelId === value.value;
       const isHidden = shouldHideSelectorModel(agent.kind, value);
       if (isHidden && !isSelected) {
+        return [];
+      }
+      if (!isChatModelIdVisible({
+        agent,
+        agentKind: agent.kind,
+        modelId: value.value,
+        catalogModel: catalogModelsById.get(value.value) ?? null,
+        overrides: modelVisibilityOverrides,
+        forceVisible: isSelected,
+      })) {
         return [];
       }
 
@@ -207,7 +229,16 @@ function resolveSelectorModels(
     });
   }
 
-  return agent.models;
+  return agent.models.filter((model) =>
+    isChatModelIdVisible({
+      agent,
+      agentKind: agent.kind,
+      modelId: model.id,
+      catalogModel: model,
+      overrides: modelVisibilityOverrides,
+      forceVisible: selected?.kind === agent.kind && selected.modelId === model.id,
+    })
+  );
 }
 
 function shouldHideSelectorModel(

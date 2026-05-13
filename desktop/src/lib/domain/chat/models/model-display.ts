@@ -108,6 +108,41 @@ function formatClaudeModelId(modelId: string): string | null {
   return normalizeWhitespace(`${titleCaseToken(family)} ${major}.${minor}${contextHint}`);
 }
 
+function formatCursorModelId(modelId: string): string | null {
+  const baseId = modelId.replace(/\[.*\]$/, "");
+  if (baseId === "default") {
+    return "Auto";
+  }
+  if (baseId.startsWith("composer-")) {
+    return titleCaseModelId(baseId);
+  }
+  if (baseId.startsWith("gpt-")) {
+    return formatGptModelId(baseId);
+  }
+  if (baseId.startsWith("claude-")) {
+    return formatClaudeModelId(baseId);
+  }
+  if (baseId.startsWith("gemini-")) {
+    return titleCaseModelId(baseId);
+  }
+  if (baseId.startsWith("grok-")) {
+    return titleCaseModelId(baseId).replace(/\b4 20\b/, "4.20");
+  }
+  if (baseId.startsWith("kimi-")) {
+    return titleCaseModelId(baseId).replace(/\bK2 5\b/, "K2.5");
+  }
+
+  return null;
+}
+
+function titleCaseModelId(modelId: string): string {
+  return modelId
+    .split("-")
+    .filter(Boolean)
+    .map(titleCaseToken)
+    .join(" ");
+}
+
 export function shouldHideModel(agentKind: string, modelId: string): boolean {
   if (HIDDEN_MODEL_IDS.has(modelKey(agentKind, modelId))) {
     return true;
@@ -158,6 +193,13 @@ export function resolveModelDisplayName(args: {
     }
   }
 
+  if (preferKnownAlias && agentKind === "cursor") {
+    const formatted = formatCursorModelId(modelId);
+    if (formatted) {
+      return formatted;
+    }
+  }
+
   for (const candidate of sourceLabels) {
     if (!candidate) {
       continue;
@@ -172,6 +214,13 @@ export function resolveModelDisplayName(args: {
 
   if (alias) {
     return withContextHint(alias, sourceLabels);
+  }
+
+  if (agentKind === "cursor") {
+    const formatted = formatCursorModelId(modelId);
+    if (formatted) {
+      return formatted;
+    }
   }
 
   return formatGptModelId(modelId)

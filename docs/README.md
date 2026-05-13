@@ -78,6 +78,24 @@ start of the task, not after implementation has already started.
 - `docs/analytics/customerio.md`
   - Customer.io lifecycle messaging integration
 
+## Product architecture reference
+
+- `docs/architecture/plugins-and-skills.md`
+  - reference architecture for plugin packages, skill bundles, plugin-owned
+    MCP servers, the plugins UI, and the session bundle boundary
+- `docs/architecture/cloud-worker-control-plane.md`
+  - reference architecture for target workers, Cloud-mediated session control,
+    command delivery, event ingestion, and projections
+- `docs/architecture/worker-cloud-sync-decisions.md`
+  - decision record for the Proliferate Worker, target model, Cloud sync,
+    BYO SSH, managed cloud, MCP readiness, and retention mental model
+- `docs/architecture/worker-cloud-sync-v1-implementation-spec.md`
+  - implementation alignment spec for Worker, Cloud, BYO SSH, managed cloud,
+    SDK extraction, basic web validation, and lifecycle retention
+- `docs/architecture/model-catalog-and-dynamic-registries.md`
+  - reference architecture for Cloud model catalogs, AnyHarness dynamic model
+    registry refresh, synced target model projections, and launch resolution
+
 ## Deployment and environment reference
 
 - `docs/reference/dev-profiles.md`

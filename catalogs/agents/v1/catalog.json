@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-05-05.1",
-  "generatedAt": "2026-05-05T23:00:00Z",
+  "catalogVersion": "2026-05-13.1",
+  "generatedAt": "2026-05-13T18:00:00Z",
   "compatibility": {
     "minRuntimeVersion": "0.1.0",
     "maxRuntimeVersion": null,
@@ -68,8 +68,8 @@
         "dynamicModels": false,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
-            "us.anthropic.claude-sonnet-4-6",
             "us.anthropic.claude-opus-4-7",
+            "us.anthropic.claude-sonnet-4-6",
             "haiku"
           ],
           "allowUserVisibleModelSelection": true,
@@ -82,77 +82,9 @@
         },
         "models": [
           {
-            "id": "us.anthropic.claude-sonnet-4-6",
-            "displayName": "Sonnet",
-            "description": "Sonnet 4.6 \u00b7 Best for everyday tasks",
-            "aliases": [
-              "sonnet",
-              "claude-sonnet-4-6",
-              "claude-sonnet-4-5"
-            ],
-            "status": "active",
-            "isDefault": true,
-            "provider": "anthropic",
-            "tags": [
-              "recommended"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "us.anthropic.claude-sonnet-4-6[1m]",
-            "displayName": "Sonnet (1M context)",
-            "description": "Sonnet 4.6 for long sessions",
-            "aliases": [
-              "sonnet[1m]",
-              "claude-sonnet-4-6-1m",
-              "claude-sonnet-4-5-1m"
-            ],
-            "status": "active",
-            "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "long-context"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": "1m"
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "opus",
-            "displayName": "Opus 4.1",
-            "description": "Opus 4.1 \u00b7 Legacy",
-            "aliases": [
-              "claude-opus-4-1",
-              "claude-opus-4.1"
-            ],
-            "status": "active",
-            "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "legacy"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
             "id": "us.anthropic.claude-opus-4-7",
             "displayName": "Opus 4.7",
-            "description": "Opus 4.7 \u00b7 Most capable for complex work",
+            "description": "Opus 4.7 · Most capable for complex work",
             "aliases": [
               "claude-opus-4-7"
             ],
@@ -198,7 +130,7 @@
           {
             "id": "us.anthropic.claude-opus-4-6-v1",
             "displayName": "Opus 4.6",
-            "description": "Opus 4.6 \u00b7 Most capable for complex work",
+            "description": "Opus 4.6 · Most capable for complex work",
             "aliases": [
               "claude-opus-4-6"
             ],
@@ -237,9 +169,77 @@
             "launchRemediation": null
           },
           {
+            "id": "opus",
+            "displayName": "Opus 4.1",
+            "description": "Opus 4.1 · Legacy",
+            "aliases": [
+              "claude-opus-4-1",
+              "claude-opus-4.1"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "legacy"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6",
+            "displayName": "Sonnet",
+            "description": "Sonnet 4.6 · Best for everyday tasks",
+            "aliases": [
+              "sonnet",
+              "claude-sonnet-4-6",
+              "claude-sonnet-4-5"
+            ],
+            "status": "active",
+            "isDefault": true,
+            "provider": "anthropic",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6[1m]",
+            "displayName": "Sonnet (1M context)",
+            "description": "Sonnet 4.6 for long sessions",
+            "aliases": [
+              "sonnet[1m]",
+              "claude-sonnet-4-6-1m",
+              "claude-sonnet-4-5-1m"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "long-context"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "1m"
+            },
+            "compatibility": {},
+            "launchRemediation": null
+          },
+          {
             "id": "haiku",
             "displayName": "Haiku",
-            "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+            "description": "Haiku 4.5 · Fastest for quick answers",
             "aliases": [
               "claude-haiku-4-5"
             ],
@@ -543,7 +543,7 @@
           },
           {
             "id": "gpt-5.4",
-            "displayName": "gpt-5.4",
+            "displayName": "GPT-5.4",
             "description": "Strong model for everyday coding.",
             "aliases": [],
             "status": "active",
@@ -560,7 +560,7 @@
           },
           {
             "id": "gpt-5.4-mini",
-            "displayName": "GPT-5.4-Mini",
+            "displayName": "GPT-5.4 Mini",
             "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
             "aliases": [],
             "status": "active",
@@ -579,7 +579,7 @@
           },
           {
             "id": "gpt-5.3-codex",
-            "displayName": "gpt-5.3-codex",
+            "displayName": "GPT-5.3 Codex",
             "description": "Coding-optimized model.",
             "aliases": [],
             "status": "active",
@@ -596,7 +596,7 @@
           },
           {
             "id": "gpt-5.3-codex-spark",
-            "displayName": "GPT-5.3-Codex-Spark",
+            "displayName": "GPT-5.3 Codex Spark",
             "description": "Ultra-fast coding model.",
             "aliases": [],
             "status": "active",
@@ -615,7 +615,7 @@
           },
           {
             "id": "gpt-5.2",
-            "displayName": "gpt-5.2",
+            "displayName": "GPT-5.2",
             "description": "Optimized for professional work and long-running agents.",
             "aliases": [],
             "status": "active",
@@ -1211,17 +1211,17 @@
       "session": {
         "defaultModelId": "default[]",
         "defaultModeId": "agent",
-        "dynamicModels": false,
+        "dynamicModels": true,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
             "default[]",
             "composer-2[fast=true]",
-            "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+            "gpt-5.3-codex[reasoning=medium,fast=false]",
             "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
             "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]"
           ],
           "allowUserVisibleModelSelection": true,
-          "moreModelsSource": "none"
+          "moreModelsSource": "lastKnownLiveSnapshot"
         },
         "promptCapabilities": {
           "image": true,
@@ -1246,7 +1246,7 @@
           },
           {
             "id": "composer-2[fast=true]",
-            "displayName": "composer-2",
+            "displayName": "Composer 2 Fast",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1261,7 +1261,7 @@
           },
           {
             "id": "composer-1.5[]",
-            "displayName": "composer-1.5",
+            "displayName": "Composer 1.5",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1274,7 +1274,7 @@
           },
           {
             "id": "gpt-5.3-codex[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.3-codex",
+            "displayName": "Codex 5.3",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1287,7 +1287,7 @@
           },
           {
             "id": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
-            "displayName": "claude-sonnet-4-6",
+            "displayName": "Sonnet 4.6",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1302,7 +1302,7 @@
           },
           {
             "id": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
-            "displayName": "gpt-5.5",
+            "displayName": "GPT-5.5",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1322,7 +1322,7 @@
           },
           {
             "id": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]",
-            "displayName": "claude-opus-4-7",
+            "displayName": "Opus 4.7",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1339,7 +1339,7 @@
           },
           {
             "id": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
-            "displayName": "gpt-5.4",
+            "displayName": "GPT-5.4",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1354,7 +1354,7 @@
           },
           {
             "id": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
-            "displayName": "claude-opus-4-6",
+            "displayName": "Opus 4.6",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1369,7 +1369,7 @@
           },
           {
             "id": "claude-opus-4-5[thinking=true]",
-            "displayName": "claude-opus-4-5",
+            "displayName": "Opus 4.5",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1382,7 +1382,7 @@
           },
           {
             "id": "gpt-5.2[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.2",
+            "displayName": "GPT-5.2",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1395,7 +1395,7 @@
           },
           {
             "id": "gemini-3.1-pro[]",
-            "displayName": "gemini-3.1-pro",
+            "displayName": "Gemini 3.1 Pro",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1408,7 +1408,7 @@
           },
           {
             "id": "gpt-5.4-mini[reasoning=medium]",
-            "displayName": "gpt-5.4-mini",
+            "displayName": "GPT-5.4 Mini",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1423,7 +1423,7 @@
           },
           {
             "id": "gpt-5.4-nano[reasoning=medium]",
-            "displayName": "gpt-5.4-nano",
+            "displayName": "GPT-5.4 Nano",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1438,7 +1438,7 @@
           },
           {
             "id": "claude-haiku-4-5[thinking=true]",
-            "displayName": "claude-haiku-4-5",
+            "displayName": "Haiku 4.5",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1453,7 +1453,7 @@
           },
           {
             "id": "gpt-5.3-codex-spark[reasoning=medium]",
-            "displayName": "gpt-5.3-codex-spark",
+            "displayName": "Codex 5.3 Spark",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1468,7 +1468,7 @@
           },
           {
             "id": "grok-4.3[context=200k]",
-            "displayName": "grok-4.3",
+            "displayName": "Grok 4.3 1M",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1483,7 +1483,7 @@
           },
           {
             "id": "grok-4-20[thinking=true]",
-            "displayName": "grok-4-20",
+            "displayName": "Grok 4.20",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1496,7 +1496,7 @@
           },
           {
             "id": "claude-sonnet-4-5[thinking=true,context=200k]",
-            "displayName": "claude-sonnet-4-5",
+            "displayName": "Sonnet 4.5",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1511,7 +1511,7 @@
           },
           {
             "id": "gpt-5.2-codex[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.2-codex",
+            "displayName": "Codex 5.2",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1524,7 +1524,7 @@
           },
           {
             "id": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.1-codex-max",
+            "displayName": "Codex 5.1 Max",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1537,7 +1537,7 @@
           },
           {
             "id": "gpt-5.1[reasoning=medium]",
-            "displayName": "gpt-5.1",
+            "displayName": "GPT-5.1",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1550,7 +1550,7 @@
           },
           {
             "id": "gemini-3-flash[]",
-            "displayName": "gemini-3-flash",
+            "displayName": "Gemini 3 Flash",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1565,7 +1565,7 @@
           },
           {
             "id": "gpt-5.1-codex-mini[reasoning=medium]",
-            "displayName": "gpt-5.1-codex-mini",
+            "displayName": "Codex 5.1 Mini",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1580,7 +1580,7 @@
           },
           {
             "id": "claude-sonnet-4[thinking=false,context=200k]",
-            "displayName": "claude-sonnet-4",
+            "displayName": "Sonnet 4",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1595,7 +1595,7 @@
           },
           {
             "id": "gpt-5-mini[]",
-            "displayName": "gpt-5-mini",
+            "displayName": "GPT-5 Mini",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1610,7 +1610,7 @@
           },
           {
             "id": "gemini-2.5-flash[]",
-            "displayName": "gemini-2.5-flash",
+            "displayName": "Gemini 2.5 Flash",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1625,7 +1625,7 @@
           },
           {
             "id": "kimi-k2.5[]",
-            "displayName": "kimi-k2.5",
+            "displayName": "Kimi K2.5",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1751,12 +1751,10 @@
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
             "opencode/big-pickle",
-            "opencode/gpt-5-nano",
-            "opencode/nemotron-3-super-free",
+            "opencode/deepseek-v4-flash-free",
             "opencode/minimax-m2.5-free",
-            "opencode/hy3-preview-free",
-            "anthropic/claude-sonnet-4-6",
-            "anthropic/claude-opus-4-7"
+            "opencode/nemotron-3-super-free",
+            "opencode/ring-2.6-1t-free"
           ],
           "allowUserVisibleModelSelection": true,
           "moreModelsSource": "lastKnownLiveSnapshot"
@@ -1769,7 +1767,7 @@
         "models": [
           {
             "id": "opencode/big-pickle",
-            "displayName": "OpenCode Zen/Big Pickle",
+            "displayName": "Big Pickle",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1787,14 +1785,15 @@
             "launchRemediation": null
           },
           {
-            "id": "opencode/gpt-5-nano",
-            "displayName": "OpenCode Zen/GPT-5 Nano",
+            "id": "opencode/deepseek-v4-flash-free",
+            "displayName": "DeepSeek V4 Flash Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",
             "tags": [
+              "free",
               "fast"
             ],
             "capabilities": {
@@ -1806,27 +1805,8 @@
             "launchRemediation": null
           },
           {
-            "id": "opencode/nemotron-3-super-free",
-            "displayName": "OpenCode Zen/Nemotron 3 Super Free",
-            "description": null,
-            "aliases": [],
-            "status": "active",
-            "isDefault": false,
-            "provider": "opencode",
-            "tags": [
-              "free"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
             "id": "opencode/minimax-m2.5-free",
-            "displayName": "OpenCode Zen/MiniMax M2.5 Free",
+            "displayName": "MiniMax M2.5 Free",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1844,16 +1824,15 @@
             "launchRemediation": null
           },
           {
-            "id": "opencode/hy3-preview-free",
-            "displayName": "OpenCode Zen/Hy3 preview Free",
+            "id": "opencode/nemotron-3-super-free",
+            "displayName": "Nemotron 3 Super Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",
             "tags": [
-              "free",
-              "preview"
+              "free"
             ],
             "capabilities": {
               "image": true,
@@ -1864,34 +1843,15 @@
             "launchRemediation": null
           },
           {
-            "id": "anthropic/claude-sonnet-4-6",
-            "displayName": "Anthropic/Claude Sonnet 4.6",
+            "id": "opencode/ring-2.6-1t-free",
+            "displayName": "Ring 2.6 1T Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
+            "provider": "opencode",
             "tags": [
-              "recommended"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "anthropic/claude-opus-4-7",
-            "displayName": "Anthropic/Claude Opus 4.7",
-            "description": null,
-            "aliases": [],
-            "status": "active",
-            "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "frontier"
+              "free"
             ],
             "capabilities": {
               "image": true,

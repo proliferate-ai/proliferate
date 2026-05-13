@@ -10,6 +10,9 @@ import {
   sanitizeDefaultSessionModeByAgentKind,
 } from "@/lib/domain/preferences/user/session-defaults";
 import {
+  sanitizeChatModelVisibilityOverridesByAgentKind,
+} from "@/lib/domain/chat/models/model-visibility";
+import {
   PERSISTED_RECORD_BACKFILL,
   type UserPreferences,
 } from "@/lib/domain/preferences/user/model";
@@ -57,6 +60,19 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
   next.defaultChatModelIdByAgentKind = sanitizedDefaultChatModelIdByAgentKind;
+
+  const sanitizedChatModelVisibilityOverridesByAgentKind =
+    sanitizeChatModelVisibilityOverridesByAgentKind(
+      next.chatModelVisibilityOverridesByAgentKind,
+    );
+  if (
+    JSON.stringify(sanitizedChatModelVisibilityOverridesByAgentKind)
+    !== JSON.stringify(next.chatModelVisibilityOverridesByAgentKind)
+  ) {
+    next.chatModelVisibilityOverridesByAgentKind =
+      sanitizedChatModelVisibilityOverridesByAgentKind;
+    changed = true;
+  }
 
   if (defaultChatModelId !== undefined) {
     changed = true;

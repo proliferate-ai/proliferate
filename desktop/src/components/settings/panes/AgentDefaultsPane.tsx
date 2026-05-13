@@ -4,6 +4,8 @@ import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
@@ -16,6 +18,10 @@ import {
   withUpdatedDefaultLiveSessionControlValueByAgentKind,
 } from "@/lib/domain/settings/agent-defaults";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
+import {
+  withToggledChatModelVisibilityOverride,
+  withoutChatModelVisibilityOverride,
+} from "@/lib/domain/chat/models/model-visibility";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
@@ -41,6 +47,8 @@ export function AgentDefaultsPane() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind:
+      state.chatModelVisibilityOverridesByAgentKind,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
       state.defaultLiveSessionControlValuesByAgentKind,
@@ -166,6 +174,62 @@ export function AgentDefaultsPane() {
                 }]}
               />
             </SettingsCardRow>
+
+            {row.modelVisibilityOptions.length > 0 && (
+              <SettingsCardRow
+                label="Visible models"
+                description={`${row.modelVisibilityOptions.filter((option) => option.isVisible).length} shown in the model picker`}
+              >
+                <div className="w-72 space-y-2">
+                  <div className="max-h-64 overflow-y-auto rounded-md border border-border/60 bg-background/40 p-1">
+                    {row.modelVisibilityOptions.map((option) => (
+                      <label
+                        key={option.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-accent"
+                      >
+                        <Checkbox
+                          checked={option.isVisible}
+                          onChange={() => {
+                            preferences.set(
+                              "chatModelVisibilityOverridesByAgentKind",
+                              withToggledChatModelVisibilityOverride(
+                                preferences.chatModelVisibilityOverridesByAgentKind,
+                                row.kind,
+                                option.id,
+                                !option.isVisible,
+                                option.isDefaultVisible,
+                              ),
+                            );
+                          }}
+                          className="size-3.5 shrink-0"
+                        />
+                        <span className="min-w-0 flex-1 truncate">{option.displayName}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {row.hasModelVisibilityOverrides && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => {
+                        preferences.set(
+                          "chatModelVisibilityOverridesByAgentKind",
+                          withoutChatModelVisibilityOverride(
+                            preferences.chatModelVisibilityOverridesByAgentKind,
+                            row.kind,
+                          ),
+                        );
+                      }}
+                    >
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              </SettingsCardRow>
+            )}
 
             {row.modeOptions.length > 0 && row.selectedMode ? (
               <SettingsCardRow

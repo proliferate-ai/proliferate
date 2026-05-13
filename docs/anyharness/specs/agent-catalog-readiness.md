@@ -87,6 +87,10 @@ legacy split launch catalog directory
 
 Runtime catalog refresh/fetch/cache behavior is not supported in the migrated
 runtime. The bundled `AgentCatalogDocument` is the only runtime catalog input.
+This does not ban target-side dynamic model registry snapshots for harnesses
+such as Cursor or OpenCode. Those snapshots are runtime capability facts, not
+mutations to the bundled catalog. See
+`docs/architecture/model-catalog-and-dynamic-registries.md`.
 
 ## Trust Boundary
 

@@ -77,6 +77,7 @@ export interface DesktopLaunchModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
+  tags: string[];
   launchRemediation?: DesktopAgentLaunchRemediation | null;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
 }
@@ -125,6 +126,7 @@ export interface DesktopLaunchModelRegistry {
   kind: string;
   displayName: string;
   defaultModelId?: string | null;
+  modelDisplayPolicy?: DesktopAgentModelDisplayPolicy | null;
   models: DesktopLaunchModelRegistryModel[];
 }
 
@@ -226,6 +228,7 @@ export function buildDesktopLaunchModelRegistries(
     kind: agent.kind,
     displayName: agent.displayName,
     defaultModelId: agent.defaultModelId,
+    modelDisplayPolicy: agent.modelDisplayPolicy ?? null,
     models: agent.models,
   }));
 }
@@ -240,7 +243,7 @@ export function dynamicLaunchAgentAcceptsModel(
 function projectCloudAgent(agent: CloudAgentCatalogAgentInput): DesktopAgentLaunchAgent {
   const visibleModels = agent.session.models
     .filter(isLaunchVisibleModel)
-    .map(projectCloudModel);
+    .map((model) => projectCloudModel(agent.kind, model));
   const defaultModelId = resolveDefaultModelId(
     agent.session.defaultModelId,
     visibleModels,
@@ -276,10 +279,13 @@ function isLaunchVisibleModel(model: CloudAgentCatalogModelInput): boolean {
   return model.status === "active";
 }
 
-function projectCloudModel(model: CloudAgentCatalogModelInput): DesktopAgentLaunchModel {
+function projectCloudModel(
+  agentKind: string,
+  model: CloudAgentCatalogModelInput,
+): DesktopAgentLaunchModel {
   return {
     id: model.id,
-    displayName: model.displayName,
+    displayName: resolveProjectedModelDisplayName(agentKind, model),
     description: model.description ?? null,
     aliases: model.aliases ?? [],
     status: model.status,
@@ -293,6 +299,87 @@ function projectCloudModel(model: CloudAgentCatalogModelInput): DesktopAgentLaun
       }
       : null,
   };
+}
+
+function resolveProjectedModelDisplayName(
+  agentKind: string,
+  model: CloudAgentCatalogModelInput,
+): string {
+  if (agentKind !== "cursor") {
+    return model.displayName;
+  }
+
+  return formatCursorModelLabel(model.id) ?? model.displayName;
+}
+
+function formatCursorModelLabel(modelId: string): string | null {
+  const baseId = modelId.replace(/\[.*\]$/, "");
+  if (baseId === "default") {
+    return "Auto";
+  }
+  if (baseId.startsWith("composer-")) {
+    return titleCaseModelTokens(baseId);
+  }
+  if (baseId.startsWith("gpt-")) {
+    return formatGptModelId(baseId);
+  }
+  if (baseId.startsWith("claude-")) {
+    return formatClaudeModelId(baseId);
+  }
+  if (baseId.startsWith("gemini-")) {
+    return titleCaseModelTokens(baseId);
+  }
+  if (baseId.startsWith("grok-")) {
+    return titleCaseModelTokens(baseId).replace(/\b4 20\b/, "4.20");
+  }
+  if (baseId.startsWith("kimi-")) {
+    return titleCaseModelTokens(baseId).replace(/\bK2 5\b/, "K2.5");
+  }
+
+  return null;
+}
+
+function formatGptModelId(modelId: string): string {
+  const [, version = "", suffix = ""] = /^gpt-(\d(?:\.\d+)?)(?:-(.+))?$/.exec(modelId) ?? [];
+  return normalizeDisplayLabel(
+    `GPT ${version}${suffix ? ` ${titleCaseModelTokens(suffix)}` : ""}`,
+  );
+}
+
+function formatClaudeModelId(modelId: string): string {
+  const [, family = "", major = "", minor = ""] =
+    /claude-([a-z]+)-(\d)-(\d)/.exec(modelId) ?? [];
+  if (!family || !major || !minor) {
+    return titleCaseModelTokens(modelId);
+  }
+
+  return normalizeDisplayLabel(`${titleCaseToken(family)} ${major}.${minor}`);
+}
+
+function titleCaseModelTokens(value: string): string {
+  return value
+    .split("-")
+    .filter(Boolean)
+    .map(titleCaseToken)
+    .join(" ");
+}
+
+function titleCaseToken(token: string): string {
+  if (/^\d+(?:\.\d+)?$/.test(token)) {
+    return token;
+  }
+  const lower = token.toLowerCase();
+  if (lower === "gpt") {
+    return "GPT";
+  }
+  if (lower === "k2") {
+    return "K2";
+  }
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+function normalizeDisplayLabel(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 function resolveDefaultModelId(
