@@ -383,8 +383,8 @@ domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
 current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
 current terminals/     -> target live/terminals/
-observability/latency.rs is the current owner for latency request context
-and trace-field helpers.
+current observability/latency.rs -> current and target latency request context
+and trace-field helper owner
 ```
 
 Known transitional issues:
@@ -405,8 +405,9 @@ Known transitional issues:
   type remains the caller-facing store surface.
 - `SessionEventSink` is split under `acp/event_sink/**`. It has not moved to
   final `live/sessions/event_sink/**` topology yet.
-- Latency helpers live under `observability/latency.rs`; lower layers should
-  not import API transport modules for latency context.
+- Latency request context and trace-field helpers are already owned by
+  `observability/latency.rs`; lower layers should not import API transport
+  modules for latency context.
 - Contract request/response types leak below `api/`. Contract event payloads
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
