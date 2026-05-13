@@ -36,6 +36,8 @@ pub enum SubagentError {
     CrossWorkspace,
     #[error("subagent children cannot create subagents")]
     DepthLimit,
+    #[error("subagents are disabled for this session")]
+    Disabled,
     #[error("parent already has the maximum number of subagents")]
     FanoutLimit,
     #[error("child session is not owned by parent")]
@@ -88,6 +90,9 @@ impl SubagentService {
             .ok_or_else(|| SubagentError::WorkspaceNotFound(parent.workspace_id.clone()))?;
         if workspace.surface != "standard" {
             return Err(SubagentError::IneligibleWorkspace);
+        }
+        if !parent.subagents_enabled {
+            return Err(SubagentError::Disabled);
         }
         if self
             .link_service

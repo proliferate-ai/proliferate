@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-use super::super::service::{SubagentService, MAX_SUBAGENTS_PER_PARENT};
+use super::super::service::SubagentService;
 use super::context::SubagentMcpContext;
 use super::tools::{
     ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, SendSubagentMessageArgs,
@@ -19,12 +19,10 @@ pub async fn call_tool(
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
     match name {
-        "get_subagent_launch_options" => {
-            get_subagent_launch_options(service, session_runtime, &ctx.parent_session_id)
-        }
+        "get_subagent_launch_options" => get_subagent_launch_options(service, session_runtime, ctx),
         "create_subagent" => {
             let args: CreateSubagentArgs = deserialize_args(arguments)?;
-            create_subagent(service, session_runtime, &ctx.parent_session_id, args).await
+            create_subagent(service, session_runtime, ctx, args).await
         }
         "list_subagents" => service
             .list_subagents(&ctx.parent_session_id)
@@ -68,19 +66,14 @@ pub async fn call_tool(
 fn get_subagent_launch_options(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    parent_session_id: &str,
+    ctx: &SubagentMcpContext,
 ) -> anyhow::Result<Value> {
     let parent = service
         .session_store()
-        .find_by_id(parent_session_id)?
+        .find_by_id(&ctx.parent_session_id)?
         .ok_or_else(|| anyhow::anyhow!("parent session not found"))?;
-    let existing_subagent_count = service.list_subagents(parent_session_id)?.len();
-    let create_block_reason = service
-        .validate_parent_can_spawn(parent_session_id)
-        .err()
-        .map(|error| error.to_string());
     let catalog = session_runtime.workspace_session_launch_catalog(&parent.workspace_id)?;
-    let live_config = session_runtime.live_config_snapshot(parent_session_id)?;
+    let live_config = session_runtime.live_config_snapshot(&ctx.parent_session_id)?;
 
     let default_agent_kind = parent.agent_kind.clone();
     let default_model_id = parent
@@ -100,10 +93,10 @@ fn get_subagent_launch_options(
         .or_else(|| live_mode_control.and_then(|control| control.current_value.clone()));
 
     Ok(json!({
-        "parentSessionId": parent_session_id,
-        "workspaceId": parent.workspace_id,
-        "canCreate": create_block_reason.is_none(),
-        "createBlockReason": create_block_reason,
+        "parentSessionId": ctx.parent_session_id,
+        "workspaceId": ctx.workspace_id,
+        "canCreate": ctx.can_create,
+        "createBlockReason": ctx.create_block_reason,
         "defaults": {
             "agentKind": default_agent_kind,
             "modelId": default_model_id,
@@ -111,9 +104,9 @@ fn get_subagent_launch_options(
             "source": "current_parent_session"
         },
         "limits": {
-            "maxSubagentsPerParent": MAX_SUBAGENTS_PER_PARENT,
-            "existingSubagentCount": existing_subagent_count,
-            "remainingSubagents": MAX_SUBAGENTS_PER_PARENT.saturating_sub(existing_subagent_count),
+            "maxSubagentsPerParent": ctx.max_subagents_per_parent,
+            "existingSubagentCount": ctx.existing_subagent_count,
+            "remainingSubagents": ctx.max_subagents_per_parent.saturating_sub(ctx.existing_subagent_count),
             "depthLimit": 1,
             "readEventsDefaultLimit": READ_EVENTS_DEFAULT_LIMIT,
             "readEventsMaxLimit": READ_EVENTS_MAX_LIMIT
@@ -145,9 +138,18 @@ fn get_subagent_launch_options(
 async fn create_subagent(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    parent_session_id: &str,
+    ctx: &SubagentMcpContext,
     args: CreateSubagentArgs,
 ) -> anyhow::Result<Value> {
+    let parent_session_id = &ctx.parent_session_id;
+    if !ctx.can_create {
+        anyhow::bail!(
+            "{}",
+            ctx.create_block_reason
+                .as_deref()
+                .unwrap_or("subagent creation is not available for this session")
+        );
+    }
     let parent = service.validate_parent_can_spawn(parent_session_id)?;
     let prompt = args.prompt.trim().to_string();
     if prompt.is_empty() {
@@ -233,6 +235,7 @@ async fn create_subagent(
                     "send initial prompt",
                 );
             }
+            cleanup_child_session_after_failed_launch(service, &child.id, "send initial prompt");
             return Err(anyhow::anyhow!("{error:?}"));
         }
     };

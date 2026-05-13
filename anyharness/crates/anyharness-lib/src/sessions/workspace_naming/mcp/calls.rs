@@ -53,6 +53,8 @@ fn set_workspace_display_name(
     let workspace = workspace_runtime
         .get_workspace(workspace_id)?
         .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
+    // Re-check at mutation time; the context availability flag only drives
+    // tools/list and may be stale by the time the agent calls the tool.
     eligibility::validate_tool_call(session_store, &workspace, &session)?;
     workspace_access_gate.assert_can_mutate_for_workspace(workspace_id)?;
     let workspace = workspace_runtime

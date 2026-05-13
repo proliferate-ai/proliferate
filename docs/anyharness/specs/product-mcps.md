@@ -319,6 +319,14 @@ browser
 Context resolution belongs in the product domain because it depends on product
 state.
 
+Expected but currently unavailable product state should normally resolve to a
+typed context that advertises fewer tools rather than failing protocol setup.
+Examples: a reviews MCP attached to a session with no current review role, a
+workspace-naming MCP attached after the workspace was already named, or a
+subagents MCP attached to a parent that is now depth/fanout/config blocked.
+Use a hard context error for missing rows, cross-workspace tokens, corrupt
+state, or a product MCP attached to a fundamentally unsupported surface.
+
 ### `tools.rs`
 
 Owns MCP `tools/list` definitions.

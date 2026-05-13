@@ -292,6 +292,46 @@ mod tests {
 
     struct TestEndpointHandler(&'static ProductMcpDefinition);
 
+    struct TestProductMcpServer;
+
+    #[async_trait]
+    impl ProductMcpServer for TestProductMcpServer {
+        type Context = ();
+
+        fn definition(&self) -> &'static ProductMcpDefinition {
+            &TEST_DEFINITION_A
+        }
+
+        fn validate_capability_token(
+            &self,
+            _header: ProductMcpAuthHeader<'_>,
+            _request: &ProductMcpRequestContext,
+        ) -> anyhow::Result<ProductMcpTokenValidation> {
+            Ok(ProductMcpTokenValidation::Valid)
+        }
+
+        fn resolve_context(
+            &self,
+            _request: &ProductMcpRequestContext,
+        ) -> Result<Self::Context, crate::integrations::mcp::product_server::ProductMcpContextError>
+        {
+            Ok(())
+        }
+
+        fn tools(&self, _ctx: &Self::Context) -> Vec<Value> {
+            Vec::new()
+        }
+
+        async fn call_tool(
+            &self,
+            _ctx: &Self::Context,
+            _name: &str,
+            _arguments: Option<Value>,
+        ) -> anyhow::Result<Value> {
+            Ok(json!({}))
+        }
+    }
+
     #[async_trait]
     impl ProductMcpEndpointHandler for TestEndpointHandler {
         fn definition(&self) -> &'static ProductMcpDefinition {
@@ -360,6 +400,32 @@ mod tests {
                 "method": "tools/list"
             })),
             ProductMcpEndpointOperation::ToolsList
+        );
+    }
+
+    #[test]
+    fn endpoint_handler_adapter_gates_only_mutating_tool_calls() {
+        let adapter = ProductMcpEndpointHandlerAdapter::new(
+            Arc::new(TestProductMcpServer),
+            Some(WorkspaceOperationKind::ReviewWrite),
+            &["mutating_tool"],
+        );
+
+        assert_eq!(
+            adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsCall {
+                tool_name: Some("mutating_tool".to_string())
+            }),
+            Some(WorkspaceOperationKind::ReviewWrite)
+        );
+        assert_eq!(
+            adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsCall {
+                tool_name: Some("read_only_tool".to_string())
+            }),
+            None
+        );
+        assert_eq!(
+            adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsList),
+            None
         );
     }
 

@@ -1,3 +1,8 @@
+use anyharness_contract::v1::{
+    SessionMcpBindingNotAppliedReason, SessionMcpBindingOutcome, SessionMcpBindingSummary,
+    SessionMcpTransport,
+};
+
 use crate::integrations::mcp::product_server::{
     ProductMcpDefinition, ProductMcpPromptPolicy, ProductMcpVisibility,
 };
@@ -24,4 +29,15 @@ pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
 
 pub fn system_prompt_append() -> Vec<String> {
     vec![INSTRUCTIONS.to_string()]
+}
+
+pub fn binding_summary() -> SessionMcpBindingSummary {
+    SessionMcpBindingSummary {
+        id: "internal:workspace_naming".to_string(),
+        server_name: ACP_SERVER_NAME.to_string(),
+        display_name: Some("Workspace Naming".to_string()),
+        transport: SessionMcpTransport::Http,
+        outcome: SessionMcpBindingOutcome::Applied,
+        reason: None::<SessionMcpBindingNotAppliedReason>,
+    }
 }

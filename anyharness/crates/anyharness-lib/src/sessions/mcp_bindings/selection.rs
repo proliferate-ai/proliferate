@@ -81,6 +81,9 @@ pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaun
                 let prompts = workspace_naming_mcp::definition::system_prompt_append();
                 extras.system_prompt_append.extend(prompts.clone());
                 extras.first_prompt_system_prompt_append.extend(prompts);
+                extras
+                    .mcp_binding_summaries
+                    .push(workspace_naming_mcp::definition::binding_summary());
             }
         }
     }
@@ -138,5 +141,18 @@ mod tests {
 
         assert!(extras.system_prompt_append.is_empty());
         assert_eq!(extras.mcp_binding_summaries.len(), 1);
+    }
+
+    #[test]
+    fn workspace_naming_selection_adds_prompt_text_and_binding_summary() {
+        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::WorkspaceNaming]);
+
+        assert!(!extras.system_prompt_append.is_empty());
+        assert!(!extras.first_prompt_system_prompt_append.is_empty());
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+        assert_eq!(
+            extras.mcp_binding_summaries[0].server_name,
+            workspace_naming_mcp::definition::ACP_SERVER_NAME
+        );
     }
 }

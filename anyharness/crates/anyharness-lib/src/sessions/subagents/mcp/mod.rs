@@ -70,8 +70,8 @@ impl ProductMcpServer for SubagentProductMcpServer {
         context::resolve_context(&self.service, &self.workspace_runtime, request)
     }
 
-    fn tools(&self, _ctx: &Self::Context) -> Vec<Value> {
-        tools::build_tool_list()
+    fn tools(&self, ctx: &Self::Context) -> Vec<Value> {
+        tools::build_tool_list(ctx)
     }
 
     async fn call_tool(

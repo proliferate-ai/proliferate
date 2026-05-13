@@ -60,3 +60,47 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     ));
     tools
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{parent_tool_list, reviewer_tool_list, MUTATING_TOOL_NAMES};
+
+    fn names(tools: &[serde_json::Value]) -> Vec<String> {
+        tools
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(|value| value.as_str()))
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn reviewer_tools_only_expose_review_submission() {
+        assert_eq!(
+            names(&reviewer_tool_list()),
+            vec!["submit_review_result".to_string()]
+        );
+    }
+
+    #[test]
+    fn parent_tools_only_expose_revision_signal_when_allowed() {
+        let without_signal = names(&parent_tool_list(false));
+        assert_eq!(without_signal, vec!["get_review_status".to_string()]);
+
+        let with_signal = names(&parent_tool_list(true));
+        assert!(with_signal.contains(&"mark_review_revision_ready".to_string()));
+        assert!(with_signal.contains(&"get_review_status".to_string()));
+    }
+
+    #[test]
+    fn mutating_tool_names_are_advertised_by_some_review_role() {
+        let mut advertised = names(&reviewer_tool_list());
+        advertised.extend(names(&parent_tool_list(true)));
+
+        for tool_name in MUTATING_TOOL_NAMES {
+            assert!(
+                advertised.iter().any(|advertised| advertised == tool_name),
+                "mutating tool {tool_name} is not in any review tool list"
+            );
+        }
+    }
+}

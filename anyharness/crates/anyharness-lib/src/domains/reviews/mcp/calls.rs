@@ -11,6 +11,8 @@ pub async fn call_tool(
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
+    validate_tool_for_role(ctx.role, name)?;
+
     match (ctx.role, name) {
         (ReviewMcpRole::Reviewer, "submit_review_result") => {
             let args: SubmitReviewResultArgs = deserialize_args(arguments)?;
@@ -49,7 +51,59 @@ pub async fn call_tool(
             .list_session_reviews(&ctx.session_id)
             .map(|reviews| json!({ "reviews": reviews }))
             .map_err(|error| anyhow::anyhow!(error.to_string())),
+        (_, tool_name) => Err(anyhow::anyhow!("unknown tool for review role: {tool_name}")),
+    }
+}
+
+fn validate_tool_for_role(role: ReviewMcpRole, tool_name: &str) -> anyhow::Result<()> {
+    match (role, tool_name) {
+        (ReviewMcpRole::Reviewer, "submit_review_result") => Ok(()),
+        (
+            ReviewMcpRole::Parent {
+                can_signal_revision: true,
+            },
+            "mark_review_revision_ready",
+        ) => Ok(()),
+        (ReviewMcpRole::Parent { .. }, "get_review_status") => Ok(()),
         (ReviewMcpRole::None, _) => Err(anyhow::anyhow!("no active review role for this session")),
         (_, tool_name) => Err(anyhow::anyhow!("unknown tool for review role: {tool_name}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_tool_for_role;
+    use crate::domains::reviews::mcp::context::ReviewMcpRole;
+
+    #[test]
+    fn no_role_rejects_review_tool_calls() {
+        let error = validate_tool_for_role(ReviewMcpRole::None, "get_review_status")
+            .err()
+            .expect("no-role call should fail");
+
+        assert!(error.to_string().contains("no active review role"));
+    }
+
+    #[test]
+    fn reviewer_rejects_parent_only_tools() {
+        let error = validate_tool_for_role(ReviewMcpRole::Reviewer, "get_review_status")
+            .err()
+            .expect("reviewer cannot use parent tool");
+
+        assert!(error.to_string().contains("unknown tool for review role"));
+    }
+
+    #[test]
+    fn parent_without_revision_signal_rejects_signal_tool() {
+        let error = validate_tool_for_role(
+            ReviewMcpRole::Parent {
+                can_signal_revision: false,
+            },
+            "mark_review_revision_ready",
+        )
+        .err()
+        .expect("parent without revision signal cannot use signal tool");
+
+        assert!(error.to_string().contains("unknown tool for review role"));
     }
 }
