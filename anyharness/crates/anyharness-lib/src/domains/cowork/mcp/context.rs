@@ -1,4 +1,4 @@
-use crate::domains::cowork::runtime::CoworkRuntime;
+use crate::domains::cowork::runtime::{CoworkCanonicalThreadError, CoworkRuntime};
 use crate::integrations::mcp::product_server::{ProductMcpContextError, ProductMcpRequestContext};
 use crate::workspaces::model::WorkspaceRecord;
 
@@ -15,7 +15,7 @@ pub fn resolve_context(
 ) -> Result<CoworkMcpContext, ProductMcpContextError> {
     let (thread, workspace, _session) = runtime
         .validate_canonical_thread(&request.workspace_id, &request.session_id)
-        .map_err(map_context_error)?;
+        .map_err(ProductMcpContextError::from)?;
 
     Ok(CoworkMcpContext {
         session_id: request.session_id.clone(),
@@ -24,14 +24,50 @@ pub fn resolve_context(
     })
 }
 
-fn map_context_error(error: anyhow::Error) -> ProductMcpContextError {
-    let message = error.to_string();
-    match message.as_str() {
-        "workspace not found" | "session not found" => ProductMcpContextError::not_found(message),
-        "session does not belong to workspace"
-        | "workspace is not a cowork workspace"
-        | "session is not the canonical cowork session"
-        | "cowork thread does not belong to workspace" => ProductMcpContextError::conflict(message),
-        _ => ProductMcpContextError::Internal(error),
+impl From<CoworkCanonicalThreadError> for ProductMcpContextError {
+    fn from(error: CoworkCanonicalThreadError) -> Self {
+        match error {
+            CoworkCanonicalThreadError::WorkspaceNotFound
+            | CoworkCanonicalThreadError::SessionNotFound => {
+                ProductMcpContextError::not_found(error.to_string())
+            }
+            CoworkCanonicalThreadError::SessionWorkspaceMismatch
+            | CoworkCanonicalThreadError::NotCoworkWorkspace
+            | CoworkCanonicalThreadError::NotCanonicalCoworkSession
+            | CoworkCanonicalThreadError::ThreadWorkspaceMismatch => {
+                ProductMcpContextError::conflict(error.to_string())
+            }
+            CoworkCanonicalThreadError::Internal(error) => ProductMcpContextError::Internal(error),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn context_mapping_preserves_not_found_errors() {
+        let error = ProductMcpContextError::from(CoworkCanonicalThreadError::WorkspaceNotFound);
+
+        assert!(matches!(error, ProductMcpContextError::NotFound(_)));
+    }
+
+    #[test]
+    fn context_mapping_preserves_conflict_errors() {
+        for error in [
+            CoworkCanonicalThreadError::SessionWorkspaceMismatch,
+            CoworkCanonicalThreadError::NotCoworkWorkspace,
+            CoworkCanonicalThreadError::NotCanonicalCoworkSession,
+            CoworkCanonicalThreadError::ThreadWorkspaceMismatch,
+        ] {
+            let message = error.to_string();
+            let error = ProductMcpContextError::from(error);
+
+            assert!(
+                matches!(error, ProductMcpContextError::Conflict(_)),
+                "expected conflict for {message}"
+            );
+        }
     }
 }

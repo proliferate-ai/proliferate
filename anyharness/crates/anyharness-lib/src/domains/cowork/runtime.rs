@@ -52,6 +52,24 @@ impl From<anyhow::Error> for CoworkCreateThreadError {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum CoworkCanonicalThreadError {
+    #[error("workspace not found")]
+    WorkspaceNotFound,
+    #[error("session not found")]
+    SessionNotFound,
+    #[error("session does not belong to workspace")]
+    SessionWorkspaceMismatch,
+    #[error("workspace is not a cowork workspace")]
+    NotCoworkWorkspace,
+    #[error("session is not the canonical cowork session")]
+    NotCanonicalCoworkSession,
+    #[error("cowork thread does not belong to workspace")]
+    ThreadWorkspaceMismatch,
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
 #[derive(Debug, Clone)]
 pub struct CoworkThreadSummary {
     pub thread: CoworkThreadRecord,
@@ -662,27 +680,28 @@ impl CoworkRuntime {
         &self,
         workspace_id: &str,
         session_id: &str,
-    ) -> anyhow::Result<(CoworkThreadRecord, WorkspaceRecord, SessionRecord)> {
+    ) -> Result<(CoworkThreadRecord, WorkspaceRecord, SessionRecord), CoworkCanonicalThreadError>
+    {
         let workspace = self
             .workspace_runtime
             .get_workspace(workspace_id)?
-            .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
+            .ok_or(CoworkCanonicalThreadError::WorkspaceNotFound)?;
         let session = self
             .session_service
             .get_session(session_id)?
-            .ok_or_else(|| anyhow::anyhow!("session not found"))?;
+            .ok_or(CoworkCanonicalThreadError::SessionNotFound)?;
         if session.workspace_id != workspace_id {
-            anyhow::bail!("session does not belong to workspace");
+            return Err(CoworkCanonicalThreadError::SessionWorkspaceMismatch);
         }
         if workspace.surface != "cowork" {
-            anyhow::bail!("workspace is not a cowork workspace");
+            return Err(CoworkCanonicalThreadError::NotCoworkWorkspace);
         }
         let thread = self
             .cowork_service
             .find_thread_by_session(session_id)?
-            .ok_or_else(|| anyhow::anyhow!("session is not the canonical cowork session"))?;
+            .ok_or(CoworkCanonicalThreadError::NotCanonicalCoworkSession)?;
         if thread.workspace_id != workspace_id {
-            anyhow::bail!("cowork thread does not belong to workspace");
+            return Err(CoworkCanonicalThreadError::ThreadWorkspaceMismatch);
         }
         Ok((thread, workspace, session))
     }

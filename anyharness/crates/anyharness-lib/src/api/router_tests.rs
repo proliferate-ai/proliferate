@@ -153,6 +153,37 @@ async fn protected_routes_allow_matching_bearer_auth_when_token_is_configured() 
 }
 
 #[tokio::test]
+async fn legacy_cowork_mcp_route_uses_product_mcp_auth_errors() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let app = build_router(test_state(false));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/workspaces/workspace-1/cowork/sessions/session-1/mcp")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" }).to_string(),
+                ))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["code"], "COWORK_MCP_UNAUTHORIZED");
+}
+
+#[tokio::test]
 async fn repo_root_resolve_route_accepts_post_and_persists_repo_root() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))

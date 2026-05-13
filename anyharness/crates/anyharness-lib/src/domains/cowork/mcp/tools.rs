@@ -7,15 +7,19 @@ pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "create_artifact",
     "update_artifact",
     "delete_artifact",
-    "list_artifacts",
-    "get_artifact",
-    "get_coding_workspace_launch_options",
     "create_coding_workspace",
-    "list_coding_workspaces",
-    "get_coding_session_launch_options",
     "create_coding_session",
     "send_coding_message",
     "schedule_coding_wake",
+];
+
+#[cfg(test)]
+const READ_ONLY_TOOL_NAMES: &[&str] = &[
+    "list_artifacts",
+    "get_artifact",
+    "get_coding_workspace_launch_options",
+    "list_coding_workspaces",
+    "get_coding_session_launch_options",
     "get_coding_status",
     "read_coding_events",
 ];
@@ -310,8 +314,56 @@ fn delegation_tool_definitions() -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::sync::Arc;
 
     use super::*;
+    use crate::integrations::mcp::product_server::{
+        ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition,
+        ProductMcpRequestContext, ProductMcpServer, ProductMcpTokenValidation,
+    };
+    use crate::sessions::mcp_bindings::product_registry::{
+        ProductMcpEndpointHandler, ProductMcpEndpointHandlerAdapter, ProductMcpEndpointOperation,
+    };
+    use crate::workspaces::operation_gate::WorkspaceOperationKind;
+
+    struct TestProductMcpServer;
+
+    #[async_trait::async_trait]
+    impl ProductMcpServer for TestProductMcpServer {
+        type Context = ();
+
+        fn definition(&self) -> &'static ProductMcpDefinition {
+            &crate::domains::cowork::mcp::definition::DEFINITION
+        }
+
+        fn validate_capability_token(
+            &self,
+            _header: ProductMcpAuthHeader<'_>,
+            _request: &ProductMcpRequestContext,
+        ) -> anyhow::Result<ProductMcpTokenValidation> {
+            Ok(ProductMcpTokenValidation::Valid)
+        }
+
+        fn resolve_context(
+            &self,
+            _request: &ProductMcpRequestContext,
+        ) -> Result<Self::Context, ProductMcpContextError> {
+            Ok(())
+        }
+
+        fn tools(&self, _ctx: &Self::Context) -> Vec<Value> {
+            Vec::new()
+        }
+
+        async fn call_tool(
+            &self,
+            _ctx: &Self::Context,
+            _name: &str,
+            _arguments: Option<Value>,
+        ) -> anyhow::Result<Value> {
+            Ok(json!({}))
+        }
+    }
 
     fn tool_names(tools: Vec<Value>) -> HashSet<String> {
         tools
@@ -348,6 +400,45 @@ mod tests {
 
         for tool_name in MUTATING_TOOL_NAMES {
             assert!(names.contains(*tool_name), "missing tool: {tool_name}");
+        }
+    }
+
+    #[test]
+    fn read_only_tool_names_are_not_marked_mutating() {
+        for tool_name in READ_ONLY_TOOL_NAMES {
+            assert!(
+                !MUTATING_TOOL_NAMES.contains(tool_name),
+                "read-only tool should not request write gate: {tool_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_only_tools_do_not_request_cowork_write_gate() {
+        let adapter = ProductMcpEndpointHandlerAdapter::new(
+            Arc::new(TestProductMcpServer),
+            Some(WorkspaceOperationKind::CoworkWrite),
+            MUTATING_TOOL_NAMES,
+        );
+
+        for tool_name in READ_ONLY_TOOL_NAMES {
+            assert_eq!(
+                adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsCall {
+                    tool_name: Some((*tool_name).to_string())
+                }),
+                None,
+                "read-only tool should not acquire write gate: {tool_name}"
+            );
+        }
+
+        for tool_name in MUTATING_TOOL_NAMES {
+            assert_eq!(
+                adapter.endpoint_operation_kind(ProductMcpEndpointOperation::ToolsCall {
+                    tool_name: Some((*tool_name).to_string())
+                }),
+                Some(WorkspaceOperationKind::CoworkWrite),
+                "mutating tool should acquire write gate: {tool_name}"
+            );
         }
     }
 }
