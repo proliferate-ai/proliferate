@@ -1,4 +1,20 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use anyharness_contract::v1::{
+    ConfigOptionUpdatePayload, CurrentModeUpdatePayload, NormalizedSessionControl,
+    SessionLiveConfigSnapshot,
+};
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::domains::agents::model::AgentKind;
+use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::sessions::live_config::{
+    build_live_config_snapshot, normalized_key_rank, snapshot_from_record, snapshot_to_record,
+    NormalizedControlKind,
+};
+use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn persist_session_config_state_if_changed(
     store: &SessionStore,
     event_sink: &Arc<Mutex<SessionEventSink>>,

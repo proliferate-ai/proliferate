@@ -1,4 +1,19 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use agent_client_protocol as acp;
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::live::sessions::actor::command::SetConfigOptionCommandError;
+use crate::live::sessions::actor::config::apply::apply_specific_config_option;
+use crate::live::sessions::actor::config::selection::{
+    current_select_value, find_select_option_for_request, is_mode_config_request,
+    is_model_config_request, pending_config_rank, select_option_contains_value,
+};
+use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::sessions::model::PendingConfigChangeRecord;
+use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) fn queue_pending_config_change(
     store: &SessionStore,
     session_id: &str,

@@ -1,6 +1,5 @@
-use super::*;
-use crate::live::sessions::actor::config::selection::find_select_option_by_purpose;
-use crate::live::sessions::actor::config::types::ConfigPurpose;
+use crate::sessions::live_config::{LegacyModeOption, LegacyModeState};
+use agent_client_protocol as acp;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionStartupStrategy {
@@ -47,22 +46,21 @@ impl NativeSessionStartupDisposition {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::live::sessions) struct SessionStartupState {
+pub(in crate::live::sessions) struct NativeSessionStartupState {
     pub(in crate::live::sessions) current_mode_id: Option<String>,
     pub(in crate::live::sessions) legacy_mode_state: Option<LegacyModeState>,
     pub(in crate::live::sessions) config_options: Vec<acp::SessionConfigOption>,
     pub(in crate::live::sessions) current_model_id: Option<String>,
     pub(in crate::live::sessions) available_model_ids: Vec<String>,
-    pub(in crate::live::sessions) prompt_capabilities: anyharness_contract::v1::PromptCapabilities,
 }
 
-impl SessionStartupState {
+impl NativeSessionStartupState {
     pub(in crate::live::sessions) fn from_new_session(response: &acp::NewSessionResponse) -> Self {
         Self {
             current_mode_id: response
                 .modes
                 .as_ref()
-                .map(|m| m.current_mode_id.to_string()),
+                .map(|modes| modes.current_mode_id.to_string()),
             legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
             config_options: response.config_options.clone().unwrap_or_default(),
             current_model_id: response
@@ -80,7 +78,6 @@ impl SessionStartupState {
                         .collect()
                 })
                 .unwrap_or_default(),
-            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
 
@@ -91,7 +88,7 @@ impl SessionStartupState {
             current_mode_id: response
                 .modes
                 .as_ref()
-                .map(|m| m.current_mode_id.to_string()),
+                .map(|modes| modes.current_mode_id.to_string()),
             legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
             config_options: response.config_options.clone().unwrap_or_default(),
             current_model_id: response
@@ -109,7 +106,6 @@ impl SessionStartupState {
                         .collect()
                 })
                 .unwrap_or_default(),
-            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
 
@@ -120,7 +116,7 @@ impl SessionStartupState {
             current_mode_id: response
                 .modes
                 .as_ref()
-                .map(|m| m.current_mode_id.to_string()),
+                .map(|modes| modes.current_mode_id.to_string()),
             legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
             config_options: response.config_options.clone().unwrap_or_default(),
             current_model_id: response
@@ -138,52 +134,11 @@ impl SessionStartupState {
                         .collect()
                 })
                 .unwrap_or_default(),
-            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
-    }
-
-    pub(in crate::live::sessions) fn set_current_mode_id(
-        &mut self,
-        current_mode_id: impl Into<String>,
-    ) {
-        let current_mode_id = current_mode_id.into();
-        self.current_mode_id = Some(current_mode_id.clone());
-        if let Some(legacy_mode_state) = self.legacy_mode_state.as_mut() {
-            legacy_mode_state.current_mode_id = current_mode_id;
-        }
-    }
-
-    pub(in crate::live::sessions) fn has_legacy_mode_control(&self) -> bool {
-        self.legacy_mode_state
-            .as_ref()
-            .map(|state| !state.available_modes.is_empty())
-            .unwrap_or(false)
-    }
-
-    pub(in crate::live::sessions) fn has_raw_or_legacy_mode_control(&self) -> bool {
-        self.has_legacy_mode_control()
-            || find_select_option_by_purpose(&self.config_options, ConfigPurpose::Mode).is_some()
-    }
-
-    pub(in crate::live::sessions) fn legacy_mode_contains_value(
-        &self,
-        desired_mode_id: &str,
-    ) -> bool {
-        self.legacy_mode_state
-            .as_ref()
-            .map(|state| {
-                state
-                    .available_modes
-                    .iter()
-                    .any(|mode| mode.id == desired_mode_id)
-            })
-            .unwrap_or(false)
     }
 }
 
-pub(in crate::live::sessions) fn into_legacy_mode_state(
-    modes: &acp::SessionModeState,
-) -> LegacyModeState {
+fn into_legacy_mode_state(modes: &acp::SessionModeState) -> LegacyModeState {
     LegacyModeState {
         current_mode_id: modes.current_mode_id.to_string(),
         available_modes: modes

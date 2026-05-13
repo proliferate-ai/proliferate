@@ -1,4 +1,12 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use anyharness_contract::v1::{SessionEndReason, SessionExecutionPhase};
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) async fn persist_exit_disposition(
     handle: &Arc<LiveSessionHandle>,
@@ -18,6 +26,9 @@ pub(in crate::live::sessions::actor) async fn persist_exit_disposition(
             ActorExitDisposition::Close => {
                 sink.session_ended(SessionEndReason::Closed);
             }
+            // Invariant: dismiss detaches the live actor without announcing a
+            // terminal session_ended event. The session remains durable and
+            // resumable from the client's perspective.
             ActorExitDisposition::Dismiss => {}
         }
     }

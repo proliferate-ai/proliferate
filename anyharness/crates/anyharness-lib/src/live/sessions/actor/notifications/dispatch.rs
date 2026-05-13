@@ -1,4 +1,45 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use agent_client_protocol as acp;
+use anyharness_contract::v1::{
+    AvailableCommandsUpdatePayload, CurrentModeUpdatePayload, SessionInfoUpdatePayload,
+    UsageUpdatePayload,
+};
+use tokio::sync::Mutex;
+
+use crate::acp::background_work::BackgroundWorkRegistry;
+use crate::acp::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
+use crate::acp::persistence_sanitizer::sanitize_raw_notification_for_sqlite;
+use crate::domains::plans::service::PlanService;
+use crate::domains::reviews::service::ReviewService;
+use crate::live::sessions::actor::config::apply::set_select_option_current_value_for_purpose;
+use crate::live::sessions::actor::config::persist::{
+    emit_live_config_update, persist_current_config_state_from_startup,
+};
+use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
+use crate::live::sessions::actor::notifications::plans::{
+    maybe_ingest_claude_exit_plan, maybe_ingest_codex_completed_plan,
+    maybe_ingest_tagged_completed_plan,
+};
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
+use crate::sessions::store::SessionStore;
+pub(in crate::live::sessions::actor) async fn inject_runtime_event(
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    handle: &Arc<LiveSessionHandle>,
+    event: RuntimeInjectedSessionEvent,
+) -> RuntimeEventInjectionResult {
+    let touch_session_activity = event.updates_session_activity_at();
+    let result = event_sink.lock().await.inject_runtime_event(event);
+    if touch_session_activity {
+        if let Ok(envelope) = &result {
+            handle.mark_activity_at(envelope.timestamp.clone()).await;
+        }
+    }
+    result
+}
+
 pub(in crate::live::sessions::actor) async fn normalize_notification(
     notif: &acp::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,

@@ -99,3 +99,46 @@ pub(in crate::live::sessions) fn spawn_agent_stderr_logger(
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_agent_stderr_line_strips_ansi_sequences() {
+        let line = "\u{1b}[2m2026-03-28T03:11:55.593240Z\u{1b}[0m \u{1b}[32m INFO\u{1b}[0m codex_otel.log_only";
+
+        assert_eq!(
+            sanitize_agent_stderr_line(line),
+            "2026-03-28T03:11:55.593240Z  INFO codex_otel.log_only"
+        );
+    }
+
+    #[test]
+    fn classify_agent_stderr_line_downgrades_info_logs() {
+        let line = "2026-03-28T03:11:55.593240Z INFO codex_otel.log_only";
+
+        assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Debug);
+    }
+
+    #[test]
+    fn classify_agent_stderr_line_preserves_warnings() {
+        let line = "2026-03-28T03:11:55.593240Z WARN auth refresh failed";
+
+        assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Warn);
+    }
+
+    #[test]
+    fn classify_agent_stderr_line_preserves_errors() {
+        let line = "2026-03-28T03:11:55.593240Z ERROR session crashed";
+
+        assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Error);
+    }
+
+    #[test]
+    fn classify_agent_stderr_line_keeps_unknown_stderr_visible() {
+        let line = "fatal: failed to resolve workspace";
+
+        assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Warn);
+    }
+}

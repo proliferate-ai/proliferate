@@ -1,7 +1,19 @@
-use crate::live::sessions::actor::*;
+use std::fmt;
+
+use anyharness_contract::v1::{
+    ConfigApplyState, McpElicitationSubmittedField, ProposedPlanDecisionState,
+    UserInputSubmittedAnswer,
+};
+use tokio::sync::oneshot;
+
+use crate::acp::permission_broker::PermissionDecision;
+use crate::domains::plans::model::PlanRecord;
+use crate::domains::plans::service::PlanDecisionError;
+use crate::observability::latency::LatencyRequestContext;
+use crate::sessions::prompt::PromptPayload;
+use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 #[derive(Debug)]
 pub enum PromptAcceptError {
-    ActorDead,
     EnqueueFailed(String),
 }
 
@@ -14,7 +26,6 @@ pub enum PromptAcceptance {
 #[derive(Debug)]
 pub enum QueueMutationError {
     NotFound,
-    ActorDead,
 }
 
 #[derive(Debug)]

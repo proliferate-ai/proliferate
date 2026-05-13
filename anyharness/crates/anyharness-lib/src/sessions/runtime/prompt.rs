@@ -129,9 +129,6 @@ impl SessionRuntime {
                 SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
             })?
             .map_err(|error| match error {
-                PromptAcceptError::ActorDead => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
-                }
                 PromptAcceptError::EnqueueFailed(detail) => {
                     let _ = prepared.cleanup_attachments(
                         self.session_service.store(),
@@ -206,9 +203,6 @@ impl SessionRuntime {
                 SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
             })?
             .map_err(|error| match error {
-                PromptAcceptError::ActorDead => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
-                }
                 PromptAcceptError::EnqueueFailed(detail) => {
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }

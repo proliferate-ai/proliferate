@@ -1,4 +1,23 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use anyharness_contract::v1::{
+    InteractionKind, InteractionOutcome, ProposedPlanDecisionState,
+    ProposedPlanNativeResolutionState,
+};
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::acp::mcp_elicitation::McpElicitationOutcome;
+use crate::acp::permission_broker::{
+    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionOutcome,
+    ResolveInteractionError, UserInputOutcome,
+};
+use crate::domains::plans::model::PlanRecord;
+use crate::domains::plans::service::{PlanDecisionError, PlanService};
+use crate::live::sessions::actor::command::{
+    InteractionResolution, ResolveInteractionCommandError,
+};
+use crate::live::sessions::handle::LiveSessionHandle;
 pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,

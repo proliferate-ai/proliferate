@@ -1,7 +1,7 @@
 use super::*;
 use crate::live::sessions::connection::start::start_new_session;
 use crate::live::sessions::connection::types::{
-    NativeSessionStartupDisposition, SessionStartupState, SessionStartupStrategy,
+    NativeSessionStartupDisposition, NativeSessionStartupState, SessionStartupStrategy,
 };
 use acp::Agent as _;
 use anyharness_contract::v1::SessionActionCapabilities;
@@ -41,6 +41,82 @@ pub(in crate::live::sessions) fn is_missing_load_session_resource(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_system_prompt_meta_uses_append_shape() {
+        let meta = build_system_prompt_meta(Some("Rename the branch")).expect("meta");
+
+        assert_eq!(
+            serde_json::to_value(&meta).ok(),
+            Some(serde_json::json!({
+                "systemPrompt": {
+                    "append": "Rename the branch",
+                },
+            }))
+        );
+    }
+
+    #[test]
+    fn build_system_prompt_meta_skips_blank_values() {
+        assert!(build_system_prompt_meta(None).is_none());
+        assert!(build_system_prompt_meta(Some("   ")).is_none());
+    }
+
+    #[test]
+    fn missing_load_session_resource_matches_expected_uri() {
+        let error = acp::Error::resource_not_found(Some("session-123".to_string()));
+        assert!(is_missing_load_session_resource(&error, "session-123"));
+        assert!(!is_missing_load_session_resource(&error, "session-xyz"));
+    }
+
+    #[test]
+    fn missing_load_session_resource_without_uri_still_matches() {
+        let error = acp::Error::resource_not_found(None);
+        assert!(is_missing_load_session_resource(&error, "session-123"));
+    }
+
+    #[test]
+    fn missing_load_session_resource_ignores_other_error_codes() {
+        let error = acp::Error::internal_error().data(serde_json::json!({
+            "uri": "session-123",
+        }));
+        assert!(!is_missing_load_session_resource(&error, "session-123"));
+    }
+}
+
+pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(meta: &acp::Meta) -> bool {
+    let Some(anyharness) = meta.get("anyharness").and_then(|value| value.as_object()) else {
+        return false;
+    };
+    if anyharness
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        != Some(1)
+    {
+        return false;
+    }
+    let Some(targeted_fork) = anyharness
+        .get("targetedFork")
+        .and_then(|value| value.as_object())
+    else {
+        return false;
+    };
+    if targeted_fork
+        .get("fileEffects")
+        .and_then(|value| value.as_str())
+        != Some("none")
+    {
+        return false;
+    }
+    matches!(
+        targeted_fork.get("target").and_then(|value| value.as_str()),
+        Some("message_id" | "user_message_index")
+    )
+}
+
 pub(in crate::live::sessions) async fn start_native_session(
     conn: &acp::ClientSideConnection,
     workspace_path: &std::path::PathBuf,
@@ -51,7 +127,11 @@ pub(in crate::live::sessions) async fn start_native_session(
     session_id: &str,
     workspace_id: &str,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
-) -> anyhow::Result<(String, SessionStartupState, NativeSessionStartupDisposition)> {
+) -> anyhow::Result<(
+    String,
+    NativeSessionStartupState,
+    NativeSessionStartupDisposition,
+)> {
     let startup_strategy_label = startup_strategy.as_str();
     match startup_strategy {
         SessionStartupStrategy::Fresh | SessionStartupStrategy::ResumeSeqFreshNative => {
@@ -77,7 +157,7 @@ pub(in crate::live::sessions) async fn start_native_session(
 
             Ok((
                 new_session_resp.session_id.to_string(),
-                SessionStartupState::from_new_session(&new_session_resp),
+                NativeSessionStartupState::from_new_session(&new_session_resp),
                 NativeSessionStartupDisposition::CreatedFresh,
             ))
         }
@@ -104,7 +184,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                     );
                     Ok((
                         existing.clone(),
-                        SessionStartupState::from_load_session(&resp),
+                        NativeSessionStartupState::from_load_session(&resp),
                         NativeSessionStartupDisposition::LoadedExisting,
                     ))
                 }
@@ -148,7 +228,7 @@ pub(in crate::live::sessions) async fn start_native_session(
 
                     Ok((
                         new_session_resp.session_id.to_string(),
-                        SessionStartupState::from_new_session(&new_session_resp),
+                        NativeSessionStartupState::from_new_session(&new_session_resp),
                         NativeSessionStartupDisposition::CreatedFresh,
                     ))
                 }
@@ -203,7 +283,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                     );
                     Ok((
                         resp.session_id.to_string(),
-                        SessionStartupState::from_fork_session(&resp),
+                        NativeSessionStartupState::from_fork_session(&resp),
                         NativeSessionStartupDisposition::CreatedFresh,
                     ))
                 }

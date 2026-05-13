@@ -1,4 +1,12 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::acp::permission_broker::{InteractionBroker, InteractionCancelOutcome};
+use crate::live::sessions::actor::command::InteractionResolution;
+use crate::live::sessions::actor::interactions::handle::broker_outcome_to_interaction_event;
+use crate::live::sessions::handle::LiveSessionHandle;
 pub(in crate::live::sessions::actor) async fn resolve_pending_interactions(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,

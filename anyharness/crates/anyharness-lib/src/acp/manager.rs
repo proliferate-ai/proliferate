@@ -11,7 +11,7 @@ use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
 use crate::live::sessions::actor::command::SessionCommand;
-use crate::live::sessions::actor::startup::{
+use crate::live::sessions::actor::spawn::{
     spawn_session_actor_pending, ActorReadyResult, PendingSessionActor,
 };
 use crate::live::sessions::actor::state::SessionActorConfig;

@@ -1,4 +1,25 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use agent_client_protocol::{self as acp, Agent};
+use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::live::sessions::actor::command::SetConfigOptionCommandError;
+use crate::live::sessions::actor::config::persist::{
+    emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
+};
+use crate::live::sessions::actor::config::queue::config_request_matches_current_state;
+use crate::live::sessions::actor::config::selection::{
+    current_select_value, find_select_option_by_purpose, find_select_option_for_request,
+    find_select_option_for_value, is_mode_config_request, is_model_config_request,
+    option_matches_purpose, select_option_contains_value,
+};
+use crate::live::sessions::actor::config::types::{
+    tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
+};
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
     conn: &acp::ClientSideConnection,
     native_session_id: &str,

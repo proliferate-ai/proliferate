@@ -212,3 +212,113 @@ pub(in crate::live::sessions) async fn start_new_session(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::agents::model::{
+        AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
+        ResolvedArtifact,
+    };
+    use crate::domains::agents::registry::built_in_registry;
+
+    #[test]
+    fn client_capabilities_preserve_codex_managed_gate() {
+        let capabilities = build_client_capabilities(
+            AgentKind::Codex.as_str(),
+            &resolved_agent_with_source(AgentKind::Codex, "managed"),
+        );
+
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "requestUserInput"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "mcpElicitation"),
+            None
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "mcpElicitation"),
+            None
+        );
+    }
+
+    #[test]
+    fn client_capabilities_preserve_codex_override_gate() {
+        let capabilities = build_client_capabilities(
+            AgentKind::Codex.as_str(),
+            &resolved_agent_with_source(AgentKind::Codex, "override"),
+        );
+
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "requestUserInput"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "mcpElicitation"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "mcpElicitation"),
+            None
+        );
+    }
+
+    #[test]
+    fn client_capabilities_advertise_claude_mcp_only() {
+        let capabilities = build_client_capabilities(
+            AgentKind::Claude.as_str(),
+            &resolved_agent_with_source(AgentKind::Claude, "managed"),
+        );
+
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "mcpElicitation"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "requestUserInput"),
+            None
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "requestUserInput"),
+            None
+        );
+    }
+
+    fn resolved_agent_with_source(kind: AgentKind, source: &str) -> ResolvedAgent {
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == kind)
+            .expect("missing descriptor");
+        let artifact_path = format!("/tmp/{}/agent", kind.as_str());
+
+        ResolvedAgent {
+            descriptor,
+            status: ResolvedAgentStatus::Ready,
+            credential_state: CredentialState::Ready,
+            native: None,
+            agent_process: ResolvedArtifact {
+                role: ArtifactRole::AgentProcess,
+                installed: true,
+                source: Some(source.to_string()),
+                version: None,
+                path: Some(std::path::PathBuf::from(artifact_path)),
+                message: None,
+            },
+            spawn: None,
+        }
+    }
+
+    fn capability_bool(
+        capabilities: &acp::ClientCapabilities,
+        agent: &str,
+        capability: &str,
+    ) -> Option<bool> {
+        capabilities
+            .meta
+            .as_ref()?
+            .get(agent)?
+            .get(capability)?
+            .as_bool()
+    }
+}

@@ -15,7 +15,7 @@ use crate::live::sessions::actor::command::{
     ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
     SessionCommand, SetConfigOptionCommandError,
 };
-use crate::live::sessions::actor::startup::ActorReadyResult;
+use crate::live::sessions::actor::spawn::ActorReadyResult;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::RuntimeEventInjectionError;

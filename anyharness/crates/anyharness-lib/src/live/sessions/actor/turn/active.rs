@@ -1,4 +1,41 @@
-use crate::live::sessions::actor::*;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Duration;
+
+use agent_client_protocol::{self as acp, Agent};
+use anyharness_contract::v1::SessionExecutionPhase;
+use tokio::sync::{mpsc, oneshot, Mutex};
+
+use crate::acp::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
+use crate::acp::event_sink::SessionEventSink;
+use crate::live::sessions::actor::background_work::handle_background_work_update;
+use crate::live::sessions::actor::command::{
+    ForkSessionCommandError, InteractionResolution, PromptAcceptError, PromptAcceptance,
+    SessionCommand,
+};
+use crate::live::sessions::actor::config::handle::handle_busy_config_command;
+use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
+use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
+use crate::live::sessions::actor::interactions::handle::{
+    handle_apply_plan_decision, handle_resolve_interaction,
+};
+use crate::live::sessions::actor::notifications::dispatch::inject_runtime_event;
+use crate::live::sessions::actor::notifications::handle::handle_notification_with_resume_replay_filter;
+use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
+use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
+use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupState};
+use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
+use crate::live::sessions::actor::turn::finish::{finish_prompt_result, PromptFinishContext};
+use crate::live::sessions::actor::turn::queue::{
+    handle_busy_prompt_queue, handle_delete_pending_prompt, handle_edit_pending_prompt,
+    next_pending_prompt_for_drain,
+};
+use crate::live::sessions::actor::turn::start::{begin_prompt_turn, StartedPromptTurn};
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::sessions::prompt::PromptPayload;
+use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,
@@ -70,82 +107,30 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.actor.prompt.received"
         );
-        let mut acp_blocks =
-            match current_payload.to_acp_blocks(store, attachment_storage, session_id) {
-                Ok(blocks) => blocks,
-                Err(error) => {
-                    let detail = error.detail.clone();
-                    tracing::warn!(
-                        session_id = %session_id,
-                        code = error.code,
-                        detail = %error.detail,
-                        "failed to build ACP prompt blocks",
-                    );
-                    if let Some(respond_to) = current_respond_to.take() {
-                        let _ = respond_to.send(Err(PromptAcceptError::EnqueueFailed(detail)));
-                    }
-                    break 'drain;
-                }
-            };
-        match store.has_turn_started_event(session_id) {
-            Ok(has_turn_started) => {
-                if let Some(append) = first_prompt_system_prompt_append_for_codex_prompt(
-                    source_agent_kind,
-                    config.first_prompt_system_prompt_append.as_deref(),
-                    has_turn_started,
-                ) {
-                    prepend_system_prompt_append_to_acp_blocks(&mut acp_blocks, append);
-                }
-            }
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    error = %error,
-                    "failed to determine whether prompt should inline system prompt append"
-                );
-            }
-        }
-        let turn_id;
+        let StartedPromptTurn {
+            acp_blocks,
+            turn_id,
+        } = match begin_prompt_turn(
+            config,
+            store,
+            attachment_storage,
+            event_sink,
+            session_id,
+            source_agent_kind,
+            &current_payload,
+            current_prompt_id.clone(),
+            current_queue_seq.take(),
+        )
+        .await
         {
-            let mut sink = event_sink.lock().await;
-            let content_parts = current_payload.content_parts();
-            turn_id = sink.begin_turn(
-                current_payload.text_summary.clone(),
-                current_prompt_id.clone(),
-                content_parts,
-                current_payload.public_provenance(),
-            );
-            if let Err(error) = store.mark_prompt_attachments_state(
-                session_id,
-                &current_payload.attachment_ids(),
-                PromptAttachmentState::Transcript,
-            ) {
-                tracing::warn!(
-                    session_id = %session_id,
-                    error = %error,
-                    "failed to mark prompt attachments as transcript",
-                );
-            }
-            // Invariant 3: delete the queue row and emit Removed AFTER
-            // begin_turn has durably persisted the replacement turn events.
-            // `current_queue_seq` is only set on drained iterations; initial
-            // iterations get None.
-            if let Some(seq) = current_queue_seq.take() {
-                if let Err(error) = store.delete_pending_prompt(session_id, seq) {
-                    tracing::warn!(
-                        session_id = %session_id,
-                        seq,
-                        error = %error,
-                        "failed to delete pending prompt after begin_turn",
-                    );
+            Ok(started) => started,
+            Err(error) => {
+                if let Some(respond_to) = current_respond_to.take() {
+                    let _ = respond_to.send(Err(error));
                 }
-                sink.pending_prompt_removed(PendingPromptRemovedPayload {
-                    seq,
-                    prompt_id: current_prompt_id.clone(),
-                    reason: PendingPromptRemovalReason::Executed,
-                });
+                break 'drain;
             }
-        }
+        };
         if let Some(respond_to) = current_respond_to.take() {
             let _ = respond_to.send(Ok(PromptAcceptance::Started {
                 turn_id: turn_id.clone(),
@@ -315,48 +300,20 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                             )));
                         }
                         Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
-                            let touch_session_activity = event.updates_session_activity_at();
-                            let result = event_sink.lock().await.inject_runtime_event(event);
-                            if touch_session_activity {
-                                if let Ok(envelope) = &result {
-                                    handle.mark_activity_at(envelope.timestamp.clone()).await;
-                                }
-                            }
+                            let result = inject_runtime_event(event_sink, handle, event).await;
                             let _ = respond_to.send(result);
                         }
                         Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
-                            let option = find_select_option_for_request(
-                                &startup_state.config_options,
-                                &config_id,
-                            );
-                            let result = queue_pending_config_change(
+                            let result = handle_busy_config_command(
                                 store,
+                                event_sink,
                                 session_id,
+                                persisted_config_state,
                                 startup_state,
                                 &config_id,
                                 &value,
-                            );
-                            let result = match result {
-                                Ok(()) => {
-                                    if let Err(error) = persist_requested_config_value_if_changed(
-                                        store,
-                                        event_sink,
-                                        session_id,
-                                        persisted_config_state,
-                                        tracked_config_purpose(&config_id, option),
-                                        &value,
-                                        chrono::Utc::now().to_rfc3339(),
-                                    )
-                                    .await
-                                    {
-                                        let _ = store.delete_pending_config_change(session_id, &config_id);
-                                        Err(SetConfigOptionCommandError::Rejected(error.to_string()))
-                                    } else {
-                                        Ok(ConfigApplyState::Queued)
-                                    }
-                                }
-                                Err(error) => Err(error),
-                            };
+                            )
+                            .await;
                             let _ = respond_to.send(result);
                         }
                         Some(SessionCommand::Close { respond_to }) => {
@@ -372,65 +329,16 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                             exit_after_prompt = Some(ActorExitDisposition::Close);
                         }
                         Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, latency: _, from_queue_seq, respond_to }) => {
-                            if let Some(seq) = from_queue_seq {
-                                match store.find_pending_prompt(session_id, seq) {
-                                    Ok(Some(record)) => {
-                                        let mut sink = event_sink.lock().await;
-                                        sink.pending_prompt_added(PendingPromptAddedPayload {
-                                            seq: record.seq,
-                                            prompt_id: record.prompt_id.clone(),
-                                            text: record.text.clone(),
-                                            content_parts: record.prompt_payload().content_parts(),
-                                            queued_at: record.queued_at.clone(),
-                                            prompt_provenance: record.prompt_payload().public_provenance(),
-                                        });
-                                    }
-                                    Ok(None) => {}
-                                    Err(error) => {
-                                        tracing::warn!(
-                                            session_id = %session_id,
-                                            seq,
-                                            error = %error,
-                                            "failed to load prequeued prompt for pending prompt event",
-                                        );
-                                    }
-                                }
-                                let _ = respond_to.send(Ok(PromptAcceptance::Queued { seq }));
-                                continue;
-                            }
-                            // Invariant 2/3: busy-path enqueue. Insert durably,
-                            // emit PendingPromptAdded, respond Queued.
-                            match store.insert_pending_prompt_payload(
+                            let result = handle_busy_prompt_queue(
+                                store,
+                                event_sink,
                                 session_id,
-                                &queued_payload,
-                                queued_prompt_id.as_deref(),
-                            ) {
-                                Ok(record) => {
-                                    let mut sink = event_sink.lock().await;
-                                    sink.pending_prompt_added(PendingPromptAddedPayload {
-                                        seq: record.seq,
-                                        prompt_id: record.prompt_id.clone(),
-                                        text: record.text.clone(),
-                                        content_parts: record.prompt_payload().content_parts(),
-                                        queued_at: record.queued_at.clone(),
-                                        prompt_provenance: record.prompt_payload().public_provenance(),
-                                    });
-                                    drop(sink);
-                                    let _ = respond_to.send(Ok(PromptAcceptance::Queued {
-                                        seq: record.seq,
-                                    }));
-                                }
-                                Err(error) => {
-                                    tracing::warn!(
-                                        session_id = %session_id,
-                                        error = %error,
-                                        "failed to enqueue pending prompt",
-                                    );
-                                    let _ = respond_to.send(Err(PromptAcceptError::EnqueueFailed(
-                                        error.to_string(),
-                                    )));
-                                }
-                            }
+                                queued_payload,
+                                queued_prompt_id,
+                                from_queue_seq,
+                            )
+                            .await;
+                            let _ = respond_to.send(result);
                         }
                         Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
                             let _ = respond_to.send(
@@ -504,23 +412,15 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
         // Invariant 2/3: peek the head of the queue BEFORE releasing `busy`.
         // If present, re-enter the prompt body with the new payload; begin_turn's
         // event emission is what durably hands off the queue row.
-        match store.peek_head_pending_prompt(session_id) {
-            Ok(Some(next)) => {
-                current_payload = next.prompt_payload();
-                current_prompt_id = next.prompt_id;
+        match next_pending_prompt_for_drain(store, session_id) {
+            Some((next_payload, next_prompt_id, next_seq)) => {
+                current_payload = next_payload;
+                current_prompt_id = next_prompt_id;
                 current_latency = None;
-                current_queue_seq = Some(next.seq);
+                current_queue_seq = Some(next_seq);
                 continue 'drain;
             }
-            Ok(None) => break 'drain,
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    error = %error,
-                    "failed to peek pending prompt queue after turn end",
-                );
-                break 'drain;
-            }
+            None => break 'drain,
         }
     }
 

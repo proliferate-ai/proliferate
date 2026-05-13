@@ -78,6 +78,7 @@ live/sessions/actor/
   command.rs
   state.rs
   event_loop.rs
+  spawn.rs
   startup.rs
   background_work.rs
   turn/
@@ -111,7 +112,6 @@ live/sessions/actor/
   fork/
     mod.rs
     handle.rs
-    policy.rs
   shutdown/
     mod.rs
     types.rs

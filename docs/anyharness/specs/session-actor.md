@@ -293,6 +293,7 @@ live/sessions/actor/
   command.rs
   state.rs
   event_loop.rs
+  spawn.rs
   startup.rs
   background_work.rs
 ```
@@ -312,8 +313,11 @@ state.rs
 event_loop.rs
   top-level select loop and dispatch only
 
+spawn.rs
+  actor thread creation, readiness waiting, and handle construction
+
 startup.rs
-  actor thread spawn/readiness and startup handoff into the event loop
+  ACP process/session startup orchestration after the actor thread is running
 
 background_work.rs
   actor-side background work update handling
@@ -342,8 +346,8 @@ interactions/
   actor-side interaction resolution commands
 
 fork/
-  actor policy and command handling for verify-fork-ready, fork, and native
-  child-session close
+  actor command handling for verify-fork-ready, fork, and native child-session
+  close; raw ACP capability parsing stays with connection/protocol code
 
 diagnostics/
   stuck-turn and state diagnostics if it outgrows turn/diagnostics.rs

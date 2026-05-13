@@ -305,7 +305,7 @@ which guide to read and where the code belongs.
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [src/cowork-artifacts.md](src/cowork-artifacts.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
-| Latency tracing, request measurement, diagnostic ids | `api/http/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
+| Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
 
 If a task appears to belong in two places, split by ownership. Example: a new
@@ -383,7 +383,8 @@ domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
 current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
 current terminals/     -> target live/terminals/
-current api/http/latency.rs -> target observability/latency.rs
+observability/latency.rs is the current owner for latency request context
+and trace-field helpers.
 ```
 
 Known transitional issues:

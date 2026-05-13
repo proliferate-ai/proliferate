@@ -97,9 +97,6 @@ impl SessionRuntime {
                     );
                     PendingPromptMutationError::NotFound
                 }
-                QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
-                    anyhow::anyhow!("session actor is not responding"),
-                ),
             })?;
 
         self.session_service
@@ -159,9 +156,6 @@ impl SessionRuntime {
             })?
             .map_err(|error| match error {
                 QueueMutationError::NotFound => PendingPromptMutationError::NotFound,
-                QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
-                    anyhow::anyhow!("session actor is not responding"),
-                ),
             })?;
 
         self.session_service

@@ -1,39 +1,40 @@
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::{
-    extract_tagged_proposed_plan, finalize_established_actor_exit, find_select_option_for_request,
-    first_prompt_system_prompt_append_for_codex_prompt, handle_notification,
-    handle_notification_with_resume_replay_filter, is_mode_config_request, is_model_config_request,
-    load_startup_restore_snapshot, normalized_key_rank, pending_config_rank,
-    persisted_control_values, prepend_system_prompt_append_to_acp_blocks,
-    resolve_pending_interactions, serialize_meta, should_apply_model_via_direct_setter,
-    should_emit_empty_turn_error, title_from_markdown, tracked_config_purpose,
-    ActorExitDisposition, InteractionResolution, LiveSessionExecutionSnapshot, LiveSessionHandle,
-    NativeSessionStartupDisposition, PersistedSessionConfigState, PromptDiagnostics,
-    ResumeReplayFilter, SessionCommand, SessionStartupState, IDLE_RESUME_REPLAY_QUIET_WINDOW,
+use super::command::{InteractionResolution, SessionCommand};
+use super::config::apply::should_apply_model_via_direct_setter;
+use super::config::persist::{load_startup_restore_snapshot, persisted_control_values};
+use super::config::selection::{
+    find_select_option_for_request, is_mode_config_request, is_model_config_request,
+    pending_config_rank,
 };
+use super::config::types::{tracked_config_purpose, PersistedSessionConfigState};
+use super::interactions::cleanup::resolve_pending_interactions;
+use super::notifications::handle::{
+    handle_notification, handle_notification_with_resume_replay_filter,
+};
+use super::notifications::plans::{extract_tagged_proposed_plan, title_from_markdown};
+use super::notifications::replay_filter::{ResumeReplayFilter, IDLE_RESUME_REPLAY_QUIET_WINDOW};
+use super::shutdown::handle::finalize_established_actor_exit;
+use super::shutdown::types::ActorExitDisposition;
+use super::state::SessionStartupState;
+use super::turn::diagnostics::PromptDiagnostics;
+use super::turn::finish::should_emit_empty_turn_error;
+use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
+use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
 use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::acp::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::acp::permission_broker::{InteractionBroker, PermissionOutcome};
-use crate::domains::agents::model::{
-    AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
-};
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::model::AgentKind;
 use crate::domains::plans::{service::PlanService, store::PlanStore};
-use crate::live::sessions::connection::native_session::{
-    build_system_prompt_meta, is_missing_load_session_resource,
-};
-use crate::live::sessions::connection::process::merge_spawn_env;
-use crate::live::sessions::connection::start::build_client_capabilities;
-use crate::live::sessions::connection::stderr::{
-    classify_agent_stderr_line, sanitize_agent_stderr_line, AgentStderrSeverity,
-};
+use crate::live::sessions::connection::types::NativeSessionStartupDisposition;
+use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 use crate::persistence::Db;
-use crate::sessions::live_config::{snapshot_to_record, NormalizedControlKind};
+use crate::sessions::live_config::{
+    normalized_key_rank, snapshot_to_record, NormalizedControlKind,
+};
 use crate::sessions::{model::SessionRecord, store::SessionStore};
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
@@ -45,7 +46,6 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
 mod config;
-mod connection;
 mod notifications;
 mod prompt;
 mod shutdown;
@@ -169,43 +169,6 @@ fn pending_interaction_summary() -> PendingInteractionSummary {
             context: None,
         },
     }
-}
-
-fn resolved_agent_with_source(kind: AgentKind, source: &str) -> ResolvedAgent {
-    let descriptor = built_in_registry()
-        .into_iter()
-        .find(|descriptor| descriptor.kind == kind)
-        .expect("missing descriptor");
-    let artifact_path = format!("/tmp/{}/agent", kind.as_str());
-
-    ResolvedAgent {
-        descriptor,
-        status: ResolvedAgentStatus::Ready,
-        credential_state: CredentialState::Ready,
-        native: None,
-        agent_process: ResolvedArtifact {
-            role: ArtifactRole::AgentProcess,
-            installed: true,
-            source: Some(source.to_string()),
-            version: None,
-            path: Some(PathBuf::from(artifact_path)),
-            message: None,
-        },
-        spawn: None,
-    }
-}
-
-fn capability_bool(
-    capabilities: &acp::ClientCapabilities,
-    agent: &str,
-    capability: &str,
-) -> Option<bool> {
-    capabilities
-        .meta
-        .as_ref()?
-        .get(agent)?
-        .get(capability)?
-        .as_bool()
 }
 
 fn test_background_work_registry(store: &SessionStore) -> BackgroundWorkRegistry {

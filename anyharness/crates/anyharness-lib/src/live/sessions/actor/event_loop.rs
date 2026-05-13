@@ -1,4 +1,29 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use agent_client_protocol::{self as acp, Agent};
+use tokio::sync::mpsc;
+
+use crate::live::sessions::actor::background_work::handle_background_work_update;
+use crate::live::sessions::actor::command::{InteractionResolution, SessionCommand};
+use crate::live::sessions::actor::config::handle::handle_idle_config_command;
+use crate::live::sessions::actor::fork::handle::{fork_native_session, verify_fork_ready};
+use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
+use crate::live::sessions::actor::interactions::handle::{
+    handle_apply_plan_decision, handle_resolve_interaction,
+};
+use crate::live::sessions::actor::notifications::dispatch::inject_runtime_event;
+use crate::live::sessions::actor::notifications::handle::handle_notification_with_resume_replay_filter;
+use crate::live::sessions::actor::shutdown::handle::finalize_established_actor_exit;
+use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
+use crate::live::sessions::actor::startup::{start_actor, StartedActor};
+use crate::live::sessions::actor::state::SessionActorConfig;
+use crate::live::sessions::actor::turn::active::ActivePromptRequest;
+use crate::live::sessions::actor::turn::handle::{handle_idle_prompt_command, IdlePromptContext};
+use crate::live::sessions::actor::turn::queue::{
+    handle_delete_pending_prompt, handle_edit_pending_prompt,
+};
+use crate::live::sessions::connection::shutdown::close_native_session;
+use crate::live::sessions::handle::LiveSessionHandle;
 
 pub(in crate::live::sessions::actor) async fn run_actor(
     config: SessionActorConfig,
@@ -34,8 +59,8 @@ pub(in crate::live::sessions::actor) async fn run_actor(
             cmd = command_rx.recv() => {
                 match cmd {
                     Some(SessionCommand::Prompt { payload, prompt_id, latency, from_queue_seq, respond_to }) => {
-                        let exit_after_prompt = handle_active_prompt(
-                            ActivePromptContext {
+                        let exit_after_prompt = handle_idle_prompt_command(
+                            IdlePromptContext {
                                 config: &config,
                                 conn: &conn,
                                 native_session_id: &native_session_id,
@@ -132,13 +157,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
-                        let touch_session_activity = event.updates_session_activity_at();
-                        let result = event_sink.lock().await.inject_runtime_event(event);
-                        if touch_session_activity {
-                            if let Ok(envelope) = &result {
-                                handle.mark_activity_at(envelope.timestamp.clone()).await;
-                            }
-                        }
+                        let result = inject_runtime_event(&event_sink, &handle, event).await;
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::SetConfigOption {
@@ -146,7 +165,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         value,
                         respond_to,
                     }) => {
-                        let result = apply_specific_config_option(
+                        let result = handle_idle_config_command(
                             &conn,
                             &native_session_id,
                             &source_agent_kind,

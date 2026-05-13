@@ -1,4 +1,23 @@
-use crate::live::sessions::actor::*;
+use std::sync::Arc;
+
+use agent_client_protocol as acp;
+use anyharness_contract::v1::ConfigApplyState;
+use tokio::sync::Mutex;
+
+use crate::acp::event_sink::SessionEventSink;
+use crate::live::sessions::actor::config::apply::{
+    apply_mode_via_direct_setter_legacy, apply_specific_config_option, try_apply_config_option,
+    try_apply_model_preference,
+};
+use crate::live::sessions::actor::config::persist::persist_requested_config_value_if_changed;
+use crate::live::sessions::actor::config::queue::queue_pending_config_change;
+use crate::live::sessions::actor::config::selection::find_select_option_for_request;
+use crate::live::sessions::actor::config::types::{
+    tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
+};
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::sessions::model::SessionRecord;
+use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn apply_requested_session_preferences(
     conn: &acp::ClientSideConnection,
     native_session_id: &str,
@@ -41,4 +60,65 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
     }
 
     Ok(())
+}
+
+pub(in crate::live::sessions::actor) async fn handle_idle_config_command(
+    conn: &acp::ClientSideConnection,
+    native_session_id: &str,
+    source_agent_kind: &str,
+    session_id: &str,
+    store: &SessionStore,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    persisted_config_state: &mut PersistedSessionConfigState,
+    startup_state: &mut SessionStartupState,
+    config_id: &str,
+    value: &str,
+) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError> {
+    apply_specific_config_option(
+        conn,
+        native_session_id,
+        source_agent_kind,
+        session_id,
+        store,
+        event_sink,
+        persisted_config_state,
+        startup_state,
+        config_id,
+        value,
+    )
+    .await
+}
+
+pub(in crate::live::sessions::actor) async fn handle_busy_config_command(
+    store: &SessionStore,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    session_id: &str,
+    persisted_config_state: &mut PersistedSessionConfigState,
+    startup_state: &mut SessionStartupState,
+    config_id: &str,
+    value: &str,
+) -> Result<ConfigApplyState, crate::live::sessions::actor::command::SetConfigOptionCommandError> {
+    let option = find_select_option_for_request(&startup_state.config_options, config_id);
+    queue_pending_config_change(store, session_id, startup_state, config_id, value)?;
+
+    if let Err(error) = persist_requested_config_value_if_changed(
+        store,
+        event_sink,
+        session_id,
+        persisted_config_state,
+        tracked_config_purpose(config_id, option),
+        value,
+        chrono::Utc::now().to_rfc3339(),
+    )
+    .await
+    {
+        let _ = store.delete_pending_config_change(session_id, config_id);
+        return Err(
+            crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(
+                error.to_string(),
+            ),
+        );
+    }
+
+    Ok(ConfigApplyState::Queued)
 }

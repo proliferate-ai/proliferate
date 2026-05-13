@@ -1,5 +1,21 @@
+use std::sync::Arc;
+use std::time::Instant;
+
+use agent_client_protocol as acp;
+use tokio::sync::Mutex;
+
+use crate::acp::background_work::BackgroundWorkRegistry;
+use crate::acp::event_sink::SessionEventSink;
 use crate::acp::runtime_client;
-use crate::live::sessions::actor::*;
+use crate::domains::plans::service::PlanService;
+use crate::domains::reviews::service::ReviewService;
+use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
+use crate::live::sessions::actor::notifications::dispatch::{
+    normalize_notification, persist_raw_notification,
+};
+use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::sessions::store::SessionStore;
 #[cfg(test)]
 pub(in crate::live::sessions::actor) async fn handle_notification(
     notif: &acp::SessionNotification,
@@ -62,6 +78,9 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
         );
     }
 
+    // Invariant: raw ACP notifications are stored before replay suppression or
+    // transcript normalization so durable debugging state preserves provider
+    // order even when resumed-session replay is filtered from the transcript.
     if replay_filter.should_suppress(notif, Instant::now()) {
         tracing::info!(
             session_id = %session_id,
