@@ -181,3 +181,12 @@ pub(crate) enum SessionCommand {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
 }
+
+impl SessionCommand {
+    pub(in crate::live::sessions::actor) fn is_fork_lifecycle_command(&self) -> bool {
+        matches!(
+            self,
+            Self::VerifyForkReady { .. } | Self::Fork { .. } | Self::CloseNativeSession { .. }
+        )
+    }
+}

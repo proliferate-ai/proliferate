@@ -5,7 +5,9 @@ use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 use tokio::sync::oneshot;
 
-use crate::live::sessions::actor::command::{ForkSessionCommandError, ForkSessionCommandResult};
+use crate::live::sessions::actor::command::{
+    ForkSessionCommandError, ForkSessionCommandResult, SessionCommand,
+};
 use crate::live::sessions::connection::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::mcp_bindings::acp::to_acp_servers;
@@ -37,6 +39,49 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
         native_session_id: response.session_id.to_string(),
         supports_close,
     })
+}
+
+pub(in crate::live::sessions::actor) async fn handle_idle_fork_lifecycle_command(
+    command: SessionCommand,
+    conn: &acp::ClientSideConnection,
+    native_session_id: &str,
+    workspace_path: &std::path::PathBuf,
+    mcp_servers: &[SessionMcpServer],
+    handle: &Arc<LiveSessionHandle>,
+    store: &SessionStore,
+    session_id: &str,
+    action_capabilities: SessionActionCapabilities,
+    supports_close: bool,
+) {
+    match command {
+        SessionCommand::VerifyForkReady { respond_to } => {
+            let result = verify_fork_ready(handle, store, session_id, action_capabilities).await;
+            let _ = respond_to.send(result);
+        }
+        SessionCommand::Fork { respond_to } => {
+            let result = fork_native_session(
+                conn,
+                native_session_id,
+                workspace_path,
+                mcp_servers,
+                handle,
+                store,
+                session_id,
+                action_capabilities,
+                supports_close,
+            )
+            .await;
+            let _ = respond_to.send(result);
+        }
+        SessionCommand::CloseNativeSession {
+            native_session_id,
+            respond_to,
+        } => {
+            handle_close_native_child_session(conn, native_session_id, supports_close, respond_to)
+                .await;
+        }
+        _ => unreachable!("non-fork command routed to fork lifecycle handler"),
+    }
 }
 
 pub(in crate::live::sessions::actor) async fn verify_fork_ready(

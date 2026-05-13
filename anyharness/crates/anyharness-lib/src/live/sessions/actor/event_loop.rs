@@ -6,9 +6,7 @@ use tokio::sync::mpsc;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::command::{InteractionResolution, SessionCommand};
 use crate::live::sessions::actor::config::handle::handle_idle_config_command;
-use crate::live::sessions::actor::fork::handle::{
-    fork_native_session, handle_close_native_child_session, verify_fork_ready,
-};
+use crate::live::sessions::actor::fork::handle::handle_idle_fork_lifecycle_command;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
 use crate::live::sessions::actor::interactions::handle::{
     handle_apply_plan_decision, handle_resolve_interaction,
@@ -123,40 +121,6 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         .await;
                         let _ = respond_to.send(result);
                     }
-                    Some(SessionCommand::VerifyForkReady { respond_to }) => {
-                        let result = verify_fork_ready(
-                            &handle,
-                            &store,
-                            &session_id,
-                            action_capabilities,
-                        )
-                        .await;
-                        let _ = respond_to.send(result);
-                    }
-                    Some(SessionCommand::Fork { respond_to }) => {
-                        let result = fork_native_session(
-                            &conn,
-                            &native_session_id,
-                            &config.workspace_path,
-                            &config.mcp_servers,
-                            &handle,
-                            &store,
-                            &session_id,
-                            action_capabilities,
-                            supports_native_close,
-                        )
-                        .await;
-                        let _ = respond_to.send(result);
-                    }
-                    Some(SessionCommand::CloseNativeSession { native_session_id, respond_to }) => {
-                        handle_close_native_child_session(
-                            &conn,
-                            native_session_id,
-                            supports_native_close,
-                            respond_to,
-                        )
-                        .await;
-                    }
                     Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
                         let result = inject_runtime_event(&event_sink, &handle, event).await;
                         let _ = respond_to.send(result);
@@ -222,6 +186,22 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                     }
                     Some(SessionCommand::ReplayAdvance { respond_to }) => {
                         let _ = respond_to.send(Err(anyhow::anyhow!("session is not a replay session")));
+                    }
+                    Some(command) => {
+                        debug_assert!(command.is_fork_lifecycle_command());
+                        handle_idle_fork_lifecycle_command(
+                            command,
+                            &conn,
+                            &native_session_id,
+                            &config.workspace_path,
+                            &config.mcp_servers,
+                            &handle,
+                            &store,
+                            &session_id,
+                            action_capabilities,
+                            supports_native_close,
+                        )
+                        .await;
                     }
                     None => break,
                 }
