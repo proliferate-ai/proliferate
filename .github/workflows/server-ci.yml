@@ -11,7 +11,6 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "scripts/validate-agent-catalog.mjs"
-      - "scripts/validate-launch-catalog.mjs"
       - "server/**"
   pull_request:
     paths:
@@ -21,7 +20,6 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - "scripts/validate-agent-catalog.mjs"
-      - "scripts/validate-launch-catalog.mjs"
       - "server/**"
   workflow_dispatch:
 
@@ -48,7 +46,6 @@ jobs:
       - name: Validate catalogs
         run: |
           node scripts/validate-agent-catalog.mjs
-          node scripts/validate-launch-catalog.mjs
         working-directory: .
 
       - name: Install workspace dependencies

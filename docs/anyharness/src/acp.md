@@ -1,10 +1,12 @@
 # ACP Runtime
 
-`anyharness-lib/src/acp/**` owns live ACP-backed session execution.
+`anyharness-lib/src/acp/**` owns legacy ACP-backed session collaborators that
+have not completed final topology moves.
 
 This is a legacy subsystem doc updated for current implementation paths. The
-event sink is already split under `acp/event_sink/**`; the actor remains in
-`acp/session_actor.rs` and its rewrite is deferred/manual.
+event sink is already split under `acp/event_sink/**`; the actor has moved to
+`live/sessions/actor/**`, connection mechanics to `live/sessions/connection/**`,
+and the control handle to `live/sessions/handle.rs`.
 
 ## Core Concepts
 
@@ -43,7 +45,7 @@ Its main jobs are:
 - create the live broadcast channel
 - spawn the actor and return its control handle
 
-### `LiveSessionHandle` (`anyharness/crates/anyharness-lib/src/acp/session_actor.rs`)
+### `LiveSessionHandle` (`anyharness/crates/anyharness-lib/src/live/sessions/handle.rs`)
 
 `LiveSessionHandle` is the control surface for one live session.
 
@@ -59,7 +61,7 @@ Higher layers use it to:
 - send prompt / config / cancel / close commands
 - gate prompt concurrency
 
-### `SessionActorConfig` (`anyharness/crates/anyharness-lib/src/acp/session_actor.rs`)
+### `SessionActorConfig` (`anyharness/crates/anyharness-lib/src/live/sessions/actor/state.rs`)
 
 `SessionActorConfig` is the full startup input for one actor.
 
@@ -229,8 +231,8 @@ The notification flow is:
 1. ACP sends `session_notification(...)` into `RuntimeClient`
 2. `RuntimeClient` forwards the notification into an internal channel
 3. the actor consumes notifications
-4. `handle_notification(...)` in
-   `anyharness/crates/anyharness-lib/src/acp/session_actor.rs`
+4. notification handlers in
+   `anyharness/crates/anyharness-lib/src/live/sessions/actor/notifications/**`
    maps ACP updates into runtime behavior
 5. `SessionEventSink` converts ACP-native chunks and tool updates into
    normalized transcript items and session events
@@ -298,7 +300,7 @@ Model selection has extra logic:
 - keep the normalized snapshot aligned with the effective current model
 
 Most of that logic lives in
-`anyharness/crates/anyharness-lib/src/acp/session_actor.rs`.
+`anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`.
 
 ## Boundaries
 

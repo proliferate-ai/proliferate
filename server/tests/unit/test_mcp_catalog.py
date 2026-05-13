@@ -1,5 +1,6 @@
 import re
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,10 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     EnvTemplate,
     HttpLaunchTemplate,
     StaticUrl,
+)
+from proliferate.server.cloud.plugins.catalog.first_party import (
+    _package_version,
+    first_party_package_for_catalog_entry,
 )
 
 
@@ -302,6 +307,24 @@ def test_first_party_plugin_skill_files_are_tracked() -> None:
             capture_output=True,
             text=True,
         )
+
+
+def test_plugin_package_version_changes_with_full_package_payload() -> None:
+    entry = get_catalog_entry("github")
+    assert entry is not None
+    package = first_party_package_for_catalog_entry(entry)
+    base = replace(package, version="")
+    mutated_skill = replace(
+        package.skills[0],
+        requires_credential_binding=not package.skills[0].requires_credential_binding,
+    )
+    mutated = replace(
+        package,
+        version="",
+        skills=(mutated_skill, *package.skills[1:]),
+    )
+
+    assert _package_version(entry.version, base) != _package_version(entry.version, mutated)
 
 
 def test_localhost_launch_urls_are_local_materialization_only() -> None:

@@ -90,9 +90,11 @@ Implemented now:
   served from the in-memory bundle registry.
 - MCP-only packages are valid. They mount plugin MCP servers and no skills.
 - Desktop never creates synthetic "use this connector" skills.
-- On create, missing `pluginBundle` means no plugins for that session. On
-  resume, missing `pluginBundle` preserves current in-memory bundle state, and
-  explicit `{ "plugins": [] }` clears it.
+- On create, missing `pluginBundle` means no plugins for that session. On cold
+  resume or restart, missing `pluginBundle` preserves current in-memory bundle
+  state, and explicit `{ "plugins": [] }` clears it. If the actor is already
+  live, AnyHarness rejects any `pluginBundle` field with
+  `SESSION_RESTART_REQUIRED`.
 
 Not implemented in this slice:
 

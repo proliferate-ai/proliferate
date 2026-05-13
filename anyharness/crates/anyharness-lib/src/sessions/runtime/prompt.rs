@@ -2,10 +2,10 @@ use std::time::Instant;
 
 use anyharness_contract::v1::PromptInputBlock;
 
-use crate::acp::session_actor::{PromptAcceptError, PromptAcceptance, SessionCommand};
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanService;
+use crate::live::sessions::actor::command::{PromptAcceptError, PromptAcceptance, SessionCommand};
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::PromptAttachmentState;
 use crate::sessions::prompt::{
@@ -129,9 +129,6 @@ impl SessionRuntime {
                 SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
             })?
             .map_err(|error| match error {
-                PromptAcceptError::ActorDead => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
-                }
                 PromptAcceptError::EnqueueFailed(detail) => {
                     let _ = prepared.cleanup_attachments(
                         self.session_service.store(),
@@ -206,9 +203,6 @@ impl SessionRuntime {
                 SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
             })?
             .map_err(|error| match error {
-                PromptAcceptError::ActorDead => {
-                    SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
-                }
                 PromptAcceptError::EnqueueFailed(detail) => {
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }

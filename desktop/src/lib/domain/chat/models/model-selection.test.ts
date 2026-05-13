@@ -1,13 +1,38 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
-import { buildModelSelectorGroups } from "./model-selection";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import {
+  buildModelSelectorGroups,
+  resolveEffectiveLaunchSelection,
+} from "./model-selection";
 
-function launchAgent(kind: string, models: WorkspaceSessionLaunchAgent["models"]): WorkspaceSessionLaunchAgent {
+function launchAgent(
+  kind: string,
+  models: DesktopAgentLaunchAgent["models"],
+  overrides: Partial<DesktopAgentLaunchAgent> = {},
+): DesktopAgentLaunchAgent {
   return {
     kind,
     displayName: kind === "claude" ? "Claude" : "Codex",
     defaultModelId: models[0]?.id ?? null,
+    defaultModeId: null,
+    dynamicModels: false,
+    modelDisplayPolicy: null,
+    promptCapabilities: null,
     models,
+    launchControls: [],
+    ...overrides,
+  };
+}
+
+function model(id: string, displayName: string, isDefault: boolean) {
+  return {
+    id,
+    displayName,
+    aliases: [],
+    status: "active" as const,
+    isDefault,
+    tags: [],
+    launchRemediation: null,
   };
 }
 
@@ -16,10 +41,10 @@ describe("buildModelSelectorGroups", () => {
     const groups = buildModelSelectorGroups(
       [
         launchAgent("claude", [
-          { id: "sonnet", displayName: "Static Sonnet", isDefault: true },
+          model("sonnet", "Static Sonnet", true),
         ]),
         launchAgent("codex", [
-          { id: "gpt-5.4", displayName: "GPT 5.4", isDefault: true },
+          model("gpt-5.4", "GPT 5.4", true),
         ]),
       ],
       { kind: "claude", modelId: "us.anthropic.claude-opus-4-7-v1:0" },
@@ -80,7 +105,7 @@ describe("buildModelSelectorGroups", () => {
     const groups = buildModelSelectorGroups(
       [
         launchAgent("claude", [
-          { id: "sonnet", displayName: "Static Sonnet", isDefault: true },
+          model("sonnet", "Static Sonnet", true),
         ]),
       ],
       { kind: "claude", modelId: "claude-sonnet-4-6" },
@@ -135,7 +160,7 @@ describe("buildModelSelectorGroups", () => {
     const groups = buildModelSelectorGroups(
       [
         launchAgent("claude", [
-          { id: "sonnet", displayName: "Static Sonnet", isDefault: true },
+          model("sonnet", "Static Sonnet", true),
         ]),
       ],
       { kind: "claude", modelId: "opus" },
@@ -171,5 +196,38 @@ describe("buildModelSelectorGroups", () => {
         isSelected: false,
       },
     ]);
+  });
+});
+
+describe("resolveEffectiveLaunchSelection", () => {
+  it("keeps a preferred OpenCode dynamic model before live ACP model truth is available", () => {
+    const selection = resolveEffectiveLaunchSelection(
+      [
+        launchAgent(
+          "opencode",
+          [model("opencode/big-pickle", "OpenCode Zen/Big Pickle", true)],
+          {
+            displayName: "OpenCode",
+            dynamicModels: true,
+            modelDisplayPolicy: {
+              defaultVisibleModelIds: ["opencode/big-pickle"],
+              allowUserVisibleModelSelection: true,
+              moreModelsSource: "lastKnownLiveSnapshot",
+            },
+          },
+        ),
+      ],
+      {
+        defaultChatAgentKind: "opencode",
+        defaultChatModelIdByAgentKind: {
+          opencode: "anthropic/claude-sonnet-4-6",
+        },
+      },
+    );
+
+    expect(selection).toEqual({
+      kind: "opencode",
+      modelId: "anthropic/claude-sonnet-4-6",
+    });
   });
 });

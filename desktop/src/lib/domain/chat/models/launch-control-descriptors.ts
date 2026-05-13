@@ -1,4 +1,3 @@
-import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
 import {
   resolveToggleState,
   type LiveSessionControlDescriptor,
@@ -8,6 +7,7 @@ import {
   getPendingSessionConfigChange,
   type PendingSessionConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
+import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export interface LaunchControlPreferences {
   defaultSessionModeByAgentKind: Record<string, string>;
@@ -18,10 +18,9 @@ export interface BuildLaunchControlDescriptorsInput {
   selection: { kind: string; modelId: string } | null;
   launchAgents: Array<{
     kind: string;
-    launchControls?: WorkspaceSessionLaunchControl[];
+    launchControls?: DesktopAgentLaunchControl[];
     models: Array<{
       id: string;
-      launchControls?: WorkspaceSessionLaunchControl[];
     }>;
   }>;
   preferences: LaunchControlPreferences;
@@ -42,12 +41,11 @@ export function buildLaunchControlDescriptors(
   }
 
   const agent = input.launchAgents.find((candidate) => candidate.kind === input.selection?.kind);
-  const model = agent?.models.find((candidate) => candidate.id === input.selection?.modelId);
   if (!agent) {
     return [];
   }
 
-  return mergeLaunchControls(agent.launchControls ?? [], model?.launchControls ?? [])
+  return (agent.launchControls ?? [])
     .flatMap((control) => launchControlToDescriptor({
       agentKind: agent.kind,
       control,
@@ -59,7 +57,7 @@ export function buildLaunchControlDescriptors(
 
 function launchControlToDescriptor(input: {
   agentKind: string;
-  control: WorkspaceSessionLaunchControl;
+  control: DesktopAgentLaunchControl;
   pendingConfigChanges: PendingSessionConfigChanges | null;
   preferences: LaunchControlPreferences;
   onSelect: (
@@ -147,7 +145,7 @@ function launchControlToDescriptor(input: {
 }
 
 function normalizeLaunchControlKey(
-  key: WorkspaceSessionLaunchControl["key"],
+  key: string,
 ): SupportedLiveControlKey | null {
   if (key === "access_mode") {
     return "mode";
@@ -162,38 +160,4 @@ function normalizeLaunchControlKey(
     return key;
   }
   return null;
-}
-
-function mergeLaunchControls(
-  agentControls: WorkspaceSessionLaunchControl[],
-  modelControls: WorkspaceSessionLaunchControl[] | undefined,
-): WorkspaceSessionLaunchControl[] {
-  const controlsByKey = new Map<SupportedLiveControlKey, WorkspaceSessionLaunchControl>();
-  const orderedKeys: SupportedLiveControlKey[] = [];
-
-  for (const control of agentControls) {
-    const key = normalizeLaunchControlKey(control.key);
-    if (!key) {
-      continue;
-    }
-    if (!controlsByKey.has(key)) {
-      orderedKeys.push(key);
-    }
-    controlsByKey.set(key, control);
-  }
-
-  for (const control of modelControls ?? []) {
-    const key = normalizeLaunchControlKey(control.key);
-    if (!key) {
-      continue;
-    }
-    if (!controlsByKey.has(key)) {
-      orderedKeys.push(key);
-    }
-    controlsByKey.set(key, control);
-  }
-
-  return orderedKeys
-    .map((key) => controlsByKey.get(key))
-    .filter((control): control is WorkspaceSessionLaunchControl => control !== undefined);
 }

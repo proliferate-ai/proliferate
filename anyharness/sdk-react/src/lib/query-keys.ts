@@ -6,10 +6,6 @@ export function anyHarnessRuntimeHealthKey(runtimeUrl: string | null | undefined
   return [...anyHarnessRuntimeKey(runtimeUrl), "health"] as const;
 }
 
-export function anyHarnessEffectiveAgentCatalogKey(runtimeUrl: string | null | undefined) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "catalogs", "agents", "effective"] as const;
-}
-
 export function anyHarnessAgentsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "agents"] as const;
 }
@@ -24,21 +20,6 @@ export function anyHarnessReconcileAgentsMutationKey(
   runtimeUrl: string | null | undefined,
 ) {
   return [...anyHarnessAgentsKey(runtimeUrl), "reconcile"] as const;
-}
-
-export function anyHarnessProviderConfigsKey(runtimeUrl: string | null | undefined) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "provider-configs"] as const;
-}
-
-export function anyHarnessModelRegistriesKey(runtimeUrl: string | null | undefined) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "model-registries"] as const;
-}
-
-export function anyHarnessModelRegistryKey(
-  runtimeUrl: string | null | undefined,
-  kind: string | null | undefined,
-) {
-  return [...anyHarnessModelRegistriesKey(runtimeUrl), kind ?? null] as const;
 }
 
 export function anyHarnessRuntimeWorkspacesKey(runtimeUrl: string | null | undefined) {
@@ -141,13 +122,6 @@ export function anyHarnessCoworkArtifactKey(
   artifactId: string | null | undefined,
 ) {
   return [...anyHarnessCoworkArtifactScopeKey(runtimeUrl, workspaceId), artifactId ?? null] as const;
-}
-
-export function anyHarnessWorkspaceSessionLaunchKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "workspace-session-launch", workspaceId ?? null] as const;
 }
 
 export function anyHarnessSessionsKey(
@@ -418,7 +392,6 @@ export function anyHarnessWorkspaceQueryKeyRoots(
     anyHarnessCoworkArtifactScopeKey(runtimeUrl, workspaceId),
     anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
     anyHarnessWorkspacePurgePreflightKey(runtimeUrl, workspaceId),
-    anyHarnessWorkspaceSessionLaunchKey(runtimeUrl, workspaceId),
     anyHarnessSessionsKey(runtimeUrl, workspaceId),
     anyHarnessSessionScopeKey(runtimeUrl, workspaceId),
     anyHarnessPlansKey(runtimeUrl, workspaceId),

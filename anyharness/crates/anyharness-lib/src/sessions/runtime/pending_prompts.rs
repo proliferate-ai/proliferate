@@ -1,6 +1,6 @@
 use anyharness_contract::v1::PromptInputBlock;
 
-use crate::acp::session_actor::{QueueMutationError, SessionCommand};
+use crate::live::sessions::actor::command::{QueueMutationError, SessionCommand};
 use crate::sessions::model::{PromptAttachmentState, SessionRecord};
 use crate::sessions::prompt::{
     capabilities_from_live_config, prepare_prompt, PromptPrepareContext,
@@ -97,9 +97,6 @@ impl SessionRuntime {
                     );
                     PendingPromptMutationError::NotFound
                 }
-                QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
-                    anyhow::anyhow!("session actor is not responding"),
-                ),
             })?;
 
         self.session_service
@@ -159,9 +156,6 @@ impl SessionRuntime {
             })?
             .map_err(|error| match error {
                 QueueMutationError::NotFound => PendingPromptMutationError::NotFound,
-                QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
-                    anyhow::anyhow!("session actor is not responding"),
-                ),
             })?;
 
         self.session_service

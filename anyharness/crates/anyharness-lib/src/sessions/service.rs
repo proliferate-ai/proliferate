@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Instant;
 
 use uuid::Uuid;
@@ -11,27 +10,23 @@ use super::model::{
     SessionRecord,
 };
 use super::store::SessionStore;
-use crate::domains::agents::catalog::{LaunchCatalogService, ModelCatalogService};
+use crate::domains::agents::catalog::projection::models::{
+    bundled_create_mode_ids, bundled_model_registries,
+};
 use crate::domains::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
+use crate::domains::agents::readiness::launch_options::{
+    workspace_session_launch_options, ResolvedWorkspaceLaunchOptions,
+};
+use crate::domains::agents::readiness::resolver::resolve_agent;
 use crate::domains::agents::registry::built_in_registry;
-use crate::domains::agents::resolver::resolve_agent;
 use crate::domains::mobility::model::MobilityPromptAttachmentData;
 use crate::origin::OriginContext;
 use crate::workspaces::store::WorkspaceStore;
-use anyharness_contract::v1::{
-    WorkspaceSessionLaunchControl, WorkspaceSessionLaunchControlKey,
-    WorkspaceSessionLaunchControlPhase, WorkspaceSessionLaunchControlValue,
-};
-
-const EFFECTIVE_SESSION_LAUNCH_WORKSPACE_ID: &str = "";
-
 pub struct SessionService {
     session_store: SessionStore,
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
     runtime_home: std::path::PathBuf,
-    model_catalog_service: Arc<ModelCatalogService>,
-    launch_catalog_service: Arc<LaunchCatalogService>,
 }
 
 #[derive(Debug)]
@@ -40,6 +35,14 @@ pub enum CreateSessionError {
     WorkspaceSingleSession {
         workspace_id: String,
         session_id: String,
+    },
+    ModelUnsupported {
+        agent_kind: String,
+        model_id: String,
+    },
+    ModeUnsupported {
+        agent_kind: String,
+        mode_id: String,
     },
     Invalid(String),
     Internal(anyhow::Error),
@@ -59,45 +62,17 @@ pub enum UpdateSessionTitleError {
     Internal(anyhow::Error),
 }
 
-#[derive(Debug, Clone)]
-pub struct WorkspaceSessionLaunchModelData {
-    pub id: String,
-    pub display_name: String,
-    pub is_default: bool,
-    pub launch_controls: Vec<WorkspaceSessionLaunchControl>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkspaceSessionLaunchAgentData {
-    pub kind: String,
-    pub display_name: String,
-    pub default_model_id: Option<String>,
-    pub launch_controls: Vec<WorkspaceSessionLaunchControl>,
-    pub models: Vec<WorkspaceSessionLaunchModelData>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkspaceSessionLaunchCatalogData {
-    pub workspace_id: String,
-    pub catalog_version: String,
-    pub agents: Vec<WorkspaceSessionLaunchAgentData>,
-}
-
 impl SessionService {
     pub fn new(
         session_store: SessionStore,
         workspace_store: WorkspaceStore,
         runtime_home: std::path::PathBuf,
-        model_catalog_service: Arc<ModelCatalogService>,
-        launch_catalog_service: Arc<LaunchCatalogService>,
     ) -> Self {
         Self {
             session_store,
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
             runtime_home,
-            model_catalog_service,
-            launch_catalog_service,
         }
     }
 
@@ -167,7 +142,7 @@ impl SessionService {
 
         let agent_resolution_started = Instant::now();
         let resolved = resolve_agent(descriptor, &self.runtime_home);
-        if resolved.status != crate::domains::agents::model::ResolvedAgentStatus::Ready {
+        if resolved.status != ResolvedAgentStatus::Ready {
             let detail = resolved.agent_process.message.clone().or_else(|| {
                 resolved
                     .native
@@ -193,15 +168,27 @@ impl SessionService {
         );
 
         let model_resolution_started = Instant::now();
-        let registries = self.model_catalog_service.registries();
+        let registries = bundled_model_registries();
         let model_registry = find_model_registry(&registries, agent_kind)
             .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
-        let resolved_model_id = resolve_model_id(model_registry, model_id)
-            .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
-        let resolved_mode_id = mode_id
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string);
+        let resolved_model_id =
+            resolve_model_id(model_registry, model_id).map_err(|error| match error {
+                ModelResolutionError::Unsupported(model_id) => {
+                    CreateSessionError::ModelUnsupported {
+                        agent_kind: agent_kind.to_string(),
+                        model_id,
+                    }
+                }
+                ModelResolutionError::Invalid(detail) => CreateSessionError::Invalid(detail),
+            })?;
+        let resolved_mode_id =
+            resolve_mode_id(agent_kind, mode_id).map_err(|error| match error {
+                ModeResolutionError::Unsupported(mode_id) => CreateSessionError::ModeUnsupported {
+                    agent_kind: agent_kind.to_string(),
+                    mode_id,
+                },
+                ModeResolutionError::Invalid(detail) => CreateSessionError::Invalid(detail),
+            })?;
         tracing::info!(
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
@@ -484,251 +471,16 @@ impl SessionService {
             .map_err(GetLiveConfigSnapshotError::Internal)
     }
 
-    pub fn get_workspace_session_launch_catalog(
+    pub fn resolved_workspace_launch_options(
         &self,
         workspace_id: &str,
-    ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
+    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
         self.workspace_store
             .find_by_id(workspace_id)?
             .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
 
-        self.session_launch_catalog_data(workspace_id)
+        Ok(workspace_session_launch_options(&self.runtime_home))
     }
-
-    pub fn get_effective_session_launch_catalog(
-        &self,
-    ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
-        self.session_launch_catalog_data(EFFECTIVE_SESSION_LAUNCH_WORKSPACE_ID)
-    }
-
-    fn session_launch_catalog_data(
-        &self,
-        workspace_id: &str,
-    ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
-        let registry = built_in_registry();
-        let launch_catalog = self.launch_catalog_service.snapshot();
-        let agents = self
-            .model_catalog_service
-            .registries()
-            .into_iter()
-            .filter_map(|model_registry| {
-                let descriptor = registry
-                    .iter()
-                    .find(|d| d.kind.as_str() == model_registry.kind)?;
-                let resolved = resolve_agent(descriptor, &self.runtime_home);
-                if resolved.status != ResolvedAgentStatus::Ready {
-                    return None;
-                }
-                let launch_agent = launch_catalog
-                    .agents
-                    .iter()
-                    .find(|agent| agent.kind == model_registry.kind);
-
-                Some(WorkspaceSessionLaunchAgentData {
-                    kind: model_registry.kind.clone(),
-                    display_name: model_registry.display_name.clone(),
-                    default_model_id: model_registry.default_model_id.clone(),
-                    launch_controls: launch_agent
-                        .map(|agent| agent.launch_controls.clone())
-                        .unwrap_or_else(|| launch_controls_for_agent(model_registry.kind.as_str())),
-                    models: model_registry
-                        .models
-                        .into_iter()
-                        .map(|model| {
-                            let catalog_controls = launch_agent
-                                .and_then(|agent| {
-                                    agent
-                                        .models
-                                        .iter()
-                                        .find(|candidate| candidate.id == model.id)
-                                })
-                                .map(|model| model.launch_controls.clone())
-                                .unwrap_or_default();
-                            WorkspaceSessionLaunchModelData {
-                                launch_controls: merge_launch_controls(
-                                    catalog_controls,
-                                    model_session_default_controls_to_launch_controls(
-                                        model.session_default_controls,
-                                    ),
-                                ),
-                                id: model.id,
-                                display_name: model.display_name,
-                                is_default: model.is_default,
-                            }
-                        })
-                        .collect(),
-                })
-            })
-            .collect();
-
-        Ok(WorkspaceSessionLaunchCatalogData {
-            workspace_id: workspace_id.to_string(),
-            catalog_version: launch_catalog.catalog_version,
-            agents,
-        })
-    }
-}
-
-fn launch_controls_for_agent(agent_kind: &str) -> Vec<WorkspaceSessionLaunchControl> {
-    match agent_kind {
-        "claude" => vec![mode_control(
-            "Permissions",
-            vec![
-                control_value("default", "Default", Some("Ask before each action."), true),
-                control_value(
-                    "acceptEdits",
-                    "Accept Edits",
-                    Some("Auto-approve file edits."),
-                    false,
-                ),
-                control_value("plan", "Plan", Some("Plan without execution."), false),
-                control_value(
-                    "dontAsk",
-                    "Don't Ask",
-                    Some("Auto-approve most actions."),
-                    false,
-                ),
-                control_value(
-                    "bypassPermissions",
-                    "Bypass",
-                    Some("Skip permission checks."),
-                    false,
-                ),
-            ],
-        )],
-        "codex" => vec![
-            mode_control(
-                "Permissions",
-                vec![
-                    control_value(
-                        "read-only",
-                        "Read Only",
-                        Some("Inspect and plan without editing."),
-                        true,
-                    ),
-                    control_value("auto", "Auto", Some("Auto-approve standard edits."), false),
-                    control_value(
-                        "full-access",
-                        "Full Access",
-                        Some("Allow unrestricted changes."),
-                        false,
-                    ),
-                ],
-            ),
-            WorkspaceSessionLaunchControl {
-                key: WorkspaceSessionLaunchControlKey::CollaborationMode,
-                label: "Mode".to_string(),
-                control_type: "select".to_string(),
-                default_value: Some("default".to_string()),
-                values: vec![
-                    control_value(
-                        "default",
-                        "Default",
-                        Some("Standard collaboration behavior."),
-                        true,
-                    ),
-                    control_value("plan", "Plan", Some("Plan before applying changes."), false),
-                ],
-                phase: WorkspaceSessionLaunchControlPhase::LiveDefault,
-                create_field: None,
-            },
-        ],
-        "gemini" => vec![mode_control(
-            "Permissions",
-            vec![
-                control_value("default", "Default", Some("Ask before each action."), true),
-                control_value("autoEdit", "Auto Edit", Some("Auto-approve edits."), false),
-                control_value("yolo", "YOLO", Some("Skip permission checks."), false),
-                control_value("plan", "Plan", Some("Plan without execution."), false),
-            ],
-        )],
-        _ => vec![],
-    }
-}
-
-fn mode_control(
-    label: &str,
-    values: Vec<WorkspaceSessionLaunchControlValue>,
-) -> WorkspaceSessionLaunchControl {
-    let default_value = values
-        .iter()
-        .find(|value| value.is_default)
-        .map(|value| value.value.clone());
-    WorkspaceSessionLaunchControl {
-        key: WorkspaceSessionLaunchControlKey::Mode,
-        label: label.to_string(),
-        control_type: "select".to_string(),
-        default_value,
-        values,
-        phase: WorkspaceSessionLaunchControlPhase::CreateSession,
-        create_field: Some("modeId".to_string()),
-    }
-}
-
-fn control_value(
-    value: &str,
-    label: &str,
-    description: Option<&str>,
-    is_default: bool,
-) -> WorkspaceSessionLaunchControlValue {
-    WorkspaceSessionLaunchControlValue {
-        value: value.to_string(),
-        label: label.to_string(),
-        description: description.map(str::to_string),
-        is_default,
-    }
-}
-
-fn model_session_default_controls_to_launch_controls(
-    controls: Vec<crate::domains::agents::model::SessionDefaultControlMetadata>,
-) -> Vec<WorkspaceSessionLaunchControl> {
-    controls
-        .into_iter()
-        .map(|control| {
-            let key = match control.key {
-                crate::domains::agents::model::SessionDefaultControlKey::Reasoning => {
-                    WorkspaceSessionLaunchControlKey::Reasoning
-                }
-                crate::domains::agents::model::SessionDefaultControlKey::Effort => {
-                    WorkspaceSessionLaunchControlKey::Effort
-                }
-                crate::domains::agents::model::SessionDefaultControlKey::FastMode => {
-                    WorkspaceSessionLaunchControlKey::FastMode
-                }
-            };
-            WorkspaceSessionLaunchControl {
-                key,
-                label: control.label,
-                control_type: "select".to_string(),
-                default_value: control.default_value,
-                values: control
-                    .values
-                    .into_iter()
-                    .map(|value| WorkspaceSessionLaunchControlValue {
-                        value: value.value,
-                        label: value.label,
-                        description: value.description,
-                        is_default: value.is_default,
-                    })
-                    .collect(),
-                phase: WorkspaceSessionLaunchControlPhase::LiveDefault,
-                create_field: None,
-            }
-        })
-        .collect()
-}
-
-fn merge_launch_controls(
-    mut primary: Vec<WorkspaceSessionLaunchControl>,
-    fallback: Vec<WorkspaceSessionLaunchControl>,
-) -> Vec<WorkspaceSessionLaunchControl> {
-    for control in fallback {
-        if primary.iter().any(|existing| existing.key == control.key) {
-            continue;
-        }
-        primary.push(control);
-    }
-    primary
 }
 
 pub fn read_prompt_attachment_content_with_legacy_fallback(
@@ -782,23 +534,33 @@ fn find_model_registry<'a>(
         .ok_or_else(|| anyhow::anyhow!("model registry not found for agent '{agent_kind}'"))
 }
 
+#[derive(Debug)]
+enum ModelResolutionError {
+    Unsupported(String),
+    Invalid(String),
+}
+
 fn resolve_model_id(
     model_registry: &ModelRegistryMetadata,
     provided_model_id: Option<&str>,
-) -> anyhow::Result<Option<String>> {
+) -> Result<Option<String>, ModelResolutionError> {
     let valid_ids = model_registry
         .models
         .iter()
         .map(|model| model.id.as_str())
         .collect::<Vec<_>>();
-    let resolved_model_id = provided_model_id.map(|model_id| {
-        if valid_ids.contains(&model_id) {
-            return model_id;
-        }
-        let normalized_model_id =
-            normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id);
-        resolve_model_alias(model_registry, normalized_model_id).unwrap_or(normalized_model_id)
-    });
+    let resolved_model_id = provided_model_id
+        .map(str::trim)
+        .filter(|model_id| !model_id.is_empty())
+        .map(|model_id| {
+            if valid_ids.contains(&model_id) {
+                return model_id;
+            }
+            let normalized_model_id =
+                normalize_legacy_model_id(model_registry.kind.as_str(), model_id)
+                    .unwrap_or(model_id);
+            resolve_model_alias(model_registry, normalized_model_id).unwrap_or(normalized_model_id)
+        });
 
     resolve_catalog_id(
         resolved_model_id,
@@ -806,6 +568,12 @@ fn resolve_model_id(
         model_registry.default_model_id.as_deref(),
         "model",
     )
+    .map_err(|error| match (provided_model_id, error) {
+        (Some(model_id), CatalogIdResolutionError::Invalid(_)) => {
+            ModelResolutionError::Unsupported(model_id.trim().to_string())
+        }
+        (_, CatalogIdResolutionError::Invalid(detail)) => ModelResolutionError::Invalid(detail),
+    })
 }
 
 fn resolve_model_alias<'a>(
@@ -824,16 +592,49 @@ fn resolve_catalog_id(
     valid_ids: &[&str],
     default_id: Option<&str>,
     label: &str,
-) -> anyhow::Result<Option<String>> {
+) -> Result<Option<String>, CatalogIdResolutionError> {
     match provided {
         Some(id) => {
             if !valid_ids.contains(&id) {
-                anyhow::bail!("invalid {label} ID: '{id}'");
+                return Err(CatalogIdResolutionError::Invalid(format!(
+                    "invalid {label} ID: '{id}'"
+                )));
             }
             Ok(Some(id.to_string()))
         }
         None => Ok(default_id.map(|value| value.to_string())),
     }
+}
+
+#[derive(Debug)]
+enum ModeResolutionError {
+    Unsupported(String),
+    Invalid(String),
+}
+
+fn resolve_mode_id(
+    agent_kind: &str,
+    provided_mode_id: Option<&str>,
+) -> Result<Option<String>, ModeResolutionError> {
+    let Some(mode_id) = provided_mode_id
+        .map(str::trim)
+        .filter(|mode_id| !mode_id.is_empty())
+    else {
+        return Ok(None);
+    };
+    let valid_ids = bundled_create_mode_ids(agent_kind).ok_or_else(|| {
+        ModeResolutionError::Invalid(format!("mode catalog not found for agent '{agent_kind}'"))
+    })?;
+    if valid_ids.iter().any(|valid_id| valid_id == mode_id) {
+        Ok(Some(mode_id.to_string()))
+    } else {
+        Err(ModeResolutionError::Unsupported(mode_id.to_string()))
+    }
+}
+
+#[derive(Debug)]
+enum CatalogIdResolutionError {
+    Invalid(String),
 }
 
 fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'static str> {
@@ -903,7 +704,24 @@ mod tests {
         let error = resolve_model_id(&provider_config, Some("missing"))
             .expect_err("invalid model id should fail");
 
-        assert!(error.to_string().contains("invalid model ID"));
+        assert!(matches!(
+            error,
+            ModelResolutionError::Unsupported(model_id) if model_id == "missing"
+        ));
+    }
+
+    #[test]
+    fn validates_create_session_mode_ids_against_bundled_catalog() {
+        let resolved =
+            resolve_mode_id("codex", Some("full-access")).expect("valid codex mode should resolve");
+        assert_eq!(resolved.as_deref(), Some("full-access"));
+
+        let error =
+            resolve_mode_id("codex", Some("not-a-mode")).expect_err("invalid mode should fail");
+        assert!(matches!(
+            error,
+            ModeResolutionError::Unsupported(mode_id) if mode_id == "not-a-mode"
+        ));
     }
 
     #[test]

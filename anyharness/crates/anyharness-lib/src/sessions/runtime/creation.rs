@@ -1,9 +1,9 @@
-use std::time::Instant;
+use std::{collections::HashSet, time::Instant};
 
 use anyharness_contract::v1::{SessionMcpBindingSummary, SessionPluginBundle};
 
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::plugins::validation::validate_session_plugin_bundle;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
@@ -166,7 +166,7 @@ impl SessionRuntime {
             );
         };
         if plugin_bundle.plugins.is_empty() {
-            self.plugin_bundle_registry.clear_session_bundle(session_id);
+            self.clear_session_plugin_bundle(session_id, &record)?;
             return Ok(());
         }
         if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
@@ -184,6 +184,50 @@ impl SessionRuntime {
 
     pub async fn has_live_session(&self, session_id: &str) -> bool {
         self.acp_manager.get_handle(session_id).await.is_some()
+    }
+
+    fn clear_session_plugin_bundle(
+        &self,
+        session_id: &str,
+        record: &SessionRecord,
+    ) -> Result<(), crate::sessions::runtime::EnsureLiveSessionError> {
+        let existing_bundle = self.plugin_bundle_registry.get_session_bundle(session_id);
+        self.plugin_bundle_registry.clear_session_bundle(session_id);
+        let Some(existing_bundle) = existing_bundle else {
+            return Ok(());
+        };
+        let plugin_summary_ids: HashSet<String> = existing_bundle
+            .plugins
+            .iter()
+            .flat_map(|plugin| plugin.mcp_binding_summaries.iter())
+            .map(|summary| summary.id.clone())
+            .collect();
+        if plugin_summary_ids.is_empty() {
+            return Ok(());
+        }
+
+        let mut summaries = record
+            .to_contract()
+            .mcp_binding_summaries
+            .unwrap_or_default();
+        let original_len = summaries.len();
+        summaries.retain(|summary| !plugin_summary_ids.contains(&summary.id));
+        if summaries.len() == original_len {
+            return Ok(());
+        }
+        let summaries_json = if summaries.is_empty() {
+            None
+        } else {
+            serialize_binding_summaries(Some(summaries)).map_err(|error| {
+                crate::sessions::runtime::EnsureLiveSessionError::Internal(anyhow::anyhow!(
+                    "serialize MCP binding summaries after plugin clear: {error}"
+                ))
+            })?
+        };
+        self.session_service
+            .store()
+            .update_mcp_binding_summaries(session_id, summaries_json)
+            .map_err(crate::sessions::runtime::EnsureLiveSessionError::Internal)
     }
 }
 
@@ -215,6 +259,20 @@ fn map_create_session_service_error(
         crate::sessions::service::CreateSessionError::WorkspaceSingleSession {
             session_id, ..
         } => CreateAndStartSessionError::WorkspaceSingleSession { session_id },
+        crate::sessions::service::CreateSessionError::ModelUnsupported {
+            agent_kind,
+            model_id,
+        } => CreateAndStartSessionError::ModelUnsupported {
+            agent_kind,
+            model_id,
+        },
+        crate::sessions::service::CreateSessionError::ModeUnsupported {
+            agent_kind,
+            mode_id,
+        } => CreateAndStartSessionError::ModeUnsupported {
+            agent_kind,
+            mode_id,
+        },
         crate::sessions::service::CreateSessionError::Invalid(detail) => {
             CreateAndStartSessionError::Invalid(detail)
         }

@@ -182,6 +182,15 @@ export type FinalizeCloudWorkspaceMobilityHandoffRequest =
   components["schemas"]["FinalizeWorkspaceMobilityHandoffRequest"];
 export type FailCloudWorkspaceMobilityHandoffRequest =
   components["schemas"]["FailWorkspaceMobilityHandoffRequest"];
+export type CloudAgentCatalogResponse = components["schemas"]["AgentCatalogResponse"];
+export type CloudAgentCatalogAgent = components["schemas"]["AgentCatalogAgent"];
+export type CloudAgentCatalogSession = components["schemas"]["AgentCatalogSession"];
+export type CloudAgentCatalogModel = components["schemas"]["AgentCatalogModel"];
+export type CloudAgentCatalogControl = components["schemas"]["AgentCatalogControl"];
+export type CloudAgentCatalogControlValue =
+  components["schemas"]["AgentCatalogControlValue"];
+export type CloudAgentCatalogLaunchRemediation =
+  components["schemas"]["AgentCatalogLaunchRemediation"];
 
 export class ProliferateClientError extends Error {
   status: number;

@@ -13,19 +13,19 @@ import {
 } from "../lib/query-keys.js";
 import {
   useRuntimeWorkspacesQuery,
-  useWorkspaceSessionLaunchQuery,
+  useWorkspaceQuery,
 } from "./workspaces.js";
 
 const mocks = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
-  getSessionLaunchCatalog: vi.fn(),
+  getWorkspace: vi.fn(),
 }));
 
 vi.mock("../lib/client-cache.js", () => ({
   getAnyHarnessClient: () => ({
     workspaces: {
       list: mocks.listWorkspaces,
-      getSessionLaunchCatalog: mocks.getSessionLaunchCatalog,
+      get: mocks.getWorkspace,
     },
   }),
 }));
@@ -34,7 +34,7 @@ describe("sdk-react workspace query request options", () => {
   afterEach(() => {
     cleanup();
     mocks.listWorkspaces.mockReset();
-    mocks.getSessionLaunchCatalog.mockReset();
+    mocks.getWorkspace.mockReset();
   });
 
   it("passes query signals to runtime workspace list without adding them to query keys", async () => {
@@ -56,15 +56,11 @@ describe("sdk-react workspace query request options", () => {
   });
 
   it("composes caller-provided request signals for workspace display queries", async () => {
-    mocks.getSessionLaunchCatalog.mockResolvedValue({
-      workspaceId: "anyharness-workspace-1",
-      catalogVersion: "test",
-      agents: [],
-    });
+    mocks.getWorkspace.mockResolvedValue({ id: "anyharness-workspace-1" });
     const callerController = new AbortController();
     const queryClient = createQueryClient();
 
-    const { result } = renderHook(() => useWorkspaceSessionLaunchQuery({
+    const { result } = renderHook(() => useWorkspaceQuery({
       requestOptions: {
         signal: callerController.signal,
       },
@@ -72,8 +68,8 @@ describe("sdk-react workspace query request options", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    const requestOptions = mocks.getSessionLaunchCatalog.mock.calls[0]?.[1];
-    expect(mocks.getSessionLaunchCatalog).toHaveBeenCalledWith(
+    const requestOptions = mocks.getWorkspace.mock.calls[0]?.[1];
+    expect(mocks.getWorkspace).toHaveBeenCalledWith(
       "anyharness-workspace-1",
       expect.objectContaining({
         signal: expect.any(AbortSignal),

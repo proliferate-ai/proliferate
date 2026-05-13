@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
+import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 import { buildLaunchControlDescriptors } from "./launch-control-descriptors";
 
 function control(
-  key: WorkspaceSessionLaunchControl["key"],
+  key: string,
   label: string,
   defaultValue: string,
-): WorkspaceSessionLaunchControl {
+): DesktopAgentLaunchControl {
   return {
     key,
     label,
@@ -20,11 +20,27 @@ function control(
       { value: "off", label: "Off", isDefault: defaultValue === "off" },
       { value: "on", label: "On", isDefault: defaultValue === "on" },
     ],
+    surfaces: {
+      start: true,
+      session: true,
+      automation: false,
+      settings: true,
+    },
+    apply: {
+      createField: null,
+      liveConfigId: key,
+      liveSetter: "runtime_control",
+      queueBeforeMaterialized: true,
+    },
+    missingLiveConfigPolicy: "ignore_default",
+    valueSource: "inline",
+    queueWhileMaterializing: true,
+    mutableAfterMaterialized: true,
   };
 }
 
 describe("buildLaunchControlDescriptors", () => {
-  it("lets model controls override agent controls by key without duplicating composer controls", () => {
+  it("builds descriptors from agent launch controls", () => {
     const controls = buildLaunchControlDescriptors({
       selection: { kind: "codex", modelId: "gpt-5.5" },
       launchAgents: [
@@ -37,10 +53,6 @@ describe("buildLaunchControlDescriptors", () => {
           models: [
             {
               id: "gpt-5.5",
-              launchControls: [
-                control("effort", "Model Effort", "high"),
-                control("fast_mode", "Model Fast Mode", "on"),
-              ],
             },
           ],
         },
@@ -55,12 +67,12 @@ describe("buildLaunchControlDescriptors", () => {
 
     expect(controls.map((candidate) => candidate.key)).toEqual(["effort", "fast_mode"]);
     expect(controls.find((candidate) => candidate.key === "effort")).toMatchObject({
-      label: "Model Effort",
-      detail: "High",
+      label: "Agent Effort",
+      detail: "Medium",
     });
     expect(controls.find((candidate) => candidate.key === "fast_mode")).toMatchObject({
-      label: "Model Fast Mode",
-      detail: "On",
+      label: "Agent Fast Mode",
+      detail: "Off",
     });
   });
 
@@ -78,6 +90,22 @@ describe("buildLaunchControlDescriptors", () => {
               phase: "live_default",
               createField: null,
               defaultValue: "off",
+              surfaces: {
+                start: true,
+                session: true,
+                automation: false,
+                settings: true,
+              },
+              apply: {
+                createField: null,
+                liveConfigId: "fast_mode",
+                liveSetter: "runtime_control",
+                queueBeforeMaterialized: true,
+              },
+              missingLiveConfigPolicy: "ignore_default",
+              valueSource: "inline",
+              queueWhileMaterializing: true,
+              mutableAfterMaterialized: true,
               values: [
                 { value: "off", label: "Off", isDefault: true },
                 { value: "on", label: "On", isDefault: false },

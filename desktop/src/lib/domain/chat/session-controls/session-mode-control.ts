@@ -5,7 +5,7 @@ import {
   type SessionControlIconKey,
   type SessionControlTone,
 } from "@/lib/domain/chat/session-controls/presentation";
-import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
+import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export type SessionModeTone = SessionControlTone;
 export type SessionModeIconKey = SessionControlIconKey;
@@ -67,7 +67,7 @@ export function resolveEffectiveConfiguredSessionControlValue(
 
 export function launchControlToConfiguredSessionControlValues(
   agentKind: string | null | undefined,
-  control: WorkspaceSessionLaunchControl | null | undefined,
+  control: DesktopAgentLaunchControl | null | undefined,
 ): ConfiguredSessionControlValue[] {
   if (!agentKind || !control || !isConfiguredSessionControlKey(control.key)) {
     return EMPTY_CONFIGURED_VALUES;
@@ -142,7 +142,7 @@ export function getPreviousSessionModeValue(
 }
 
 function isConfiguredSessionControlKey(
-  key: WorkspaceSessionLaunchControl["key"],
+  key: DesktopAgentLaunchControl["key"],
 ): key is ConfiguredSessionControlKey {
   return key === "mode" || key === "collaboration_mode";
 }

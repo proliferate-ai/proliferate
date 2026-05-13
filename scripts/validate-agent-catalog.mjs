@@ -101,6 +101,22 @@ function validateControl(control, agentKind, modelIds) {
       fail(`${agentKind}.${control.key}.apply.createField is invalid`);
     }
   }
+  if (control.key === "model") {
+    if (control?.apply?.createField !== "modelId") {
+      fail(`${agentKind}.model.apply.createField must be modelId`);
+    }
+    if (control.valueSource !== "agentModels" && control.valueSource !== "discoveredModels") {
+      fail(`${agentKind}.model.valueSource must use agent models or discovered models`);
+    }
+  }
+  if (control.key === "mode") {
+    if (control?.apply?.createField !== "modeId") {
+      fail(`${agentKind}.mode.apply.createField must be modeId`);
+    }
+    if (control.valueSource !== "inline") {
+      fail(`${agentKind}.mode.valueSource must be inline`);
+    }
+  }
   if (control?.apply?.liveSetter !== null && control?.apply?.liveSetter !== undefined) {
     if (!VALID_LIVE_SETTERS.has(control.apply.liveSetter)) {
       fail(`${agentKind}.${control.key}.apply.liveSetter is invalid`);

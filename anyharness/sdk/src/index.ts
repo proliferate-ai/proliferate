@@ -56,22 +56,6 @@ export type {
 } from "./types/agents.js";
 
 export type {
-  ModelCatalogStatus,
-  ModelLaunchRemediation,
-  ModelLaunchRemediationKind,
-  ModelRegistry,
-  ModelRegistryModel,
-  SessionDefaultControl,
-  SessionDefaultControlKey,
-  SessionDefaultControlValue,
-} from "./types/model-registries.js";
-
-export type {
-  ProviderConfig,
-  ModelEntry,
-} from "./types/providers.js";
-
-export type {
   RepoRootKind,
   RepoRoot,
   ResolveRepoRootFromPathRequest,
@@ -131,13 +115,6 @@ export type {
   WorkspaceCreatorContext,
   Workspace,
   ResolveWorkspaceResponse,
-  WorkspaceSessionLaunchControl,
-  WorkspaceSessionLaunchControlKey,
-  WorkspaceSessionLaunchControlPhase,
-  WorkspaceSessionLaunchControlValue,
-  WorkspaceSessionLaunchModel,
-  WorkspaceSessionLaunchAgent,
-  WorkspaceSessionLaunchCatalog,
   ResolveWorkspaceFromPathRequest,
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,

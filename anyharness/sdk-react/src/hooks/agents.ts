@@ -13,7 +13,6 @@ import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
-  anyHarnessProviderConfigsKey,
   anyHarnessReconcileAgentsMutationKey,
 } from "../lib/query-keys.js";
 
@@ -46,10 +45,7 @@ export function useInstallAgentMutation() {
       return client.agents.install(input.kind, input.request ?? {});
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessProviderConfigsKey(runtimeUrl) }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
     },
   });
 }
@@ -107,10 +103,7 @@ export function useReconcileAgentsMutation() {
     },
     onSuccess: async (response) => {
       queryClient.setQueryData(anyHarnessAgentReconcileStatusKey(runtimeUrl), response);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessProviderConfigsKey(runtimeUrl) }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
     },
   });
 }

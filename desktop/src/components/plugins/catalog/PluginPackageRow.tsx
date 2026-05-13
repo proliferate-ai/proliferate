@@ -135,7 +135,7 @@ function PluginPackageCard({
           </div>
         </Button>
         {status && (
-          <div className="hidden shrink-0 sm:block">
+          <div className="shrink-0">
             {status}
           </div>
         )}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import asdict, replace
 import hashlib
+import json
 
 from proliferate.server.cloud.mcp_catalog.domain.types import CatalogEntry
 from proliferate.server.cloud.plugins.catalog.domain.types import PluginPackage, PluginSkill
@@ -13,28 +15,30 @@ OPENAI_PLUGINS_SOURCE_REF = "7955f1db081ddb3e14387b27cd65cf96b3e33931"
 
 def first_party_package_for_catalog_entry(entry: CatalogEntry) -> PluginPackage:
     skills = _FIRST_PARTY_SKILLS_BY_CATALOG_ENTRY_ID.get(entry.id, ())
-    return PluginPackage(
+    package = PluginPackage(
         id=entry.id,
         catalog_entry_id=entry.id,
-        version=_package_version(entry, skills),
+        version="",
         display_name=entry.name,
         description=entry.description,
         skills=skills,
     )
+    return replace(package, version=_package_version(entry.version, package))
 
 
-def _package_version(entry: CatalogEntry, skills: tuple[PluginSkill, ...]) -> str:
-    if not skills:
-        return str(entry.version)
+def _package_version(connector_version: int, package: PluginPackage) -> str:
+    payload = asdict(package)
+    payload["version"] = ""
     digest = hashlib.sha256()
-    digest.update(str(entry.version).encode("utf-8"))
-    for skill in skills:
-        digest.update(skill.id.encode("utf-8"))
-        digest.update(str(skill.default_enabled).encode("utf-8"))
-        digest.update("|".join(skill.required_mcp_server_refs).encode("utf-8"))
-        digest.update(skill.provenance.source_ref.encode("utf-8"))
-        digest.update(skill.provenance.adapted_sha256.encode("utf-8"))
-    return f"{entry.version}+{digest.hexdigest()[:12]}"
+    digest.update(
+        json.dumps(
+            payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    return f"{connector_version}+{digest.hexdigest()[:12]}"
 
 
 def _skill(

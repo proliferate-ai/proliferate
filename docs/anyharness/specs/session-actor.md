@@ -1,6 +1,6 @@
 # Session Actor
 
-Status: draft target design for the live session actor rewrite.
+Status: authoritative for the split live session actor.
 
 This spec is specific to the actor portion of the AnyHarness session engine. It
 assumes the broader architecture in `guides/system-architecture.md` and the
@@ -9,7 +9,9 @@ session engine overview in `specs/session-engine.md`.
 Current implementation:
 
 ```text
-anyharness-lib/src/acp/session_actor.rs
+anyharness-lib/src/live/sessions/actor/
+anyharness-lib/src/live/sessions/connection/
+anyharness-lib/src/live/sessions/handle.rs
 ```
 
 Target owner:
@@ -27,8 +29,9 @@ modules around it.
 Done means:
 
 ```text
-live/sessions/actor/ owns the actor command protocol, state, loop, turn,
-config, notification, interaction-command, and shutdown behavior.
+live/sessions/actor/ owns the actor command protocol, state, event loop, turn,
+config, notification, interaction-command, fork policy, background-work update,
+and shutdown behavior.
 
 live/sessions/connection/ owns ACP process/native-session startup and shutdown
 mechanics currently embedded in actor startup paths.
@@ -42,7 +45,7 @@ re-export during the same migration PR and is deleted before the PR is done.
 
 Do not stop after moving types, small helpers, or diagnostics out of the old
 file. The top-level actor loop must be readable from
-`live/sessions/actor/loop.rs`.
+`live/sessions/actor/event_loop.rs`.
 
 ## Purpose
 
@@ -289,7 +292,10 @@ live/sessions/actor/
   mod.rs
   command.rs
   state.rs
-  loop.rs
+  event_loop.rs
+  spawn.rs
+  startup.rs
+  background_work.rs
 ```
 
 Responsibilities:
@@ -304,8 +310,17 @@ command.rs
 state.rs
   actor-owned live state and phase types
 
-loop.rs
+event_loop.rs
   top-level select loop and dispatch only
+
+spawn.rs
+  actor thread creation, readiness waiting, and handle construction
+
+startup.rs
+  ACP process/session startup orchestration after the actor thread is running
+
+background_work.rs
+  actor-side background work update handling
 ```
 
 No actor-owned file should become the new god module. If one concern file grows
@@ -329,6 +344,10 @@ shutdown/
 
 interactions/
   actor-side interaction resolution commands
+
+fork/
+  actor command handling for verify-fork-ready, fork, and native child-session
+  close; raw ACP capability parsing stays with connection/protocol code
 
 diagnostics/
   stuck-turn and state diagnostics if it outgrows turn/diagnostics.rs
@@ -665,7 +684,7 @@ extraction is not an acceptable endpoint.
 Recommended order:
 
 ```text
-1. Extract command/state/loop shell.
+1. Extract command/state/event-loop shell.
 2. Extract turn start/active/finish/queue code.
 3. Extract config apply/queue/persist code.
 4. Extract notification dispatch/replay filtering.
@@ -694,7 +713,7 @@ renames. The actor is the core loop; keep the migration reviewable.
 A full actor migration is accepted only when all of these are true:
 
 ```text
-1. Opening live/sessions/actor/loop.rs shows the session engine event loop
+1. Opening live/sessions/actor/event_loop.rs shows the session engine event loop
    without reading prompt/config/notification/shutdown implementation details.
 
 2. Idle and busy command behavior are explicit and separated.
@@ -709,20 +728,27 @@ A full actor migration is accepted only when all of these are true:
 
 6. Actor-side interaction resolution and cleanup live under actor/interactions/.
 
-7. Cancel/close/dismiss/error finalization lives under actor/shutdown/.
+7. Fork readiness, fork command handling, and native child-session close policy
+   live under actor/fork/.
 
-8. ACP process/native-session startup mechanics no longer live in actor
+8. Background work update handling lives under actor/background_work.rs unless
+   it grows enough to earn its own concern folder.
+
+9. Cancel/close/dismiss/error finalization lives under actor/shutdown/.
+
+10. ACP process/native-session startup mechanics no longer live in actor
    concern files; they live under live/sessions/connection/.
 
-9. Product prompt preparation remains in domains/sessions/prompt.
+11. Product prompt preparation remains in domains/sessions/prompt.
 
-10. Product MCP selection/injection remains in domains/sessions/mcp_bindings.
+12. Product MCP selection/injection remains in domains/sessions/mcp_bindings.
 
-11. Event normalization, sequence assignment, persistence, and broadcast remain
-    in live/sessions/event_sink.
+13. Event normalization, sequence assignment, persistence, and broadcast remain
+    in `acp/event_sink/**` until the event-sink topology move; target owner is
+    `live/sessions/event_sink/**`.
 
-12. The old acp/session_actor.rs implementation is gone.
+14. The old acp/session_actor.rs implementation is gone.
 
-13. Existing session behavior and event ordering are preserved by tests or
+15. Existing session behavior and event ordering are preserved by tests or
     focused characterization coverage.
 ```

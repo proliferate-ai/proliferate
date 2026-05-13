@@ -7,7 +7,6 @@ import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
-import { SessionModelAvailabilityDialog } from "@/components/workspace/chat/launch/SessionModelAvailabilityDialog"
 import { applyAppearancePreference, initializeTheme } from "@/config/theme"
 import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
@@ -242,7 +241,6 @@ function AppRuntime() {
       <AppCommandActionsProvider value={appCommandActions}>
         <MacWindowControlsSafeArea />
         <UpdateRestartDialog />
-        <SessionModelAvailabilityDialog />
         <RuntimeInputSyncGate />
         <WorktreeCleanupPolicySyncGate />
         <InstrumentedRoutes>

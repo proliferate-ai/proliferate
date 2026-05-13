@@ -17,9 +17,9 @@ use serde::Deserialize;
 
 use super::access::assert_session_mutable;
 use super::error::ApiError;
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
@@ -557,6 +557,7 @@ pub async fn get_prompt_attachment(
     request_body = Option<ResumeSessionRequest>,
     responses(
         (status = 200, description = "Session resumed", body = Session),
+        (status = 409, description = "Session must be restarted before applying resume changes", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "sessions"
@@ -581,6 +582,9 @@ pub async fn resume_session(
     } else {
         None
     };
+    let _lease =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
+            .await?;
     if let Some(plugin_bundle) = req.plugin_bundle {
         if state.session_runtime.has_live_session(&session_id).await {
             return Err(ApiError::conflict(
@@ -593,9 +597,6 @@ pub async fn resume_session(
             .set_session_plugin_bundle(&session_id, plugin_bundle)
             .map_err(map_ensure_live_session_error)?;
     }
-    let _lease =
-        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
-            .await?;
     let updated = state
         .session_runtime
         .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
@@ -1154,6 +1155,20 @@ fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
         CreateAndStartSessionError::Invalid(detail) => {
             ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
         }
+        CreateAndStartSessionError::ModelUnsupported {
+            agent_kind,
+            model_id,
+        } => ApiError::bad_request(
+            format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
+            "SESSION_MODEL_UNSUPPORTED",
+        ),
+        CreateAndStartSessionError::ModeUnsupported {
+            agent_kind,
+            mode_id,
+        } => ApiError::bad_request(
+            format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
+            "SESSION_MODE_UNSUPPORTED",
+        ),
         CreateAndStartSessionError::WorkspaceNotFound => {
             ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
         }

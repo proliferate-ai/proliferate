@@ -1,6 +1,6 @@
 use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 
-use crate::acp::session_actor::{SessionCommand, SetConfigOptionCommandError};
+use crate::live::sessions::actor::command::{SessionCommand, SetConfigOptionCommandError};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::SessionRecord;
 

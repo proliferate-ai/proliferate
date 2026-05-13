@@ -19,8 +19,8 @@ use super::delegation::service::{CoworkDelegationError, CoworkDelegationService}
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
 use crate::acp::manager::AcpManager;
-use crate::acp::session_actor::SessionCommand;
 use crate::adapters::git::GitService;
+use crate::live::sessions::actor::command::SessionCommand;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
@@ -720,12 +720,14 @@ impl CoworkRuntime {
             .list_source_workspace_options(parent_session_id)
     }
 
-    pub fn workspace_session_launch_catalog(
+    pub fn resolved_workspace_launch_options(
         &self,
         workspace_id: &str,
-    ) -> anyhow::Result<crate::sessions::service::WorkspaceSessionLaunchCatalogData> {
+    ) -> anyhow::Result<
+        crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions,
+    > {
         self.session_runtime
-            .workspace_session_launch_catalog(workspace_id)
+            .resolved_workspace_launch_options(workspace_id)
     }
 
     pub fn validate_managed_coding_workspace(

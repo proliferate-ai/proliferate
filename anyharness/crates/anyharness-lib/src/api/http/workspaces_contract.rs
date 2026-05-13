@@ -1,15 +1,10 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
     SetupScriptStatus, Workspace, WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind,
-    WorkspaceLifecycleState, WorkspaceSessionLaunchAgent, WorkspaceSessionLaunchCatalog,
-    WorkspaceSessionLaunchModel, WorkspaceSurface,
+    WorkspaceLifecycleState, WorkspaceSurface,
 };
 
 use super::error::ApiError;
-use crate::sessions::service::{
-    WorkspaceSessionLaunchAgentData, WorkspaceSessionLaunchCatalogData,
-    WorkspaceSessionLaunchModelData,
-};
 use crate::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::types::{
@@ -138,20 +133,6 @@ pub(super) fn workspace_cleanup_operation_to_contract(
     }
 }
 
-pub(super) fn workspace_session_launch_catalog_to_contract(
-    catalog: WorkspaceSessionLaunchCatalogData,
-) -> WorkspaceSessionLaunchCatalog {
-    WorkspaceSessionLaunchCatalog {
-        workspace_id: catalog.workspace_id,
-        catalog_version: catalog.catalog_version,
-        agents: catalog
-            .agents
-            .into_iter()
-            .map(workspace_session_launch_agent_to_contract)
-            .collect(),
-    }
-}
-
 fn setup_hint_to_contract(hint: DetectedSetupHint) -> SetupHint {
     SetupHint {
         id: hint.id,
@@ -162,32 +143,5 @@ fn setup_hint_to_contract(hint: DetectedSetupHint) -> SetupHint {
             DetectedHintCategory::BuildTool => SetupHintCategory::BuildTool,
             DetectedHintCategory::SecretSync => SetupHintCategory::SecretSync,
         },
-    }
-}
-
-fn workspace_session_launch_agent_to_contract(
-    agent: WorkspaceSessionLaunchAgentData,
-) -> WorkspaceSessionLaunchAgent {
-    WorkspaceSessionLaunchAgent {
-        kind: agent.kind,
-        display_name: agent.display_name,
-        default_model_id: agent.default_model_id,
-        launch_controls: agent.launch_controls,
-        models: agent
-            .models
-            .into_iter()
-            .map(workspace_session_launch_model_to_contract)
-            .collect(),
-    }
-}
-
-fn workspace_session_launch_model_to_contract(
-    model: WorkspaceSessionLaunchModelData,
-) -> WorkspaceSessionLaunchModel {
-    WorkspaceSessionLaunchModel {
-        id: model.id,
-        display_name: model.display_name,
-        is_default: model.is_default,
-        launch_controls: model.launch_controls,
     }
 }

@@ -52,8 +52,18 @@ pub struct SessionRuntime {
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
+    ModelUnsupported {
+        agent_kind: String,
+        model_id: String,
+    },
+    ModeUnsupported {
+        agent_kind: String,
+        mode_id: String,
+    },
     WorkspaceNotFound,
-    WorkspaceSingleSession { session_id: String },
+    WorkspaceSingleSession {
+        session_id: String,
+    },
     MissingDataKey,
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),

@@ -13,7 +13,6 @@ import type {
   WorkspacePurgeResponse,
   WorkspaceRetirePreflightResponse,
   WorkspaceRetireResponse,
-  WorkspaceSessionLaunchCatalog,
 } from "../types/workspaces.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
@@ -70,16 +69,6 @@ export class WorkspacesClient {
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/display-name`,
       input,
       withTimingCategory(options, "workspace.display_name.update"),
-    );
-  }
-
-  async getSessionLaunchCatalog(
-    workspaceId: string,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspaceSessionLaunchCatalog> {
-    return this.transport.get<WorkspaceSessionLaunchCatalog>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/session-launch`,
-      withTimingCategory(options, "workspace.session_launch"),
     );
   }
 

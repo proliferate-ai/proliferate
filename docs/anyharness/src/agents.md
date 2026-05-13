@@ -33,7 +33,7 @@ It includes:
 - docs URL
 
 The built-in descriptors live in
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`.
 
 ### Artifact Specs (`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`)
 
@@ -93,29 +93,32 @@ This is the main handoff from the agents area into the rest of the runtime.
 
 ## Main Flow
 
-### Static Registry and Catalog
+### Bundled Catalog and Registry
 
-There are two separate static sources:
+There is one supported AnyHarness runtime catalog input:
 
-- `registry.rs`
-  - built-in agent descriptors
-- `catalog.rs`
-  - curated provider/model catalog used for session validation and defaults
+- `catalogs/agents/v1/catalog.json`
+  - supported agent families
+  - install and launch metadata
+  - credential-discovery metadata
+  - fallback model/control metadata
 
-Code paths:
+Runtime code projects that bundled catalog into two target-local surfaces:
 
-- `anyharness/crates/anyharness-lib/src/domains/agents/registry.rs`
-- `anyharness/crates/anyharness-lib/src/domains/agents/catalog.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`
+  - trusted built-in `AgentDescriptor` values
+- `anyharness/crates/anyharness-lib/src/domains/agents/catalog/**`
+  - schema, validation, bundled loading, and model/descriptor projections
 
-Those are related but distinct:
-
-- the registry defines install, auth, and launch behavior
-- the catalog defines model choices the session domain can validate against
+There is no separate runtime `catalog.rs` source and no split model/launch
+catalog path. Cloud product catalogs may be newer than this bundled runtime
+catalog; AnyHarness still validates creation against what the target runtime
+can actually launch.
 
 ### Resolution Flow
 
 Resolution is owned by
-`anyharness/crates/anyharness-lib/src/domains/agents/resolver.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/readiness/resolver.rs`.
 
 The flow is:
 
@@ -141,7 +144,7 @@ Credential detection is layered:
    - otherwise return `MissingEnv`
 
 Provider-specific local discovery currently checks known local config/auth files
-for Claude, Codex, Gemini, OpenCode, Cursor, and Amp.
+for Claude, Codex, Gemini, OpenCode, and Cursor.
 
 OpenCode is intentionally treated as provider-managed for readiness. AnyHarness
 may detect `~/.local/share/opencode/auth.json` as a positive signal, but it does
@@ -151,7 +154,7 @@ chain support, public/free model behavior, and live ACP-reported model list.
 
 Code path:
 
-- `anyharness/crates/anyharness-lib/src/domains/agents/credentials.rs`
+- `anyharness/crates/anyharness-lib/src/domains/agents/credentials/mod.rs`
 - Claude/Codex local file parsing and portable export normalization are shared
   with desktop cloud sync via `anyharness/crates/anyharness-credential-discovery/`
 
@@ -204,8 +207,8 @@ the broader agents flow.
 
 ### Reconcile Flow
 
-`reconcile.rs`
-(`anyharness/crates/anyharness-lib/src/domains/agents/reconcile.rs`)
+`reconcile/`
+(`anyharness/crates/anyharness-lib/src/domains/agents/reconcile/`)
 is the batch install path.
 
 It iterates the built-in registry and attempts managed install where supported,

@@ -1,6 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use anyharness_contract::v1::{SessionMcpBindingOutcome, SessionMcpServer, SessionPluginBundle};
+use anyharness_contract::v1::{
+    SessionMcpBindingOutcome, SessionMcpServer, SessionMcpTransport, SessionPluginBundle,
+    SessionPluginCredentialBindingStatus,
+};
 
 use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 
@@ -196,6 +199,7 @@ fn validate_mcp_servers(
     plugin_id: &str,
     mcp_servers: &[SessionMcpServer],
 ) -> Result<HashSet<String>, SessionPluginBundleValidationError> {
+    let mut connection_ids = HashSet::new();
     let mut names = HashSet::new();
     for server in mcp_servers {
         let connection_id = session_mcp_connection_id(server).trim();
@@ -209,6 +213,11 @@ fn validate_mcp_servers(
             connection_id,
             MAX_MCP_CONNECTION_ID_LEN,
         )?;
+        if !connection_ids.insert(connection_id.to_string()) {
+            return Err(invalid(format!(
+                "duplicate MCP connection id {connection_id} for plugin {plugin_id}"
+            )));
+        }
         let server_name = session_mcp_server_name(server).trim();
         if server_name.is_empty() {
             return Err(invalid(format!(
@@ -299,11 +308,25 @@ fn validate_mcp_binding_summary_consistency(
     plugin: &anyharness_contract::v1::SessionPlugin,
     mcp_server_names: &HashSet<String>,
 ) -> Result<(), SessionPluginBundleValidationError> {
-    let mcp_connection_ids: HashSet<String> = plugin
+    if plugin.mcp_binding_summaries.len() != plugin.mcp_servers.len() {
+        return Err(invalid(format!(
+            "plugin {plugin_id} must include one applied MCP binding summary per MCP server"
+        )));
+    }
+    let mcp_servers_by_connection_id: HashMap<String, (&str, SessionMcpTransport)> = plugin
         .mcp_servers
         .iter()
-        .map(|server| session_mcp_connection_id(server).trim().to_string())
+        .map(|server| {
+            (
+                session_mcp_connection_id(server).trim().to_string(),
+                (
+                    session_mcp_server_name(server).trim(),
+                    session_mcp_transport(server),
+                ),
+            )
+        })
         .collect();
+    let mut summary_ids = HashSet::new();
     for summary in &plugin.mcp_binding_summaries {
         if summary.outcome != SessionMcpBindingOutcome::Applied {
             return Err(invalid(format!(
@@ -312,15 +335,30 @@ fn validate_mcp_binding_summary_consistency(
             )));
         }
         let summary_id = summary.id.trim();
-        if !mcp_connection_ids.contains(summary_id) {
+        if !summary_ids.insert(summary_id.to_string()) {
+            return Err(invalid(format!(
+                "duplicate MCP binding summary id {summary_id} for plugin {plugin_id}"
+            )));
+        }
+        let Some((server_name, transport)) = mcp_servers_by_connection_id.get(summary_id) else {
             return Err(invalid(format!(
                 "plugin {plugin_id} summary references unknown MCP connection {summary_id}"
             )));
-        }
+        };
         let summary_server_name = summary.server_name.trim();
         if !mcp_server_names.contains(summary_server_name) {
             return Err(invalid(format!(
                 "plugin {plugin_id} summary references unknown MCP server {summary_server_name}"
+            )));
+        }
+        if summary_server_name != *server_name {
+            return Err(invalid(format!(
+                "plugin {plugin_id} summary server name does not match mounted MCP server {summary_id}"
+            )));
+        }
+        if summary.transport != *transport {
+            return Err(invalid(format!(
+                "plugin {plugin_id} summary transport does not match mounted MCP server {summary_id}"
             )));
         }
     }
@@ -346,6 +384,11 @@ fn validate_credential_bindings(
             )));
         }
         validate_len("credential binding id", id, MAX_CREDENTIAL_BINDING_ID_LEN)?;
+        if binding.status != SessionPluginCredentialBindingStatus::Ready {
+            return Err(invalid(format!(
+                "credential binding {id} for plugin {plugin_id} is not ready"
+            )));
+        }
         if !ids.insert(id.to_string()) {
             return Err(invalid(format!(
                 "duplicate credential binding id {id} for plugin {plugin_id}"
@@ -413,6 +456,13 @@ fn session_mcp_connection_id(server: &SessionMcpServer) -> &str {
     }
 }
 
+fn session_mcp_transport(server: &SessionMcpServer) -> SessionMcpTransport {
+    match server {
+        SessionMcpServer::Http(_) => SessionMcpTransport::Http,
+        SessionMcpServer::Stdio(_) => SessionMcpTransport::Stdio,
+    }
+}
+
 fn validate_text_field(
     field: &str,
     value: &str,
@@ -472,6 +522,15 @@ mod tests {
             });
 
         assert_error_contains(&bundle, "duplicate credential binding id");
+    }
+
+    #[test]
+    fn rejects_non_ready_credential_bindings() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].credential_bindings[0].status =
+            SessionPluginCredentialBindingStatus::NeedsReconnect;
+
+        assert_error_contains(&bundle, "is not ready");
     }
 
     #[test]
@@ -550,6 +609,46 @@ mod tests {
         bundle.plugins[0].mcp_binding_summaries[0].id = "missing".to_string();
 
         assert_error_contains(&bundle, "summary references unknown MCP connection");
+    }
+
+    #[test]
+    fn rejects_missing_mcp_binding_summary_for_server() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_binding_summaries.clear();
+
+        assert_error_contains(&bundle, "one applied MCP binding summary per MCP server");
+    }
+
+    #[test]
+    fn rejects_mismatched_mcp_binding_summary_transport() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_binding_summaries[0].transport = SessionMcpTransport::Stdio;
+
+        assert_error_contains(&bundle, "summary transport does not match");
+    }
+
+    #[test]
+    fn rejects_mismatched_mcp_binding_summary_server_name() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_binding_summaries[0].server_name = "other".to_string();
+
+        assert_error_contains(&bundle, "summary references unknown MCP server");
+    }
+
+    #[test]
+    fn rejects_duplicate_mcp_connection_ids() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0]
+            .mcp_servers
+            .push(SessionMcpServer::Http(SessionMcpHttpServer {
+                connection_id: "conn_github".to_string(),
+                catalog_entry_id: Some("github".to_string()),
+                server_name: "github_extra".to_string(),
+                url: "https://example.com/extra-mcp".to_string(),
+                headers: Vec::new(),
+            }));
+
+        assert_error_contains(&bundle, "duplicate MCP connection id");
     }
 
     #[test]

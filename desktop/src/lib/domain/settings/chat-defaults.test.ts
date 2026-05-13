@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
+import type {
+  DesktopLaunchModelRegistry as SettingsChatModelRegistry,
+  DesktopLaunchModelRegistryModel as SettingsChatModel,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import {
   buildPrimaryHarnessPreferenceUpdate,
   buildSettingsChatDefaultRows,
 } from "./chat-defaults";
 
-function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+function model(id: string, displayName: string, isDefault: boolean): SettingsChatModel {
   return {
     id,
     displayName,
@@ -15,7 +18,9 @@ function model(id: string, displayName: string, isDefault: boolean): ModelRegist
   };
 }
 
-function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRegistry {
+function registry(
+  overrides: Partial<SettingsChatModelRegistry> & { kind: string },
+): SettingsChatModelRegistry {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,

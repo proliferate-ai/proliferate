@@ -453,7 +453,7 @@ The runtime tries:
 That is why model configuration spans both:
 
 - `anyharness/crates/anyharness-lib/src/sessions/live_config.rs`
-- `anyharness/crates/anyharness-lib/src/acp/session_actor.rs`
+- `anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`
 
 ## SSE and Event Flow
 

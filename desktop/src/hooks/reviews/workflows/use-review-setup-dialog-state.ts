@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ModelRegistry } from "@anyharness/sdk";
 import {
-  useModelRegistriesQuery,
   useStartCodeReviewMutation,
   useStartPlanReviewMutation,
 } from "@anyharness/sdk-react";
 import { useNavigate } from "react-router-dom";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";
+import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import {
   buildReviewRequest,
   createReviewSetupDraft,
@@ -53,7 +53,7 @@ export function useReviewSetupDialogState() {
   const setPreference = useUserPreferencesStore((state) => state.set);
   const showToast = useToastStore((state) => state.show);
   const { readyAgents, isLoading: agentsLoading } = useAgentCatalog();
-  const modelRegistriesQuery = useModelRegistriesQuery();
+  const modelRegistriesQuery = useCloudLaunchModelRegistries();
   const modelRegistries = modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES;
   const startPlanReviewMutation = useStartPlanReviewMutation({ workspaceId: selectedWorkspaceId });
   const startCodeReviewMutation = useStartCodeReviewMutation({ workspaceId: selectedWorkspaceId });

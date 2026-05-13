@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRegistry } from "@anyharness/sdk";
+import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import { buildSettingsAgentDefaultRows } from "@/lib/domain/settings/agent-defaults";
 
 describe("buildSettingsAgentDefaultRows", () => {

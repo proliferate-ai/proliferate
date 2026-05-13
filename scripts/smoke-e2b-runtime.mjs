@@ -59,7 +59,6 @@ const API_KEYS = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || envFile.OPENAI_API_KEY || "",
   GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || envFile.GOOGLE_API_KEY || "",
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || envFile.GEMINI_API_KEY || "",
-  AMP_API_KEY: process.env.AMP_API_KEY || envFile.AMP_API_KEY || "",
   CURSOR_API_KEY: process.env.CURSOR_API_KEY || envFile.CURSOR_API_KEY || "",
 };
 
@@ -81,12 +80,6 @@ const PROVIDERS = [
     kind: "gemini",
     displayName: "Gemini",
     envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-    modelId: null,
-  },
-  {
-    kind: "amp",
-    displayName: "Amp",
-    envVars: ["AMP_API_KEY"],
     modelId: null,
   },
   {

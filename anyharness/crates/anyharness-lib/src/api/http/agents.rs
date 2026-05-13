@@ -15,14 +15,14 @@ use crate::domains::agents::installer::{
     self, InstallError, InstallOptions, InstalledArtifactResult,
 };
 use crate::domains::agents::model::*;
+use crate::domains::agents::readiness::resolver::resolve_agent;
+use crate::domains::agents::reconcile::execution::{
+    AgentReconcileJobSnapshot, AgentReconcileJobStatus,
+};
 use crate::domains::agents::reconcile::{
     AgentReconcileOutcome, AgentReconcileResult as InternalAgentReconcileResult,
 };
-use crate::domains::agents::reconcile_execution::{
-    AgentReconcileJobSnapshot, AgentReconcileJobStatus,
-};
 use crate::domains::agents::registry::built_in_registry;
-use crate::domains::agents::resolver::resolve_agent;
 
 type ProblemResponse = (StatusCode, Json<ProblemDetails>);
 

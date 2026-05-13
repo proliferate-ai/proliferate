@@ -1,9 +1,14 @@
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
-import { buildAvailablePluginPresentation } from "@/lib/domain/plugins/plugin-package-view-model";
+import type { PluginPackagePresentation } from "@/lib/domain/plugins/plugin-package-view-model";
 import { Blocks, FileText, Sparkles } from "@/components/ui/icons";
 
-export function ConnectorToolsTab({ entry }: { entry: ConnectorCatalogEntry }) {
-  const presentation = buildAvailablePluginPresentation(entry);
+export function ConnectorToolsTab({
+  entry,
+  presentation,
+}: {
+  entry: ConnectorCatalogEntry;
+  presentation: PluginPackagePresentation;
+}) {
   const skills = entry.pluginPackage?.skills ?? [];
   if (entry.capabilities.length === 0 && skills.length === 0) {
     return (

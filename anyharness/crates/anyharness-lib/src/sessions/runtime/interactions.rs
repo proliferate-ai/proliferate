@@ -1,6 +1,8 @@
 use anyharness_contract::v1::{InteractionKind, McpElicitationUrlRevealResponse};
 
-use crate::acp::session_actor::{InteractionResolution, ResolveInteractionCommandError};
+use crate::live::sessions::actor::command::{
+    InteractionResolution, ResolveInteractionCommandError,
+};
 
 use super::{InteractionResolutionRequest, ResolveInteractionError, SessionRuntime};
 

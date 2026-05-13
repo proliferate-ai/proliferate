@@ -100,22 +100,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/catalogs/agents/effective": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_effective_agent_launch_catalog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cowork": {
         parameters: {
             query?: never;
@@ -174,54 +158,6 @@ export interface paths {
         get: operations["list_cowork_threads"];
         put?: never;
         post: operations["create_cowork_thread"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-registries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_model_registries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/model-registries/{kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_model_registry"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/provider-configs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_provider_configs"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1524,22 +1460,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_id}/session-launch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_workspace_session_launch_catalog"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces/{workspace_id}/sessions/restore": {
         parameters: {
             query?: never;
@@ -2647,75 +2567,6 @@ export interface components {
             updatedAt: string;
         };
         /**
-         * @description Runtime-owned lifecycle status for a model catalog row.
-         * @enum {string}
-         */
-        ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
-        /** @description A known model in the AnyHarness catalog for a given provider. */
-        ModelEntry: {
-            /** @description Legacy or provider-native selectors that resolve to this model ID */
-            aliases?: string[];
-            /** @description Optional descriptive copy surfaced in launch/settings UIs */
-            description?: string | null;
-            /** @description Human-readable name (e.g. "Claude Opus 4.6") */
-            displayName: string;
-            /** @description Session-level model ID exposed by the harness (e.g. "opus[1m]") */
-            id: string;
-            /** @description Whether this is the default model for the provider */
-            isDefault: boolean;
-            launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
-            /** @description Minimum AnyHarness runtime version required for this model, if any */
-            minRuntimeVersion?: string | null;
-            /** @description Live controls that can be configured as launch defaults for this model. */
-            sessionDefaultControls?: components["schemas"]["SessionDefaultControl"][];
-            /** @description Runtime-owned lifecycle status for this model */
-            status: components["schemas"]["ModelCatalogStatus"];
-        };
-        /** @description Catalog metadata for the app-owned action shown after live-apply mismatch. */
-        ModelLaunchRemediation: {
-            /** @description App-owned action class for remediation. */
-            kind: components["schemas"]["ModelLaunchRemediationKind"];
-            /** @description Short detail text from the catalog. Button labels remain app-owned. */
-            message: string;
-        };
-        /**
-         * @description Product-owned remediation hint shown when a live harness cannot apply a
-         *     selected catalog model at launch.
-         * @enum {string}
-         */
-        ModelLaunchRemediationKind: "managed_reinstall" | "external_update" | "restart";
-        /** @description Backend-owned model registry for a harness. */
-        ModelRegistry: {
-            /** @description Default session-level model selector ID for this harness */
-            defaultModelId?: string | null;
-            /** @description Human-readable harness name */
-            displayName: string;
-            /** @description Which agent this registry is for */
-            kind: string;
-            /** @description Known models for this harness */
-            models: components["schemas"]["ModelRegistryModel"][];
-        };
-        /** @description A model row in the backend-owned registry for a given harness. */
-        ModelRegistryModel: {
-            /** @description Legacy or provider-native selectors that resolve to this model ID */
-            aliases?: string[];
-            /** @description Optional descriptive copy surfaced in launch/settings UIs */
-            description?: string | null;
-            /** @description Human-readable name for the model */
-            displayName: string;
-            /** @description Session-level model selector ID accepted by the harness */
-            id: string;
-            /** @description Whether this is the default model for the registry */
-            isDefault: boolean;
-            launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
-            /** @description Minimum AnyHarness runtime version required for this model, if any */
-            minRuntimeVersion?: string | null;
-            /** @description Live controls that can be configured as launch defaults for this model. */
-            sessionDefaultControls?: components["schemas"]["SessionDefaultControl"][];
-            /** @description Runtime-owned lifecycle status for this model */
-            status: components["schemas"]["ModelCatalogStatus"];
-        };
-        /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
          *     This is the product semantics layer used by clients to render consistent
@@ -3024,18 +2875,6 @@ export interface components {
             title: string;
             updatedAt: string;
             workspaceId: string;
-        };
-        /**
-         * @description Provider-level configuration metadata describing which models AnyHarness
-         *     intentionally exposes for this agent.
-         */
-        ProviderConfig: {
-            /** @description Human-readable provider name (e.g. "Claude") */
-            displayName: string;
-            /** @description Which agent this config is for */
-            kind: string;
-            /** @description Known models for this provider */
-            models: components["schemas"]["ModelEntry"][];
         };
         PruneOrphanWorktreeRequest: {
             path: string;
@@ -3399,33 +3238,6 @@ export interface components {
          * @enum {string}
          */
         SessionConfigOptionType: "select";
-        /** @description Static model metadata describing a live control that can be defaulted at launch. */
-        SessionDefaultControl: {
-            /** @description Optional model catalog default value. */
-            defaultValue?: string | null;
-            /** @description Product-level semantic key such as `reasoning`, `effort`, or `fast_mode`. */
-            key: components["schemas"]["SessionDefaultControlKey"];
-            /** @description Human-readable control label shown in settings. */
-            label: string;
-            /** @description Values intentionally exposed for launch-default selection. */
-            values: components["schemas"]["SessionDefaultControlValue"][];
-        };
-        /**
-         * @description Product-level live controls that can be configured as launch defaults.
-         * @enum {string}
-         */
-        SessionDefaultControlKey: "reasoning" | "effort" | "fast_mode";
-        /** @description Selectable value for a launch-default session control. */
-        SessionDefaultControlValue: {
-            /** @description Optional user-facing description. */
-            description?: string | null;
-            /** @description Whether this is the model catalog default value. */
-            isDefault: boolean;
-            /** @description Human-readable value label shown in settings. */
-            label: string;
-            /** @description Stable raw value identifier to send after live config confirms support. */
-            value: string;
-        };
         /** @enum {string} */
         SessionEndReason: "closed" | "error";
         SessionEndedEvent: {
@@ -4111,43 +3923,6 @@ export interface components {
             preflight: components["schemas"]["WorkspaceRetirePreflightResponse"];
             workspace: components["schemas"]["Workspace"];
         };
-        WorkspaceSessionLaunchAgent: {
-            defaultModelId?: string | null;
-            displayName: string;
-            kind: string;
-            launchControls?: components["schemas"]["WorkspaceSessionLaunchControl"][];
-            models: components["schemas"]["WorkspaceSessionLaunchModel"][];
-        };
-        WorkspaceSessionLaunchCatalog: {
-            agents: components["schemas"]["WorkspaceSessionLaunchAgent"][];
-            catalogVersion: string;
-            workspaceId: string;
-        };
-        WorkspaceSessionLaunchControl: {
-            createField?: string | null;
-            defaultValue?: string | null;
-            key: components["schemas"]["WorkspaceSessionLaunchControlKey"];
-            label: string;
-            phase: components["schemas"]["WorkspaceSessionLaunchControlPhase"];
-            type: string;
-            values: components["schemas"]["WorkspaceSessionLaunchControlValue"][];
-        };
-        /** @enum {string} */
-        WorkspaceSessionLaunchControlKey: "mode" | "collaboration_mode" | "access_mode" | "reasoning" | "effort" | "fast_mode";
-        /** @enum {string} */
-        WorkspaceSessionLaunchControlPhase: "create_session" | "live_default";
-        WorkspaceSessionLaunchControlValue: {
-            description?: string | null;
-            isDefault: boolean;
-            label: string;
-            value: string;
-        };
-        WorkspaceSessionLaunchModel: {
-            displayName: string;
-            id: string;
-            isDefault: boolean;
-            launchControls?: components["schemas"]["WorkspaceSessionLaunchControl"][];
-        };
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
         /** @enum {string} */
@@ -4434,26 +4209,6 @@ export interface operations {
             };
         };
     };
-    get_effective_agent_launch_catalog: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Effective runtime agent launch catalog */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceSessionLaunchCatalog"];
-                };
-            };
-        };
-    };
     get_cowork_status: {
         parameters: {
             query?: never;
@@ -4575,78 +4330,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    list_model_registries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Backend-owned model registries */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelRegistry"][];
-                };
-            };
-        };
-    };
-    get_model_registry: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Harness kind */
-                kind: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Model registry */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelRegistry"];
-                };
-            };
-            /** @description Model registry not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    list_provider_configs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Provider configuration catalog */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderConfig"][];
                 };
             };
         };
@@ -5906,6 +5589,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session must be restarted before applying resume changes */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7883,38 +7575,6 @@ export interface operations {
             };
             /** @description Invalid review request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_workspace_session_launch_catalog: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Workspace session launch catalog */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceSessionLaunchCatalog"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

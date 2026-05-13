@@ -11,9 +11,8 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    product_mcp, provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
-    workspaces, worktrees,
+    agents, cowork, files, git, health, hosting, mobility, plans, processes, product_mcp, replay,
+    repo_roots, reviews, sessions, subagents, terminals, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -33,23 +32,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/agents/{kind}/login/start",
             post(agents::start_agent_login),
-        )
-        // Provider configs
-        .route(
-            "/provider-configs",
-            get(provider_configs::list_provider_configs),
-        )
-        .route(
-            "/model-registries",
-            get(model_registries::list_model_registries),
-        )
-        .route(
-            "/model-registries/{kind}",
-            get(model_registries::get_model_registry),
-        )
-        .route(
-            "/catalogs/agents/effective",
-            get(workspaces::get_effective_agent_launch_catalog),
         )
         // Workspaces
         .route(
@@ -182,10 +164,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/setup-start",
             post(workspaces::start_setup),
-        )
-        .route(
-            "/workspaces/{workspace_id}/session-launch",
-            get(workspaces::get_workspace_session_launch_catalog),
         )
         .route(
             "/workspaces/{workspace_id}/sessions/restore",

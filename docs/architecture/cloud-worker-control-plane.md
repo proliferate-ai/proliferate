@@ -1074,7 +1074,15 @@ ResolveInteractionRequest:
 CreateSessionRequest:
   command_metadata optional
   target/cloud launch context optional
+
+ResumeSessionRequest:
+  command_metadata optional in the future
 ```
+
+In v0, resume command identity may remain only in the Cloud command envelope
+and worker delivery record. If the command id is not forwarded into
+`ResumeSessionRequest`, Cloud must still correlate the eventual AnyHarness
+accept/reject/error response back to the queued `resume_session` command.
 
 If an existing route can remain backwards compatible, add optional fields
 instead of creating a parallel worker-only route.

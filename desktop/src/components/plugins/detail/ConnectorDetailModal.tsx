@@ -2,6 +2,10 @@ import type {
   ConnectorModalTab,
   ResolvedConnectorModal,
 } from "@/lib/domain/mcp/connector-catalog-view-model";
+import {
+  buildAvailablePluginPresentation,
+  buildConnectedPluginPresentation,
+} from "@/lib/domain/plugins/plugin-package-view-model";
 import type { ConnectorDetailCallbacks } from "@/hooks/mcp/workflows/use-connector-detail-actions";
 import { useConnectorDetailActions } from "@/hooks/mcp/workflows/use-connector-detail-actions";
 import { ModalShell } from "@/components/ui/ModalShell";
@@ -28,6 +32,9 @@ export function ConnectorDetailModal({
     modal,
     onClose,
   });
+  const pluginPresentation = modal.kind === "manage"
+    ? buildConnectedPluginPresentation(modal.record, modal.status)
+    : buildAvailablePluginPresentation(modal.entry);
 
   const primaryAction = modal.tab !== "configure"
     ? null
@@ -69,7 +76,9 @@ export function ConnectorDetailModal({
             variant={detail.variant}
           />
         )}
-        {modal.tab === "tools" && <ConnectorToolsTab entry={detail.entry} />}
+        {modal.tab === "tools" && (
+          <ConnectorToolsTab entry={detail.entry} presentation={pluginPresentation} />
+        )}
         {modal.tab === "about" && <ConnectorAboutTab entry={detail.entry} />}
       </div>
     </ModalShell>

@@ -8,7 +8,7 @@ use anyharness_contract::v1::{
     WorkspaceLifecycleState, WorkspacePurgeOutcome, WorkspacePurgePreflightResponse,
     WorkspacePurgeResponse, WorkspaceRetireBlocker, WorkspaceRetireBlockerCode,
     WorkspaceRetireBlockerSeverity, WorkspaceRetireOutcome, WorkspaceRetirePreflightResponse,
-    WorkspaceRetireResponse, WorkspaceSessionLaunchCatalog,
+    WorkspaceRetireResponse,
 };
 use axum::{
     extract::{Path, State},
@@ -19,13 +19,13 @@ use axum::{
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
 use super::blocking::run_blocking;
 use super::error::ApiError;
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces_contract::{
     detection_result_to_contract, map_set_workspace_display_name_error,
     setup_command_run_to_contract, workspace_cleanup_operation_to_contract,
-    workspace_session_launch_catalog_to_contract, workspace_to_contract_with_summary,
+    workspace_to_contract_with_summary,
 };
 use crate::app::AppState;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
@@ -834,58 +834,6 @@ pub async fn update_workspace_display_name(
     .map_err(map_set_workspace_display_name_error)?;
 
     Ok(Json(workspace_to_contract(&state, record).await?))
-}
-
-#[utoipa::path(
-    get,
-    path = "/v1/workspaces/{workspace_id}/session-launch",
-    params(("workspace_id" = String, Path, description = "Workspace ID")),
-    responses(
-        (status = 200, description = "Workspace session launch catalog", body = WorkspaceSessionLaunchCatalog),
-        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
-    ),
-    tag = "workspaces"
-)]
-pub async fn get_workspace_session_launch_catalog(
-    State(state): State<AppState>,
-    Path(workspace_id): Path<String>,
-) -> Result<Json<WorkspaceSessionLaunchCatalog>, ApiError> {
-    let session_service = state.session_service.clone();
-    let workspace_id_for_task = workspace_id.clone();
-    let catalog = run_blocking("session launch", move || {
-        session_service.get_workspace_session_launch_catalog(&workspace_id_for_task)
-    })
-    .await?
-    .map_err(|error| {
-        if error.to_string().contains("workspace not found") {
-            ApiError::not_found(error.to_string(), "WORKSPACE_NOT_FOUND")
-        } else {
-            ApiError::internal(error.to_string())
-        }
-    })?;
-
-    Ok(Json(workspace_session_launch_catalog_to_contract(catalog)))
-}
-
-#[utoipa::path(
-    get,
-    path = "/v1/catalogs/agents/effective",
-    responses(
-        (status = 200, description = "Effective runtime agent launch catalog", body = WorkspaceSessionLaunchCatalog),
-    ),
-    tag = "catalogs"
-)]
-pub async fn get_effective_agent_launch_catalog(
-    State(state): State<AppState>,
-) -> Result<Json<WorkspaceSessionLaunchCatalog>, ApiError> {
-    let session_service = state.session_service.clone();
-    let catalog = run_blocking("effective agent catalog", move || {
-        session_service.get_effective_session_launch_catalog()
-    })
-    .await?
-    .map_err(|error| ApiError::internal(error.to_string()))?;
-
-    Ok(Json(workspace_session_launch_catalog_to_contract(catalog)))
 }
 
 #[utoipa::path(

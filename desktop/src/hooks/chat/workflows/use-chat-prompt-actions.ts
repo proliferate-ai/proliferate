@@ -10,7 +10,6 @@ import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-a
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import { useSessionCancelActions } from "@/hooks/sessions/workflows/use-session-cancel-actions";
 import { useSessionFindOrCreateActions } from "@/hooks/sessions/workflows/use-session-find-or-create-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useSessionPromptActions } from "@/hooks/sessions/workflows/use-session-prompt-actions";
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
@@ -231,11 +230,6 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       }, { trackProductEvent });
       return true;
     } catch (error) {
-      if (isSessionModelAvailabilityInterruption(error)) {
-        finishOrCancelMeasurementOperation(input?.measurementOperationId, "aborted");
-        return false;
-      }
-
       if (latencyFlowId) {
         failLatencyFlow(latencyFlowId, "prompt_submit_failed");
       }

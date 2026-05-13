@@ -1,7 +1,7 @@
 # Agent Catalog And Readiness
 
-Status: authoritative for the fully migrated AnyHarness agent catalog,
-installation, credentials, and readiness architecture.
+Status: authoritative for AnyHarness agent catalog/readiness truth sources and
+the current catalog migration.
 
 ## Goal
 
@@ -20,9 +20,12 @@ It does not answer:
 - how to speak provider-specific CLI, ACP registry, or MCP protocols
 - how a session actor processes turns
 
-The fully migrated architecture has one supported catalog input, one agents
-domain, and separate modules for catalog, install, credentials, readiness, and
-launch resolution.
+The current migration establishes one supported catalog input and removes the
+old split model/launch catalog paths. It promotes the cheap ownership folders
+for registry, credentials, readiness resolution, and reconcile execution.
+Install files remain transitional until the install/update boundary is split
+cleanly. All install, credentials, registry, reconcile, readiness, and seed
+code must live outside `catalog/**`.
 
 ## Truth Sources
 
@@ -73,18 +76,17 @@ The catalog document describes supported agent families:
 There must be no split legacy catalog inputs:
 
 ```text
-catalogs/launch/**
-ModelCatalogDocument
-LaunchCatalogDocument
-ANYHARNESS_MODEL_CATALOG_URL
-ANYHARNESS_LAUNCH_CATALOG_URL
+old model-catalog document type
+old launch-catalog document type
+old model-catalog URL environment variable
+old launch-catalog URL environment variable
 old model/launch cache readers
 old model/launch cache writers
+legacy split launch catalog directory
 ```
 
-If remote catalog refresh is supported, it must use the same
-`AgentCatalogDocument` schema. Remote refresh must not reintroduce separate
-model or launch catalog formats.
+Runtime catalog refresh/fetch/cache behavior is not supported in the migrated
+runtime. The bundled `AgentCatalogDocument` is the only runtime catalog input.
 
 ## Trust Boundary
 
@@ -99,24 +101,12 @@ The trusted bundled catalog may define:
 - credential discovery kind
 - login command
 
-An unsigned remote catalog may only update non-executable metadata:
-
-- model display names
-- model status
-- launch-remediation text
-- fallback launch controls
-- fallback session default controls
-
-Remote catalog data must not silently change process/install/auth behavior
-unless the remote catalog is signed and verified by an explicitly documented
-trust path.
-
 This boundary should be visible in code. The projection that produces
 `AgentDescriptor` must be sourced from trusted catalog data only.
 
-## Target Source Shape
+## Catalog Migration Source Shape
 
-Final agents domain:
+Required shape for this migration:
 
 ```text
 anyharness-lib/src/domains/agents/
@@ -126,19 +116,41 @@ anyharness-lib/src/domains/agents/
     schema.rs
     bundled.rs
     validation.rs
-    cache.rs
-    remote.rs
     projection/
       descriptors.rs
       models.rs
-      launch.rs
-    tests/
+  readiness/
+    mod.rs
+    launch_options.rs
+    resolver.rs
+  credentials/
+    mod.rs
+  installer.rs                # transitional: outside catalog/**
+  install_lock.rs             # transitional: outside catalog/**
+  registry/
+    mod.rs
+  reconcile/
+    mod.rs
+    execution.rs
+  seed/
+    mod.rs
+  portability/
+    mod.rs
+```
+
+Follow-up topology may promote those transitional files into focused folders
+once their boundaries are split cleanly:
+
+```text
+anyharness-lib/src/domains/agents/
   registry/
     mod.rs
   credentials/
     mod.rs
   readiness/
     mod.rs
+    launch_options.rs
+    resolver.rs
     artifacts.rs
     spawn.rs
     compatibility.rs
@@ -169,10 +181,9 @@ Allowed:
 - parse `AgentCatalogDocument`
 - validate schema invariants
 - read bundled catalog JSON
-- refresh/cache same-schema remote catalog metadata, if enabled
 - project trusted catalog data into `AgentDescriptor`
 - project fallback model metadata
-- project fallback launch metadata when an API still needs that response shape
+- expose catalog data to readiness-owned launch-option projection
 
 Banned:
 
@@ -245,7 +256,7 @@ Dynamic providers such as OpenCode may expose model lists at live ACP runtime.
 Readiness should say whether the provider is launchable; it should not try to
 precompute every live model choice when the provider owns that dynamically.
 
-### `install/`
+### `install/` Or Transitional Install Files
 
 Owns managed install/update workflows.
 
@@ -379,17 +390,17 @@ After live session starts:
 
 ## Public API Behavior
 
-AnyHarness may expose target capability endpoints, but their semantics must be
-clear:
+AnyHarness does not expose public runtime catalog endpoints in this migration.
+The remaining public target capability endpoints are:
 
 - agent list/readiness endpoint: target-local support and readiness
 - install endpoint: mutate target-local managed artifacts
-- session-launch endpoint, if retained: target-local launch metadata projected
-  from the single agents catalog plus readiness filtering
-- model registry endpoint, if retained: fallback metadata projected from the
-  single agents catalog, not active live-session truth
 
-No API should expose or depend on the removed split launch/model catalog files.
+SessionRuntime, cowork, and subagent flows may use internal target-local launch
+options projected from the bundled agents catalog plus readiness filtering.
+That internal projection should be named as resolved launch options, not as a
+public catalog response, and should carry only the fields those internal flows
+need.
 
 ## Banned Shapes
 
@@ -397,11 +408,10 @@ Do not add:
 
 - `domains/agents/catalog.rs`
 - `catalog/legacy.rs`
-- `ModelCatalogDocument`
-- `LaunchCatalogDocument`
-- `catalogs/launch/**`
-- `ANYHARNESS_MODEL_CATALOG_URL`
-- `ANYHARNESS_LAUNCH_CATALOG_URL`
+- the old model-catalog document type
+- the old launch-catalog document type
+- the legacy split launch catalog directory
+- old model/launch remote catalog URL environment variables
 - direct catalog JSON parsing from `sessions/**`, `live/**`, or `api/**`
 - credential detection inside `catalog/**`
 - install/update execution inside `catalog/**`
@@ -409,34 +419,37 @@ Do not add:
 
 ## Migration Acceptance
 
-A full migration is done only when:
+The catalog migration is done only when:
 
 - `domains/agents/catalog.rs` is gone.
 - `domains/agents/catalog/**` exists with focused submodules.
-- `catalogs/launch/**` is gone.
+- legacy split launch catalog files are gone.
 - old split catalog structs/functions/env vars are gone.
-- all launch/model metadata AnyHarness still exposes is projected from
+- all launch/model metadata AnyHarness still uses is projected from
   `AgentCatalogDocument`.
 - executable/process/auth descriptor projection is sourced only from trusted
   catalog data.
-- install, credential detection, readiness, reconcile, and seed behavior live
-  outside `catalog/**`.
+- install, credential detection, readiness, reconcile, seed, and portability
+  behavior live outside `catalog/**`.
 - tests are split by responsibility:
   - catalog validation
   - descriptor projection
   - fallback model projection
-  - fallback launch projection
-  - unified remote/cache behavior, if retained
-  - readiness
-  - install
-  - credentials
+  - internal launch-option projection
+  - readiness code touched by the migration
+
+Agents-domain topology promotion is a separate cleanup. It is not complete
+until transitional files such as `installer.rs` and `install_lock.rs` are
+either promoted into focused folders or documented as intentionally flat, and
+until readiness internals such as artifacts, spawn, and compatibility are split
+out of `readiness/resolver.rs`.
 
 Verification examples:
 
 ```bash
-rg "ModelCatalogDocument|LaunchCatalogDocument|ANYHARNESS_MODEL_CATALOG_URL|ANYHARNESS_LAUNCH_CATALOG_URL" anyharness catalogs scripts
-rg "catalogs/launch" anyharness catalogs scripts docs
 cargo test -p anyharness-lib domains::agents
 ```
 
-The first two commands should return no code references after the migration.
+Run a stale-symbol search for the removed split launch path, old catalog service
+names, old runtime catalog hooks, and old remote catalog environment variables.
+It should return no code references after the migration.

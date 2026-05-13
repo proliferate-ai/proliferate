@@ -3,11 +3,14 @@
 Status: authoritative for long-lived in-memory runtime systems under
 `anyharness-lib/src/live/**`.
 
-The current code is transitional. Today `acp/**` maps mostly to target
-`live/sessions/**`, and `terminals/**` maps to target `live/terminals/**`.
+The current code is transitional. The live session actor now lives under
+`live/sessions/actor/**`, its handle under `live/sessions/handle.rs`, and ACP
+process/session mechanics under `live/sessions/connection/**`.
 `SessionEventSink` has been split under `acp/event_sink/**`; the final move to
-`live/sessions/event_sink/**` is still a topology step. `SessionActor` remains
-in `acp/session_actor.rs`; the actor loop rewrite is deferred/manual.
+`live/sessions/event_sink/**` is still a topology step. `AcpManager`,
+`RuntimeClient`, `InteractionBroker`, `BackgroundWorkRegistry`, and
+`replay_actor` also remain under transitional `acp/**` paths until their own
+topology passes. `terminals/**` maps to target `live/terminals/**`.
 
 ## Purpose
 
@@ -74,36 +77,59 @@ live/sessions/actor/
   mod.rs
   command.rs
   state.rs
-  events.rs
-  loop.rs
+  event_loop.rs
+  spawn.rs
   startup.rs
-  notifications.rs
   background_work.rs
-  exit.rs
-  stderr.rs
-  commands/
-    idle.rs
-    busy.rs
-    prompt.rs
-    config.rs
-    interactions.rs
-    plans.rs
-    fork.rs
-    close.rs
   turn/
+    mod.rs
+    types.rs
+    handle.rs
     start.rs
-    run.rs
+    active.rs
     finish.rs
     queue.rs
     diagnostics.rs
   config/
+    mod.rs
+    types.rs
+    handle.rs
     apply.rs
-    restore.rs
-    snapshot.rs
-    selectors.rs
+    queue.rs
+    persist.rs
+    selection.rs
+  notifications/
+    mod.rs
+    types.rs
+    handle.rs
+    dispatch.rs
+    replay_filter.rs
+    plans.rs
+  interactions/
+    mod.rs
+    handle.rs
+    cleanup.rs
+  fork/
+    mod.rs
+    handle.rs
+  shutdown/
+    mod.rs
+    types.rs
+    handle.rs
+    cleanup.rs
+    persist.rs
+
+live/sessions/connection/
+  mod.rs
+  types.rs
+  start.rs
+  process.rs
+  native_session.rs
+  stderr.rs
+  shutdown.rs
 ```
 
-Keep `mod.rs` focused on the public actor surface. Keep `loop.rs` focused on
+Keep `mod.rs` focused on the public actor surface. Keep `event_loop.rs` focused on
 selecting the next actor event and dispatching it. Split idle and busy command
 handling because the same command can have different legal behavior while a
 prompt is running.

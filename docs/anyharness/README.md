@@ -242,9 +242,9 @@ Specs:
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
 - [specs/agent-catalog-readiness.md](specs/agent-catalog-readiness.md) for
-  the fully migrated agents domain: single catalog input, descriptor
-  projection, install, credentials, readiness, seed artifacts, and launch
-  resolution.
+  the current agents catalog/readiness migration: single catalog input,
+  trusted descriptor/model projection, transitional install/readiness topology,
+  seed artifacts, and launch resolution.
 - [specs/mcp.md](specs/mcp.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
 - [specs/product-mcps.md](specs/product-mcps.md) for the repeatable product
@@ -305,7 +305,7 @@ which guide to read and where the code belongs.
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [src/cowork-artifacts.md](src/cowork-artifacts.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
-| Latency tracing, request measurement, diagnostic ids | `api/http/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
+| Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
 
 If a task appears to belong in two places, split by ownership. Example: a new
@@ -383,7 +383,8 @@ domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
 current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
 current terminals/     -> target live/terminals/
-current api/http/latency.rs -> target observability/latency.rs
+current observability/latency.rs -> current and target latency request context
+and trace-field helper owner
 ```
 
 Known transitional issues:
@@ -404,13 +405,16 @@ Known transitional issues:
   type remains the caller-facing store surface.
 - `SessionEventSink` is split under `acp/event_sink/**`. It has not moved to
   final `live/sessions/event_sink/**` topology yet.
-- Some runtime/domain modules import `crate::api::http::latency`; latency
-  helpers should move to `observability/`.
+- Latency request context and trace-field helpers are already owned by
+  `observability/latency.rs`; lower layers should not import API transport
+  modules for latency context.
 - Contract request/response types leak below `api/`. Contract event payloads
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
-- Core live/session cleanup still remaining is centered on
-  `acp/session_actor.rs`; the actor loop rewrite is deferred/manual.
+- The live session actor is split under `live/sessions/actor/**`,
+  `live/sessions/connection/**`, and `live/sessions/handle.rs`. `AcpManager`,
+  `RuntimeClient`, `InteractionBroker`, `BackgroundWorkRegistry`, and
+  `replay_actor` remain transitional under `acp/**`.
 - Some product MCP endpoint scaffolding may still be feature-local. Common
   protocol/auth scaffolding should use `integrations/mcp/`; product tool
   semantics stay with their owning domain.

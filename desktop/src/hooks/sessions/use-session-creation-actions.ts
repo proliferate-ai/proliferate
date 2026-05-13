@@ -1,6 +1,5 @@
-import type { ContentPart, PromptInputBlock, Session, WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock, Session } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
@@ -8,21 +7,19 @@ import { resolveSessionMcpServersForLaunch } from "@/lib/workflows/sessions/sess
 import { applySessionLaunchDefaults } from "@/lib/workflows/sessions/session-launch-defaults";
 import { createSessionLaunchDefaultsClient } from "@/lib/access/anyharness/session-launch-defaults-client";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtime-target";
-import { restartHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
+import {
+  formatSessionCreateFailureMessage,
+  toSessionCreateFailureDisplayError,
+} from "@/lib/domain/sessions/creation/create-session-error";
 import {
   mergeLiveDefaultLaunchControls,
   pickLiveDefaultLaunchControls,
 } from "@/lib/domain/sessions/creation/launch-controls";
-import {
-  buildPausedModelAvailability,
-  hasImmediateLaunchModelMismatch,
-} from "@/lib/domain/sessions/creation/model-availability";
 import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -41,13 +38,6 @@ import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/derived/use-workspace-surface-lookup";
-import { useDismissedSessionCleanup } from "@/hooks/sessions/workflows/use-dismissed-session-cleanup";
-import {
-  requestSessionModelAvailabilityDecision,
-  SessionModelAvailabilityBusyError,
-  SessionModelAvailabilityCancelledError,
-  SessionModelAvailabilityRoutedToSettingsError,
-} from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import {
   pendingConfigChangesForSessionIntents,
 } from "@/lib/domain/sessions/intents/session-intent-selectors";
@@ -77,22 +67,16 @@ import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { DESKTOP_ORIGIN } from "@/lib/domain/sessions/desktop-origin";
-import { listModelRegistries } from "@/lib/access/anyharness/model-registries";
 import {
-  closeSession,
   createSession,
   listWorkspaceSessions,
 } from "@/lib/access/anyharness/sessions";
-import {
-  getWorkspace,
-  getWorkspaceSessionLaunchCatalog,
-} from "@/lib/access/anyharness/workspaces";
+import { getWorkspace } from "@/lib/access/anyharness/workspaces";
 import type { WorkspaceShellIntentKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   rememberLastViewedSession,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { buildModelAvailabilityRetryOptions } from "@/lib/domain/sessions/creation/retry-options";
 import { buildLatencyRequestOptions } from "@/hooks/sessions/workflows/session-creation-request-options";
 import {
   materializeSessionRecord,
@@ -103,6 +87,8 @@ import {
   inFlightSessionCreatesByWorkspace,
 } from "@/hooks/sessions/workflows/session-creation-in-flight";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
+import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { buildDesktopLaunchModelRegistries } from "@/lib/domain/agents/cloud-launch-catalog";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -122,7 +108,6 @@ interface CreateSessionWithResolvedConfigOptions {
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
-  modelAvailabilityRetryCount?: number;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
@@ -176,37 +161,13 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
 }
 
 export function useSessionCreationActions() {
-  const navigate = useNavigate();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession } = useSessionRuntimeActions();
-  const cleanupClosedSession = useDismissedSessionCleanup();
-  const {
-    installAgent,
-    refreshAgentResources,
-  } = useAgentInstallationActions();
+  const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const showToast = useToastStore((state) => state.show);
-
-  const closeCreatedMismatchSession = useCallback(async (
-    connection: { runtimeUrl: string; authToken?: string | null },
-    sessionId: string,
-    workspaceId: string,
-  ) => {
-    try {
-      await closeSession(connection, sessionId);
-    } catch (error) {
-      // Local cleanup still removes the discovery-only session from view.
-      captureTelemetryException(error, {
-        tags: {
-          action: "close_model_mismatch_session",
-          domain: "sessions",
-        },
-      });
-    }
-    cleanupClosedSession(sessionId, workspaceId);
-  }, [cleanupClosedSession]);
 
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
     options: CreateSessionWithResolvedConfigOptions,
@@ -501,114 +462,11 @@ export function useSessionCreationActions() {
         targetSessionId: session.id,
       });
 
-      const modelRegistries = await listModelRegistries(targetConnection).catch(() => []);
-      const launchCatalog: WorkspaceSessionLaunchCatalog | null =
-        session.requestedModelId && session.modelId
-        ? await getWorkspaceSessionLaunchCatalog(
-          workspaceConnection,
-          requestOptions,
-        ).catch(() => null)
-        : null;
-
-      if (launchCatalog && hasImmediateLaunchModelMismatch({
-        session,
-        agentKind: options.agentKind,
-        registries: modelRegistries,
-        launchCatalog,
-      })) {
-        const pausedLaunch = buildPausedModelAvailability({
-          session,
-          workspaceId,
-          agentKind: options.agentKind,
-          registries: modelRegistries,
-        });
-        const decision = await requestSessionModelAvailabilityDecision(pausedLaunch)
-          .catch(async (error) => {
-            if (error instanceof SessionModelAvailabilityBusyError) {
-              await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-            }
-            throw error;
-          });
-
-        if (decision.kind === "cancel") {
-          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-          if (options.launchIntentId) {
-            useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-          }
-          cancelLatencyFlow(options.latencyFlowId, "session_model_availability_cancelled");
-          throw new SessionModelAvailabilityCancelledError();
-        }
-
-        if (decision.kind === "external_update") {
-          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-          navigate("/settings?section=agents");
-          cancelLatencyFlow(
-            options.latencyFlowId,
-            "session_model_availability_routed_to_settings",
-          );
-          throw new SessionModelAvailabilityRoutedToSettingsError(
-            `${pausedLaunch.requestedModelDisplayName} is not exposed by ${pausedLaunch.providerDisplayName} yet.`,
-          );
-        }
-
-        if (decision.kind === "managed_reinstall") {
-          if ((options.modelAvailabilityRetryCount ?? 0) >= 1) {
-            await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-            throw new Error(
-              `${pausedLaunch.requestedModelDisplayName} is still not exposed after updating ${pausedLaunch.providerDisplayName}.`,
-            );
-          }
-          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-          await installAgent(options.agentKind, { reinstall: true });
-          await refreshAgentResources();
-          cancelLatencyFlow(
-            options.latencyFlowId,
-            "session_model_availability_reinstall_retry",
-          );
-          return createWithResolvedConfig({
-            ...buildModelAvailabilityRetryOptions({
-              options,
-              pendingSessionId,
-              promptId,
-              hasPrompt,
-            }),
-            modelAvailabilityRetryCount:
-              (options.modelAvailabilityRetryCount ?? 0) + 1,
-          });
-        }
-
-        if (decision.kind === "restart") {
-          if ((options.modelAvailabilityRetryCount ?? 0) >= 1) {
-            await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-            throw new Error(
-              `${pausedLaunch.requestedModelDisplayName} is still not exposed after restarting ${pausedLaunch.providerDisplayName}.`,
-            );
-          }
-          await closeCreatedMismatchSession(targetConnection, session.id, workspaceId);
-          await restartHarnessRuntime();
-          cancelLatencyFlow(
-            options.latencyFlowId,
-            "session_model_availability_restart_retry",
-          );
-          return createWithResolvedConfig({
-            ...buildModelAvailabilityRetryOptions({
-              options,
-              pendingSessionId,
-              promptId,
-              hasPrompt,
-            }),
-            modelAvailabilityRetryCount:
-              (options.modelAvailabilityRetryCount ?? 0) + 1,
-          });
-        }
-
-        if (decision.kind === "use_current") {
-          // Continue below and send the original prompt, if any, to the session
-          // that already started successfully with the harness-selected model.
-        }
-      }
-
       const queuedConfigValuesBeforeDefaults = pendingConfigValuesForSession(pendingSessionId);
+      const cloudLaunchCatalog = await ensureCloudAgentCatalog().catch(() => null);
+      const modelRegistries = buildDesktopLaunchModelRegistries(
+        cloudLaunchCatalog?.agents ?? [],
+      );
       const liveDefaultsForLaunch = mergeLiveDefaultLaunchControls({
         defaults: frozenDefaultLiveSessionControlValuesByAgentKind,
         agentKind: options.agentKind,
@@ -766,8 +624,7 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(`Failed to start chat session: ${message}`, "error");
+        showToast(formatSessionCreateFailureMessage(error), "error");
       }).finally(cleanupInFlight);
       return pendingSessionId;
     }
@@ -776,19 +633,16 @@ export function useSessionCreationActions() {
       return await createPromise;
     } catch (error) {
       cleanupCreateFailure(error);
-      throw error;
+      throw toSessionCreateFailureDisplayError(error);
     } finally {
       cleanupInFlight();
     }
   }, [
     activateSession,
-    closeCreatedMismatchSession,
+    ensureCloudAgentCatalog,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
-    installAgent,
-    navigate,
     promptSession,
-    refreshAgentResources,
     showToast,
     upsertWorkspaceSessionRecord,
   ]);

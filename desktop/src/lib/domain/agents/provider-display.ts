@@ -4,7 +4,6 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   cursor: "Cursor",
   gemini: "Gemini",
   opencode: "OpenCode",
-  amp: "Amp",
 };
 
 export function getProviderDisplayName(kind: string): string {
