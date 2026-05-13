@@ -86,7 +86,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
         );
     }
 
-    if ctx.existing_subagent_count > 0 {
+    if ctx.can_create || ctx.existing_subagent_count > 0 {
         tools.extend([
         tool_definition(
             "send_subagent_message",
@@ -200,8 +200,19 @@ mod tests {
     }
 
     #[test]
-    fn tool_list_hides_child_actions_until_children_exist() {
+    fn tool_list_keeps_child_actions_available_for_fresh_eligible_parent() {
         let tools = build_tool_list(&context(true, 0));
+        let names = tool_names(&tools);
+
+        assert!(names.contains(&"send_subagent_message"));
+        assert!(names.contains(&"schedule_subagent_wake"));
+        assert!(names.contains(&"get_subagent_status"));
+        assert!(names.contains(&"read_subagent_events"));
+    }
+
+    #[test]
+    fn tool_list_hides_child_actions_when_blocked_parent_has_no_children() {
+        let tools = build_tool_list(&context(false, 0));
         let names = tool_names(&tools);
 
         assert!(!names.contains(&"send_subagent_message"));

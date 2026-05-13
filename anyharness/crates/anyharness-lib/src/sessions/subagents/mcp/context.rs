@@ -1,4 +1,4 @@
-use super::super::service::{SubagentService, MAX_SUBAGENTS_PER_PARENT};
+use super::super::service::{SubagentError, SubagentService, MAX_SUBAGENTS_PER_PARENT};
 use crate::integrations::mcp::product_server::{ProductMcpContextError, ProductMcpRequestContext};
 use crate::workspaces::runtime::WorkspaceRuntime;
 
@@ -38,10 +38,10 @@ pub fn resolve_context(
         .list_subagents(&request.session_id)
         .map_err(|error| ProductMcpContextError::Internal(error.into()))?
         .len();
-    let create_block_reason = service
-        .validate_parent_can_spawn(&request.session_id)
-        .err()
-        .map(|error| error.to_string());
+    let create_block_reason = match service.validate_parent_can_spawn(&request.session_id) {
+        Ok(_) => None,
+        Err(error) => Some(resolve_create_block_reason(error)?),
+    };
 
     Ok(SubagentMcpContext {
         parent_session_id: request.session_id.clone(),
@@ -51,4 +51,23 @@ pub fn resolve_context(
         existing_subagent_count,
         max_subagents_per_parent: MAX_SUBAGENTS_PER_PARENT,
     })
+}
+
+fn resolve_create_block_reason(error: SubagentError) -> Result<String, ProductMcpContextError> {
+    match error {
+        reason @ (SubagentError::Disabled
+        | SubagentError::DepthLimit
+        | SubagentError::FanoutLimit
+        | SubagentError::MutationBlocked(_)) => Ok(reason.to_string()),
+        not_found @ (SubagentError::ParentNotFound(_)
+        | SubagentError::ChildNotFound(_)
+        | SubagentError::WorkspaceNotFound(_)) => {
+            Err(ProductMcpContextError::not_found(not_found.to_string()))
+        }
+        conflict @ (SubagentError::IneligibleWorkspace
+        | SubagentError::CrossWorkspace
+        | SubagentError::NotOwned) => Err(ProductMcpContextError::conflict(conflict.to_string())),
+        SubagentError::Link(error) => Err(ProductMcpContextError::Internal(error.into())),
+        SubagentError::Internal(error) => Err(ProductMcpContextError::Internal(error)),
+    }
 }
