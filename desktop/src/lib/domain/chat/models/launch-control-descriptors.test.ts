@@ -40,7 +40,7 @@ function control(
 }
 
 describe("buildLaunchControlDescriptors", () => {
-  it("lets model controls override agent controls by key without duplicating composer controls", () => {
+  it("builds descriptors from agent launch controls", () => {
     const controls = buildLaunchControlDescriptors({
       selection: { kind: "codex", modelId: "gpt-5.5" },
       launchAgents: [
@@ -53,10 +53,6 @@ describe("buildLaunchControlDescriptors", () => {
           models: [
             {
               id: "gpt-5.5",
-              launchControls: [
-                control("effort", "Model Effort", "high"),
-                control("fast_mode", "Model Fast Mode", "on"),
-              ],
             },
           ],
         },
@@ -71,12 +67,12 @@ describe("buildLaunchControlDescriptors", () => {
 
     expect(controls.map((candidate) => candidate.key)).toEqual(["effort", "fast_mode"]);
     expect(controls.find((candidate) => candidate.key === "effort")).toMatchObject({
-      label: "Model Effort",
-      detail: "High",
+      label: "Agent Effort",
+      detail: "Medium",
     });
     expect(controls.find((candidate) => candidate.key === "fast_mode")).toMatchObject({
-      label: "Model Fast Mode",
-      detail: "On",
+      label: "Agent Fast Mode",
+      detail: "Off",
     });
   });
 

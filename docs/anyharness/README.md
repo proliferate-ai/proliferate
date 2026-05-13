@@ -242,9 +242,9 @@ Specs:
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
 - [specs/agent-catalog-readiness.md](specs/agent-catalog-readiness.md) for
-  the fully migrated agents domain: single catalog input, descriptor
-  projection, install, credentials, readiness, seed artifacts, and launch
-  resolution.
+  the current agents catalog/readiness migration: single catalog input,
+  trusted descriptor/model projection, transitional install/readiness topology,
+  seed artifacts, and launch resolution.
 - [specs/mcp.md](specs/mcp.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
 - [specs/product-mcps.md](specs/product-mcps.md) for the repeatable product

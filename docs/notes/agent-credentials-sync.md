@@ -115,18 +115,18 @@ Current allowlist in `desktop/src-tauri/src/commands/keychain.rs`:
 - `GOOGLE_API_KEY`
 - `GEMINI_API_KEY`
 
-But the runtime agent registry currently expects additional env vars in
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs`:
+But the runtime agent catalog currently expects an additional env var in
+`catalogs/agents/v1/catalog.json`, projected through
+`anyharness/crates/anyharness-lib/src/domains/agents/credentials/mod.rs`:
 
 - `CURSOR_API_KEY`
-- `AMP_API_KEY`
 
 Effect:
 
-- the user can conceptually save credentials for those agents
+- the user can conceptually save credentials for that agent
 - the runtime does not receive those values at sidecar boot/restart
-- readiness can never become `ready` via keychain-backed env auth for those
-  agents
+- readiness can never become `ready` via keychain-backed env auth for that
+  agent
 - spawned sessions also will not see those env vars
 
 This is the immediate bug to fix.
@@ -135,7 +135,7 @@ This is the immediate bug to fix.
 
 Short-term fix:
 
-1. Add `CURSOR_API_KEY` and `AMP_API_KEY` to the desktop allowlist.
+1. Add `CURSOR_API_KEY` to the desktop allowlist.
 2. Add a regression test or assertion around the supported env-var list if
    possible.
 3. Make the setup UX explicitly state that a restart is required before the

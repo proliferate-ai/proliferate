@@ -21,11 +21,11 @@ It does not answer:
 - how a session actor processes turns
 
 The current migration establishes one supported catalog input and removes the
-old split model/launch catalog paths. It does not require every existing
-agents-domain file to be promoted into a same-named folder in the same PR.
-Install, credentials, registry, reconcile, and seed code must live outside
-`catalog/**`; deeper folder promotion for those areas is explicit follow-up
-topology work.
+old split model/launch catalog paths. It promotes the cheap ownership folders
+for registry, credentials, readiness resolution, and reconcile execution.
+Install files remain transitional until the install/update boundary is split
+cleanly. All install, credentials, registry, reconcile, readiness, and seed
+code must live outside `catalog/**`.
 
 ## Truth Sources
 
@@ -122,13 +122,16 @@ anyharness-lib/src/domains/agents/
   readiness/
     mod.rs
     launch_options.rs
-  credentials.rs              # transitional: outside catalog/**
+    resolver.rs
+  credentials/
+    mod.rs
   installer.rs                # transitional: outside catalog/**
   install_lock.rs             # transitional: outside catalog/**
-  registry.rs                 # transitional: outside catalog/**
-  resolver.rs                 # transitional readiness resolver
-  reconcile.rs                # transitional: outside catalog/**
-  reconcile_execution.rs      # transitional: outside catalog/**
+  registry/
+    mod.rs
+  reconcile/
+    mod.rs
+    execution.rs
   seed/
     mod.rs
 ```
@@ -145,6 +148,7 @@ anyharness-lib/src/domains/agents/
   readiness/
     mod.rs
     launch_options.rs
+    resolver.rs
     artifacts.rs
     spawn.rs
     compatibility.rs
@@ -191,7 +195,7 @@ Banned:
 - treating static model metadata as active-session truth
 - parsing old model/launch catalog formats
 
-### `registry/` Or `registry.rs`
+### `registry/`
 
 Owns the supported-agent registry exposed to runtime callers.
 
@@ -204,7 +208,7 @@ Which agent kinds does this runtime know how to support?
 It is built from trusted catalog descriptor projection. It should not perform
 readiness checks or installation.
 
-### `credentials/` Or `credentials.rs`
+### `credentials/`
 
 Owns runtime credential readiness mapping.
 
@@ -275,7 +279,7 @@ Banned:
 Low-level vendor mechanics belong under `integrations/agent_cli/**`.
 `install/` uses those mechanics to implement product install/update behavior.
 
-### `reconcile/` Or Transitional Reconcile Files
+### `reconcile/`
 
 Owns batch repair/sync.
 
@@ -435,10 +439,10 @@ The catalog migration is done only when:
   - readiness code touched by the migration
 
 Agents-domain topology promotion is a separate cleanup. It is not complete
-until transitional files such as `credentials.rs`, `installer.rs`,
-`install_lock.rs`, `registry.rs`, `resolver.rs`, `reconcile.rs`, and
-`reconcile_execution.rs` are either promoted into focused folders or documented
-as intentionally flat.
+until transitional files such as `installer.rs` and `install_lock.rs` are
+either promoted into focused folders or documented as intentionally flat, and
+until readiness internals such as artifacts, spawn, and compatibility are split
+out of `readiness/resolver.rs`.
 
 Verification examples:
 

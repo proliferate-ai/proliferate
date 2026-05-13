@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::domains::agents::catalog::projection::models::bundled_model_registries;
 use crate::domains::agents::model::ResolvedAgentStatus;
+use crate::domains::agents::readiness::resolver::resolve_agent;
 use crate::domains::agents::registry::built_in_registry;
-use crate::domains::agents::resolver::resolve_agent;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedLaunchModelOption {

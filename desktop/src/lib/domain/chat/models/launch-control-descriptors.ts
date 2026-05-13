@@ -21,7 +21,6 @@ export interface BuildLaunchControlDescriptorsInput {
     launchControls?: DesktopAgentLaunchControl[];
     models: Array<{
       id: string;
-      launchControls?: DesktopAgentLaunchControl[];
     }>;
   }>;
   preferences: LaunchControlPreferences;
@@ -42,12 +41,11 @@ export function buildLaunchControlDescriptors(
   }
 
   const agent = input.launchAgents.find((candidate) => candidate.kind === input.selection?.kind);
-  const model = agent?.models.find((candidate) => candidate.id === input.selection?.modelId);
   if (!agent) {
     return [];
   }
 
-  return mergeLaunchControls(agent.launchControls ?? [], model?.launchControls ?? [])
+  return (agent.launchControls ?? [])
     .flatMap((control) => launchControlToDescriptor({
       agentKind: agent.kind,
       control,
@@ -162,38 +160,4 @@ function normalizeLaunchControlKey(
     return key;
   }
   return null;
-}
-
-function mergeLaunchControls(
-  agentControls: DesktopAgentLaunchControl[],
-  modelControls: DesktopAgentLaunchControl[] | undefined,
-): DesktopAgentLaunchControl[] {
-  const controlsByKey = new Map<SupportedLiveControlKey, DesktopAgentLaunchControl>();
-  const orderedKeys: SupportedLiveControlKey[] = [];
-
-  for (const control of agentControls) {
-    const key = normalizeLaunchControlKey(control.key);
-    if (!key) {
-      continue;
-    }
-    if (!controlsByKey.has(key)) {
-      orderedKeys.push(key);
-    }
-    controlsByKey.set(key, control);
-  }
-
-  for (const control of modelControls ?? []) {
-    const key = normalizeLaunchControlKey(control.key);
-    if (!key) {
-      continue;
-    }
-    if (!controlsByKey.has(key)) {
-      orderedKeys.push(key);
-    }
-    controlsByKey.set(key, control);
-  }
-
-  return orderedKeys
-    .map((key) => controlsByKey.get(key))
-    .filter((control): control is DesktopAgentLaunchControl => control !== undefined);
 }

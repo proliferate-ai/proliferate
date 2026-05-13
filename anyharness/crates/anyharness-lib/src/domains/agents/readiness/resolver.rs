@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::credentials::detect_credentials;
-use super::model::*;
-use super::seed;
+use crate::domains::agents::credentials::detect_credentials;
+use crate::domains::agents::model::*;
+use crate::domains::agents::seed;
 use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
 
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {

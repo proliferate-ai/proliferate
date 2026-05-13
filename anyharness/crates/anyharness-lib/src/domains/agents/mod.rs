@@ -6,7 +6,5 @@ pub mod model;
 pub mod portability;
 pub mod readiness;
 pub mod reconcile;
-pub mod reconcile_execution;
 pub mod registry;
-pub mod resolver;
 pub mod seed;

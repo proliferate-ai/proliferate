@@ -38,11 +38,11 @@ actual session controls are whatever the ACP binary advertises at
 live-session time.
 
 The *desktop-advertised* set of mode values is frozen in a presentation
-table at `desktop/src/config/session-control-presentations.ts`. This table
+table at `desktop/src/lib/domain/chat/session-controls/presentation.ts`. This table
 is what defines which values the UI renders as selectable, with labels,
 tones, icons, and a per-agent `isDefault`. The `ConfiguredSessionControlKey`
 type only recognises `mode` and `collaboration_mode`
-(`session-control-presentations.ts:1`).
+(`presentation.ts:1`).
 
 Desktop keeps a user preference `defaultSessionModeByAgentKind`
 (`desktop/src/stores/preferences/user-preferences-store.ts:13`) as an
@@ -57,26 +57,26 @@ preference directly from the store
 `use-session-creation-actions.ts:335`).
 
 Registered agent kinds come from
-`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:6-47`: `claude`,
-`codex`, `gemini`, `cursor`, `opencode`. All five are wired into the
-descriptor list at
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:15-21`.
+`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`: `claude`,
+`codex`, `gemini`, `cursor`, `opencode`. All five are declared in
+`catalogs/agents/v1/catalog.json` and projected into runtime descriptors by
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`.
 
 ## Per-agent matrix
 
 For each family, "Exposed in desktop" means the value appears in
-`desktop/src/config/session-control-presentations.ts` and therefore renders
+`desktop/src/lib/domain/chat/session-controls/presentation.ts` and therefore renders
 as a first-class selector in the UI. Values not in the table still travel
 through the runtime unchanged, but the desktop UI will only see them if the
 ACP binary surfaces them in live config and then uses fallback
 icon/tone rendering
-(`desktop/src/lib/domain/chat/session-mode-control.ts:18-22`,
-`session-mode-control.ts:88-101`).
+(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts:18-22`,
+`session-controls/session-mode-control.ts:88-101`).
 
 ### Claude (`claude`)
 
 Control key: `mode` — source:
-`desktop/src/config/session-control-presentations.ts:34-78`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts:34-78`.
 
 | Value               | Label         | Meaning (from desktop copy)  | Default | Tone         |
 | ------------------- | ------------- | ---------------------------- | ------- | ------------ |
@@ -93,14 +93,13 @@ configured for Claude.
 - Unambiguous? Yes on the desktop copy ("Skip permission checks"), which is
   stricter than `dontAsk` ("Auto-approve most actions"). Runtime cannot
   verify this independently — these strings are forwarded to the Claude ACP
-  binary (`git+proliferate-ai/claude-agent-acp` pinned in
-  `anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:5-6`), which owns
-  the actual enforcement semantics.
+  binary selected by the bundled agent catalog, which owns the actual
+  enforcement semantics.
 
 ### Codex (`codex`)
 
 Control keys: **both** `mode` and `collaboration_mode` — source:
-`desktop/src/config/session-control-presentations.ts:79-126`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts:79-126`.
 
 `mode` values:
 
@@ -142,7 +141,7 @@ values.
 ### Gemini (`gemini`)
 
 Control key: `mode` — source:
-`desktop/src/config/session-control-presentations.ts:127-163`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts:127-163`.
 
 | Value      | Label     | Meaning                    | Default | Tone        |
 | ---------- | --------- | -------------------------- | ------- | ----------- |
@@ -156,21 +155,20 @@ All four values are exposed in desktop config. No `collaboration_mode`.
 - Most permissive: **`yolo`**.
 - Unambiguous? Yes on desktop copy (`yolo` = "Skip permission checks" vs
   `autoEdit` = "Auto-approve edits"). As with Claude, actual enforcement
-  lives in the Gemini ACP binary
-  (`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:122-155`); the
+  lives in the Gemini ACP binary selected by the bundled agent catalog; the
   desktop labels reflect intent, not a runtime-side whitelist.
 
 ### Cursor (`cursor`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:10,22,53`,
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:159-189`) via
+through `catalogs/agents/v1/catalog.json` and
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs` via
 `cursor-acp` (fallback `cursor-agent acp`).
 
-**No entry in `desktop/src/config/session-control-presentations.ts`.**
+**No entry in `desktop/src/lib/domain/chat/session-controls/presentation.ts`.**
 Because `SESSION_CONTROL_PRESENTATIONS` has no `cursor` key,
 `listConfiguredSessionControlValues("cursor", ...)` returns the empty array
-(`desktop/src/lib/domain/chat/session-mode-control.ts:26-35`), so the
+(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts:26-35`), so the
 desktop UI has no first-class mode selector for Cursor.
 
 - Most permissive: **unknown from the repo.** The runtime will forward any
@@ -183,11 +181,11 @@ desktop UI has no first-class mode selector for Cursor.
 ### OpenCode (`opencode`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:11,23,54`,
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:239-263`) via the
+through `catalogs/agents/v1/catalog.json` and
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs` via the
 `opencode` ACP registry id (fallback npm package `opencode-ai`).
 
-**No entry in `desktop/src/config/session-control-presentations.ts`.** Same
+**No entry in `desktop/src/lib/domain/chat/session-controls/presentation.ts`.** Same
 situation as Cursor: the desktop UI shows no mode selector, but the runtime
 will pass `mode_id` through verbatim.
 

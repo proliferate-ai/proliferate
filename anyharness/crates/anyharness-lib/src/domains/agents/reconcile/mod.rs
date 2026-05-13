@@ -1,5 +1,7 @@
 use std::path::Path;
 
+pub mod execution;
+
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
 use super::model::{AgentDescriptor, AgentKind};
 

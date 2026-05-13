@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::acp::manager::AcpManager;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
-use crate::domains::agents::reconcile_execution::AgentReconcileService;
+use crate::domains::agents::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::seed::AgentSeedStore;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::delegation::service::CoworkDelegationService;

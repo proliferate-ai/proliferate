@@ -249,7 +249,7 @@ pub struct AgentProcessArtifactSpec {
 // ---------------------------------------------------------------------------
 
 /// Selects which provider-specific credential detection logic to run.
-/// Each variant maps to an explicit detector function in `credentials.rs`.
+/// Each variant maps to an explicit detector function in the credentials module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialDiscoveryKind {
     /// No local credential discovery; rely only on env vars.

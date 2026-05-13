@@ -4,8 +4,8 @@ use std::process::{Command, Stdio};
 
 use super::install_lock::AgentInstallLock;
 use super::model::*;
+use super::readiness::resolver::artifact_root;
 use super::registry::built_in_registry;
-use super::resolver::artifact_root;
 use super::seed;
 use crate::integrations::agent_cli::acp_registry::{self, ResolvedRegistryDistribution};
 use crate::integrations::agent_cli::executable::{is_valid_executable, make_executable};
