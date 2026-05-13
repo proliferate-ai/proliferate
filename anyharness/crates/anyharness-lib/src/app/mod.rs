@@ -19,7 +19,9 @@ use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::domains::reviews::hooks::ReviewSessionHooks;
-use crate::domains::reviews::mcp::{auth::ReviewMcpAuth, ReviewProductMcpServer};
+use crate::domains::reviews::mcp::{
+    auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
+};
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;
@@ -33,13 +35,15 @@ use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointRegistry, ProductMcpEndpointServer,
+    ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistry,
 };
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
 use crate::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::sessions::subagents::mcp::{auth::SubagentMcpAuth, SubagentProductMcpServer};
+use crate::sessions::subagents::mcp::{
+    auth::SubagentMcpAuth, tools as subagent_mcp_tools, SubagentProductMcpServer,
+};
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
 use crate::sessions::workspace_naming::mcp::{
@@ -310,23 +314,33 @@ impl AppState {
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
         let product_mcp_endpoint_registry = Arc::new(ProductMcpEndpointRegistry::new(vec![
-            ProductMcpEndpointServer::Reviews(Arc::new(ReviewProductMcpServer::new(
-                review_runtime.clone(),
-                review_mcp_auth,
-            ))),
-            ProductMcpEndpointServer::Subagents(Arc::new(SubagentProductMcpServer::new(
-                subagent_service.clone(),
-                session_runtime.clone(),
-                workspace_runtime.clone(),
-                subagent_mcp_auth,
-            ))),
-            ProductMcpEndpointServer::WorkspaceNaming(Arc::new(
-                WorkspaceNamingProductMcpServer::new(
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(ReviewProductMcpServer::new(
+                    review_runtime.clone(),
+                    review_mcp_auth,
+                )),
+                Some(crate::workspaces::operation_gate::WorkspaceOperationKind::ReviewWrite),
+                review_mcp_tools::MUTATING_TOOL_NAMES,
+            )),
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(SubagentProductMcpServer::new(
+                    subagent_service.clone(),
+                    session_runtime.clone(),
+                    workspace_runtime.clone(),
+                    subagent_mcp_auth,
+                )),
+                Some(crate::workspaces::operation_gate::WorkspaceOperationKind::SubagentWrite),
+                subagent_mcp_tools::MUTATING_TOOL_NAMES,
+            )),
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(WorkspaceNamingProductMcpServer::new(
                     workspace_runtime.clone(),
                     workspace_access_gate.clone(),
                     SessionStore::new(db.clone()),
                     workspace_naming_mcp_auth,
-                ),
+                )),
+                None,
+                &[],
             )),
         ]));
         #[cfg(not(test))]

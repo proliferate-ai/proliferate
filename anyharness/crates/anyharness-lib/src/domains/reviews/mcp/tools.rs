@@ -3,6 +3,8 @@ use serde_json::{json, Value};
 
 use crate::integrations::mcp::tools::tool_definition;
 
+pub const MUTATING_TOOL_NAMES: &[&str] = &["submit_review_result", "mark_review_revision_ready"];
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitReviewResultArgs {

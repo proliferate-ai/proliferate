@@ -16,7 +16,6 @@ use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
     ProductMcpServer, ProductMcpTokenValidation,
 };
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Clone)]
 pub struct ReviewProductMcpServer {
@@ -27,10 +26,6 @@ pub struct ReviewProductMcpServer {
 impl ReviewProductMcpServer {
     pub fn new(runtime: Arc<ReviewRuntime>, auth: Arc<ReviewMcpAuth>) -> Self {
         Self { runtime, auth }
-    }
-
-    pub fn endpoint_operation_kind(&self) -> WorkspaceOperationKind {
-        WorkspaceOperationKind::ReviewWrite
     }
 }
 

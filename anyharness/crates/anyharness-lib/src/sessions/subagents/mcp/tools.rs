@@ -4,6 +4,12 @@ use serde_json::{json, Value};
 use crate::integrations::mcp::tools::tool_definition;
 use crate::sessions::delegation::READ_EVENTS_MAX_LIMIT;
 
+pub const MUTATING_TOOL_NAMES: &[&str] = &[
+    "create_subagent",
+    "send_subagent_message",
+    "schedule_subagent_wake",
+];
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSubagentArgs {

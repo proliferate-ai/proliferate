@@ -25,11 +25,12 @@ pub fn select_product_mcps(
 ) -> anyhow::Result<Vec<SelectedProductMcp>> {
     let mut selected = Vec::new();
 
-    // Reviews intentionally attach broadly to standard sessions. Parent
-    // sessions may become review parents after launch; until MCP refresh can
-    // add product servers live, broad attachment preserves that flow while the
-    // endpoint role context exposes no tools for unrelated sessions.
-    if should_attach_reviews_mcp(ctx.workspace) {
+    // Reviews intentionally preload on standard sessions. A parent session can
+    // start unrelated and become a review parent later; without live MCP refresh,
+    // the review MCP must already be attached for that later parent tool surface.
+    // The endpoint resolves the current review role on each request, so unrelated
+    // sessions receive no review tools even though the server is attached.
+    if should_preload_reviews_mcp_until_live_refresh(ctx.workspace) {
         selected.push(SelectedProductMcp::Reviews);
     }
 
@@ -50,7 +51,7 @@ pub fn select_product_mcps(
     Ok(selected)
 }
 
-fn should_attach_reviews_mcp(workspace: &WorkspaceRecord) -> bool {
+fn should_preload_reviews_mcp_until_live_refresh(workspace: &WorkspaceRecord) -> bool {
     workspace.surface == "standard"
 }
 
@@ -120,10 +121,12 @@ mod tests {
 
     #[test]
     fn reviews_mcp_broadly_attaches_to_standard_workspaces_only() {
-        assert!(should_attach_reviews_mcp(&workspace(
+        assert!(should_preload_reviews_mcp_until_live_refresh(&workspace(
             "standard-1",
             "standard"
         )));
-        assert!(!should_attach_reviews_mcp(&workspace("cowork-1", "cowork")));
+        assert!(!should_preload_reviews_mcp_until_live_refresh(&workspace(
+            "cowork-1", "cowork"
+        )));
     }
 }

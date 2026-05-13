@@ -17,7 +17,6 @@ use crate::integrations::mcp::product_server::{
 };
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::subagents::service::SubagentService;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
 #[derive(Clone)]
@@ -41,10 +40,6 @@ impl SubagentProductMcpServer {
             workspace_runtime,
             auth,
         }
-    }
-
-    pub fn endpoint_operation_kind(&self) -> WorkspaceOperationKind {
-        WorkspaceOperationKind::SubagentWrite
     }
 }
 

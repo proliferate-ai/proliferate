@@ -14,7 +14,9 @@ use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDispatchError,
     ProductMcpRequestContext, PRODUCT_MCP_TOKEN_HEADER_NAME,
 };
-use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointServer;
+use crate::sessions::mcp_bindings::product_registry::{
+    ProductMcpEndpointHandler, ProductMcpEndpointOperation,
+};
 use crate::sessions::subagents::mcp::definition as subagents_mcp_definition;
 use crate::sessions::workspace_naming::mcp::definition as workspace_naming_mcp_definition;
 
@@ -128,6 +130,7 @@ pub async fn dispatch_product_mcp(
         .ok_or_else(|| ApiError::not_found("Product MCP not found.", "PRODUCT_MCP_NOT_FOUND"))?;
     let definition = server.definition();
     let request = ProductMcpRequestContext::new(workspace_id, session_id, definition.id);
+    let endpoint_operation = ProductMcpEndpointOperation::from_request_body(&body);
     let auth_header = read_auth_header(server, &headers).ok_or_else(|| {
         ApiError::unauthorized(
             "Missing product MCP capability token.",
@@ -144,7 +147,7 @@ pub async fn dispatch_product_mcp(
         ));
     }
 
-    let _lease = match server.endpoint_operation_kind() {
+    let _lease = match server.endpoint_operation_kind(endpoint_operation) {
         None => None,
         Some(kind) => {
             let lease = state
@@ -185,7 +188,7 @@ fn map_dispatch_error(error: ProductMcpDispatchError, request_invalid_code: &str
 }
 
 fn read_auth_header<'a>(
-    server: &ProductMcpEndpointServer,
+    server: &dyn ProductMcpEndpointHandler,
     headers: &'a HeaderMap,
 ) -> Option<ProductMcpAuthHeader<'a>> {
     if let Some(value) = headers
