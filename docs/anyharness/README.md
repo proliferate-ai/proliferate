@@ -205,6 +205,9 @@ may own, and which patterns are allowed.
 
 Guides:
 
+- [guides/system-architecture.md](guides/system-architecture.md) for the full
+  AnyHarness source organization model: `api`, `app`, `domains`, `live`,
+  `adapters`, `integrations`, `persistence`, and `observability`.
 - [guides/crates.md](guides/crates.md) for crate ownership:
   `anyharness`, `anyharness-contract`, `anyharness-credential-discovery`, and
   `anyharness-lib`.
@@ -235,8 +238,21 @@ Specs:
 - [specs/session-engine.md](specs/session-engine.md) for the core session
   engine: `SessionRuntime`, live session manager, actor, ACP client, event
   sink, and interaction broker.
+- [specs/session-actor.md](specs/session-actor.md) for the target
+  `live/sessions/actor` state-machine split, actor-owned state, command
+  handling, turn loop, config, notifications, interactions, and shutdown.
+- [specs/agent-catalog-readiness.md](specs/agent-catalog-readiness.md) for
+  the fully migrated agents domain: single catalog input, descriptor
+  projection, install, credentials, readiness, seed artifacts, and launch
+  resolution.
 - [specs/mcp.md](specs/mcp.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
+- [specs/product-mcps.md](specs/product-mcps.md) for the repeatable product
+  MCP server pattern: definition, auth, injection, context, tools, calls, UI
+  exposure, and session MCP selection.
+- [product-mcps/README.md](product-mcps/README.md) for the concrete product
+  MCP definitions currently being standardized: subagents, artifacts, reviews,
+  and workspace naming.
 
 Existing subsystem docs under `docs/anyharness/src/**` remain valid during the
 migration. Treat them as subsystem specs until they are moved or rewritten:
@@ -277,7 +293,7 @@ which guide to read and where the code belongs.
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
 | Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
-| Agent catalog, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [src/agents.md](src/agents.md) |
+| Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [specs/agent-catalog-readiness.md](specs/agent-catalog-readiness.md), [src/agents.md](src/agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/acp/**`, `docs/anyharness/harnesses/**` | harness doc plus owning runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
 | File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/adapters/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
@@ -285,7 +301,7 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal/PTTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp_bindings/**` | current `sessions/mcp_bindings/**`; final `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
-| Product MCP tool servers for cowork, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/product-mcps.md](specs/product-mcps.md), [product-mcps/README.md](product-mcps/README.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [src/cowork-artifacts.md](src/cowork-artifacts.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
