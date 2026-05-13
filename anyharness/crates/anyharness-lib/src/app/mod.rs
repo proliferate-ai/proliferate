@@ -26,6 +26,7 @@ use crate::domains::reviews::mcp::{
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::runtime_inventory::RuntimeInventoryService;
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -111,6 +112,7 @@ pub struct AppState {
     pub workspace_purge_service: Arc<WorkspacePurgeService>,
     pub workspace_retention_service: Arc<WorkspaceRetentionService>,
     pub worktree_inventory_service: Arc<WorktreeInventoryService>,
+    pub runtime_inventory_service: Arc<RuntimeInventoryService>,
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
@@ -270,6 +272,14 @@ impl AppState {
             checkout_deletion_gate.clone(),
             runtime_home.clone(),
         ));
+        let runtime_inventory_service = Arc::new(RuntimeInventoryService::new(
+            runtime_home.clone(),
+            workspace_runtime.clone(),
+            session_runtime.clone(),
+            session_service.clone(),
+            terminal_service.clone(),
+            workspace_operation_gate.clone(),
+        ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
             cowork_delegation_service,
@@ -380,6 +390,7 @@ impl AppState {
             workspace_purge_service,
             workspace_retention_service,
             worktree_inventory_service,
+            runtime_inventory_service,
             mobility_service,
             plan_service,
             plan_runtime,

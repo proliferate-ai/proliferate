@@ -1,0 +1,1 @@
+"""Cloud projection read models."""

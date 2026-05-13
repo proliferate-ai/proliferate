@@ -12,7 +12,7 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, plans, processes, product_mcp, replay,
-    repo_roots, reviews, sessions, subagents, terminals, workspaces, worktrees,
+    repo_roots, reviews, runtime, sessions, subagents, terminals, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -21,6 +21,10 @@ use crate::app::AppState;
 
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
+        // Runtime
+        .route("/runtime/inventory", get(runtime::get_runtime_inventory))
+        .route("/runtime/activity", get(runtime::get_runtime_activity))
+        .route("/runtime/prepare-stop", post(runtime::prepare_runtime_stop))
         // Agents
         .route("/agents", get(agents::list_agents))
         .route(

@@ -4160,6 +4160,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "proliferate-worker"
+version = "0.1.0"
+dependencies = [
+ "anyharness-contract",
+ "anyhow",
+ "chrono",
+ "clap",
+ "dirs",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.38.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

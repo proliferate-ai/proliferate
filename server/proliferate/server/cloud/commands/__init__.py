@@ -1,0 +1,1 @@
+"""Cloud command queue domain."""
