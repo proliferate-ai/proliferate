@@ -216,9 +216,8 @@ async fn command_loop(
     loop {
         let lease = cloud
             .lease_commands(&LeaseCommandsRequest {
-                target_id: identity.target_id.clone(),
-                worker_id: identity.worker_id.clone(),
-                long_poll_timeout_ms: poll_timeout.as_millis().min(u64::MAX as u128) as u64,
+                timeout_seconds: poll_timeout.as_secs().min(30),
+                lease_seconds: 60,
                 max_commands: 10,
             })
             .await;

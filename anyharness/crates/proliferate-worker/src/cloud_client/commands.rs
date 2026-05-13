@@ -35,18 +35,15 @@ pub enum CloudCommandKind {
     HibernateWorkspace,
     ResumeWorkspace,
     PruneWorkspace,
-    SnapshotWorkspace,
     ExtendWorkspaceTtl,
-    SetWorkspacePin,
     SyncExistingWorkspace,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaseCommandsRequest {
-    pub target_id: String,
-    pub worker_id: String,
-    pub long_poll_timeout_ms: u64,
+    pub timeout_seconds: u64,
+    pub lease_seconds: u64,
     pub max_commands: u32,
 }
 

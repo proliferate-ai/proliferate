@@ -7,12 +7,6 @@ use super::CloudClient;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EnrollmentInventory {
-    pub report: InventoryReport,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct InventoryReportRequest {
     pub target_id: String,
     pub worker_id: String,

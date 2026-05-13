@@ -79,9 +79,7 @@ impl CommandDispatcher {
             | CloudCommandKind::HibernateWorkspace
             | CloudCommandKind::ResumeWorkspace
             | CloudCommandKind::PruneWorkspace
-            | CloudCommandKind::SnapshotWorkspace
-            | CloudCommandKind::ExtendWorkspaceTtl
-            | CloudCommandKind::SetWorkspacePin => self.dispatch_compute(command).await,
+            | CloudCommandKind::ExtendWorkspaceTtl => self.dispatch_compute(command).await,
             CloudCommandKind::SyncExistingWorkspace => Ok(DispatchResult::accepted_but_queued(
                 json!({ "status": "queued", "reason": "sync backfill is handled by the worker sync loop" }),
             )),

@@ -1,16 +1,15 @@
-use crate::cloud_client::inventory::EnrollmentInventory;
 use crate::cloud_client::{CloudClient, EnrollRequest};
 use crate::config::WorkerConfig;
 use crate::error::{Result, WorkerError};
 use crate::inventory::InventoryReport;
 
 use super::credentials::StoredIdentity;
-use super::fingerprint::{new_install_id, target_fingerprint};
+use super::fingerprint::new_install_id;
 
 pub async fn enroll(
     config: &WorkerConfig,
     cloud: &CloudClient,
-    inventory: &InventoryReport,
+    _inventory: &InventoryReport,
 ) -> Result<StoredIdentity> {
     let Some(enrollment_token) = config.cloud.enrollment_token.clone() else {
         return Err(WorkerError::Identity(
@@ -24,10 +23,8 @@ pub async fn enroll(
         .enroll(&EnrollRequest {
             enrollment_token,
             install_id: install_id.clone(),
-            target_fingerprint: target_fingerprint(),
-            inventory: EnrollmentInventory {
-                report: inventory.clone(),
-            },
+            worker_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            anyharness_version: None,
         })
         .await?;
 

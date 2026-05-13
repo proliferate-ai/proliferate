@@ -27,8 +27,8 @@ pub struct CloudClient {
 pub struct EnrollRequest {
     pub enrollment_token: String,
     pub install_id: String,
-    pub target_fingerprint: String,
-    pub inventory: inventory::EnrollmentInventory,
+    pub worker_version: Option<String>,
+    pub anyharness_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
