@@ -28,7 +28,6 @@ import {
   type TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 type TranscriptRowRenderer = (
   row: TranscriptVirtualRow,
@@ -222,23 +221,6 @@ export function FullTranscriptRowList({
     rows,
     scrollToBottom,
   ]);
-  useDebugValueChange("transcript_virtualization.inputs", "full_state", {
-    activeSessionId,
-    selectedWorkspaceId,
-    rowCount: rows.length,
-    firstRowKey: rows[0]?.key ?? null,
-    lastRowKey: rows[rows.length - 1]?.key ?? null,
-    hasOlderHistory,
-    isLoadingOlderHistory,
-    olderHistoryCursor,
-    fallbackReason,
-    virtualizationMode,
-    bottomInsetPx,
-    isSessionBusy,
-    pendingPromptTextLength: pendingPromptText?.length ?? 0,
-    pendingPrependAnchorSet: pendingPrependAnchorRef.current !== null,
-    shouldStickToBottom: shouldStickToBottomRef.current,
-  });
 
   return (
     <DebugProfiler id="transcript-full-list">

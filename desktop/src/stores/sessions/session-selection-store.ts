@@ -5,7 +5,6 @@ import {
   buildPendingWorkspaceUiKey,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
-import { recordDebugStoreTransition } from "@/lib/infra/measurement/debug-action-diagnostic";
 
 interface ActivateWorkspaceOptions {
   logicalWorkspaceId: string | null;
@@ -66,28 +65,12 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
   hotPaintGate: null,
 
   setSelectedLogicalWorkspaceId: (selectedLogicalWorkspaceId) => {
-    const detail = { selectedLogicalWorkspaceId };
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "setSelectedLogicalWorkspaceId",
-      detail,
-      { selectedLogicalWorkspaceId },
-    ));
+    set({ selectedLogicalWorkspaceId });
   },
 
   enterPendingWorkspaceShell: (pendingWorkspaceEntry, options) => set((state) => {
     const activeSessionId = options?.initialActiveSessionId ?? null;
-    const detail = {
-      attemptId: pendingWorkspaceEntry.attemptId,
-      requestKind: pendingWorkspaceEntry.request.kind,
-      activeSessionId,
-      pendingWorkspaceUiKey: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
-    };
-    return withRecordedSessionSelectionTransition(
-      state,
-      "enterPendingWorkspaceShell",
-      detail,
-      {
+    return {
       pendingWorkspaceEntry,
       selectedLogicalWorkspaceId: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
       selectedWorkspaceId: null,
@@ -100,53 +83,19 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
         activeSessionId,
       ),
       hotPaintGate: null,
-      },
-    );
+    };
   }),
 
   setPendingWorkspaceEntry: (pendingWorkspaceEntry) => {
-    const detail = {
-      attemptId: pendingWorkspaceEntry?.attemptId ?? null,
-      requestKind: pendingWorkspaceEntry?.request.kind ?? null,
-      workspaceId: pendingWorkspaceEntry
-        && "workspaceId" in pendingWorkspaceEntry.request
-        ? pendingWorkspaceEntry.request.workspaceId
-        : null,
-    };
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "setPendingWorkspaceEntry",
-      detail,
-      { pendingWorkspaceEntry },
-    ));
+    set({ pendingWorkspaceEntry });
   },
 
   setWorkspaceArrivalEvent: (workspaceArrivalEvent) => {
-    const detail = {
-      workspaceId: workspaceArrivalEvent?.workspaceId ?? null,
-      source: workspaceArrivalEvent?.source ?? null,
-    };
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "setWorkspaceArrivalEvent",
-      detail,
-      { workspaceArrivalEvent },
-    ));
+    set({ workspaceArrivalEvent });
   },
 
   activateWorkspace: (options) => {
-    const detail = {
-      logicalWorkspaceId: options.logicalWorkspaceId,
-      workspaceId: options.workspaceId,
-      initialActiveSessionId: options.initialActiveSessionId ?? null,
-      clearPending: options.clearPending ?? null,
-      hotPaintGate: Boolean(options.hotPaintGate),
-    };
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "activateWorkspace",
-      detail,
-      {
+    set((state) => ({
       pendingWorkspaceEntry: options.clearPending === false
         ? state.pendingWorkspaceEntry
         : null,
@@ -163,23 +112,11 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
         options.initialActiveSessionId ?? null,
       ),
       hotPaintGate: options.hotPaintGate ?? state.hotPaintGate,
-      },
-    ));
+    }));
   },
 
   activateHotWorkspace: (options) => {
-    const detail = {
-      logicalWorkspaceId: options.logicalWorkspaceId,
-      workspaceId: options.workspaceId,
-      initialActiveSessionId: options.initialActiveSessionId ?? null,
-      clearPending: options.clearPending ?? null,
-      hotPaintGate: Boolean(options.hotPaintGate),
-    };
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "activateHotWorkspace",
-      detail,
-      {
+    set((state) => ({
       pendingWorkspaceEntry: options.clearPending === false
         ? state.pendingWorkspaceEntry
         : null,
@@ -204,21 +141,11 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
         }
         : state.sessionActivationIntentEpochByWorkspace,
       hotPaintGate: options.hotPaintGate ?? null,
-      },
-    ));
+    }));
   },
 
   deselectWorkspacePreservingSessions: () => set((state) => {
-    const detail = {
-      selectedWorkspaceId: state.selectedWorkspaceId,
-      selectedLogicalWorkspaceId: state.selectedLogicalWorkspaceId,
-      activeSessionId: state.activeSessionId,
-    };
-    return withRecordedSessionSelectionTransition(
-      state,
-      "deselectWorkspacePreservingSessions",
-      detail,
-      {
+    return {
       pendingWorkspaceEntry: null,
       selectedWorkspaceId: null,
       workspaceSelectionNonce: state.workspaceSelectionNonce + 1,
@@ -230,21 +157,11 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
         null,
       ),
       hotPaintGate: null,
-      },
-    );
+    };
   }),
 
   clearSelection: () => set((state) => {
-    const detail = {
-      selectedWorkspaceId: state.selectedWorkspaceId,
-      selectedLogicalWorkspaceId: state.selectedLogicalWorkspaceId,
-      activeSessionId: state.activeSessionId,
-    };
-    return withRecordedSessionSelectionTransition(
-      state,
-      "clearSelection",
-      detail,
-      {
+    return {
       pendingWorkspaceEntry: null,
       selectedLogicalWorkspaceId: null,
       selectedWorkspaceId: null,
@@ -258,41 +175,22 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
       ),
       sessionActivationIntentEpochByWorkspace: {},
       hotPaintGate: null,
-      },
-    );
+    };
   }),
 
   setActiveSessionId: (activeSessionId) => set((state) => {
-    const detail = {
-      previousSessionId: state.activeSessionId,
-      activeSessionId,
-    };
-    return withRecordedSessionSelectionTransition(
-      state,
-      "setActiveSessionId",
-      detail,
-      {
+    return {
       activeSessionId,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
         state.activeSessionId,
         activeSessionId,
       ),
-      },
-    );
+    };
   }),
 
   activateHotSession: (options) => set((state) => {
-    const detail = {
-      previousSessionId: state.activeSessionId,
-      sessionId: options.sessionId,
-      hotPaintGate: Boolean(options.hotPaintGate),
-    };
-    return withRecordedSessionSelectionTransition(
-      state,
-      "activateHotSession",
-      detail,
-      {
+    return {
       activeSessionId: options.sessionId,
       activeSessionVersion: bumpVersionIfChanged(
         state.activeSessionVersion,
@@ -300,24 +198,18 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
         options.sessionId,
       ),
       hotPaintGate: options.hotPaintGate ?? null,
-      },
-    );
+    };
   }),
 
   bumpSessionActivationIntentEpoch: (workspaceId) => {
     const current = get().sessionActivationIntentEpochByWorkspace[workspaceId] ?? 0;
     const next = current + 1;
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "bumpSessionActivationIntentEpoch",
-      { workspaceId, previousEpoch: current, nextEpoch: next },
-      {
+    set((state) => ({
       sessionActivationIntentEpochByWorkspace: {
         ...state.sessionActivationIntentEpochByWorkspace,
         [workspaceId]: next,
       },
-      },
-    ));
+    }));
     return next;
   },
 
@@ -325,25 +217,14 @@ export const useSessionSelectionStore = create<SessionSelectionState>((set, get)
     if (state.hotPaintGate?.nonce !== nonce) {
       return state;
     }
-    return withRecordedSessionSelectionTransition(
-      state,
-      "clearHotPaintGate",
-      { nonce },
-      { hotPaintGate: null },
-    );
+    return { hotPaintGate: null };
   }),
 
   hydrateSelectedLogicalWorkspaceSelection: (selectedLogicalWorkspaceId) => {
-    const detail = { selectedLogicalWorkspaceId };
-    set((state) => withRecordedSessionSelectionTransition(
-      state,
-      "hydrateSelectedLogicalWorkspaceSelection",
-      detail,
-      {
+    set({
       _hydrated: true,
       selectedLogicalWorkspaceId,
-      },
-    ));
+    });
   },
 }));
 
@@ -353,21 +234,4 @@ function bumpVersionIfChanged(
   nextSessionId: string | null,
 ): number {
   return previousSessionId === nextSessionId ? version : version + 1;
-}
-
-function withRecordedSessionSelectionTransition(
-  current: SessionSelectionState,
-  label: string,
-  detail?: Record<string, unknown>,
-  next?: Partial<SessionSelectionState> | SessionSelectionState,
-): Partial<SessionSelectionState> | SessionSelectionState {
-  const resolvedNext = next ?? current;
-  recordDebugStoreTransition({
-    category: "session-selection-store",
-    label,
-    before: current,
-    after: resolvedNext,
-    detail,
-  });
-  return resolvedNext;
 }

@@ -7,7 +7,6 @@ import {
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "@/config/chat-layout";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
@@ -46,17 +45,6 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
     ...rest
   }, ref) {
     useDebugRenderCount("chat-composer-dock");
-    useDebugRenderReason("ChatComposerDock", {
-      backdrop,
-      outboundSlot,
-      activeSlot,
-      attachedSlot,
-      footerSlot,
-      lowerBackdropTopPx,
-      shellClassName,
-      children,
-      className,
-    });
     const baseShellClassName = shellClassName
       ? "z-10 shrink-0"
       : "relative z-10 mt-auto shrink-0";

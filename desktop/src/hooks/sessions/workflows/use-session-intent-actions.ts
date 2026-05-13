@@ -9,7 +9,6 @@ import {
 } from "@anyharness/sdk";
 import { useRevealMcpElicitationUrlMutation } from "@anyharness/sdk-react";
 import { useCallback } from "react";
-import { flushSync } from "react-dom";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { PROMPT_SUBMIT_MEASUREMENT_SURFACES } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptAttachmentSnapshot } from "@/lib/domain/chat/composer/prompt-attachment-snapshot";
@@ -43,7 +42,6 @@ import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";
-import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 
 interface SendPromptInput {
   sessionId: string;
@@ -87,24 +85,6 @@ export function useSessionIntentActions() {
     const intentStore = useSessionIntentStore.getState();
     const existingPromptIntents = promptIntentsForSession(intentStore, sessionId);
     const enqueueStartedAt = performance.now();
-    if (isProliferatePerfFlagEnabled("pausePromptOutboxUi")) {
-      logLatency("session.intent.prompt.enqueue.paused_by_perf_flag", {
-        clientPromptId,
-        clientSessionId: sessionId,
-        workspaceId: resolvedWorkspaceId,
-      });
-      recordMeasurementWorkflowStep({
-        operationId: measurementOperationId,
-        step: "prompt.submit.enqueue",
-        startedAt: enqueueStartedAt,
-        outcome: "skipped",
-        count: existingPromptIntents.length,
-      });
-      finishLatencyFlow(latencyFlowId, "optimistic_visible", {
-        keepActive: true,
-      });
-      return;
-    }
     if (measurementOperationId) {
       markOperationForNextCommit(
         measurementOperationId,
@@ -130,11 +110,7 @@ export function useSessionIntentActions() {
         latencyFlowId,
       });
     };
-    if (isProliferatePerfFlagEnabled("forcePromptFlushSync")) {
-      flushSync(enqueuePrompt);
-    } else {
-      enqueuePrompt();
-    }
+    enqueuePrompt();
     logLatency("session.intent.prompt.enqueue", {
       clientPromptId,
       clientSessionId: sessionId,

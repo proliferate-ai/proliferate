@@ -12,7 +12,6 @@ import {
 import type { TranscriptVirtualizationMode } from "@/lib/domain/chat/transcript/transcript-virtualization-config";
 import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   buildRenderableRows,
@@ -101,33 +100,6 @@ export function VirtualizedTranscriptRowList({
   const bottomSpacerHeight = lastVirtualItem
     ? Math.max(totalContentHeight - lastVirtualItem.end, 0)
     : 0;
-  useDebugValueChange("transcript_virtualization.inputs", "virtualized_state", {
-    activeSessionId,
-    selectedWorkspaceId,
-    rowCount: rows.length,
-    firstRowKey: rows[0]?.key ?? null,
-    lastRowKey: rows[rows.length - 1]?.key ?? null,
-    renderableRowCount: renderableRows.length,
-    firstRenderableRowKey: renderableRows[0]?.key ?? null,
-    lastRenderableRowKey: renderableRows[renderableRows.length - 1]?.key ?? null,
-    virtualItemCount: virtualItems.length,
-    firstVirtualIndex: firstVirtualItem?.index ?? null,
-    lastVirtualIndex: lastVirtualItem?.index ?? null,
-    firstVirtualStart: firstVirtualItem ? Math.round(firstVirtualItem.start) : null,
-    lastVirtualEnd: lastVirtualItem ? Math.round(lastVirtualItem.end) : null,
-    totalContentHeight: Math.round(totalContentHeight),
-    topSpacerHeight: Math.round(topSpacerHeight),
-    bottomSpacerHeight: Math.round(bottomSpacerHeight),
-    bottomInsetPx,
-    hasOlderHistory,
-    isLoadingOlderHistory,
-    olderHistoryCursor,
-    isSessionBusy,
-    pendingPromptTextLength: pendingPromptText?.length ?? 0,
-    pendingAnchorSet: pendingAnchorRef.current !== null,
-    pendingPrependAnchorSet: pendingPrependAnchorRef.current !== null,
-    shouldStickToBottom: shouldStickToBottomRef.current,
-  });
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;

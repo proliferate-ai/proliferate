@@ -54,7 +54,6 @@ import {
   resolveWithWorkspaceFallback,
   sameStringArray,
 } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
@@ -122,17 +121,6 @@ export function useWorkspaceHeaderTabsViewModel() {
   const workspaceSessionsQuery = useWorkspaceSessionsQuery({
     workspaceId: selectedWorkspaceId,
     enabled: !!selectedWorkspaceId && !hotPaintPending,
-  });
-  useDebugValueChange("header_tabs.query_state", "workspace_sessions_query", {
-    selectedWorkspaceId,
-    enabled: !!selectedWorkspaceId && !hotPaintPending,
-    status: workspaceSessionsQuery.status,
-    fetchStatus: workspaceSessionsQuery.fetchStatus,
-    isFetching: workspaceSessionsQuery.isFetching,
-    isPending: workspaceSessionsQuery.isPending,
-    data: workspaceSessionsQuery.data,
-    dataUpdatedAt: workspaceSessionsQuery.dataUpdatedAt,
-    errorUpdatedAt: workspaceSessionsQuery.errorUpdatedAt,
   });
 
   const knownSessions = useMemo<Map<string, KnownHeaderSession>>(() =>
@@ -461,21 +449,6 @@ export function useWorkspaceHeaderTabsViewModel() {
     workspaceSessionsLoaded,
     workspaceUiKey,
   ]);
-
-  useDebugValueChange("header_tabs.model", "view_model_refs", {
-    selectedWorkspaceId,
-    activeSessionId,
-    hotPaintPending,
-    liveSlots,
-    knownSessions,
-    hierarchyChildToParent: hierarchy.childToParent,
-    hierarchyChildrenByParent: hierarchy.childrenByParentSessionId,
-    chatTabs,
-    stripRows,
-    displayShellRows,
-    menuChatTabs,
-    activation,
-  });
 
   return useMemo(() => ({
     activeSessionId,

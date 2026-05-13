@@ -23,7 +23,6 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -74,25 +73,6 @@ export const MainSidebar = memo(function MainSidebar() {
   } = useWorkspaceSidebarState({ showArchived });
   const navigate = useNavigate();
   const location = useLocation();
-  useDebugRenderReason("MainSidebar", {
-    groups,
-    selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    cleanupAttentionWorkspaces,
-    emptyState,
-    isLoading,
-    pendingWorkspaceEntry,
-    showArchived,
-    workspaceTypes,
-    cloudActive,
-    cloudUnavailable,
-    billingPlan,
-    cloudRepoConfigs,
-    isCloudRepoConfigsPending,
-    supportContext,
-    supportOpen,
-    pathname: location.pathname,
-  });
 
   const isOnPlugins = location.pathname === APP_ROUTES.plugins;
   const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);

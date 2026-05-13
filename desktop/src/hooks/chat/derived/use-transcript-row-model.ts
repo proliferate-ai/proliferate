@@ -7,7 +7,6 @@ import {
 } from "@/lib/domain/chat/transcript/transcript-row-model";
 import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 export function useTranscriptRowModel(input: {
   activeSessionId: string;
@@ -18,18 +17,6 @@ export function useTranscriptRowModel(input: {
   latestTurnHasAssistantRenderableContent: boolean;
 }): readonly TranscriptRow[] {
   const cacheRef = useRef(createTranscriptRowModelCache());
-
-  useDebugValueChange("transcript_row_model.inputs", "dimensions", {
-    activeSessionId: input.activeSessionId,
-    turnCount: input.transcript.turnOrder.length,
-    itemCount: Object.keys(input.transcript.itemsById).length,
-    latestTurnId: input.latestTurnId,
-    latestTurnHasAssistantRenderableContent: input.latestTurnHasAssistantRenderableContent,
-    optimisticPromptId: input.visibleOptimisticPrompt?.promptId ?? null,
-    outboxPromptCount: input.visibleOutboxEntries.length,
-    outboxPromptIds: input.visibleOutboxEntries.map((entry) => entry.clientPromptId).join(","),
-    cacheTurnCount: cacheRef.current.turnRowsById.size,
-  });
 
   const rows = useMemo(
     () => measureDebugComputation({
@@ -54,38 +41,5 @@ export function useTranscriptRowModel(input: {
     ],
   );
 
-  const rowSignature = useMemo(
-    () => summarizeTranscriptRows(rows),
-    [rows],
-  );
-
-  useDebugValueChange("transcript_row_model.outputs", "row_signature", {
-    activeSessionId: input.activeSessionId,
-    ...rowSignature,
-  });
-
   return rows;
-}
-
-function summarizeTranscriptRows(rows: readonly TranscriptRow[]) {
-  let turnRowCount = 0;
-  let pendingPromptRowCount = 0;
-  let outboxPromptRowCount = 0;
-  for (const row of rows) {
-    if (row.kind === "turn") {
-      turnRowCount += 1;
-    } else if (row.kind === "pending_prompt") {
-      pendingPromptRowCount += 1;
-    } else if (row.kind === "outbox_prompt") {
-      outboxPromptRowCount += 1;
-    }
-  }
-  return {
-    rowCount: rows.length,
-    firstRowKey: rows[0]?.key ?? null,
-    lastRowKey: rows[rows.length - 1]?.key ?? null,
-    turnRowCount,
-    pendingPromptRowCount,
-    outboxPromptRowCount,
-  };
 }

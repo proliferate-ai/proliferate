@@ -39,7 +39,6 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];
 const EMPTY_PENDING_INTERACTIONS: readonly PendingInteraction[] = [];
@@ -131,14 +130,6 @@ export function useActiveTranscriptPaneState(): {
   const outboxEntries = useSessionIntentStore(useShallow((state) =>
     activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
   ));
-  useDebugValueChange("active_session_selector.inputs", "transcript_pane_state", {
-    activeSessionId,
-    transcript: transcriptState.transcript,
-    optimisticPrompt: transcriptState.optimisticPrompt,
-    oldestLoadedEventSeq: transcriptState.oldestLoadedEventSeq,
-    outboxEntries,
-    sessionViewState,
-  });
   return useMemo(() => ({
     ...transcriptState,
     outboxEntries,
@@ -192,14 +183,6 @@ export function useActiveSessionSurfaceSnapshot(): {
       : true;
   });
   const hasContent = transcriptState.hasContent || hasRenderableOutbox;
-  useDebugValueChange("active_session_selector.inputs", "surface_snapshot", {
-    activeSessionId,
-    directoryState,
-    transcriptEntryRef: transcriptState.transcript,
-    hasTranscriptContent: transcriptState.hasContent,
-    hasRenderableOutbox,
-    hasContent,
-  });
   return {
     activeSessionId: transcriptState.activeSessionId,
     hasContent,
@@ -327,17 +310,6 @@ export function useActiveSessionLaunchState(): {
     ),
     [intentPendingConfigChanges, slice.directoryPendingConfigChanges],
   );
-  useDebugValueChange("active_session_selector.inputs", "launch_state", {
-    activeSessionId,
-    intentPendingConfigChanges,
-    configIntentCount: configIntents.length,
-    directoryPendingConfigChanges: slice.directoryPendingConfigChanges,
-    modelControl: stableModelControl,
-    currentModelConfigId: slice.currentModelConfigId,
-    pendingConfigChanges,
-    modelId: slice.modelId,
-    agentKind: slice.agentKind,
-  });
 
   const pendingModelId = useMemo(() => {
     if (!slice.currentModelConfigId) {

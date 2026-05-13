@@ -18,7 +18,6 @@ import {
 import { clearDebugJankBuffers } from "./debug-jank-activity";
 import { isAnyHarnessTimingEnabled, isMainThreadMeasurementEnabled } from "./debug-measurement-env";
 import { getLongTaskObserverSupportedForMeasurement } from "./debug-measurement-observer";
-import { getProliferatePerfFlags } from "@/lib/infra/perf/perf-isolation-flags";
 import { saveDiagnosticJsonToPath } from "@/lib/access/tauri/diagnostics";
 import type {
   MeasurementDebugApi,
@@ -43,7 +42,6 @@ export function getDebugMeasurementDump(): MeasurementDebugDump {
       mainThread: isMainThreadMeasurementEnabled(),
       anyHarnessTiming: isAnyHarnessTimingEnabled(),
     },
-    perfFlags: getProliferatePerfFlags(),
     longTaskObserverSupported: getLongTaskObserverSupportedForMeasurement(),
     memory: getMeasurementMemorySnapshot(),
     counts: getDebugMeasurementStatus().counts,

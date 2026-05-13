@@ -58,7 +58,6 @@ import {
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "./TranscriptContexts";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "./TranscriptTurnRow";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
@@ -153,35 +152,6 @@ export function MessageList({
     visibleOutboxEntries,
     latestTurnId,
     latestTurnHasAssistantRenderableContent,
-  });
-  const virtualRowSignature = useMemo(
-    () => summarizeVirtualRows(virtualRows),
-    [virtualRows],
-  );
-  useDebugValueChange("transcript_list.inputs", "row_model_refs", {
-    activeSessionId,
-    transcript,
-    optimisticPrompt,
-    visibleOptimisticPrompt,
-    outboxEntries,
-    visibleOutboxEntries,
-    sessionViewState,
-    virtualRows,
-    latestTurnId,
-    latestTurn,
-  });
-  useDebugValueChange("transcript_list.inputs", "row_model_signature", {
-    activeSessionId,
-    selectedWorkspaceId,
-    turnCount: transcript.turnOrder.length,
-    itemCount: Object.keys(transcript.itemsById).length,
-    latestTurnId,
-    latestTurnItemCount: latestTurn?.itemOrder.length ?? null,
-    latestTurnCompleted: latestTurn ? Boolean(latestTurn.completedAt) : null,
-    sessionViewState,
-    optimisticPromptId: visibleOptimisticPrompt?.promptId ?? null,
-    visibleOutboxCount: visibleOutboxEntries.length,
-    ...virtualRowSignature,
   });
   const visibleTurnIds = useMemo(
     () => {
@@ -432,34 +402,4 @@ export function MessageList({
       </div>
     </DebugProfiler>
   );
-}
-
-function summarizeVirtualRows(rows: readonly TranscriptVirtualRow[]) {
-  let turnRowCount = 0;
-  let pendingPromptRowCount = 0;
-  let outboxPromptRowCount = 0;
-  let visibleTurnCount = 0;
-  let previousTurnId: string | null = null;
-  for (const row of rows) {
-    if (row.kind === "turn") {
-      turnRowCount += 1;
-      if (row.turnId !== previousTurnId) {
-        visibleTurnCount += 1;
-        previousTurnId = row.turnId;
-      }
-    } else if (row.kind === "pending_prompt") {
-      pendingPromptRowCount += 1;
-    } else if (row.kind === "outbox_prompt") {
-      outboxPromptRowCount += 1;
-    }
-  }
-  return {
-    virtualRowCount: rows.length,
-    firstVirtualRowKey: rows[0]?.key ?? null,
-    lastVirtualRowKey: rows[rows.length - 1]?.key ?? null,
-    visibleTurnCount,
-    turnRowCount,
-    pendingPromptRowCount,
-    outboxPromptRowCount,
-  };
 }

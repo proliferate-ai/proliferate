@@ -31,7 +31,6 @@ import {
 } from "@/lib/domain/chat/subagents/session-relationship-hints";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   resolveHierarchyMaterializedSessionId,
@@ -213,12 +212,6 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       });
     }
   }, [args.workspaceId, recordSessionRelationshipHint, reviewRelationshipHints]);
-
-  useDebugValueChange("header_subagent_hierarchy.inputs", "query_refs", {
-    workspaceId: args.workspaceId,
-    uniqueSessionIds,
-    hierarchyQuerySignature,
-  });
 
   return useMemo(() => measureDebugComputation({
     category: "header_subagent_hierarchy.derive",

@@ -23,7 +23,6 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 interface UseWorkspaceSidebarStateArgs {
@@ -160,31 +159,6 @@ export function useWorkspaceSidebarState({
     finishSuggestionsByWorkspaceId,
   ]);
   const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
-  useDebugValueChange("workspace_sidebar_state.inputs", "state_refs", {
-    selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    lastViewedSessionErrorAtBySession,
-    workspaceActivities,
-    deferredLaunchesById,
-    archivedWorkspaceIds,
-    hiddenRepoRootIds,
-    lastViewedAt,
-    workspaceLastInteracted,
-    workspaceTypes,
-    logicalWorkspaces,
-    workspaceCollections,
-    cleanupAttentionWorkspaces,
-    finishSuggestionsByWorkspaceId,
-    repoRoots,
-    gitStatus,
-    archivedSet,
-    hiddenRepoRootSet,
-    pendingPromptCounts,
-    groups,
-    emptyState,
-    showArchived,
-    workspacesLoading,
-  });
 
   return {
     groups,

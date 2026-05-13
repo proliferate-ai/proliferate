@@ -22,8 +22,6 @@ import {
 import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
-import { useProliferatePerfFlag } from "@/hooks/ui/use-proliferate-perf-flag";
 
 interface GlobalHeaderProps {
   gitStatus: GitStatusSnapshot | null;
@@ -65,9 +63,6 @@ export const GlobalHeader = memo(function GlobalHeader({
   onRenameBranch: _onRenameBranch,
 }: GlobalHeaderProps) {
   useDebugRenderCount("global-header");
-  const freezeHeaderTabs = useProliferatePerfFlag("freezeHeaderTabs");
-  const freezeHeaderTabsViewModel = useProliferatePerfFlag("freezeHeaderTabsViewModel");
-
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const {
     listOpenTargets,
@@ -76,21 +71,6 @@ export const GlobalHeader = memo(function GlobalHeader({
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
   const preferredTarget = resolvePreferredOpenTarget(targets, { defaultOpenInTargetId });
   const workspacePath = workspacePathProp ?? selectedWorkspace?.path;
-  useDebugRenderReason("GlobalHeader", {
-    gitStatus,
-    existingPr,
-    selectedWorkspace,
-    workspacePath,
-    rightPanelOpen,
-    disableGitActions,
-    runDisabled,
-    runLoading,
-    runLabel,
-    runTitle,
-    targets,
-    defaultOpenInTargetId,
-    preferredTarget,
-  });
 
   useEffect(() => {
     void listOpenTargets("directory").then(setTargets);
@@ -115,16 +95,7 @@ export const GlobalHeader = memo(function GlobalHeader({
       <div className="flex h-full min-w-0 flex-1 items-stretch gap-2 px-2">
       {/* Tabs */}
       <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-        {freezeHeaderTabs || freezeHeaderTabsViewModel ? (
-          <div
-            className="h-9 min-w-0 flex-1 rounded-md border border-dashed border-border/70 px-2 text-xs text-muted-foreground flex items-center"
-            data-perf-frozen="header-tabs"
-          >
-            Header tabs frozen
-          </div>
-        ) : (
-          <HeaderTabs />
-        )}
+        <HeaderTabs />
       </div>
 
       {/* Right side - branch + open-in + git + panel toggle */}

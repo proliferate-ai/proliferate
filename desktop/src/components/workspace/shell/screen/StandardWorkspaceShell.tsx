@@ -21,16 +21,13 @@ import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
-import { useProliferatePerfFlag } from "@/hooks/ui/use-proliferate-perf-flag";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -145,68 +142,6 @@ export function StandardWorkspaceShell() {
   const nativeWorkspaceOverlaysHidden = commandPaletteOpen
     || publishDialog.open
     || nativePortalOverlayOpen;
-  const freezeSidebar = useProliferatePerfFlag("freezeSidebar");
-  const freezeRightPanel = useProliferatePerfFlag("freezeRightPanel");
-  const freezeWorkspaceContent = useProliferatePerfFlag("freezeWorkspaceContent");
-  const freezeHeaderTabsViewModel = useProliferatePerfFlag("freezeHeaderTabsViewModel");
-  useDebugValueChange("workspace_shell.inputs", "shell_refs", {
-    selectedWorkspaceId,
-    selectedWorkspace,
-    selectedCloudWorkspace,
-    gitStatus,
-    existingPr,
-    hasRuntimeReadyWorkspace,
-    shouldKeepRuntimePanelsVisible,
-    hasWorkspaceShell,
-    isCloudWorkspaceSelected,
-    sidebarOpen,
-    sidebarWidth,
-    rightPanelOpen,
-    rightPanelState,
-    rightPanelWidth,
-    rightPanelFocusRequestToken,
-    terminalActivationRequest,
-    publishDialog,
-    commandPaletteOpen,
-    transparentChromeEnabled,
-    chromeClasses,
-    runCanRun: runCommand.canRun,
-    runIsLaunching: runCommand.isLaunching,
-    runLabel: runCommand.runLabel,
-    runTitle: runCommand.runTitle,
-    runtimeBlockedReason,
-    repoSettingsHref,
-    canOpenRepositorySettings,
-    nativeWorkspaceOverlaysHidden,
-  });
-  useDebugRenderReason("StandardWorkspaceShell", {
-    pendingWorkspaceEntry,
-    selectedLogicalWorkspaceId,
-    selectedWorkspaceId,
-    selectedWorkspace,
-    selectedCloudWorkspace,
-    gitStatus,
-    existingPr,
-    hasRuntimeReadyWorkspace,
-    shouldKeepRuntimePanelsVisible,
-    hasWorkspaceShell,
-    hasLaunchIntentOnlyShell,
-    isCloudWorkspaceSelected,
-    sidebarOpen,
-    sidebarWidth,
-    rightPanelOpen,
-    rightPanelState,
-    rightPanelWidth,
-    terminalActivationRequest,
-    publishDialog,
-    commandPaletteOpen,
-    chromeClasses,
-    runCanRun: runCommand.canRun,
-    runIsLaunching: runCommand.isLaunching,
-    runtimeBlockedReason,
-    repoSettingsHref,
-    nativeWorkspaceOverlaysHidden,
-  });
   const handleTerminalActivationRequestHandled = useCallback(
     (request: NonNullable<typeof terminalActivationRequest>) => {
       layout.setTerminalActivationRequest((current) =>
@@ -251,7 +186,7 @@ export function StandardWorkspaceShell() {
       <WorkspaceShellActionsProvider value={shellActions}>
         <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}>
           <WorkspaceHeaderTabsViewModelProvider
-            enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell && !freezeHeaderTabsViewModel}
+            enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
           >
             <div
               className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
@@ -288,11 +223,7 @@ export function StandardWorkspaceShell() {
                       </div>
                     </div>
                     <div className="flex-1 min-h-0 overflow-hidden">
-                      {freezeSidebar ? (
-                        <PerfFrozenPanel label="Sidebar frozen" surface="sidebar" />
-                      ) : (
-                        <MainSidebar />
-                      )}
+                      <MainSidebar />
                     </div>
                   </div>
                 </DebugProfiler>
@@ -363,22 +294,14 @@ export function StandardWorkspaceShell() {
                   {hasLaunchIntentOnlyShell ? (
                     <DebugProfiler id="workspace-content-frame">
                       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                        {freezeWorkspaceContent ? (
-                          <PerfFrozenPanel label="Workspace content frozen" surface="workspace-content" />
-                        ) : (
-                          <ChatView shellRenderSurface={CHAT_SHELL_RENDER_SURFACE} />
-                        )}
+                        <ChatView shellRenderSurface={CHAT_SHELL_RENDER_SURFACE} />
                       </div>
                     </DebugProfiler>
                   ) : hasWorkspaceShell ? (
                     <>
                       <DebugProfiler id="workspace-content-frame">
                         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                        {freezeWorkspaceContent || freezeHeaderTabsViewModel ? (
-                          <PerfFrozenPanel label="Workspace content frozen" surface="workspace-content" />
-                        ) : (
                           <WorkspaceContentView />
-                          )}
                         </div>
                       </DebugProfiler>
 
@@ -396,27 +319,23 @@ export function StandardWorkspaceShell() {
                       >
                         <DebugProfiler id="workspace-right-panel">
                           <div className="h-full" style={{ minWidth: 260 }}>
-                            {freezeRightPanel ? (
-                              <PerfFrozenPanel label="Right panel frozen" surface="right-panel" />
-                            ) : (
-                              <RightPanel
-                                workspaceId={selectedWorkspaceId}
-                                isWorkspaceReady={hasRuntimeReadyWorkspace}
-                                isOpen={rightPanelOpen}
-                                shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
-                                isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                                state={rightPanelState}
-                                repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
-                                  section: "repo",
-                                  repo: null,
-                                })}
-                                onStateChange={layout.setRightPanelState}
-                                terminalActivationRequest={terminalActivationRequest}
-                                focusRequestToken={rightPanelFocusRequestToken}
-                                nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                                onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
-                              />
-                            )}
+                            <RightPanel
+                              workspaceId={selectedWorkspaceId}
+                              isWorkspaceReady={hasRuntimeReadyWorkspace}
+                              isOpen={rightPanelOpen}
+                              shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
+                              isCloudWorkspaceSelected={isCloudWorkspaceSelected}
+                              state={rightPanelState}
+                              repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
+                                section: "repo",
+                                repo: null,
+                              })}
+                              onStateChange={layout.setRightPanelState}
+                              terminalActivationRequest={terminalActivationRequest}
+                              focusRequestToken={rightPanelFocusRequestToken}
+                              nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
+                              onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
+                            />
                           </div>
                         </DebugProfiler>
                       </div>
@@ -465,22 +384,5 @@ export function StandardWorkspaceShell() {
         </WorkspacePathProvider>
       </WorkspaceShellActionsProvider>
     </DebugProfiler>
-  );
-}
-
-function PerfFrozenPanel({
-  label,
-  surface,
-}: {
-  label: string;
-  surface: string;
-}) {
-  return (
-    <div
-      className="flex h-full min-h-0 w-full items-center justify-center border border-dashed border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground"
-      data-perf-frozen={surface}
-    >
-      {label}
-    </div>
   );
 }
