@@ -539,10 +539,10 @@ cloud-openapi:
 	  > openapi.json
 
 cloud-client-generate: cloud-openapi
-	mkdir -p desktop/src/lib/integrations/cloud/generated
+	mkdir -p desktop/src/lib/access/cloud/generated
 	cd desktop && npx openapi-typescript \
 	  ../server/openapi.json \
-	  -o src/lib/integrations/cloud/generated/openapi.ts
+	  -o src/lib/access/cloud/generated/openapi.ts
 
 # --- TypeScript SDK ---
 

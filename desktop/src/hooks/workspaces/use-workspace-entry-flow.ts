@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import {
   type PendingWorkspaceEntry,
@@ -11,6 +12,7 @@ import {
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   ensureRepoGroupExpanded,
+  useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
 import {
   elapsedSince,
@@ -25,6 +27,9 @@ import {
 } from "@/hooks/workspaces/workflows/pending-workspace-session-shell";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
+import { buildPendingInitialSession } from "@/hooks/workspaces/workflows/workspace-entry-action-helpers";
 
 interface FinalizeSelectionOptions {
   latencyFlowId?: string | null;
@@ -61,19 +66,51 @@ export function useWorkspaceEntryFlow() {
     entry: PendingWorkspaceEntry,
     options?: BeginPendingWorkspaceOptions,
   ): string | null => {
+    const preferences = useUserPreferencesStore.getState();
+    const preferredAgentKind = preferences.defaultChatAgentKind;
+    const preferredModelId = preferredAgentKind
+      ? preferences.defaultChatModelIdByAgentKind[preferredAgentKind] ?? null
+      : null;
+    const activeSessionId = useSessionSelectionStore.getState().activeSessionId;
+    const activeRecord = activeSessionId ? getSessionRecord(activeSessionId) : null;
     const initialSession = options?.initialSession === undefined
-      ? configuredLaunch.selection
-        ? {
-          kind: "session" as const,
-          agentKind: configuredLaunch.selection.kind,
-          modelId: configuredLaunch.selection.modelId,
-          displayTitle: configuredLaunch.displayName ?? configuredLaunch.selection.modelId,
-        }
-        : null
+      ? buildPendingInitialSession({
+        agentKind: configuredLaunch.selection?.kind,
+        modelId: configuredLaunch.selection?.modelId,
+        modeId: configuredLaunch.selection?.kind
+          ? preferences.defaultSessionModeByAgentKind[configuredLaunch.selection.kind] ?? null
+          : null,
+        displayTitle: configuredLaunch.displayName,
+      }) ?? buildPendingInitialSession({
+        agentKind: preferredAgentKind,
+        modelId: preferredModelId,
+        modeId: preferredAgentKind
+          ? preferences.defaultSessionModeByAgentKind[preferredAgentKind] ?? null
+          : null,
+      }) ?? buildPendingInitialSession({
+        agentKind: activeRecord?.agentKind ?? null,
+        modelId: activeRecord?.modelId ?? null,
+        modeId: activeRecord?.modeId ?? null,
+      })
       : options.initialSession;
-    const projectedSessionId = ensurePendingWorkspaceSessionShell({
-      entry,
-      initialSession: initialSession ?? null,
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+    let projectedSessionId: string | null = null;
+    batchSessionStoreWrites(() => {
+      projectedSessionId = ensurePendingWorkspaceSessionShell({
+        entry,
+        initialSession: initialSession ?? null,
+      });
+      resetWorkspaceEditorState();
+      if (projectedSessionId) {
+        writeChatShellIntentForSession({
+          workspaceId: pendingWorkspaceUiKey,
+          shellWorkspaceId: pendingWorkspaceUiKey,
+          sessionId: projectedSessionId,
+        });
+      }
+      enterPendingWorkspaceShell(entry, {
+        initialActiveSessionId: projectedSessionId,
+      });
     });
     logLatency("workspace.entry.pending_shell", {
       attemptId: entry.attemptId,
@@ -84,20 +121,21 @@ export function useWorkspaceEntryFlow() {
       baseBranchName: entry.baseBranchName,
       originKind: entry.originTarget.kind,
       projectedSessionId,
+      pendingWorkspaceUiKey,
+      selectedLogicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
+      activeSessionId: useSessionSelectionStore.getState().activeSessionId,
+      storedActiveShellTabKey:
+        useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace[pendingWorkspaceUiKey] ?? null,
+      directorySessionIds:
+        useSessionDirectoryStore.getState().sessionIdsByWorkspaceId[pendingWorkspaceUiKey] ?? [],
     });
-    resetWorkspaceEditorState();
-    enterPendingWorkspaceShell(entry, {
-      initialActiveSessionId: projectedSessionId,
-    });
-    if (projectedSessionId) {
-      writeChatShellIntentForSession({
-        workspaceId: buildPendingWorkspaceUiKey(entry),
-        sessionId: projectedSessionId,
-      });
-    }
     requestChatInputFocus();
     return projectedSessionId;
-  }, [configuredLaunch.displayName, configuredLaunch.selection, enterPendingWorkspaceShell]);
+  }, [
+    configuredLaunch.displayName,
+    configuredLaunch.selection,
+    enterPendingWorkspaceShell,
+  ]);
 
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,

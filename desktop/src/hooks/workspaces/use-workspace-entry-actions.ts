@@ -1,10 +1,7 @@
 import { useCallback } from "react";
-import { useShallow } from "zustand/react/shallow";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   buildWorkspaceArrivalEvent,
 } from "@/lib/domain/workspaces/creation/arrival";
@@ -24,7 +21,6 @@ import {
 import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
 import {
   ensureRepoGroupExpanded,
-  useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
 import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
@@ -42,20 +38,8 @@ import {
 import {
   usePendingWorkspaceSessionMaterialization,
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
-import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import {
-  ensurePendingWorkspaceSessionShell,
-} from "@/hooks/workspaces/workflows/pending-workspace-session-shell";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { getSessionRecord } from "@/stores/sessions/session-records";
-import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
-  useActiveSessionLaunchState,
-  useActiveSessionModeState,
-} from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import {
-  buildPendingInitialSession,
   normalizeWorktreeInput,
   resolveDisplayNameFromPath,
   resolveErrorMessage,
@@ -98,101 +82,15 @@ export function useWorkspaceEntryActions() {
     createWorktreeWorkspace,
     isCreatingWorktreeWorkspace,
   } = useWorkspaceActions();
-  const { selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
-  const configuredLaunch = useConfiguredLaunchReadiness();
-  const launchDefaults = useUserPreferencesStore(useShallow((state) => ({
-    defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
-  })));
-  const activeLaunchState = useActiveSessionLaunchState();
-  const activeModeState = useActiveSessionModeState();
+  const { beginPendingWorkspace, selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
   const { selectWorkspace } = useWorkspaceSelection();
   const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
-  const enterPendingWorkspaceShell = useSessionSelectionStore(
-    (state) => state.enterPendingWorkspaceShell,
-  );
   const setPendingWorkspaceEntry = useSessionSelectionStore(
     (state) => state.setPendingWorkspaceEntry,
   );
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
-
-  const beginPendingWorkspace = useCallback((
-    entry: PendingWorkspaceEntry,
-    options?: { initialSession?: PendingWorkspaceInitialSession | null },
-  ): string | null => {
-    const preferredAgentKind = launchDefaults.defaultChatAgentKind;
-    const preferredModelId = preferredAgentKind
-      ? launchDefaults.defaultChatModelIdByAgentKind[preferredAgentKind] ?? null
-      : null;
-    const initialSession = options?.initialSession === undefined
-      ? buildPendingInitialSession({
-        agentKind: configuredLaunch.selection?.kind,
-        modelId: configuredLaunch.selection?.modelId,
-        modeId: configuredLaunch.selection?.kind
-          ? launchDefaults.defaultSessionModeByAgentKind[configuredLaunch.selection.kind] ?? null
-          : null,
-        displayTitle: configuredLaunch.displayName,
-      }) ?? buildPendingInitialSession({
-        agentKind: preferredAgentKind,
-        modelId: preferredModelId,
-        modeId: preferredAgentKind
-          ? launchDefaults.defaultSessionModeByAgentKind[preferredAgentKind] ?? null
-          : null,
-      }) ?? buildPendingInitialSession({
-        agentKind: activeLaunchState.currentLaunchIdentity?.kind,
-        modelId: activeLaunchState.currentLaunchIdentity?.modelId,
-        modeId: activeModeState.currentModeId,
-      })
-      : options.initialSession;
-    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
-    let projectedSessionId: string | null = null;
-    batchSessionStoreWrites(() => {
-      projectedSessionId = ensurePendingWorkspaceSessionShell({
-        entry,
-        initialSession: initialSession ?? null,
-      });
-      resetWorkspaceEditorState();
-      if (projectedSessionId) {
-        writeChatShellIntentForSession({
-          workspaceId: pendingWorkspaceUiKey,
-          shellWorkspaceId: pendingWorkspaceUiKey,
-          sessionId: projectedSessionId,
-        });
-      }
-      enterPendingWorkspaceShell(entry, {
-        initialActiveSessionId: projectedSessionId,
-      });
-    });
-    logLatency("workspace.entry.pending_shell", {
-      attemptId: entry.attemptId,
-      source: entry.source,
-      requestKind: entry.request.kind,
-      displayName: entry.displayName,
-      repoLabel: entry.repoLabel,
-      baseBranchName: entry.baseBranchName,
-      originKind: entry.originTarget.kind,
-      projectedSessionId,
-      pendingWorkspaceUiKey,
-      selectedLogicalWorkspaceId: useSessionSelectionStore.getState().selectedLogicalWorkspaceId,
-      activeSessionId: useSessionSelectionStore.getState().activeSessionId,
-      storedActiveShellTabKey:
-        useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace[pendingWorkspaceUiKey] ?? null,
-      directorySessionIds:
-        useSessionDirectoryStore.getState().sessionIdsByWorkspaceId[pendingWorkspaceUiKey] ?? [],
-    });
-    requestChatInputFocus();
-    return projectedSessionId;
-  }, [
-    activeLaunchState.currentLaunchIdentity,
-    activeModeState.currentModeId,
-    configuredLaunch.displayName,
-    configuredLaunch.selection,
-    enterPendingWorkspaceShell,
-    launchDefaults,
-  ]);
 
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,

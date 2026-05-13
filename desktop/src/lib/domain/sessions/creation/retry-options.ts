@@ -22,6 +22,7 @@ export interface SessionCreateWithResolvedConfigRetryOptions {
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
+  preserveProjectedSessionOnCreateFailure?: boolean;
   modelAvailabilityRetryCount?: number;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;

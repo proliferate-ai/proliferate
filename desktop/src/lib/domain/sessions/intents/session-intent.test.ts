@@ -268,6 +268,86 @@ describe("session intents", () => {
       status: "reconciled",
     });
   });
+
+  it("only reconciles config and interaction intents for the streamed client session", () => {
+    let state = emptyState();
+    state = upsertSessionIntent(state, {
+      ...createUpdateConfigIntent({
+        intentId: "config-session-1",
+        clientSessionId: "session-1",
+        configId: "effort",
+        value: "high",
+      }),
+      status: "accepted",
+      applyState: "queued",
+    });
+    state = upsertSessionIntent(state, {
+      ...createUpdateConfigIntent({
+        intentId: "config-session-2",
+        clientSessionId: "session-2",
+        configId: "effort",
+        value: "high",
+      }),
+      status: "accepted",
+      applyState: "queued",
+    });
+    state = upsertSessionIntent(state, {
+      ...createResolveInteractionIntent({
+        intentId: "interaction-session-1",
+        clientSessionId: "session-1",
+        action: "permission",
+        requestId: "request-shared",
+        request: { outcome: "decision", decision: "allow" },
+      }),
+      status: "accepted",
+    });
+    state = upsertSessionIntent(state, {
+      ...createResolveInteractionIntent({
+        intentId: "interaction-session-2",
+        clientSessionId: "session-2",
+        action: "permission",
+        requestId: "request-shared",
+        request: { outcome: "decision", decision: "allow" },
+      }),
+      status: "accepted",
+    });
+
+    const next = reconcileOutboxFromEnvelopes(state, "session-1", [
+      {
+        seq: 1,
+        timestamp: "2026-05-12T00:00:00Z",
+        event: {
+          type: "config_option_update",
+          liveConfig: liveConfig("effort", "high"),
+        },
+        sessionId: "session-1",
+      } as SessionEventEnvelope,
+      {
+        seq: 2,
+        timestamp: "2026-05-12T00:00:01Z",
+        event: {
+          type: "interaction_resolved",
+          requestId: "request-shared",
+          kind: "permission",
+          outcome: { type: "decision", decision: "allow" },
+        },
+        sessionId: "session-1",
+      } as unknown as SessionEventEnvelope,
+    ]);
+
+    expect(next.entriesById["config-session-1"]).toMatchObject({
+      status: "reconciled",
+    });
+    expect(next.entriesById["interaction-session-1"]).toMatchObject({
+      status: "reconciled",
+    });
+    expect(next.entriesById["config-session-2"]).toMatchObject({
+      status: "accepted",
+    });
+    expect(next.entriesById["interaction-session-2"]).toMatchObject({
+      status: "accepted",
+    });
+  });
 });
 
 function emptyState(): SessionIntentStateShape {

@@ -121,6 +121,7 @@ interface CreateSessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
+  preserveProjectedSessionOnCreateFailure?: boolean;
   modelAvailabilityRetryCount?: number;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
@@ -135,6 +136,7 @@ interface CreateEmptySessionWithResolvedConfigOptions {
   latencyFlowId?: string | null;
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
+  preserveProjectedSessionOnCreateFailure?: boolean;
 }
 
 const sessionStreamPruningDeps: SessionStreamPruningDeps = {
@@ -717,6 +719,19 @@ export function useSessionCreationActions() {
         });
         return;
       }
+      if (options.preserveProjectedSessionOnCreateFailure) {
+        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
+        if (options.launchIntentId) {
+          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
+        }
+        captureTelemetryException(error, {
+          tags: {
+            action: "create_projected_session_materialization",
+            domain: "sessions",
+          },
+        });
+        return;
+      }
       const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
       useSessionIntentStore.getState().clearSession(pendingSessionId);
       removeSessionRecordAndClearSelection(pendingSessionId);
@@ -789,6 +804,7 @@ export function useSessionCreationActions() {
       latencyFlowId: options.latencyFlowId,
       clientSessionId: options.clientSessionId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
+      preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
     });
   }, [createSessionWithResolvedConfig]);
 

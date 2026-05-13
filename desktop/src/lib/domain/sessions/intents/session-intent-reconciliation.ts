@@ -78,6 +78,7 @@ export function reconcileOutboxFromEnvelopes(
       for (const intent of Object.values(nextState.entriesById)) {
         if (
           intent.kind === "update_config"
+          && intent.clientSessionId === clientSessionId
           && (intent.status === "accepted" || intent.status === "dispatching" || intent.status === "queued")
           && getAuthoritativeConfigValue(event.liveConfig, intent.configId) === intent.value
         ) {
@@ -94,6 +95,7 @@ export function reconcileOutboxFromEnvelopes(
       for (const intent of Object.values(nextState.entriesById)) {
         if (
           intent.kind === "resolve_interaction"
+          && intent.clientSessionId === clientSessionId
           && intent.requestId === event.requestId
           && (intent.status === "accepted" || intent.status === "dispatching" || intent.status === "queued")
         ) {

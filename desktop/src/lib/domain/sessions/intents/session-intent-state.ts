@@ -134,7 +134,25 @@ export const bindOutboxSessionMaterialization = bindSessionIntentMaterialization
 export const outboxEntriesForSession = promptIntentsForSession;
 
 function sessionIntentEqual(a: SessionIntent, b: SessionIntent): boolean {
-  return a === b || JSON.stringify(a) === JSON.stringify(b);
+  if (a === b) {
+    return true;
+  }
+  const aRecord = a as unknown as Record<string, unknown>;
+  const bRecord = b as unknown as Record<string, unknown>;
+  const aKeys = Object.keys(aRecord);
+  const bKeys = Object.keys(bRecord);
+  if (aKeys.length !== bKeys.length) {
+    return false;
+  }
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(bRecord, key)) {
+      return false;
+    }
+    if (!Object.is(aRecord[key], bRecord[key])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function getPromptEntryByPromptId(

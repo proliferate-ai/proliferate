@@ -65,6 +65,7 @@ export function usePendingWorkspaceSessionMaterialization() {
         modelId: session.modelId ?? session.agentKind,
         modeId: session.modeId ?? undefined,
         reuseInFlightEmptySession: false,
+        preserveProjectedSessionOnCreateFailure: true,
       }).then((clientSessionId) => {
         logLatency(`${eventPrefix}.projected_session_create_completed`, {
           attemptId: entry.attemptId,

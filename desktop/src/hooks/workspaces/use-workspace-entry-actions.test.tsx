@@ -56,9 +56,22 @@ vi.mock("./use-workspace-actions", () => ({
   }),
 }));
 
-vi.mock("./use-workspace-entry-flow", () => ({
-  useWorkspaceEntryFlow: () => ({
-    selectWorkspaceWithArrival: mocks.selectWorkspaceWithArrival,
+vi.mock("./use-workspace-entry-flow", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./use-workspace-entry-flow")>();
+  return {
+    useWorkspaceEntryFlow: () => ({
+      ...actual.useWorkspaceEntryFlow(),
+      selectWorkspaceWithArrival: mocks.selectWorkspaceWithArrival,
+    }),
+  };
+});
+
+vi.mock("@/hooks/chat/derived/use-active-chat-session-selectors", () => ({
+  useActiveSessionLaunchState: () => ({
+    currentLaunchIdentity: null,
+  }),
+  useActiveSessionModeState: () => ({
+    currentModeId: null,
   }),
 }));
 

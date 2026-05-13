@@ -73,6 +73,15 @@ vi.mock("@/hooks/chat/derived/use-configured-launch-readiness", () => ({
   }),
 }));
 
+vi.mock("@/hooks/chat/derived/use-active-chat-session-selectors", () => ({
+  useActiveSessionLaunchState: () => ({
+    currentLaunchIdentity: null,
+  }),
+  useActiveSessionModeState: () => ({
+    currentModeId: null,
+  }),
+}));
+
 vi.mock("@/lib/infra/measurement/debug-latency", () => ({
   elapsedSince: () => 0,
   logLatency: vi.fn(),
