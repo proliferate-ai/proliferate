@@ -51,7 +51,7 @@ fn ensure_tool_available(name: &str, ctx: &CoworkMcpContext) -> anyhow::Result<(
 
 async fn call_artifact_tool(
     artifact_runtime: &CoworkArtifactRuntime,
-    workspace: &crate::workspaces::model::WorkspaceRecord,
+    workspace: &WorkspaceRecord,
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Option<Value>> {
@@ -564,10 +564,8 @@ mod tests {
             workspace: workspace(&temp.path),
             workspace_delegation_enabled: false,
         };
-
         let error = ensure_tool_available("create_coding_workspace", &ctx)
             .expect_err("delegation tool should be rejected when disabled");
-
         assert_eq!(
             error.to_string(),
             "cowork workspace delegation is disabled for this thread"
