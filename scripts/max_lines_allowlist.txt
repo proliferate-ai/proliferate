@@ -1,8 +1,7 @@
 # Existing oversized source files. Keep this list shrinking over time.
 anyharness/crates/anyharness-lib/src/acp/manager.rs
 anyharness/crates/anyharness-lib/src/domains/agents/installer.rs
-anyharness/crates/anyharness-lib/src/domains/agents/catalog.rs
-anyharness/crates/anyharness-lib/src/domains/agents/resolver.rs
+anyharness/crates/anyharness-lib/src/domains/agents/readiness/resolver.rs
 anyharness/crates/anyharness-lib/src/api/openapi.rs
 anyharness/crates/anyharness-lib/src/api/router_tests.rs
 anyharness/crates/anyharness-lib/src/api/http/git.rs
@@ -32,6 +31,7 @@ anyharness/sdk-react/src/hooks/sessions.ts
 desktop/src/components/ui/icons.tsx
 desktop/src/hooks/sessions/use-session-creation-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
+desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts
 server/tests/integration/test_cloud_api.py

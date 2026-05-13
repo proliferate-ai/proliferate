@@ -1,7 +1,5 @@
 import {
   anyHarnessAgentsKey,
-  anyHarnessProviderConfigsKey,
-  anyHarnessWorkspaceSessionLaunchKey,
 } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
@@ -15,10 +13,6 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { isCloudWorkspaceConnectionQueryKey } from "@/hooks/access/cloud/query-keys";
 
-// Transitional Wave 1 cache bridge: this cloud mutation must also refresh
-// AnyHarness launch/config caches when the selected workspace points at the
-// resynced cloud runtime. Move that selected-workspace composition to a product
-// cache hook when workspace settings hooks are reorganized.
 export function useResyncCloudWorkspaceCredentials(workspaceId: string | null) {
   const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
@@ -44,12 +38,6 @@ export function useResyncCloudWorkspaceCredentials(workspaceId: string | null) {
         invalidations.push(
           queryClient.invalidateQueries({
             queryKey: anyHarnessAgentsKey(runtimeUrl),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: anyHarnessProviderConfigsKey(runtimeUrl),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: anyHarnessWorkspaceSessionLaunchKey(runtimeUrl, selectedWorkspaceId),
           }),
         );
       }

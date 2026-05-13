@@ -1,9 +1,10 @@
-import type { ContentPart, PromptInputBlock, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,
 } from "@/lib/domain/home/home-next-launch";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export type ChatLaunchTargetKind = HomeLaunchTarget["kind"];
 
@@ -30,7 +31,7 @@ export interface LaunchCatalogSnapshot {
   workspaceId: string | null;
   runtimeUrl: string | null;
   catalogVersion: string | null;
-  agents: WorkspaceSessionLaunchAgent[];
+  agents: DesktopAgentLaunchAgent[];
   createdAt: number;
 }
 

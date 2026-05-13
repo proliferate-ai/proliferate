@@ -5,11 +5,11 @@ use super::context::SubagentMcpContext;
 use super::tools::{
     ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, SendSubagentMessageArgs,
 };
+use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 use crate::sessions::delegation::{READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT};
 use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};
-use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
 
 pub async fn call_tool(
     service: &SubagentService,
@@ -72,7 +72,7 @@ fn get_subagent_launch_options(
         .session_store()
         .find_by_id(&ctx.parent_session_id)?
         .ok_or_else(|| anyhow::anyhow!("parent session not found"))?;
-    let catalog = session_runtime.workspace_session_launch_catalog(&parent.workspace_id)?;
+    let catalog = session_runtime.resolved_workspace_launch_options(&parent.workspace_id)?;
     let live_config = session_runtime.live_config_snapshot(&ctx.parent_session_id)?;
 
     let default_agent_kind = parent.agent_kind.clone();
@@ -280,7 +280,7 @@ fn cleanup_child_session_after_failed_launch(
 }
 
 fn default_model_for_agent(
-    catalog: &WorkspaceSessionLaunchCatalogData,
+    catalog: &ResolvedWorkspaceLaunchOptions,
     agent_kind: &str,
 ) -> Option<String> {
     catalog
@@ -291,7 +291,7 @@ fn default_model_for_agent(
 }
 
 fn launch_agents_to_json(
-    catalog: WorkspaceSessionLaunchCatalogData,
+    catalog: ResolvedWorkspaceLaunchOptions,
     parent_agent_kind: &str,
 ) -> Vec<Value> {
     catalog

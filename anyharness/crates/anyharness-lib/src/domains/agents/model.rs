@@ -9,7 +9,6 @@ pub enum AgentKind {
     Gemini,
     Cursor,
     OpenCode,
-    Amp,
 }
 
 impl AgentKind {
@@ -20,7 +19,6 @@ impl AgentKind {
             Self::Gemini => "gemini",
             Self::Cursor => "cursor",
             Self::OpenCode => "opencode",
-            Self::Amp => "amp",
         }
     }
 
@@ -31,7 +29,6 @@ impl AgentKind {
             Self::Gemini => "Gemini",
             Self::Cursor => "Cursor",
             Self::OpenCode => "OpenCode",
-            Self::Amp => "Amp",
         }
     }
 
@@ -42,7 +39,6 @@ impl AgentKind {
             Self::Gemini,
             Self::Cursor,
             Self::OpenCode,
-            Self::Amp,
         ]
     }
 
@@ -53,7 +49,6 @@ impl AgentKind {
             "gemini" => Some(Self::Gemini),
             "cursor" => Some(Self::Cursor),
             "opencode" => Some(Self::OpenCode),
-            "amp" => Some(Self::Amp),
             _ => None,
         }
     }
@@ -254,7 +249,7 @@ pub struct AgentProcessArtifactSpec {
 // ---------------------------------------------------------------------------
 
 /// Selects which provider-specific credential detection logic to run.
-/// Each variant maps to an explicit detector function in `credentials.rs`.
+/// Each variant maps to an explicit detector function in the credentials module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialDiscoveryKind {
     /// No local credential discovery; rely only on env vars.
@@ -270,8 +265,6 @@ pub enum CredentialDiscoveryKind {
     OpenCode,
     /// Check Cursor-specific ~/.cursor/cli-config.json for login state.
     Cursor,
-    /// Check Amp-specific ~/.amp/config.json for API key fields.
-    Amp,
 }
 
 /// Describes how to log in with this agent's native CLI if env-based auth is missing.

@@ -1,12 +1,14 @@
 import type {
   AnyHarnessClient,
-  ModelRegistry,
-  ModelRegistryModel,
   NormalizedSessionControl,
   Session,
-  SessionDefaultControl,
   SessionLiveConfigSnapshot,
 } from "@anyharness/sdk";
+import type { DesktopSessionDefaultControl } from "@/lib/domain/agents/cloud-launch-catalog";
+import type {
+  SessionConfigModel,
+  SessionConfigModelRegistry,
+} from "@/lib/domain/chat/launch/session-config";
 import type {
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
@@ -43,7 +45,7 @@ interface ApplySessionLaunchDefaultsInput {
   client: AnyHarnessClient;
   session: Session;
   agentKind: string;
-  modelRegistries: readonly ModelRegistry[];
+  modelRegistries: readonly SessionConfigModelRegistry[];
   defaultLiveSessionControlValuesByAgentKind:
     DefaultLiveSessionControlValuesByAgentKind;
 }
@@ -157,11 +159,11 @@ export async function applySessionLaunchDefaults({
 }
 
 function buildDefaultControlMetadataByKey(
-  controls: readonly SessionDefaultControl[],
-): Map<DefaultLiveSessionControlKey, SessionDefaultControl> {
+  controls: readonly DesktopSessionDefaultControl[],
+): Map<DefaultLiveSessionControlKey, DesktopSessionDefaultControl> {
   const metadataByKey = new Map<
     DefaultLiveSessionControlKey,
-    SessionDefaultControl
+    DesktopSessionDefaultControl
   >();
 
   for (const control of controls) {
@@ -217,10 +219,10 @@ async function resolveInitialLiveConfig(
 }
 
 function resolveSessionModel(
-  registry: ModelRegistry,
+  registry: SessionConfigModelRegistry,
   session: Session,
   liveConfig: SessionLiveConfigSnapshot,
-): ModelRegistryModel | null {
+): SessionConfigModel | null {
   const candidates = [
     liveConfig.normalizedControls.model?.currentValue,
     session.modelId,
@@ -242,9 +244,9 @@ function resolveSessionModel(
 }
 
 function findModelByIdOrAlias(
-  registry: ModelRegistry,
+  registry: SessionConfigModelRegistry,
   idOrAlias: string,
-): ModelRegistryModel | null {
+): SessionConfigModel | null {
   return registry.models.find((model) => model.id === idOrAlias)
     ?? registry.models.find((model) => (model.aliases ?? []).includes(idOrAlias))
     ?? null;

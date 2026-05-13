@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import type { ModelRegistry } from "@anyharness/sdk";
-import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
 import {
   buildHomeNextModelGroups,
   resolveHomeModelAvailabilityState,
@@ -27,7 +27,7 @@ export function useHomeNextModelSelection({
     isError: agentsError,
     error: agentsQueryError,
   } = useAgentCatalog();
-  const modelRegistriesQuery = useModelRegistriesQuery();
+  const modelRegistriesQuery = useCloudLaunchModelRegistries();
   const modelRegistries = modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,

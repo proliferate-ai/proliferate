@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type {
   AgentSummary,
   GitBranchRef,
-  ModelRegistry,
-  ModelRegistryModel,
   Workspace,
 } from "@anyharness/sdk";
+import type {
+  AgentModelRegistry,
+  AgentModelRegistryModel,
+} from "@/lib/domain/agents/model-options";
 import {
   buildHomeNextModelGroups,
   buildHomeNextAgentOptions,
@@ -62,7 +64,7 @@ function agent(overrides: Partial<AgentSummary> & { kind: string }): AgentSummar
   };
 }
 
-function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRegistry {
+function registry(overrides: Partial<AgentModelRegistry> & { kind: string }): AgentModelRegistry {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,
@@ -73,7 +75,7 @@ function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRe
   };
 }
 
-function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+function model(id: string, displayName: string, isDefault: boolean): AgentModelRegistryModel {
   return {
     id,
     displayName,

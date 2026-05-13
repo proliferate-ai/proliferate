@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useEffectiveAgentCatalogQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
+import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import {
   launchControlToConfiguredSessionControlValues,
@@ -30,9 +30,7 @@ export function useHomeNextModeSelection({
     useShallow((state) => state.defaultSessionModeByAgentKind),
   );
   const agentKind = modelSelection?.kind ?? null;
-  const catalogQuery = useEffectiveAgentCatalogQuery({
-    enabled: Boolean(agentKind),
-  });
+  const catalogQuery = useCloudAgentCatalog(Boolean(agentKind));
 
   const catalogModeOptions = useMemo(() => {
     const agent = catalogQuery.data?.agents.find((candidate) => candidate.kind === agentKind);

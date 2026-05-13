@@ -9,12 +9,15 @@ one is the most permissive?"
 
 ## How modes flow through the stack
 
-The runtime is *mode-agnostic*. It does not hardcode a per-agent list of
-legal mode values:
+The runtime does not hardcode per-agent mode values, but create-session mode
+values are now validated against the bundled AnyHarness agent catalog:
 
 - The HTTP create-session request takes an opaque `mode_id` string
-  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs:64`,
-  `sessions.rs:104`) and the runtime passes it through to the ACP binary
+  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs`).
+- Session creation resolves the agent's bundled catalog row and validates an
+  explicit `mode_id` against the catalog's create-session `mode` control before
+  launch.
+- After validation, the runtime passes the mode through to the ACP binary
   (`anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs`,
   `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`).
 - At session start the ACP binary returns its own `SessionModeState`, which
@@ -23,55 +26,53 @@ legal mode values:
 - `build_live_config_snapshot` normalizes whatever the agent exposed into the
   common `NormalizedSessionControls` buckets (`model`, `collaboration_mode`,
   `mode`, `reasoning`, `effort`, `fast_mode`, plus `extras`)
-  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs:45-130`,
-  `live_config.rs:173-215`).
+  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`).
 - The contract shape with the six normalized buckets is declared at
-  `anyharness/crates/anyharness-contract/src/v1/session_config.rs:95-120`.
+  `anyharness/crates/anyharness-contract/src/v1/session_config.rs`.
 
-Consequence: the *runtime-legal* set of mode values for a given agent is
-whatever that agent's ACP binary advertises at live-session time. There is
-no server-side enum to grep.
+Consequence: the pre-launch legal set is the bundled AnyHarness catalog's
+create-session `mode` control for that agent. Once the process is live, the
+actual session controls are whatever the ACP binary advertises at
+live-session time.
 
 The *desktop-advertised* set of mode values is frozen in a presentation
-table at `desktop/src/config/session-control-presentations.ts`. This table
+table at `desktop/src/lib/domain/chat/session-controls/presentation.ts`. This table
 is what defines which values the UI renders as selectable, with labels,
 tones, icons, and a per-agent `isDefault`. The `ConfiguredSessionControlKey`
 type only recognises `mode` and `collaboration_mode`
-(`session-control-presentations.ts:1`).
+(`desktop/src/lib/domain/chat/session-controls/presentation.ts`).
 
 Desktop keeps a user preference `defaultSessionModeByAgentKind`
-(`desktop/src/stores/preferences/user-preferences-store.ts:13`) as an
+(`desktop/src/lib/domain/preferences/user/model.ts`) as an
 unvalidated `Record<string, string>` — it is sanitized for shape only
-(`user-preferences-store.ts:101-115`), not against the presentation table.
+(`desktop/src/lib/domain/preferences/user/session-defaults.ts`), not against
+the presentation table.
 
 Cowork uses that preference verbatim when creating threads
-(`desktop/src/hooks/cowork/use-cowork-thread-workflow.ts:94`,
-`use-cowork-thread-workflow.ts:114`), and session creation reads the same
-preference directly from the store
-(`desktop/src/hooks/sessions/use-session-creation-actions.ts:288-290`,
-`use-session-creation-actions.ts:335`).
+(`desktop/src/hooks/cowork/workflows/use-cowork-thread-workflow.ts`), and
+session creation reads the same preference directly from the store
+(`desktop/src/hooks/sessions/use-session-creation-actions.ts`).
 
 Registered agent kinds come from
-`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:6-47`: `claude`,
-`codex`, `gemini`, `cursor`, `opencode`, `amp`. All six are wired into the
-descriptor list at
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:15-21`.
+`anyharness/crates/anyharness-lib/src/domains/agents/model.rs`: `claude`,
+`codex`, `gemini`, `cursor`, `opencode`. All five are declared in
+`catalogs/agents/v1/catalog.json` and projected into runtime descriptors by
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`.
 
 ## Per-agent matrix
 
 For each family, "Exposed in desktop" means the value appears in
-`desktop/src/config/session-control-presentations.ts` and therefore renders
+`desktop/src/lib/domain/chat/session-controls/presentation.ts` and therefore renders
 as a first-class selector in the UI. Values not in the table still travel
 through the runtime unchanged, but the desktop UI will only see them if the
 ACP binary surfaces them in live config and then uses fallback
 icon/tone rendering
-(`desktop/src/lib/domain/chat/session-mode-control.ts:18-22`,
-`session-mode-control.ts:88-101`).
+(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts`).
 
 ### Claude (`claude`)
 
 Control key: `mode` — source:
-`desktop/src/config/session-control-presentations.ts:34-78`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts`.
 
 | Value               | Label         | Meaning (from desktop copy)  | Default | Tone         |
 | ------------------- | ------------- | ---------------------------- | ------- | ------------ |
@@ -88,14 +89,13 @@ configured for Claude.
 - Unambiguous? Yes on the desktop copy ("Skip permission checks"), which is
   stricter than `dontAsk` ("Auto-approve most actions"). Runtime cannot
   verify this independently — these strings are forwarded to the Claude ACP
-  binary (`git+proliferate-ai/claude-agent-acp` pinned in
-  `anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:5-6`), which owns
-  the actual enforcement semantics.
+  binary selected by the bundled agent catalog, which owns the actual
+  enforcement semantics.
 
 ### Codex (`codex`)
 
 Control keys: **both** `mode` and `collaboration_mode` — source:
-`desktop/src/config/session-control-presentations.ts:79-126`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts`.
 
 `mode` values:
 
@@ -115,9 +115,8 @@ Control keys: **both** `mode` and `collaboration_mode` — source:
 Both keys are exposed in desktop config. Codex is the only family where the
 normalizer expects two distinct controls — see the `collaboration_mode`
 detection branch at
-`anyharness/crates/anyharness-lib/src/sessions/live_config.rs:182-194` and
-the test at `live_config.rs:538-600` that asserts the two keep distinct
-values.
+`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`; the tests in
+that file assert that the two controls keep distinct values.
 
 - Most permissive: **`mode = full-access`**.
 - Caveat: the desktop UI lets the user set `collaboration_mode` independently,
@@ -125,19 +124,20 @@ values.
   layer — the runtime will not reject that combination. "Most permissive" is
   unambiguous only if you also leave `collaboration_mode` at `default`.
 - Caveat 2: cowork's `defaultSessionModeByAgentKind` is a single string per
-  agent kind (`user-preferences-store.ts:13`) and the create-session path
-  only carries `mode_id`
-  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs:104`). There is
+  agent kind (`desktop/src/lib/domain/preferences/user/model.ts`) and the
+  create-session path only carries `mode_id`
+  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs`). There is
   no parallel `collaboration_mode_id` on session creation — collaboration
   mode is only mutable at live-config time via
-  `SetSessionConfigOptionRequest` (`session_config.rs:148-156`). A cowork
-  thread created from the default will therefore start with whatever
+  `SetSessionConfigOptionRequest`
+  (`anyharness/crates/anyharness-contract/src/v1/session_config.rs`). A
+  cowork thread created from the default will therefore start with whatever
   `collaboration_mode` the codex ACP binary picks as its own default.
 
 ### Gemini (`gemini`)
 
 Control key: `mode` — source:
-`desktop/src/config/session-control-presentations.ts:127-163`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts`.
 
 | Value      | Label     | Meaning                    | Default | Tone        |
 | ---------- | --------- | -------------------------- | ------- | ----------- |
@@ -151,22 +151,21 @@ All four values are exposed in desktop config. No `collaboration_mode`.
 - Most permissive: **`yolo`**.
 - Unambiguous? Yes on desktop copy (`yolo` = "Skip permission checks" vs
   `autoEdit` = "Auto-approve edits"). As with Claude, actual enforcement
-  lives in the Gemini ACP binary
-  (`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:122-155`); the
+  lives in the Gemini ACP binary selected by the bundled agent catalog; the
   desktop labels reflect intent, not a runtime-side whitelist.
 
 ### Cursor (`cursor`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:10,22,53`,
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:159-189`) via
+through `catalogs/agents/v1/catalog.json` and
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs` via
 `cursor-acp` (fallback `cursor-agent acp`).
 
-**No entry in `desktop/src/config/session-control-presentations.ts`.**
+**No entry in `desktop/src/lib/domain/chat/session-controls/presentation.ts`.**
 Because `SESSION_CONTROL_PRESENTATIONS` has no `cursor` key,
 `listConfiguredSessionControlValues("cursor", ...)` returns the empty array
-(`desktop/src/lib/domain/chat/session-mode-control.ts:26-35`), so the
-desktop UI has no first-class mode selector for Cursor.
+(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts`), so
+the desktop UI has no first-class mode selector for Cursor.
 
 - Most permissive: **unknown from the repo.** The runtime will forward any
   `mode_id` string the client sends through to cursor-acp, and the normalized
@@ -178,38 +177,22 @@ desktop UI has no first-class mode selector for Cursor.
 ### OpenCode (`opencode`)
 
 Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:11,23,54`,
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:239-263`) via the
+through `catalogs/agents/v1/catalog.json` and
+`anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs` via the
 `opencode` ACP registry id (fallback npm package `opencode-ai`).
 
-**No entry in `desktop/src/config/session-control-presentations.ts`.** Same
+**No entry in `desktop/src/lib/domain/chat/session-controls/presentation.ts`.** Same
 situation as Cursor: the desktop UI shows no mode selector, but the runtime
 will pass `mode_id` through verbatim.
 
 - Most permissive: **unknown from the repo.** Not defined in either the
   presentation table or anywhere runtime-side.
 
-### Amp (`amp`)
-
-Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:12,24,55`,
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:193-235`) via
-`amp-acp`.
-
-**No entry in `desktop/src/config/session-control-presentations.ts`.** Not
-mentioned anywhere as having explicit mode values. Same caveats as Cursor
-and OpenCode apply.
-
-- Most permissive: **unknown from the repo.**
-
 ## Divergence between desktop labels and runtime behaviour
 
-- The desktop presentation table is descriptive, not enforced. The runtime
-  will happily forward any `mode_id` string, including values not in the
-  table. Conversely, if an ACP binary drops or renames a mode, the desktop
-  table will keep offering the stale value and the runtime will forward it
-  to a binary that no longer recognises it. There is no repo-side
-  reconciliation between the two.
+- The desktop presentation table is descriptive. Session creation enforces the
+  bundled AnyHarness catalog's create-session `mode` values, and live controls
+  then come from the ACP binary.
 - Claude `dontAsk` and `bypassPermissions` are both in desktop config; they
   are distinct only by copy tone ("Auto-approve most actions" vs "Skip
   permission checks"). If the upstream Claude ACP binary no longer
@@ -217,8 +200,8 @@ and OpenCode apply.
 - Codex's `plan` appears in both `mode` and `collaboration_mode` as distinct
   options. The UI treats them as independent controls; the runtime
   normalizer explicitly keeps them separate
-  (`live_config.rs:182-194`, `live_config.rs:538-600`).
-- Cursor, OpenCode, and Amp have zero desktop mode metadata. A cowork thread
+  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`).
+- Cursor and OpenCode have zero desktop mode metadata. A cowork thread
   created against one of these families today will send `mode_id = undefined`
   (since `defaultSessionModeByAgentKind` has no entry for them unless the
   user typed one in by hand) and inherit whatever default the ACP binary
@@ -236,9 +219,8 @@ recommendation. For the rest, explicitly: unknown — do not ship a default.
 | gemini   | `mode`              | `yolo`                       | High. Unambiguous in desktop config.             |
 | cursor   | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
 | opencode | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
-| amp      | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
 
-If cowork needs a permissive default for cursor / opencode / amp, the next
+If cowork needs a permissive default for cursor / opencode, the next
 step is to either (a) query the live `SessionLiveConfigSnapshot` after the
 first session starts and pick the most permissive value from the
 `normalized_controls.mode` bucket heuristically, or (b) extend the

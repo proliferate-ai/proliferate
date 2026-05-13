@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
@@ -91,9 +90,6 @@ export function useWorkspaceCommandPaletteTabs() {
       latencyFlowId,
       reuseInFlightEmptySession: false,
     }).catch((error) => {
-      if (isSessionModelAvailabilityInterruption(error)) {
-        return;
-      }
       failLatencyFlow(latencyFlowId, "session_create_failed");
       showToast(error instanceof Error ? error.message : String(error));
     });

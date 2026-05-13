@@ -1,9 +1,3 @@
-import type {
-  AgentSummary,
-  ModelRegistry,
-  ProviderConfig,
-  WorkspaceSessionLaunchAgent,
-} from "@anyharness/sdk";
 import type { UserPreferences } from "@/lib/domain/preferences/user/model";
 import {
   buildAgentModelGroups,
@@ -11,12 +5,18 @@ import {
   findAgentModelSelection,
   preferredAgentModelForGroup,
   resolveEffectiveAgentModelSelection,
+  type AgentCatalogSummary,
   type AgentModelGroup,
+  type AgentModelRegistry,
   type AgentModelOption,
 } from "@/lib/domain/agents/model-options";
 import {
   resolveConfiguredLaunchAgentSelection,
 } from "@/lib/domain/chat/models/model-selection";
+import {
+  dynamicLaunchAgentAcceptsModel,
+  type DesktopAgentLaunchAgent,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 
 export interface ChatDefaultPreferences {
   defaultChatAgentKind: string;
@@ -56,8 +56,8 @@ function findModelById<T extends { id: string }>(
 }
 
 export function resolveEffectiveChatDefaults(
-  modelRegistries: ModelRegistry[],
-  agents: AgentSummary[],
+  modelRegistries: AgentModelRegistry[],
+  agents: AgentCatalogSummary[],
   prefs: ChatDefaultPreferences,
   explicit?: ExplicitSelection | null,
 ): EffectiveChatDefaults {
@@ -96,9 +96,8 @@ export function resolveEffectiveChatDefaults(
 }
 
 export function resolveConfiguredLaunchSelection(
-  launchAgents: WorkspaceSessionLaunchAgent[],
+  launchAgents: DesktopAgentLaunchAgent[],
   prefs: ChatDefaultPreferences,
-  providerConfigs: ProviderConfig[],
 ): ConfiguredLaunchResolution {
   if (!prefs.defaultChatAgentKind) {
     return {
@@ -109,13 +108,7 @@ export function resolveConfiguredLaunchSelection(
     };
   }
 
-  const configuredProvider = providerConfigs.find(
-    (config) => config.kind === prefs.defaultChatAgentKind,
-  ) ?? null;
   const preferredModelId = prefs.defaultChatModelIdByAgentKind[prefs.defaultChatAgentKind] ?? "";
-  const configuredProviderModel = configuredProvider
-    ? resolveProviderConfigModel(configuredProvider, preferredModelId)
-    : null;
   const launchAgent = launchAgents.find(
     (agent) => agent.kind === prefs.defaultChatAgentKind,
   ) ?? null;
@@ -124,14 +117,13 @@ export function resolveConfiguredLaunchSelection(
     ? findModelById(launchAgent.models, launchSelection.modelId)
     : null;
   const displayName = launchModel?.displayName
-    ?? configuredProviderModel?.displayName
     ?? (preferredModelId || null);
 
-  if (launchAgent && launchModel) {
+  if (launchAgent && launchSelection && (launchModel || dynamicLaunchAgentAcceptsModel(launchAgent))) {
     return {
       selection: {
         kind: launchAgent.kind,
-        modelId: launchModel.id,
+        modelId: launchModel?.id ?? launchSelection.modelId,
       },
       displayName,
       reason: null,
@@ -139,11 +131,11 @@ export function resolveConfiguredLaunchSelection(
     };
   }
 
-  if (configuredProvider && !configuredProviderModel) {
+  if (launchAgent) {
     return {
       selection: null,
       displayName: null,
-      reason: `No launchable model is available for ${configuredProvider.displayName}.`,
+      reason: `No launchable model is available for ${launchAgent.displayName}.`,
       status: "unavailable",
     };
   }
@@ -151,7 +143,7 @@ export function resolveConfiguredLaunchSelection(
   return {
     selection: null,
     displayName,
-    reason: `${configuredProvider?.displayName ?? prefs.defaultChatAgentKind} is not ready yet.`,
+    reason: `${prefs.defaultChatAgentKind} is not ready yet.`,
     status: "unavailable",
   };
 }
@@ -223,16 +215,6 @@ function emptyChatDefaults(
     degraded: true,
     degradedReason,
   };
-}
-
-function resolveProviderConfigModel(
-  providerConfig: ProviderConfig,
-  preferredModelId: string | null | undefined,
-) {
-  return (preferredModelId ? findModelById(providerConfig.models, preferredModelId) : null)
-    ?? providerConfig.models.find((model) => model.isDefault)
-    ?? providerConfig.models[0]
-    ?? null;
 }
 
 export function resolvePreferredOpenTarget<T extends { id: string; kind?: string }>(

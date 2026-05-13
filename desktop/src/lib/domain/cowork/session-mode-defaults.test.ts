@@ -11,7 +11,6 @@ describe("resolveCoworkDefaultSessionModeId", () => {
   it("returns undefined for unresolved agent families", () => {
     expect(resolveCoworkDefaultSessionModeId("cursor")).toBeUndefined();
     expect(resolveCoworkDefaultSessionModeId("opencode")).toBeUndefined();
-    expect(resolveCoworkDefaultSessionModeId("amp")).toBeUndefined();
   });
 
   it("returns undefined for missing agent kinds", () => {

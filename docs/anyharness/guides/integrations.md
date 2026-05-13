@@ -14,7 +14,7 @@ integrations/mcp/
   JSON-RPC/MCP helpers, tool result formatting, capability-token helper
 
 integrations/agent_cli/
-  Claude/Codex/Gemini/OpenCode/Cursor/Amp CLI install/probe/path/version quirks
+  Claude/Codex/Gemini/OpenCode/Cursor CLI install/probe/path/version quirks
 
 integrations/acp/
   low-level ACP protocol helpers if they become reusable outside live sessions

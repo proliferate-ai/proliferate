@@ -1,9 +1,10 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import type { ModelRegistry } from "@anyharness/sdk";
 import { useCallback, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
+import { compareChatLaunchKinds } from "@/config/chat-launch";
 import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
+import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -12,15 +13,15 @@ import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-sessi
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
 } from "@/lib/domain/workspaces/selection/selection";
 import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-selection";
-import { mergeLaunchAgentsWithRegistries } from "@/lib/domain/chat/launch/session-config";
 import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import {
   elapsedMs,
   logLatency,
@@ -82,7 +83,6 @@ interface ReconcileHotWorkspaceInput {
 }
 
 const EMPTY_WORKSPACES = [] as const;
-const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
 
@@ -146,12 +146,12 @@ function clearInvalidOptimisticActiveSession(input: {
 
 export function useWorkspaceBootstrapActions() {
   const {
-    ensureModelRegistries,
-    ensureWorkspaceLaunchCatalog,
     fetchWorkspaceSessions,
     getWorkspaceSessionsCacheDecision,
     loadWorkspaceSessions,
   } = useWorkspaceBootstrapCache();
+  const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
+  const { agentsByKind } = useAgentCatalog();
   const workspaceCollections = useWorkspaces().data;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
@@ -440,17 +440,7 @@ export function useWorkspaceBootstrapActions() {
       }
 
       const launchCatalogStartedAt = startLatencyTimer();
-      const launchCatalog = await ensureWorkspaceLaunchCatalog({
-        workspaceConnection,
-        workspaceId,
-        requestOptions: latencyFlowId
-          ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
-          : undefined,
-      }).catch(() => null);
-      const modelRegistries = await ensureModelRegistries({
-        runtimeUrl,
-        workspaceConnection,
-      }).catch(() => EMPTY_MODEL_REGISTRIES);
+      const launchCatalog = await ensureCloudAgentCatalog().catch(() => null);
 
       logLatency("workspace.select.launch_catalog_loaded", {
         workspaceId,
@@ -468,11 +458,9 @@ export function useWorkspaceBootstrapActions() {
         return { sessions };
       }
 
-      const launchAgents = orderChatLaunchAgents(
-        mergeLaunchAgentsWithRegistries(
-          launchCatalog?.agents ?? [],
-          modelRegistries,
-        ).filter(shouldExposeChatLaunchAgent),
+      const launchAgents = orderLaunchAgents(
+        launchCatalog?.agents ?? [],
+        agentsByKind,
       );
       const defaultLaunch = resolveEffectiveLaunchSelection(
         launchAgents,
@@ -494,20 +482,13 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionDispatchStartedAt = startLatencyTimer();
-        try {
-          await createEmptySessionWithResolvedConfig({
-            workspaceId,
-            agentKind: defaultLaunch.kind,
-            modelId: defaultLaunch.modelId,
-            latencyFlowId,
-            reuseInFlightEmptySession: true,
-          });
-        } catch (error) {
-          if (isSessionModelAvailabilityInterruption(error)) {
-            return { sessions };
-          }
-          throw error;
-        }
+        await createEmptySessionWithResolvedConfig({
+          workspaceId,
+          agentKind: defaultLaunch.kind,
+          modelId: defaultLaunch.modelId,
+          latencyFlowId,
+          reuseInFlightEmptySession: true,
+        });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.initial_session",
@@ -607,10 +588,10 @@ export function useWorkspaceBootstrapActions() {
     cancelDeferredFileTreePrefetch,
     lastViewedSessionByWorkspace,
     createEmptySessionWithResolvedConfig,
+    agentsByKind,
     prepareFileWorkspace,
     preferences,
-    ensureModelRegistries,
-    ensureWorkspaceLaunchCatalog,
+    ensureCloudAgentCatalog,
     fetchWorkspaceSessions,
     getWorkspaceSessionsCacheDecision,
     scheduleDeferredFileTreePrefetch,
@@ -819,4 +800,19 @@ export function useWorkspaceBootstrapActions() {
       workspaceCollections,
     ]),
   };
+}
+
+function orderLaunchAgents(
+  agents: readonly DesktopAgentLaunchAgent[],
+  agentsByKind: ReadonlyMap<string, { readiness: string }>,
+): DesktopAgentLaunchAgent[] {
+  return filterTargetReadyLaunchAgents(agents, agentsByKind)
+    .sort((left, right) =>
+      compareChatLaunchKinds(
+        left.kind,
+        right.kind,
+        left.displayName,
+        right.displayName,
+      )
+    );
 }

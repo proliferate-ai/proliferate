@@ -3,11 +3,9 @@ import { AgentsClient } from "./agents.js";
 import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
-import { ModelRegistriesClient } from "./model-registries.js";
 import { MobilityClient } from "./mobility.js";
 import { PlansClient } from "./plans.js";
 import { ProcessesClient } from "./processes.js";
-import { ProvidersClient } from "./providers.js";
 import { PullRequestsClient } from "./pull-requests.js";
 import { RepoRootsClient } from "./repo-roots.js";
 import { ReplayClient } from "./replay.js";
@@ -39,9 +37,7 @@ export type AnyHarnessTimingCategory =
   | "workspace.get"
   | "workspace.list"
   | "workspace.detect_setup"
-  | "catalog.agents.effective"
   | "workspace.display_name.update"
-  | "workspace.session_launch"
   | "workspace.setup_status"
   | "workspace.setup_rerun"
   | "workspace.setup_start"
@@ -367,10 +363,8 @@ export function hashTimingScope(value: string): string {
 export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
   readonly agents: AgentsClient;
-  readonly modelRegistries: ModelRegistriesClient;
   readonly mobility: MobilityClient;
   readonly plans: PlansClient;
-  readonly providers: ProvidersClient;
   readonly repoRoots: RepoRootsClient;
   readonly replay: ReplayClient;
   readonly reviews: ReviewsClient;
@@ -388,10 +382,8 @@ export class AnyHarnessClient {
     const transport = new AnyHarnessTransport(options);
     this.runtime = new RuntimeClient(transport);
     this.agents = new AgentsClient(transport);
-    this.modelRegistries = new ModelRegistriesClient(transport);
     this.mobility = new MobilityClient(transport);
     this.plans = new PlansClient(transport);
-    this.providers = new ProvidersClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
     this.replay = new ReplayClient(transport);
     this.reviews = new ReviewsClient(transport);

@@ -23,13 +23,9 @@ export type {
 export {
   anyHarnessRuntimeKey,
   anyHarnessRuntimeHealthKey,
-  anyHarnessEffectiveAgentCatalogKey,
   anyHarnessAgentsKey,
   anyHarnessAgentReconcileStatusKey,
-  anyHarnessModelRegistriesKey,
-  anyHarnessModelRegistryKey,
   anyHarnessReconcileAgentsMutationKey,
-  anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
@@ -46,7 +42,6 @@ export {
   anyHarnessCoworkManifestKey,
   anyHarnessCoworkArtifactScopeKey,
   anyHarnessCoworkArtifactKey,
-  anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessSessionsKey,
   anyHarnessSessionScopeKey,
   anyHarnessSessionKey,
@@ -77,7 +72,6 @@ export {
 } from "./lib/query-keys.js";
 
 export {
-  useEffectiveAgentCatalogQuery,
   useRuntimeHealthQuery,
 } from "./hooks/runtime.js";
 export {
@@ -87,11 +81,6 @@ export {
   useStartAgentLoginMutation,
   useReconcileAgentsMutation,
 } from "./hooks/agents.js";
-export {
-  useModelRegistriesQuery,
-  useModelRegistryQuery,
-} from "./hooks/model-registries.js";
-export { useProviderConfigsQuery } from "./hooks/providers.js";
 export {
   useRepoRootsQuery,
   useReadRepoRootFileMutation,
@@ -123,7 +112,6 @@ export {
   useSetupStatusQuery,
   useRerunSetupMutation,
   useStartSetupMutation,
-  useWorkspaceSessionLaunchQuery,
   useUpdateWorkspaceDisplayNameMutation,
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,

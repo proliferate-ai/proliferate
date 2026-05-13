@@ -153,6 +153,20 @@ fn map_create_session_service_error(
         crate::sessions::service::CreateSessionError::WorkspaceSingleSession {
             session_id, ..
         } => CreateAndStartSessionError::WorkspaceSingleSession { session_id },
+        crate::sessions::service::CreateSessionError::ModelUnsupported {
+            agent_kind,
+            model_id,
+        } => CreateAndStartSessionError::ModelUnsupported {
+            agent_kind,
+            model_id,
+        },
+        crate::sessions::service::CreateSessionError::ModeUnsupported {
+            agent_kind,
+            mode_id,
+        } => CreateAndStartSessionError::ModeUnsupported {
+            agent_kind,
+            mode_id,
+        },
         crate::sessions::service::CreateSessionError::Invalid(detail) => {
             CreateAndStartSessionError::Invalid(detail)
         }

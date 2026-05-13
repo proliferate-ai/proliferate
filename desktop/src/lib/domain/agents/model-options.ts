@@ -1,9 +1,5 @@
-import type {
-  AgentSummary,
-  ModelRegistry,
-  ModelRegistryModel,
-} from "@anyharness/sdk";
 import { compareChatLaunchKinds } from "@/config/chat-launch";
+import type { DesktopAgentCatalogStatus } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export interface AgentModelSelection {
   kind: string;
@@ -24,10 +20,32 @@ export interface AgentModelGroup {
   models: AgentModelOption[];
 }
 
+export interface AgentModelRegistryModel {
+  id: string;
+  displayName: string;
+  description?: string | null;
+  aliases?: string[];
+  status?: DesktopAgentCatalogStatus;
+  isDefault: boolean;
+}
+
+export interface AgentModelRegistry {
+  kind: string;
+  displayName: string;
+  defaultModelId?: string | null;
+  models: AgentModelRegistryModel[];
+}
+
+export interface AgentCatalogSummary {
+  kind: string;
+  displayName?: string | null;
+  readiness: string;
+}
+
 export interface AgentModelInfo {
   kind: string;
   providerDisplayName: string;
-  model: ModelRegistryModel;
+  model: AgentModelRegistryModel;
 }
 
 export interface AgentModelPreferences {
@@ -36,11 +54,11 @@ export interface AgentModelPreferences {
 }
 
 interface BuildAgentModelGroupsInput {
-  agents: AgentSummary[];
-  modelRegistries: ModelRegistry[];
+  agents: AgentCatalogSummary[];
+  modelRegistries: AgentModelRegistry[];
   selected: AgentModelSelection | null;
   isAgentKindAllowed?: (kind: string) => boolean;
-  fallbackDisplayName?: (kind: string, agent: AgentSummary | null) => string;
+  fallbackDisplayName?: (kind: string, agent: AgentCatalogSummary | null) => string;
 }
 
 export function buildAgentModelGroups({
@@ -187,7 +205,7 @@ export function withUpdatedDefaultModelIdByAgentKind(
 
 export function resolveAgentModelInfo(
   groups: AgentModelGroup[],
-  modelRegistries: ModelRegistry[],
+  modelRegistries: AgentModelRegistry[],
   selection: AgentModelSelection | null | undefined,
 ): AgentModelInfo | null {
   if (!selection) {

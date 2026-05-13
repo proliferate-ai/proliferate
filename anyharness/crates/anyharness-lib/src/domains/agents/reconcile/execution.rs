@@ -5,10 +5,10 @@ use std::time::Instant;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use super::installer::InstallOptions;
-use super::model::{AgentDescriptor, AgentKind};
-use super::reconcile::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
-use super::seed::AgentSeedStore;
+use super::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
+use crate::domains::agents::installer::InstallOptions;
+use crate::domains::agents::model::{AgentDescriptor, AgentKind};
+use crate::domains::agents::seed::AgentSeedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {

@@ -2,7 +2,8 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentSummary, ModelRegistry } from "@anyharness/sdk";
+import type { AgentSummary } from "@anyharness/sdk";
+import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "./use-home-next-model-selection";
 
@@ -25,8 +26,8 @@ vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => selectionMocks.agentCatalog,
 }));
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useModelRegistriesQuery: () => selectionMocks.modelRegistriesQuery,
+vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
+  useCloudLaunchModelRegistries: () => selectionMocks.modelRegistriesQuery,
 }));
 
 function agent(kind: string): AgentSummary {

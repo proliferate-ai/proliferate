@@ -1,5 +1,3 @@
-import type { WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
-
 const CHAT_LAUNCH_PROVIDER_ORDER = [
   "claude",
   "codex",
@@ -27,13 +25,19 @@ export function compareChatLaunchKinds(
   return leftDisplayName.localeCompare(rightDisplayName);
 }
 
-export function shouldExposeChatLaunchAgent(agent: WorkspaceSessionLaunchAgent): boolean {
+interface ChatLaunchAgentOrderInput {
+  kind: string;
+  displayName: string;
+  models: readonly unknown[];
+}
+
+export function shouldExposeChatLaunchAgent(agent: ChatLaunchAgentOrderInput): boolean {
   return agent.models.length > 0;
 }
 
-export function orderChatLaunchAgents(
-  agents: WorkspaceSessionLaunchAgent[],
-): WorkspaceSessionLaunchAgent[] {
+export function orderChatLaunchAgents<T extends ChatLaunchAgentOrderInput>(
+  agents: readonly T[],
+): T[] {
   return [...agents].sort((left, right) => {
     return compareChatLaunchKinds(
       left.kind,

@@ -6,6 +6,7 @@ use super::tools::{
     CreateCodingWorkspaceArgs, DeleteArtifactArgs, GetArtifactArgs, ReadCodingEventsArgs,
     SendCodingMessageArgs, UpdateArtifactArgs,
 };
+use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::cowork::artifacts::{
     CoworkArtifactRuntime, CreateCoworkArtifactInput, UpdateCoworkArtifactInput,
 };
@@ -16,7 +17,7 @@ use crate::domains::cowork::delegation::model::{
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::sessions::runtime::SendPromptOutcome;
-use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
+use crate::workspaces::model::WorkspaceRecord;
 
 pub async fn call_tool(
     artifact_runtime: &CoworkArtifactRuntime,
@@ -50,7 +51,7 @@ fn ensure_tool_available(name: &str, ctx: &CoworkMcpContext) -> anyhow::Result<(
 
 async fn call_artifact_tool(
     artifact_runtime: &CoworkArtifactRuntime,
-    workspace: &crate::workspaces::model::WorkspaceRecord,
+    workspace: &WorkspaceRecord,
     name: &str,
     arguments: Option<Value>,
 ) -> anyhow::Result<Option<Value>> {
@@ -185,7 +186,7 @@ fn get_coding_workspace_launch_options(
     let workspaces = options
         .into_iter()
         .map(|option| {
-            let catalog = cowork_runtime.workspace_session_launch_catalog(&option.workspace.id)?;
+            let catalog = cowork_runtime.resolved_workspace_launch_options(&option.workspace.id)?;
             let base_branch = cowork_runtime
                 .repo_default_branch_for_workspace(&option.workspace)?
                 .or(option.workspace.original_branch.clone())
@@ -287,7 +288,7 @@ fn get_coding_session_launch_options(
         .or(parent.current_mode_id.clone())
         .or(parent.requested_mode_id.clone())
         .or_else(|| live_mode_control.and_then(|control| control.current_value.clone()));
-    let catalog = cowork_runtime.workspace_session_launch_catalog(&args.workspace_id)?;
+    let catalog = cowork_runtime.resolved_workspace_launch_options(&args.workspace_id)?;
     Ok(json!({
         "parentSessionId": parent_session_id,
         "workspaceId": args.workspace_id,
@@ -428,7 +429,7 @@ fn read_coding_events(
     }))
 }
 
-fn launch_agents_to_json(catalog: WorkspaceSessionLaunchCatalogData) -> Vec<Value> {
+fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> Vec<Value> {
     catalog
         .agents
         .into_iter()
@@ -563,10 +564,8 @@ mod tests {
             workspace: workspace(&temp.path),
             workspace_delegation_enabled: false,
         };
-
         let error = ensure_tool_available("create_coding_workspace", &ctx)
             .expect_err("delegation tool should be rejected when disabled");
-
         assert_eq!(
             error.to_string(),
             "cowork workspace delegation is disabled for this thread"
