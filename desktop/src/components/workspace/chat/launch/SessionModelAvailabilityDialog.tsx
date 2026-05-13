@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { useSessionModelAvailabilityWorkflow } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
-import type { ModelLaunchRemediationKind } from "@anyharness/sdk";
+import type { DesktopAgentLaunchRemediationKind as ModelLaunchRemediationKind } from "@/lib/domain/agents/cloud-launch-catalog";
 
 function primaryActionLabel(kind: ModelLaunchRemediationKind): string {
   switch (kind) {

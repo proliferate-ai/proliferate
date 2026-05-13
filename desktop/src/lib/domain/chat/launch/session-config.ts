@@ -1,12 +1,43 @@
 import type {
-  ModelRegistry,
-  ModelRegistryModel,
-  WorkspaceSessionLaunchAgent,
-} from "@anyharness/sdk";
+  DesktopAgentCatalogStatus,
+  DesktopAgentLaunchRemediation,
+  DesktopSessionDefaultControl,
+} from "@/lib/domain/agents/cloud-launch-catalog";
+
+export interface SessionConfigModel {
+  id: string;
+  displayName: string;
+  description?: string | null;
+  aliases?: string[];
+  status?: DesktopAgentCatalogStatus;
+  isDefault: boolean;
+  launchRemediation?: DesktopAgentLaunchRemediation | null;
+  sessionDefaultControls?: DesktopSessionDefaultControl[];
+}
+
+export interface SessionConfigModelRegistry {
+  kind: string;
+  displayName: string;
+  defaultModelId?: string | null;
+  models: SessionConfigModel[];
+}
+
+export interface SessionLaunchAgentModel {
+  id: string;
+  displayName: string;
+  isDefault: boolean;
+}
+
+export interface SessionLaunchAgent {
+  kind: string;
+  displayName: string;
+  defaultModelId: string | null;
+  models: SessionLaunchAgentModel[];
+}
 
 export interface RegistryModelInfo {
-  registry: ModelRegistry;
-  model: ModelRegistryModel;
+  registry: SessionConfigModelRegistry;
+  model: SessionConfigModel;
 }
 
 export interface SessionConfigSnapshot {
@@ -15,7 +46,7 @@ export interface SessionConfigSnapshot {
 }
 
 export function defaultModelIdForAgentKind(
-  modelRegistries: ModelRegistry[],
+  modelRegistries: SessionConfigModelRegistry[],
   agentKind: string | null | undefined,
 ): string | undefined {
   if (!agentKind) return undefined;
@@ -24,9 +55,9 @@ export function defaultModelIdForAgentKind(
 }
 
 export function resolveModelRegistry(
-  modelRegistries: ModelRegistry[],
+  modelRegistries: SessionConfigModelRegistry[],
   agentKind: string | null | undefined,
-): ModelRegistry | null {
+): SessionConfigModelRegistry | null {
   if (!agentKind) {
     return null;
   }
@@ -34,9 +65,9 @@ export function resolveModelRegistry(
 }
 
 export function resolveModelForRegistry(
-  registry: ModelRegistry,
+  registry: SessionConfigModelRegistry,
   modelId: string | null | undefined,
-): ModelRegistryModel | null {
+): SessionConfigModel | null {
   const normalizedModelId = modelId?.trim();
   return (
     registry.models.find((model) => model.id === normalizedModelId)
@@ -51,9 +82,9 @@ export function resolveModelForRegistry(
 }
 
 function resolveRegistryModelForRow(
-  registry: ModelRegistry,
+  registry: SessionConfigModelRegistry,
   modelId: string,
-): ModelRegistryModel | null {
+): SessionConfigModel | null {
   return (
     registry.models.find((model) => model.id === modelId)
     ?? registry.models.find((model) => model.aliases?.includes(modelId))
@@ -63,12 +94,12 @@ function resolveRegistryModelForRow(
 
 function rowMatchesRegistryModel(
   rowId: string,
-  model: ModelRegistryModel,
+  model: SessionConfigModel,
 ): boolean {
   return rowId === model.id || (model.aliases ?? []).includes(rowId);
 }
 
-function resolveRegistryDefaultModel(registry: ModelRegistry): ModelRegistryModel | null {
+function resolveRegistryDefaultModel(registry: SessionConfigModelRegistry): SessionConfigModel | null {
   return (
     registry.models.find((model) => model.id === registry.defaultModelId)
     ?? registry.models.find((model) => model.isDefault)
@@ -78,7 +109,7 @@ function resolveRegistryDefaultModel(registry: ModelRegistry): ModelRegistryMode
 }
 
 export function resolveModelInfo(
-  modelRegistries: ModelRegistry[],
+  modelRegistries: SessionConfigModelRegistry[],
   agentKind: string | null | undefined,
   modelId: string | null | undefined,
 ): RegistryModelInfo | null {
@@ -91,9 +122,9 @@ export function resolveModelInfo(
 }
 
 export function mergeLaunchAgentsWithRegistries(
-  launchAgents: WorkspaceSessionLaunchAgent[],
-  modelRegistries: ModelRegistry[],
-): WorkspaceSessionLaunchAgent[] {
+  launchAgents: SessionLaunchAgent[],
+  modelRegistries: SessionConfigModelRegistry[],
+): SessionLaunchAgent[] {
   const registryByKind = new Map(modelRegistries.map((registry) => [registry.kind, registry]));
 
   return launchAgents.flatMap((agent) => {

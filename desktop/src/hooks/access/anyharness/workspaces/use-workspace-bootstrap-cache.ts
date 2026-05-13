@@ -1,19 +1,13 @@
 import type {
   AnyHarnessRequestOptions,
-  ModelRegistry,
-  WorkspaceSessionLaunchCatalog,
 } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import {
-  anyHarnessModelRegistriesKey,
   anyHarnessSessionsKey,
-  anyHarnessWorkspaceSessionLaunchKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { listModelRegistries } from "@/lib/access/anyharness/model-registries";
 import { listWorkspaceSessions } from "@/lib/access/anyharness/sessions";
-import { getWorkspaceSessionLaunchCatalog } from "@/lib/access/anyharness/workspaces";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 
 export type CacheDecision = "hit" | "stale" | "miss";
@@ -33,17 +27,6 @@ interface FetchWorkspaceSessionsInput {
   includeDismissed?: boolean;
   requestOptions?: AnyHarnessRequestOptions;
   timeoutMs?: number;
-}
-
-interface EnsureWorkspaceLaunchCatalogInput {
-  workspaceConnection: AnyHarnessResolvedConnection;
-  workspaceId: string;
-  requestOptions?: AnyHarnessRequestOptions;
-}
-
-interface EnsureModelRegistriesInput {
-  runtimeUrl: string;
-  workspaceConnection: AnyHarnessResolvedConnection;
 }
 
 function requestOptionsWithSignal(
@@ -104,19 +87,6 @@ async function fetchWorkspaceSessionsWithConnection(
   }));
 }
 
-async function fetchWorkspaceLaunchCatalog(input: {
-  workspaceConnection: AnyHarnessResolvedConnection;
-  requestOptions?: AnyHarnessRequestOptions;
-  signal?: AbortSignal;
-}): Promise<WorkspaceSessionLaunchCatalog> {
-  return getWorkspaceSessionLaunchCatalog(
-    input.workspaceConnection,
-    input.signal
-      ? requestOptionsWithSignal(input.requestOptions, input.signal)
-      : input.requestOptions,
-  );
-}
-
 // Owns AnyHarness React Query cache shape needed during workspace activation.
 export function useWorkspaceBootstrapCache() {
   const queryClient = useQueryClient();
@@ -164,30 +134,7 @@ export function useWorkspaceBootstrapCache() {
     return sessions;
   }, [queryClient]);
 
-  const ensureWorkspaceLaunchCatalog = useCallback((
-    input: EnsureWorkspaceLaunchCatalogInput,
-  ): Promise<WorkspaceSessionLaunchCatalog> => queryClient.ensureQueryData({
-    queryKey: anyHarnessWorkspaceSessionLaunchKey(
-      input.workspaceConnection.runtimeUrl,
-      input.workspaceId,
-    ),
-    queryFn: ({ signal }) => fetchWorkspaceLaunchCatalog({
-      workspaceConnection: input.workspaceConnection,
-      requestOptions: input.requestOptions,
-      signal,
-    }),
-  }), [queryClient]);
-
-  const ensureModelRegistries = useCallback((
-    input: EnsureModelRegistriesInput,
-  ): Promise<ModelRegistry[]> => queryClient.ensureQueryData({
-    queryKey: anyHarnessModelRegistriesKey(input.runtimeUrl),
-    queryFn: ({ signal }) => listModelRegistries(input.workspaceConnection, { signal }),
-  }), [queryClient]);
-
   return {
-    ensureModelRegistries,
-    ensureWorkspaceLaunchCatalog,
     fetchWorkspaceSessions,
     getWorkspaceSessionsCacheDecision,
     loadWorkspaceSessions,

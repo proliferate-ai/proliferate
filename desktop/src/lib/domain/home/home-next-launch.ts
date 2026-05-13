@@ -1,9 +1,9 @@
 import type {
   AgentSummary,
   GitBranchRef,
-  ModelRegistry,
   Workspace,
 } from "@anyharness/sdk";
+import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
 import { compareChatLaunchKinds } from "@/config/chat-launch";
 import {
   buildAgentModelGroups,

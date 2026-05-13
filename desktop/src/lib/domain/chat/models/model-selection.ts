@@ -1,9 +1,14 @@
-import type { AgentSummary, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
+import type { AgentSummary } from "@anyharness/sdk";
 import {
   resolveModelDisplayName,
   shouldHideModel,
 } from "@/lib/domain/chat/models/model-display";
 import type { PendingSessionConfigChangeStatus } from "@/lib/domain/sessions/pending-config";
+import {
+  dynamicLaunchAgentAcceptsModel,
+  type DesktopAgentLaunchAgent,
+  type DesktopAgentLaunchModel,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 
 export interface ModelSelectorSelection {
   kind: string;
@@ -77,35 +82,21 @@ export function resolveModelSelectionActionKind(
 }
 
 export function resolveEffectiveLaunchSelection(
-  agents: WorkspaceSessionLaunchAgent[],
+  agents: DesktopAgentLaunchAgent[],
   preferences: ChatLaunchPreferences,
 ): ModelSelectorSelection | null {
   const preferredAgent = agents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
-    const preferredModelId = preferences.defaultChatModelIdByAgentKind[preferredAgent.kind];
-    const preferredModel = preferredModelId
-      ? preferredAgent.models.find((model) => model.id === preferredModelId) ?? null
-      : null;
-    const model = preferredModel ?? resolveDefaultAgentModel(preferredAgent);
-    if (model) {
-      return {
-        kind: preferredAgent.kind,
-        modelId: model.id,
-      };
+    const selection = resolveAgentLaunchSelection(preferredAgent, preferences);
+    if (selection) {
+      return selection;
     }
   }
 
   for (const agent of agents) {
-    const preferredModelId = preferences.defaultChatModelIdByAgentKind[agent.kind];
-    const preferredModel = preferredModelId
-      ? agent.models.find((model) => model.id === preferredModelId) ?? null
-      : null;
-    const model = preferredModel ?? resolveDefaultAgentModel(agent);
-    if (model) {
-      return {
-        kind: agent.kind,
-        modelId: model.id,
-      };
+    const selection = resolveAgentLaunchSelection(agent, preferences);
+    if (selection) {
+      return selection;
     }
   }
 
@@ -113,7 +104,7 @@ export function resolveEffectiveLaunchSelection(
 }
 
 export function resolveConfiguredLaunchAgentSelection(
-  agents: WorkspaceSessionLaunchAgent[],
+  agents: DesktopAgentLaunchAgent[],
   preferences: ChatLaunchPreferences,
 ): ModelSelectorSelection | null {
   if (!preferences.defaultChatAgentKind) {
@@ -122,32 +113,55 @@ export function resolveConfiguredLaunchAgentSelection(
 
   const preferredAgent = agents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
-    const preferredModelId = preferences.defaultChatModelIdByAgentKind[preferredAgent.kind];
-    const preferredModel = preferredModelId
-      ? preferredAgent.models.find((model) => model.id === preferredModelId) ?? null
-      : null;
-    const model = preferredModel ?? resolveDefaultAgentModel(preferredAgent);
-    if (model) {
-      return {
-        kind: preferredAgent.kind,
-        modelId: model.id,
-      };
-    }
+    return resolveAgentLaunchSelection(preferredAgent, preferences);
   }
 
   return null;
 }
 
+function resolveAgentLaunchSelection(
+  agent: DesktopAgentLaunchAgent,
+  preferences: ChatLaunchPreferences,
+): ModelSelectorSelection | null {
+  const preferredModelId = preferences.defaultChatModelIdByAgentKind[agent.kind]?.trim();
+  if (preferredModelId) {
+    const preferredModel =
+      agent.models.find((model) => model.id === preferredModelId)
+      ?? agent.models.find((model) => model.aliases.includes(preferredModelId))
+      ?? null;
+    if (preferredModel) {
+      return {
+        kind: agent.kind,
+        modelId: preferredModel.id,
+      };
+    }
+    if (dynamicLaunchAgentAcceptsModel(agent)) {
+      return {
+        kind: agent.kind,
+        modelId: preferredModelId,
+      };
+    }
+  }
+
+  const model = resolveDefaultAgentModel(agent);
+  return model
+    ? {
+      kind: agent.kind,
+      modelId: model.id,
+    }
+    : null;
+}
+
 function resolveDefaultAgentModel(
-  agent: WorkspaceSessionLaunchAgent,
-) {
+  agent: DesktopAgentLaunchAgent,
+): DesktopAgentLaunchModel | undefined {
   return agent.models.find((model) =>
     model.id === agent.defaultModelId || model.isDefault,
   ) ?? agent.models[0];
 }
 
 export function buildModelSelectorGroups(
-  agents: WorkspaceSessionLaunchAgent[],
+  agents: DesktopAgentLaunchAgent[],
   selected: ModelSelectorSelection | null,
   activeSelection: ModelSelectorSelection | null | undefined,
   activeModelControl?: ActiveModelSelectorControl | null,
@@ -167,7 +181,7 @@ export function buildModelSelectorGroups(
 }
 
 function resolveSelectorModels(
-  agent: WorkspaceSessionLaunchAgent,
+  agent: DesktopAgentLaunchAgent,
   activeModelControl: ActiveModelSelectorControl | null | undefined,
   selected: ModelSelectorSelection | null,
 ): Array<{ id: string; displayName: string }> {

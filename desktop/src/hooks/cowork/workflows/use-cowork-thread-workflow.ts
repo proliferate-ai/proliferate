@@ -2,9 +2,7 @@ import {
   resolveRuntimeConnection,
   useAnyHarnessRuntimeContext,
   useCreateCoworkThreadMutation,
-  useModelRegistriesQuery,
 } from "@anyharness/sdk-react";
-import type { ModelRegistry } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
@@ -28,6 +26,8 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
@@ -74,7 +74,7 @@ export function useCoworkThreadWorkflow() {
   );
   const activateWorkspace = useSessionSelectionStore((state) => state.activateWorkspace);
   const { agents } = useAgentCatalog();
-  const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useModelRegistriesQuery();
+  const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useCloudLaunchModelRegistries();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,

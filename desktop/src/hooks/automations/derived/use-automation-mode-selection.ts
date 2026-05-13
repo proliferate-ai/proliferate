@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useEffectiveAgentCatalogQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
+import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {
   resolveAutomationModeSelection,
   type AutomationModeOverride,
@@ -24,9 +24,7 @@ export function useAutomationModeSelection({
   const defaultSessionModeByAgentKind = useUserPreferencesStore(
     useShallow((state) => state.defaultSessionModeByAgentKind),
   );
-  const catalogQuery = useEffectiveAgentCatalogQuery({
-    enabled: Boolean(agentKind),
-  });
+  const catalogQuery = useCloudAgentCatalog(Boolean(agentKind));
 
   const catalogModeOptions = useMemo(() => {
     const agent = catalogQuery.data?.agents.find((candidate) => candidate.kind === agentKind);

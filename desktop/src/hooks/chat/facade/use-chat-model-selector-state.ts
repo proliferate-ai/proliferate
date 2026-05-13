@@ -70,6 +70,7 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
       : null,
   });
   const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
+  const launchCatalogBlocked = Boolean(launchCatalog.error && !launchCatalog.data);
   const launchControlPreferences = useUserPreferencesStore(useShallow((state) => ({
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:

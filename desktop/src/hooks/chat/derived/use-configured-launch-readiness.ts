@@ -1,6 +1,4 @@
 import { useMemo } from "react";
-import { useProviderConfigsQuery } from "@anyharness/sdk-react";
-import type { ProviderConfig } from "@anyharness/sdk";
 import { useShallow } from "zustand/react/shallow";
 import { AGENT_READINESS_LABELS } from "@/lib/domain/agents/readiness-presentation";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
@@ -8,8 +6,6 @@ import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/pre
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
-
-const EMPTY_PROVIDER_CONFIGS: ProviderConfig[] = [];
 
 export function useConfiguredLaunchReadiness(
   activeSelection: ModelSelectorSelection | null = null,
@@ -19,16 +15,22 @@ export function useConfiguredLaunchReadiness(
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
   })));
   const launchCatalog = useChatLaunchCatalog({ activeSelection });
-  const { data: providerConfigs = EMPTY_PROVIDER_CONFIGS, isLoading: providerConfigsLoading } = useProviderConfigsQuery();
   const { agentsByKind } = useAgentCatalog();
+  const hasCatalogLoadError = Boolean(launchCatalog.error && !launchCatalog.data);
 
   const resolution = useMemo(
-    () => resolveConfiguredLaunchSelection(
-      launchCatalog.launchAgents,
-      preferences,
-      providerConfigs,
-    ),
-    [launchCatalog.launchAgents, preferences, providerConfigs],
+    () => hasCatalogLoadError
+      ? {
+        selection: null,
+        displayName: null,
+        reason: "Couldn't load the agent catalog. Retry once cloud is reachable.",
+        status: "unavailable" as const,
+      }
+      : resolveConfiguredLaunchSelection(
+        launchCatalog.launchAgents,
+        preferences,
+      ),
+    [hasCatalogLoadError, launchCatalog.launchAgents, preferences],
   );
 
   const configuredAgent = preferences.defaultChatAgentKind
@@ -45,7 +47,7 @@ export function useConfiguredLaunchReadiness(
     displayName: resolution.displayName,
     disabledReason,
     status: resolution.status,
-    isLoading: launchCatalog.isLoading || providerConfigsLoading,
+    isLoading: !hasCatalogLoadError && launchCatalog.isLoading,
     isReady: resolution.status === "ready",
     launchCatalog,
   };

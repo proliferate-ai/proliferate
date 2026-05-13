@@ -228,6 +228,20 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             crate::sessions::runtime::CreateAndStartSessionError::Invalid(detail) => {
                 ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
             }
+            crate::sessions::runtime::CreateAndStartSessionError::ModelUnsupported {
+                agent_kind,
+                model_id,
+            } => ApiError::bad_request(
+                format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
+                "SESSION_MODEL_UNSUPPORTED",
+            ),
+            crate::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
+                agent_kind,
+                mode_id,
+            } => ApiError::bad_request(
+                format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
+                "SESSION_MODE_UNSUPPORTED",
+            ),
             crate::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
                 ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
             }

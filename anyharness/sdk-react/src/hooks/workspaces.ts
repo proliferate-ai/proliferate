@@ -22,7 +22,6 @@ import {
   anyHarnessWorkspacePurgePreflightKey,
   anyHarnessWorkspaceDetectSetupKey,
   anyHarnessWorkspaceRetirePreflightKey,
-  anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessWorkspaceSetupStatusKey,
 } from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
@@ -414,25 +413,6 @@ export function useStartSetupMutation() {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessWorkspaceSetupStatusKey(runtimeUrl, variables.workspaceId),
       });
-    },
-  });
-}
-
-export function useWorkspaceSessionLaunchQuery(options?: WorkspaceQueryOptions) {
-  const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
-  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
-
-  return useQuery({
-    queryKey: anyHarnessWorkspaceSessionLaunchKey(runtimeUrl, workspaceId),
-    enabled: (options?.enabled ?? true) && !!workspaceId,
-    queryFn: async ({ signal }) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
-      const client = getAnyHarnessClient(resolved.connection);
-      return client.workspaces.getSessionLaunchCatalog(
-        resolved.connection.anyharnessWorkspaceId,
-        requestOptionsWithSignal(options?.requestOptions, signal),
-      );
     },
   });
 }

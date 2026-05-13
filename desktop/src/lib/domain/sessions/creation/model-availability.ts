@@ -1,10 +1,16 @@
 import type {
-  ModelLaunchRemediation,
-  ModelRegistry,
-  ModelRegistryModel,
   Session,
-  WorkspaceSessionLaunchCatalog,
 } from "@anyharness/sdk";
+import type { DesktopAgentLaunchRemediation as ModelLaunchRemediation } from "@/lib/domain/agents/cloud-launch-catalog";
+import type {
+  SessionConfigModel,
+  SessionConfigModelRegistry,
+  SessionLaunchAgent,
+} from "@/lib/domain/chat/launch/session-config";
+
+interface SessionModelAvailabilityCatalog {
+  agents: SessionLaunchAgent[];
+}
 
 export interface PausedSessionModelAvailability {
   id: string;
@@ -19,12 +25,12 @@ export interface PausedSessionModelAvailability {
   remediation: ModelLaunchRemediation | null;
 }
 
-function modelMatchesId(model: Pick<ModelRegistryModel, "id" | "aliases">, modelId: string): boolean {
+function modelMatchesId(model: Pick<SessionConfigModel, "id" | "aliases">, modelId: string): boolean {
   return model.id === modelId || (model.aliases ?? []).includes(modelId);
 }
 
 function findRegistryModel(
-  registries: ModelRegistry[],
+  registries: SessionConfigModelRegistry[],
   agentKind: string,
   modelId: string,
 ) {
@@ -34,10 +40,10 @@ function findRegistryModel(
 }
 
 function launchCatalogExposesModel(input: {
-  launchCatalog: WorkspaceSessionLaunchCatalog;
+  launchCatalog: SessionModelAvailabilityCatalog;
   agentKind: string;
   requestedModelId: string;
-  requestedModel: ModelRegistryModel;
+  requestedModel: SessionConfigModel;
 }): boolean {
   const agent = input.launchCatalog.agents.find((candidate) =>
     candidate.kind === input.agentKind
@@ -57,8 +63,8 @@ function launchCatalogExposesModel(input: {
 export function hasImmediateLaunchModelMismatch(input: {
   session: Session;
   agentKind: string;
-  registries: ModelRegistry[];
-  launchCatalog: WorkspaceSessionLaunchCatalog;
+  registries: SessionConfigModelRegistry[];
+  launchCatalog: SessionModelAvailabilityCatalog;
 }): boolean {
   const requestedModelId = input.session.requestedModelId;
   const currentModelId = input.session.modelId;
@@ -87,7 +93,7 @@ export function buildPausedModelAvailability(input: {
   session: Session;
   workspaceId: string;
   agentKind: string;
-  registries: ModelRegistry[];
+  registries: SessionConfigModelRegistry[];
 }): PausedSessionModelAvailability {
   const requestedModelId = input.session.requestedModelId ?? "";
   const currentModelId = input.session.modelId ?? "";

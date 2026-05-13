@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Session } from "@anyharness/sdk";
 import type {
-  ModelRegistry,
-  Session,
-  WorkspaceSessionLaunchCatalog,
-} from "@anyharness/sdk";
+  SessionConfigModelRegistry as ModelRegistry,
+  SessionLaunchAgent,
+} from "@/lib/domain/chat/launch/session-config";
 import {
   buildPausedModelAvailability,
   hasImmediateLaunchModelMismatch,
@@ -20,7 +20,6 @@ const registry: ModelRegistry = {
       isDefault: false,
       status: "active",
       aliases: ["gpt-5.5-latest"],
-      minRuntimeVersion: null,
       launchRemediation: {
         kind: "managed_reinstall",
         message: "Update Codex tools and retry.",
@@ -32,7 +31,6 @@ const registry: ModelRegistry = {
       isDefault: true,
       status: "active",
       aliases: [],
-      minRuntimeVersion: null,
       launchRemediation: null,
     },
   ],
@@ -54,10 +52,8 @@ function sessionModelPair(
   } as Session;
 }
 
-function launchCatalog(modelIds: string[]): WorkspaceSessionLaunchCatalog {
+function launchCatalog(modelIds: string[]): { agents: SessionLaunchAgent[] } {
   return {
-    workspaceId: "workspace-1",
-    catalogVersion: "test",
     agents: [
       {
         kind: "codex",

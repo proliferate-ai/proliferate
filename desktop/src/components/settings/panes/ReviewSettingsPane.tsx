@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
-import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { ReviewDefaultsSection } from "@/components/settings/panes/review/ReviewDefaultsSection";
 import { ReviewPersonalitySection } from "@/components/settings/panes/review/ReviewPersonalitySection";
@@ -18,10 +17,12 @@ import {
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";
+import type { DesktopLaunchModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
-const EMPTY_MODEL_REGISTRIES: NonNullable<ReturnType<typeof useModelRegistriesQuery>["data"]> = [];
+const EMPTY_MODEL_REGISTRIES: DesktopLaunchModelRegistry[] = [];
 
 const REVIEW_SECTIONS: {
   kind: ReviewKind;
@@ -76,7 +77,7 @@ export function ReviewSettingsPane() {
   const {
     data: modelRegistries = EMPTY_MODEL_REGISTRIES,
     isLoading: modelRegistriesLoading,
-  } = useModelRegistriesQuery();
+  } = useCloudLaunchModelRegistries();
   const modelGroups = useMemo(() => buildAgentModelGroups({
     agents,
     modelRegistries,

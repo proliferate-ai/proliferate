@@ -723,7 +723,9 @@ impl CoworkRuntime {
     pub fn workspace_session_launch_catalog(
         &self,
         workspace_id: &str,
-    ) -> anyhow::Result<crate::sessions::service::WorkspaceSessionLaunchCatalogData> {
+    ) -> anyhow::Result<
+        crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData,
+    > {
         self.session_runtime
             .workspace_session_launch_catalog(workspace_id)
     }

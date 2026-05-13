@@ -1,4 +1,7 @@
-import type { ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
+import type {
+  DesktopLaunchModelRegistry as SettingsChatModelRegistry,
+  DesktopLaunchModelRegistryModel as SettingsChatModel,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
 import {
@@ -20,8 +23,8 @@ export interface SettingsChatDefaultRow {
   kind: string;
   displayName: string;
   isPrimary: boolean;
-  models: ModelRegistryModel[];
-  selectedModel: ModelRegistryModel;
+  models: SettingsChatModel[];
+  selectedModel: SettingsChatModel;
   modeOptions: ConfiguredSessionControlValue[];
   selectedMode: ConfiguredSessionControlValue | null;
 }
@@ -31,7 +34,7 @@ export function buildSettingsChatDefaultRows({
   readyAgentKinds,
   preferences,
 }: {
-  modelRegistries: ModelRegistry[];
+  modelRegistries: SettingsChatModelRegistry[];
   readyAgentKinds: ReadonlySet<string>;
   preferences: SettingsChatDefaultPreferences;
 }): SettingsChatDefaultRow[] {
@@ -71,7 +74,7 @@ export function buildSettingsChatDefaultRows({
 
 export function buildPrimaryHarnessPreferenceUpdate(
   preferences: SettingsChatDefaultPreferences,
-  registry: ModelRegistry,
+  registry: SettingsChatModelRegistry,
 ): SettingsChatDefaultPreferences {
   const selectedModel = resolveModelForRegistry(
     registry,

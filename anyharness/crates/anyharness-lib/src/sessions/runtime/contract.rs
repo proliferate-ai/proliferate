@@ -5,12 +5,12 @@ use anyharness_contract::v1::{
     WorkspaceExecutionSummary,
 };
 
+use crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData;
 use crate::sessions::execution_summary::{
     idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
 };
 use crate::sessions::links::model::SessionLinkRecord;
 use crate::sessions::model::SessionRecord;
-use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
 
 use super::SessionRuntime;
 

@@ -9,12 +9,16 @@ one is the most permissive?"
 
 ## How modes flow through the stack
 
-The runtime is *mode-agnostic*. It does not hardcode a per-agent list of
-legal mode values:
+The runtime does not hardcode per-agent mode values, but create-session mode
+values are now validated against the bundled AnyHarness agent catalog:
 
 - The HTTP create-session request takes an opaque `mode_id` string
   (`anyharness/crates/anyharness-contract/src/v1/sessions.rs:64`,
-  `sessions.rs:104`) and the runtime passes it through to the ACP binary
+  `sessions.rs:104`).
+- Session creation resolves the agent's bundled catalog row and validates an
+  explicit `mode_id` against the catalog's create-session `mode` control before
+  launch.
+- After validation, the runtime passes the mode through to the ACP binary
   (`anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs`,
   `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`).
 - At session start the ACP binary returns its own `SessionModeState`, which
@@ -28,9 +32,10 @@ legal mode values:
 - The contract shape with the six normalized buckets is declared at
   `anyharness/crates/anyharness-contract/src/v1/session_config.rs:95-120`.
 
-Consequence: the *runtime-legal* set of mode values for a given agent is
-whatever that agent's ACP binary advertises at live-session time. There is
-no server-side enum to grep.
+Consequence: the pre-launch legal set is the bundled AnyHarness catalog's
+create-session `mode` control for that agent. Once the process is live, the
+actual session controls are whatever the ACP binary advertises at
+live-session time.
 
 The *desktop-advertised* set of mode values is frozen in a presentation
 table at `desktop/src/config/session-control-presentations.ts`. This table
@@ -53,7 +58,7 @@ preference directly from the store
 
 Registered agent kinds come from
 `anyharness/crates/anyharness-lib/src/domains/agents/model.rs:6-47`: `claude`,
-`codex`, `gemini`, `cursor`, `opencode`, `amp`. All six are wired into the
+`codex`, `gemini`, `cursor`, `opencode`. All five are wired into the
 descriptor list at
 `anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:15-21`.
 
@@ -189,27 +194,11 @@ will pass `mode_id` through verbatim.
 - Most permissive: **unknown from the repo.** Not defined in either the
   presentation table or anywhere runtime-side.
 
-### Amp (`amp`)
-
-Registered in the runtime
-(`anyharness/crates/anyharness-lib/src/domains/agents/model.rs:12,24,55`,
-`anyharness/crates/anyharness-lib/src/domains/agents/registry.rs:193-235`) via
-`amp-acp`.
-
-**No entry in `desktop/src/config/session-control-presentations.ts`.** Not
-mentioned anywhere as having explicit mode values. Same caveats as Cursor
-and OpenCode apply.
-
-- Most permissive: **unknown from the repo.**
-
 ## Divergence between desktop labels and runtime behaviour
 
-- The desktop presentation table is descriptive, not enforced. The runtime
-  will happily forward any `mode_id` string, including values not in the
-  table. Conversely, if an ACP binary drops or renames a mode, the desktop
-  table will keep offering the stale value and the runtime will forward it
-  to a binary that no longer recognises it. There is no repo-side
-  reconciliation between the two.
+- The desktop presentation table is descriptive. Session creation enforces the
+  bundled AnyHarness catalog's create-session `mode` values, and live controls
+  then come from the ACP binary.
 - Claude `dontAsk` and `bypassPermissions` are both in desktop config; they
   are distinct only by copy tone ("Auto-approve most actions" vs "Skip
   permission checks"). If the upstream Claude ACP binary no longer
@@ -218,7 +207,7 @@ and OpenCode apply.
   options. The UI treats them as independent controls; the runtime
   normalizer explicitly keeps them separate
   (`live_config.rs:182-194`, `live_config.rs:538-600`).
-- Cursor, OpenCode, and Amp have zero desktop mode metadata. A cowork thread
+- Cursor and OpenCode have zero desktop mode metadata. A cowork thread
   created against one of these families today will send `mode_id = undefined`
   (since `defaultSessionModeByAgentKind` has no entry for them unless the
   user typed one in by hand) and inherit whatever default the ACP binary
@@ -236,9 +225,8 @@ recommendation. For the rest, explicitly: unknown — do not ship a default.
 | gemini   | `mode`              | `yolo`                       | High. Unambiguous in desktop config.             |
 | cursor   | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
 | opencode | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
-| amp      | `mode`              | *unknown*                    | None. No repo-local source of truth.             |
 
-If cowork needs a permissive default for cursor / opencode / amp, the next
+If cowork needs a permissive default for cursor / opencode, the next
 step is to either (a) query the live `SessionLiveConfigSnapshot` after the
 first session starts and pick the most permissive value from the
 `normalized_controls.mode` bucket heuristically, or (b) extend the

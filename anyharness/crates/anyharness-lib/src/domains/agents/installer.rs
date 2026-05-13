@@ -1224,12 +1224,12 @@ mod tests {
             "@proliferate/claude-agent-acp@0.25.0"
         );
         assert_eq!(
-            apply_npm_version_override("amp-acp@1.0.0", Some("1.2.3")),
-            "amp-acp@1.2.3"
+            apply_npm_version_override("example-acp@1.0.0", Some("1.2.3")),
+            "example-acp@1.2.3"
         );
         assert_eq!(
-            apply_npm_version_override("amp-acp", Some("1.2.3")),
-            "amp-acp@1.2.3"
+            apply_npm_version_override("example-acp", Some("1.2.3")),
+            "example-acp@1.2.3"
         );
         assert_eq!(
             apply_npm_version_override(
@@ -1247,8 +1247,11 @@ mod tests {
             Some("0.24.2".into())
         );
         assert_eq!(npm_package_version("@proliferate/claude-agent-acp"), None);
-        assert_eq!(npm_package_version("amp-acp@1.2.3"), Some("1.2.3".into()));
-        assert_eq!(npm_package_version("amp-acp"), None);
+        assert_eq!(
+            npm_package_version("example-acp@1.2.3"),
+            Some("1.2.3".into())
+        );
+        assert_eq!(npm_package_version("example-acp"), None);
         assert_eq!(
             npm_package_version(
                 "git+https://github.com/proliferate-ai/claude-agent-acp.git#48cc672"
@@ -1267,8 +1270,8 @@ mod tests {
             npm_package_name("@proliferateai/codex-acp"),
             Some("@proliferateai/codex-acp")
         );
-        assert_eq!(npm_package_name("amp-acp@1.2.3"), Some("amp-acp"));
-        assert_eq!(npm_package_name("amp-acp"), Some("amp-acp"));
+        assert_eq!(npm_package_name("example-acp@1.2.3"), Some("example-acp"));
+        assert_eq!(npm_package_name("example-acp"), Some("example-acp"));
         assert_eq!(
             npm_package_name("git+https://github.com/proliferate-ai/codex-acp.git#main"),
             None

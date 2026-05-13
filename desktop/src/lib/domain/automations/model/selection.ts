@@ -1,4 +1,4 @@
-import type { AgentSummary, ModelRegistry } from "@anyharness/sdk";
+import type { AgentSummary } from "@anyharness/sdk";
 import {
   AUTOMATION_SUPPORTED_AGENT_KINDS,
   type AutomationSupportedAgentKind,
@@ -14,6 +14,7 @@ import {
   type AgentModelGroup,
   type AgentModelOption,
   type AgentModelSelection,
+  type AgentModelRegistry as ModelRegistry,
 } from "@/lib/domain/agents/model-options";
 
 export type AutomationModelSelection = AgentModelSelection;

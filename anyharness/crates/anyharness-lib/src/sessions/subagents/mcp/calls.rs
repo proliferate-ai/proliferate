@@ -5,11 +5,11 @@ use super::context::SubagentMcpContext;
 use super::tools::{
     ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, SendSubagentMessageArgs,
 };
+use crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 use crate::sessions::delegation::{READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT};
 use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};
-use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
 
 pub async fn call_tool(
     service: &SubagentService,

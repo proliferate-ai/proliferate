@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ModelRegistry, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
-import { mergeLaunchAgentsWithRegistries } from "./session-config";
+import {
+  mergeLaunchAgentsWithRegistries,
+  type SessionConfigModelRegistry,
+  type SessionLaunchAgent,
+} from "./session-config";
 
-function launchAgent(overrides: Partial<WorkspaceSessionLaunchAgent> & { kind: string }): WorkspaceSessionLaunchAgent {
+function launchAgent(overrides: Partial<SessionLaunchAgent> & { kind: string }): SessionLaunchAgent {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,
@@ -11,7 +14,9 @@ function launchAgent(overrides: Partial<WorkspaceSessionLaunchAgent> & { kind: s
   };
 }
 
-function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRegistry {
+function registry(
+  overrides: Partial<SessionConfigModelRegistry> & { kind: string },
+): SessionConfigModelRegistry {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,

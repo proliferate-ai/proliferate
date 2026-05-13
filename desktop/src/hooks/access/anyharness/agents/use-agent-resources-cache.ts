@@ -1,7 +1,6 @@
 import {
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
-  anyHarnessProviderConfigsKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -19,9 +18,6 @@ export function useAgentResourcesCache() {
       queryClient.invalidateQueries({
         queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl),
       }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessProviderConfigsKey(normalizedRuntimeUrl),
-      }),
     ]);
   }, [queryClient]);
 
@@ -34,9 +30,6 @@ export function useAgentResourcesCache() {
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessProviderConfigsKey(normalizedRuntimeUrl),
       }),
       queryClient.invalidateQueries({
         queryKey: anyHarnessAgentReconcileStatusKey(normalizedRuntimeUrl),

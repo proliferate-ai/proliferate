@@ -2,56 +2,77 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
+import type {
+  DesktopAgentLaunchAgent,
+  DesktopAgentLaunchCatalog,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 
 const mocks = vi.hoisted(() => ({
-  useEffectiveAgentCatalogQuery: vi.fn(),
-  useWorkspaceSessionLaunchQuery: vi.fn(),
-  useModelRegistriesQuery: vi.fn(),
+  useCloudAgentCatalog: vi.fn(),
 }));
 
-vi.mock("@anyharness/sdk-react", () => ({
-  useEffectiveAgentCatalogQuery: mocks.useEffectiveAgentCatalogQuery,
-  useWorkspaceSessionLaunchQuery: mocks.useWorkspaceSessionLaunchQuery,
-  useModelRegistriesQuery: mocks.useModelRegistriesQuery,
+vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
+  useCloudAgentCatalog: mocks.useCloudAgentCatalog,
 }));
 
-vi.mock("@/hooks/workspaces/use-selected-cloud-runtime-state", () => ({
-  useSelectedCloudRuntimeState: () => ({ state: null }),
-}));
+function launchAgent(
+  kind: string,
+  modelId: string,
+  displayName = kind,
+): DesktopAgentLaunchAgent {
+  return {
+    kind,
+    displayName,
+    defaultModelId: modelId,
+    defaultModeId: null,
+    dynamicModels: false,
+    modelDisplayPolicy: null,
+    promptCapabilities: null,
+    models: [{
+      id: modelId,
+      displayName: modelId,
+      aliases: [],
+      status: "active",
+      isDefault: true,
+      tags: [],
+      launchRemediation: null,
+    }],
+    launchControls: [],
+  };
+}
+
+function catalog(agents: DesktopAgentLaunchAgent[]): DesktopAgentLaunchCatalog {
+  return {
+    schemaVersion: 1,
+    catalogVersion: "cloud-test",
+    generatedAt: "2026-05-05T00:00:00Z",
+    workspaceId: null,
+    agents,
+  };
+}
 
 describe("useChatLaunchCatalog", () => {
   beforeEach(() => {
-    mocks.useWorkspaceSessionLaunchQuery.mockReturnValue({
-      data: {
-        workspaceId: "workspace-1",
-        catalogVersion: "test",
-        agents: [],
-      },
+    mocks.useCloudAgentCatalog.mockReturnValue({
+      data: catalog([
+        launchAgent("codex", "gpt-5.5", "Codex"),
+        launchAgent("claude", "sonnet", "Claude"),
+      ]),
       isLoading: false,
       error: null,
-    });
-    mocks.useModelRegistriesQuery.mockReturnValue({
-      data: [],
-      isLoading: false,
-      error: null,
-    });
-    mocks.useEffectiveAgentCatalogQuery.mockReturnValue({
-      data: null,
-      isLoading: false,
-      error: null,
-    });
-    useHarnessConnectionStore.setState({
-      runtimeUrl: "http://runtime.test",
-      connectionState: "healthy",
-      error: null,
+      refetch: vi.fn(),
     });
     useSessionSelectionStore.setState({
       pendingWorkspaceEntry: null,
       selectedWorkspaceId: "workspace-1",
       hotPaintGate: null,
+    });
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "codex",
+      defaultChatModelIdByAgentKind: { codex: "gpt-5.5" },
     });
   });
 
@@ -60,43 +81,43 @@ describe("useChatLaunchCatalog", () => {
     vi.clearAllMocks();
   });
 
-  it("gates session launch and model registry queries during hot paint", () => {
-    useSessionSelectionStore.setState({
-      hotPaintGate: {
-        workspaceId: "workspace-1",
-        sessionId: "session-1",
-        nonce: 1,
-        operationId: null,
-        kind: "workspace_hot_reopen",
-      },
-    });
+  it("uses the cloud agent catalog projection for launch groups and defaults", () => {
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
 
-    renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
-
-    expect(mocks.useWorkspaceSessionLaunchQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      enabled: false,
+    expect(mocks.useCloudAgentCatalog).toHaveBeenCalledWith(true);
+    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual([
+      "claude",
+      "codex",
+    ]);
+    expect(result.current.defaultLaunchSelection).toEqual({
+      kind: "codex",
+      modelId: "gpt-5.5",
     });
-    expect(mocks.useEffectiveAgentCatalogQuery).toHaveBeenCalledWith({
-      enabled: false,
-    });
-    expect(mocks.useModelRegistriesQuery).toHaveBeenCalledWith({
-      enabled: false,
+    expect(result.current.groups.map((group) => group.kind)).toEqual([
+      "claude",
+      "codex",
+    ]);
+    expect(result.current.snapshot).toMatchObject({
+      snapshotId: "cloud-launch-catalog:workspace-1:cloud-test",
+      runtimeUrl: null,
+      catalogVersion: "cloud-test",
     });
   });
 
-  it("enables launch catalog queries for a ready local workspace outside hot paint", () => {
-    renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+  it("surfaces cloud catalog errors without runtime fallback data", () => {
+    const error = new Error("cloud unavailable");
+    mocks.useCloudAgentCatalog.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error,
+      refetch: vi.fn(),
+    });
 
-    expect(mocks.useWorkspaceSessionLaunchQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      enabled: true,
-    });
-    expect(mocks.useEffectiveAgentCatalogQuery).toHaveBeenCalledWith({
-      enabled: true,
-    });
-    expect(mocks.useModelRegistriesQuery).toHaveBeenCalledWith({
-      enabled: true,
-    });
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+
+    expect(result.current.error).toBe(error);
+    expect(result.current.launchAgents).toEqual([]);
+    expect(result.current.hasLaunchableAgents).toBe(false);
+    expect(result.current.isEmpty).toBe(true);
   });
 });

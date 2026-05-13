@@ -6,6 +6,7 @@ use super::tools::{
     CreateCodingWorkspaceArgs, DeleteArtifactArgs, GetArtifactArgs, ReadCodingEventsArgs,
     SendCodingMessageArgs, UpdateArtifactArgs,
 };
+use crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData;
 use crate::domains::cowork::artifacts::{
     CoworkArtifactRuntime, CreateCoworkArtifactInput, UpdateCoworkArtifactInput,
 };
@@ -16,7 +17,7 @@ use crate::domains::cowork::delegation::model::{
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::sessions::runtime::SendPromptOutcome;
-use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
+use crate::workspaces::model::WorkspaceRecord;
 
 pub async fn call_tool(
     artifact_runtime: &CoworkArtifactRuntime,

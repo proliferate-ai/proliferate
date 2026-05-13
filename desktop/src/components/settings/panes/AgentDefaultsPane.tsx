@@ -1,6 +1,4 @@
 import { useMemo, type ReactNode } from "react";
-import { useModelRegistriesQuery } from "@anyharness/sdk-react";
-import type { ModelRegistry } from "@anyharness/sdk";
 import { useShallow } from "zustand/react/shallow";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
@@ -9,7 +7,9 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
+import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
 import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
   buildSettingsAgentDefaultRows,
@@ -36,7 +36,7 @@ export function AgentDefaultsPane() {
   const {
     data: modelRegistries = EMPTY_MODEL_REGISTRIES,
     isLoading: modelRegistriesLoading,
-  } = useModelRegistriesQuery();
+  } = useCloudLaunchModelRegistries();
   const { agents, isLoading: agentsLoading, readyAgentKinds } = useAgentCatalog();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,

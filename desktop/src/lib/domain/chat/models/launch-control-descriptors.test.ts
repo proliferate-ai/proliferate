@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { WorkspaceSessionLaunchControl } from "@anyharness/sdk";
+import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 import { buildLaunchControlDescriptors } from "./launch-control-descriptors";
 
 function control(
-  key: WorkspaceSessionLaunchControl["key"],
+  key: string,
   label: string,
   defaultValue: string,
-): WorkspaceSessionLaunchControl {
+): DesktopAgentLaunchControl {
   return {
     key,
     label,
@@ -20,6 +20,22 @@ function control(
       { value: "off", label: "Off", isDefault: defaultValue === "off" },
       { value: "on", label: "On", isDefault: defaultValue === "on" },
     ],
+    surfaces: {
+      start: true,
+      session: true,
+      automation: false,
+      settings: true,
+    },
+    apply: {
+      createField: null,
+      liveConfigId: key,
+      liveSetter: "runtime_control",
+      queueBeforeMaterialized: true,
+    },
+    missingLiveConfigPolicy: "ignore_default",
+    valueSource: "inline",
+    queueWhileMaterializing: true,
+    mutableAfterMaterialized: true,
   };
 }
 
@@ -78,6 +94,22 @@ describe("buildLaunchControlDescriptors", () => {
               phase: "live_default",
               createField: null,
               defaultValue: "off",
+              surfaces: {
+                start: true,
+                session: true,
+                automation: false,
+                settings: true,
+              },
+              apply: {
+                createField: null,
+                liveConfigId: "fast_mode",
+                liveSetter: "runtime_control",
+                queueBeforeMaterialized: true,
+              },
+              missingLiveConfigPolicy: "ignore_default",
+              valueSource: "inline",
+              queueWhileMaterializing: true,
+              mutableAfterMaterialized: true,
               values: [
                 { value: "off", label: "Off", isDefault: true },
                 { value: "on", label: "On", isDefault: false },

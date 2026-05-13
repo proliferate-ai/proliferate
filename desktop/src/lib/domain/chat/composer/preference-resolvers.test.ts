@@ -1,36 +1,26 @@
 import { describe, expect, it } from "vitest";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 import type {
-  AgentSummary,
-  ModelRegistry,
-  ModelRegistryModel,
-  ProviderConfig,
-  WorkspaceSessionLaunchAgent,
-} from "@anyharness/sdk";
+  AgentCatalogSummary,
+  AgentModelRegistry,
+  AgentModelRegistryModel,
+} from "@/lib/domain/agents/model-options";
 import {
   resolveConfiguredLaunchSelection,
   resolveEffectiveChatDefaults,
   resolvePreferredOpenTarget,
 } from "./preference-resolvers";
 
-function agent(overrides: Partial<AgentSummary> & { kind: string }): AgentSummary {
+function agent(overrides: Partial<AgentCatalogSummary> & { kind: string }): AgentCatalogSummary {
   return {
     displayName: overrides.displayName ?? overrides.kind,
     readiness: "ready",
-    installState: "installed",
-    credentialState: "ready",
-    expectedEnvVars: [],
-    nativeRequired: false,
-    supportsLogin: true,
-    agentProcess: {
-      installed: true,
-      role: "agent",
-    },
     ...overrides,
     kind: overrides.kind,
   };
 }
 
-function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+function model(id: string, displayName: string, isDefault: boolean): AgentModelRegistryModel {
   return {
     id,
     displayName,
@@ -39,33 +29,38 @@ function model(id: string, displayName: string, isDefault: boolean): ModelRegist
   };
 }
 
-function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRegistry {
+function registry(overrides: Partial<AgentModelRegistry> & { kind: string }): AgentModelRegistry {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,
     defaultModelId: overrides.defaultModelId ?? "default-model",
-    models: overrides.models ?? [model("default-model", "Default Model", true)],
-  };
-}
-
-function provider(overrides: Partial<ProviderConfig> & { kind: string }): ProviderConfig {
-  return {
-    kind: overrides.kind,
-    displayName: overrides.displayName ?? overrides.kind,
     models: overrides.models ?? [model("default-model", "Default Model", true)],
   };
 }
 
 function launchAgent(
-  overrides: Partial<WorkspaceSessionLaunchAgent> & { kind: string },
-): WorkspaceSessionLaunchAgent {
+  overrides: Partial<DesktopAgentLaunchAgent> & { kind: string },
+): DesktopAgentLaunchAgent {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,
     defaultModelId: overrides.defaultModelId ?? "default-model",
+    defaultModeId: null,
+    dynamicModels: overrides.dynamicModels ?? false,
+    modelDisplayPolicy: overrides.modelDisplayPolicy ?? null,
+    promptCapabilities: null,
     models: overrides.models ?? [
-      { id: "default-model", displayName: "Default Model", isDefault: true },
+      {
+        id: "default-model",
+        displayName: "Default Model",
+        aliases: [],
+        status: "active",
+        isDefault: true,
+        tags: [],
+        launchRemediation: null,
+      },
     ],
+    launchControls: [],
   };
 }
 
@@ -162,7 +157,15 @@ describe("resolveConfiguredLaunchSelection", () => {
       [
         launchAgent({
           kind: "codex",
-          models: [{ id: "gpt-5.4", displayName: "GPT-5.4", isDefault: true }],
+          models: [{
+            id: "gpt-5.4",
+            displayName: "GPT-5.4",
+            aliases: [],
+            status: "active",
+            isDefault: true,
+            tags: [],
+            launchRemediation: null,
+          }],
         }),
       ],
       {
@@ -171,12 +174,6 @@ describe("resolveConfiguredLaunchSelection", () => {
           claude: "sonnet",
         },
       },
-      [
-        provider({
-          kind: "claude",
-          models: [model("sonnet", "Sonnet", true)],
-        }),
-      ],
     );
 
     expect(result).toMatchObject({
@@ -192,7 +189,15 @@ describe("resolveConfiguredLaunchSelection", () => {
         launchAgent({
           kind: "codex",
           defaultModelId: "gpt-5.4",
-          models: [{ id: "gpt-5.4", displayName: "GPT-5.4", isDefault: true }],
+          models: [{
+            id: "gpt-5.4",
+            displayName: "GPT-5.4",
+            aliases: [],
+            status: "active",
+            isDefault: true,
+            tags: [],
+            launchRemediation: null,
+          }],
         }),
       ],
       {
@@ -201,12 +206,6 @@ describe("resolveConfiguredLaunchSelection", () => {
           codex: "stale-model",
         },
       },
-      [
-        provider({
-          kind: "codex",
-          models: [model("gpt-5.4", "GPT-5.4", true)],
-        }),
-      ],
     );
 
     expect(result).toMatchObject({
@@ -215,6 +214,48 @@ describe("resolveConfiguredLaunchSelection", () => {
         modelId: "gpt-5.4",
       },
       displayName: "GPT-5.4",
+      status: "ready",
+    });
+  });
+
+  it("accepts a configured OpenCode dynamic model before live ACP model truth is available", () => {
+    const result = resolveConfiguredLaunchSelection(
+      [
+        launchAgent({
+          kind: "opencode",
+          displayName: "OpenCode",
+          defaultModelId: "opencode/big-pickle",
+          dynamicModels: true,
+          modelDisplayPolicy: {
+            defaultVisibleModelIds: ["opencode/big-pickle"],
+            allowUserVisibleModelSelection: true,
+            moreModelsSource: "lastKnownLiveSnapshot",
+          },
+          models: [{
+            id: "opencode/big-pickle",
+            displayName: "OpenCode Zen/Big Pickle",
+            aliases: [],
+            status: "active",
+            isDefault: true,
+            tags: [],
+            launchRemediation: null,
+          }],
+        }),
+      ],
+      {
+        defaultChatAgentKind: "opencode",
+        defaultChatModelIdByAgentKind: {
+          opencode: "anthropic/claude-sonnet-4-6",
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      selection: {
+        kind: "opencode",
+        modelId: "anthropic/claude-sonnet-4-6",
+      },
+      displayName: "anthropic/claude-sonnet-4-6",
       status: "ready",
     });
   });

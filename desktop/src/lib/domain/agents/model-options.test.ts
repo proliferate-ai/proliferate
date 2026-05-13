@@ -1,29 +1,22 @@
 import { describe, expect, it } from "vitest";
-import type { AgentSummary, ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
 import {
   buildAgentModelGroups,
   resolveEffectiveAgentModelSelection,
+  type AgentCatalogSummary,
+  type AgentModelRegistry,
+  type AgentModelRegistryModel,
 } from "./model-options";
 
-function agent(overrides: Partial<AgentSummary> & { kind: string }): AgentSummary {
+function agent(overrides: Partial<AgentCatalogSummary> & { kind: string }): AgentCatalogSummary {
   return {
     displayName: overrides.displayName ?? overrides.kind,
     readiness: "ready",
-    installState: "installed",
-    credentialState: "ready",
-    expectedEnvVars: [],
-    nativeRequired: false,
-    supportsLogin: true,
-    agentProcess: {
-      installed: true,
-      role: "agent",
-    },
     ...overrides,
     kind: overrides.kind,
   };
 }
 
-function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRegistry {
+function registry(overrides: Partial<AgentModelRegistry> & { kind: string }): AgentModelRegistry {
   return {
     kind: overrides.kind,
     displayName: overrides.displayName ?? overrides.kind,
@@ -34,7 +27,7 @@ function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRe
   };
 }
 
-function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+function model(id: string, displayName: string, isDefault: boolean): AgentModelRegistryModel {
   return {
     id,
     displayName,

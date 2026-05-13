@@ -61,16 +61,6 @@ export function createWorktreeWorkspace(
   return getAnyHarnessClient(connection).workspaces.createWorktree(request, options);
 }
 
-export function getWorkspaceSessionLaunchCatalog(
-  connection: AnyHarnessResolvedConnection,
-  request?: AnyHarnessRequestOptions,
-) {
-  return getAnyHarnessClient(connection).workspaces.getSessionLaunchCatalog(
-    connection.anyharnessWorkspaceId,
-    request,
-  );
-}
-
 export function getWorkspaceSetupStatus(
   connection: AnyHarnessResolvedConnection,
   request?: AnyHarnessRequestOptions,

@@ -25,20 +25,6 @@ export type Workspace = Omit<GeneratedWorkspace, "kind" | "repoRootId" | "surfac
 export type ResolveWorkspaceResponse = components["schemas"]["ResolveWorkspaceResponse"];
 export type UpdateWorkspaceDisplayNameRequest =
   components["schemas"]["UpdateWorkspaceDisplayNameRequest"];
-export type WorkspaceSessionLaunchModel =
-  components["schemas"]["WorkspaceSessionLaunchModel"];
-export type WorkspaceSessionLaunchControlKey =
-  components["schemas"]["WorkspaceSessionLaunchControlKey"];
-export type WorkspaceSessionLaunchControlPhase =
-  components["schemas"]["WorkspaceSessionLaunchControlPhase"];
-export type WorkspaceSessionLaunchControlValue =
-  components["schemas"]["WorkspaceSessionLaunchControlValue"];
-export type WorkspaceSessionLaunchControl =
-  components["schemas"]["WorkspaceSessionLaunchControl"];
-export type WorkspaceSessionLaunchAgent =
-  components["schemas"]["WorkspaceSessionLaunchAgent"];
-export type WorkspaceSessionLaunchCatalog =
-  components["schemas"]["WorkspaceSessionLaunchCatalog"];
 export type ResolveWorkspaceFromPathRequest =
   components["schemas"]["ResolveWorkspaceFromPathRequest"];
 export type CreateWorkspaceRequest = components["schemas"]["CreateWorkspaceRequest"];

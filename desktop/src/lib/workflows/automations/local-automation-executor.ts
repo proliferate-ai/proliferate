@@ -230,8 +230,6 @@ async function createOrReuseSession(
     throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.sessionCreateFailed);
   }
 
-  await assertAgentAndModelReady(input.client, workspaceId, agentKind, input.claim.modelIdSnapshot);
-
   let session: Session;
   try {
     session = await input.client.sessions.create({
@@ -249,22 +247,6 @@ async function createOrReuseSession(
     throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.staleClaim);
   }
   return session;
-}
-
-async function assertAgentAndModelReady(
-  client: AnyHarnessClient,
-  workspaceId: string,
-  agentKind: string,
-  modelId: string | null,
-): Promise<void> {
-  const catalog = await client.workspaces.getSessionLaunchCatalog(workspaceId).catch(() => null);
-  const agent = catalog?.agents.find((candidate) => candidate.kind === agentKind);
-  if (!agent) {
-    throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.agentNotReady);
-  }
-  if (modelId && !agent.models.some((model) => model.id === modelId)) {
-    throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.agentNotReady);
-  }
 }
 
 async function applyReasoningEffort(

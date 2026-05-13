@@ -4,6 +4,7 @@ pub mod install_lock;
 pub mod installer;
 pub mod model;
 pub mod portability;
+pub mod readiness;
 pub mod reconcile;
 pub mod reconcile_execution;
 pub mod registry;

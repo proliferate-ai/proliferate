@@ -20,7 +20,6 @@ anyharness/
         core.ts
         runtime.ts
         agents.ts
-        providers.ts
         workspaces.ts
         files.ts
         sessions.ts
@@ -31,7 +30,6 @@ anyharness/
       types/
         runtime.ts
         agents.ts
-        providers.ts
         workspaces.ts
         files.ts
         sessions.ts
@@ -57,7 +55,6 @@ anyharness/
       hooks/
         runtime.ts
         agents.ts
-        providers.ts
         workspaces.ts
         sessions.ts
         git.ts

@@ -1,4 +1,8 @@
-import type { ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
+import type {
+  DesktopLaunchModelRegistry as SettingsAgentModelRegistry,
+  DesktopLaunchModelRegistryModel as SettingsAgentModel,
+  DesktopSessionDefaultControl,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 import {
   resolveEffectiveConfiguredSessionControlValue,
   listConfiguredSessionControlValues,
@@ -11,7 +15,7 @@ import type {
 } from "@/lib/domain/preferences/user/session-defaults";
 
 export type SessionDefaultControlMetadata =
-  NonNullable<ModelRegistryModel["sessionDefaultControls"]>[number];
+  DesktopSessionDefaultControl;
 export type SessionDefaultControlValueMetadata =
   SessionDefaultControlMetadata["values"][number];
 
@@ -35,8 +39,8 @@ export interface SettingsAgentDefaultRow {
   kind: string;
   displayName: string;
   isPrimary: boolean;
-  models: ModelRegistryModel[];
-  selectedModel: ModelRegistryModel;
+  models: SettingsAgentModel[];
+  selectedModel: SettingsAgentModel;
   modeOptions: ConfiguredSessionControlValue[];
   selectedMode: ConfiguredSessionControlValue | null;
   liveDefaultControls: SettingsAgentLiveDefaultControlRow[];
@@ -54,7 +58,7 @@ export function buildSettingsAgentDefaultRows({
   readyAgentKinds,
   preferences,
 }: {
-  modelRegistries: ModelRegistry[];
+  modelRegistries: SettingsAgentModelRegistry[];
   readyAgentKinds: ReadonlySet<string>;
   preferences: SettingsAgentDefaultPreferences;
 }): SettingsAgentDefaultRow[] {
@@ -112,7 +116,7 @@ export function withUpdatedDefaultLiveSessionControlValueByAgentKind(
 }
 
 function buildLiveDefaultControlsForModel(
-  model: ModelRegistryModel,
+  model: SettingsAgentModel,
   storedValues: Partial<Record<DefaultLiveSessionControlKey, string>>,
 ): SettingsAgentLiveDefaultControlRow[] {
   return (model.sessionDefaultControls ?? []).flatMap((control) => {
