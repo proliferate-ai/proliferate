@@ -248,8 +248,7 @@ def test_cloud_catalog_includes_separate_plugin_packages() -> None:
     response = catalog_service.get_cloud_mcp_catalog()
     entries_by_id = {entry.id: entry for entry in response.entries}
     packages_by_catalog_entry_id = {
-        package.catalog_entry_id: package
-        for package in response.plugin_packages
+        package.catalog_entry_id: package for package in response.plugin_packages
     }
 
     assert set(packages_by_catalog_entry_id) == set(entries_by_id)
@@ -264,23 +263,13 @@ def test_cloud_catalog_includes_separate_plugin_packages() -> None:
     ]
     assert all(skill.provenance.source_sha256 for skill in github_package.skills)
     assert all(skill.provenance.adapted_sha256 for skill in github_package.skills)
-    assert all(
-        skill.provenance.review_status == "reviewed"
-        for skill in github_package.skills
-    )
-    assert all(
-        skill.required_mcp_server_refs == ["github"]
-        for skill in github_package.skills
-    )
+    assert all(skill.provenance.review_status == "reviewed" for skill in github_package.skills)
+    assert all(skill.required_mcp_server_refs == ["github"] for skill in github_package.skills)
 
 
 def test_first_party_plugin_skill_provenance_is_reviewed_and_pinned() -> None:
     response = catalog_service.get_cloud_mcp_catalog()
-    skills = [
-        skill
-        for package in response.plugin_packages
-        for skill in package.skills
-    ]
+    skills = [skill for package in response.plugin_packages for skill in package.skills]
 
     assert skills
     for skill in skills:

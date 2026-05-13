@@ -7,11 +7,7 @@ from proliferate.server.cloud.plugins.catalog.service import plugin_packages_for
 
 
 def get_cloud_mcp_catalog() -> ConnectorCatalogResponse:
-    entries = [
-        entry
-        for entry in build_connector_catalog()
-        if catalog_entry_is_configured(entry)
-    ]
+    entries = [entry for entry in build_connector_catalog() if catalog_entry_is_configured(entry)]
     return catalog_response(
         entries,
         plugin_packages_for_catalog_entries(entries),

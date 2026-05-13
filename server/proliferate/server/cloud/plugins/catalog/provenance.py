@@ -11,7 +11,6 @@ from proliferate.server.cloud.plugins.catalog.domain.types import (
     SkillReviewStatus,
 )
 
-
 SKILL_ROOT = Path(__file__).resolve().parent / "first_party"
 
 

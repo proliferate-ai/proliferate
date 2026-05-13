@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-
 SkillImportMode = Literal["adapted", "vendored"]
 SkillReviewStatus = Literal["reviewed", "pending"]
 

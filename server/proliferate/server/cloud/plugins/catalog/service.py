@@ -15,10 +15,7 @@ _GIT_SHA_RE = re.compile(r"^[a-f0-9]{40}$")
 def plugin_packages_for_catalog_entries(
     entries: list[CatalogEntry],
 ) -> list[PluginPackage]:
-    packages = [
-        first_party_package_for_catalog_entry(entry)
-        for entry in entries
-    ]
+    packages = [first_party_package_for_catalog_entry(entry) for entry in entries]
     for package in packages:
         _validate_package_for_exposure(package)
     return packages

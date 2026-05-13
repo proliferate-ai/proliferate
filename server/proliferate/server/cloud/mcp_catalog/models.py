@@ -261,8 +261,5 @@ def catalog_response(
     return ConnectorCatalogResponse(
         catalog_version=CATALOG_VERSION,
         entries=[catalog_entry_payload(entry) for entry in entries],
-        plugin_packages=[
-            plugin_package_payload(package)
-            for package in (plugin_packages or [])
-        ],
+        plugin_packages=[plugin_package_payload(package) for package in (plugin_packages or [])],
     )
