@@ -5,7 +5,7 @@ use crate::integrations::mcp::product_server::{
     ProductMcpAuth, ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
 };
 
-const SECRET_FILE_NAME: &str = "cowork-mcp-token.key";
+pub(crate) const SECRET_FILE_NAME: &str = "cowork-mcp-token.key";
 pub const LEGACY_CAPABILITY_HEADER_NAME: &str = "x-cowork-session-token";
 
 #[derive(Clone)]

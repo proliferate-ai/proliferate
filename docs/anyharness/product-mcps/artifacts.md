@@ -110,7 +110,10 @@ Current HTTP read APIs:
 anyharness-lib/src/api/router.rs
   GET /v1/workspaces/{workspace_id}/cowork/manifest
   GET /v1/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}
+  GET/POST /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/cowork
+    fresh cowork product MCP route
   GET/POST /v1/workspaces/{workspace_id}/cowork/sessions/{session_id}/mcp
+    legacy cowork MCP compatibility alias for already-launched sessions
 
 anyharness-lib/src/api/http/cowork.rs
   get_cowork_manifest
@@ -307,7 +310,18 @@ Out of scope unless separately designed:
 
 ## Auth
 
-Current auth while artifact tools live under cowork:
+Current fresh auth while artifact tools live under the cowork product MCP:
+
+```text
+header: x-anyharness-product-mcp-token
+secret file: cowork-mcp-token.key
+ttl: 12 hours
+scope: workspace_id + session_id + product_mcp_id: cowork
+signature: hmac_sha256
+route: /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/cowork
+```
+
+Current legacy auth accepted only for already-launched cowork sessions:
 
 ```text
 header: x-cowork-session-token
@@ -315,6 +329,7 @@ secret file: cowork-mcp-token.key
 ttl: 12 hours
 scope: workspace_id + session_id
 signature: legacy sha256-dot
+route: /v1/workspaces/{workspace_id}/cowork/sessions/{session_id}/mcp
 ```
 
 Target artifact auth:
