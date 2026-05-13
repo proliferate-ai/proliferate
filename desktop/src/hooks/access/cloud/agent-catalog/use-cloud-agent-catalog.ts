@@ -6,6 +6,7 @@ import {
   projectCloudAgentCatalogToDesktopLaunchCatalog,
   type DesktopAgentLaunchCatalog,
 } from "@/lib/domain/agents/cloud-launch-catalog";
+import { getBundledDesktopAgentLaunchCatalog } from "@/lib/domain/agents/bundled-agent-catalog";
 import { cloudAgentCatalogKey } from "./query-keys";
 
 async function fetchCloudAgentCatalogProjection(): Promise<DesktopAgentLaunchCatalog> {
@@ -17,6 +18,8 @@ export function useCloudAgentCatalog(enabled = true) {
     queryKey: cloudAgentCatalogKey(),
     queryFn: fetchCloudAgentCatalogProjection,
     enabled,
+    initialData: getBundledDesktopAgentLaunchCatalog,
+    initialDataUpdatedAt: 0,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
@@ -43,6 +46,8 @@ export function useCloudAgentCatalogCache() {
       queryClient.ensureQueryData({
         queryKey: cloudAgentCatalogKey(),
         queryFn: fetchCloudAgentCatalogProjection,
+        initialData: getBundledDesktopAgentLaunchCatalog,
+        initialDataUpdatedAt: 0,
         staleTime: 5 * 60 * 1000,
       }),
   };
