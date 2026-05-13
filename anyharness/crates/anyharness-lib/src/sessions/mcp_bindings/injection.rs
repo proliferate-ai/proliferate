@@ -1,3 +1,4 @@
+use crate::domains::cowork::mcp as cowork_mcp;
 use crate::domains::reviews::mcp as reviews_mcp;
 use crate::integrations::mcp::product_server::{
     ProductMcpDefinition, PRODUCT_MCP_TOKEN_HEADER_NAME,
@@ -18,6 +19,7 @@ pub struct ProductMcpInjectionContext<'a> {
     pub review_auth: &'a reviews_mcp::auth::ReviewMcpAuth,
     pub subagent_auth: &'a subagents_mcp::auth::SubagentMcpAuth,
     pub workspace_naming_auth: &'a workspace_naming_mcp::auth::WorkspaceNamingMcpAuth,
+    pub cowork_auth: &'a cowork_mcp::auth::CoworkMcpAuth,
     pub workspace: &'a WorkspaceRecord,
     pub session: &'a SessionRecord,
 }
@@ -45,6 +47,12 @@ pub fn inject_product_mcps(
                 &workspace_naming_mcp::definition::DEFINITION,
                 &ctx,
                 ctx.workspace_naming_auth
+                    .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
+            ),
+            SelectedProductMcp::Cowork => build_http_server(
+                &cowork_mcp::definition::DEFINITION,
+                &ctx,
+                ctx.cowork_auth
                     .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
             ),
         });
@@ -165,6 +173,7 @@ mod tests {
         let subagent_auth = subagents_mcp::auth::SubagentMcpAuth::new(home.clone());
         let workspace_naming_auth =
             workspace_naming_mcp::auth::WorkspaceNamingMcpAuth::new(home.clone());
+        let cowork_auth = cowork_mcp::auth::CoworkMcpAuth::new(home.clone());
         let workspace = workspace("workspace-1");
         let session = session("session-1", &workspace.id);
 
@@ -176,6 +185,7 @@ mod tests {
                 review_auth: &review_auth,
                 subagent_auth: &subagent_auth,
                 workspace_naming_auth: &workspace_naming_auth,
+                cowork_auth: &cowork_auth,
                 workspace: &workspace,
                 session: &session,
             },

@@ -1,3 +1,4 @@
+use crate::domains::cowork::mcp as cowork_mcp;
 use crate::domains::reviews::mcp as reviews_mcp;
 use crate::sessions::extensions::SessionLaunchExtras;
 use crate::sessions::model::SessionRecord;
@@ -11,6 +12,7 @@ pub enum SelectedProductMcp {
     Reviews,
     Subagents,
     WorkspaceNaming,
+    Cowork,
 }
 
 pub struct ProductMcpSelectionContext<'a> {
@@ -48,11 +50,19 @@ pub fn select_product_mcps(
         selected.push(SelectedProductMcp::WorkspaceNaming);
     }
 
+    if should_attach_cowork_mcp(ctx.workspace) {
+        selected.push(SelectedProductMcp::Cowork);
+    }
+
     Ok(selected)
 }
 
 fn should_preload_reviews_mcp_until_live_refresh(workspace: &WorkspaceRecord) -> bool {
     workspace.surface == "standard"
+}
+
+fn should_attach_cowork_mcp(workspace: &WorkspaceRecord) -> bool {
+    workspace.surface == "cowork" && !cowork_mcp::definition::launch_disabled()
 }
 
 pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaunchExtras {
@@ -84,6 +94,14 @@ pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaun
                 extras
                     .mcp_binding_summaries
                     .push(workspace_naming_mcp::definition::binding_summary());
+            }
+            SelectedProductMcp::Cowork => {
+                extras
+                    .system_prompt_append
+                    .extend(cowork_mcp::definition::system_prompt_append());
+                extras
+                    .mcp_binding_summaries
+                    .push(cowork_mcp::definition::binding_summary());
             }
         }
     }
@@ -136,6 +154,15 @@ mod tests {
     }
 
     #[test]
+    fn cowork_mcp_attaches_to_cowork_workspaces_only() {
+        assert!(should_attach_cowork_mcp(&workspace("cowork-1", "cowork")));
+        assert!(!should_attach_cowork_mcp(&workspace(
+            "standard-1",
+            "standard"
+        )));
+    }
+
+    #[test]
     fn broad_reviews_selection_does_not_add_review_prompt_text() {
         let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Reviews]);
 
@@ -153,6 +180,18 @@ mod tests {
         assert_eq!(
             extras.mcp_binding_summaries[0].server_name,
             workspace_naming_mcp::definition::ACP_SERVER_NAME
+        );
+    }
+
+    #[test]
+    fn cowork_selection_adds_prompt_text_and_binding_summary() {
+        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Cowork]);
+
+        assert!(!extras.system_prompt_append.is_empty());
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+        assert_eq!(
+            extras.mcp_binding_summaries[0].server_name,
+            cowork_mcp::definition::ACP_SERVER_NAME
         );
     }
 }

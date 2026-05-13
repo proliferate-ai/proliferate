@@ -16,7 +16,6 @@ use super::delegation::model::{
     CreateCodingSessionInput, CreateCodingWorkspaceInput, SendCodingMessageInput,
 };
 use super::delegation::service::{CoworkDelegationError, CoworkDelegationService};
-use super::mcp_server::auth::CoworkMcpAuth;
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
 use crate::acp::manager::AcpManager;
@@ -25,14 +24,10 @@ use crate::adapters::git::GitService;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
-use crate::sessions::extensions::{
-    SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
-};
+use crate::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
 use crate::sessions::links::completions::LinkCompletionRecord;
 use crate::sessions::links::model::SessionLinkRelation;
-use crate::sessions::mcp_bindings::model::{
-    SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
-};
+use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::prompt::{PromptPayload, PromptProvenance};
 use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, SessionRuntime};
@@ -55,6 +50,24 @@ impl From<anyhow::Error> for CoworkCreateThreadError {
     fn from(value: anyhow::Error) -> Self {
         Self::Internal(value)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CoworkCanonicalThreadError {
+    #[error("workspace not found")]
+    WorkspaceNotFound,
+    #[error("session not found")]
+    SessionNotFound,
+    #[error("session does not belong to workspace")]
+    SessionWorkspaceMismatch,
+    #[error("workspace is not a cowork workspace")]
+    NotCoworkWorkspace,
+    #[error("session is not the canonical cowork session")]
+    NotCanonicalCoworkSession,
+    #[error("cowork thread does not belong to workspace")]
+    ThreadWorkspaceMismatch,
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
 }
 
 #[derive(Debug, Clone)]
@@ -133,9 +146,6 @@ fn materialize_cowork_workspace_path(mcp_servers: &mut [SessionMcpServer], works
 
 #[derive(Clone)]
 pub struct CoworkSessionHooks {
-    runtime_base_url: String,
-    runtime_bearer_token: Option<String>,
-    mcp_auth: Arc<CoworkMcpAuth>,
     delegation_service: CoworkDelegationService,
     acp_manager: AcpManager,
     session_store: SessionStore,
@@ -144,96 +154,16 @@ pub struct CoworkSessionHooks {
 
 impl CoworkSessionHooks {
     pub fn new(
-        runtime_base_url: String,
-        runtime_bearer_token: Option<String>,
-        mcp_auth: Arc<CoworkMcpAuth>,
         delegation_service: CoworkDelegationService,
         acp_manager: AcpManager,
         session_store: SessionStore,
     ) -> Self {
         Self {
-            runtime_base_url,
-            runtime_bearer_token,
-            mcp_auth,
             delegation_service,
             acp_manager,
             session_store,
             autosave_locks: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    fn cowork_launch_extras(
-        &self,
-        workspace: &WorkspaceRecord,
-        session_id: &str,
-    ) -> anyhow::Result<SessionLaunchExtras> {
-        if workspace.surface != "cowork" {
-            return Ok(SessionLaunchExtras::default());
-        }
-
-        if cowork_launch_extras_disabled() {
-            tracing::warn!(
-                workspace_id = %workspace.id,
-                session_id,
-                "[workspace-latency] cowork.runtime.launch_extras.disabled"
-            );
-            return Ok(SessionLaunchExtras::default());
-        }
-
-        let capability_token = self
-            .mcp_auth
-            .mint_capability_token(&workspace.id, session_id)?;
-        let url = format!(
-            "{}/v1/workspaces/{}/cowork/sessions/{}/mcp",
-            self.runtime_base_url, workspace.id, session_id
-        );
-
-        let mut headers = Vec::new();
-        if let Some(token) = self.runtime_bearer_token.as_ref() {
-            headers.push(SessionMcpHeader {
-                name: "authorization".to_string(),
-                value: format!("Bearer {token}"),
-            });
-        }
-        headers.push(SessionMcpHeader {
-            name: self.mcp_auth.capability_header_name().to_string(),
-            value: capability_token,
-        });
-
-        tracing::info!(
-            workspace_id = %workspace.id,
-            session_id,
-            mcp_server_count = 1,
-            system_prompt_append_count = cowork_artifact_system_prompt_append().len(),
-            "[workspace-latency] cowork.runtime.launch_extras.resolved"
-        );
-
-        Ok(SessionLaunchExtras {
-            system_prompt_append: cowork_artifact_system_prompt_append(),
-            first_prompt_system_prompt_append: Vec::new(),
-            mcp_servers: vec![SessionMcpServer::Http(SessionMcpHttpServer {
-                connection_id: "cowork".to_string(),
-                catalog_entry_id: None,
-                server_name: "cowork".to_string(),
-                url,
-                headers,
-            })],
-            mcp_binding_summaries: Vec::new(),
-        })
-    }
-
-    pub fn validate_capability_token(
-        &self,
-        token: &str,
-        workspace_id: &str,
-        session_id: &str,
-    ) -> anyhow::Result<bool> {
-        self.mcp_auth
-            .validate_capability_token(token, workspace_id, session_id)
-    }
-
-    pub fn capability_header_name(&self) -> &'static str {
-        self.mcp_auth.capability_header_name()
     }
 
     fn notify_turn_finished(&self, workspace: &WorkspaceRecord, session_id: &str) {
@@ -274,13 +204,6 @@ impl CoworkSessionHooks {
 }
 
 impl SessionExtension for CoworkSessionHooks {
-    fn resolve_launch_extras(
-        &self,
-        ctx: &SessionLaunchContext<'_>,
-    ) -> anyhow::Result<SessionLaunchExtras> {
-        self.cowork_launch_extras(ctx.workspace, &ctx.session.id)
-    }
-
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
         self.notify_turn_finished(&ctx.workspace, &ctx.session_id);
         let service = self.delegation_service.clone();
@@ -757,27 +680,28 @@ impl CoworkRuntime {
         &self,
         workspace_id: &str,
         session_id: &str,
-    ) -> anyhow::Result<(CoworkThreadRecord, WorkspaceRecord, SessionRecord)> {
+    ) -> Result<(CoworkThreadRecord, WorkspaceRecord, SessionRecord), CoworkCanonicalThreadError>
+    {
         let workspace = self
             .workspace_runtime
             .get_workspace(workspace_id)?
-            .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
+            .ok_or(CoworkCanonicalThreadError::WorkspaceNotFound)?;
         let session = self
             .session_service
             .get_session(session_id)?
-            .ok_or_else(|| anyhow::anyhow!("session not found"))?;
+            .ok_or(CoworkCanonicalThreadError::SessionNotFound)?;
         if session.workspace_id != workspace_id {
-            anyhow::bail!("session does not belong to workspace");
+            return Err(CoworkCanonicalThreadError::SessionWorkspaceMismatch);
         }
         if workspace.surface != "cowork" {
-            anyhow::bail!("workspace is not a cowork workspace");
+            return Err(CoworkCanonicalThreadError::NotCoworkWorkspace);
         }
         let thread = self
             .cowork_service
             .find_thread_by_session(session_id)?
-            .ok_or_else(|| anyhow::anyhow!("session is not the canonical cowork session"))?;
+            .ok_or(CoworkCanonicalThreadError::NotCanonicalCoworkSession)?;
         if thread.workspace_id != workspace_id {
-            anyhow::bail!("cowork thread does not belong to workspace");
+            return Err(CoworkCanonicalThreadError::ThreadWorkspaceMismatch);
         }
         Ok((thread, workspace, session))
     }
@@ -1306,33 +1230,6 @@ impl CoworkRuntime {
             );
         }
     }
-}
-
-fn cowork_launch_extras_disabled() -> bool {
-    std::env::var("ANYHARNESS_DISABLE_COWORK_LAUNCH_EXTRAS")
-        .ok()
-        .is_some_and(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
-}
-
-fn cowork_artifact_system_prompt_append() -> Vec<String> {
-    vec![
-        "You are operating in Proliferate Cowork mode.".to_string(),
-        "This session belongs to a managed cowork thread workspace.".to_string(),
-        "Continue work in this thread unless the user explicitly asks to start a new thread."
-            .to_string(),
-        "Use create_artifact, update_artifact, and delete_artifact for user-visible artifacts."
-            .to_string(),
-        "Never edit .proliferate/artifacts.json directly.".to_string(),
-        "Do not use generic file writes on artifact-backed paths.".to_string(),
-        "Use normal file tools only for supporting non-artifact files.".to_string(),
-        "JSX artifacts must default-export a React component with no required props.".to_string(),
-        "JSX artifacts may only import allowlisted libraries.".to_string(),
-    ]
 }
 
 fn normalize_required_prompt(value: String) -> Result<String, CoworkDelegationError> {

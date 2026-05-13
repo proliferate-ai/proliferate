@@ -106,7 +106,7 @@ Expected shape:
   store/          # product-specific queries
   service/        # durable product rules
   runtime/        # only if it coordinates cross-domain or live work
-  mcp_server/     # when the product exposes MCP tools
+  mcp/            # when the product exposes MCP tools
   session_extension.rs  # when the product plugs into session launch/prompt
 ```
 

@@ -7,8 +7,7 @@ Status: authoritative target definition for the Workspace Naming product MCP.
 ```text
 id: workspace_naming
 owner domain: domains/sessions/workspace_naming
-target implementation: domains/sessions/workspace_naming/mcp/**
-current implementation: sessions/workspace_naming/mcp_server/**
+implementation: sessions/workspace_naming/mcp/**
 visibility: internal
 route slug: workspace_naming
 server name: proliferate-workspace-naming
@@ -153,4 +152,3 @@ Done when:
 - prompt-sensitive instructions live in injection/definition, not actor code.
 - `calls.rs` delegates to workspace runtime/access gate and naming policy.
 - shared JSON-RPC dispatch lives in `integrations/mcp/product_server`.
-

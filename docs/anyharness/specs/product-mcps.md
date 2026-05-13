@@ -49,6 +49,7 @@ Current internal product MCPs:
 domains/sessions/subagents/mcp
 domains/reviews/mcp
 domains/sessions/workspace_naming/mcp
+domains/cowork/mcp
 ```
 
 Likely future user-selectable product MCPs:
@@ -122,8 +123,8 @@ domains/computer_use/mcp/
 domains/browser/mcp/
 ```
 
-Current transitional paths may still use `mcp_server/`; target naming is
-`mcp/`.
+Legacy migration notes may mention old `mcp_server/` paths. New product MCP
+code uses `mcp/`.
 
 ## Shared Protocol Kit
 

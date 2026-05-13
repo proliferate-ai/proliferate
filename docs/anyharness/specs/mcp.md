@@ -77,10 +77,10 @@ Examples:
 Current implementation shape:
 
 ```text
-domains/cowork/mcp_server/
-domains/reviews/mcp_server/
-sessions/subagents/mcp_server/
-sessions/workspace_naming/mcp_server/
+domains/cowork/mcp/
+domains/reviews/mcp/
+sessions/subagents/mcp/
+sessions/workspace_naming/mcp/
 ```
 
 Product tool behavior stays with the product domain.
@@ -190,28 +190,32 @@ MCP servers to inject.
 
 Every product MCP feature should follow the same two-part pattern.
 
-First, a session extension contributes launch extras:
+First, the session MCP binding layer contributes launch extras:
 
 ```text
-domains/<feature>/session_extension.rs
-  -> returns internal MCP server config
-  -> returns binding summaries
-  -> returns any system prompt additions
+domains/sessions/mcp_bindings/selection.rs
+  -> decides which product MCPs attach to a launched session
+  -> returns binding summaries and any product prompt additions
+
+domains/sessions/mcp_bindings/injection.rs
+  -> builds concrete HTTP MCP server configs
+  -> mints product capability tokens
 ```
 
 Second, the product MCP server implements the tools:
 
 ```text
-domains/<feature>/mcp_server/
-  protocol.rs    # feature tool args and tool list
-  server.rs      # initialize/tools/list/tools/call dispatch
-  tools.rs       # product tool handlers
-  auth.rs        # thin feature auth wrapper around integrations/mcp
+domains/<feature>/mcp/
+  definition.rs  # stable id, route slug, ACP server name, prompt text
+  auth.rs        # thin feature auth wrapper around integrations/mcp/product_server
+  context.rs     # request/session context resolution
+  tools.rs       # feature tool args and tool list
+  calls.rs       # product tool handlers
 ```
 
-Session extension code is about making tools available to an agent. MCP server
-code is about handling tool calls after the agent invokes them. Keep those
-separate.
+Session MCP binding code is about making tools available to an agent. Product
+MCP server code is about handling tool calls after the agent invokes them. Keep
+those separate.
 
 Each product extension typically creates an HTTP MCP server:
 
@@ -219,7 +223,7 @@ Each product extension typically creates an HTTP MCP server:
 url: /v1/workspaces/{workspace_id}/.../{session_id}/mcp
 headers:
   authorization: Bearer <runtime token>       # when runtime auth is enabled
-  x-<feature>-session-token: <capability token>
+  x-anyharness-product-mcp-token: <capability token>
 ```
 
 ## Current Endpoint Flow
@@ -231,14 +235,14 @@ GET  -> 204 No Content
 POST -> validate capability header
         optionally acquire workspace operation lease
         optionally assert workspace mutable
-        call product handle_json_rpc(...)
+        dispatch through integrations/mcp/product_server
         return JSON-RPC response or no-content response
 ```
 
 Target shared owner for transport scaffolding:
 
 ```text
-api/http/mcp_endpoint.rs
+api/http/product_mcp.rs
 ```
 
 Target shared owner for protocol/auth helpers:
@@ -279,8 +283,8 @@ Those stay in the owning domain.
 ## Dependency Rule
 
 ```text
-domains/<feature>/mcp_server -> integrations/mcp
-api/http/*_mcp_endpoint -> domains/<feature>/mcp_server
+domains/<feature>/mcp -> integrations/mcp/product_server
+api/http/product_mcp -> sessions/mcp_bindings/product_registry
 integrations/mcp -> no product domains
 ```
 

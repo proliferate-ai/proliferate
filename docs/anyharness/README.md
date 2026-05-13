@@ -165,7 +165,7 @@ MCP crosses layers. Do not put all MCP code in one folder.
 domains/sessions/mcp_bindings
   durable user-attached MCP server config and summaries
 
-domains/<feature>/mcp_server
+domains/<feature>/mcp
   product MCP tool behavior
 
 integrations/mcp

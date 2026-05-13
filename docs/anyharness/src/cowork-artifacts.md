@@ -70,7 +70,7 @@ Keep ownership split the same way the rest of the runtime is split:
 - `domains/cowork/artifacts.rs`
   - artifact lifecycle operations
   - create, update, delete, read, list
-- `domains/cowork/mcp.rs`
+- `domains/cowork/mcp/**`
   - built-in cowork MCP server implementation
   - tool registry and dispatch
 - `api/http/cowork.rs`
