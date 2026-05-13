@@ -3,11 +3,14 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import {
+  getAuthoritativeConfigValue,
+} from "@/lib/domain/sessions/pending-config";
+import {
   patchPromptOutboxEntry,
   removePromptOutboxEntry,
   type PromptOutboxStateShape,
-} from "@/lib/domain/chat/outbox/prompt-outbox-state";
-import { isRenderableUserMessageEcho } from "@/lib/domain/chat/outbox/prompt-echo";
+} from "@/lib/domain/sessions/intents/session-intent-state";
+import { isRenderableUserMessageEcho } from "@/lib/domain/sessions/intents/prompt-echo";
 
 export function reconcileOutboxFromEnvelopes(
   state: PromptOutboxStateShape,
@@ -69,6 +72,40 @@ export function reconcileOutboxFromEnvelopes(
           errorMessage: null,
         });
       }
+      continue;
+    }
+    if (event.type === "config_option_update") {
+      for (const intent of Object.values(nextState.entriesById)) {
+        if (
+          intent.kind === "update_config"
+          && intent.clientSessionId === clientSessionId
+          && (intent.status === "accepted" || intent.status === "dispatching" || intent.status === "queued")
+          && getAuthoritativeConfigValue(event.liveConfig, intent.configId) === intent.value
+        ) {
+          nextState = patchPromptOutboxEntry(nextState, intent.intentId, {
+            status: "reconciled",
+            reconciledAt: envelope.timestamp,
+            errorMessage: null,
+          });
+        }
+      }
+      continue;
+    }
+    if (event.type === "interaction_resolved") {
+      for (const intent of Object.values(nextState.entriesById)) {
+        if (
+          intent.kind === "resolve_interaction"
+          && intent.clientSessionId === clientSessionId
+          && intent.requestId === event.requestId
+          && (intent.status === "accepted" || intent.status === "dispatching" || intent.status === "queued")
+        ) {
+          nextState = patchPromptOutboxEntry(nextState, intent.intentId, {
+            status: "reconciled",
+            reconciledAt: envelope.timestamp,
+            errorMessage: null,
+          });
+        }
+      }
     }
   }
   return nextState;
@@ -80,7 +117,11 @@ export function pruneEchoedOutboxTombstones(
   ttlMs = 5_000,
 ): PromptOutboxStateShape {
   let nextState = state;
-  for (const entry of Object.values(state.entriesByPromptId)) {
+  for (const intent of Object.values(state.entriesById)) {
+    if (intent.kind !== "send_prompt") {
+      continue;
+    }
+    const entry = intent;
     if (entry.deliveryState !== "echoed_tombstone" || !entry.echoedAt) {
       continue;
     }
@@ -100,7 +141,11 @@ export function pruneEchoedOutboxTombstonesForTranscript(
 ): PromptOutboxStateShape {
   const inProgressPromptIds = collectInProgressTurnPromptIds(transcript);
   let nextState = state;
-  for (const entry of Object.values(state.entriesByPromptId)) {
+  for (const intent of Object.values(state.entriesById)) {
+    if (intent.kind !== "send_prompt") {
+      continue;
+    }
+    const entry = intent;
     if (
       entry.deliveryState !== "echoed_tombstone"
       || !entry.echoedAt

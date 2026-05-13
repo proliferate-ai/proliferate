@@ -48,7 +48,12 @@ import {
   SessionModelAvailabilityCancelledError,
   SessionModelAvailabilityRoutedToSettingsError,
 } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
-import { reconcilePendingConfigChanges } from "@/lib/domain/sessions/pending-config";
+import {
+  pendingConfigChangesForSessionIntents,
+} from "@/lib/domain/sessions/intents/session-intent-selectors";
+import {
+  sessionIntentsForSession,
+} from "@/lib/domain/sessions/intents/session-intent-state";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import {
   createPendingSessionId,
@@ -97,7 +102,7 @@ import { reportConnectorLaunchWarnings } from "@/hooks/sessions/workflows/sessio
 import {
   inFlightSessionCreatesByWorkspace,
 } from "@/hooks/sessions/workflows/session-creation-in-flight";
-import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -116,6 +121,7 @@ interface CreateSessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preferExistingCompatibleSession?: boolean;
+  preserveProjectedSessionOnCreateFailure?: boolean;
   modelAvailabilityRetryCount?: number;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
@@ -130,6 +136,7 @@ interface CreateEmptySessionWithResolvedConfigOptions {
   latencyFlowId?: string | null;
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
+  preserveProjectedSessionOnCreateFailure?: boolean;
 }
 
 const sessionStreamPruningDeps: SessionStreamPruningDeps = {
@@ -311,8 +318,9 @@ export function useSessionCreationActions() {
         materializedSessionId: null,
         modelId: options.modelId,
         modeId: resolvedModeId ?? null,
+        title: existingProjectedRecord?.title ?? null,
         optimisticPrompt: null,
-        pendingConfigChanges: existingProjectedRecord?.pendingConfigChanges ?? {},
+        pendingConfigChanges: {},
         sessionRelationship: { kind: "root" },
       }),
       status: "starting",
@@ -419,10 +427,11 @@ export function useSessionCreationActions() {
             workspaceId,
             fallbackModelId: options.modelId,
             fallbackModeId: resolvedModeId ?? null,
-            pendingConfigChanges: getSessionRecord(pendingSessionId)?.pendingConfigChanges ?? {},
+            fallbackTitle: existingProjectedRecord?.title ?? null,
+            pendingConfigChanges: {},
           });
           materializeSessionRecord(pendingSessionId, existingSession.id, realRecord);
-          usePromptOutboxStore.getState().bindMaterializedSession(
+          useSessionIntentStore.getState().bindMaterializedSession(
             pendingSessionId,
             existingSession.id,
           );
@@ -614,27 +623,20 @@ export function useSessionCreationActions() {
       const launchedLiveConfig = launchDefaults.liveConfig
         ?? launchedSession.liveConfig
         ?? null;
-      const latestPendingConfigChanges =
-        getSessionRecord(pendingSessionId)?.pendingConfigChanges ?? {};
-      const pendingConfigReconcile = reconcilePendingConfigChanges(
-        launchedLiveConfig,
-        latestPendingConfigChanges,
-      );
-
       const realRecord: SessionRuntimeRecord = {
         ...createEmptySessionRecord(pendingSessionId, options.agentKind, {
           workspaceId,
           materializedSessionId: launchedSession.id,
           modelId: launchedSession.modelId ?? options.modelId,
           modeId: launchedSession.modeId ?? resolvedModeId ?? null,
-          title: launchedSession.title ?? null,
+          title: launchedSession.title ?? existingProjectedRecord?.title ?? null,
           actionCapabilities: launchedSession.actionCapabilities,
           liveConfig: launchedLiveConfig,
           executionSummary: launchedSession.executionSummary ?? null,
           mcpBindingSummaries: launchedSession.mcpBindingSummaries ?? null,
           lastPromptAt: launchedSession.lastPromptAt ?? null,
           optimisticPrompt: null,
-          pendingConfigChanges: pendingConfigReconcile.pendingConfigChanges,
+          pendingConfigChanges: {},
           sessionRelationship: { kind: "root" },
         }),
         status: resolveStatusFromExecutionSummary(
@@ -645,7 +647,7 @@ export function useSessionCreationActions() {
       };
 
       materializeSessionRecord(pendingSessionId, launchedSession.id, realRecord);
-      usePromptOutboxStore.getState().bindMaterializedSession(
+      useSessionIntentStore.getState().bindMaterializedSession(
         pendingSessionId,
         launchedSession.id,
       );
@@ -717,8 +719,21 @@ export function useSessionCreationActions() {
         });
         return;
       }
+      if (options.preserveProjectedSessionOnCreateFailure) {
+        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
+        if (options.launchIntentId) {
+          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
+        }
+        captureTelemetryException(error, {
+          tags: {
+            action: "create_projected_session_materialization",
+            domain: "sessions",
+          },
+        });
+        return;
+      }
       const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
-      usePromptOutboxStore.getState().clearSession(pendingSessionId);
+      useSessionIntentStore.getState().clearSession(pendingSessionId);
       removeSessionRecordAndClearSelection(pendingSessionId);
       const rolledBackShellIntent = rollbackOwnedShellIntent();
       if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
@@ -789,6 +804,7 @@ export function useSessionCreationActions() {
       latencyFlowId: options.latencyFlowId,
       clientSessionId: options.clientSessionId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
+      preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
     });
   }, [createSessionWithResolvedConfig]);
 
@@ -799,7 +815,9 @@ export function useSessionCreationActions() {
 }
 
 function pendingConfigValuesForSession(sessionId: string): Record<string, string> {
-  const pendingConfigChanges = getSessionRecord(sessionId)?.pendingConfigChanges ?? {};
+  const pendingConfigChanges = pendingConfigChangesForSessionIntents(
+    sessionIntentsForSession(useSessionIntentStore.getState(), sessionId),
+  );
   return Object.fromEntries(
     Object.values(pendingConfigChanges)
       .map((change) => [change.rawConfigId, change.value] as const),
@@ -812,6 +830,7 @@ function materializedRecordFromExistingSession({
   workspaceId,
   fallbackModelId,
   fallbackModeId,
+  fallbackTitle,
   pendingConfigChanges,
 }: {
   clientSessionId: string;
@@ -819,6 +838,7 @@ function materializedRecordFromExistingSession({
   workspaceId: string;
   fallbackModelId: string;
   fallbackModeId: string | null;
+  fallbackTitle: string | null;
   pendingConfigChanges: SessionRuntimeRecord["pendingConfigChanges"];
 }): SessionRuntimeRecord {
   return {
@@ -827,7 +847,7 @@ function materializedRecordFromExistingSession({
       materializedSessionId: session.id,
       modelId: session.modelId ?? fallbackModelId,
       modeId: session.modeId ?? fallbackModeId,
-      title: session.title ?? null,
+      title: session.title ?? fallbackTitle,
       actionCapabilities: session.actionCapabilities,
       liveConfig: session.liveConfig ?? null,
       executionSummary: session.executionSummary ?? null,
@@ -855,8 +875,12 @@ function markProjectedSessionPromptCreateFailed(
   const message = error instanceof Error && error.message.trim()
     ? error.message
     : "Session creation failed.";
-  const store = usePromptOutboxStore.getState();
-  for (const entry of Object.values(store.entriesByPromptId)) {
+  const store = useSessionIntentStore.getState();
+  for (const intent of Object.values(store.entriesById)) {
+    if (intent.kind !== "send_prompt") {
+      continue;
+    }
+    const entry = intent;
     if (
       entry.clientSessionId !== clientSessionId
       || entry.deliveryState === "cancelled"
@@ -864,7 +888,7 @@ function markProjectedSessionPromptCreateFailed(
     ) {
       continue;
     }
-    store.patchEntry(entry.clientPromptId, {
+    store.patchIntent(entry.intentId, {
       deliveryState: "failed_before_dispatch",
       errorMessage: message,
     });

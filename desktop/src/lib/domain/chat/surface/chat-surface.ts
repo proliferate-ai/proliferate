@@ -108,6 +108,12 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
     return { kind: "no-workspace" };
   }
 
+  if (input.hasPendingWorkspaceEntry && scopedActiveSessionId) {
+    return scopedHasContent
+      ? { kind: "session-transcript", sessionId: scopedActiveSessionId }
+      : { kind: "session-empty", sessionId: scopedActiveSessionId };
+  }
+
   const launchIntentOverride = resolveLaunchIntentSurfaceOverride({
     activeLaunchIntentId: input.activeLaunchIntentId,
     launchIntentSessionId: input.launchIntentSessionId,

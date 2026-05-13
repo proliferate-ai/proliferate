@@ -41,11 +41,21 @@ export function clearHiddenChatSessionIds(
 
 export function resolveVisibleChatSessionIds(args: {
   liveSessions: ChatVisibilityCandidate[];
+  includeUnresolvedPersistedIds?: boolean;
   persistedVisibleIds?: string[];
   recentlyHiddenIds?: string[];
   activeSessionId?: string | null;
 }): VisibleChatSessionResolution {
-  const liveIds = args.liveSessions.map((session) => session.sessionId);
+  const unresolvedPersistedIds = args.includeUnresolvedPersistedIds
+    ? uniqueIds([
+      ...(args.persistedVisibleIds ?? []),
+      args.activeSessionId ?? "",
+    ]).filter(Boolean)
+    : [];
+  const liveIds = uniqueIds([
+    ...args.liveSessions.map((session) => session.sessionId),
+    ...unresolvedPersistedIds,
+  ]);
   const liveSet = new Set(liveIds);
   const childToParent = new Map(
     args.liveSessions

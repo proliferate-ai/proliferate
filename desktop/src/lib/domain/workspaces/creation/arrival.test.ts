@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
 import {
+  buildPendingWorkspaceArrivalViewModel,
   buildWorkspaceArrivalEvent,
   buildWorkspaceArrivalViewModel,
 } from "@/lib/domain/workspaces/creation/arrival";
+import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -49,5 +51,59 @@ describe("workspace arrival view model", () => {
     });
 
     expect(view.badgeLabel).toBe("New worktree");
+  });
+
+  it("keeps generated worktree names stable after materialization", () => {
+    const view = buildWorkspaceArrivalViewModel({
+      event: buildWorkspaceArrivalEvent({
+        workspaceId: "workspace-1",
+        source: "worktree-created",
+        baseBranchName: "main",
+      }),
+      workspace: makeWorkspace({
+        path: "/Users/pablo/.proliferate/worktrees/landing/gulch",
+        currentBranch: "gulch",
+        displayName: undefined,
+      }),
+      configuredSetupScript: "",
+    });
+
+    expect(view.title).toBe("gulch");
+    expect(view.workspaceName).toBe("gulch");
+    if (view.kind === "worktree") {
+      expect(view.branchName).toBe("gulch");
+    }
+  });
+
+  it("projects pending worktrees with the final arrival copy before materialization", () => {
+    const view = buildPendingWorkspaceArrivalViewModel({
+      entry: buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "worktree-created",
+        displayName: "landing",
+        repoLabel: "proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "worktree",
+          input: {
+            repoRootId: "repo-root-1",
+            workspaceName: "landing",
+            branchName: "pablo/landing",
+            baseBranch: "main",
+            targetPath: "/Users/pablo/.proliferate/worktrees/proliferate/landing",
+          },
+        },
+      }),
+      configuredSetupScript: "",
+    });
+
+    expect(view).toMatchObject({
+      badgeLabel: "New worktree",
+      title: "landing",
+      subtitle: "Created in proliferate from main",
+      setupStatusLabel: "Optional",
+      setupSummary: "No setup script configured yet",
+    });
   });
 });

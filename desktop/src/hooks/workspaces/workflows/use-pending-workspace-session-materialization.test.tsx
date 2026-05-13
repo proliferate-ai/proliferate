@@ -76,6 +76,7 @@ describe("usePendingWorkspaceSessionMaterialization", () => {
       modelId: "gpt-5.5",
       modeId: "full-access",
       reuseInFlightEmptySession: false,
+      preserveProjectedSessionOnCreateFailure: true,
     });
   });
 });

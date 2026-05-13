@@ -62,6 +62,9 @@ Specs:
 - [specs/chat-composer.md](specs/chat-composer.md) for the chat composer area.
 - [specs/chat-transcript.md](specs/chat-transcript.md) for transcript
   streaming, replay, row models, or long-history rendering.
+- [specs/pending-workspace-shell.md](specs/pending-workspace-shell.md) for
+  pending workspace entry, projected session shell, optimistic prompts, and
+  workspace/session materialization handoff.
 - [specs/workspace-files.md](specs/workspace-files.md) for workspace file
   browsing, file viewing, diff viewing, Changes, or all-changes review.
 

@@ -56,7 +56,7 @@ export function usePendingWorkspaceSessionMaterialization() {
     }
 
     for (const session of projectedSessions) {
-      // The prompt outbox remains the user-visible owner while this background
+      // Session intents remain the user-visible owner while this background
       // create binds the projected client session to a real runtime session.
       void createEmptySessionWithResolvedConfig({
         clientSessionId: session.sessionId,
@@ -65,6 +65,7 @@ export function usePendingWorkspaceSessionMaterialization() {
         modelId: session.modelId ?? session.agentKind,
         modeId: session.modeId ?? undefined,
         reuseInFlightEmptySession: false,
+        preserveProjectedSessionOnCreateFailure: true,
       }).then((clientSessionId) => {
         logLatency(`${eventPrefix}.projected_session_create_completed`, {
           attemptId: entry.attemptId,

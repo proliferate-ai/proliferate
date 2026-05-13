@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
@@ -31,7 +30,9 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
+import type { PendingWorkspaceInitialSession } from "@/lib/domain/workspaces/creation/pending-entry";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 
 interface HomeNextLaunchInput {
   text: string;
@@ -50,12 +51,6 @@ function modeOptions(modeId: string | null): { modeId?: string } {
 
 function newLaunchId(): string {
   return crypto.randomUUID();
-}
-
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    scheduleAfterNextPaint(resolve);
-  });
 }
 
 function markLaunchIntentMaterializedFromPendingWorkspace(intentId: string): void {
@@ -94,6 +89,64 @@ function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
   )
     ? "manual_after_workspace"
     : "safe";
+}
+
+function resolveProjectedPendingWorkspaceSession(): {
+  sessionId: string;
+  workspaceId: string;
+} | null {
+  const selection = useSessionSelectionStore.getState();
+  const entry = selection.pendingWorkspaceEntry;
+  const activeSessionId = selection.activeSessionId;
+  if (!entry || !activeSessionId) {
+    return null;
+  }
+
+  const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
+  const record = getSessionRecord(activeSessionId);
+  if (record?.workspaceId !== pendingWorkspaceUiKey) {
+    return null;
+  }
+
+  return {
+    sessionId: activeSessionId,
+    workspaceId: pendingWorkspaceUiKey,
+  };
+}
+
+function waitForProjectedPendingWorkspaceSession(
+  stopWhen: Promise<unknown>,
+): Promise<{
+  sessionId: string;
+  workspaceId: string;
+} | null> {
+  const existing = resolveProjectedPendingWorkspaceSession();
+  if (existing) {
+    return Promise.resolve(existing);
+  }
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let unsubscribe: () => void = () => {};
+    const finish = (projected: ReturnType<typeof resolveProjectedPendingWorkspaceSession>) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      unsubscribe();
+      resolve(projected);
+    };
+    unsubscribe = useSessionSelectionStore.subscribe(() => {
+      const projected = resolveProjectedPendingWorkspaceSession();
+      if (projected) {
+        finish(projected);
+      }
+    });
+    void stopWhen.then(
+      () => finish(resolveProjectedPendingWorkspaceSession()),
+      () => finish(resolveProjectedPendingWorkspaceSession()),
+    );
+  });
 }
 
 // Owns the Home Next submit action. Does not own read-only selection state or deferred launch replay.
@@ -139,6 +192,84 @@ export function useHomeNextLaunch() {
     });
   }, [createSessionWithResolvedConfig]);
 
+  const promptProjectedOrCreateFreshSession = useCallback(async (input: {
+    workspaceId: string;
+    projectedSessionId: string | null | undefined;
+    modelSelection: HomeNextModelSelection;
+    modeId: string | null;
+    text: string;
+    promptId: string;
+    launchIntentId: string;
+    allowFreshFallback?: boolean;
+  }) => {
+    if (input.projectedSessionId) {
+      markLaunchIntentMaterialized(input.launchIntentId, {
+        clientSessionId: input.projectedSessionId,
+        workspaceId: input.workspaceId,
+      });
+      await promptSession({
+        sessionId: input.projectedSessionId,
+        text: input.text,
+        workspaceId: input.workspaceId,
+        promptId: input.promptId,
+        onBeforeOptimisticPrompt: () => {
+          markLaunchIntentSendAttempted(input.launchIntentId);
+        },
+      });
+      return;
+    }
+
+    if (input.allowFreshFallback === false) {
+      throw new Error("Projected session shell was not created.");
+    }
+
+    await createFreshSession({
+      workspaceId: input.workspaceId,
+      modelSelection: input.modelSelection,
+      modeId: input.modeId,
+      text: input.text,
+      promptId: input.promptId,
+      launchIntentId: input.launchIntentId,
+    });
+  }, [
+    createFreshSession,
+    markLaunchIntentMaterialized,
+    markLaunchIntentSendAttempted,
+    promptSession,
+  ]);
+
+  const promptProjectedPendingWorkspaceSession = useCallback(async (input: {
+    text: string;
+    promptId: string;
+    launchIntentId: string;
+    waitUntil?: Promise<unknown>;
+  }): Promise<string | null> => {
+    const projected = input.waitUntil
+      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil)
+      : resolveProjectedPendingWorkspaceSession();
+    if (!projected) {
+      return null;
+    }
+
+    markLaunchIntentMaterialized(input.launchIntentId, {
+      clientSessionId: projected.sessionId,
+    });
+    await promptSession({
+      sessionId: projected.sessionId,
+      text: input.text,
+      workspaceId: projected.workspaceId,
+      promptId: input.promptId,
+      onBeforeOptimisticPrompt: () => {
+        markLaunchIntentSendAttempted(input.launchIntentId);
+      },
+    });
+    return projected.sessionId;
+  }, [
+    markLaunchIntentMaterialized,
+    markLaunchIntentSendAttempted,
+    promptSession,
+  ]);
+
   const launch = useCallback(async ({
     text,
     modelSelection,
@@ -154,38 +285,42 @@ export function useHomeNextLaunch() {
     setIsLaunching(true);
     const launchIntentId = newLaunchId();
     const promptId = newLaunchId();
-    flushSync(() => {
-      beginLaunchIntent({
-        id: launchIntentId,
-        catalogSnapshotId: null,
-        agentKind: modelSelection.kind,
-        modelId: modelSelection.modelId,
-        modeId,
-        launchControlValues: modeId ? { mode: modeId } : {},
-        promptId,
-        queuedPromptBlocks: [{ type: "text", text: prompt }],
-        optimisticContentParts: [{ type: "text", text: prompt }],
+    const initialSession: PendingWorkspaceInitialSession = {
+      kind: "session",
+      agentKind: modelSelection.kind,
+      modelId: modelSelection.modelId,
+      modeId,
+      displayTitle: modelSelection.modelId,
+    };
+    beginLaunchIntent({
+      id: launchIntentId,
+      catalogSnapshotId: null,
+      agentKind: modelSelection.kind,
+      modelId: modelSelection.modelId,
+      modeId,
+      launchControlValues: modeId ? { mode: modeId } : {},
+      promptId,
+      queuedPromptBlocks: [{ type: "text", text: prompt }],
+      optimisticContentParts: [{ type: "text", text: prompt }],
+      text: prompt,
+      contentParts: [{ type: "text", text: prompt }],
+      targetKind: target.kind,
+      retryInput: {
         text: prompt,
-        contentParts: [{ type: "text", text: prompt }],
-        targetKind: target.kind,
-        retryInput: {
-          text: prompt,
-          modelSelection,
-          modeId,
-          target,
-        },
-        materializedWorkspaceId: null,
-        materializedSessionId: null,
-        createdAt: Date.now(),
-        sendAttemptedAt: null,
-        failure: null,
-      });
-      navigate("/");
+        modelSelection,
+        modeId,
+        target,
+      },
+      materializedWorkspaceId: null,
+      materializedSessionId: null,
+      createdAt: Date.now(),
+      sendAttemptedAt: null,
+      failure: null,
     });
-    await waitForNextPaint();
 
     try {
       if (target.kind === "cowork") {
+        navigate("/");
         const result = await createThreadFromSelection({
           agentKind: modelSelection.kind,
           modelId: modelSelection.modelId,
@@ -215,48 +350,99 @@ export function useHomeNextLaunch() {
       }
 
       if (target.kind === "local") {
-        const workspaceId = target.existingWorkspaceId
-          ? target.existingWorkspaceId
-          : (await createLocalWorkspaceAndEnterWithResult(target.sourceRoot, {
+        const createdWorkspacePromise = target.existingWorkspaceId
+          ? null
+          : createLocalWorkspaceAndEnterWithResult(target.sourceRoot, {
             repoGroupKeyToExpand: target.sourceRoot,
-          })).workspaceId;
+            initialSession,
+          });
+        const queuedProjectedSessionId = createdWorkspacePromise
+          ? await promptProjectedPendingWorkspaceSession({
+            text: prompt,
+            promptId,
+            launchIntentId,
+            waitUntil: createdWorkspacePromise,
+          })
+          : null;
+        if (queuedProjectedSessionId) {
+          navigate("/");
+        }
+        const createdWorkspace = createdWorkspacePromise
+          ? await createdWorkspacePromise
+          : null;
+        const workspaceId = target.existingWorkspaceId ?? createdWorkspace?.workspaceId;
+        if (!workspaceId) {
+          throw new Error("Workspace creation was interrupted.");
+        }
+        if (!queuedProjectedSessionId) {
+          navigate("/");
+        }
+        const projectedSessionId =
+          queuedProjectedSessionId ?? createdWorkspace?.projectedSessionId ?? null;
         if (!target.existingWorkspaceId) {
           markLaunchIntentMaterialized(launchIntentId, {
             workspaceId,
+            clientSessionId: projectedSessionId,
           });
         }
         if (target.existingWorkspaceId) {
           await selectWorkspace(workspaceId, { force: true });
         }
-        await createFreshSession({
-          workspaceId,
-          modelSelection,
-          modeId,
-          text: prompt,
-          promptId,
-          launchIntentId,
-        });
+        if (!queuedProjectedSessionId) {
+          await promptProjectedOrCreateFreshSession({
+            workspaceId,
+            projectedSessionId,
+            modelSelection,
+            modeId,
+            text: prompt,
+            promptId,
+            launchIntentId,
+            allowFreshFallback: target.existingWorkspaceId !== null,
+          });
+        }
         clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
 
       if (target.kind === "worktree") {
-        const { workspaceId } = await createWorktreeAndEnterWithResult({
+        const createdWorkspacePromise = createWorktreeAndEnterWithResult({
           repoRootId: target.repoRootId,
           sourceWorkspaceId: target.sourceWorkspaceId,
           baseBranch: target.baseBranch,
+        }, {
+          initialSession,
         });
-        markLaunchIntentMaterialized(launchIntentId, {
-          workspaceId,
-        });
-        await createFreshSession({
-          workspaceId,
-          modelSelection,
-          modeId,
+        const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
           text: prompt,
           promptId,
           launchIntentId,
+          waitUntil: createdWorkspacePromise,
         });
+        if (queuedProjectedSessionId) {
+          navigate("/");
+        }
+        const { workspaceId, projectedSessionId: createdProjectedSessionId } =
+          await createdWorkspacePromise;
+        if (!queuedProjectedSessionId) {
+          navigate("/");
+        }
+        const projectedSessionId = queuedProjectedSessionId ?? createdProjectedSessionId;
+        markLaunchIntentMaterialized(launchIntentId, {
+          workspaceId,
+          clientSessionId: projectedSessionId,
+        });
+        if (!queuedProjectedSessionId) {
+          await promptProjectedOrCreateFreshSession({
+            workspaceId,
+            projectedSessionId,
+            modelSelection,
+            modeId,
+            text: prompt,
+            promptId,
+            launchIntentId,
+            allowFreshFallback: false,
+          });
+        }
         clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
@@ -265,36 +451,78 @@ export function useHomeNextLaunch() {
         flowKind: "cloud_workspace_create",
         source: "home",
       });
-      const result = await createCloudWorkspaceAndEnterWithResult(
+      const resultPromise = createCloudWorkspaceAndEnterWithResult(
         {
           gitOwner: target.gitOwner,
           gitRepoName: target.gitRepoName,
           baseBranch: target.baseBranch,
         },
-        { latencyFlowId },
-      );
+          {
+            latencyFlowId,
+            initialSession,
+          },
+        );
+      const queuedProjectedSessionId = await promptProjectedPendingWorkspaceSession({
+        text: prompt,
+        promptId,
+        launchIntentId,
+        waitUntil: resultPromise,
+      });
+      if (queuedProjectedSessionId) {
+        navigate("/");
+      }
+      const result = await resultPromise;
       if (result.status === "interrupted") {
         failLatencyFlow(latencyFlowId, "cloud_workspace_create_interrupted");
         throw new Error("Cloud workspace creation was interrupted.");
       }
+      if (!queuedProjectedSessionId) {
+        navigate("/");
+      }
       if (result.status === "ready") {
+        const projectedSessionId = queuedProjectedSessionId ?? result.projectedSessionId;
         markLaunchIntentMaterialized(launchIntentId, {
           workspaceId: result.workspaceId,
+          clientSessionId: projectedSessionId,
         });
-        await createFreshSession({
-          workspaceId: result.workspaceId,
-          modelSelection,
-          modeId,
-          text: prompt,
-          promptId,
-          launchIntentId,
-        });
+        if (!queuedProjectedSessionId) {
+          await promptProjectedOrCreateFreshSession({
+            workspaceId: result.workspaceId,
+            projectedSessionId,
+            modelSelection,
+            modeId,
+            text: prompt,
+            promptId,
+            launchIntentId,
+            allowFreshFallback: false,
+          });
+        }
         clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
+      const projectedSessionId = queuedProjectedSessionId ?? result.projectedSessionId;
       markLaunchIntentMaterialized(launchIntentId, {
         workspaceId: result.workspaceId,
+        clientSessionId: projectedSessionId,
       });
+
+      if (projectedSessionId) {
+        if (!queuedProjectedSessionId) {
+          await promptProjectedOrCreateFreshSession({
+            workspaceId: result.workspaceId,
+            projectedSessionId,
+            modelSelection,
+            modeId,
+            text: prompt,
+            promptId,
+            launchIntentId,
+            allowFreshFallback: false,
+          });
+        }
+        clearLaunchIntentIfActive(launchIntentId);
+        showToast("Prompt queued. It will send when the cloud workspace is ready.", "info");
+        return true;
+      }
 
       enqueueDeferredLaunch({
         id: buildDeferredHomeLaunchId({
@@ -343,7 +571,8 @@ export function useHomeNextLaunch() {
     beginLaunchIntent,
     clearLaunchIntentIfActive,
     createCloudWorkspaceAndEnterWithResult,
-    createFreshSession,
+    promptProjectedOrCreateFreshSession,
+    promptProjectedPendingWorkspaceSession,
     createLocalWorkspaceAndEnterWithResult,
     createThreadFromSelection,
     createWorktreeAndEnterWithResult,

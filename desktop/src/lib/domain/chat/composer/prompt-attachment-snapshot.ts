@@ -77,7 +77,6 @@ export async function promptAttachmentSnapshotsToBlocks(
     if (snapshot.kind === "image") {
       blocks.push({
         type: "image",
-        attachmentId: snapshot.id,
         data: await readAsBase64(snapshot.file),
         mimeType: snapshot.mimeType,
         name: snapshot.name,
@@ -87,7 +86,6 @@ export async function promptAttachmentSnapshotsToBlocks(
     }
     blocks.push({
       type: "resource",
-      attachmentId: snapshot.id,
       text: await readAsText(snapshot.file),
       uri: `file://${snapshot.name}`,
       name: snapshot.name,
@@ -100,23 +98,16 @@ export async function promptAttachmentSnapshotsToBlocks(
   return blocks;
 }
 
-function readAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
-    reader.onload = () => {
-      const value = typeof reader.result === "string" ? reader.result : "";
-      resolve(value.includes(",") ? value.slice(value.indexOf(",") + 1) : value);
-    };
-    reader.readAsDataURL(file);
-  });
+async function readAsBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const chunkSize = 8192;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function readAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
-    reader.readAsText(file);
-  });
+  return file.text();
 }

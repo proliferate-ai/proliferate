@@ -122,6 +122,25 @@ describe("buildKnownHeaderSessions", () => {
 
     expect(getKnownSessionId(knownSessions.get("live-session")!)).toBe("live-session");
   });
+
+  it("creates placeholders for remembered tabs before remote session data loads", () => {
+    const knownSessions = buildKnownHeaderSessions({
+      optimisticSessionIds: ["remembered-session"],
+      sessions: undefined,
+      selectedWorkspaceId: "workspace-1",
+      clientSessionIdByMaterializedSessionId: {},
+      liveSlots: [],
+    });
+
+    const known = knownSessions.get("remembered-session");
+    expect(known).toEqual({
+      kind: "placeholder",
+      sessionId: "remembered-session",
+    });
+    expect(getKnownSessionId(known!)).toBe("remembered-session");
+    expect(getKnownSessionViewState(known!)).toBe("idle");
+    expect(getKnownSessionCanFork(known!)).toBe(false);
+  });
 });
 
 describe("buildHeaderLiveVisibilityCandidates", () => {

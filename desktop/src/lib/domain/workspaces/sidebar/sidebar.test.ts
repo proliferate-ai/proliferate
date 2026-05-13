@@ -84,6 +84,7 @@ describe("repo-root seeded groups", () => {
 
     expect(groups).toHaveLength(0);
   });
+
 });
 
 describe("sidebar workspace filters", () => {

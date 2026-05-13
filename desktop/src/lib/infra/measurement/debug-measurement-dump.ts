@@ -4,6 +4,8 @@ import {
   categoryBindings,
   operations,
   pendingCommitMarks,
+  recentDebugActivities,
+  recentJankIncidents,
   recentMemorySamples,
   recentMetrics,
   recentOperationEvents,
@@ -13,9 +15,9 @@ import {
   clearDebugMeasurementBuffer as clearDebugMeasurementEventBuffer,
   recordMemorySample,
 } from "./debug-measurement-events";
+import { clearDebugJankBuffers } from "./debug-jank-activity";
 import { isAnyHarnessTimingEnabled, isMainThreadMeasurementEnabled } from "./debug-measurement-env";
 import { getLongTaskObserverSupportedForMeasurement } from "./debug-measurement-observer";
-import { getProliferatePerfFlags } from "@/lib/infra/perf/perf-isolation-flags";
 import { saveDiagnosticJsonToPath } from "@/lib/access/tauri/diagnostics";
 import type {
   MeasurementDebugApi,
@@ -26,6 +28,7 @@ import { getMeasurementMemorySnapshot, getTimeOrigin } from "./debug-measurement
 
 export function clearDebugMeasurementBuffer(): void {
   clearDebugMeasurementEventBuffer();
+  clearDebugJankBuffers();
 }
 
 export function getDebugMeasurementDump(): MeasurementDebugDump {
@@ -39,13 +42,14 @@ export function getDebugMeasurementDump(): MeasurementDebugDump {
       mainThread: isMainThreadMeasurementEnabled(),
       anyHarnessTiming: isAnyHarnessTimingEnabled(),
     },
-    perfFlags: getProliferatePerfFlags(),
     longTaskObserverSupported: getLongTaskObserverSupportedForMeasurement(),
     memory: getMeasurementMemorySnapshot(),
     counts: getDebugMeasurementStatus().counts,
     activeOperations: [...operations.values()].map(operationSnapshot),
     recentOperationEvents: [...recentOperationEvents],
     recentMetrics: [...recentMetrics],
+    recentDebugActivities: [...recentDebugActivities],
+    recentJankIncidents: [...recentJankIncidents],
     recentMemorySamples: [...recentMemorySamples],
     recentSummaries: [...recentSummaries],
   };
@@ -90,6 +94,8 @@ function getDebugMeasurementStatus(): MeasurementDebugStatus {
       categoryBindings: categoryBindings.size,
       recentOperationEvents: recentOperationEvents.length,
       recentMetrics: recentMetrics.length,
+      recentDebugActivities: recentDebugActivities.length,
+      recentJankIncidents: recentJankIncidents.length,
       recentMemorySamples: recentMemorySamples.length,
       recentSummaries: recentSummaries.length,
     },

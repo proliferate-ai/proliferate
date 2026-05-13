@@ -149,7 +149,7 @@ export function workspaceCollectionsNeedActivityRefresh(
 
   const hasLocalActivity = collections.localWorkspaces.some((workspace) => {
     const phase = workspace.executionSummary?.phase;
-    return phase === "running" || phase === "awaiting_interaction";
+    return phase === "running";
   });
   if (hasLocalActivity) {
     return true;

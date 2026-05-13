@@ -29,7 +29,6 @@ import {
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
 
-const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;
 
 interface UseWorkspacesOptions {
@@ -101,6 +100,12 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
           "global-header",
           "header-tabs",
           "chat-surface",
+          "session-transcript-pane",
+          "transcript-list",
+          "transcript-context-providers",
+          "transcript-row-list-router",
+          "transcript-virtualized-viewport",
+          "transcript-full-list",
           "file-tree",
         ],
         maxDurationMs: 30_000,
@@ -210,7 +215,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
     refetchOnWindowFocus: false,
     refetchInterval: (query) =>
       workspaceCollectionsNeedActivityRefresh(query.state.data)
-        ? WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS
+        ? WORKSPACE_COLLECTIONS_STALE_MS
         : false,
   });
 }

@@ -10,7 +10,7 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
-import { isRenderableUserMessageEcho } from "@/lib/domain/chat/outbox/prompt-echo";
+import { isRenderableUserMessageEcho } from "@/lib/domain/sessions/intents/prompt-echo";
 
 export function createOptimisticPendingPrompt(
   text: string,

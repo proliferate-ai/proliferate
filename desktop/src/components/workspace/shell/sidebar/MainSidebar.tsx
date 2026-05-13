@@ -23,7 +23,6 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -74,25 +73,6 @@ export const MainSidebar = memo(function MainSidebar() {
   } = useWorkspaceSidebarState({ showArchived });
   const navigate = useNavigate();
   const location = useLocation();
-  useDebugRenderReason("MainSidebar", {
-    groups,
-    selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    cleanupAttentionWorkspaces,
-    emptyState,
-    isLoading,
-    pendingWorkspaceEntry,
-    showArchived,
-    workspaceTypes,
-    cloudActive,
-    cloudUnavailable,
-    billingPlan,
-    cloudRepoConfigs,
-    isCloudRepoConfigsPending,
-    supportContext,
-    supportOpen,
-    pathname: location.pathname,
-  });
 
   const isOnPlugins = location.pathname === APP_ROUTES.plugins;
   const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
@@ -177,16 +157,18 @@ export const MainSidebar = memo(function MainSidebar() {
         />
       )}
       <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
-        <SidebarPrimaryNavigation
-          homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-          pluginsActive={isOnPlugins}
-          automationsActive={isOnAutomations}
-          supportActive={supportOpen}
-          onGoHome={actions.handleGoHome}
-          onGoPlugins={actions.handleGoPlugins}
-          onGoAutomations={actions.handleGoAutomations}
-          onOpenSupport={() => setSupportOpen(true)}
-        />
+        <DebugProfiler id="workspace-sidebar-primary-nav">
+          <SidebarPrimaryNavigation
+            homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
+            pluginsActive={isOnPlugins}
+            automationsActive={isOnAutomations}
+            supportActive={supportOpen}
+            onGoHome={actions.handleGoHome}
+            onGoPlugins={actions.handleGoPlugins}
+            onGoAutomations={actions.handleGoAutomations}
+            onOpenSupport={() => setSupportOpen(true)}
+          />
+        </DebugProfiler>
 
         <div className="relative overflow-hidden flex-1 w-full min-w-0 min-h-0">
           <AutoHideScrollArea
@@ -212,37 +194,41 @@ export const MainSidebar = memo(function MainSidebar() {
               onAddRepo={actions.handleAddRepo}
             />
 
-            <SidebarWorkspaceContent
-              emptyState={emptyState}
-              isLoading={isLoading}
-              groups={groups}
-              collapsedRepoGroupKeys={collapsedRepoGroupKeys}
-              repoGroupsShownMore={repoGroupsShownMoreKeys}
-              onToggleRepoCollapsed={handleToggleRepoCollapsed}
-              onToggleRepoShowMore={handleToggleRepoShowMore}
-              configuredCloudRepoKeys={configuredCloudRepoKeys}
-              cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
-              cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
-              cloudWorkspaceTooltip={cloudWorkspaceTooltip}
-              onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
-              onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
-              onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
-              onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
-              onSelectWorkspace={actions.handleSelectWorkspace}
-              onIndicatorAction={actions.handleSidebarIndicatorAction}
-              onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
-              onWorkspaceHover={handleWorkspaceHover}
-              onArchiveWorkspace={archiveWorkspace}
-              onUnarchiveWorkspace={unarchiveWorkspace}
-              onRenameWorkspace={handleRenameWorkspace}
-              onRemoveRepo={handleRemoveRepo}
-              onOpenRepoSettings={handleOpenRepoSettings}
-            />
+            <DebugProfiler id="workspace-sidebar-content">
+              <SidebarWorkspaceContent
+                emptyState={emptyState}
+                isLoading={isLoading}
+                groups={groups}
+                collapsedRepoGroupKeys={collapsedRepoGroupKeys}
+                repoGroupsShownMore={repoGroupsShownMoreKeys}
+                onToggleRepoCollapsed={handleToggleRepoCollapsed}
+                onToggleRepoShowMore={handleToggleRepoShowMore}
+                configuredCloudRepoKeys={configuredCloudRepoKeys}
+                cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
+                cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
+                cloudWorkspaceTooltip={cloudWorkspaceTooltip}
+                onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
+                onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
+                onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
+                onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
+                onSelectWorkspace={actions.handleSelectWorkspace}
+                onIndicatorAction={actions.handleSidebarIndicatorAction}
+                onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
+                onWorkspaceHover={handleWorkspaceHover}
+                onArchiveWorkspace={archiveWorkspace}
+                onUnarchiveWorkspace={unarchiveWorkspace}
+                onRenameWorkspace={handleRenameWorkspace}
+                onRemoveRepo={handleRemoveRepo}
+                onOpenRepoSettings={handleOpenRepoSettings}
+              />
+            </DebugProfiler>
           </AutoHideScrollArea>
         </div>
       </div>
 
-      <SidebarFooter />
+      <DebugProfiler id="workspace-sidebar-footer">
+        <SidebarFooter />
+      </DebugProfiler>
       </div>
     </DebugProfiler>
   );

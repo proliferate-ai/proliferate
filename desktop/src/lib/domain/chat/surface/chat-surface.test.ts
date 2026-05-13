@@ -161,6 +161,30 @@ describe("chat surface", () => {
     }))).toEqual({ kind: "session-empty", sessionId: null });
   });
 
+  it("shows a pending projected session before the launch-intent pane", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: null,
+      hasPendingWorkspaceEntry: true,
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: "session-1",
+      activeSessionId: "session-1",
+      hasContent: false,
+      isEmpty: true,
+    }))).toEqual({ kind: "session-empty", sessionId: "session-1" });
+  });
+
+  it("shows pending projected session content as a transcript", () => {
+    expect(resolveChatSurfaceState(surfaceInput({
+      selectedWorkspaceId: null,
+      hasPendingWorkspaceEntry: true,
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: "session-1",
+      activeSessionId: "session-1",
+      hasContent: true,
+      isEmpty: false,
+    }))).toEqual({ kind: "session-transcript", sessionId: "session-1" });
+  });
+
   it("shows pending session switching for pending session render surfaces", () => {
     expect(resolveChatSurfaceState(surfaceInput({
       shellRenderScope: { kind: "chat-session-pending", sessionId: "session-2" },

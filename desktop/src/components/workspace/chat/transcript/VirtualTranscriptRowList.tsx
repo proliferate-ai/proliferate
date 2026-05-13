@@ -15,18 +15,13 @@ const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:enableTranscriptVi
 const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:disableTranscriptVirtualization";
 
 export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
-  const {
-    activeSessionId,
-    rows,
-    selectedWorkspaceId,
-  } = props;
+  const { activeSessionId, rows, selectedWorkspaceId } = props;
   const [virtualizationMode] = useState(readTranscriptVirtualizationMode);
   const virtualizationEnabled = resolveTranscriptVirtualizationEnabled({
     mode: virtualizationMode,
     rowCount: rows.length,
   });
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
-
   useLayoutEffect(() => {
     setFallbackReason(null);
   }, [activeSessionId, selectedWorkspaceId]);

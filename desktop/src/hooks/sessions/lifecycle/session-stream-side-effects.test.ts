@@ -9,7 +9,10 @@ import {
   createTranscriptState,
   type SessionEventEnvelope,
 } from "@anyharness/sdk";
-import { applyBatchedStreamSideEffects } from "@/hooks/sessions/lifecycle/session-stream-side-effects";
+import {
+  applyBatchedStreamSideEffects,
+  resetStreamWorkspaceActivityForTests,
+} from "@/hooks/sessions/lifecycle/session-stream-side-effects";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import type { SessionRelationship } from "@/lib/domain/sessions/directory/relationship";
@@ -20,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   notifyTurnEnd: vi.fn(),
   notifyUserFacingTurnEnd: vi.fn(),
   clearPendingConfigRollbackCheck: vi.fn(),
-  schedulePendingConfigRollbackCheck: vi.fn(),
 }));
 
 vi.mock("@/stores/preferences/workspace-ui-store", () => ({
@@ -34,11 +36,11 @@ vi.mock("@/lib/infra/events/turn-end-events", () => ({
 
 vi.mock("@/hooks/sessions/lifecycle/session-runtime-pending-config", () => ({
   clearPendingConfigRollbackCheck: mocks.clearPendingConfigRollbackCheck,
-  schedulePendingConfigRollbackCheck: mocks.schedulePendingConfigRollbackCheck,
 }));
 
 describe("applyBatchedStreamSideEffects", () => {
   beforeEach(() => {
+    resetStreamWorkspaceActivityForTests();
     mocks.effectOrder.length = 0;
     vi.clearAllMocks();
     mocks.trackWorkspaceInteraction.mockImplementation((workspaceId: string, timestamp: string) => {
@@ -52,9 +54,6 @@ describe("applyBatchedStreamSideEffects", () => {
     });
     mocks.clearPendingConfigRollbackCheck.mockImplementation((sessionId: string) => {
       mocks.effectOrder.push(`clear-rollback:${sessionId}`);
-    });
-    mocks.schedulePendingConfigRollbackCheck.mockImplementation((sessionId: string) => {
-      mocks.effectOrder.push(`schedule-rollback:${sessionId}`);
     });
   });
 
@@ -78,7 +77,6 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(mocks.effectOrder).toEqual([
       "activity:workspace-1:2026-04-04T00:00:03Z",
       "clear-summary",
-      "schedule-rollback:session-1",
       "notify:session-1:turn_ended",
       "clear-rollback:session-1",
       "schedule-summary",
@@ -135,7 +133,6 @@ describe("applyBatchedStreamSideEffects", () => {
     expect(mocks.effectOrder).toEqual([
       "activity:workspace-1:2026-04-04T00:00:02Z",
       "ack:workspace-1:2026-04-04T00:00:02Z",
-      "clear-rollback:session-1",
       "clear-rollback:session-1",
     ]);
   });

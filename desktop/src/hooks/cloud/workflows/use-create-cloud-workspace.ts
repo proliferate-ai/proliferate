@@ -17,6 +17,7 @@ import {
   buildSubmittingPendingWorkspaceEntry,
   createPendingWorkspaceAttemptId,
   type PendingWorkspaceEntry,
+  type PendingWorkspaceInitialSession,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import { useCloudCredentialCache } from "@/hooks/access/cloud/use-cloud-credential-cache";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
@@ -47,11 +48,24 @@ const MAX_CLOUD_CREATE_ATTEMPTS = 3;
 interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
   latencyFlowId?: string | null;
+  initialSession?: PendingWorkspaceInitialSession | null;
 }
 
 export type CloudWorkspaceEntryResult =
-  | { status: "ready"; workspaceId: string; cloudWorkspaceId: string; attemptId: string }
-  | { status: "awaiting-ready"; workspaceId: string; cloudWorkspaceId: string; attemptId: string }
+  | {
+    status: "ready";
+    workspaceId: string;
+    cloudWorkspaceId: string;
+    attemptId: string;
+    projectedSessionId: string | null;
+  }
+  | {
+    status: "awaiting-ready";
+    workspaceId: string;
+    cloudWorkspaceId: string;
+    attemptId: string;
+    projectedSessionId: string | null;
+  }
   | { status: "interrupted" };
 
 function resolveErrorMessage(error: unknown, fallback: string): string {
@@ -124,6 +138,7 @@ export function useCreateCloudWorkspace() {
     allowConflictRetry: boolean;
     repoGroupKeyToExpand?: string | null;
     latencyFlowId?: string | null;
+    initialSession?: PendingWorkspaceInitialSession | null;
   }): Promise<CloudWorkspaceEntryResult> => {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
@@ -138,6 +153,7 @@ export function useCreateCloudWorkspace() {
       args.initialRequest ? [args.initialRequest.branchName] : [],
     );
     let currentEntry: PendingWorkspaceEntry | null = null;
+    let projectedSessionId: string | null = null;
     let retryCount = 0;
     const maxAttempts = args.allowConflictRetry ? MAX_CLOUD_CREATE_ATTEMPTS : 1;
 
@@ -164,7 +180,7 @@ export function useCreateCloudWorkspace() {
       });
 
       if (currentEntry === null) {
-        beginPendingWorkspace(nextEntry);
+        projectedSessionId = beginPendingWorkspace(nextEntry, { initialSession: args.initialSession });
       } else if (isAttemptCurrent(attemptId)) {
         setPendingWorkspaceEntry(nextEntry);
       } else {
@@ -224,6 +240,7 @@ export function useCreateCloudWorkspace() {
             workspaceId,
             cloudWorkspaceId: workspace.id,
             attemptId,
+            projectedSessionId,
           };
         }
 
@@ -233,6 +250,7 @@ export function useCreateCloudWorkspace() {
         await selectWorkspace(workspaceId, {
           force: true,
           preservePending: true,
+          initialActiveSessionId: projectedSessionId,
           latencyFlowId: args.latencyFlowId,
         });
         logLatency("workspace.cloud_create.awaiting_ready", {
@@ -247,6 +265,7 @@ export function useCreateCloudWorkspace() {
           workspaceId,
           cloudWorkspaceId: workspace.id,
           attemptId,
+          projectedSessionId,
         };
       } catch (error) {
         if (
@@ -303,6 +322,7 @@ export function useCreateCloudWorkspace() {
       allowConflictRetry: true,
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
+      initialSession: options?.initialSession,
     });
   }, [runCloudWorkspaceCreateFlow]);
 
@@ -315,6 +335,7 @@ export function useCreateCloudWorkspace() {
       allowConflictRetry: true,
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
       latencyFlowId: options?.latencyFlowId,
+      initialSession: options?.initialSession,
     });
   }, [runCloudWorkspaceCreateFlow]);
 

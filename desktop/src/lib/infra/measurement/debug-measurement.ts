@@ -2,6 +2,10 @@ import { applyMetric, createEmptyAggregate } from "./debug-measurement-aggregate
 import { clearDebugMeasurementBuffer, recordMetricEvent, recordOperationEvent } from "./debug-measurement-events";
 import { isDebugMeasurementEnabled, isMainThreadMeasurementEnabled } from "./debug-measurement-env";
 import {
+  clearDebugJankBuffers,
+  recordMetricDebugActivity,
+} from "./debug-jank-activity";
+import {
   getLongTaskObserverSupportedForMeasurement,
   resetLongTaskObserverSupportForTest,
 } from "./debug-measurement-observer";
@@ -262,6 +266,7 @@ export function recordMeasurementMetric(input: MeasurementMetricInput): void {
   }
   const operationIds = resolveMetricOperationIds(input);
   recordMetricEvent(input, operationIds);
+  recordMetricDebugActivity(input, operationIds);
   for (const operationId of operationIds) {
     const operation = operations.get(operationId);
     if (!operation) {
@@ -356,6 +361,7 @@ export function resetDebugMeasurementForTest(): void {
   categoryBindings.clear();
   operationFinishListeners.clear();
   clearDebugMeasurementBuffer();
+  clearDebugJankBuffers();
   resetMeasurementSequencesForTest();
   resetLongTaskObserverSupportForTest();
 }

@@ -8,7 +8,7 @@ import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pe
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueRow,
-} from "@/lib/domain/chat/outbox/pending-prompt-queue";
+} from "@/lib/domain/chat/pending-prompts/pending-prompt-queue";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];
@@ -107,17 +107,28 @@ function PendingPromptRow({
   onBeginEdit,
   onDelete,
 }: PendingPromptRowProps) {
-  const { seq, label, isBeingEdited, canEdit, canDelete } = entry;
-  const showEditAction = canEdit && !isBeingEdited;
+  const {
+    seq,
+    label,
+    isBeingEdited,
+    showEditAction,
+    canEdit,
+    editDisabledReason,
+    showDeleteAction,
+    canDelete,
+    deleteDisabledReason,
+  } = entry;
+  const renderEditAction = showEditAction && !isBeingEdited;
 
   const handleBeginEdit = useCallback(() => {
-    if (!showEditAction) return;
+    if (!canEdit) return;
     onBeginEdit(seq);
-  }, [onBeginEdit, seq, showEditAction]);
+  }, [canEdit, onBeginEdit, seq]);
 
   const handleDelete = useCallback(() => {
+    if (!canDelete) return;
     onDelete(entry);
-  }, [entry, onDelete]);
+  }, [canDelete, entry, onDelete]);
 
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">
@@ -133,25 +144,28 @@ function PendingPromptRow({
         <div className="shrink-0 text-xs italic text-muted-foreground">
           editing in composer…
         </div>
-      ) : showEditAction ? (
+      ) : renderEditAction ? (
         <Button
           variant="ghost"
           size="icon-sm"
+          disabled={!canEdit}
           onClick={handleBeginEdit}
           className="shrink-0 opacity-60 hover:opacity-100"
           aria-label="Edit queued message"
-          title="Edit queued message"
+          title={editDisabledReason ?? "Edit queued message"}
         >
           <Pencil className="size-3.5" />
         </Button>
       ) : null}
-      {canDelete && (
+      {showDeleteAction && (
         <Button
           variant="ghost"
           size="icon-sm"
+          disabled={!canDelete}
           onClick={handleDelete}
           className="shrink-0 opacity-60 hover:opacity-100"
           aria-label="Delete queued message"
+          title={deleteDisabledReason ?? "Delete queued message"}
         >
           <X className="size-3.5" />
         </Button>

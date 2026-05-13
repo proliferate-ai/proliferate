@@ -1,5 +1,9 @@
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
+  resolvePendingWorkspacePath,
+  type PendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
+import {
   isWorkspaceMobilityTransitionPhase,
   mobilityDestinationKind,
   type WorkspaceMobilityDestinationKind,
@@ -83,6 +87,53 @@ function detailKindForLocation(
   return locationKind === "cloud_workspace" ? "repository" : "path";
 }
 
+function pendingLocationKind(entry: PendingWorkspaceEntry): WorkspaceMobilityLocationKind {
+  switch (entry.request.kind) {
+    case "worktree":
+      return "local_worktree";
+    case "cloud":
+      return "cloud_workspace";
+    case "local":
+    case "cowork":
+    case "select-existing":
+      return "local_workspace";
+  }
+}
+
+function pendingDetailValue(
+  entry: PendingWorkspaceEntry,
+  locationKind: WorkspaceMobilityLocationKind,
+): string | null {
+  if (locationKind === "cloud_workspace") {
+    const repoLabel = entry.repoLabel?.trim();
+    if (repoLabel) {
+      return repoLabel;
+    }
+    return entry.request.kind === "cloud"
+      ? `${entry.request.input.gitOwner}/${entry.request.input.gitRepoName}`
+      : null;
+  }
+
+  return resolvePendingWorkspacePath(entry);
+}
+
+function pendingBranchValue(entry: PendingWorkspaceEntry): string | null {
+  if (entry.request.kind === "worktree") {
+    return entry.request.input.branchName?.trim()
+      || entry.baseBranchName?.trim()
+      || null;
+  }
+
+  if (entry.request.kind === "cloud") {
+    return entry.request.input.branchName?.trim()
+      || entry.request.input.baseBranch?.trim()
+      || entry.baseBranchName?.trim()
+      || null;
+  }
+
+  return entry.baseBranchName?.trim() || null;
+}
+
 function resolveDetailValue(
   logicalWorkspace: LogicalWorkspace | null,
   locationKind: WorkspaceMobilityLocationKind,
@@ -119,5 +170,25 @@ export function buildMobilityFooterContext(args: {
     branchValue,
     isInteractive: !isWorkspaceMobilityTransitionPhase(status.phase),
     isActive: status.isBlocking,
+  };
+}
+
+export function buildPendingMobilityFooterContext(
+  entry: PendingWorkspaceEntry,
+): MobilityFooterContext | null {
+  const locationKind = pendingLocationKind(entry);
+  const detailValue = pendingDetailValue(entry, locationKind);
+  const branchValue = pendingBranchValue(entry);
+
+  return {
+    locationKind,
+    locationLabel: mobilityLocationLabel(locationKind),
+    detailKind: detailKindForLocation(locationKind),
+    detailValue,
+    detailCopyLabel: mobilityDetailCopyLabel(locationKind),
+    branchLabel: branchValue,
+    branchValue,
+    isInteractive: false,
+    isActive: true,
   };
 }

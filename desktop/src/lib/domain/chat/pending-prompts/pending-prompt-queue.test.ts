@@ -27,7 +27,9 @@ describe("derivePendingPromptQueueRow", () => {
       kind: "plain",
       label: "first line second line",
       isBeingEdited: false,
+      showEditAction: true,
       canEdit: true,
+      showDeleteAction: true,
       canDelete: true,
     });
   });
@@ -44,7 +46,12 @@ describe("derivePendingPromptQueueRow", () => {
 
     expect(beforeAck.key).toBe("prompt:prompt-stable");
     expect(afterAck.key).toBe(beforeAck.key);
+    expect(beforeAck.showEditAction).toBe(true);
+    expect(beforeAck.canEdit).toBe(false);
+    expect(beforeAck.editDisabledReason).toBe("Available once queued");
+    expect(beforeAck.showDeleteAction).toBe(true);
     expect(beforeAck.canDelete).toBe(false);
+    expect(beforeAck.deleteDisabledReason).toBe("Available once queued");
     expect(afterAck.canDelete).toBe(true);
     expect(afterAck.deleteAction).toBe("runtime");
   });
@@ -55,8 +62,27 @@ describe("derivePendingPromptQueueRow", () => {
       promptId: "prompt-local",
       localOutboxDeliveryState: "waiting_for_session",
     }))).toMatchObject({
+      showEditAction: true,
+      canEdit: true,
+      showDeleteAction: true,
       canDelete: true,
       deleteAction: "cancel_local",
+    });
+  });
+
+  it("reserves disabled actions while a local prompt waits for runtime acknowledgement", () => {
+    expect(derivePendingPromptQueueRow(entry({
+      seq: -22,
+      promptId: "prompt-dispatching",
+      localOutboxDeliveryState: "dispatching",
+    }))).toMatchObject({
+      showEditAction: true,
+      canEdit: false,
+      editDisabledReason: "Available once queued",
+      showDeleteAction: true,
+      canDelete: false,
+      deleteDisabledReason: "Available once queued",
+      deleteAction: null,
     });
   });
 
@@ -66,6 +92,7 @@ describe("derivePendingPromptQueueRow", () => {
       promptId: "prompt-unknown",
       localOutboxDeliveryState: "unknown_after_dispatch",
     }))).toMatchObject({
+      showDeleteAction: true,
       canDelete: true,
       deleteAction: "dismiss_local",
     });
@@ -110,7 +137,9 @@ describe("derivePendingPromptQueueRow", () => {
     expect(derivePendingPromptQueueRow(entry({ contentParts, text: "" }))).toMatchObject({
       kind: "plain",
       label: "Review these [image: screenshot.png] [file: README.md] [link: spec] [plan: Implementation Plan]",
+      showEditAction: false,
       canEdit: false,
+      showDeleteAction: true,
       canDelete: true,
     });
   });

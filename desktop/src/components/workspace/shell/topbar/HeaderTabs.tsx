@@ -16,7 +16,6 @@ import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session
 import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";
 import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/use-header-tabs-group-editor";
@@ -42,28 +41,6 @@ import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measure
 export const HeaderTabs = memo(function HeaderTabs() {
   useDebugRenderCount("header-tabs");
   const viewModel = useWorkspaceHeaderTabsViewModelContext();
-  useDebugRenderReason("HeaderTabs", {
-    activeSessionId: viewModel.activeSessionId,
-    activeShellTab: viewModel.activeShellTab,
-    activeShellTabKey: viewModel.activeShellTabKey,
-    activation: viewModel.activation,
-    selectedWorkspaceId: viewModel.selectedWorkspaceId,
-    workspaceUiKey: viewModel.workspaceUiKey,
-    materializedWorkspaceId: viewModel.materializedWorkspaceId,
-    openTargets: viewModel.openTargets,
-    chatTabs: viewModel.chatTabs,
-    stripRows: viewModel.stripRows,
-    shellRows: viewModel.shellRows,
-    orderedTabs: viewModel.orderedTabs,
-    orderedShellTabKeys: viewModel.orderedShellTabKeys,
-    stripChatSessionIds: viewModel.stripChatSessionIds,
-    menuChatTabs: viewModel.menuChatTabs,
-    visibleChatSessionIds: viewModel.visibleChatSessionIds,
-    liveChatSessionIds: viewModel.liveChatSessionIds,
-    childToParent: viewModel.childToParent,
-    childrenByParentSessionId: viewModel.childrenByParentSessionId,
-    displayManualGroups: viewModel.displayManualGroups,
-  });
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: viewModel.workspaceUiKey,
     materializedWorkspaceId: viewModel.materializedWorkspaceId,
@@ -284,76 +261,80 @@ export const HeaderTabs = memo(function HeaderTabs() {
   return (
     <DebugProfiler id="header-tabs">
       <div className="flex h-full min-w-0 flex-1 items-end gap-1 overflow-hidden px-1">
-      <WorkspaceTabStrip
-        label="Workspace tabs"
-        stripRef={shellStrip.ref}
-        className="h-9 min-w-0 flex-1"
-        {...shellDrag.stripDragProps}
-      >
-        {chatGroupUnderlines.map((range) => (
-          <span
-            key={`group-line-${range.groupId}`}
-            aria-hidden="true"
-            className="pointer-events-none absolute bottom-0 z-[6] h-0.5 rounded-full"
-            style={{
-              left: range.left + shellDrag.getRowDragOffset(`pill:${range.groupId}`),
-              width: range.width,
-            backgroundColor: range.color,
-          }}
-        />
-      ))}
-        <HeaderTabsStripRows
-          shellRows={viewModel.shellRows}
-          widths={layout.widths}
-          positions={layout.positions}
-          shellDrag={shellDrag}
-          renamingSessionId={renamingSessionId}
-          activeShellTab={viewModel.activeShellTab}
-          urgentHighlightedChatSessionId={urgentHighlightedChatSessionId}
-          buffersByPath={viewModel.buffersByPath}
-          tabModes={viewModel.tabModes}
-          multiSelectedSessionIds={multiSelect.multiSelectedSessionIds}
-          selectedTopLevelSessionIds={multiSelect.selectedTopLevelSessionIds}
-          onHeaderTabHover={handleHeaderTabHover}
-          onSelectViewerTarget={handleSelectViewerTarget}
-          onCloseViewerTarget={handleCloseViewerTarget}
-          onCloseOtherViewerTargets={handleCloseOtherViewerTargets}
-          onCloseViewerTargetsToRight={handleCloseViewerTargetsToRight}
-          onToggleGroup={tabGroupActions.toggleGroupCollapsed}
-          onRenameManualGroup={handleRenameManualGroup}
-          onChangeManualGroupColor={handleChangeManualGroupColor}
-          onUngroupManualGroup={handleUngroupManualGroup}
-          onRenameOpenChange={handleRenameOpenChange}
-          onStartRename={handleStartRename}
-          onRenameChatTab={handleRenameChatTab}
-          onCreateGroup={handleCreateGroup}
-          onChatContextMenuTarget={handleChatContextMenuTarget}
-          onForkChatTab={handleForkChatTab}
-          onPreviewChatTab={previewHeaderChatTab}
-          onActivateChatTab={activateHeaderChatTab}
-          onSuppressChatTabSelect={clearUrgentChatHighlight}
-          onCloseChatTab={handleCloseChatTab}
-          onCloseOtherChatTabs={handleCloseOtherChatTabs}
-          onCloseChatTabsToRight={handleCloseChatTabsToRight}
-          onDismissChatSession={dismissChatSession}
-          clearSelection={multiSelect.clearSelection}
-          toggleSelection={multiSelect.toggleSelection}
-          suppressNextSelectClick={multiSelect.suppressNextSelectClick}
-          consumeSuppressedSelectClick={multiSelect.consumeSuppressedSelectClick}
-        />
-      </WorkspaceTabStrip>
+      <DebugProfiler id="header-tabs-strip">
+        <WorkspaceTabStrip
+          label="Workspace tabs"
+          stripRef={shellStrip.ref}
+          className="h-9 min-w-0 flex-1"
+          {...shellDrag.stripDragProps}
+        >
+          {chatGroupUnderlines.map((range) => (
+            <span
+              key={`group-line-${range.groupId}`}
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 z-[6] h-0.5 rounded-full"
+              style={{
+                left: range.left + shellDrag.getRowDragOffset(`pill:${range.groupId}`),
+                width: range.width,
+              backgroundColor: range.color,
+            }}
+          />
+        ))}
+          <HeaderTabsStripRows
+            shellRows={viewModel.shellRows}
+            widths={layout.widths}
+            positions={layout.positions}
+            shellDrag={shellDrag}
+            renamingSessionId={renamingSessionId}
+            activeShellTab={viewModel.activeShellTab}
+            urgentHighlightedChatSessionId={urgentHighlightedChatSessionId}
+            buffersByPath={viewModel.buffersByPath}
+            tabModes={viewModel.tabModes}
+            multiSelectedSessionIds={multiSelect.multiSelectedSessionIds}
+            selectedTopLevelSessionIds={multiSelect.selectedTopLevelSessionIds}
+            onHeaderTabHover={handleHeaderTabHover}
+            onSelectViewerTarget={handleSelectViewerTarget}
+            onCloseViewerTarget={handleCloseViewerTarget}
+            onCloseOtherViewerTargets={handleCloseOtherViewerTargets}
+            onCloseViewerTargetsToRight={handleCloseViewerTargetsToRight}
+            onToggleGroup={tabGroupActions.toggleGroupCollapsed}
+            onRenameManualGroup={handleRenameManualGroup}
+            onChangeManualGroupColor={handleChangeManualGroupColor}
+            onUngroupManualGroup={handleUngroupManualGroup}
+            onRenameOpenChange={handleRenameOpenChange}
+            onStartRename={handleStartRename}
+            onRenameChatTab={handleRenameChatTab}
+            onCreateGroup={handleCreateGroup}
+            onChatContextMenuTarget={handleChatContextMenuTarget}
+            onForkChatTab={handleForkChatTab}
+            onPreviewChatTab={previewHeaderChatTab}
+            onActivateChatTab={activateHeaderChatTab}
+            onSuppressChatTabSelect={clearUrgentChatHighlight}
+            onCloseChatTab={handleCloseChatTab}
+            onCloseOtherChatTabs={handleCloseOtherChatTabs}
+            onCloseChatTabsToRight={handleCloseChatTabsToRight}
+            onDismissChatSession={dismissChatSession}
+            clearSelection={multiSelect.clearSelection}
+            toggleSelection={multiSelect.toggleSelection}
+            suppressNextSelectClick={multiSelect.suppressNextSelectClick}
+            consumeSuppressedSelectClick={multiSelect.consumeSuppressedSelectClick}
+          />
+        </WorkspaceTabStrip>
+      </DebugProfiler>
 
-      <HeaderTabsActions
-        workspaceId={viewModel.selectedWorkspaceId}
-        menuChatTabs={viewModel.menuChatTabs}
-        childrenByParentSessionId={viewModel.childrenByParentSessionId}
-        canOpenNewSessionTab={tabActions.canOpenNewSessionTab}
-        newSessionDisabledReason={tabActions.newSessionDisabledReason}
-        onOpenSession={(sessionId) => {
-          chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
-        }}
-        onOpenNewSessionTab={() => tabActions.openNewSessionTab()}
-      />
+      <DebugProfiler id="header-tabs-actions">
+        <HeaderTabsActions
+          workspaceId={viewModel.selectedWorkspaceId}
+          menuChatTabs={viewModel.menuChatTabs}
+          childrenByParentSessionId={viewModel.childrenByParentSessionId}
+          canOpenNewSessionTab={tabActions.canOpenNewSessionTab}
+          newSessionDisabledReason={tabActions.newSessionDisabledReason}
+          onOpenSession={(sessionId) => {
+            chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
+          }}
+          onOpenNewSessionTab={() => tabActions.openNewSessionTab()}
+        />
+      </DebugProfiler>
 
       {groupEditorWorkflow.groupEditor && (
         <ManualChatGroupEditorPopover

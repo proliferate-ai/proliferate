@@ -293,6 +293,24 @@ describe("workspaceCollectionsNeedActivityRefresh", () => {
     expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
   });
 
+  it("does not keep polling for local workspaces awaiting interaction", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        executionSummary: {
+          phase: "awaiting_interaction",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 0,
+          awaitingInteractionCount: 1,
+          idleCount: 0,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
+  });
+
   it("requests refresh while cloud post-ready setup is still running", () => {
     const collections = buildWorkspaceCollections(
       [],

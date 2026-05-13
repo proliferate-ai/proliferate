@@ -1,7 +1,13 @@
 import type { SetupScriptExecution, Workspace, WorkspaceKind } from "@anyharness/sdk";
 import { WORKSPACE_ARRIVAL_LABELS } from "@/copy/workspaces/workspace-arrival-copy";
+import { workspaceCurrentBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
+import {
+  buildPendingWorkspaceUiKey,
+  resolvePendingWorkspacePath,
+  type PendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 
 export interface WorkspaceArrivalEvent {
   workspaceId: string;
@@ -226,7 +232,7 @@ export function buildWorkspaceArrivalViewModel(args: {
 }): WorkspaceArrivalViewModel {
   const { event, workspace } = args;
   const workspaceName = workspace.kind === "worktree"
-    ? workspaceDisplayName(workspace)
+    ? worktreeArrivalName(workspace)
     : workspace.path.split("/").pop()
       ?? workspace.gitRepoName
       ?? "workspace";
@@ -306,7 +312,7 @@ export function buildWorkspaceArrivalViewModel(args: {
     return {
       ...baseViewModel,
       kind: "worktree",
-      branchName: workspaceBranchLabel(workspace),
+      branchName: worktreeArrivalBranchName(workspace),
       baseBranchName: event.baseBranchName?.trim() || null,
     };
   }
@@ -315,6 +321,18 @@ export function buildWorkspaceArrivalViewModel(args: {
     ...baseViewModel,
     kind: "workspace",
   };
+}
+
+function worktreeArrivalName(workspace: Workspace): string {
+  return workspace.path.split("/").filter(Boolean).pop()
+    || workspace.displayName?.trim()
+    || workspaceCurrentBranchName(workspace)
+    || workspaceDisplayName(workspace);
+}
+
+function worktreeArrivalBranchName(workspace: Workspace): string {
+  return workspaceCurrentBranchName(workspace)
+    || workspaceBranchLabel(workspace);
 }
 
 function resolveWorkspaceArrivalSubtitle(
@@ -369,4 +387,66 @@ function resolveWorkspaceArrivalEyebrow(
   }
 
   return WORKSPACE_ARRIVAL_LABELS.workspaceCreatedEyebrow;
+}
+
+export function buildPendingWorkspaceArrivalViewModel(args: {
+  entry: PendingWorkspaceEntry;
+  configuredSetupScript?: string | null;
+}): WorkspaceArrivalViewModel | null {
+  const { entry } = args;
+  if (entry.stage === "failed") {
+    return null;
+  }
+  if (entry.source !== "local-created" && entry.source !== "worktree-created") {
+    return null;
+  }
+
+  const pendingWorkspaceId = buildPendingWorkspaceUiKey(entry);
+  const workspacePath = resolvePendingWorkspacePath(entry) ?? entry.displayName;
+  const now = new Date(entry.createdAt).toISOString();
+  const repoName =
+    entry.repoLabel?.trim()
+    || workspacePath.split("/").filter(Boolean).pop()
+    || entry.displayName
+    || "workspace";
+  const { request } = entry;
+  const isWorktree = request.kind === "worktree";
+  const branchName = isWorktree
+    ? request.input.branchName?.trim()
+      || entry.displayName
+    : entry.baseBranchName?.trim()
+      || "HEAD";
+  const sourceRepoRootPath = request.kind === "local"
+    ? request.sourceRoot
+    : undefined;
+  const workspace: Workspace = {
+    id: pendingWorkspaceId,
+    kind: isWorktree ? "worktree" : "repo",
+    repoRootId: isWorktree ? request.input.repoRootId : undefined,
+    path: workspacePath,
+    sourceRepoRootPath,
+    sourceWorkspaceId: isWorktree ? request.input.sourceWorkspaceId ?? null : null,
+    gitProvider: null,
+    gitOwner: null,
+    gitRepoName: repoName,
+    currentBranch: branchName,
+    originalBranch: entry.baseBranchName,
+    displayName: entry.displayName,
+    surface: "standard",
+    lifecycleState: "active",
+    cleanupState: "none",
+    createdAt: now,
+    updatedAt: now,
+  } as Workspace;
+
+  return buildWorkspaceArrivalViewModel({
+    event: buildWorkspaceArrivalEvent({
+      workspaceId: pendingWorkspaceId,
+      source: entry.source,
+      setupScript: entry.setupScript,
+      baseBranchName: entry.baseBranchName,
+    }),
+    workspace,
+    configuredSetupScript: args.configuredSetupScript ?? "",
+  });
 }

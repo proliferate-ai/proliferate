@@ -24,11 +24,16 @@ const handleRender: ProfilerOnRenderCallback = (
   id,
   _phase,
   actualDuration,
+  _baseDuration,
+  startTime,
+  commitTime,
 ) => {
   recordMeasurementMetric({
     type: "main_thread",
     surface: id as MeasurementSurface,
     metric: "react_commit",
     durationMs: actualDuration,
+    startedAtMs: startTime,
+    endedAtMs: commitTime,
   });
 };

@@ -2,7 +2,6 @@ import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/ui/use-plan-handoff-dialog-state";
@@ -93,29 +92,6 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     );
     return Object.fromEntries(entries);
   }, [coworkManagedWorkspaces]);
-  useDebugValueChange("transcript_pane.inputs", "active_transcript_refs", {
-    selectedWorkspaceId,
-    immediateActiveSessionId: immediatePaneState.activeSessionId,
-    deferredActiveSessionId: deferredPaneState.activeSessionId,
-    transcriptDeferred,
-    transcript,
-    optimisticPrompt,
-    outboxEntries,
-    sessionViewState,
-    oldestLoadedEventSeq,
-    workspaceCollections,
-    selectedWorkspace,
-    selectedCloudWorkspace,
-    coworkManagedWorkspaces,
-    linkedSessionWorkspaces,
-  });
-  useDebugValueChange("transcript_pane.defer", "switching_state", {
-    transcriptDeferred,
-    immediateActiveSessionId: immediatePaneState.activeSessionId,
-    deferredActiveSessionId: deferredPaneState.activeSessionId,
-    hasImmediateTranscript: immediatePaneState.transcript !== null,
-    hasDeferredTranscript: deferredPaneState.transcript !== null,
-  });
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
   const loadOlderHistory = useCallback(() => {

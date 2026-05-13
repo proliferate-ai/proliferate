@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
-import type { PromptOutboxDeliveryState } from "@/lib/domain/chat/outbox/prompt-outbox-model";
+import type {
+  PromptOutboxDeliveryState,
+  PromptOutboxEntry,
+} from "@/lib/domain/sessions/intents/session-intent-model";
 import {
   useActivePendingPrompts,
   useActiveSessionId,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useEditPendingPrompt } from "@/hooks/sessions/workflows/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 export interface VisiblePendingPromptEntry extends PendingPromptEntry {
   isBeingEdited: boolean;
@@ -95,7 +99,13 @@ export function useQueuedPromptEdit(): {
   cancelEdit: () => void;
   commitEdit: () => Promise<void>;
 } {
-  const { activeSessionId, storedEditingSeq, editingSeq, isStoredSeqLive } = useDerivedEditingState();
+  const {
+    activeSessionId,
+    pendingPrompts,
+    storedEditingSeq,
+    editingSeq,
+    isStoredSeqLive,
+  } = useDerivedEditingState();
   const editDraft = useChatInputStore((state) =>
     activeSessionId ? state.editDraftBySessionId[activeSessionId] ?? "" : "",
   );
@@ -138,8 +148,13 @@ export function useQueuedPromptEdit(): {
       cancelEdit();
       return;
     }
+    const editingPrompt = pendingPrompts.find((prompt) => prompt.seq === editingSeq);
     try {
-      await editPendingPrompt(activeSessionId, editingSeq, trimmed);
+      if (isLocallyEditableOutboxPrompt(editingPrompt)) {
+        patchLocalOutboxPrompt(editingPrompt.promptId, trimmed);
+      } else {
+        await editPendingPrompt(activeSessionId, editingSeq, trimmed);
+      }
     } finally {
       setEditDraft(activeSessionId, "");
       setEditingQueueSeq(activeSessionId, null);
@@ -150,6 +165,7 @@ export function useQueuedPromptEdit(): {
     editDraft,
     editPendingPrompt,
     editingSeq,
+    pendingPrompts,
     setEditDraft,
     setEditingQueueSeq,
   ]);
@@ -162,4 +178,77 @@ export function useQueuedPromptEdit(): {
     cancelEdit,
     commitEdit,
   };
+}
+
+function isLocallyEditableOutboxPrompt(
+  prompt: PendingPromptEntry | undefined,
+): prompt is PendingPromptEntry & {
+  promptId: string;
+  localOutboxDeliveryState: PromptOutboxDeliveryState;
+} {
+  return !!prompt
+    && !!prompt.promptId
+    && (prompt as PendingPromptEntry & {
+      localOutboxDeliveryState?: PromptOutboxDeliveryState | null;
+    }).localOutboxDeliveryState === "waiting_for_session";
+}
+
+function patchLocalOutboxPrompt(clientPromptId: string, text: string): void {
+  const store = useSessionIntentStore.getState();
+  const entry = store.entriesById[clientPromptId];
+  if (!entry || entry.kind !== "send_prompt" || entry.deliveryState !== "waiting_for_session") {
+    return;
+  }
+
+  store.patchIntent(clientPromptId, {
+    text,
+    blocks: updateOutboxTextBlocks(entry, text),
+    contentParts: updateOutboxTextContentParts(entry, text),
+  });
+}
+
+function updateOutboxTextBlocks(
+  entry: PromptOutboxEntry,
+  text: string,
+): PromptOutboxEntry["blocks"] {
+  let replaced = false;
+  const blocks: PromptOutboxEntry["blocks"] = [];
+  for (const block of entry.blocks) {
+    if (block.type !== "text") {
+      blocks.push({ ...block });
+      continue;
+    }
+    if (replaced) {
+      continue;
+    }
+    replaced = true;
+    blocks.push({ ...block, text });
+  }
+  if (!replaced) {
+    blocks.unshift({ type: "text", text });
+  }
+  return blocks;
+}
+
+function updateOutboxTextContentParts(
+  entry: PromptOutboxEntry,
+  text: string,
+): PromptOutboxEntry["contentParts"] {
+  let replaced = false;
+  const contentParts: PromptOutboxEntry["contentParts"] = [];
+  for (const part of entry.contentParts) {
+    if (part.type !== "text") {
+      contentParts.push({ ...part });
+      continue;
+    }
+    if (replaced) {
+      continue;
+    }
+    replaced = true;
+    contentParts.push({ ...part, text });
+  }
+  if (!replaced) {
+    contentParts.unshift({ type: "text", text });
+  }
+  return contentParts;
 }

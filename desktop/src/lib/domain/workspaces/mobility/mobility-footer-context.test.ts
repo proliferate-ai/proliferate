@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import {
+  buildPendingMobilityFooterContext,
   buildMobilityFooterContext,
   type WorkspaceMobilitySelectedMaterializationKind,
 } from "@/lib/domain/workspaces/mobility/mobility-footer-context";
+import {
+  buildSubmittingPendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   mobilityDestinationKind,
   type WorkspaceMobilityStatusModel,
@@ -232,6 +236,78 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context?.isInteractive).toBe(true);
     expect(context?.isActive).toBe(false);
+  });
+
+  it("builds footer context for pending local, worktree, and cloud workspaces", () => {
+    const local = buildPendingMobilityFooterContext(buildSubmittingPendingWorkspaceEntry({
+      attemptId: "local-attempt",
+      selectedWorkspaceId: null,
+      source: "local-created",
+      displayName: "proliferate",
+      request: { kind: "local", sourceRoot: "/Users/pablo/proliferate" },
+    }));
+    const worktree = buildPendingMobilityFooterContext(buildSubmittingPendingWorkspaceEntry({
+      attemptId: "worktree-attempt",
+      selectedWorkspaceId: null,
+      source: "worktree-created",
+      displayName: "workspace-abc",
+      repoLabel: "proliferate",
+      baseBranchName: "main",
+      request: {
+        kind: "worktree",
+        input: {
+          repoRootId: "repo-root",
+          workspaceName: "workspace-abc",
+          branchName: "pablo/workspace-abc",
+          baseBranch: "main",
+          targetPath: "/Users/pablo/.proliferate/worktrees/proliferate/workspace-abc",
+        },
+      },
+    }));
+    const cloud = buildPendingMobilityFooterContext(buildSubmittingPendingWorkspaceEntry({
+      attemptId: "cloud-attempt",
+      selectedWorkspaceId: null,
+      source: "cloud-created",
+      displayName: "workspace-cloud",
+      repoLabel: "proliferate-ai/proliferate",
+      baseBranchName: "main",
+      request: {
+        kind: "cloud",
+        input: {
+          gitProvider: "github",
+          gitOwner: "proliferate-ai",
+          gitRepoName: "proliferate",
+          baseBranch: "main",
+          branchName: "pablo/workspace-cloud",
+          ownerScope: "personal",
+        },
+      },
+    }));
+
+    expect(local).toMatchObject({
+      locationLabel: "Local workspace",
+      detailKind: "path",
+      detailValue: "/Users/pablo/proliferate",
+      branchValue: null,
+      isInteractive: false,
+      isActive: true,
+    });
+    expect(worktree).toMatchObject({
+      locationLabel: "Local worktree",
+      detailKind: "path",
+      detailValue: "/Users/pablo/.proliferate/worktrees/proliferate/workspace-abc",
+      branchValue: "pablo/workspace-abc",
+      isInteractive: false,
+      isActive: true,
+    });
+    expect(cloud).toMatchObject({
+      locationLabel: "Cloud workspace",
+      detailKind: "repository",
+      detailValue: "proliferate-ai/proliferate",
+      branchValue: "pablo/workspace-cloud",
+      isInteractive: false,
+      isActive: true,
+    });
   });
 
   it.each<{

@@ -11,6 +11,8 @@ import {
 } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@/lib/domain/chat/transcript/transcript-virtualization-config";
 import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   buildRenderableRows,
   estimateRenderableRowHeight,
@@ -66,7 +68,12 @@ export function VirtualizedTranscriptRowList({
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
   const renderableRows = useMemo(
-    () => buildRenderableRows(rows, isLoadingOlderHistory),
+    () => measureDebugComputation({
+      category: "transcript_virtualization.derive",
+      label: "renderable_rows",
+      keys: ["rows", "isLoadingOlderHistory"],
+      count: (nextRows) => nextRows.length,
+    }, () => buildRenderableRows(rows, isLoadingOlderHistory)),
     [isLoadingOlderHistory, rows],
   );
   const estimatedInitialBottomOffset =
@@ -333,17 +340,19 @@ export function VirtualizedTranscriptRowList({
   });
 
   return (
-    <VirtualTranscriptViewport
-      bottomSpacerHeight={bottomSpacerHeight}
-      measureElement={virtualizer.measureElement}
-      onViewportScroll={handleViewportScroll}
-      renderableRows={renderableRows}
-      renderRow={renderRow}
-      scrollRef={scrollRef}
-      selectionRootRef={selectionRootRef}
-      topSpacerHeight={topSpacerHeight}
-      virtualItems={virtualItems}
-      virtualizationMode={virtualizationMode}
-    />
+    <DebugProfiler id="transcript-virtualized-viewport">
+      <VirtualTranscriptViewport
+        bottomSpacerHeight={bottomSpacerHeight}
+        measureElement={virtualizer.measureElement}
+        onViewportScroll={handleViewportScroll}
+        renderableRows={renderableRows}
+        renderRow={renderRow}
+        scrollRef={scrollRef}
+        selectionRootRef={selectionRootRef}
+        topSpacerHeight={topSpacerHeight}
+        virtualItems={virtualItems}
+        virtualizationMode={virtualizationMode}
+      />
+    </DebugProfiler>
   );
 }

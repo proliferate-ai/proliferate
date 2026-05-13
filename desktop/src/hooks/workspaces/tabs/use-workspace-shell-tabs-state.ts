@@ -103,6 +103,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   const activeTargetKey = useWorkspaceViewerTabsStore((state) => state.activeTargetKey);
   const viewerRestoreMarker = useWorkspaceViewerTabsStore((state) => state.viewerRestoreMarker);
   const workspaceSelectionNonce = useSessionSelectionStore((state) => state.workspaceSelectionNonce);
+  const sessionWorkspaceId = materializedWorkspaceId ?? workspaceUiKey;
   const sessionActivationEpoch = useSessionSelectionStore((state) =>
     materializedWorkspaceId
       ? state.sessionActivationIntentEpochByWorkspace[materializedWorkspaceId] ?? 0
@@ -155,11 +156,11 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
 
   const orderedTabs = useMemo(
     () => buildWorkspaceShellTabs({
-      selectedWorkspaceId: materializedWorkspaceId,
+      selectedWorkspaceId: sessionWorkspaceId,
       sessionSlots: Object.fromEntries(
         shellChatSessionIds.map((sessionId) => [
           sessionId,
-          { sessionId, workspaceId: materializedWorkspaceId },
+          { sessionId, workspaceId: sessionWorkspaceId },
         ]),
       ),
       visibleChatSessionIds: [...shellChatSessionIds],
@@ -167,9 +168,9 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
       orderKeys: persistedShellOrderKeys,
     }),
     [
-      materializedWorkspaceId,
       openTargets,
       persistedShellOrderKeys,
+      sessionWorkspaceId,
       shellChatSessionIds,
     ],
   );
@@ -178,7 +179,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     [orderedTabs],
   );
   const resolvedActivation = useMemo<WorkspaceShellActivation>(() => resolveWorkspaceShellActivation({
-    workspaceId: materializedWorkspaceId ?? "",
+    workspaceId: sessionWorkspaceId ?? "",
     storedIntent: storedActiveShellTabKey,
     orderedTabs: orderedShellTabKeys,
     activeSessionId,
@@ -192,10 +193,10 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   }), [
     activeTargetKey,
     activeSessionId,
-    materializedWorkspaceId,
     openTargets,
     orderedShellTabKeys,
     pendingChatActivation,
+    sessionWorkspaceId,
     sessionActivationEpoch,
     shellActivationEpoch,
     shellChatSessionIds,

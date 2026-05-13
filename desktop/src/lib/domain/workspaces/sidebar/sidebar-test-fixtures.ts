@@ -1,6 +1,7 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import type { SidebarCloudWorkspaceSummary } from "./cloud-workspace";
 import {
   buildSidebarGroupStates,
@@ -151,6 +152,7 @@ export function makeCloudWorkspace(args: {
 
 export function makeLocalLogicalWorkspace(args: {
   id: string;
+  workspaceId?: string;
   repoKey: string;
   repoName: string;
   kind?: Workspace["kind"];
@@ -162,6 +164,7 @@ export function makeLocalLogicalWorkspace(args: {
 }): LogicalWorkspace {
   const {
     id,
+    workspaceId,
     repoKey,
     repoName,
     kind = "local",
@@ -172,7 +175,7 @@ export function makeLocalLogicalWorkspace(args: {
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const localWorkspace = makeWorkspace({
-    id: `${id}-materialization`,
+    id: workspaceId ?? `${id}-materialization`,
     repoName,
     sourceRoot: repoKey,
     kind,
@@ -258,6 +261,8 @@ export function buildGroups(args: {
   archivedIds?: string[];
   hiddenRepoRootIds?: string[];
   selectedLogicalWorkspaceId?: string | null;
+  selectedWorkspaceId?: string | null;
+  pendingWorkspaceEntry?: PendingWorkspaceEntry | null;
   workspaceActivities?: Record<string, SidebarSessionActivityState>;
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
@@ -275,7 +280,8 @@ export function buildGroups(args: {
     archivedSet: new Set(args.archivedIds ?? []),
     hiddenRepoRootIds: new Set(args.hiddenRepoRootIds ?? []),
     selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId ?? null,
-    selectedWorkspaceId: null,
+    selectedWorkspaceId: args.selectedWorkspaceId ?? null,
+    pendingWorkspaceEntry: args.pendingWorkspaceEntry ?? null,
     workspaceActivities: args.workspaceActivities ?? {},
     pendingPromptCounts: args.pendingPromptCounts,
     gitStatus: undefined,

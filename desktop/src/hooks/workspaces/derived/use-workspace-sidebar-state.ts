@@ -21,8 +21,9 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -49,6 +50,8 @@ export function useWorkspaceSidebarState({
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const lastViewedSessionErrorAtBySession = useWorkspaceUiStore((state) =>
     state.lastViewedSessionErrorAtBySession
     ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION
@@ -57,6 +60,12 @@ export function useWorkspaceSidebarState({
     lastViewedSessionErrorAtBySession,
   );
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
+  const activeSessionTitle = useSessionDirectoryStore((state) => {
+    const entry = activeSessionId ? state.entriesById[activeSessionId] : null;
+    return entry
+      ? entry.title?.trim() || entry.activity.transcriptTitle?.trim() || null
+      : null;
+  });
 
   const {
     archivedWorkspaceIds,
@@ -101,28 +110,44 @@ export function useWorkspaceSidebarState({
     return counts;
   }, [deferredLaunchesById]);
 
-  const groups = useMemo(() => buildSidebarGroupStates({
-    repoRoots,
-    logicalWorkspaces,
-    showArchived,
-    workspaceTypes,
-    archivedSet,
-    hiddenRepoRootIds: hiddenRepoRootSet,
-    selectedLogicalWorkspaceId,
-    selectedWorkspaceId,
-    workspaceActivities,
-    pendingPromptCounts,
-    gitStatus,
-    activeSessionTitle: null,
-    lastViewedAt,
-    workspaceLastInteracted,
-    finishSuggestionsByWorkspaceId,
-  }), [
+  const groups = useMemo(() => measureDebugComputation({
+    category: "workspace_sidebar_state.derive",
+    label: "groups",
+    keys: [
+      "repoRoots",
+      "logicalWorkspaces",
+      "workspaceTypes",
+      "selection",
+      "pendingWorkspaceEntry",
+      "workspaceActivities",
+      "gitStatus",
+    ],
+    count: (value) => value.length,
+  }, () => buildSidebarGroupStates({
+      repoRoots,
+      logicalWorkspaces,
+      showArchived,
+      workspaceTypes,
+      archivedSet,
+      hiddenRepoRootIds: hiddenRepoRootSet,
+      selectedLogicalWorkspaceId,
+      selectedWorkspaceId,
+      pendingWorkspaceEntry,
+      workspaceActivities,
+      pendingPromptCounts,
+      gitStatus,
+      activeSessionTitle,
+      lastViewedAt,
+      workspaceLastInteracted,
+      finishSuggestionsByWorkspaceId,
+    })), [
+    activeSessionTitle,
     archivedSet,
     gitStatus,
     hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,
+    pendingWorkspaceEntry,
     pendingPromptCounts,
     repoRoots,
     workspaceTypes,
@@ -134,31 +159,6 @@ export function useWorkspaceSidebarState({
     finishSuggestionsByWorkspaceId,
   ]);
   const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
-  useDebugValueChange("workspace_sidebar_state.inputs", "state_refs", {
-    selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    lastViewedSessionErrorAtBySession,
-    workspaceActivities,
-    deferredLaunchesById,
-    archivedWorkspaceIds,
-    hiddenRepoRootIds,
-    lastViewedAt,
-    workspaceLastInteracted,
-    workspaceTypes,
-    logicalWorkspaces,
-    workspaceCollections,
-    cleanupAttentionWorkspaces,
-    finishSuggestionsByWorkspaceId,
-    repoRoots,
-    gitStatus,
-    archivedSet,
-    hiddenRepoRootSet,
-    pendingPromptCounts,
-    groups,
-    emptyState,
-    showArchived,
-    workspacesLoading,
-  });
 
   return {
     groups,

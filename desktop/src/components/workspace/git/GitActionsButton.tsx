@@ -43,32 +43,44 @@ export function GitActionsButton({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  if (!gitStatus) return null;
-
-  const { actions, clean } = gitStatus;
+  const { actions, clean } = gitStatus ?? {
+    clean: true,
+    actions: {
+      canCommit: false,
+      canPush: false,
+      canCreatePullRequest: false,
+      pushLabel: "Publish branch",
+    },
+  };
+  const effectiveDisabled = disabled || !gitStatus;
 
   // Primary action for button face
-  let primaryLabel = "Commit";
-  let primaryIcon = <GitCommit className="size-3.5" />;
-  let primaryOnClick = onCommit;
-  let primaryDisabled = disabled;
+  let primaryLabel = gitStatus ? "Commit" : actions.pushLabel;
+  let primaryIcon = gitStatus
+    ? <GitCommit className="size-3.5" />
+    : <CloudUpload className="size-3.5" />;
+  let primaryOnClick = gitStatus ? onCommit : onPush;
+  let primaryDisabled = effectiveDisabled;
 
-  if (!disabled && !clean && actions.canCommit) {
+  if (!effectiveDisabled && !clean && actions.canCommit) {
     primaryLabel = "Commit";
     primaryIcon = <GitCommit className="size-3.5" />;
     primaryOnClick = onCommit;
-  } else if (!disabled && clean && actions.canPush) {
+  } else if (clean && actions.canPush) {
     primaryLabel = actions.pushLabel;
     primaryIcon = <CloudUpload className="size-3.5" />;
     primaryOnClick = onPush;
-  } else if (!disabled && existingPr) {
+    primaryDisabled = effectiveDisabled;
+  } else if (existingPr) {
     primaryLabel = "View PR";
     primaryIcon = <GitHub className="size-3.5" />;
     primaryOnClick = onViewPr;
-  } else if (!disabled && clean && actions.canCreatePullRequest) {
+    primaryDisabled = effectiveDisabled;
+  } else if (clean && actions.canCreatePullRequest) {
     primaryLabel = "Create PR";
     primaryIcon = <GitHub className="size-3.5" />;
     primaryOnClick = onCreatePr;
+    primaryDisabled = effectiveDisabled;
   } else {
     primaryDisabled = true;
   }
@@ -77,26 +89,26 @@ export function GitActionsButton({
     {
       icon: <GitCommit className="size-3.5" />,
       label: "Commit",
-      disabled: disabled || clean || !actions.canCommit,
+      disabled: effectiveDisabled || clean || !actions.canCommit,
       onClick: onCommit,
     },
     {
       icon: <CloudUpload className="size-3.5" />,
       label: actions.pushLabel,
-      disabled: disabled || !actions.canPush,
+      disabled: effectiveDisabled || !actions.canPush,
       onClick: onPush,
     },
     {
       icon: <GitHub className="size-3.5" />,
       label: "Create PR",
-      disabled: disabled || !actions.canCreatePullRequest || !!existingPr,
+      disabled: effectiveDisabled || !actions.canCreatePullRequest || !!existingPr,
       onClick: onCreatePr,
     },
     ...(existingPr
       ? [{
           icon: <GitHub className="size-3.5" />,
           label: "View PR",
-          disabled,
+          disabled: effectiveDisabled,
           onClick: onViewPr,
         }]
       : []),
@@ -125,7 +137,7 @@ export function GitActionsButton({
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="menu"
           aria-expanded={open}
-          disabled={disabled}
+          disabled={effectiveDisabled}
           className="h-6 rounded-lg rounded-l-none bg-background px-1.5 text-xs"
         >
           <ChevronDown className="size-3" />

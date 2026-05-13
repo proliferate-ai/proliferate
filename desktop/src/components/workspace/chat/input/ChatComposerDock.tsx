@@ -7,7 +7,6 @@ import {
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "@/config/chat-layout";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
@@ -46,17 +45,6 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
     ...rest
   }, ref) {
     useDebugRenderCount("chat-composer-dock");
-    useDebugRenderReason("ChatComposerDock", {
-      backdrop,
-      outboundSlot,
-      activeSlot,
-      attachedSlot,
-      footerSlot,
-      lowerBackdropTopPx,
-      shellClassName,
-      children,
-      className,
-    });
     const baseShellClassName = shellClassName
       ? "z-10 shrink-0"
       : "relative z-10 mt-auto shrink-0";
@@ -99,23 +87,33 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
         )}
         <div className={twMerge("pointer-events-none relative z-10 pb-4", CHAT_SURFACE_GUTTER_CLASSNAME, className)} {...rest}>
           <div className={twMerge("pointer-events-auto relative @container", CHAT_COLUMN_CLASSNAME)}>
-            {dockSlots.map((slot, index) => (
-              <div
-                key={slot.key}
-                data-dock-slot={slot.key}
-                className={twMerge(
-                  "relative flex flex-col px-5",
-                  index === 0
-                    ? "[&>*+*]:rounded-t-none [&>*+*]:border-border/60"
-                    : "[&>*]:rounded-t-none [&>*]:border-border/60",
-                )}
-              >
-                {slot.content}
-              </div>
-            ))}
-            {children}
+            {dockSlots.length > 0 && (
+              <DebugProfiler id="chat-composer-dock-slots">
+                <>
+                  {dockSlots.map((slot, index) => (
+                    <div
+                      key={slot.key}
+                      data-dock-slot={slot.key}
+                      className={twMerge(
+                        "relative flex flex-col px-5",
+                        index === 0
+                          ? "[&>*+*]:rounded-t-none [&>*+*]:border-border/60"
+                          : "[&>*]:rounded-t-none [&>*]:border-border/60",
+                      )}
+                    >
+                      {slot.content}
+                    </div>
+                  ))}
+                </>
+              </DebugProfiler>
+            )}
+            <DebugProfiler id="chat-composer-dock-input">
+              <>{children}</>
+            </DebugProfiler>
             {footerSlot ? (
-              <div className="mt-2" data-chat-composer-footer="true">{footerSlot}</div>
+              <DebugProfiler id="chat-composer-dock-footer">
+                <div className="mt-2" data-chat-composer-footer="true">{footerSlot}</div>
+              </DebugProfiler>
             ) : null}
           </div>
         </div>

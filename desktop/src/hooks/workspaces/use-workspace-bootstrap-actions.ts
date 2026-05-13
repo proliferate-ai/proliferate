@@ -10,6 +10,8 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
+import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
+import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
@@ -47,10 +49,16 @@ import {
 import {
   getSessionRecord,
   patchSessionRecord,
+  removeSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import { writeChatShellIntentForEmptySurface } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import {
+  isOptimisticWorkspaceSessionPlaceholder,
+} from "@/lib/domain/workspaces/selection/optimistic-session-shell";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -78,6 +86,64 @@ const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
 const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
 
+function activeProjectedSessionForPendingWorkspace(workspaceId: string): string | null {
+  const selection = useSessionSelectionStore.getState();
+  const activeSessionId = selection.activeSessionId;
+  const pendingEntry = selection.pendingWorkspaceEntry;
+  if (!activeSessionId || pendingEntry?.workspaceId !== workspaceId) {
+    return null;
+  }
+
+  const activeSession = getSessionRecord(activeSessionId);
+  if (!activeSession || activeSession.materializedSessionId) {
+    return null;
+  }
+
+  return activeSession.workspaceId === buildPendingWorkspaceUiKey(pendingEntry)
+    ? activeSessionId
+    : null;
+}
+
+function findLoadedSessionForClientSession(
+  clientSessionId: string,
+  sessions: readonly WorkspaceSession[],
+): WorkspaceSession | null {
+  const record = getSessionRecord(clientSessionId);
+  const materializedSessionId = record?.materializedSessionId ?? clientSessionId;
+  return sessions.find((session) =>
+    session.id === materializedSessionId || session.id === clientSessionId
+  ) ?? null;
+}
+
+function clearInvalidOptimisticActiveSession(input: {
+  workspaceId: string;
+  logicalWorkspaceId: string;
+}): boolean {
+  const activeSessionId = useSessionSelectionStore.getState().activeSessionId;
+  const activeSession = activeSessionId ? getSessionRecord(activeSessionId) : null;
+  if (
+    !activeSessionId
+    || activeSession?.workspaceId !== input.workspaceId
+    || !isOptimisticWorkspaceSessionPlaceholder(activeSession)
+  ) {
+    return false;
+  }
+
+  removeSessionRecord(activeSessionId);
+  useSessionSelectionStore.getState().setActiveSessionId(null);
+  writeChatShellIntentForEmptySurface({
+    workspaceId: input.workspaceId,
+    shellWorkspaceId: input.logicalWorkspaceId,
+    invalidateSessionIntent: false,
+  });
+  logLatency("workspace.select.optimistic_session_invalidated", {
+    workspaceId: input.workspaceId,
+    logicalWorkspaceId: input.logicalWorkspaceId,
+    sessionId: activeSessionId,
+  });
+  return true;
+}
+
 export function useWorkspaceBootstrapActions() {
   const {
     ensureModelRegistries,
@@ -100,6 +166,7 @@ export function useWorkspaceBootstrapActions() {
   } = useWorkspaceFileActions();
   const { createEmptySessionWithResolvedConfig } = useSessionCreationActions();
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
+  const { applySessionSummary } = useSessionSummaryActions();
   const { selectSession } = useSessionSelectionActions();
   const cancelDeferredFileTreePrefetchRef = useRef<(() => void) | null>(null);
 
@@ -294,6 +361,31 @@ export function useWorkspaceBootstrapActions() {
       return { sessions };
     }
 
+    const activeSessionIdAfterLoad = useSessionSelectionStore.getState().activeSessionId;
+    const loadedActiveSession = activeSessionIdAfterLoad
+      ? findLoadedSessionForClientSession(activeSessionIdAfterLoad, sessions)
+      : null;
+    if (activeSessionIdAfterLoad && loadedActiveSession) {
+      const activeSessionBeforePatch = getSessionRecord(activeSessionIdAfterLoad);
+      const wasOptimisticPlaceholder =
+        isOptimisticWorkspaceSessionPlaceholder(activeSessionBeforePatch);
+      applySessionSummary(activeSessionIdAfterLoad, loadedActiveSession, workspaceId);
+      if (wasOptimisticPlaceholder) {
+        logLatency("workspace.select.optimistic_session_validated", {
+          workspaceId,
+          logicalWorkspaceId,
+          sessionId: activeSessionIdAfterLoad,
+          title: loadedActiveSession.title ?? null,
+          agentKind: loadedActiveSession.agentKind,
+        });
+      }
+    } else if (!sessionsLoadFailed) {
+      clearInvalidOptimisticActiveSession({
+        workspaceId,
+        logicalWorkspaceId,
+      });
+    }
+
     if (sessions.length === 0) {
       if (!sessionsLoadFailed) {
         clearLastViewedSession(logicalWorkspaceId);
@@ -327,6 +419,20 @@ export function useWorkspaceBootstrapActions() {
 
       if (hasDismissedSessions) {
         useSessionSelectionStore.getState().setActiveSessionId(null);
+        if (isCurrent()) {
+          markWorkspaceBootstrappedInSession(workspaceId);
+        }
+        return { sessions };
+      }
+
+      const activeProjectedSessionId = activeProjectedSessionForPendingWorkspace(workspaceId);
+      if (activeProjectedSessionId) {
+        logLatency("workspace.select.initial_session_open.skipped", {
+          workspaceId,
+          sessionId: activeProjectedSessionId,
+          reason: "projected_pending_session",
+          totalElapsedMs: elapsedMs(startedAt),
+        });
         if (isCurrent()) {
           markWorkspaceBootstrappedInSession(workspaceId);
         }
@@ -452,7 +558,12 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionSelectStartedAt = performance.now();
-        await selectSession(targetSession.id, { latencyFlowId });
+        await selectSessionWithShellIntentRollback({
+          workspaceId,
+          sessionId: targetSession.id,
+          options: { latencyFlowId },
+          selectSession,
+        });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.session_select",
@@ -492,6 +603,7 @@ export function useWorkspaceBootstrapActions() {
       }
     }
   }, [
+    applySessionSummary,
     cancelDeferredFileTreePrefetch,
     lastViewedSessionByWorkspace,
     createEmptySessionWithResolvedConfig,

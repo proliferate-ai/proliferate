@@ -8,32 +8,46 @@ import {
   type PromptCapabilities,
   type TranscriptState,
 } from "@anyharness/sdk";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
 import {
   hasVisibleTranscriptContent,
-} from "@/lib/domain/chat/outbox/pending-prompts";
+} from "@/lib/domain/chat/pending-prompts/pending-prompts";
 import { isSessionSlotBusy, resolveSessionViewState, type SessionViewState } from "@/lib/domain/sessions/activity";
 import { getPendingSessionConfigChange, type PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import {
+  pendingConfigChangesForSessionIntents,
   outboxEntryToPendingPromptEntry,
+  projectPendingPromptsWithSessionIntents,
   queuedOutboxEntriesForSession,
   renderableOutboxEntriesForTranscript,
-} from "@/lib/domain/chat/outbox/prompt-outbox-selectors";
-import type { PromptOutboxEntry } from "@/lib/domain/chat/outbox/prompt-outbox-model";
-import { outboxEntriesForSession } from "@/lib/domain/chat/outbox/prompt-outbox-state";
+} from "@/lib/domain/sessions/intents/session-intent-selectors";
+import type {
+  PromptOutboxEntry,
+  SessionIntent,
+  SessionUpdateConfigIntent,
+} from "@/lib/domain/sessions/intents/session-intent-model";
+import {
+  outboxEntriesForSession,
+  sessionIntentsForSession,
+} from "@/lib/domain/sessions/intents/session-intent-state";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import type { SessionStreamConnectionState } from "@/lib/domain/sessions/directory/directory-entry";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 
 const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];
 const EMPTY_PENDING_INTERACTIONS: readonly PendingInteraction[] = [];
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
+const EMPTY_SESSION_INTENTS: readonly SessionIntent[] = [];
+const EMPTY_CONFIG_INTENTS: readonly SessionUpdateConfigIntent[] = [];
+
+type NormalizedSessionControls = NonNullable<TranscriptState["liveConfig"]>["normalizedControls"];
+type NormalizedSessionModelControl = NormalizedSessionControls["model"];
 
 // Owns read-only projections for the active chat session. Action hooks should
 // consume these selectors rather than re-reading session stores ad hoc.
@@ -55,11 +69,12 @@ export function useActiveSessionWorkspaceId(): string | null {
 
 export function useActiveSessionPromptCapabilities(): PromptCapabilities | null {
   const activeSessionId = useActiveSessionId();
-  return useSessionDirectoryStore((state) =>
+  const capabilities = useSessionDirectoryStore((state) =>
     activeSessionId
       ? state.entriesById[activeSessionId]?.liveConfig?.promptCapabilities ?? null
       : null
   );
+  return useStablePromptCapabilities(capabilities);
 }
 
 export function useActiveSessionRunningState(): boolean {
@@ -112,7 +127,7 @@ export function useActiveTranscriptPaneState(): {
       oldestLoadedEventSeq: transcriptEntry?.events?.[0]?.seq ?? null,
     };
   }));
-  const outboxEntries = usePromptOutboxStore(useShallow((state) =>
+  const outboxEntries = useSessionIntentStore(useShallow((state) =>
     activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
   ));
   return useMemo(() => ({
@@ -158,7 +173,7 @@ export function useActiveSessionSurfaceSnapshot(): {
       transcript,
     };
   }));
-  const hasRenderableOutbox = usePromptOutboxStore((state) => {
+  const hasRenderableOutbox = useSessionIntentStore((state) => {
     const entries = outboxEntriesForSession(state, activeSessionId);
     if (entries.length === 0) {
       return false;
@@ -186,9 +201,13 @@ export function useActivePendingPrompts(): readonly PendingPromptEntry[] {
       ? state.entriesById[activeSessionId]?.transcript?.pendingPrompts ?? EMPTY_PENDING_PROMPTS
       : EMPTY_PENDING_PROMPTS
   );
-  const outboxEntries = usePromptOutboxStore(useShallow((state) =>
-    activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
+  const sessionIntents = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? sessionIntentsForSession(state, activeSessionId) : EMPTY_SESSION_INTENTS
   ));
+  const outboxEntries = useMemo(
+    () => sessionIntents.filter((intent): intent is PromptOutboxEntry => intent.kind === "send_prompt"),
+    [sessionIntents],
+  );
   const outboxQueuedPrompts = useMemo(() => {
     const entries = outboxEntries;
     return entries.length > 0
@@ -196,22 +215,26 @@ export function useActivePendingPrompts(): readonly PendingPromptEntry[] {
       : EMPTY_PENDING_PROMPTS;
   }, [outboxEntries]);
   return useMemo(() => {
-    if (runtimePendingPrompts.length === 0) {
+    const projectedRuntimePendingPrompts = projectPendingPromptsWithSessionIntents(
+      runtimePendingPrompts,
+      sessionIntents,
+    );
+    if (projectedRuntimePendingPrompts.length === 0) {
       return outboxQueuedPrompts;
     }
     if (outboxQueuedPrompts.length === 0) {
-      return runtimePendingPrompts;
+      return projectedRuntimePendingPrompts;
     }
     const runtimePromptIds = new Set(
-      runtimePendingPrompts.map((entry) => entry.promptId).filter(Boolean),
+      projectedRuntimePendingPrompts.map((entry) => entry.promptId).filter(Boolean),
     );
     return [
-      ...runtimePendingPrompts,
+      ...projectedRuntimePendingPrompts,
       ...outboxQueuedPrompts.filter((entry) =>
         !entry.promptId || !runtimePromptIds.has(entry.promptId)
       ),
     ];
-  }, [outboxQueuedPrompts, runtimePendingPrompts]);
+  }, [outboxQueuedPrompts, runtimePendingPrompts, sessionIntents]);
 }
 
 export function useActivePendingInteractionState(): {
@@ -258,6 +281,13 @@ export function useActiveSessionLaunchState(): {
   modelControl: NonNullable<TranscriptState["liveConfig"]>["normalizedControls"]["model"] | null;
 } {
   const activeSessionId = useActiveSessionId();
+  const configIntents = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? configIntentsForSession(state, activeSessionId) : EMPTY_CONFIG_INTENTS
+  ));
+  const intentPendingConfigChanges = useMemo(
+    () => pendingConfigChangesForSessionIntents(configIntents),
+    [configIntents],
+  );
   const slice = useSessionDirectoryStore(useShallow((state) => {
     const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
     const modelControl = entry?.liveConfig?.normalizedControls.model ?? null;
@@ -265,21 +295,31 @@ export function useActiveSessionLaunchState(): {
       activeSessionId,
       agentKind: entry?.agentKind ?? null,
       modelId: entry?.modelId ?? null,
-      pendingConfigChanges: entry?.pendingConfigChanges ?? null,
+      directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
+        entry?.pendingConfigChanges,
+      ),
       currentModelConfigId: modelControl?.rawConfigId ?? null,
       modelControl,
     };
   }));
+  const stableModelControl = useStableModelControl(slice.modelControl);
+  const pendingConfigChanges = useMemo(
+    () => mergePendingConfigChanges(
+      slice.directoryPendingConfigChanges,
+      intentPendingConfigChanges,
+    ),
+    [intentPendingConfigChanges, slice.directoryPendingConfigChanges],
+  );
 
   const pendingModelId = useMemo(() => {
-    if (!slice.pendingConfigChanges || !slice.currentModelConfigId) {
+    if (!slice.currentModelConfigId) {
       return null;
     }
     return getPendingSessionConfigChange(
-      slice.pendingConfigChanges,
+      pendingConfigChanges,
       slice.currentModelConfigId,
     )?.value ?? null;
-  }, [slice.currentModelConfigId, slice.pendingConfigChanges]);
+  }, [pendingConfigChanges, slice.currentModelConfigId]);
 
   const currentLaunchIdentity = useMemo<ActiveLaunchIdentity | null>(() => {
     if (!slice.agentKind) {
@@ -291,13 +331,22 @@ export function useActiveSessionLaunchState(): {
 
   return {
     ...slice,
+    modelControl: stableModelControl,
     currentLaunchIdentity,
+    pendingConfigChanges,
   };
 }
 
 export function useActiveSessionConfigState() {
   const activeSessionId = useActiveSessionId();
-  return useSessionDirectoryStore(useShallow((state) => {
+  const configIntents = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? configIntentsForSession(state, activeSessionId) : EMPTY_CONFIG_INTENTS
+  ));
+  const intentPendingConfigChanges = useMemo(
+    () => pendingConfigChangesForSessionIntents(configIntents),
+    [configIntents],
+  );
+  const slice = useSessionDirectoryStore(useShallow((state) => {
     const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
     return {
       agentKind: entry?.agentKind ?? null,
@@ -305,9 +354,24 @@ export function useActiveSessionConfigState() {
       modeId: entry?.modeId ?? null,
       workspaceId: entry?.workspaceId ?? null,
       normalizedControls: entry?.liveConfig?.normalizedControls ?? null,
-      pendingConfigChanges: entry?.pendingConfigChanges ?? null,
+      directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
+        entry?.pendingConfigChanges,
+      ),
     };
   }));
+  const stableNormalizedControls = useStableNormalizedControls(slice.normalizedControls);
+  const pendingConfigChanges = useMemo(
+    () => mergePendingConfigChanges(
+      slice.directoryPendingConfigChanges,
+      intentPendingConfigChanges,
+    ),
+    [intentPendingConfigChanges, slice.directoryPendingConfigChanges],
+  );
+  return {
+    ...slice,
+    normalizedControls: stableNormalizedControls,
+    pendingConfigChanges,
+  };
 }
 
 export function useActiveSessionModeState(): {
@@ -331,4 +395,108 @@ export function useActiveSessionModeState(): {
         : null),
     };
   }));
+}
+
+function mergePendingConfigChanges(
+  directoryPendingConfigChanges: PendingSessionConfigChanges | null | undefined,
+  intentPendingConfigChanges: PendingSessionConfigChanges,
+): PendingSessionConfigChanges | null {
+  const hasDirectoryChanges = directoryPendingConfigChanges
+    ? Object.keys(directoryPendingConfigChanges).length > 0
+    : false;
+  const hasIntentChanges = Object.keys(intentPendingConfigChanges).length > 0;
+  if (!hasDirectoryChanges && !hasIntentChanges) {
+    return null;
+  }
+  if (!hasDirectoryChanges) {
+    return intentPendingConfigChanges;
+  }
+  if (!hasIntentChanges) {
+    return directoryPendingConfigChanges ?? null;
+  }
+  return {
+    ...directoryPendingConfigChanges,
+    ...intentPendingConfigChanges,
+  };
+}
+
+function normalizeEmptyPendingConfigChanges(
+  changes: PendingSessionConfigChanges | null | undefined,
+): PendingSessionConfigChanges | null {
+  return changes && Object.keys(changes).length > 0 ? changes : null;
+}
+
+function useStableModelControl(
+  control: NormalizedSessionModelControl | null,
+): NormalizedSessionModelControl | null {
+  return useStableBySignature(control, modelControlSignature);
+}
+
+function useStableNormalizedControls(
+  controls: NormalizedSessionControls | null,
+): NormalizedSessionControls | null {
+  return useStableBySignature(controls, normalizedControlsSignature);
+}
+
+function useStablePromptCapabilities(
+  capabilities: PromptCapabilities | null,
+): PromptCapabilities | null {
+  return useStableBySignature(capabilities, promptCapabilitiesSignature);
+}
+
+function useStableBySignature<T>(
+  value: T | null,
+  buildSignature: (value: T | null) => string,
+): T | null {
+  const ref = useRef<{ signature: string; value: T | null } | null>(null);
+  const signature = buildSignature(value);
+  if (ref.current?.signature === signature) {
+    return ref.current.value;
+  }
+  ref.current = { signature, value };
+  return value;
+}
+
+function normalizedControlsSignature(controls: NormalizedSessionControls | null): string {
+  if (!controls) {
+    return "null";
+  }
+  return JSON.stringify({
+    model: controls.model,
+    collaborationMode: controls.collaborationMode,
+    mode: controls.mode,
+    reasoning: controls.reasoning,
+    effort: controls.effort,
+    fastMode: controls.fastMode,
+    extras: controls.extras,
+  });
+}
+
+function modelControlSignature(control: NormalizedSessionModelControl | null): string {
+  return control ? JSON.stringify(control) : "null";
+}
+
+function promptCapabilitiesSignature(capabilities: PromptCapabilities | null): string {
+  if (!capabilities) {
+    return "null";
+  }
+  return JSON.stringify({
+    audio: capabilities.audio === true,
+    embeddedContext: capabilities.embeddedContext === true,
+    image: capabilities.image === true,
+  });
+}
+
+function configIntentsForSession(
+  state: Parameters<typeof sessionIntentsForSession>[0],
+  clientSessionId: string,
+): readonly SessionUpdateConfigIntent[] {
+  const intents = sessionIntentsForSession(state, clientSessionId);
+  if (intents.length === 0) {
+    return EMPTY_CONFIG_INTENTS;
+  }
+  const configIntents = intents.filter(
+    (intent): intent is SessionUpdateConfigIntent => intent.kind === "update_config",
+  );
+  return configIntents.length > 0 ? configIntents : EMPTY_CONFIG_INTENTS;
 }

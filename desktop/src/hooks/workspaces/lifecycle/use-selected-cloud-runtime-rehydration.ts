@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
+import { logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/use-workspace-bootstrap-actions";
+import { usePendingWorkspaceSessionMaterialization } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 
@@ -15,6 +16,7 @@ export function useSelectedCloudRuntimeRehydration(
   const setPendingWorkspaceEntry = useSessionSelectionStore((state) => state.setPendingWorkspaceEntry);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const { bootstrapWorkspace } = useWorkspaceBootstrapActions();
+  const materializePendingWorkspaceSessions = usePendingWorkspaceSessionMaterialization();
   const lastWorkspaceIdRef = useRef<string | null>(null);
   const shouldRehydrateOnReadyRef = useRef(false);
 
@@ -38,20 +40,62 @@ export function useSelectedCloudRuntimeRehydration(
       shouldRehydrateOnReadyRef.current = true;
     }
 
+    const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+    const hasAwaitingPendingWorkspaceEntry = Boolean(
+      pendingWorkspaceEntry
+        && pendingWorkspaceEntry.workspaceId === workspaceId
+        && pendingWorkspaceEntry.stage === "awaiting-cloud-ready",
+    );
+
     if (
       state.phase !== "ready"
-      || !shouldRehydrateOnReadyRef.current
+      || (!shouldRehydrateOnReadyRef.current && !hasAwaitingPendingWorkspaceEntry)
       || !connectionInfo
     ) {
       return;
     }
 
-    const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
-    if (
-      pendingWorkspaceEntry
-      && pendingWorkspaceEntry.workspaceId === workspaceId
-      && pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
-    ) {
+    if (!shouldRehydrateOnReadyRef.current && isBootstrapped && !hasAwaitingPendingWorkspaceEntry) {
+      return;
+    }
+
+    shouldRehydrateOnReadyRef.current = false;
+
+    let cancelled = false;
+    void (async () => {
+      if (!isBootstrapped) {
+        await bootstrapWorkspace({
+          workspaceId,
+          logicalWorkspaceId: selectedLogicalWorkspaceId ?? workspaceId,
+          runtimeUrl,
+          workspaceConnection: {
+            runtimeUrl: connectionInfo.runtimeUrl,
+            authToken: connectionInfo.accessToken,
+            anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
+          },
+          startedAt: startLatencyTimer(),
+          isCurrent: () => useSessionSelectionStore.getState().selectedWorkspaceId === workspaceId,
+        });
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      const pendingWorkspaceEntry = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+      if (
+        !pendingWorkspaceEntry
+        || pendingWorkspaceEntry.workspaceId !== workspaceId
+        || pendingWorkspaceEntry.stage !== "awaiting-cloud-ready"
+      ) {
+        return;
+      }
+
+      materializePendingWorkspaceSessions(
+        pendingWorkspaceEntry,
+        workspaceId,
+        { eventPrefix: "workspace.cloud_runtime_rehydration" },
+      );
       setPendingWorkspaceEntry(null);
       setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
         workspaceId,
@@ -59,27 +103,25 @@ export function useSelectedCloudRuntimeRehydration(
         setupScript: pendingWorkspaceEntry.setupScript,
         baseBranchName: pendingWorkspaceEntry.baseBranchName,
       }));
-    }
-
-    if (!shouldRehydrateOnReadyRef.current && isBootstrapped) {
-      return;
-    }
-
-    shouldRehydrateOnReadyRef.current = false;
-    void bootstrapWorkspace({
-      workspaceId,
-      logicalWorkspaceId: selectedLogicalWorkspaceId ?? workspaceId,
-      runtimeUrl,
-      workspaceConnection: {
-        runtimeUrl: connectionInfo.runtimeUrl,
-        authToken: connectionInfo.accessToken,
-        anyharnessWorkspaceId: connectionInfo.anyharnessWorkspaceId ?? "",
-      },
-      startedAt: startLatencyTimer(),
-      isCurrent: () => useSessionSelectionStore.getState().selectedWorkspaceId === workspaceId,
+    })().catch((error) => {
+      if (!cancelled) {
+        shouldRehydrateOnReadyRef.current = true;
+      }
+      const message = error instanceof Error
+        ? error.message
+        : "Failed to rehydrate cloud workspace runtime.";
+      logLatency("workspace.cloud_runtime_rehydration.failed", {
+        workspaceId,
+        errorMessage: message,
+      });
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     bootstrapWorkspace,
+    materializePendingWorkspaceSessions,
     runtimeUrl,
     selectedLogicalWorkspaceId,
     setPendingWorkspaceEntry,

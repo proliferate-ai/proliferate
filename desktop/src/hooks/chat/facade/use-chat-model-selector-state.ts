@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
@@ -18,6 +18,8 @@ import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catal
 import { useChatLaunchControlActions } from "@/hooks/chat/workflows/use-chat-launch-control-actions";
 import { buildLaunchControlDescriptors } from "@/lib/domain/chat/models/launch-control-descriptors";
 import { resolveCurrentModelDisplayName } from "@/lib/domain/chat/models/model-selector-current";
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 // Facade for the composer model selector: derived catalog/readiness state plus
 // the workflow callbacks needed by selector items and launch controls.
@@ -35,6 +37,10 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
   const scopedLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
   const scopedPendingConfigChanges = suppressActiveSessionState ? null : pendingConfigChanges;
   const scopedModelControl = suppressActiveSessionState ? null : modelControl;
+  const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
+  const selectedLogicalWorkspaceId = useSessionSelectionStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const launchIntentIdentity = useMemo(() => (
     !suppressActiveSessionState
@@ -100,6 +106,19 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
       scopedLaunchIdentity,
     ],
   );
+  const hasSelectableModels = launchCatalog.groups.some((group) => group.models.length > 0);
+  const hasCurrentModel =
+    Boolean(currentSelection)
+    || Boolean(configuredLaunch.configuredKind && configuredLaunch.displayName);
+  const selectorHasAgents =
+    hasAgents
+    || launchCatalog.hasLaunchableAgents
+    || hasSelectableModels
+    || hasCurrentModel;
+  const selectorIsLoading =
+    !hasSelectableModels
+    && !hasCurrentModel
+    && (agentsLoading || launchCatalog.isLoading);
 
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
     ? connectionState
@@ -126,6 +145,45 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     ],
   );
 
+  useEffect(() => {
+    if (!pendingWorkspaceEntry) {
+      return;
+    }
+    logLatency("workspace.pending_shell.model_selector_state", {
+      attemptId: pendingWorkspaceEntry.attemptId,
+      selectedLogicalWorkspaceId,
+      activeSessionId: scopedActiveSessionId,
+      currentSelection,
+      currentModelDisplayName,
+      hasCurrentModel,
+      hasSelectableModels,
+      selectorHasAgents,
+      selectorIsLoading,
+      launchCatalogIsLoading: launchCatalog.isLoading,
+      launchAgentsCount: launchCatalog.launchAgents.length,
+      modelGroupCount: launchCatalog.groups.length,
+      launchControlCount: launchControls.length,
+      hasSessionModelControl: !!scopedModelControl,
+      connectionState,
+    });
+  }, [
+    connectionState,
+    currentModelDisplayName,
+    currentSelection,
+    hasCurrentModel,
+    hasSelectableModels,
+    launchCatalog.groups.length,
+    launchCatalog.isLoading,
+    launchCatalog.launchAgents.length,
+    launchControls.length,
+    pendingWorkspaceEntry,
+    scopedActiveSessionId,
+    scopedModelControl,
+    selectedLogicalWorkspaceId,
+    selectorHasAgents,
+    selectorIsLoading,
+  ]);
+
   return {
     connectionState: resolvedConnectionState,
     currentModel: currentSelection
@@ -146,8 +204,8 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
         }
         : null,
     groups: launchCatalog.groups,
-    hasAgents,
-    isLoading: agentsLoading || launchCatalog.isLoading,
+    hasAgents: selectorHasAgents,
+    isLoading: selectorIsLoading,
     notReadyAgents,
     onSelect: handleLaunchSelect,
     launchControls,

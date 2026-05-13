@@ -5,9 +5,11 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   useActivePendingPrompts,
+  useActiveSessionConfigState,
   useActiveTranscriptPaneState,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { usePromptOutboxStore } from "@/stores/chat/prompt-outbox-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 
@@ -18,7 +20,8 @@ afterEach(() => {
     activeSessionVersion: 0,
   });
   useSessionTranscriptStore.getState().clearEntries();
-  usePromptOutboxStore.getState().clear();
+  useSessionDirectoryStore.getState().clearEntries();
+  useSessionIntentStore.getState().clear();
 });
 
 describe("useActiveTranscriptPaneState", () => {
@@ -71,7 +74,7 @@ describe("useActivePendingPrompts", () => {
       activeSessionId: "session-1",
       activeSessionVersion: 1,
     });
-    usePromptOutboxStore.getState().enqueue({
+    useSessionIntentStore.getState().enqueuePrompt({
       clientPromptId: "prompt-1",
       clientSessionId: "session-1",
       text: "queued behind active turn",
@@ -89,5 +92,41 @@ describe("useActivePendingPrompts", () => {
       }),
     ]);
     expect(result.current[0]?.seq).toBeLessThan(0);
+  });
+});
+
+describe("useActiveSessionConfigState", () => {
+  it("keeps intent-derived pending config stable across unchanged snapshots", () => {
+    useSessionSelectionStore.setState({
+      activeSessionId: "session-1",
+      activeSessionVersion: 1,
+    });
+    useSessionDirectoryStore.getState().upsertEntry({
+      sessionId: "session-1",
+      agentKind: "claude",
+      modelId: "claude-sonnet",
+      workspaceId: "workspace-1",
+    });
+    useSessionIntentStore.getState().enqueueConfig({
+      clientSessionId: "session-1",
+      configId: "model",
+      value: "claude-opus",
+      now: "2026-01-01T00:00:00.000Z",
+    });
+
+    const { result, rerender } = renderHook(() => useActiveSessionConfigState());
+
+    const firstPendingConfigChanges = result.current.pendingConfigChanges;
+    expect(firstPendingConfigChanges).toMatchObject({
+      model: {
+        rawConfigId: "model",
+        value: "claude-opus",
+        status: "queued",
+      },
+    });
+
+    rerender();
+
+    expect(result.current.pendingConfigChanges).toBe(firstPendingConfigChanges);
   });
 });

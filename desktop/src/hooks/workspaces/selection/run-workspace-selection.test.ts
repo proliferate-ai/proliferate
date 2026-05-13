@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   listActiveLatencyFlows,
   resetLatencyFlowsForTest,
@@ -68,6 +70,7 @@ describe("runWorkspaceSelection", () => {
     useSessionTranscriptStore.getState().clearEntries();
     useWorkspaceUiStore.setState({
       lastViewedSessionByWorkspace: {},
+      visibleChatSessionIdsByWorkspace: {},
     });
   });
 
@@ -188,7 +191,7 @@ describe("runWorkspaceSelection", () => {
     expect(listActiveLatencyFlows()).toEqual([]);
   });
 
-  it("does not activate a remembered session unless its slot is already retained", async () => {
+  it("opens a remembered session optimistically before bootstrap validates it", async () => {
     vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
     vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
       runtimeUrl: "http://runtime.test",
@@ -218,7 +221,52 @@ describe("runWorkspaceSelection", () => {
     });
 
     expect(useSessionSelectionStore.getState().selectedWorkspaceId).toBe("workspace-1");
-    expect(useSessionSelectionStore.getState().activeSessionId).toBeNull();
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-forgotten");
+    expect(getSessionRecord("session-forgotten")).toMatchObject({
+      agentKind: "",
+      materializedSessionId: "session-forgotten",
+      title: "Chat",
+      workspaceId: "workspace-1",
+    });
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace["logical:workspace-1"])
+      .toBe(chatWorkspaceShellTabKey("session-forgotten"));
+  });
+
+  it("falls back to the first persisted visible chat tab when no last-viewed session exists", async () => {
+    vi.mocked(resolveCloudWorkspaceReadiness).mockResolvedValueOnce({ kind: "local" });
+    vi.mocked(resolveSelectionConnection).mockResolvedValueOnce({
+      runtimeUrl: "http://runtime.test",
+      workspaceConnection: {
+        runtimeUrl: "http://runtime.test",
+        anyharnessWorkspaceId: "ah-workspace-1",
+      },
+    });
+    useWorkspaceUiStore.setState({
+      visibleChatSessionIdsByWorkspace: {
+        "logical:workspace-1": ["session-visible", "session-other"],
+      },
+    });
+
+    await runWorkspaceSelection({
+      cache: selectionCache(),
+      logicalWorkspaces,
+      rawWorkspaces: [],
+      setSelectedLogicalWorkspaceId: vi.fn(),
+      setSelectedWorkspace,
+      removeWorkspaceSlots: vi.fn(),
+      clearSelection: vi.fn(),
+      bootstrapWorkspace: vi.fn().mockResolvedValue({ sessions: [] }),
+      reconcileHotWorkspace: vi.fn(),
+    }, {
+      workspaceId: "workspace-1",
+    });
+
+    expect(useSessionSelectionStore.getState().activeSessionId).toBe("session-visible");
+    expect(getSessionRecord("session-visible")).toMatchObject({
+      materializedSessionId: "session-visible",
+      title: "Chat",
+      workspaceId: "workspace-1",
+    });
   });
 
   it("preserves an explicit initial active session even when the slot is not retained", async () => {

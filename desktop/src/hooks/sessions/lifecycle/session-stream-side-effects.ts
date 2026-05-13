@@ -22,10 +22,19 @@ import type {
 } from "@/lib/domain/sessions/directory/relationship";
 import {
   clearPendingConfigRollbackCheck,
-  schedulePendingConfigRollbackCheck,
 } from "@/hooks/sessions/lifecycle/session-runtime-pending-config";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { SessionStreamCache } from "@/hooks/sessions/cache/use-session-stream-cache";
+import {
+  createLatestTimestampThrottle,
+} from "@/lib/domain/sessions/stream/latest-timestamp-throttle";
+
+const STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS = 1_000;
+
+const streamWorkspaceInteractionThrottle = createLatestTimestampThrottle({
+  intervalMs: STREAM_WORKSPACE_ACTIVITY_WRITE_INTERVAL_MS,
+  write: trackWorkspaceInteraction,
+});
 
 export function applyBatchedStreamSideEffects(input: {
   sessionStreamCache: SessionStreamCache;
@@ -120,7 +129,7 @@ export function applyBatchedStreamSideEffects(input: {
     input.sessionStreamCache.invalidateWorkspaceCollections(input.runtimeUrl);
   }
   if (plan.lastActivityTimestamp && input.workspaceId) {
-    trackWorkspaceInteraction(input.workspaceId, plan.lastActivityTimestamp);
+    trackWorkspaceInteractionFromStream(input.workspaceId, plan.lastActivityTimestamp);
     input.acknowledgeWorkspaceActivity?.(input.workspaceId, plan.lastActivityTimestamp);
   }
   if (plan.invalidateSessionSubagents) {
@@ -161,13 +170,6 @@ export function applyBatchedStreamSideEffects(input: {
       case "clear_active_summary_refresh":
         input.clearActiveSummaryRefreshTimer();
         break;
-      case "schedule_pending_config_rollback":
-        schedulePendingConfigRollbackCheck(
-          input.sessionId,
-          input.refreshSessionSlotMeta,
-          input.showToast,
-        );
-        break;
       case "notify_turn_end":
         notifyTurnEnd(input.sessionId, effect.eventType);
         if (input.getSessionRelationship(input.sessionId)?.kind === "root") {
@@ -176,4 +178,12 @@ export function applyBatchedStreamSideEffects(input: {
         break;
     }
   }
+}
+
+function trackWorkspaceInteractionFromStream(workspaceId: string, timestamp: string) {
+  streamWorkspaceInteractionThrottle.record(workspaceId, timestamp);
+}
+
+export function resetStreamWorkspaceActivityForTests() {
+  streamWorkspaceInteractionThrottle.reset();
 }
