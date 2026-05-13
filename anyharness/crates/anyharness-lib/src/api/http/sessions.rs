@@ -582,6 +582,12 @@ pub async fn resume_session(
         None
     };
     if let Some(plugin_bundle) = req.plugin_bundle {
+        if state.session_runtime.has_live_session(&session_id).await {
+            return Err(ApiError::conflict(
+                "Plugin bundle changes require restarting the session.",
+                "SESSION_RESTART_REQUIRED",
+            ));
+        }
         state
             .session_runtime
             .set_session_plugin_bundle(&session_id, plugin_bundle)

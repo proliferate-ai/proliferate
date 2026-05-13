@@ -87,6 +87,25 @@ describe("buildSessionPluginBundle", () => {
     ]);
   });
 
+  it("skips skills when required MCP refs do not match the concrete server", () => {
+    const bundle = buildSessionPluginBundle({
+      mcpServers: [httpServer({ catalogEntryId: "github", serverName: "github_conn_github" })],
+      mcpBindingSummaries: [appliedSummary({ serverName: "github_conn_github" })],
+      pluginPackages: [
+        pluginPackage({
+          skills: [
+            {
+              ...pluginPackage().skills[0],
+              requiredMcpServerRefs: ["linear"],
+            },
+          ],
+        }),
+      ],
+    });
+
+    expect(bundle?.plugins?.[0]?.skills).toEqual([]);
+  });
+
   it("skips applied summaries without a matching concrete server", () => {
     const bundle = buildSessionPluginBundle({
       mcpServers: [httpServer({ connectionId: "different", serverName: "github" })],

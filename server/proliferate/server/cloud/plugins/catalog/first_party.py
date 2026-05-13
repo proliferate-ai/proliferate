@@ -1,23 +1,40 @@
 from __future__ import annotations
 
+import hashlib
+
 from proliferate.server.cloud.mcp_catalog.domain.types import CatalogEntry
-from proliferate.server.cloud.plugins.catalog.domain.provenance import adapted_skill
 from proliferate.server.cloud.plugins.catalog.domain.types import PluginPackage, PluginSkill
+from proliferate.server.cloud.plugins.catalog.provenance import adapted_skill
 
 
 OPENAI_PLUGINS_REPO = "https://github.com/openai/plugins"
-LOCAL_OPENAI_PLUGIN_CACHE_REF = "local-openai-plugin-cache-2026-05-13"
+OPENAI_PLUGINS_SOURCE_REF = "7955f1db081ddb3e14387b27cd65cf96b3e33931"
 
 
 def first_party_package_for_catalog_entry(entry: CatalogEntry) -> PluginPackage:
+    skills = _FIRST_PARTY_SKILLS_BY_CATALOG_ENTRY_ID.get(entry.id, ())
     return PluginPackage(
         id=entry.id,
         catalog_entry_id=entry.id,
-        version=str(entry.version),
+        version=_package_version(entry, skills),
         display_name=entry.name,
         description=entry.description,
-        skills=_FIRST_PARTY_SKILLS_BY_CATALOG_ENTRY_ID.get(entry.id, ()),
+        skills=skills,
     )
+
+
+def _package_version(entry: CatalogEntry, skills: tuple[PluginSkill, ...]) -> str:
+    if not skills:
+        return str(entry.version)
+    digest = hashlib.sha256()
+    digest.update(str(entry.version).encode("utf-8"))
+    for skill in skills:
+        digest.update(skill.id.encode("utf-8"))
+        digest.update(str(skill.default_enabled).encode("utf-8"))
+        digest.update("|".join(skill.required_mcp_server_refs).encode("utf-8"))
+        digest.update(skill.provenance.source_ref.encode("utf-8"))
+        digest.update(skill.provenance.adapted_sha256.encode("utf-8"))
+    return f"{entry.version}+{digest.hexdigest()[:12]}"
 
 
 def _skill(
@@ -30,7 +47,7 @@ def _skill(
     source_path: str,
     source_sha256: str,
     source_license: str,
-    source_ref: str = LOCAL_OPENAI_PLUGIN_CACHE_REF,
+    source_ref: str = OPENAI_PLUGINS_SOURCE_REF,
     notes: str = "",
 ) -> PluginSkill:
     return adapted_skill(
@@ -101,7 +118,7 @@ _FIRST_PARTY_SKILLS_BY_CATALOG_ENTRY_ID: dict[str, tuple[PluginSkill, ...]] = {
             id="context",
             display_name="Slack context lookup",
             description="Find relevant Slack channels, threads, and messages for a task.",
-            relative_path="slack/context.md",
+            relative_path="slack/context-lookup.md",
             source_path="plugins/slack/skills/slack/SKILL.md",
             source_sha256="e9ce0c0f26ab433e32883401ae65732582fd0d0fb17ce9eafd5302673f0b9df3",
             source_license="MIT",

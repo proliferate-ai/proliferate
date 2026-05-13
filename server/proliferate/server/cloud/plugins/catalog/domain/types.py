@@ -52,4 +52,3 @@ class PluginPackage:
     display_name: str
     description: str
     skills: tuple[PluginSkill, ...]
-

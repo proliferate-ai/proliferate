@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";
+import { ConnectorStatusChip } from "@/components/plugins/status/ConnectorStatusChip";
 import { Plus } from "@/components/ui/icons";
 
 export function AvailablePluginPackageRow({
@@ -69,6 +70,7 @@ export function ConnectedPluginPackageRow({
       icon={<ConnectorIcon entry={model.record.catalogEntry} size="md" />}
       presentation={presentation}
       onOpen={model.status.actionable ? onStatusClick : onManage}
+      status={<ConnectorStatusChip status={model.status} onClick={onStatusClick} />}
       controls={(
         <div className="flex shrink-0 items-center gap-1">
           <div className="pointer-events-none opacity-0 transition-opacity group-hover/plugin-package:pointer-events-auto group-hover/plugin-package:opacity-100 group-focus-within/plugin-package:pointer-events-auto group-focus-within/plugin-package:opacity-100">
@@ -99,11 +101,13 @@ function PluginPackageCard({
   icon,
   onOpen,
   presentation,
+  status,
 }: {
   controls: ReactNode;
   icon: ReactNode;
   onOpen: () => void;
   presentation: PluginPackagePresentation;
+  status?: ReactNode;
 }) {
   return (
     <div className="group/plugin-package flex min-h-[60px] flex-col justify-center gap-2.5 rounded-2xl border border-transparent p-2.5 transition-colors hover:bg-foreground/5">
@@ -125,8 +129,16 @@ function PluginPackageCard({
             <div className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
               {presentation.description}
             </div>
+            <div className="line-clamp-1 text-xs text-muted-foreground/80">
+              {presentation.includesLabel}
+            </div>
           </div>
         </Button>
+        {status && (
+          <div className="hidden shrink-0 sm:block">
+            {status}
+          </div>
+        )}
         <div className="flex shrink-0 items-center">
           {controls}
         </div>

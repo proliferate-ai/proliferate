@@ -102,4 +102,3 @@ def _provenance_payload(provenance: PluginSkillProvenance) -> PluginSkillProvena
         reviewed_at=provenance.reviewed_at,
         notes=provenance.notes,
     )
-

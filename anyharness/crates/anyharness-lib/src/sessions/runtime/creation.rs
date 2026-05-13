@@ -154,9 +154,25 @@ impl SessionRuntime {
         session_id: &str,
         plugin_bundle: SessionPluginBundle,
     ) -> Result<(), crate::sessions::runtime::EnsureLiveSessionError> {
+        let Some(record) = self
+            .session_service
+            .get_session(session_id)
+            .map_err(crate::sessions::runtime::EnsureLiveSessionError::Internal)?
+        else {
+            return Err(
+                crate::sessions::runtime::EnsureLiveSessionError::SessionNotFound(
+                    session_id.to_string(),
+                ),
+            );
+        };
         if plugin_bundle.plugins.is_empty() {
             self.plugin_bundle_registry.clear_session_bundle(session_id);
             return Ok(());
+        }
+        if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
+            return Err(crate::sessions::runtime::EnsureLiveSessionError::Invalid(
+                "plugin bundles are not allowed for internal-only sessions".to_string(),
+            ));
         }
         validate_session_plugin_bundle(&plugin_bundle).map_err(|error| {
             crate::sessions::runtime::EnsureLiveSessionError::Invalid(error.to_string())
@@ -164,6 +180,10 @@ impl SessionRuntime {
         self.plugin_bundle_registry
             .set_session_bundle(session_id.to_string(), plugin_bundle);
         Ok(())
+    }
+
+    pub async fn has_live_session(&self, session_id: &str) -> bool {
+        self.acp_manager.get_handle(session_id).await.is_some()
     }
 }
 

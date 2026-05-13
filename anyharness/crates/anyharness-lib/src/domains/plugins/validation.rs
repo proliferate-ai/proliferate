@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use anyharness_contract::v1::{SessionMcpServer, SessionPluginBundle};
+use anyharness_contract::v1::{SessionMcpBindingOutcome, SessionMcpServer, SessionPluginBundle};
 
 use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 
@@ -24,6 +24,25 @@ const MAX_RESOURCE_CONTENT_LEN: usize = 128_000;
 const MAX_CREDENTIAL_BINDINGS_PER_PLUGIN: usize = 32;
 const MAX_CREDENTIAL_BINDING_ID_LEN: usize = 160;
 const MAX_MCP_SERVERS_PER_PLUGIN: usize = 64;
+const MAX_MCP_CONNECTION_ID_LEN: usize = 160;
+const MAX_MCP_SERVER_NAME_LEN: usize = 160;
+const MAX_MCP_URL_LEN: usize = 4_096;
+const MAX_MCP_HEADERS: usize = 64;
+const MAX_MCP_HEADER_NAME_LEN: usize = 160;
+const MAX_MCP_HEADER_VALUE_LEN: usize = 8_192;
+const MAX_MCP_COMMAND_LEN: usize = 1_024;
+const MAX_MCP_ARGS: usize = 128;
+const MAX_MCP_ARG_LEN: usize = 4_096;
+const MAX_MCP_ENV: usize = 128;
+const MAX_MCP_ENV_NAME_LEN: usize = 160;
+const MAX_MCP_ENV_VALUE_LEN: usize = 8_192;
+const RESERVED_MCP_SERVER_NAMES: &[&str] = &[
+    "cowork",
+    "proliferate_skills",
+    "reviews",
+    "subagents",
+    "workspace_naming",
+];
 
 pub fn validate_session_plugin_bundle(
     bundle: &SessionPluginBundle,
@@ -37,6 +56,7 @@ pub fn validate_session_plugin_bundle(
 
     let mut plugin_ids = HashSet::new();
     let mut skill_ids = HashSet::new();
+    let mut bundle_mcp_server_names = HashSet::new();
     let mut total_skills = 0usize;
 
     for plugin in &bundle.plugins {
@@ -60,6 +80,19 @@ pub fn validate_session_plugin_bundle(
             ))
         })?;
         let mcp_server_names = validate_mcp_servers(plugin_id, &plugin.mcp_servers)?;
+        validate_mcp_binding_summary_consistency(plugin_id, plugin, &mcp_server_names)?;
+        for server_name in &mcp_server_names {
+            if RESERVED_MCP_SERVER_NAMES.contains(&server_name.as_str()) {
+                return Err(invalid(format!(
+                    "plugin {plugin_id} uses reserved MCP server name: {server_name}"
+                )));
+            }
+            if !bundle_mcp_server_names.insert(server_name.clone()) {
+                return Err(invalid(format!(
+                    "duplicate MCP server name across plugin bundle: {server_name}"
+                )));
+            }
+        }
         let credential_binding_ids = validate_credential_bindings(plugin_id, plugin)?;
 
         for skill in &plugin.skills {
@@ -165,19 +198,133 @@ fn validate_mcp_servers(
 ) -> Result<HashSet<String>, SessionPluginBundleValidationError> {
     let mut names = HashSet::new();
     for server in mcp_servers {
+        let connection_id = session_mcp_connection_id(server).trim();
+        if connection_id.is_empty() {
+            return Err(invalid(format!(
+                "MCP connection id is required for plugin {plugin_id}"
+            )));
+        }
+        validate_text_field(
+            "MCP connection id",
+            connection_id,
+            MAX_MCP_CONNECTION_ID_LEN,
+        )?;
         let server_name = session_mcp_server_name(server).trim();
         if server_name.is_empty() {
             return Err(invalid(format!(
                 "MCP server name is required for plugin {plugin_id}"
             )));
         }
+        validate_text_field("MCP server name", server_name, MAX_MCP_SERVER_NAME_LEN)?;
         if !names.insert(server_name.to_string()) {
             return Err(invalid(format!(
                 "duplicate MCP server name {server_name} for plugin {plugin_id}"
             )));
         }
+        match server {
+            SessionMcpServer::Http(server) => {
+                let url = server.url.trim();
+                if !(url.starts_with("https://") || url.starts_with("http://")) {
+                    return Err(invalid(format!(
+                        "HTTP MCP server URL must use http or https for plugin {plugin_id}"
+                    )));
+                }
+                validate_text_field("HTTP MCP server URL", url, MAX_MCP_URL_LEN)?;
+                if server.headers.len() > MAX_MCP_HEADERS {
+                    return Err(invalid(format!(
+                        "MCP server {server_name} has too many headers: {}",
+                        server.headers.len()
+                    )));
+                }
+                for header in &server.headers {
+                    let name = header.name.trim();
+                    if name.is_empty() {
+                        return Err(invalid(format!(
+                            "MCP header name is required for server {server_name}"
+                        )));
+                    }
+                    validate_text_field("MCP header name", name, MAX_MCP_HEADER_NAME_LEN)?;
+                    validate_len(
+                        "MCP header value",
+                        header.value.as_str(),
+                        MAX_MCP_HEADER_VALUE_LEN,
+                    )?;
+                }
+            }
+            SessionMcpServer::Stdio(server) => {
+                let command = server.command.trim();
+                if command.is_empty() {
+                    return Err(invalid(format!(
+                        "stdio MCP command is required for plugin {plugin_id}"
+                    )));
+                }
+                validate_text_field("stdio MCP command", command, MAX_MCP_COMMAND_LEN)?;
+                if server.args.len() > MAX_MCP_ARGS {
+                    return Err(invalid(format!(
+                        "MCP server {server_name} has too many args: {}",
+                        server.args.len()
+                    )));
+                }
+                for arg in &server.args {
+                    validate_text_field("stdio MCP arg", arg.as_str(), MAX_MCP_ARG_LEN)?;
+                }
+                if server.env.len() > MAX_MCP_ENV {
+                    return Err(invalid(format!(
+                        "MCP server {server_name} has too many env vars: {}",
+                        server.env.len()
+                    )));
+                }
+                for variable in &server.env {
+                    let name = variable.name.trim();
+                    if name.is_empty() {
+                        return Err(invalid(format!(
+                            "MCP env name is required for server {server_name}"
+                        )));
+                    }
+                    validate_text_field("MCP env name", name, MAX_MCP_ENV_NAME_LEN)?;
+                    validate_len(
+                        "MCP env value",
+                        variable.value.as_str(),
+                        MAX_MCP_ENV_VALUE_LEN,
+                    )?;
+                }
+            }
+        }
     }
     Ok(names)
+}
+
+fn validate_mcp_binding_summary_consistency(
+    plugin_id: &str,
+    plugin: &anyharness_contract::v1::SessionPlugin,
+    mcp_server_names: &HashSet<String>,
+) -> Result<(), SessionPluginBundleValidationError> {
+    let mcp_connection_ids: HashSet<String> = plugin
+        .mcp_servers
+        .iter()
+        .map(|server| session_mcp_connection_id(server).trim().to_string())
+        .collect();
+    for summary in &plugin.mcp_binding_summaries {
+        if summary.outcome != SessionMcpBindingOutcome::Applied {
+            return Err(invalid(format!(
+                "plugin {plugin_id} contains non-applied MCP binding summary {}",
+                summary.id
+            )));
+        }
+        let summary_id = summary.id.trim();
+        if !mcp_connection_ids.contains(summary_id) {
+            return Err(invalid(format!(
+                "plugin {plugin_id} summary references unknown MCP connection {summary_id}"
+            )));
+        }
+        let summary_server_name = summary.server_name.trim();
+        if !mcp_server_names.contains(summary_server_name) {
+            return Err(invalid(format!(
+                "plugin {plugin_id} summary references unknown MCP server {summary_server_name}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_credential_bindings(
@@ -259,6 +406,25 @@ fn session_mcp_server_name(server: &SessionMcpServer) -> &str {
     }
 }
 
+fn session_mcp_connection_id(server: &SessionMcpServer) -> &str {
+    match server {
+        SessionMcpServer::Http(server) => &server.connection_id,
+        SessionMcpServer::Stdio(server) => &server.connection_id,
+    }
+}
+
+fn validate_text_field(
+    field: &str,
+    value: &str,
+    max: usize,
+) -> Result<(), SessionPluginBundleValidationError> {
+    validate_len(field, value, max)?;
+    if value.chars().any(char::is_control) {
+        return Err(invalid(format!("{field} contains control characters")));
+    }
+    Ok(())
+}
+
 fn validate_len(
     field: &str,
     value: &str,
@@ -280,9 +446,11 @@ fn invalid(message: impl Into<String>) -> SessionPluginBundleValidationError {
 #[cfg(test)]
 mod tests {
     use anyharness_contract::v1::{
-        SessionMcpBindingOutcome, SessionMcpBindingSummary, SessionMcpHttpServer, SessionMcpServer,
-        SessionMcpTransport, SessionPlugin, SessionPluginBundle, SessionPluginCredentialBinding,
-        SessionPluginCredentialBindingStatus, SessionPluginSkill, SessionPluginSkillResource,
+        SessionMcpBindingNotAppliedReason, SessionMcpBindingOutcome, SessionMcpBindingSummary,
+        SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+        SessionMcpStdioServer, SessionMcpTransport, SessionPlugin, SessionPluginBundle,
+        SessionPluginCredentialBinding, SessionPluginCredentialBindingStatus, SessionPluginSkill,
+        SessionPluginSkillResource,
     };
 
     use super::validate_session_plugin_bundle;
@@ -336,6 +504,118 @@ mod tests {
         bundle.plugins[0].skills[0].instructions = "a".repeat(super::MAX_INSTRUCTIONS_LEN + 1);
 
         assert_error_contains(&bundle, "skill instructions is too long");
+    }
+
+    #[test]
+    fn rejects_reserved_mcp_server_names() {
+        let mut bundle = valid_bundle();
+        if let SessionMcpServer::Http(server) = &mut bundle.plugins[0].mcp_servers[0] {
+            server.server_name = "proliferate_skills".to_string();
+        }
+        bundle.plugins[0].mcp_binding_summaries[0].server_name = "proliferate_skills".to_string();
+
+        assert_error_contains(&bundle, "reserved MCP server name");
+    }
+
+    #[test]
+    fn rejects_duplicate_mcp_server_names_across_plugins() {
+        let mut bundle = valid_bundle();
+        let mut second = bundle.plugins[0].clone();
+        second.plugin_id = "connector.conn_other".to_string();
+        if let SessionMcpServer::Http(server) = &mut second.mcp_servers[0] {
+            server.connection_id = "conn_other".to_string();
+        }
+        second.credential_bindings[0].id = "conn_other".to_string();
+        second.mcp_binding_summaries[0].id = "conn_other".to_string();
+        second.skills[0].skill_id = "connector.conn_other.triage".to_string();
+        second.skills[0].credential_binding_ids = vec!["conn_other".to_string()];
+        bundle.plugins.push(second);
+
+        assert_error_contains(&bundle, "duplicate MCP server name across plugin bundle");
+    }
+
+    #[test]
+    fn rejects_non_applied_mcp_binding_summaries() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_binding_summaries[0].outcome = SessionMcpBindingOutcome::NotApplied;
+        bundle.plugins[0].mcp_binding_summaries[0].reason =
+            Some(SessionMcpBindingNotAppliedReason::MissingSecret);
+
+        assert_error_contains(&bundle, "non-applied MCP binding summary");
+    }
+
+    #[test]
+    fn rejects_summary_for_unknown_mcp_connection() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_binding_summaries[0].id = "missing".to_string();
+
+        assert_error_contains(&bundle, "summary references unknown MCP connection");
+    }
+
+    #[test]
+    fn rejects_blank_mcp_connection_id() {
+        let mut bundle = valid_bundle();
+        if let SessionMcpServer::Http(server) = &mut bundle.plugins[0].mcp_servers[0] {
+            server.connection_id = " ".to_string();
+        }
+
+        assert_error_contains(&bundle, "MCP connection id is required");
+    }
+
+    #[test]
+    fn rejects_invalid_http_mcp_url() {
+        let mut bundle = valid_bundle();
+        if let SessionMcpServer::Http(server) = &mut bundle.plugins[0].mcp_servers[0] {
+            server.url = "file:///tmp/server".to_string();
+        }
+
+        assert_error_contains(&bundle, "URL must use http or https");
+    }
+
+    #[test]
+    fn rejects_blank_stdio_mcp_command() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_servers[0] = SessionMcpServer::Stdio(SessionMcpStdioServer {
+            connection_id: "conn_github".to_string(),
+            catalog_entry_id: Some("github".to_string()),
+            server_name: "github".to_string(),
+            command: " ".to_string(),
+            args: Vec::new(),
+            env: Vec::new(),
+        });
+
+        assert_error_contains(&bundle, "stdio MCP command is required");
+    }
+
+    #[test]
+    fn rejects_blank_http_header_name() {
+        let mut bundle = valid_bundle();
+        if let SessionMcpServer::Http(server) = &mut bundle.plugins[0].mcp_servers[0] {
+            server.headers.push(SessionMcpHeader {
+                name: " ".to_string(),
+                value: "secret".to_string(),
+            });
+        }
+
+        assert_error_contains(&bundle, "MCP header name is required");
+    }
+
+    #[test]
+    fn rejects_blank_stdio_env_name() {
+        let mut bundle = valid_bundle();
+        bundle.plugins[0].mcp_servers[0] = SessionMcpServer::Stdio(SessionMcpStdioServer {
+            connection_id: "conn_github".to_string(),
+            catalog_entry_id: Some("github".to_string()),
+            server_name: "github".to_string(),
+            command: "github-mcp".to_string(),
+            args: Vec::new(),
+            env: vec![SessionMcpEnvVar {
+                name: " ".to_string(),
+                value: "secret".to_string(),
+            }],
+        });
+
+        assert_error_contains(&bundle, "MCP env name is required");
     }
 
     fn assert_error_contains(bundle: &SessionPluginBundle, expected: &str) {

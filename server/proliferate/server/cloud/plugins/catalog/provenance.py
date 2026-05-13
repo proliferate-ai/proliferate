@@ -12,7 +12,7 @@ from proliferate.server.cloud.plugins.catalog.domain.types import (
 )
 
 
-SKILL_ROOT = Path(__file__).resolve().parents[1] / "first_party"
+SKILL_ROOT = Path(__file__).resolve().parent / "first_party"
 
 
 def adapted_skill(
@@ -36,7 +36,7 @@ def adapted_skill(
     default_enabled: bool = True,
     notes: str = "",
 ) -> PluginSkill:
-    instructions = _read_skill_file(relative_path)
+    instructions = read_skill_file(relative_path)
     return PluginSkill(
         id=id,
         display_name=display_name,
@@ -51,7 +51,7 @@ def adapted_skill(
             source_path=source_path,
             source_ref=source_ref,
             source_sha256=source_sha256,
-            adapted_sha256=_sha256_text(instructions),
+            adapted_sha256=sha256_text(instructions),
             source_license=source_license,
             import_mode=import_mode,
             review_status=review_status,
@@ -62,7 +62,7 @@ def adapted_skill(
     )
 
 
-def _read_skill_file(relative_path: str) -> str:
+def read_skill_file(relative_path: str) -> str:
     path = (SKILL_ROOT / relative_path).resolve()
     if not path.is_file():
         raise FileNotFoundError(f"plugin skill file not found: {relative_path}")
@@ -71,6 +71,5 @@ def _read_skill_file(relative_path: str) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-def _sha256_text(value: str) -> str:
+def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-

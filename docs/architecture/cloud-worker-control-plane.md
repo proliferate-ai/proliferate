@@ -451,6 +451,7 @@ V1 command kinds:
 
 ```text
 start_session
+resume_session
 send_prompt
 resolve_interaction
 update_session_config
@@ -1093,6 +1094,7 @@ POST /v1/workspaces/{workspace_id}/stop-preflight   # optional if separate
 GET  /v1/sessions?workspace_id=...
 POST /v1/sessions
 GET  /v1/sessions/{session_id}
+POST /v1/sessions/{session_id}/resume
 POST /v1/sessions/{session_id}/prompt
 PATCH /v1/sessions/{session_id}/config
 POST /v1/sessions/{session_id}/interactions/{interaction_id}/resolve
@@ -1105,6 +1107,11 @@ GET  /v1/sessions/{session_id}/stream?after_seq=...
 If current routes use slightly different paths, keep the public route stable
 and adapt inside the worker `anyharness_client` module. Do not create duplicate
 AnyHarness behavior just for worker.
+
+For `start_session` and `resume_session`, Cloud resolves the authorized
+MCP/plugin launch input before delivery. The worker transports that
+session-scoped input to AnyHarness; it does not choose plugins, skills,
+credentials, or bundle policy.
 
 ## AnyHarness Implementation Placement
 

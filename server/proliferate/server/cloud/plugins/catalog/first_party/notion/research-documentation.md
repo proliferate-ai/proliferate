@@ -7,4 +7,3 @@ Use this skill to organize research findings into Notion.
 3. Keep source links attached to the claims they support.
 4. Mark confidence and open questions explicitly.
 5. Do not create broad knowledge-base structure unless the user asks for it.
-

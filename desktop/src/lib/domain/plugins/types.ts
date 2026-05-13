@@ -39,4 +39,3 @@ export interface PluginPackageCatalogEntry {
   description: string;
   skills: readonly PluginPackageSkill[];
 }
-

@@ -7,4 +7,3 @@ Use this skill to inspect Hugging Face datasets through the mounted MCP server.
 3. Page through rows deliberately. Do not assume a small sample represents the whole dataset.
 4. Preserve dataset ids, config names, split names, row offsets, and source URLs.
 5. Avoid upload, delete, or write operations unless the user explicitly asks and the mounted tools support them.
-

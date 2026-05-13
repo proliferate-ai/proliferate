@@ -296,6 +296,7 @@ describe("resumeSession", () => {
     expect(resumeOptions).toEqual({
       mcpBindingSummaries: undefined,
       mcpServers: [],
+      pluginBundle: { plugins: [] },
     });
     if (requestOptions !== undefined) {
       expect(requestOptions).toMatchObject({

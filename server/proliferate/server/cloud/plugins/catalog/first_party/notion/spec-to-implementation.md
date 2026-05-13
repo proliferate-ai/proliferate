@@ -7,4 +7,3 @@ Use this skill when a Notion document is the source of truth for implementation 
 3. Preserve links back to the source Notion page.
 4. Do not treat stale Notion content as truth if repository code or user instructions conflict. Surface the conflict.
 5. If updating Notion after implementation, summarize actual changes and verification, not intentions.
-

@@ -7,4 +7,3 @@ Use this skill to turn research, session findings, or decisions into structured 
 3. Prefer concise headings and bullets over long narrative.
 4. When updating Notion, preserve existing page structure unless the user asks for a rewrite.
 5. If the target location is unclear, draft the proposed content and ask where it should live.
-

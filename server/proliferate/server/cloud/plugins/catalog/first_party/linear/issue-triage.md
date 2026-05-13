@@ -7,4 +7,3 @@ Use the mounted Linear MCP server to inspect and summarize Linear work.
 3. Summarize current state, blockers, owners, dates, and related work separately.
 4. For create, update, comment, label, or status changes, only proceed when the user explicitly asks. Echo the intended change before executing it.
 5. If the request is ambiguous, provide the likely matching issues and ask the user to choose.
-

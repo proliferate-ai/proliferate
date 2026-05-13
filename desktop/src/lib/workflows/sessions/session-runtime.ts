@@ -297,7 +297,7 @@ export async function resumeSession(
     : {
       mcpServers: [],
       mcpBindingSummaries: [],
-      pluginBundle: undefined,
+      pluginBundle: { plugins: [] },
       releaseRuntimeReservations: async () => {},
     };
   const { mcpServers, mcpBindingSummaries, pluginBundle } = mcpLaunch;

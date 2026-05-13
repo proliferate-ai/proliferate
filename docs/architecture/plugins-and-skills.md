@@ -123,7 +123,7 @@ SessionPluginBundle
   contains selected enabled components only
   includes selected skill metadata plus inline instructions or session-scoped refs
   includes selected plugin MCP server definitions
-  includes credential binding references, never broad raw secrets
+  includes credential binding references
   sent to AnyHarness through the session API contract
 
 Runtime mounted state
@@ -157,7 +157,9 @@ session bundle does not need to carry hundreds of full markdown files.
 
 Existing sessions must not silently change behavior when a plugin package is
 updated. New package versions affect new sessions by default. Existing sessions
-only change when explicitly resumed or restarted with a newly resolved bundle.
+only change on cold resume or restart with a newly resolved bundle. A bundle
+change for an already-live AnyHarness actor is rejected until actor-side MCP
+remount support exists.
 
 ## Predefined Packages and Catalogs
 
@@ -187,7 +189,7 @@ server/proliferate/server/cloud/plugins/catalog/
     Pydantic API schemas for plugin package responses
   domain/types.py
     dataclass domain structs for package, skill, provenance
-  domain/provenance.py
+  provenance.py
     file loader and adapted skill hash calculation
   first_party.py
     curated first-party package skill definitions
@@ -214,6 +216,12 @@ Plugin package entry
 
 `CatalogEntry` stays connector-only. Do not add skill bodies, package
 components, or product plugin policy to `mcp_catalog/domain/types.py`.
+
+The current API transports plugin package records as a `pluginPackages` sidecar
+on MCP catalog and MCP materialization responses because Desktop needs both
+records during connector setup and session launch. That is transport
+composition, not ownership. The plugin package model, loader, provenance
+checks, and first-party skill files live under `cloud/plugins/catalog/**`.
 
 ### Skill Eligibility And Safety
 
@@ -648,7 +656,9 @@ Launch behavior:
   `resolveSessionMcpServersForLaunch` returns no plugin bundle.
 - On resume, when the policy is disabled or no connectors apply,
   `resolveSessionMcpServersForLaunch` returns explicit `{ plugins: [] }` so
-  AnyHarness clears stale in-memory plugin state.
+  AnyHarness clears stale in-memory plugin state. Desktop sends this with an
+  MCP refresh so durable MCP summaries are replaced by the user-visible current
+  launch state.
 
 ## Bundle Resolution Flow
 
@@ -879,9 +889,15 @@ Resume session:
 ```text
 api/http/sessions.rs
   parses ResumeSessionRequest.pluginBundle
+  rejects pluginBundle changes when the session actor is already live
   SessionRuntime.set_session_plugin_bundle()
   ensure_live_session()
 ```
+
+Resume plugin bundles are a cold-start/restart input. If a live actor already
+exists, AnyHarness returns `409 SESSION_RESTART_REQUIRED` for any
+`pluginBundle` field instead of mutating `PluginBundleRegistry` behind a running
+session. Missing `pluginBundle` preserves the current in-memory bundle.
 
 App wiring:
 
@@ -1055,7 +1071,15 @@ desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 Plugins declare credential requirements. Resolvers select credential bindings.
 
 `SessionPluginBundle` may carry credential binding references and readiness
-status. It must not carry broad raw secret material.
+status. In the current v0 shape it also embeds concrete `SessionMcpServer`
+launch definitions inside each selected plugin entry. HTTP server definitions
+can contain secret-bearing headers after Cloud materialization, so the bundle is
+secret-bearing launch input even though plugin package catalog files are not.
+
+Do not log `SessionPluginBundle` payloads, persist them as plaintext, expose
+them in UI/debug surfaces, or treat them as durable package metadata. The
+long-term ref-backed model should replace embedded secret-bearing launch data
+with session-scoped credential grants or references where possible.
 
 Allowed:
 

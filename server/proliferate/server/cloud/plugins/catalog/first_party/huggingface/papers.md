@@ -7,4 +7,3 @@ Use this skill to look up and interpret Hugging Face paper pages.
 3. Separate paper claims from your interpretation.
 4. Cite linked resources by title or URL when discussing implementation relevance.
 5. If the user needs a deep paper review, identify methods, evidence, limitations, and practical relevance.
-

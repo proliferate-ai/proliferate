@@ -41,6 +41,7 @@ curated plugin skill examples in the OpenAI plugins repository:
 
 - Project: https://github.com/openai/plugins
 - Package: curated plugin skill examples
+- Source ref: 7955f1db081ddb3e14387b27cd65cf96b3e33931
 - Licenses represented in the adapted sources: MIT and Apache-2.0
 - Adaptation metadata: each skill exposes source path, source hash, adapted
   hash, license, review status, reviewer, and review date in the cloud plugin

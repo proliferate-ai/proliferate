@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from proliferate.config import settings
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.server.cloud.mcp_catalog.domain.types import (
     ArgTemplate,
@@ -16,6 +17,7 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     StaticUrl,
 )
 from proliferate.server.cloud.mcp_materialization import http_launch, record_materialization
+from proliferate.server.cloud.mcp_materialization import service as materialization_service
 from proliferate.server.cloud.mcp_materialization.models import (
     LocalStdioCandidateModel,
     MaterializeCloudMcpResponse,
@@ -24,6 +26,7 @@ from proliferate.server.cloud.mcp_materialization.models import (
     local_stdio_static_arg_payload,
     local_stdio_static_env_payload,
 )
+from proliferate.server.cloud.mcp_materialization.results import MaterializedRecordResult
 from proliferate.utils.crypto import encrypt_json
 
 
@@ -372,3 +375,73 @@ def test_materialization_repr_redacts_launch_values() -> None:
 
     assert "secret-token" not in rendered
     assert "secret-arg" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_cloud_materialization_includes_plugin_packages_for_connections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    github = _connection(catalog_entry_id="github")
+    context7 = _connection(catalog_entry_id="context7")
+
+    async def _list_user_connections(_db, _user_id):
+        return [github, context7]
+
+    async def _materialize_record_with_timeout(_record, *, target_location, semaphore):
+        return MaterializedRecordResult()
+
+    monkeypatch.setattr(settings, "cloud_mcp_enabled", True)
+    monkeypatch.setattr(materialization_service, "list_user_connections", _list_user_connections)
+    monkeypatch.setattr(
+        materialization_service,
+        "materialize_record_with_timeout",
+        _materialize_record_with_timeout,
+    )
+
+    response = await materialization_service.materialize_cloud_mcp_servers(
+        object(),
+        user_id=github.user_id,
+        body=materialization_service.MaterializeCloudMcpRequest(targetLocation="cloud"),
+    )
+
+    packages = {package.catalog_entry_id: package for package in response.plugin_packages}
+    assert set(packages) == {"github", "context7"}
+    assert [skill.id for skill in packages["github"].skills] == [
+        "triage",
+        "address-comments",
+        "fix-ci",
+    ]
+    assert packages["context7"].skills == []
+
+
+@pytest.mark.asyncio
+async def test_cloud_materialization_filters_plugin_packages_by_requested_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    github = _connection(catalog_entry_id="github")
+    context7 = _connection(catalog_entry_id="context7")
+
+    async def _list_user_connections(_db, _user_id):
+        return [github, context7]
+
+    async def _materialize_record_with_timeout(_record, *, target_location, semaphore):
+        return MaterializedRecordResult()
+
+    monkeypatch.setattr(settings, "cloud_mcp_enabled", True)
+    monkeypatch.setattr(materialization_service, "list_user_connections", _list_user_connections)
+    monkeypatch.setattr(
+        materialization_service,
+        "materialize_record_with_timeout",
+        _materialize_record_with_timeout,
+    )
+
+    response = await materialization_service.materialize_cloud_mcp_servers(
+        object(),
+        user_id=github.user_id,
+        body=materialization_service.MaterializeCloudMcpRequest(
+            targetLocation="cloud",
+            connectionIds=[github.connection_id],
+        ),
+    )
+
+    assert [package.catalog_entry_id for package in response.plugin_packages] == ["github"]

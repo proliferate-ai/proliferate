@@ -1,8 +1,45 @@
-import type { CloudPluginPackage } from "@/lib/access/cloud/client";
 import type { PluginPackageCatalogEntry } from "@/lib/domain/plugins/types";
 
+interface CloudPluginPackageLike {
+  id: string;
+  catalogEntryId: string;
+  version: string;
+  displayName: string;
+  description: string;
+  skills?: readonly CloudPluginPackageSkillLike[];
+}
+
+interface CloudPluginPackageSkillLike {
+  id: string;
+  displayName: string;
+  description: string;
+  instructions: string;
+  requiredMcpServerRefs?: readonly string[];
+  requiresCredentialBinding: boolean;
+  resources?: readonly {
+    resourceId: string;
+    displayName?: string | null;
+    contentType: string;
+    content: string;
+  }[];
+  defaultEnabled: boolean;
+  provenance?: {
+    sourceRepoUrl: string;
+    sourcePath: string;
+    sourceRef: string;
+    sourceSha256: string;
+    adaptedSha256: string;
+    sourceLicense: string;
+    importMode: "adapted" | "vendored";
+    reviewStatus: "reviewed" | "pending";
+    reviewer: string;
+    reviewedAt: string;
+    notes?: string | null;
+  };
+}
+
 export function cloudPluginPackageToLocal(
-  pluginPackage: CloudPluginPackage,
+  pluginPackage: CloudPluginPackageLike,
 ): PluginPackageCatalogEntry {
   return {
     id: pluginPackage.id,
@@ -42,4 +79,3 @@ export function cloudPluginPackageToLocal(
     })),
   };
 }
-

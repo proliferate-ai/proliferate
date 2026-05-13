@@ -11,6 +11,7 @@ use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
+use crate::sessions::model::SessionMcpBindingPolicy;
 
 #[derive(Clone)]
 pub struct PluginSessionLaunchExtension {
@@ -108,6 +109,26 @@ mod tests {
         assert_eq!(extras.mcp_servers.len(), 2);
         assert_eq!(extras.system_prompt_append.len(), 1);
         assert!(extras.system_prompt_append[0].contains("connector.conn_github.triage"));
+    }
+
+    #[test]
+    fn internal_only_session_mounts_no_plugin_extras() {
+        let registry = PluginBundleRegistry::default();
+        registry.set_session_bundle("session-1", skill_bundle());
+        let extension = extension(registry);
+        let workspace = workspace_record();
+        let mut session = session_record();
+        session.mcp_binding_policy = SessionMcpBindingPolicy::InternalOnly;
+
+        let extras = extension
+            .resolve_launch_extras(&SessionLaunchContext {
+                workspace: &workspace,
+                session: &session,
+            })
+            .expect("launch extras should resolve");
+
+        assert!(extras.mcp_servers.is_empty());
+        assert!(extras.system_prompt_append.is_empty());
     }
 
     fn extension(registry: PluginBundleRegistry) -> PluginSessionLaunchExtension {
@@ -250,6 +271,9 @@ impl SessionExtension for PluginSessionLaunchExtension {
         &self,
         ctx: &SessionLaunchContext<'_>,
     ) -> anyhow::Result<SessionLaunchExtras> {
+        if ctx.session.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
+            return Ok(SessionLaunchExtras::default());
+        }
         let Some(bundle) = self.registry.get_session_bundle(&ctx.session.id) else {
             return Ok(SessionLaunchExtras::default());
         };

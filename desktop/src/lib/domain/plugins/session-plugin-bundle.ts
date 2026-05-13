@@ -39,12 +39,15 @@ export function buildSessionPluginBundle(input: {
       : undefined;
     const skills = (pluginPackage?.skills ?? [])
       .filter((skill) => skill.defaultEnabled)
-      .map((skill) => sessionSkillFromCatalogSkill({
-        pluginId,
-        skill,
-        summary,
-        mcpServers,
-      }));
+      .flatMap((skill) => {
+        const sessionSkill = sessionSkillFromCatalogSkill({
+          pluginId,
+          skill,
+          summary,
+          mcpServers,
+        });
+        return sessionSkill ? [sessionSkill] : [];
+      });
 
     return [{
       pluginId,
@@ -77,8 +80,11 @@ function sessionSkillFromCatalogSkill({
   skill: PluginPackageSkill;
   summary: SessionMcpBindingSummary;
   mcpServers: SessionMcpServer[];
-}): SessionPluginSkill {
+}): SessionPluginSkill | null {
   const requiredMcpServers = concreteRequiredMcpServers(skill, mcpServers, summary);
+  if (!requiredMcpServers) {
+    return null;
+  }
   return {
     skillId: `${pluginId}.${skill.id}`,
     displayName: skill.displayName,
@@ -99,7 +105,7 @@ function concreteRequiredMcpServers(
   skill: PluginPackageSkill,
   mcpServers: SessionMcpServer[],
   summary: SessionMcpBindingSummary,
-): string[] {
+): string[] | null {
   const refs = new Set(skill.requiredMcpServerRefs);
   const matchedServers = refs.size === 0
     ? mcpServers
@@ -108,7 +114,10 @@ function concreteRequiredMcpServers(
       || refs.has(sessionMcpServerName(server))
     );
   const names = matchedServers.map(sessionMcpServerName);
-  return names.length > 0 ? names : [summary.serverName];
+  if (names.length > 0) {
+    return names;
+  }
+  return refs.size === 0 ? [summary.serverName] : null;
 }
 
 function sessionMcpConnectionId(server: SessionMcpServer): string {

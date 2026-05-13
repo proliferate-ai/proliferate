@@ -7,4 +7,3 @@ Use the mounted GitHub MCP server to orient before making claims about repositor
 3. Preserve GitHub identifiers returned by tools, including repository owner/name, pull request number, issue number, comment ids, check run ids, workflow run ids, and commit shas.
 4. When summarizing, separate observed GitHub state from recommendations.
 5. Do not publish commits, push branches, merge pull requests, close issues, or otherwise mutate GitHub unless the user explicitly asks for that action and the available MCP tools support it.
-
