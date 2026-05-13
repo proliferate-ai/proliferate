@@ -11,6 +11,7 @@ BLOCKED_PATHS = [
     "anyharness/crates/anyharness-lib/src/sessions/runtime.rs",
     "anyharness/crates/anyharness-lib/src/sessions/store.rs",
     "anyharness/crates/anyharness-lib/src/acp/event_sink.rs",
+    "anyharness/crates/anyharness-lib/src/acp/session_actor.rs",
 ]
 
 

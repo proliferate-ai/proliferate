@@ -18,8 +18,8 @@ legal mode values:
   (`anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs`,
   `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`).
 - At session start the ACP binary returns its own `SessionModeState`, which
-  the session actor stores as `LegacyModeState`
-  (`anyharness/crates/anyharness-lib/src/acp/session_actor.rs:286-374`).
+  the live-session actor config path stores as `LegacyModeState`
+  (`anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`).
 - `build_live_config_snapshot` normalizes whatever the agent exposed into the
   common `NormalizedSessionControls` buckets (`model`, `collaboration_mode`,
   `mode`, `reasoning`, `effort`, `fast_mode`, plus `extras`)

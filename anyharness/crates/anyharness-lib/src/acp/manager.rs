@@ -7,14 +7,18 @@ use tokio::sync::{broadcast, oneshot, watch, RwLock};
 
 use super::permission_broker::InteractionBroker;
 use super::replay_actor::{spawn_replay_actor, ReplayActorConfig};
-use super::session_actor::{
-    spawn_session_actor_pending, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
-    SessionStartupStrategy, SessionTurnFinishResult,
-};
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
+use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::actor::spawn::{
+    spawn_session_actor_pending, ActorReadyResult, PendingSessionActor,
+};
+use crate::live::sessions::actor::state::SessionActorConfig;
+use crate::live::sessions::actor::state::SessionStartupStrategy;
+use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
@@ -226,7 +230,7 @@ impl AcpManager {
             let (tx, rx) = oneshot::channel();
             let send_result = handle
                 .command_tx
-                .send(super::session_actor::SessionCommand::InjectRuntimeEvent {
+                .send(SessionCommand::InjectRuntimeEvent {
                     event: event.clone(),
                     respond_to: tx,
                 })
@@ -345,7 +349,7 @@ impl Clone for AcpManager {
 }
 
 async fn wait_for_new_startup_readiness(
-    pending: super::session_actor::PendingSessionActor,
+    pending: PendingSessionActor,
     startup_tx: watch::Sender<StartupReadinessState>,
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
     pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
@@ -422,13 +426,15 @@ mod tests {
     use tokio::time::{sleep, Duration};
 
     use super::{AcpManager, PromptAttachmentStorage};
-    use crate::acp::session_actor::{LiveSessionHandle, SessionStartupStrategy};
     use crate::domains::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
         ResolvedArtifact,
     };
     use crate::domains::agents::registry::built_in_registry;
     use crate::domains::plans::{service::PlanService, store::PlanStore};
+    use crate::live::sessions::actor::command::SessionCommand;
+    use crate::live::sessions::actor::state::SessionStartupStrategy;
+    use crate::live::sessions::handle::LiveSessionHandle;
     use crate::persistence::Db;
     use crate::sessions::model::{SessionEventRecord, SessionRecord};
     use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
@@ -806,10 +812,8 @@ mod tests {
             .insert("session-1".to_string(), handle);
 
         let actor = tokio::spawn(async move {
-            let Some(super::super::session_actor::SessionCommand::InjectRuntimeEvent {
-                respond_to,
-                ..
-            }) = command_rx.recv().await
+            let Some(SessionCommand::InjectRuntimeEvent { respond_to, .. }) =
+                command_rx.recv().await
             else {
                 panic!("expected InjectRuntimeEvent");
             };

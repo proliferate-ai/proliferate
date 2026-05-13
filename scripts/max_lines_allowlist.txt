@@ -1,6 +1,5 @@
 # Existing oversized source files. Keep this list shrinking over time.
 anyharness/crates/anyharness-lib/src/acp/manager.rs
-anyharness/crates/anyharness-lib/src/acp/session_actor.rs
 anyharness/crates/anyharness-lib/src/domains/agents/installer.rs
 anyharness/crates/anyharness-lib/src/domains/agents/catalog.rs
 anyharness/crates/anyharness-lib/src/domains/agents/resolver.rs

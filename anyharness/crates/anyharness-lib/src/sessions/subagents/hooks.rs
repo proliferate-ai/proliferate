@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::model::SubagentCompletionRecord;
 use super::service::SubagentService;
 use crate::acp::manager::AcpManager;
-use crate::acp::session_actor::SessionCommand;
+use crate::live::sessions::actor::command::SessionCommand;
 use crate::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };

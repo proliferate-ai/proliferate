@@ -17,9 +17,9 @@ use serde::Deserialize;
 
 use super::access::assert_session_mutable;
 use super::error::ApiError;
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;

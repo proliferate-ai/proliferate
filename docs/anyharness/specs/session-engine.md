@@ -23,8 +23,8 @@ SessionRuntime      anyharness-lib/src/sessions/runtime/
 SessionService      anyharness-lib/src/sessions/service.rs
 SessionStore        anyharness-lib/src/sessions/store/**
 AcpManager          target name: LiveSessionManager
-LiveSessionHandle   currently inside acp/session_actor.rs
-SessionActor        currently acp/session_actor.rs
+LiveSessionHandle   live/sessions/handle.rs
+SessionActor        live/sessions/actor/**
 RuntimeClient       target name: AcpClient
 SessionEventSink    currently acp/event_sink/**
 InteractionBroker   currently acp/permission_broker/**
@@ -36,8 +36,8 @@ Implementation reality after the completed migration phases:
 - `SessionStore` is split under `sessions/store/**`.
 - `SessionRuntime` is split under `sessions/runtime/**`.
 - `SessionEventSink` is split under `acp/event_sink/**`.
-- `acp/session_actor.rs` remains the current actor implementation; the target
-  actor rewrite is specified in `specs/session-actor.md`.
+- `SessionActor` is split under `live/sessions/actor/**`; connection mechanics
+  are split under `live/sessions/connection/**`.
 
 ## Role Map
 
@@ -123,8 +123,8 @@ One running agent session state machine:
 - event sink calls
 - shutdown/error handling
 
-The current implementation remains a single `acp/session_actor.rs` file. The
-rewrite into an actor folder is specified in `specs/session-actor.md`.
+The actor implementation is split under `live/sessions/actor/**`; the detailed
+folder contract is specified in `specs/session-actor.md`.
 
 ### AcpClient
 
@@ -230,10 +230,11 @@ live/sessions/actor/
   mod.rs
   command.rs
   state.rs
-  loop.rs
+  event_loop.rs
   turn/
   config/
   notifications/
+  fork/
   interactions/
   shutdown/
 ```

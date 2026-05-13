@@ -4,7 +4,7 @@ use anyharness_contract::v1::{
 };
 
 use super::model::SessionRecord;
-use crate::acp::session_actor::LiveSessionExecutionSnapshot;
+use crate::live::sessions::handle::LiveSessionExecutionSnapshot;
 
 pub fn summarize_session_record(
     record: &SessionRecord,

@@ -15,12 +15,12 @@ use super::access::map_access_error;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::files::{map_service_error, read_response_to_contract, run_files_task, FilePathQuery};
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces::workspace_to_contract;
 use super::workspaces_contract::detection_result_to_contract;
 use crate::adapters::files::service::WorkspaceFilesService;
 use crate::adapters::git::GitService;
 use crate::app::AppState;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::repo_roots::model::RepoRootRecord;
 use crate::workspaces::types::ResolveRepoRootError;
 

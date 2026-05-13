@@ -7,7 +7,6 @@ pub mod files;
 pub mod git;
 pub mod health;
 pub mod hosting;
-pub mod latency;
 pub mod mobility;
 pub mod model_registries;
 pub mod plans;

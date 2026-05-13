@@ -27,7 +27,12 @@ Current migration reality:
   launch assembly shape.
 - `acp/event_sink/**` is the current split session event sink shape.
 - `sessions/runtime/**` is the current split session runtime shape.
-- `acp/session_actor.rs` remains a manual deferred rewrite target.
+- `live/sessions/actor/**`, `live/sessions/connection/**`, and
+  `live/sessions/handle.rs` are the current split live session actor shape.
+  Related collaborators such as `AcpManager`, `RuntimeClient`,
+  `SessionEventSink`, `InteractionBroker`, `BackgroundWorkRegistry`, and
+  `replay_actor` may still use transitional `acp/**` paths until their own
+  topology passes.
 
 ## Module Style
 
@@ -58,14 +63,14 @@ multiple responsibility families, define its internal shape before splitting
 files. The target is legibility by path at both levels:
 
 ```text
-domains/sessions/runtime/prompt.rs   # session workflow entrypoint
-live/sessions/actor/turn/run.rs      # active prompt turn loop
-live/sessions/event_sink/tools.rs    # transcript event normalization
+domains/sessions/runtime/prompt.rs    # session workflow entrypoint
+live/sessions/actor/turn/active.rs    # active prompt turn loop
+live/sessions/event_sink/tools.rs     # transcript event normalization
 ```
 
-Do not dump unrelated files into a newly-correct parent folder. A move from
-`acp/session_actor.rs` to `live/sessions/actor/*.rs` is only useful if the
-children also encode responsibility.
+Do not dump unrelated files into a newly-correct parent folder. A move into
+`live/sessions/actor/*.rs` is only useful if the children also encode
+responsibility.
 
 Large subsystem splits should name the local architecture explicitly in the
 owning spec or guide. For example:

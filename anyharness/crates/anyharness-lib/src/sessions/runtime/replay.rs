@@ -1,6 +1,6 @@
 use anyharness_contract::v1::ReplayRecordingSummary;
 
-use crate::acp::session_actor::SessionCommand;
+use crate::live::sessions::actor::command::SessionCommand;
 use crate::origin::OriginContext;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::replay::{
