@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
+use tokio::sync::oneshot;
 
 use crate::live::sessions::actor::command::{ForkSessionCommandError, ForkSessionCommandResult};
 use crate::live::sessions::connection::shutdown::close_native_session;
@@ -76,4 +77,22 @@ pub(in crate::live::sessions::actor) async fn close_native_child_session(
     supports_close: bool,
 ) -> anyhow::Result<()> {
     close_native_session(conn, native_session_id, supports_close).await
+}
+
+pub(in crate::live::sessions::actor) async fn handle_close_native_child_session(
+    conn: &acp::ClientSideConnection,
+    native_session_id: String,
+    supports_close: bool,
+    respond_to: oneshot::Sender<anyhow::Result<()>>,
+) {
+    let result = close_native_child_session(conn, &native_session_id, supports_close).await;
+    let _ = respond_to.send(result);
+}
+
+pub(in crate::live::sessions::actor) fn reject_busy_close_native_child_session(
+    respond_to: oneshot::Sender<anyhow::Result<()>>,
+) {
+    let _ = respond_to.send(Err(anyhow::anyhow!(
+        "cannot close native child session while parent session is busy"
+    )));
 }

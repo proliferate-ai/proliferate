@@ -7,7 +7,7 @@ use crate::live::sessions::actor::background_work::handle_background_work_update
 use crate::live::sessions::actor::command::{InteractionResolution, SessionCommand};
 use crate::live::sessions::actor::config::handle::handle_idle_config_command;
 use crate::live::sessions::actor::fork::handle::{
-    close_native_child_session, fork_native_session, verify_fork_ready,
+    fork_native_session, handle_close_native_child_session, verify_fork_ready,
 };
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
 use crate::live::sessions::actor::interactions::handle::{
@@ -149,13 +149,13 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::CloseNativeSession { native_session_id, respond_to }) => {
-                        let result = close_native_child_session(
+                        handle_close_native_child_session(
                             &conn,
-                            &native_session_id,
+                            native_session_id,
                             supports_native_close,
+                            respond_to,
                         )
                         .await;
-                        let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
                         let result = inject_runtime_event(&event_sink, &handle, event).await;

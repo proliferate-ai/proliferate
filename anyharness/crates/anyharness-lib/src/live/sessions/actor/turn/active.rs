@@ -15,6 +15,7 @@ use crate::live::sessions::actor::command::{
 };
 use crate::live::sessions::actor::config::handle::handle_busy_config_command;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
+use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_session;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
 use crate::live::sessions::actor::interactions::handle::{
     handle_apply_plan_decision, handle_resolve_interaction,
@@ -295,9 +296,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                             let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                         }
                         Some(SessionCommand::CloseNativeSession { respond_to, .. }) => {
-                            let _ = respond_to.send(Err(anyhow::anyhow!(
-                                "cannot close native child session while parent session is busy"
-                            )));
+                            reject_busy_close_native_child_session(respond_to);
                         }
                         Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
                             let result = inject_runtime_event(event_sink, handle, event).await;
