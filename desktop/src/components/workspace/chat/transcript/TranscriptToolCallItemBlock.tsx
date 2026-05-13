@@ -12,8 +12,10 @@ import { CoworkCodingToolActionRow } from "@/components/workspace/chat/tool-call
 import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
 import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
+import { SkillsToolResultRow } from "@/components/workspace/chat/tool-calls/SkillsToolResultRow";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { deriveSkillsToolResultPresentation } from "@/lib/domain/chat/tools/skills-tool-result";
 import { describeToolCallDisplay } from "@/lib/domain/chat/tools/tool-call-display";
 import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
 import { ToolKindIcon } from "./TranscriptToolKindIcon";
@@ -82,6 +84,7 @@ export function TranscriptToolCallItemBlock({
   const fallbackDisplay = describeToolCallDisplay(item, toolName);
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
+  const skillsToolResult = deriveSkillsToolResultPresentation(item, normalizedResultText);
 
   fileChanges.forEach((part, idx) => {
     rows.push(
@@ -162,6 +165,16 @@ export function TranscriptToolCallItemBlock({
         />,
       );
     }
+  }
+
+  if (rows.length === 0 && skillsToolResult) {
+    rows.push(
+      <SkillsToolResultRow
+        key="skills-result"
+        presentation={skillsToolResult}
+        status={status}
+      />,
+    );
   }
 
   if (rows.length === 0 && normalizedResultText) {
