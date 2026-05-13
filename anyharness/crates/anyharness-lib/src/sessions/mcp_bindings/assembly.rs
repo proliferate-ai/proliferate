@@ -4,6 +4,7 @@ use anyharness_contract::v1::SessionMcpBindingSummary;
 
 use super::crypto::{decrypt_bindings, SessionDataCipher, SessionMcpBindingsError};
 use super::model::SessionMcpServer;
+use super::product_catalog::ProductMcpLaunchCatalog;
 use super::summaries::serialize_binding_summaries;
 use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
 use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
@@ -30,6 +31,7 @@ pub enum SessionMcpLaunchAssemblyError {
 pub fn assemble_session_mcp_launch(
     cipher: Option<&SessionDataCipher>,
     session_extensions: &[Arc<dyn SessionExtension>],
+    product_mcp_launch_catalog: &ProductMcpLaunchCatalog,
     workspace: &WorkspaceRecord,
     record: &SessionRecord,
     persisted_system_prompt_append: Option<String>,
@@ -41,8 +43,23 @@ pub fn assemble_session_mcp_launch(
             .map_err(map_decrypt_bindings_error_to_assembly)?
     };
 
-    let launch_extras = resolve_extension_launch_extras(session_extensions, workspace, record)
+    let mut launch_extras = resolve_extension_launch_extras(session_extensions, workspace, record)
         .map_err(SessionMcpLaunchAssemblyError::Internal)?;
+    let mut product_extras = product_mcp_launch_catalog
+        .resolve_launch_extras(workspace, record)
+        .map_err(SessionMcpLaunchAssemblyError::Internal)?;
+    launch_extras
+        .system_prompt_append
+        .append(&mut product_extras.system_prompt_append);
+    launch_extras
+        .first_prompt_system_prompt_append
+        .append(&mut product_extras.first_prompt_system_prompt_append);
+    launch_extras
+        .mcp_servers
+        .append(&mut product_extras.mcp_servers);
+    launch_extras
+        .mcp_binding_summaries
+        .append(&mut product_extras.mcp_binding_summaries);
     let first_prompt_system_prompt_append =
         join_system_prompt_append(Some(launch_extras.first_prompt_system_prompt_append));
     let system_prompt_append = merge_system_prompt_append(
@@ -293,6 +310,7 @@ mod tests {
         let assembled = assemble_session_mcp_launch(
             Some(&cipher),
             &[extension],
+            &ProductMcpLaunchCatalog::disabled(),
             &workspace_record(),
             &record,
             Some("persisted prompt".to_string()),
@@ -332,9 +350,15 @@ mod tests {
             },
         });
 
-        let assembled =
-            assemble_session_mcp_launch(None, &[extension], &workspace_record(), &record, None)
-                .expect("assemble launch");
+        let assembled = assemble_session_mcp_launch(
+            None,
+            &[extension],
+            &ProductMcpLaunchCatalog::disabled(),
+            &workspace_record(),
+            &record,
+            None,
+        )
+        .expect("assemble launch");
 
         assert_eq!(assembled.mcp_servers.len(), 1);
         assert!(matches!(
@@ -356,6 +380,7 @@ mod tests {
         let error = assemble_session_mcp_launch(
             Some(&sample_cipher()),
             &[],
+            &ProductMcpLaunchCatalog::disabled(),
             &workspace_record(),
             &record,
             None,
@@ -380,9 +405,15 @@ mod tests {
             },
         });
 
-        let assembled =
-            assemble_session_mcp_launch(None, &[extension], &workspace_record(), &record, None)
-                .expect("assemble launch");
+        let assembled = assemble_session_mcp_launch(
+            None,
+            &[extension],
+            &ProductMcpLaunchCatalog::disabled(),
+            &workspace_record(),
+            &record,
+            None,
+        )
+        .expect("assemble launch");
         let summaries: Vec<SessionMcpBindingSummary> =
             serde_json::from_str(&assembled.mcp_binding_summaries_json.expect("summaries"))
                 .expect("parse summaries");
@@ -403,9 +434,15 @@ mod tests {
             },
         });
 
-        let assembled =
-            assemble_session_mcp_launch(None, &[extension], &workspace_record(), &record, None)
-                .expect("assemble launch");
+        let assembled = assemble_session_mcp_launch(
+            None,
+            &[extension],
+            &ProductMcpLaunchCatalog::disabled(),
+            &workspace_record(),
+            &record,
+            None,
+        )
+        .expect("assemble launch");
         let summaries: Vec<SessionMcpBindingSummary> =
             serde_json::from_str(&assembled.mcp_binding_summaries_json.expect("summaries"))
                 .expect("parse summaries");
@@ -429,6 +466,7 @@ mod tests {
         let error = assemble_session_mcp_launch(
             None,
             &[extension],
+            &ProductMcpLaunchCatalog::disabled(),
             &workspace_record(),
             &session_record(),
             None,

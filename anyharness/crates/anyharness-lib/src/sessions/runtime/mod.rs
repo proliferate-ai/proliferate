@@ -10,6 +10,7 @@ use super::links::model::SessionLinkRecord;
 use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
 use super::mcp_bindings::model::SessionMcpServer;
+use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
@@ -41,6 +42,7 @@ pub struct SessionRuntime {
     runtime_home: PathBuf,
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
+    product_mcp_launch_catalog: ProductMcpLaunchCatalog,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
 }
@@ -221,6 +223,7 @@ impl SessionRuntime {
         runtime_home: PathBuf,
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,
+        product_mcp_launch_catalog: ProductMcpLaunchCatalog,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
     ) -> Self {
@@ -232,6 +235,7 @@ impl SessionRuntime {
             runtime_home,
             session_data_cipher,
             session_extensions,
+            product_mcp_launch_catalog,
             access_gate,
             plan_service,
         }

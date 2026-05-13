@@ -1,41 +1,38 @@
 use serde_json::{json, Value};
 
-use super::protocol::SetWorkspaceDisplayNameArgs;
-use crate::integrations::mcp::json_rpc::{deserialize_args, CallToolParams};
-use crate::integrations::mcp::tools::jsonrpc_tool_result;
+use super::context::WorkspaceNamingMcpContext;
+use super::tools::SetWorkspaceDisplayNameArgs;
+use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::sessions::store::SessionStore;
 use crate::sessions::workspace_naming::eligibility;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
-pub(super) fn handle_tool_call(
+pub async fn call_tool(
     workspace_runtime: &WorkspaceRuntime,
     workspace_access_gate: &WorkspaceAccessGate,
     session_store: &SessionStore,
-    workspace_id: &str,
-    session_id: &str,
-    id: Option<Value>,
-    params: CallToolParams,
-) -> Value {
-    let result = match params.name.as_str() {
+    ctx: &WorkspaceNamingMcpContext,
+    name: &str,
+    arguments: Option<Value>,
+) -> anyhow::Result<Value> {
+    match name {
         "set_workspace_display_name" => {
-            let args: anyhow::Result<SetWorkspaceDisplayNameArgs> =
-                deserialize_args(params.arguments);
-            match args {
-                Ok(args) => set_workspace_display_name(
-                    workspace_runtime,
-                    workspace_access_gate,
-                    session_store,
-                    workspace_id,
-                    session_id,
-                    args,
-                ),
-                Err(error) => Err(anyhow::anyhow!(error.to_string())),
+            if !ctx.available {
+                anyhow::bail!("workspace naming is not available for this session");
             }
+            let args: SetWorkspaceDisplayNameArgs = deserialize_args(arguments)?;
+            set_workspace_display_name(
+                workspace_runtime,
+                workspace_access_gate,
+                session_store,
+                &ctx.workspace_id,
+                &ctx.session_id,
+                args,
+            )
         }
-        _ => Err(anyhow::anyhow!("unknown tool: {}", params.name)),
-    };
-    jsonrpc_tool_result(id, result)
+        _ => Err(anyhow::anyhow!("unknown tool: {name}")),
+    }
 }
 
 fn set_workspace_display_name(

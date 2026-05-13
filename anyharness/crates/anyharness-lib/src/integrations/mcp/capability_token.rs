@@ -21,11 +21,29 @@ pub enum McpCapabilityTokenSignature {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct CapabilityTokenPayload {
     workspace_id: String,
     session_id: String,
     exp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct ProductCapabilityTokenPayload {
+    workspace_id: String,
+    session_id: String,
+    product_mcp_id: String,
+    exp: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProductMcpCapabilityScope<'a> {
+    pub workspace_id: &'a str,
+    pub session_id: &'a str,
+    pub product_mcp_id: &'a str,
 }
 
 #[derive(Clone)]
@@ -102,6 +120,70 @@ impl McpCapabilityTokenIssuer {
             return Ok(false);
         };
         if payload.workspace_id != workspace_id || payload.session_id != session_id {
+            return Ok(false);
+        }
+        if payload.exp < chrono::Utc::now().timestamp() {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    pub fn mint_product_mcp_token(
+        &self,
+        scope: ProductMcpCapabilityScope<'_>,
+    ) -> anyhow::Result<String> {
+        let secret = self.load_or_create_secret()?;
+        let payload = ProductCapabilityTokenPayload {
+            workspace_id: scope.workspace_id.to_string(),
+            session_id: scope.session_id.to_string(),
+            product_mcp_id: scope.product_mcp_id.to_string(),
+            exp: chrono::Utc::now().timestamp() + self.ttl_seconds,
+        };
+        let payload_json = serde_json::to_vec(&payload)?;
+        let payload_encoded = URL_SAFE_NO_PAD.encode(payload_json);
+        let signature = self.sign(&secret, payload_encoded.as_bytes());
+        Ok(format!(
+            "{payload_encoded}.{}",
+            URL_SAFE_NO_PAD.encode(signature)
+        ))
+    }
+
+    pub fn validate_product_mcp_token(
+        &self,
+        token: &str,
+        scope: ProductMcpCapabilityScope<'_>,
+    ) -> anyhow::Result<bool> {
+        let secret = self.load_or_create_secret()?;
+        let mut parts = token.split('.');
+        let Some(payload_encoded) = parts.next() else {
+            return Ok(false);
+        };
+        let Some(signature_encoded) = parts.next() else {
+            return Ok(false);
+        };
+        if parts.next().is_some() {
+            return Ok(false);
+        }
+
+        let expected = self.sign(&secret, payload_encoded.as_bytes());
+        let Ok(provided) = URL_SAFE_NO_PAD.decode(signature_encoded) else {
+            return Ok(false);
+        };
+        if expected.as_slice().ct_eq(provided.as_slice()).unwrap_u8() != 1 {
+            return Ok(false);
+        }
+
+        let Ok(payload_json) = URL_SAFE_NO_PAD.decode(payload_encoded) else {
+            return Ok(false);
+        };
+        let Ok(payload) = serde_json::from_slice::<ProductCapabilityTokenPayload>(&payload_json)
+        else {
+            return Ok(false);
+        };
+        if payload.workspace_id != scope.workspace_id
+            || payload.session_id != scope.session_id
+            || payload.product_mcp_id != scope.product_mcp_id
+        {
             return Ok(false);
         }
         if payload.exp < chrono::Utc::now().timestamp() {
@@ -219,6 +301,51 @@ mod tests {
             .unwrap());
         assert!(!issuer
             .validate_workspace_session_token(&token, "workspace-1", "session-2")
+            .unwrap());
+
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn validates_product_mcp_token_scope() {
+        let home = runtime_home("product");
+        let issuer = McpCapabilityTokenIssuer::new(
+            home.clone(),
+            "product.key",
+            McpCapabilityTokenSignature::HmacSha256,
+            60,
+        );
+
+        let token = issuer
+            .mint_product_mcp_token(ProductMcpCapabilityScope {
+                workspace_id: "workspace-1",
+                session_id: "session-1",
+                product_mcp_id: "reviews",
+            })
+            .unwrap();
+
+        assert!(issuer
+            .validate_product_mcp_token(
+                &token,
+                ProductMcpCapabilityScope {
+                    workspace_id: "workspace-1",
+                    session_id: "session-1",
+                    product_mcp_id: "reviews",
+                },
+            )
+            .unwrap());
+        assert!(!issuer
+            .validate_product_mcp_token(
+                &token,
+                ProductMcpCapabilityScope {
+                    workspace_id: "workspace-1",
+                    session_id: "session-1",
+                    product_mcp_id: "subagents",
+                },
+            )
+            .unwrap());
+        assert!(!issuer
+            .validate_workspace_session_token(&token, "workspace-1", "session-1")
             .unwrap());
 
         let _ = std::fs::remove_dir_all(home);

@@ -7,8 +7,9 @@ use axum::{
 use serde_json::Value;
 
 use super::error::ApiError;
+use super::product_mcp;
 use crate::app::AppState;
-use crate::sessions::workspace_naming::mcp_server::server::handle_json_rpc;
+use crate::sessions::workspace_naming::mcp::definition::ROUTE_SLUG;
 
 pub async fn get_workspace_naming_mcp_endpoint(
     State(_state): State<AppState>,
@@ -23,45 +24,13 @@ pub async fn post_workspace_naming_mcp_endpoint(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let capability_header = headers
-        .get(
-            state
-                .workspace_naming_session_hooks
-                .capability_header_name(),
-        )
-        .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| {
-            ApiError::unauthorized(
-                "Missing workspace naming capability token.",
-                "WORKSPACE_NAMING_MCP_UNAUTHORIZED",
-            )
-        })?;
-    let is_valid = state
-        .workspace_naming_session_hooks
-        .validate_capability_token(capability_header, &workspace_id, &session_id)
-        .map_err(|error| ApiError::internal(error.to_string()))?;
-    if !is_valid {
-        return Err(ApiError::unauthorized(
-            "Invalid workspace naming capability token.",
-            "WORKSPACE_NAMING_MCP_UNAUTHORIZED",
-        ));
-    }
-
-    let response = handle_json_rpc(
-        state.workspace_runtime.as_ref(),
-        state.workspace_access_gate.as_ref(),
-        state.session_service.store(),
+    product_mcp::dispatch_product_mcp(
+        &state,
         &workspace_id,
         &session_id,
+        ROUTE_SLUG,
+        headers,
         body,
     )
     .await
-    .map_err(|error| {
-        ApiError::bad_request(error.to_string(), "WORKSPACE_NAMING_MCP_REQUEST_INVALID")
-    })?;
-
-    match response {
-        Some(payload) => Ok((StatusCode::OK, Json(payload)).into_response()),
-        None => Ok(StatusCode::NO_CONTENT.into_response()),
-    }
 }

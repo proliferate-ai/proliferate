@@ -13,8 +13,9 @@ use serde_json::Value;
 
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
+use super::product_mcp;
 use crate::app::AppState;
-use crate::domains::reviews::mcp_server::server::handle_json_rpc;
+use crate::domains::reviews::mcp::definition::ROUTE_SLUG;
 use crate::domains::reviews::service::ReviewError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -234,44 +235,15 @@ pub async fn post_reviews_mcp_endpoint(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let _lease = state
-        .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::ReviewWrite)
-        .await;
-    assert_workspace_mutable(&state, &workspace_id)?;
-    let capability_header = headers
-        .get(state.review_session_hooks.capability_header_name())
-        .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| {
-            ApiError::unauthorized(
-                "Missing review capability token.",
-                "REVIEW_MCP_UNAUTHORIZED",
-            )
-        })?;
-    let is_valid = state
-        .review_session_hooks
-        .validate_capability_token(capability_header, &workspace_id, &session_id)
-        .map_err(|error| ApiError::internal(error.to_string()))?;
-    if !is_valid {
-        return Err(ApiError::unauthorized(
-            "Invalid review capability token.",
-            "REVIEW_MCP_UNAUTHORIZED",
-        ));
-    }
-
-    let response = handle_json_rpc(
-        state.review_runtime.as_ref(),
+    product_mcp::dispatch_product_mcp(
+        &state,
         &workspace_id,
         &session_id,
+        ROUTE_SLUG,
+        headers,
         body,
     )
     .await
-    .map_err(|error| ApiError::bad_request(error.to_string(), "REVIEW_MCP_REQUEST_INVALID"))?;
-
-    match response {
-        Some(payload) => Ok((StatusCode::OK, Json(payload)).into_response()),
-        None => Ok(StatusCode::NO_CONTENT.into_response()),
-    }
 }
 
 fn map_review_error(error: ReviewError) -> ApiError {

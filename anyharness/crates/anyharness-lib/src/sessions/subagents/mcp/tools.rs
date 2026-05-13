@@ -6,7 +6,7 @@ use crate::sessions::delegation::READ_EVENTS_MAX_LIMIT;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct CreateSubagentArgs {
+pub struct CreateSubagentArgs {
     pub prompt: String,
     #[serde(default)]
     pub label: Option<String>,
@@ -22,13 +22,13 @@ pub(super) struct CreateSubagentArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct ChildSessionArgs {
+pub struct ChildSessionArgs {
     pub child_session_id: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct SendSubagentMessageArgs {
+pub struct SendSubagentMessageArgs {
     pub child_session_id: String,
     pub prompt: String,
     #[serde(default)]
@@ -37,7 +37,7 @@ pub(super) struct SendSubagentMessageArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct ReadSubagentEventsArgs {
+pub struct ReadSubagentEventsArgs {
     pub child_session_id: String,
     #[serde(default)]
     pub since_seq: Option<i64>,
@@ -45,7 +45,7 @@ pub(super) struct ReadSubagentEventsArgs {
     pub limit: Option<usize>,
 }
 
-pub(super) fn build_tool_list() -> Vec<Value> {
+pub fn build_tool_list() -> Vec<Value> {
     vec![
         tool_definition(
             "get_subagent_launch_options",

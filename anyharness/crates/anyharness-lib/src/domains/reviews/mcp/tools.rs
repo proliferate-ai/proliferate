@@ -5,7 +5,7 @@ use crate::integrations::mcp::tools::tool_definition;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct SubmitReviewResultArgs {
+pub struct SubmitReviewResultArgs {
     pub pass: bool,
     pub summary: String,
     pub critique_markdown: String,
@@ -13,13 +13,13 @@ pub(super) struct SubmitReviewResultArgs {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct MarkReviewRevisionReadyArgs {
+pub struct MarkReviewRevisionReadyArgs {
     pub review_run_id: String,
     #[serde(default)]
     pub revised_plan_id: Option<String>,
 }
 
-pub(super) fn reviewer_tool_list() -> Vec<Value> {
+pub fn reviewer_tool_list() -> Vec<Value> {
     vec![tool_definition(
         "submit_review_result",
         "Submit the final structured review verdict. This is the only way to complete your review assignment.",
@@ -35,7 +35,7 @@ pub(super) fn reviewer_tool_list() -> Vec<Value> {
     )]
 }
 
-pub(super) fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
+pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     let mut tools = Vec::new();
     if can_signal_revision {
         tools.push(tool_definition(

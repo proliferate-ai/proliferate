@@ -1,90 +1,68 @@
 use serde_json::{json, Value};
 
 use super::super::service::{SubagentService, MAX_SUBAGENTS_PER_PARENT};
-use super::protocol::{
+use super::context::SubagentMcpContext;
+use super::tools::{
     ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, SendSubagentMessageArgs,
 };
-use crate::integrations::mcp::json_rpc::{deserialize_args, CallToolParams};
-use crate::integrations::mcp::tools::jsonrpc_tool_result;
+use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 use crate::sessions::delegation::{READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT};
 use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};
 use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
 
-pub(super) async fn handle_tool_call(
+pub async fn call_tool(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
-    parent_session_id: &str,
-    id: Option<Value>,
-    params: CallToolParams,
-) -> Value {
-    let result = match params.name.as_str() {
+    ctx: &SubagentMcpContext,
+    name: &str,
+    arguments: Option<Value>,
+) -> anyhow::Result<Value> {
+    match name {
         "get_subagent_launch_options" => {
-            get_subagent_launch_options(service, session_runtime, parent_session_id)
+            get_subagent_launch_options(service, session_runtime, &ctx.parent_session_id)
         }
         "create_subagent" => {
-            let args: anyhow::Result<CreateSubagentArgs> = deserialize_args(params.arguments);
-            match args {
-                Ok(args) => {
-                    create_subagent(service, session_runtime, parent_session_id, args).await
-                }
-                Err(error) => Err(anyhow::anyhow!(error.to_string())),
-            }
+            let args: CreateSubagentArgs = deserialize_args(arguments)?;
+            create_subagent(service, session_runtime, &ctx.parent_session_id, args).await
         }
         "list_subagents" => service
-            .list_subagents(parent_session_id)
+            .list_subagents(&ctx.parent_session_id)
             .map(|summaries| json!({ "subagents": summaries_to_json(summaries) }))
             .map_err(anyhow::Error::from),
         "send_subagent_message" => {
-            let args: anyhow::Result<SendSubagentMessageArgs> = deserialize_args(params.arguments);
-            match args {
-                Ok(args) => {
-                    send_subagent_message(service, session_runtime, parent_session_id, args).await
-                }
-                Err(error) => Err(anyhow::anyhow!(error.to_string())),
-            }
+            let args: SendSubagentMessageArgs = deserialize_args(arguments)?;
+            send_subagent_message(service, session_runtime, &ctx.parent_session_id, args).await
         }
         "schedule_subagent_wake" => {
-            let args: anyhow::Result<ChildSessionArgs> = deserialize_args(params.arguments);
-            match args {
-                Ok(args) => schedule_subagent_wake(service, parent_session_id, args),
-                Err(error) => Err(anyhow::anyhow!(error.to_string())),
-            }
+            let args: ChildSessionArgs = deserialize_args(arguments)?;
+            schedule_subagent_wake(service, &ctx.parent_session_id, args)
         }
         "get_subagent_status" => {
-            let args: anyhow::Result<ChildSessionArgs> = deserialize_args(params.arguments);
-            match args {
-                Ok(args) => {
-                    get_subagent_status(service, session_runtime, parent_session_id, args).await
-                }
-                Err(error) => Err(anyhow::anyhow!(error.to_string())),
-            }
+            let args: ChildSessionArgs = deserialize_args(arguments)?;
+            get_subagent_status(service, session_runtime, &ctx.parent_session_id, args).await
         }
         "read_subagent_events" => {
-            let args: anyhow::Result<ReadSubagentEventsArgs> = deserialize_args(params.arguments);
-            match args {
-                Ok(args) => service
-                    .read_subagent_events(
-                        parent_session_id,
-                        &args.child_session_id,
-                        args.since_seq,
-                        args.limit,
-                    )
-                    .map(|slice| {
-                        json!({
-                            "childSessionId": slice.child_session_id,
-                            "events": slice.events,
-                            "nextSinceSeq": slice.next_since_seq,
-                            "truncated": slice.truncated,
-                        })
+            let args: ReadSubagentEventsArgs = deserialize_args(arguments)?;
+            service
+                .read_subagent_events(
+                    &ctx.parent_session_id,
+                    &args.child_session_id,
+                    args.since_seq,
+                    args.limit,
+                )
+                .map(|slice| {
+                    json!({
+                        "childSessionId": slice.child_session_id,
+                        "events": slice.events,
+                        "nextSinceSeq": slice.next_since_seq,
+                        "truncated": slice.truncated,
                     })
-                    .map_err(anyhow::Error::from),
-                Err(error) => Err(anyhow::anyhow!(error.to_string())),
-            }
+                })
+                .map_err(anyhow::Error::from)
         }
-        _ => Err(anyhow::anyhow!("unknown tool: {}", params.name)),
-    };
-    jsonrpc_tool_result(id, result)
+        _ => Err(anyhow::anyhow!("unknown tool: {name}")),
+    }
 }
 
 fn get_subagent_launch_options(
