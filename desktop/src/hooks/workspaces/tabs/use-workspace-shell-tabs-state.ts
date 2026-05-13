@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
 import type { DisplayManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
@@ -17,6 +17,7 @@ import { viewerTargetKey, type ViewerTarget } from "@/lib/domain/workspaces/view
 import {
   resolveWorkspaceShellActivation,
   type WorkspaceShellActivation,
+  type WorkspaceRenderSurface,
 } from "@/lib/domain/workspaces/tabs/shell-activation";
 import {
   resolveWithWorkspaceFallback,
@@ -176,7 +177,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     () => orderedTabs.map(getWorkspaceShellTabKey),
     [orderedTabs],
   );
-  const activation = useMemo<WorkspaceShellActivation>(() => resolveWorkspaceShellActivation({
+  const resolvedActivation = useMemo<WorkspaceShellActivation>(() => resolveWorkspaceShellActivation({
     workspaceId: materializedWorkspaceId ?? "",
     storedIntent: storedActiveShellTabKey,
     orderedTabs: orderedShellTabKeys,
@@ -201,6 +202,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     storedActiveShellTabKey,
     workspaceSelectionNonce,
   ]);
+  const activation = useStableWorkspaceShellActivation(resolvedActivation);
   const activeShellTab = useMemo<WorkspaceShellTab | null>(() => {
     switch (activation.renderSurface.kind) {
       case "chat-session":
@@ -269,4 +271,38 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     orderedTabs,
     orderedShellTabKeys,
   };
+}
+
+function useStableWorkspaceShellActivation(
+  activation: WorkspaceShellActivation,
+): WorkspaceShellActivation {
+  const previousRef = useRef<WorkspaceShellActivation | null>(null);
+  const previous = previousRef.current;
+  if (
+    previous
+    && previous.highlightedTabKey === activation.highlightedTabKey
+    && sameRenderSurface(previous.renderSurface, activation.renderSurface)
+  ) {
+    return previous;
+  }
+  previousRef.current = activation;
+  return activation;
+}
+
+function sameRenderSurface(
+  left: WorkspaceRenderSurface,
+  right: WorkspaceRenderSurface,
+): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+  switch (left.kind) {
+    case "chat-shell":
+      return true;
+    case "chat-session":
+    case "chat-session-pending":
+      return left.sessionId === (right as typeof left).sessionId;
+    case "viewer":
+      return left.targetKey === (right as typeof left).targetKey;
+  }
 }

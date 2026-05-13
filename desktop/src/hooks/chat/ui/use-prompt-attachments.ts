@@ -168,7 +168,7 @@ export function usePromptAttachments(
     );
   }, []);
 
-  return {
+  return useMemo(() => ({
     attachments: descriptors,
     addFiles,
     addTextPaste,
@@ -176,5 +176,13 @@ export function usePromptAttachments(
     clearAttachments,
     snapshotForSubmit,
     hasAttachments: entries.length > 0,
-  };
+  }), [
+    addFiles,
+    addTextPaste,
+    clearAttachments,
+    descriptors,
+    entries.length,
+    removeAttachment,
+    snapshotForSubmit,
+  ]);
 }

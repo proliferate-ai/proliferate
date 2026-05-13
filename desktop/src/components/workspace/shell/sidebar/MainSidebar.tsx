@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SupportDialog } from "@/components/support/SupportDialog";
@@ -23,6 +23,7 @@ import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-avail
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -36,7 +37,7 @@ import {
 } from "@/lib/domain/settings/navigation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
-export function MainSidebar() {
+export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
@@ -71,9 +72,28 @@ export function MainSidebar() {
     emptyState,
     isLoading,
   } = useWorkspaceSidebarState({ showArchived });
-
   const navigate = useNavigate();
   const location = useLocation();
+  useDebugRenderReason("MainSidebar", {
+    groups,
+    selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
+    cleanupAttentionWorkspaces,
+    emptyState,
+    isLoading,
+    pendingWorkspaceEntry,
+    showArchived,
+    workspaceTypes,
+    cloudActive,
+    cloudUnavailable,
+    billingPlan,
+    cloudRepoConfigs,
+    isCloudRepoConfigsPending,
+    supportContext,
+    supportOpen,
+    pathname: location.pathname,
+  });
+
   const isOnPlugins = location.pathname === APP_ROUTES.plugins;
   const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
   const isOnHome = location.pathname === APP_ROUTES.home;
@@ -226,4 +246,4 @@ export function MainSidebar() {
       </div>
     </DebugProfiler>
   );
-}
+});

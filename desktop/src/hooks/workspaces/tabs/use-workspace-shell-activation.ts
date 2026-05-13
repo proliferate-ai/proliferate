@@ -25,6 +25,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { recordDebugActionDiagnostic } from "@/lib/infra/measurement/debug-action-diagnostic";
 import {
   HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   type MeasurementOperationId,
@@ -36,6 +37,7 @@ import {
   getSessionRecord,
   isPendingSessionId,
 } from "@/stores/sessions/session-records";
+import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 
 const HOT_SWITCH_SURFACES = [
   "workspace-shell",
@@ -53,6 +55,17 @@ const pendingHotSwitchMeasurementsByShellKey = new Map<
     operationId: MeasurementOperationId;
   }
 >();
+const pendingDeferredChatActivationsByShellKey = new Map<
+  string,
+  {
+    attemptId: string;
+    cancel: () => void;
+    guard: SessionActivationGuard;
+    sessionId: string;
+    resolve: (outcome: SessionActivationOutcome) => void;
+  }
+>();
+const CHAT_TAB_ACTIVATION_COALESCE_MS = 180;
 
 export type ShellActivationOutcome =
   | { result: "completed"; surface: "viewer" | "chat-shell"; shellActivationEpoch: number }
@@ -85,6 +98,17 @@ export function useWorkspaceShellActivation() {
     mode?: "focus-existing" | "open-or-focus";
   }): ShellActivationOutcome => {
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
+    recordDebugActionDiagnostic({
+      category: "workspace_shell_activation",
+      label: "activate_viewer_target",
+      keys: [workspaceId, shellStateKey],
+      detail: {
+        workspaceId,
+        shellWorkspaceId: shellWorkspaceId ?? null,
+        shellStateKey,
+        targetKind: target.kind,
+      },
+    });
     invalidateSessionActivationIntent(workspaceId);
     const targetKey = viewerWorkspaceShellTabKey(target);
     setActiveViewerTarget(targetKey);
@@ -92,6 +116,7 @@ export function useWorkspaceShellActivation() {
       workspaceId: shellStateKey,
       intent: targetKey,
     });
+    cancelPendingDeferredChatActivation(shellStateKey, "intent-replaced");
     clearCurrentPendingForWorkspace(shellStateKey);
     return {
       result: "completed",
@@ -129,12 +154,23 @@ export function useWorkspaceShellActivation() {
     reason?: string;
   }): ShellActivationOutcome => {
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
+    recordDebugActionDiagnostic({
+      category: "workspace_shell_activation",
+      label: "activate_chat_shell",
+      keys: [workspaceId, shellStateKey],
+      detail: {
+        workspaceId,
+        shellWorkspaceId: shellWorkspaceId ?? null,
+        shellStateKey,
+      },
+    });
     invalidateSessionActivationIntent(workspaceId);
     const write = writeShellIntent({
       workspaceId: shellStateKey,
       intent: chatShellWorkspaceIntentKey(),
     });
     clearActiveSession(workspaceId);
+    cancelPendingDeferredChatActivation(shellStateKey, "intent-replaced");
     clearCurrentPendingForWorkspace(shellStateKey);
     return {
       result: "completed",
@@ -147,6 +183,7 @@ export function useWorkspaceShellActivation() {
     workspaceId,
     shellWorkspaceId,
     sessionId,
+    source,
     selection,
   }: {
     workspaceId: string;
@@ -156,7 +193,35 @@ export function useWorkspaceShellActivation() {
     source?: string;
     selection?: SelectSessionOptionsWithoutGuard;
   }): Promise<SessionActivationOutcome> => {
+    if (isProliferatePerfFlagEnabled("freezeShellActivation")) {
+      const state = useSessionSelectionStore.getState();
+      return Promise.resolve({
+        result: "completed",
+        sessionId,
+        guard: {
+          workspaceId,
+          workspaceSelectionNonce: state.workspaceSelectionNonce,
+          token: state.sessionActivationIntentEpochByWorkspace[workspaceId] ?? 0,
+        },
+        activeSessionVersion: state.activeSessionVersion,
+      });
+    }
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
+    recordDebugActionDiagnostic({
+      category: "workspace_shell_activation",
+      label: "activate_chat_tab",
+      keys: [source ?? "unknown", workspaceId, sessionId],
+      detail: {
+        source: source ?? null,
+        workspaceId,
+        shellWorkspaceId: shellWorkspaceId ?? null,
+        shellStateKey,
+        sessionId,
+        hasSelection: selection !== undefined,
+        allowColdIdleNoStream: selection?.allowColdIdleNoStream ?? false,
+        forceCold: selection?.forceCold ?? false,
+      },
+    });
     const guard = beginSessionActivationIntent(workspaceId);
     const intent = chatWorkspaceShellTabKey(sessionId);
     const shellEpochAtWrite =
@@ -197,8 +262,14 @@ export function useWorkspaceShellActivation() {
     }
 
     return new Promise<SessionActivationOutcome>((resolve, reject) => {
+      cancelPendingDeferredChatActivation(shellStateKey, "intent-replaced");
       const scheduledAt = performance.now();
-      scheduleAfterNextPaint(() => {
+      const cancel = scheduleCoalescedChatActivation(() => {
+        const currentScheduled =
+          pendingDeferredChatActivationsByShellKey.get(shellStateKey);
+        if (currentScheduled?.attemptId === pending.attemptId) {
+          pendingDeferredChatActivationsByShellKey.delete(shellStateKey);
+        }
         recordMeasurementWorkflowStep({
           operationId: hotOperationId,
           step: "workspace.shell.after_paint",
@@ -216,10 +287,16 @@ export function useWorkspaceShellActivation() {
           selectSession,
           selection,
           sessionId,
-          setPendingChatActivation,
           shellStateKey,
           writeShellIntent,
         }).then(resolve, reject);
+      });
+      pendingDeferredChatActivationsByShellKey.set(shellStateKey, {
+        attemptId: pending.attemptId,
+        cancel,
+        guard,
+        sessionId,
+        resolve,
       });
     });
   }, [
@@ -235,6 +312,27 @@ export function useWorkspaceShellActivation() {
     activateChatTab,
     activateFileTab,
     activateViewerTarget,
+  };
+}
+
+function scheduleCoalescedChatActivation(callback: () => void): () => void {
+  let cancelled = false;
+  let cancelAfterPaint: (() => void) | null = null;
+  const timeoutId = window.setTimeout(() => {
+    if (cancelled) {
+      return;
+    }
+    cancelAfterPaint = scheduleAfterNextPaint(() => {
+      if (!cancelled) {
+        callback();
+      }
+    });
+  }, CHAT_TAB_ACTIVATION_COALESCE_MS);
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timeoutId);
+    cancelAfterPaint?.();
   };
 }
 
@@ -345,6 +443,24 @@ function clearPendingHotSwitchMeasurement({
   }
 }
 
+function cancelPendingDeferredChatActivation(
+  shellStateKey: string,
+  reason: Extract<SessionActivationOutcome, { result: "stale" }>["reason"],
+): void {
+  const scheduled = pendingDeferredChatActivationsByShellKey.get(shellStateKey);
+  if (!scheduled) {
+    return;
+  }
+  scheduled.cancel();
+  pendingDeferredChatActivationsByShellKey.delete(shellStateKey);
+  scheduled.resolve({
+    result: "stale",
+    sessionId: scheduled.sessionId,
+    guard: scheduled.guard,
+    reason,
+  });
+}
+
 async function runDeferredChatTabActivation({
   clearPendingChatActivation,
   guard,
@@ -356,7 +472,6 @@ async function runDeferredChatTabActivation({
   selectSession,
   selection,
   sessionId,
-  setPendingChatActivation,
   shellStateKey,
   writeShellIntent,
 }: {
@@ -370,7 +485,6 @@ async function runDeferredChatTabActivation({
   selectSession: ReturnType<typeof useSessionSelectionActions>["selectSession"];
   selection?: SelectSessionOptionsWithoutGuard;
   sessionId: string;
-  setPendingChatActivation: WorkspaceUiStoreState["setPendingChatActivation"];
   shellStateKey: string;
   writeShellIntent: WorkspaceUiStoreState["writeShellIntent"];
 }): Promise<SessionActivationOutcome> {
@@ -402,15 +516,6 @@ async function runDeferredChatTabActivation({
     startedAt: durableStartedAt,
     outcome: previousWrite.changed ? "completed" : "skipped",
   });
-  const durablePending = pending.shellEpochAtWrite === previousWrite.epoch
-    ? pending
-    : { ...pending, shellEpochAtWrite: previousWrite.epoch };
-  if (durablePending !== pending) {
-    setPendingChatActivation({
-      workspaceId: shellStateKey,
-      pending: durablePending,
-    });
-  }
 
   try {
     const guardedSelectSession = selectSession as (
@@ -435,7 +540,7 @@ async function runDeferredChatTabActivation({
       rollbackPendingDurableIntent({
         hotOperationId,
         intent,
-        pending: durablePending,
+        pending,
         previousWrite,
         rollbackShellIntent,
         shellStateKey,
@@ -443,7 +548,7 @@ async function runDeferredChatTabActivation({
       clearMatchingPending({
         clearPendingChatActivation,
         hotOperationId,
-        pending: durablePending,
+        pending,
         shellStateKey,
         step: "workspace.shell.pending_clear",
       });
@@ -453,7 +558,7 @@ async function runDeferredChatTabActivation({
     clearMatchingPending({
       clearPendingChatActivation,
       hotOperationId,
-      pending: durablePending,
+      pending,
       shellStateKey,
       step: "workspace.shell.pending_clear",
     });
@@ -467,7 +572,7 @@ async function runDeferredChatTabActivation({
     rollbackPendingDurableIntent({
       hotOperationId,
       intent,
-      pending: durablePending,
+      pending,
       previousWrite,
       rollbackShellIntent,
       shellStateKey,
@@ -475,7 +580,7 @@ async function runDeferredChatTabActivation({
     clearMatchingPending({
       clearPendingChatActivation,
       hotOperationId,
-      pending: durablePending,
+      pending,
       shellStateKey,
       step: "workspace.shell.pending_clear",
     });

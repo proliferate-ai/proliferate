@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { PromptCapabilities } from "@anyharness/sdk";
 import { canAttachPromptContent } from "@/lib/domain/chat/composer/prompt-attachment-rules";
 import { usePromptAttachments } from "@/hooks/chat/ui/use-prompt-attachments";
@@ -34,11 +34,17 @@ export function useChatPromptAttachments({
     return attachments.addTextPaste(text);
   }, [attachments.addTextPaste, canAttachFiles, pasteAttachmentsEnabled]);
 
-  return {
+  return useMemo(() => ({
     ...attachments,
     addFiles,
     addTextPaste,
     canAttachFiles,
     supportsAttachments,
-  };
+  }), [
+    addFiles,
+    addTextPaste,
+    attachments,
+    canAttachFiles,
+    supportsAttachments,
+  ]);
 }

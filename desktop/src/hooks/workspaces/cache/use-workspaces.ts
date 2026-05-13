@@ -32,6 +32,10 @@ import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-
 const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
 const WORKSPACE_COLLECTIONS_STALE_MS = 30_000;
 
+interface UseWorkspacesOptions {
+  enabled?: boolean;
+}
+
 function requestOptionsWithSignal(
   requestOptions: AnyHarnessRequestOptions | undefined,
   signal: AbortSignal,
@@ -74,10 +78,12 @@ async function fallbackOnNonAbort<T>(
   }
 }
 
-export function useWorkspaces() {
+export function useWorkspaces(options?: UseWorkspacesOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { cloudActive } = useCloudAvailabilityState();
-  const canQuery = runtimeUrl.trim().length > 0 || cloudActive;
+  const canQuery = (options?.enabled ?? true) && (
+    runtimeUrl.trim().length > 0 || cloudActive
+  );
   const {
     getWorkspaceCollectionsCacheState,
     queryKey,

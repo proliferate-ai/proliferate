@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useState,
 } from "react";
@@ -15,6 +16,7 @@ import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session
 import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";
 import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/use-header-tabs-group-editor";
@@ -37,9 +39,31 @@ import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-ta
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
-export function HeaderTabs() {
+export const HeaderTabs = memo(function HeaderTabs() {
   useDebugRenderCount("header-tabs");
   const viewModel = useWorkspaceHeaderTabsViewModelContext();
+  useDebugRenderReason("HeaderTabs", {
+    activeSessionId: viewModel.activeSessionId,
+    activeShellTab: viewModel.activeShellTab,
+    activeShellTabKey: viewModel.activeShellTabKey,
+    activation: viewModel.activation,
+    selectedWorkspaceId: viewModel.selectedWorkspaceId,
+    workspaceUiKey: viewModel.workspaceUiKey,
+    materializedWorkspaceId: viewModel.materializedWorkspaceId,
+    openTargets: viewModel.openTargets,
+    chatTabs: viewModel.chatTabs,
+    stripRows: viewModel.stripRows,
+    shellRows: viewModel.shellRows,
+    orderedTabs: viewModel.orderedTabs,
+    orderedShellTabKeys: viewModel.orderedShellTabKeys,
+    stripChatSessionIds: viewModel.stripChatSessionIds,
+    menuChatTabs: viewModel.menuChatTabs,
+    visibleChatSessionIds: viewModel.visibleChatSessionIds,
+    liveChatSessionIds: viewModel.liveChatSessionIds,
+    childToParent: viewModel.childToParent,
+    childrenByParentSessionId: viewModel.childrenByParentSessionId,
+    displayManualGroups: viewModel.displayManualGroups,
+  });
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: viewModel.workspaceUiKey,
     materializedWorkspaceId: viewModel.materializedWorkspaceId,
@@ -344,4 +368,4 @@ export function HeaderTabs() {
       </div>
     </DebugProfiler>
   );
-}
+});

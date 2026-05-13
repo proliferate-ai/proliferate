@@ -15,6 +15,8 @@ import {
 } from "./debug-measurement-events";
 import { isAnyHarnessTimingEnabled, isMainThreadMeasurementEnabled } from "./debug-measurement-env";
 import { getLongTaskObserverSupportedForMeasurement } from "./debug-measurement-observer";
+import { getProliferatePerfFlags } from "@/lib/infra/perf/perf-isolation-flags";
+import { saveDiagnosticJsonToPath } from "@/lib/access/tauri/diagnostics";
 import type {
   MeasurementDebugApi,
   MeasurementDebugDump,
@@ -37,6 +39,7 @@ export function getDebugMeasurementDump(): MeasurementDebugDump {
       mainThread: isMainThreadMeasurementEnabled(),
       anyHarnessTiming: isAnyHarnessTimingEnabled(),
     },
+    perfFlags: getProliferatePerfFlags(),
     longTaskObserverSupported: getLongTaskObserverSupportedForMeasurement(),
     memory: getMeasurementMemorySnapshot(),
     counts: getDebugMeasurementStatus().counts,
@@ -56,6 +59,7 @@ export function installDebugMeasurementExport(): () => void {
   const api: MeasurementDebugApi = {
     dump: getDebugMeasurementDump,
     export: exportDebugMeasurementDump,
+    save: saveDebugMeasurementDump,
     clear: clearDebugMeasurementBuffer,
     status: () => getDebugMeasurementStatus(),
   };
@@ -112,4 +116,14 @@ function exportDebugMeasurementDump(fileName?: string): MeasurementDebugDump {
   link.remove();
   URL.revokeObjectURL(url);
   return dump;
+}
+
+async function saveDebugMeasurementDump(outputPath: string): Promise<string | null> {
+  const dump = getDebugMeasurementDump();
+  const body = JSON.stringify(dump, null, 2);
+  const writtenPath = await saveDiagnosticJsonToPath(outputPath, body);
+  if (typeof console !== "undefined") {
+    console.info("[measurement_dump] saved", writtenPath ?? "(not running in Tauri)");
+  }
+  return writtenPath;
 }

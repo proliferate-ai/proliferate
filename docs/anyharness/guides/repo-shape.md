@@ -51,6 +51,32 @@ event_sink/tools.rs
 integrations/mcp/json_rpc.rs
 ```
 
+## Large Subsystems
+
+The top-level boundary is not enough for large subsystems. Once a subsystem has
+multiple responsibility families, define its internal shape before splitting
+files. The target is legibility by path at both levels:
+
+```text
+domains/sessions/runtime/prompt.rs   # session workflow entrypoint
+live/sessions/actor/turn/run.rs      # active prompt turn loop
+live/sessions/event_sink/tools.rs    # transcript event normalization
+```
+
+Do not dump unrelated files into a newly-correct parent folder. A move from
+`acp/session_actor.rs` to `live/sessions/actor/*.rs` is only useful if the
+children also encode responsibility.
+
+Large subsystem splits should name the local architecture explicitly in the
+owning spec or guide. For example:
+
+- durable domains split by `model`, `store`, `service`, `runtime`, and named
+  subdomains.
+- live actors split by command surface, loop, startup, prompt turn, config,
+  notifications, interactions, and shutdown.
+- event sinks split by normalized event family.
+- integrations split by protocol/vendor mechanic.
+
 ## Migration Discipline
 
 - Preserve behavior unless the task explicitly asks for a behavior change.

@@ -1,19 +1,48 @@
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 
-export function TranscriptSwitchingPlaceholder() {
+function AssistantMessageSkeleton() {
+  return (
+    <div className="flex max-w-[88%] flex-col gap-2">
+      <div className="h-3 w-24 rounded-md bg-muted/60" />
+      <div className="h-3 w-full rounded-md bg-muted/45" />
+      <div className="h-3 w-[92%] rounded-md bg-muted/45" />
+      <div className="h-3 w-[68%] rounded-md bg-muted/45" />
+    </div>
+  );
+}
+
+function UserMessageSkeleton() {
+  return (
+    <div className="flex justify-end">
+      <div className="flex w-[min(22rem,72%)] flex-col items-end gap-2">
+        <div className="h-3 w-20 rounded-md bg-muted/60" />
+        <div className="h-10 w-full rounded-md bg-muted/45" />
+      </div>
+    </div>
+  );
+}
+
+export function TranscriptSwitchingPlaceholder({
+  label = "Loading chat",
+}: {
+  label?: string;
+}) {
   return (
     <DebugProfiler id="session-transcript-pane">
       <div
-        className="flex h-full min-h-0 items-center justify-center text-muted-foreground"
+        className="flex h-full min-h-0 overflow-hidden px-5 py-4"
         role="status"
-        aria-label="Switching chat"
+        aria-label={label}
         data-chat-switching-placeholder
       >
-        <div className="flex w-full max-w-[14rem] flex-col items-center gap-2 px-6">
-          <div className="h-px w-full bg-border" aria-hidden="true" />
-        <span className="text-[11px] font-medium uppercase text-muted-foreground/70">
-            Switching chat
-          </span>
+        <div
+          className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 motion-safe:animate-pulse"
+          aria-hidden="true"
+        >
+          <UserMessageSkeleton />
+          <AssistantMessageSkeleton />
+          <UserMessageSkeleton />
+          <AssistantMessageSkeleton />
         </div>
       </div>
     </DebugProfiler>
