@@ -4,8 +4,8 @@ use anyharness_contract::v1::{
     CreateSessionRequest, EditPendingPromptRequest, ForkChildStartStatus, ForkSessionRequest,
     ForkSessionResponse, GetSessionLiveConfigResponse, InteractionDecision, PromptInputBlock,
     PromptSessionRequest, PromptSessionResponse, ResolveInteractionRequest, ResumeSessionRequest,
-    Session, SessionEventEnvelope, SessionRawNotificationEnvelope, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
+    Session, SessionEventEnvelope, SessionPluginBundle, SessionRawNotificationEnvelope,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
 };
 use axum::{
     body::Bytes,
@@ -365,7 +365,12 @@ pub async fn fork_session(
     body: Bytes,
 ) -> Result<Json<ForkSessionResponse>, ApiError> {
     let req = parse_optional_fork_request(body)?;
-    let _lease = acquire_session_exclusive_operation_lease(&state, &session_id).await?;
+    let _lease = acquire_session_exclusive_operation_lease(
+        &state,
+        &session_id,
+        WorkspaceOperationKind::SessionFork,
+    )
+    .await?;
     let outcome = match state
         .session_runtime
         .fork_session(&session_id, req.target)
@@ -582,10 +587,15 @@ pub async fn resume_session(
     } else {
         None
     };
-    let _lease =
-        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
-            .await?;
-    if let Some(plugin_bundle) = req.plugin_bundle {
+    let plugin_bundle = req.plugin_bundle;
+    validate_resume_plugin_bundle_clear(plugin_bundle.as_ref(), mcp_refresh.is_some())?;
+    let updated = if let Some(plugin_bundle) = plugin_bundle {
+        let _lease = acquire_session_exclusive_operation_lease(
+            &state,
+            &session_id,
+            WorkspaceOperationKind::SessionResume,
+        )
+        .await?;
         if state.session_runtime.has_live_session(&session_id).await {
             return Err(ApiError::conflict(
                 "Plugin bundle changes require restarting the session.",
@@ -596,12 +606,24 @@ pub async fn resume_session(
             .session_runtime
             .set_session_plugin_bundle(&session_id, plugin_bundle)
             .map_err(map_ensure_live_session_error)?;
-    }
-    let updated = state
-        .session_runtime
-        .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
-        .await
-        .map_err(map_ensure_live_session_error)?;
+        state
+            .session_runtime
+            .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
+            .await
+            .map_err(map_ensure_live_session_error)?
+    } else {
+        let _lease = acquire_session_operation_lease(
+            &state,
+            &session_id,
+            WorkspaceOperationKind::SessionResume,
+        )
+        .await?;
+        state
+            .session_runtime
+            .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
+            .await
+            .map_err(map_ensure_live_session_error)?
+    };
 
     Ok(Json(session_to_contract(&state, &updated).await?))
 }
@@ -622,6 +644,19 @@ fn parse_optional_resume_request(body: Bytes) -> Result<ResumeSessionRequest, Ap
             "INVALID_RESUME_REQUEST",
         )
     })
+}
+
+fn validate_resume_plugin_bundle_clear(
+    plugin_bundle: Option<&SessionPluginBundle>,
+    has_mcp_refresh: bool,
+) -> Result<(), ApiError> {
+    if plugin_bundle.is_some_and(|bundle| bundle.plugins.is_empty()) && !has_mcp_refresh {
+        return Err(ApiError::bad_request(
+            "Clearing a plugin bundle requires an MCP server refresh.",
+            "PLUGIN_CLEAR_REQUIRES_MCP_REFRESH",
+        ));
+    }
+    Ok(())
 }
 
 async fn acquire_session_operation_lease(
@@ -648,6 +683,7 @@ async fn acquire_session_operation_lease(
 async fn acquire_session_exclusive_operation_lease(
     state: &AppState,
     session_id: &str,
+    kind: WorkspaceOperationKind,
 ) -> Result<crate::workspaces::operation_gate::WorkspaceExclusiveOperationLease, ApiError> {
     let session = state
         .session_service
@@ -661,7 +697,7 @@ async fn acquire_session_exclusive_operation_lease(
         })?;
     Ok(state
         .workspace_operation_gate
-        .acquire_exclusive_with_kind(&session.workspace_id, WorkspaceOperationKind::SessionFork)
+        .acquire_exclusive_with_kind(&session.workspace_id, kind)
         .await)
 }
 
@@ -1340,6 +1376,7 @@ fn request_origin_or_api_default(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::response::IntoResponse;
 
     #[test]
     fn resume_request_accepts_missing_body() {
@@ -1404,6 +1441,22 @@ mod tests {
 
         assert_eq!(request.mcp_servers.unwrap_or_default().len(), 0);
         assert!(request.mcp_binding_summaries.is_none());
+    }
+
+    #[test]
+    fn empty_plugin_bundle_clear_requires_mcp_refresh() {
+        let bundle = SessionPluginBundle {
+            plugins: Vec::new(),
+        };
+
+        let error = validate_resume_plugin_bundle_clear(Some(&bundle), false)
+            .expect_err("empty plugin clear without refresh should fail");
+        assert_eq!(
+            error.into_response().status(),
+            axum::http::StatusCode::BAD_REQUEST
+        );
+        assert!(validate_resume_plugin_bundle_clear(Some(&bundle), true).is_ok());
+        assert!(validate_resume_plugin_bundle_clear(None, false).is_ok());
     }
 
     #[test]

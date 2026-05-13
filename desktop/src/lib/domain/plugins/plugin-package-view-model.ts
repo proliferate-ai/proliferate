@@ -29,7 +29,7 @@ export function buildConnectedPluginPresentation(
 ): PluginPackagePresentation {
   const entry = record.catalogEntry;
   const components = buildPluginComponents(entry, {
-    authState: status.label,
+    authState: connectedCredentialStateLabel(status),
     mcpState: record.metadata.enabled ? "Enabled" : "Off",
     skillState: record.metadata.enabled ? "Available" : "Off",
   });
@@ -78,7 +78,7 @@ function buildPluginComponents(
       label: `${entry.name} connection`,
       description: "Account, token, or local setup used by plugin capabilities.",
       stateLabel: state.authState,
-      stateTone: state.authState === "Connected" ? "success" : "neutral",
+      stateTone: credentialStateTone(state.authState),
     },
     {
       kind: "mcp",
@@ -110,6 +110,25 @@ function buildPluginComponents(
   );
 
   return components;
+}
+
+function connectedCredentialStateLabel(status: ConnectorCardStatus): string {
+  if (status.intent === "needs_reconnect" || status.intent === "needs_token") {
+    return status.label;
+  }
+  return "Connected";
+}
+
+function credentialStateTone(
+  stateLabel: string,
+): PluginComponentRowModel["stateTone"] {
+  if (stateLabel === "Connected") {
+    return "success";
+  }
+  if (stateLabel.startsWith("Needs ")) {
+    return "warning";
+  }
+  return "neutral";
 }
 
 function summarizeComponents(components: readonly PluginComponentRowModel[]): string {

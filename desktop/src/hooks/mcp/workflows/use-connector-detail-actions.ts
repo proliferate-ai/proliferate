@@ -60,12 +60,16 @@ export function useConnectorDetailActions({
   const isConnected = modal.kind === "manage";
   const connectionId =
     modal.kind === "manage" ? modal.record.metadata.connectionId : null;
-  const existingSettings = useMemo(() => {
-    if (modal.kind === "manage") {
-      return normalizeConnectorSettings(entry, modal.record.metadata.settings);
-    }
-    return createDefaultConnectorSettings(entry) ?? {};
-  }, [entry, modal]);
+  const modalKind = modal.kind;
+  const persistedSettings = modal.kind === "manage" ? modal.record.metadata.settings : undefined;
+  const persistedSettingsKey = useMemo(
+    () => JSON.stringify(persistedSettings ?? null),
+    [persistedSettings],
+  );
+  const existingSettings = useMemo(
+    () => resolveExistingSettings(entry, modalKind, persistedSettings),
+    [entry, modalKind, persistedSettings],
+  );
 
   const [secretValues, setSecretValues] = useState<Record<string, string>>(
     () => initialConnectorSecretValues(entry),
@@ -77,9 +81,9 @@ export function useConnectorDetailActions({
 
   useEffect(() => {
     setSecretValues(initialConnectorSecretValues(entry));
-    setSettings(existingSettings);
+    setSettings(resolveExistingSettings(entry, modalKind, persistedSettings));
     setError(null);
-  }, [entry.id, connectionId, existingSettings]);
+  }, [entry.id, connectionId, modalKind, persistedSettingsKey]);
 
   const { variant } = modal;
   const isInitialLocalOAuthConnect = modal.kind === "connect" && variant === "local_oauth";
@@ -314,4 +318,15 @@ export function useConnectorDetailActions({
     submitting,
     variant,
   };
+}
+
+function resolveExistingSettings(
+  entry: ConnectorCatalogEntry,
+  modalKind: ResolvedConnectorModal["kind"],
+  persistedSettings: ConnectorSettings | undefined,
+): ConnectorSettings {
+  if (modalKind === "manage") {
+    return normalizeConnectorSettings(entry, persistedSettings);
+  }
+  return createDefaultConnectorSettings(entry) ?? {};
 }

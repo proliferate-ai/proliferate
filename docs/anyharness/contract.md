@@ -134,7 +134,9 @@ unknown; it does not mean the session had no MCP bindings.
 `ResumeSessionRequest` must remain backwards-compatible with no body and `{}`.
 When present, it may carry refreshed secret-bearing `mcpServers` plus matching
 redacted `mcpBindingSummaries`; runtime liveness remains authoritative for
-whether those refreshed bindings are persisted.
+whether those refreshed bindings are persisted. An explicit empty
+`pluginBundle` is a clear request and must be sent with an MCP refresh; this
+keeps the clear self-contained after a runtime process restart.
 
 `CreateSessionRequest.subagentsEnabled` is a create-time session policy.
 Omitted values default to enabled for compatibility. Resume requests do not

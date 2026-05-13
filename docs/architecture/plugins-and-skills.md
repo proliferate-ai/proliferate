@@ -92,8 +92,9 @@ Implemented now:
 - Desktop never creates synthetic "use this connector" skills.
 - On create, missing `pluginBundle` means no plugins for that session. On cold
   resume or restart, missing `pluginBundle` preserves current in-memory bundle
-  state, and explicit `{ "plugins": [] }` clears it. If the actor is already
-  live, AnyHarness rejects any `pluginBundle` field with
+  state, and explicit `{ "plugins": [] }` clears it when the resume also
+  carries an MCP refresh. If the actor is already live, AnyHarness rejects any
+  `pluginBundle` field with
   `SESSION_RESTART_REQUIRED`.
 
 Not implemented in this slice:
@@ -899,7 +900,10 @@ api/http/sessions.rs
 Resume plugin bundles are a cold-start/restart input. If a live actor already
 exists, AnyHarness returns `409 SESSION_RESTART_REQUIRED` for any
 `pluginBundle` field instead of mutating `PluginBundleRegistry` behind a running
-session. Missing `pluginBundle` preserves the current in-memory bundle.
+session. Missing `pluginBundle` preserves the current in-memory bundle. Explicit
+empty bundles must be accompanied by an MCP refresh so durable MCP summaries and
+secret-bearing MCP bindings can be replaced even after an AnyHarness process
+restart.
 
 App wiring:
 
