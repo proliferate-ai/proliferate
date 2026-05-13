@@ -25,7 +25,6 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { recordDebugActionDiagnostic } from "@/lib/infra/measurement/debug-action-diagnostic";
 import {
   HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
   type MeasurementOperationId,
@@ -37,13 +36,16 @@ import {
   getSessionRecord,
   isPendingSessionId,
 } from "@/stores/sessions/session-records";
-import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 
 const HOT_SWITCH_SURFACES = [
   "workspace-shell",
   "chat-surface",
   "session-transcript-pane",
   "transcript-list",
+  "transcript-context-providers",
+  "transcript-row-list-router",
+  "transcript-virtualized-viewport",
+  "transcript-full-list",
   "header-tabs",
   "workspace-sidebar",
 ] satisfies readonly MeasurementSurface[];
@@ -98,17 +100,6 @@ export function useWorkspaceShellActivation() {
     mode?: "focus-existing" | "open-or-focus";
   }): ShellActivationOutcome => {
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
-    recordDebugActionDiagnostic({
-      category: "workspace_shell_activation",
-      label: "activate_viewer_target",
-      keys: [workspaceId, shellStateKey],
-      detail: {
-        workspaceId,
-        shellWorkspaceId: shellWorkspaceId ?? null,
-        shellStateKey,
-        targetKind: target.kind,
-      },
-    });
     invalidateSessionActivationIntent(workspaceId);
     const targetKey = viewerWorkspaceShellTabKey(target);
     setActiveViewerTarget(targetKey);
@@ -154,16 +145,6 @@ export function useWorkspaceShellActivation() {
     reason?: string;
   }): ShellActivationOutcome => {
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
-    recordDebugActionDiagnostic({
-      category: "workspace_shell_activation",
-      label: "activate_chat_shell",
-      keys: [workspaceId, shellStateKey],
-      detail: {
-        workspaceId,
-        shellWorkspaceId: shellWorkspaceId ?? null,
-        shellStateKey,
-      },
-    });
     invalidateSessionActivationIntent(workspaceId);
     const write = writeShellIntent({
       workspaceId: shellStateKey,
@@ -183,7 +164,6 @@ export function useWorkspaceShellActivation() {
     workspaceId,
     shellWorkspaceId,
     sessionId,
-    source,
     selection,
   }: {
     workspaceId: string;
@@ -193,35 +173,7 @@ export function useWorkspaceShellActivation() {
     source?: string;
     selection?: SelectSessionOptionsWithoutGuard;
   }): Promise<SessionActivationOutcome> => {
-    if (isProliferatePerfFlagEnabled("freezeShellActivation")) {
-      const state = useSessionSelectionStore.getState();
-      return Promise.resolve({
-        result: "completed",
-        sessionId,
-        guard: {
-          workspaceId,
-          workspaceSelectionNonce: state.workspaceSelectionNonce,
-          token: state.sessionActivationIntentEpochByWorkspace[workspaceId] ?? 0,
-        },
-        activeSessionVersion: state.activeSessionVersion,
-      });
-    }
     const shellStateKey = resolveCurrentShellStateKey(workspaceId, shellWorkspaceId);
-    recordDebugActionDiagnostic({
-      category: "workspace_shell_activation",
-      label: "activate_chat_tab",
-      keys: [source ?? "unknown", workspaceId, sessionId],
-      detail: {
-        source: source ?? null,
-        workspaceId,
-        shellWorkspaceId: shellWorkspaceId ?? null,
-        shellStateKey,
-        sessionId,
-        hasSelection: selection !== undefined,
-        allowColdIdleNoStream: selection?.allowColdIdleNoStream ?? false,
-        forceCold: selection?.forceCold ?? false,
-      },
-    });
     const guard = beginSessionActivationIntent(workspaceId);
     const intent = chatWorkspaceShellTabKey(sessionId);
     const shellEpochAtWrite =

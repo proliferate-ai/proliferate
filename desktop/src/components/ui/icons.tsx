@@ -811,6 +811,7 @@ export function BrailleSweepBadge({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
+      data-jank-canary="braille"
       className={`braille-sweep-frame inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] ${className ?? ""}`}
     />
   );

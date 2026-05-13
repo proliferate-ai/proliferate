@@ -11,6 +11,7 @@ import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-activation";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 export type { ChatSurfaceState };
 
@@ -65,7 +66,21 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     }
     return { kind: shellRenderSurface.kind === "chat-shell" ? "chat-shell" as const : "other" as const };
   }, [shellRenderSurface]);
-  const mode = useMemo(() => resolveChatSurfaceState({
+  const mode = useMemo(() => measureDebugComputation({
+    category: "chat_surface_state.derive",
+    label: "resolve_mode",
+    keys: [
+      "selectedWorkspaceId",
+      "pendingWorkspaceEntry",
+      "activeLaunchIntent",
+      "selectedLocalWorkspace",
+      "selectedCloudWorkspace",
+      "selectedCloudRuntime",
+      "shellRenderScope",
+      "activeSessionSnapshot",
+    ],
+    count: (value) => (value.kind ? 1 : 0),
+  }, () => resolveChatSurfaceState({
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
     activeLaunchIntentId: activeLaunchIntent?.id ?? null,
@@ -88,7 +103,7 @@ export function useChatSurfaceState(shellRenderSurface?: WorkspaceRenderSurface 
     isEmpty,
     isRunning,
     streamConnectionState,
-  }), [
+  })), [
     activeLaunchIntent?.clientSessionId,
     activeLaunchIntent?.id,
     activeLaunchIntent?.materializedSessionId,

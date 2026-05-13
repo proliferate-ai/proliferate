@@ -3,9 +3,7 @@ import { ChatView } from "@/components/workspace/chat/ChatView";
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspace-content-shortcuts";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 import { useWorkspaceContentTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
@@ -16,21 +14,6 @@ export const WorkspaceContentView = memo(function WorkspaceContentView() {
   const contentTabs = useWorkspaceContentTabsViewModelContext();
   const tabActions = useWorkspaceTabActions(contentTabs);
   useWorkspaceContentShortcuts(tabActions);
-  const renderSurface = contentTabs.activation.renderSurface;
-  useDebugValueChange("workspace_content.inputs", "active_surface_refs", {
-    activeShellTab: contentTabs.activeShellTab,
-    activeShellTabKey: contentTabs.activeShellTabKey,
-    activation: contentTabs.activation,
-    renderSurfaceKind: renderSurface.kind,
-    renderSurfaceSessionId: "sessionId" in renderSurface ? renderSurface.sessionId : null,
-    renderSurfaceTargetKey: "targetKey" in renderSurface ? renderSurface.targetKey : null,
-  });
-  useDebugRenderReason("WorkspaceContentView", {
-    activeShellTab: contentTabs.activeShellTab,
-    activeShellTabKey: contentTabs.activeShellTabKey,
-    activation: contentTabs.activation,
-    renderSurface,
-  });
 
   return (
     <DebugProfiler id="workspace-content-view">

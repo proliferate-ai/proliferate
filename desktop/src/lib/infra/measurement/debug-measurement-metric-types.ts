@@ -77,6 +77,8 @@ export type MeasurementMetricInput =
       metric: "react_commit" | "render_count" | "long_task" | "frame_gap";
       durationMs?: number;
       count?: number;
+      startedAtMs?: number;
+      endedAtMs?: number;
     }
   | {
       type: "diagnostic";

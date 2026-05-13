@@ -8,7 +8,7 @@ import {
   type PromptCapabilities,
   type TranscriptState,
 } from "@anyharness/sdk";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
@@ -24,8 +24,11 @@ import {
   queuedOutboxEntriesForSession,
   renderableOutboxEntriesForTranscript,
 } from "@/lib/domain/sessions/intents/session-intent-selectors";
-import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
-import type { SessionIntent } from "@/lib/domain/sessions/intents/session-intent-model";
+import type {
+  PromptOutboxEntry,
+  SessionIntent,
+  SessionUpdateConfigIntent,
+} from "@/lib/domain/sessions/intents/session-intent-model";
 import {
   outboxEntriesForSession,
   sessionIntentsForSession,
@@ -41,7 +44,10 @@ const EMPTY_PENDING_PROMPTS: readonly PendingPromptEntry[] = [];
 const EMPTY_PENDING_INTERACTIONS: readonly PendingInteraction[] = [];
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_SESSION_INTENTS: readonly SessionIntent[] = [];
-const EMPTY_PENDING_CONFIG_CHANGES: PendingSessionConfigChanges = {};
+const EMPTY_CONFIG_INTENTS: readonly SessionUpdateConfigIntent[] = [];
+
+type NormalizedSessionControls = NonNullable<TranscriptState["liveConfig"]>["normalizedControls"];
+type NormalizedSessionModelControl = NormalizedSessionControls["model"];
 
 // Owns read-only projections for the active chat session. Action hooks should
 // consume these selectors rather than re-reading session stores ad hoc.
@@ -63,11 +69,12 @@ export function useActiveSessionWorkspaceId(): string | null {
 
 export function useActiveSessionPromptCapabilities(): PromptCapabilities | null {
   const activeSessionId = useActiveSessionId();
-  return useSessionDirectoryStore((state) =>
+  const capabilities = useSessionDirectoryStore((state) =>
     activeSessionId
       ? state.entriesById[activeSessionId]?.liveConfig?.promptCapabilities ?? null
       : null
   );
+  return useStablePromptCapabilities(capabilities);
 }
 
 export function useActiveSessionRunningState(): boolean {
@@ -120,13 +127,9 @@ export function useActiveTranscriptPaneState(): {
       oldestLoadedEventSeq: transcriptEntry?.events?.[0]?.seq ?? null,
     };
   }));
-  const intentDispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
-  const outboxEntries = useMemo(
-    () => activeSessionId
-      ? outboxEntriesForSession(useSessionIntentStore.getState(), activeSessionId)
-      : EMPTY_OUTBOX_ENTRIES,
-    [activeSessionId, intentDispatchVersion],
-  );
+  const outboxEntries = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
+  ));
   return useMemo(() => ({
     ...transcriptState,
     outboxEntries,
@@ -198,13 +201,9 @@ export function useActivePendingPrompts(): readonly PendingPromptEntry[] {
       ? state.entriesById[activeSessionId]?.transcript?.pendingPrompts ?? EMPTY_PENDING_PROMPTS
       : EMPTY_PENDING_PROMPTS
   );
-  const intentDispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
-  const sessionIntents = useMemo(
-    () => activeSessionId
-      ? sessionIntentsForSession(useSessionIntentStore.getState(), activeSessionId)
-      : EMPTY_SESSION_INTENTS,
-    [activeSessionId, intentDispatchVersion],
-  );
+  const sessionIntents = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? sessionIntentsForSession(state, activeSessionId) : EMPTY_SESSION_INTENTS
+  ));
   const outboxEntries = useMemo(
     () => sessionIntents.filter((intent): intent is PromptOutboxEntry => intent.kind === "send_prompt"),
     [sessionIntents],
@@ -282,14 +281,12 @@ export function useActiveSessionLaunchState(): {
   modelControl: NonNullable<TranscriptState["liveConfig"]>["normalizedControls"]["model"] | null;
 } {
   const activeSessionId = useActiveSessionId();
-  const intentDispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
+  const configIntents = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? configIntentsForSession(state, activeSessionId) : EMPTY_CONFIG_INTENTS
+  ));
   const intentPendingConfigChanges = useMemo(
-    () => activeSessionId
-      ? pendingConfigChangesForSessionIntents(
-          sessionIntentsForSession(useSessionIntentStore.getState(), activeSessionId),
-        )
-      : EMPTY_PENDING_CONFIG_CHANGES,
-    [activeSessionId, intentDispatchVersion],
+    () => pendingConfigChangesForSessionIntents(configIntents),
+    [configIntents],
   );
   const slice = useSessionDirectoryStore(useShallow((state) => {
     const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
@@ -298,11 +295,14 @@ export function useActiveSessionLaunchState(): {
       activeSessionId,
       agentKind: entry?.agentKind ?? null,
       modelId: entry?.modelId ?? null,
-      directoryPendingConfigChanges: entry?.pendingConfigChanges ?? null,
+      directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
+        entry?.pendingConfigChanges,
+      ),
       currentModelConfigId: modelControl?.rawConfigId ?? null,
       modelControl,
     };
   }));
+  const stableModelControl = useStableModelControl(slice.modelControl);
   const pendingConfigChanges = useMemo(
     () => mergePendingConfigChanges(
       slice.directoryPendingConfigChanges,
@@ -331,6 +331,7 @@ export function useActiveSessionLaunchState(): {
 
   return {
     ...slice,
+    modelControl: stableModelControl,
     currentLaunchIdentity,
     pendingConfigChanges,
   };
@@ -338,14 +339,12 @@ export function useActiveSessionLaunchState(): {
 
 export function useActiveSessionConfigState() {
   const activeSessionId = useActiveSessionId();
-  const intentDispatchVersion = useSessionIntentStore((state) => state.dispatchVersion);
+  const configIntents = useSessionIntentStore(useShallow((state) =>
+    activeSessionId ? configIntentsForSession(state, activeSessionId) : EMPTY_CONFIG_INTENTS
+  ));
   const intentPendingConfigChanges = useMemo(
-    () => activeSessionId
-      ? pendingConfigChangesForSessionIntents(
-          sessionIntentsForSession(useSessionIntentStore.getState(), activeSessionId),
-        )
-      : EMPTY_PENDING_CONFIG_CHANGES,
-    [activeSessionId, intentDispatchVersion],
+    () => pendingConfigChangesForSessionIntents(configIntents),
+    [configIntents],
   );
   const slice = useSessionDirectoryStore(useShallow((state) => {
     const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
@@ -355,9 +354,12 @@ export function useActiveSessionConfigState() {
       modeId: entry?.modeId ?? null,
       workspaceId: entry?.workspaceId ?? null,
       normalizedControls: entry?.liveConfig?.normalizedControls ?? null,
-      directoryPendingConfigChanges: entry?.pendingConfigChanges ?? null,
+      directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
+        entry?.pendingConfigChanges,
+      ),
     };
   }));
+  const stableNormalizedControls = useStableNormalizedControls(slice.normalizedControls);
   const pendingConfigChanges = useMemo(
     () => mergePendingConfigChanges(
       slice.directoryPendingConfigChanges,
@@ -367,6 +369,7 @@ export function useActiveSessionConfigState() {
   );
   return {
     ...slice,
+    normalizedControls: stableNormalizedControls,
     pendingConfigChanges,
   };
 }
@@ -415,4 +418,85 @@ function mergePendingConfigChanges(
     ...directoryPendingConfigChanges,
     ...intentPendingConfigChanges,
   };
+}
+
+function normalizeEmptyPendingConfigChanges(
+  changes: PendingSessionConfigChanges | null | undefined,
+): PendingSessionConfigChanges | null {
+  return changes && Object.keys(changes).length > 0 ? changes : null;
+}
+
+function useStableModelControl(
+  control: NormalizedSessionModelControl | null,
+): NormalizedSessionModelControl | null {
+  return useStableBySignature(control, modelControlSignature);
+}
+
+function useStableNormalizedControls(
+  controls: NormalizedSessionControls | null,
+): NormalizedSessionControls | null {
+  return useStableBySignature(controls, normalizedControlsSignature);
+}
+
+function useStablePromptCapabilities(
+  capabilities: PromptCapabilities | null,
+): PromptCapabilities | null {
+  return useStableBySignature(capabilities, promptCapabilitiesSignature);
+}
+
+function useStableBySignature<T>(
+  value: T | null,
+  buildSignature: (value: T | null) => string,
+): T | null {
+  const ref = useRef<{ signature: string; value: T | null } | null>(null);
+  const signature = buildSignature(value);
+  if (ref.current?.signature === signature) {
+    return ref.current.value;
+  }
+  ref.current = { signature, value };
+  return value;
+}
+
+function normalizedControlsSignature(controls: NormalizedSessionControls | null): string {
+  if (!controls) {
+    return "null";
+  }
+  return JSON.stringify({
+    model: controls.model,
+    collaborationMode: controls.collaborationMode,
+    mode: controls.mode,
+    reasoning: controls.reasoning,
+    effort: controls.effort,
+    fastMode: controls.fastMode,
+    extras: controls.extras,
+  });
+}
+
+function modelControlSignature(control: NormalizedSessionModelControl | null): string {
+  return control ? JSON.stringify(control) : "null";
+}
+
+function promptCapabilitiesSignature(capabilities: PromptCapabilities | null): string {
+  if (!capabilities) {
+    return "null";
+  }
+  return JSON.stringify({
+    audio: capabilities.audio === true,
+    embeddedContext: capabilities.embeddedContext === true,
+    image: capabilities.image === true,
+  });
+}
+
+function configIntentsForSession(
+  state: Parameters<typeof sessionIntentsForSession>[0],
+  clientSessionId: string,
+): readonly SessionUpdateConfigIntent[] {
+  const intents = sessionIntentsForSession(state, clientSessionId);
+  if (intents.length === 0) {
+    return EMPTY_CONFIG_INTENTS;
+  }
+  const configIntents = intents.filter(
+    (intent): intent is SessionUpdateConfigIntent => intent.kind === "update_config",
+  );
+  return configIntents.length > 0 ? configIntents : EMPTY_CONFIG_INTENTS;
 }

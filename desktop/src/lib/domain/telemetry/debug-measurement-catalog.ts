@@ -34,18 +34,33 @@ export type MeasurementSurface =
   | "workspace-shell"
   | "workspace-sidebar-frame"
   | "workspace-sidebar"
+  | "workspace-sidebar-primary-nav"
+  | "workspace-sidebar-content"
+  | "workspace-sidebar-footer"
   | "workspace-header-frame"
   | "workspace-content-frame"
   | "workspace-content-view"
   | "workspace-right-panel"
   | "workspace-command-palette"
   | "global-header"
+  | "global-header-actions"
   | "header-tabs"
+  | "header-tabs-strip"
+  | "header-tabs-actions"
   | "chat-surface"
+  | "chat-content"
   | "chat-composer"
   | "chat-composer-dock"
+  | "chat-composer-dock-region"
+  | "chat-composer-dock-slots"
+  | "chat-composer-dock-input"
+  | "chat-composer-dock-footer"
   | "session-transcript-pane"
   | "transcript-list"
+  | "transcript-context-providers"
+  | "transcript-row-list-router"
+  | "transcript-virtualized-viewport"
+  | "transcript-full-list"
   | "file-tree"
   | "loading-braille"
   | "send-button"
@@ -156,9 +171,17 @@ export const HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET = {
 export const PROMPT_SUBMIT_MEASUREMENT_SURFACES = [
   "chat-composer",
   "chat-composer-dock",
+  "chat-composer-dock-region",
+  "chat-composer-dock-slots",
+  "chat-composer-dock-input",
+  "chat-composer-dock-footer",
   "chat-surface",
   "session-transcript-pane",
   "transcript-list",
+  "transcript-context-providers",
+  "transcript-row-list-router",
+  "transcript-virtualized-viewport",
+  "transcript-full-list",
   "header-tabs",
 ] as const satisfies readonly MeasurementSurface[];
 

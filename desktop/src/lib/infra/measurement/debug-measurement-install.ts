@@ -5,7 +5,6 @@ import { installDebugMainThreadDetectors } from "@/lib/infra/measurement/debug-m
 import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
 import { installDebugMeasurementExport } from "@/lib/infra/measurement/debug-measurement-dump";
 import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
-import { isProliferatePerfFlagEnabled } from "@/lib/infra/perf/perf-isolation-flags";
 import type { MeasurementOperationId } from "./debug-measurement-catalog-types";
 
 let uninstallMeasurement: (() => void) | null = null;
@@ -33,9 +32,6 @@ export function installDebugMeasurement(): () => void {
         return;
       }
 
-      if (isProliferatePerfFlagEnabled("suppressAnyHarnessStreamMetrics")) {
-        return;
-      }
       recordMeasurementMetric({
         type: "stream",
         category: event.category,

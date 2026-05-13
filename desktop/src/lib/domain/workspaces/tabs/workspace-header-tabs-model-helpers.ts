@@ -10,7 +10,8 @@ import type { SessionDirectoryEntry } from "@/lib/domain/sessions/directory/dire
 
 export type KnownHeaderSession =
   | { kind: "slot"; slot: SessionDirectoryEntry; session?: Session }
-  | { kind: "session"; session: Session; clientSessionId?: string };
+  | { kind: "session"; session: Session; clientSessionId?: string }
+  | { kind: "placeholder"; sessionId: string };
 
 export interface HeaderHierarchyChildRow {
   sessionLinkId: string;
@@ -26,6 +27,7 @@ export interface HeaderHierarchyChildRow {
 }
 
 export function buildKnownHeaderSessions(args: {
+  optimisticSessionIds?: readonly string[];
   sessions: readonly Session[] | null | undefined;
   selectedWorkspaceId: string | null;
   clientSessionIdByMaterializedSessionId: Readonly<Record<string, string | undefined>>;
@@ -41,11 +43,21 @@ export function buildKnownHeaderSessions(args: {
   }
   for (const slot of args.liveSlots) {
     const existing = map.get(slot.sessionId);
+    const existingSession = existing?.kind === "session"
+      ? existing.session
+      : existing?.kind === "slot"
+        ? existing.session
+        : undefined;
     map.set(slot.sessionId, {
       kind: "slot",
       slot,
-      session: existing?.kind === "session" ? existing.session : existing?.session,
+      session: existingSession,
     });
+  }
+  for (const sessionId of args.optimisticSessionIds ?? []) {
+    if (!map.has(sessionId)) {
+      map.set(sessionId, { kind: "placeholder", sessionId });
+    }
   }
   return map;
 }
@@ -109,16 +121,31 @@ function isTransientClientSessionId(sessionId: string): boolean {
 }
 
 export function getKnownSessionId(known: KnownHeaderSession): string {
-  return known.kind === "slot"
-    ? known.slot.sessionId
-    : known.clientSessionId ?? known.session.id;
+  switch (known.kind) {
+    case "slot":
+      return known.slot.sessionId;
+    case "session":
+      return known.clientSessionId ?? known.session.id;
+    case "placeholder":
+      return known.sessionId;
+  }
 }
 
 export function getKnownSessionAgentKind(known: KnownHeaderSession): string {
-  return known.kind === "slot" ? known.slot.agentKind : known.session.agentKind;
+  switch (known.kind) {
+    case "slot":
+      return known.slot.agentKind;
+    case "session":
+      return known.session.agentKind;
+    case "placeholder":
+      return "";
+  }
 }
 
 export function getKnownSessionTitle(known: KnownHeaderSession): string {
+  if (known.kind === "placeholder") {
+    return "Chat";
+  }
   if (known.kind === "slot") {
     return (
       known.slot.title?.trim()
@@ -131,6 +158,9 @@ export function getKnownSessionTitle(known: KnownHeaderSession): string {
 }
 
 export function getKnownSessionViewState(known: KnownHeaderSession): SessionViewState {
+  if (known.kind === "placeholder") {
+    return "idle";
+  }
   if (known.kind === "slot") {
     const viewState = resolveSessionViewState(activitySnapshotFromDirectoryEntry(known.slot));
     return shouldSuppressMaterializationActivity(known.slot, viewState) ? "idle" : viewState;
@@ -164,6 +194,9 @@ function shouldSuppressMaterializationActivity(
 }
 
 export function getKnownSessionCanFork(known: KnownHeaderSession): boolean {
+  if (known.kind === "placeholder") {
+    return false;
+  }
   if (getKnownSessionViewState(known) !== "idle") {
     return false;
   }

@@ -16,6 +16,7 @@ import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
+  measureDebugComputation,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
@@ -132,7 +133,12 @@ export function MessageList({
     )
     : null;
   const visibleOutboxEntries = useMemo(
-    () => renderableOutboxEntriesForTranscript(outboxEntries, transcript),
+    () => measureDebugComputation({
+      category: "transcript_list.derive",
+      label: "visible_outbox_entries",
+      keys: ["outboxEntries", "transcript"],
+      count: (entries) => entries.length,
+    }, () => renderableOutboxEntriesForTranscript(outboxEntries, transcript)),
     [outboxEntries, transcript],
   );
   const outboxStartedAtByPromptId = useMemo(
@@ -262,7 +268,15 @@ export function MessageList({
     const operationId = startMeasurementOperation({
       kind: "transcript_scroll",
       sampleKey: "transcript",
-      surfaces: ["transcript-list", "session-transcript-pane", "chat-surface"],
+      surfaces: [
+        "transcript-list",
+        "transcript-context-providers",
+        "transcript-row-list-router",
+        "transcript-virtualized-viewport",
+        "transcript-full-list",
+        "session-transcript-pane",
+        "chat-surface",
+      ],
       idleTimeoutMs: 750,
       maxDurationMs: 8000,
       cooldownMs: 1500,
@@ -271,6 +285,10 @@ export function MessageList({
       scrollSampleOperationRef.current = operationId;
       markOperationForNextCommit(operationId, [
         "transcript-list",
+        "transcript-context-providers",
+        "transcript-row-list-router",
+        "transcript-virtualized-viewport",
+        "transcript-full-list",
         "session-transcript-pane",
         "chat-surface",
       ]);
@@ -355,28 +373,32 @@ export function MessageList({
   return (
     <DebugProfiler id="transcript-list">
       <div className="flex-1 min-h-0" data-telemetry-block>
-        <TranscriptContextProviders
-          sessionId={activeSessionId}
-          onOpenSession={onOpenSession}
-          canOpenSession={canOpenSession}
-        >
-          <VirtualTranscriptRowList
-            key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
-            rows={virtualRows}
-            selectionRootRef={selectionRootRef}
-            hasOlderHistory={hasOlderHistory}
-            isLoadingOlderHistory={isLoadingOlderHistory}
-            olderHistoryCursor={olderHistoryCursor}
-            bottomInsetPx={bottomInsetPx}
-            selectedWorkspaceId={selectedWorkspaceId}
-            activeSessionId={activeSessionId}
-            isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
-            pendingPromptText={visibleOptimisticPrompt?.text ?? null}
-            onLoadOlderHistory={onLoadOlderHistory ?? noop}
-            onScrollSample={handleTranscriptScroll}
-            renderRow={renderVirtualRow}
-          />
-        </TranscriptContextProviders>
+        <DebugProfiler id="transcript-context-providers">
+          <TranscriptContextProviders
+            sessionId={activeSessionId}
+            onOpenSession={onOpenSession}
+            canOpenSession={canOpenSession}
+          >
+            <DebugProfiler id="transcript-row-list-router">
+              <VirtualTranscriptRowList
+                key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
+                rows={virtualRows}
+                selectionRootRef={selectionRootRef}
+                hasOlderHistory={hasOlderHistory}
+                isLoadingOlderHistory={isLoadingOlderHistory}
+                olderHistoryCursor={olderHistoryCursor}
+                bottomInsetPx={bottomInsetPx}
+                selectedWorkspaceId={selectedWorkspaceId}
+                activeSessionId={activeSessionId}
+                isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
+                pendingPromptText={visibleOptimisticPrompt?.text ?? null}
+                onLoadOlderHistory={onLoadOlderHistory ?? noop}
+                onScrollSample={handleTranscriptScroll}
+                renderRow={renderVirtualRow}
+              />
+            </DebugProfiler>
+          </TranscriptContextProviders>
+        </DebugProfiler>
       </div>
     </DebugProfiler>
   );

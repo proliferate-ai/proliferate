@@ -6,6 +6,7 @@ import {
   type TranscriptRow,
 } from "@/lib/domain/chat/transcript/transcript-row-model";
 import type { PromptOutboxEntry } from "@/lib/domain/sessions/intents/session-intent-model";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 export function useTranscriptRowModel(input: {
   activeSessionId: string;
@@ -17,8 +18,19 @@ export function useTranscriptRowModel(input: {
 }): readonly TranscriptRow[] {
   const cacheRef = useRef(createTranscriptRowModelCache());
 
-  return useMemo(
-    () => buildTranscriptRowModel(input, cacheRef.current),
+  const rows = useMemo(
+    () => measureDebugComputation({
+      category: "transcript_row_model.derive",
+      label: "rows",
+      keys: [
+        "activeSessionId",
+        "latestTurnId",
+        "transcript",
+        "visibleOptimisticPrompt",
+        "visibleOutboxEntries",
+      ],
+      count: (rows) => rows.length,
+    }, () => buildTranscriptRowModel(input, cacheRef.current)),
     [
       input.activeSessionId,
       input.latestTurnHasAssistantRenderableContent,
@@ -28,4 +40,6 @@ export function useTranscriptRowModel(input: {
       input.visibleOutboxEntries,
     ],
   );
+
+  return rows;
 }

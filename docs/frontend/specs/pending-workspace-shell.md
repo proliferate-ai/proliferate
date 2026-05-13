@@ -3,10 +3,11 @@
 Status: authoritative for pending workspace entry, projected session shell, and
 optimistic outbound session work in the desktop frontend.
 
-Read this doc before changing new-workspace launch, pending workspace UI,
-optimistic session creation, queued prompts, projected chat tabs, workspace
-arrival panels, optimistic config/interaction handling, or sidebar/footer/header
-state during workspace materialization.
+Read this doc before changing new-workspace launch, existing-workspace
+selection/opening, pending workspace UI, optimistic session creation, queued
+prompts, projected chat tabs, workspace arrival panels, optimistic
+config/interaction handling, or sidebar/footer/header state during workspace
+or session materialization.
 
 This is a UI-side spec. It does not define AnyHarness runtime semantics. It
 defines how the desktop renders immediately, stores outbound user work, and
@@ -19,6 +20,9 @@ Use this map to decide whether this spec applies and where to look first.
 | Path | Owns |
 | --- | --- |
 | `desktop/src/lib/domain/workspaces/creation/pending-entry.ts` | Pending workspace model and path helpers. |
+| `desktop/src/lib/domain/workspaces/selection/optimistic-session-shell.ts` | Fast-open session candidate and placeholder rules. |
+| `desktop/src/hooks/workspaces/selection/run-workspace-selection.ts` | Existing workspace selection and first active-session projection. |
+| `desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts` | Session-list bootstrap and optimistic session validation. |
 | `desktop/src/hooks/workspaces/use-workspace-entry-flow.ts` | Begin/finalize/fail handoff workflow. |
 | `desktop/src/hooks/workspaces/use-workspace-entry-actions.ts` | Local/worktree entry actions. |
 | `desktop/src/hooks/workspaces/workflows/pending-workspace-session-shell.ts` | Projected session creation. |
@@ -51,6 +55,7 @@ Use these entry points when debugging or extending the system:
 | A queued action flickers or appears late | `pending-prompt-queue.ts` and the distinction between `show*Action` and `can*`. |
 | A second session/tab appears after materialization | `use-home-next-launch.ts` and `use-pending-workspace-session-materialization.ts`. |
 | A sidebar/header/footer row disappears during handoff | The matching pure projection helper under `lib/domain/workspaces/**`. |
+| Opening an existing workspace briefly shows no tabs or an empty chat | `run-workspace-selection.ts`, then `optimistic-session-shell.ts`, then `use-workspace-bootstrap-actions.ts`. |
 
 ## 1. Purpose
 
@@ -258,6 +263,23 @@ user opens/sends to a new session
   -> bind materialized session id
   -> dispatch and reconcile
 ```
+
+The same model also applies when selecting an existing workspace with remembered
+tabs:
+
+```text
+user selects existing workspace
+  -> resolve explicit, last-viewed, or first visible persisted session id
+  -> create a lightweight placeholder session record if needed
+  -> set active session id and shell tab intent immediately
+  -> render header tabs and empty/session skeleton before session-list load
+  -> load workspace sessions through the normal bootstrap path
+  -> patch the placeholder from the real session summary, or clear it if stale
+```
+
+This fast-open placeholder is only shell scaffolding. It must not invent
+transcript content, runtime activity, or action capabilities. The real session
+summary and stream replace it as soon as AnyHarness session data is available.
 
 ## 7. Begin Flow
 

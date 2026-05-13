@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
 import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
@@ -26,11 +26,13 @@ import { buildHeaderStripRows } from "@/lib/domain/workspaces/tabs/group-rows";
 import {
   resolveManualChatGroupColor,
   deriveManualChatGroupsForDisplay,
+  type DisplayManualChatGroup,
 } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
   includeVisibleLinkedChildSessionIds,
   resolveVisibleChatSessionIds,
   type ChatVisibilityCandidate,
+  uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
 import {
   useWorkspaceShellTabsState,
@@ -51,14 +53,16 @@ import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   resolveWithWorkspaceFallback,
+  sameStringArray,
 } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
+const EMPTY_SESSION_ID_LIST: string[] = [];
+const EMPTY_MANUAL_GROUPS: DisplayManualChatGroup[] = [];
 
 const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};
 const EMPTY_TAB_MODES: Record<string, FileViewerMode> = {};
@@ -119,26 +123,60 @@ export function useWorkspaceHeaderTabsViewModel() {
     workspaceId: selectedWorkspaceId,
     enabled: !!selectedWorkspaceId && !hotPaintPending,
   });
-  useDebugValueChange("header_tabs.query_state", "workspace_sessions_query", {
-    selectedWorkspaceId,
-    enabled: !!selectedWorkspaceId && !hotPaintPending,
-    status: workspaceSessionsQuery.status,
-    fetchStatus: workspaceSessionsQuery.fetchStatus,
-    isFetching: workspaceSessionsQuery.isFetching,
-    isPending: workspaceSessionsQuery.isPending,
-    data: workspaceSessionsQuery.data,
-    dataUpdatedAt: workspaceSessionsQuery.dataUpdatedAt,
-    errorUpdatedAt: workspaceSessionsQuery.errorUpdatedAt,
-  });
+  const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
+
+  const persistedVisibleFallback = resolveWithWorkspaceFallback(
+    visibleByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const recentlyHiddenFallback = resolveWithWorkspaceFallback(
+    hiddenByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const collapsedParentFallback = resolveWithWorkspaceFallback(
+    collapsedGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const manualGroupsFallback = resolveWithWorkspaceFallback(
+    manualGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const persistedVisibleIds = persistedVisibleFallback.value;
+  const recentlyHiddenIds = recentlyHiddenFallback.value ?? EMPTY_SESSION_ID_LIST;
+  const collapsedParentIds = collapsedParentFallback.value ?? EMPTY_SESSION_ID_LIST;
+  const persistedManualGroups = manualGroupsFallback.value ?? EMPTY_MANUAL_GROUPS;
+  const optimisticHeaderSessionIds = useStableStringArray(useMemo(
+    () => workspaceSessionsLoaded
+      ? EMPTY_SESSION_ID_LIST
+      : uniqueIds([
+        ...(persistedVisibleIds ?? []),
+        activeSessionId ?? "",
+      ]).filter(Boolean),
+    [
+      activeSessionId,
+      persistedVisibleIds,
+      workspaceSessionsLoaded,
+    ],
+  ));
 
   const knownSessions = useMemo<Map<string, KnownHeaderSession>>(() =>
     measureDebugComputation({
       category: "header_tabs.derive",
       label: "known_sessions",
-      keys: ["liveSlots", "workspaceSessionsQuery.data", "selectedWorkspaceId"],
+      keys: [
+        "liveSlots",
+        "optimisticHeaderSessionIds",
+        "workspaceSessionsQuery.data",
+        "selectedWorkspaceId",
+      ],
       count: (map) => map.size,
     }, () => {
       return buildKnownHeaderSessions({
+        optimisticSessionIds: optimisticHeaderSessionIds,
         sessions: workspaceSessionsQuery.data,
         selectedWorkspaceId,
         clientSessionIdByMaterializedSessionId,
@@ -147,10 +185,13 @@ export function useWorkspaceHeaderTabsViewModel() {
     }), [
       clientSessionIdByMaterializedSessionId,
       liveSlots,
+      optimisticHeaderSessionIds,
       selectedWorkspaceId,
       workspaceSessionsQuery.data,
     ]);
-  const knownSessionIds = useMemo(() => Array.from(knownSessions.keys()), [knownSessions]);
+  const knownSessionIds = useStableStringArray(
+    useMemo(() => Array.from(knownSessions.keys()), [knownSessions]),
+  );
   const hierarchy = useWorkspaceHeaderSubagentHierarchy({
     workspaceId: selectedWorkspaceId,
     sessionIds: knownSessionIds,
@@ -178,35 +219,10 @@ export function useWorkspaceHeaderTabsViewModel() {
     })),
     [hierarchy.childToParent, hierarchyChildren.visibilityCandidates, knownSessionIds],
   );
-  const liveChatSessionIds = useMemo(
+  const liveChatSessionIds = useStableStringArray(useMemo(
     () => liveVisibilityCandidates.map((candidate) => candidate.sessionId),
     [liveVisibilityCandidates],
-  );
-
-  const persistedVisibleFallback = resolveWithWorkspaceFallback(
-    visibleByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const recentlyHiddenFallback = resolveWithWorkspaceFallback(
-    hiddenByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const collapsedParentFallback = resolveWithWorkspaceFallback(
-    collapsedGroupsByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const manualGroupsFallback = resolveWithWorkspaceFallback(
-    manualGroupsByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const persistedVisibleIds = persistedVisibleFallback.value;
-  const recentlyHiddenIds = recentlyHiddenFallback.value ?? [];
-  const collapsedParentIds = collapsedParentFallback.value ?? [];
-  const persistedManualGroups = manualGroupsFallback.value ?? [];
+  ));
   const persistedVisibleIdsForResolution = useMemo(
     () => persistedVisibleIds?.filter((sessionId) =>
       sessionId === activeSessionId || !hierarchyChildren.rowsBySessionId.has(sessionId)
@@ -216,6 +232,7 @@ export function useWorkspaceHeaderTabsViewModel() {
 
   const visibleResolution = useMemo(
     () => resolveVisibleChatSessionIds({
+      includeUnresolvedPersistedIds: !workspaceSessionsLoaded,
       liveSessions: liveVisibilityCandidates,
       persistedVisibleIds: persistedVisibleIdsForResolution,
       recentlyHiddenIds,
@@ -226,10 +243,11 @@ export function useWorkspaceHeaderTabsViewModel() {
       liveVisibilityCandidates,
       persistedVisibleIdsForResolution,
       recentlyHiddenIds,
+      workspaceSessionsLoaded,
     ],
   );
-  const visibleChatSessionIds = visibleResolution.visibleSessionIds;
-  const stripVisibleChatSessionIds = useMemo(
+  const visibleChatSessionIds = useStableStringArray(visibleResolution.visibleSessionIds);
+  const stripVisibleChatSessionIds = useStableStringArray(useMemo(
     () => includeVisibleLinkedChildSessionIds({
       visibleSessionIds: visibleResolution.visibleSessionIds,
       linkedChildrenByParentSessionId: hierarchyChildren.childIdsByParentSessionId,
@@ -240,10 +258,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       recentlyHiddenIds,
       visibleResolution.visibleSessionIds,
     ],
-  );
-
-  const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
-
+  ));
   const groupedTabs = useMemo(
     () => buildGroupedChatTabs({
       visibleSessionIds: stripVisibleChatSessionIds,
@@ -322,10 +337,10 @@ export function useWorkspaceHeaderTabsViewModel() {
       hierarchy.childrenByParentSessionId,
     ],
   );
-  const stripChatSessionIds = useMemo(
+  const stripChatSessionIds = useStableStringArray(useMemo(
     () => selectHeaderStripChatSessionIds(stripRows),
     [stripRows],
-  );
+  ));
   const {
     activeShellTab,
     activeShellTabKey,
@@ -456,21 +471,6 @@ export function useWorkspaceHeaderTabsViewModel() {
     workspaceUiKey,
   ]);
 
-  useDebugValueChange("header_tabs.model", "view_model_refs", {
-    selectedWorkspaceId,
-    activeSessionId,
-    hotPaintPending,
-    liveSlots,
-    knownSessions,
-    hierarchyChildToParent: hierarchy.childToParent,
-    hierarchyChildrenByParent: hierarchy.childrenByParentSessionId,
-    chatTabs,
-    stripRows,
-    displayShellRows,
-    menuChatTabs,
-    activation,
-  });
-
   return useMemo(() => ({
     activeSessionId,
     activeShellTab,
@@ -520,4 +520,14 @@ export function useWorkspaceHeaderTabsViewModel() {
     visibleChatSessionIds,
     workspaceUiKey,
   ]);
+}
+
+function useStableStringArray<T extends readonly string[]>(value: T): T {
+  const previousRef = useRef<T | null>(null);
+  const previous = previousRef.current;
+  if (previous && sameStringArray(previous, value)) {
+    return previous;
+  }
+  previousRef.current = value;
+  return value;
 }

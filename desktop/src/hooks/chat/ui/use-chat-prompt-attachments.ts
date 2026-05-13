@@ -35,15 +35,23 @@ export function useChatPromptAttachments({
   }, [attachments.addTextPaste, canAttachFiles, pasteAttachmentsEnabled]);
 
   return useMemo(() => ({
-    ...attachments,
+    attachments: attachments.attachments,
     addFiles,
     addTextPaste,
+    removeAttachment: attachments.removeAttachment,
+    clearAttachments: attachments.clearAttachments,
+    snapshotForSubmit: attachments.snapshotForSubmit,
+    hasAttachments: attachments.hasAttachments,
     canAttachFiles,
     supportsAttachments,
   }), [
     addFiles,
     addTextPaste,
-    attachments,
+    attachments.attachments,
+    attachments.clearAttachments,
+    attachments.hasAttachments,
+    attachments.removeAttachment,
+    attachments.snapshotForSubmit,
     canAttachFiles,
     supportsAttachments,
   ]);

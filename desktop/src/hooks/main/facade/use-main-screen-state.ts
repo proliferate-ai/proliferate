@@ -17,7 +17,6 @@ import {
   type SetStateAction,
 } from "react";
 import { useResize } from "@/hooks/ui/layout/use-resize";
-import { useProliferatePerfFlag } from "@/hooks/ui/use-proliferate-perf-flag";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -28,7 +27,6 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/lib/domain/preferences/workspace-ui/sidebar";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
@@ -102,7 +100,6 @@ export interface MainScreenState {
 // Owns the Main screen view-model: local layout state plus selected workspace
 // data needed by the shell. User actions live in main/workflows.
 export function useMainScreenState(): MainScreenState {
-  const freezeMainScreenDataQueries = useProliferatePerfFlag("freezeMainScreenDataQueries");
   const [rightPanelUserOpenOverride, setRightPanelUserOpenOverride] = useState<{
     materializedWorkspaceId: string;
     nonce: number;
@@ -287,9 +284,7 @@ export function useMainScreenState(): MainScreenState {
 
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const { data: workspaceCollections } = useWorkspaces({
-    enabled: !freezeMainScreenDataQueries,
-  });
+  const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const activeLaunchIntentIdForShell =
     selectedWorkspaceId || pendingWorkspaceEntry
@@ -313,12 +308,11 @@ export function useMainScreenState(): MainScreenState {
   );
   const { data: gitStatus } = useGitStatusQuery({
     workspaceId: materializedWorkspaceId,
-    enabled: hasRuntimeReadyWorkspace && !hotPaintPending && !freezeMainScreenDataQueries,
+    enabled: hasRuntimeReadyWorkspace && !hotPaintPending,
   });
   const shouldQueryCurrentPullRequest =
     hasRuntimeReadyWorkspace
     && !hotPaintPending
-    && !freezeMainScreenDataQueries
     && Boolean(gitStatus?.currentBranch?.trim());
   const { data: currentPullRequest } = useCurrentPullRequestQuery({
     workspaceId: materializedWorkspaceId,
@@ -344,39 +338,6 @@ export function useMainScreenState(): MainScreenState {
   );
   const rightPanelOpen = rightPanelDurableState.open
     && (!rightPanelSuppressed || userOpenOverrideActive);
-
-  useDebugValueChange("main_screen.inputs", "state_refs", {
-    pendingWorkspaceEntry,
-    selectedWorkspaceId,
-    selectedLogicalWorkspaceId,
-    workspaceUiKey,
-    materializedWorkspaceId,
-    hotPaintPending,
-    sidebarOpen,
-    sidebarWidth,
-    rightPanelDurableByWorkspace,
-    rightPanelMaterializedByWorkspace,
-    rightPanelDurableState,
-    rightPanelMaterializedState,
-    rightPanelState,
-    rightPanelOpen,
-    rightPanelWidth,
-    rightPanelUserOpenOverride,
-    terminalActivationRequest,
-    publishDialog,
-    commandPaletteOpen,
-    activeLaunchIntent,
-    selectedCloudRuntimeState: selectedCloudRuntime.state,
-    workspaceCollections,
-    selectedWorkspace,
-    selectedCloudWorkspace,
-    gitStatus,
-    currentPullRequest,
-    hasWorkspaceShell,
-    hasLaunchIntentOnlyShell,
-    hasRuntimeReadyWorkspace,
-    shouldKeepRuntimePanelsVisible,
-  });
 
   useEffect(() => {
     if (
