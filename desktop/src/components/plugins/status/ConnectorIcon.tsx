@@ -103,7 +103,7 @@ type ConnectorIconSize = "sm" | "md" | "lg";
 
 const TILE_SIZE: Record<ConnectorIconSize, string> = {
   sm: "size-8 rounded-lg",
-  md: "size-10 rounded-xl",
+  md: "size-10 rounded-lg",
   lg: "size-12 rounded-xl",
 };
 
@@ -126,7 +126,7 @@ export function ConnectorIcon({
     // Brand logos default to a stable logo tile; individual connectors can
     // override source and tile treatment when their dark asset needs it.
     return (
-      <div className={`flex shrink-0 items-center justify-center overflow-hidden ${tileToneClass} ${tileClass}`}>
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden border border-border/70 ${tileToneClass} ${tileClass}`}>
         <img
           src={iconImage}
           alt=""
@@ -140,7 +140,7 @@ export function ConnectorIcon({
   const Icon = CONNECTOR_ICONS[entry.iconId as keyof typeof CONNECTOR_ICONS] ?? Globe;
   return (
     <div
-      className={`flex shrink-0 items-center justify-center bg-muted/40 text-foreground ${tileClass}`}
+      className={`flex shrink-0 items-center justify-center border border-border/70 bg-transparent text-muted-foreground ${tileClass}`}
     >
       <Icon className="size-[72%] shrink-0" />
     </div>

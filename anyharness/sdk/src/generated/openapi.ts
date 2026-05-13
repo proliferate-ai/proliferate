@@ -1980,6 +1980,7 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
+            pluginBundle?: null | components["schemas"]["SessionPluginBundle"];
             subagentsEnabled?: boolean | null;
             systemPromptAppend?: string[] | null;
             workspaceId: string;
@@ -3041,6 +3042,7 @@ export interface components {
         ResumeSessionRequest: {
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
+            pluginBundle?: null | components["schemas"]["SessionPluginBundle"];
         };
         RetryReviewAssignmentRequest: {
             modelId?: string | null;
@@ -3415,6 +3417,39 @@ export interface components {
         };
         /** @enum {string} */
         SessionMcpTransport: "http" | "stdio";
+        SessionPlugin: {
+            credentialBindings?: components["schemas"]["SessionPluginCredentialBinding"][];
+            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][];
+            mcpServers?: components["schemas"]["SessionMcpServer"][];
+            pluginId: string;
+            skills?: components["schemas"]["SessionPluginSkill"][];
+            version?: string | null;
+        };
+        SessionPluginBundle: {
+            plugins?: components["schemas"]["SessionPlugin"][];
+        };
+        SessionPluginCredentialBinding: {
+            displayName?: string | null;
+            id: string;
+            status: components["schemas"]["SessionPluginCredentialBindingStatus"];
+        };
+        /** @enum {string} */
+        SessionPluginCredentialBindingStatus: "ready" | "missing" | "needs_reconnect" | "unsupported_target";
+        SessionPluginSkill: {
+            credentialBindingIds?: string[];
+            description: string;
+            displayName: string;
+            instructions: string;
+            requiredMcpServers?: string[];
+            resources?: components["schemas"]["SessionPluginSkillResource"][];
+            skillId: string;
+        };
+        SessionPluginSkillResource: {
+            content: string;
+            contentType: string;
+            displayName?: string | null;
+            resourceId: string;
+        };
         SessionRawNotificationEnvelope: {
             notification: unknown;
             notificationKind: string;
@@ -5554,6 +5589,15 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session must be restarted before applying resume changes */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

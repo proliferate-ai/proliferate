@@ -1,3 +1,5 @@
+import type { PluginPackageCatalogEntry } from "@/lib/domain/plugins/types";
+
 export type ConnectorCatalogId = string;
 
 export type ConnectorAvailability = "universal" | "local_only" | "cloud_only";
@@ -72,6 +74,7 @@ interface ConnectorCatalogEntryBase {
   requiredFields: readonly ConnectorCatalogField[];
   settingsSchema: readonly ConnectorSettingsField[];
   capabilities: readonly string[];
+  pluginPackage?: PluginPackageCatalogEntry;
 }
 
 export interface SecretHttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {

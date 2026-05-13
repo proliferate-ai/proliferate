@@ -27,7 +27,12 @@ import {
   startCloudMcpOAuthFlow,
 } from "@/lib/access/cloud/mcp_oauth";
 import { getCloudMcpCatalog } from "@/lib/access/cloud/mcp_catalog";
-import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/access/cloud/client";
+import type {
+  CloudMcpCatalogEntry,
+  CloudMcpConnection,
+} from "@/lib/access/cloud/client";
+import type { PluginPackageCatalogEntry } from "@/lib/domain/plugins/types";
+import { cloudPluginPackageToLocal } from "@/lib/domain/plugins/cloud-plugin-package";
 import {
   augmentLocalOAuthInstalledStatus,
   deleteLocalOAuthConnectorDataBeforeCloudDelete,
@@ -55,8 +60,17 @@ async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
     getCloudMcpCatalog(),
     listCloudMcpConnections(),
   ]);
+  const packagesByCatalogEntryId = new Map(
+    (catalog.pluginPackages ?? []).map((pluginPackage) => [
+      pluginPackage.catalogEntryId,
+      cloudPluginPackageToLocal(pluginPackage),
+    ]),
+  );
   const entries = catalog.entries
-    .map(cloudCatalogEntryToLocal)
+    .map((entry) => cloudCatalogEntryToLocal(
+      entry,
+      packagesByCatalogEntryId.get(entry.id),
+    ))
     .filter(isConnectorCatalogEntryAvailable);
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
   const installedBase = connectionsResponse.connections
@@ -73,8 +87,17 @@ async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
 
 async function loadCloudCatalogEntry(catalogEntryId: string): Promise<ConnectorCatalogEntry> {
   const catalog = await getCloudMcpCatalog();
+  const packagesByCatalogEntryId = new Map(
+    (catalog.pluginPackages ?? []).map((pluginPackage) => [
+      pluginPackage.catalogEntryId,
+      cloudPluginPackageToLocal(pluginPackage),
+    ]),
+  );
   const entry = catalog.entries
-    .map(cloudCatalogEntryToLocal)
+    .map((candidate) => cloudCatalogEntryToLocal(
+      candidate,
+      packagesByCatalogEntryId.get(candidate.id),
+    ))
     .find((candidate) => candidate.id === catalogEntryId);
   if (!entry) {
     throw new Error("Connector catalog entry was not found.");
@@ -82,7 +105,10 @@ async function loadCloudCatalogEntry(catalogEntryId: string): Promise<ConnectorC
   return entry;
 }
 
-function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalogEntry {
+function cloudCatalogEntryToLocal(
+  entry: CloudMcpCatalogEntry,
+  pluginPackage?: PluginPackageCatalogEntry,
+): ConnectorCatalogEntry {
   const common = {
     id: entry.id as ConnectorCatalogEntry["id"],
     name: entry.name,
@@ -127,6 +153,7 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
       affectsUrl: field.affectsUrl,
     })),
     capabilities: entry.capabilities,
+    pluginPackage,
   };
   if (entry.transport === "stdio") {
     return {

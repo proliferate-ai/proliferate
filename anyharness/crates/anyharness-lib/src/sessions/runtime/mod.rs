@@ -16,6 +16,7 @@ use super::service::SessionService;
 use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
 use crate::domains::plans::service::PlanService;
+use crate::domains::plugins::registry::PluginBundleRegistry;
 use crate::sessions::extensions::SessionExtension;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -43,6 +44,7 @@ pub struct SessionRuntime {
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
+    plugin_bundle_registry: PluginBundleRegistry,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
 }
@@ -234,6 +236,7 @@ impl SessionRuntime {
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
+        plugin_bundle_registry: PluginBundleRegistry,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
     ) -> Self {
@@ -246,6 +249,7 @@ impl SessionRuntime {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
+            plugin_bundle_registry,
             access_gate,
             plan_service,
         }

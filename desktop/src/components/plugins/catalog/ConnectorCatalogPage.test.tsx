@@ -67,19 +67,19 @@ vi.mock("@/hooks/mcp/workflows/use-update-connector-secret", () => ({
   useUpdateConnectorSecret: () => ({ mutateAsync: vi.fn().mockResolvedValue(undefined) }),
 }));
 
-vi.mock("./ConnectorCard", () => ({
-  AvailableConnectorCard: ({ model }: { model: { entry: { id: string } } }) => createElement(
+vi.mock("./PluginPackageRow", () => ({
+  AvailablePluginPackageRow: ({ model }: { model: { entry: { id: string } } }) => createElement(
     "div",
-    { "data-testid": "available-card" },
+    { "data-testid": "available-plugin-row" },
     model.entry.id,
   ),
-  ConnectedConnectorCard: ({
+  ConnectedPluginPackageRow: ({
     model,
   }: {
     model: { record: { metadata: { connectionId: string } } };
   }) => createElement(
     "div",
-    { "data-testid": "connected-card" },
+    { "data-testid": "connected-plugin-row" },
     model.record.metadata.connectionId,
   ),
 }));
@@ -102,8 +102,8 @@ describe("ConnectorCatalogPage", () => {
 
     const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
 
-    expect(html).toContain("Loading integrations");
-    expect(html).not.toContain("All available integrations are connected.");
+    expect(html).toContain("Loading plugins");
+    expect(html).not.toContain("All available plugins are installed.");
   });
 
   it("renders an error state when connector data fails to load", () => {
@@ -111,14 +111,14 @@ describe("ConnectorCatalogPage", () => {
 
     const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
 
-    expect(html).toContain("Couldn&#x27;t load integrations");
+    expect(html).toContain("Couldn&#x27;t load plugins");
     expect(html).toContain("Auth session expired");
   });
 
   it("renders an explicit empty catalog message when nothing is available", () => {
     const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
 
-    expect(html).toContain("No integrations are available right now.");
+    expect(html).toContain("No plugins are available right now.");
   });
 
   it("renders the connected-empty message only after at least one connector is connected", () => {
@@ -132,7 +132,7 @@ describe("ConnectorCatalogPage", () => {
 
     const html = renderToStaticMarkup(createElement(ConnectorCatalogPage));
 
-    expect(html).toContain("All available integrations are connected.");
-    expect(html).not.toContain("No integrations are available right now.");
+    expect(html).toContain("All available plugins are installed.");
+    expect(html).not.toContain("No plugins are available right now.");
   });
 });

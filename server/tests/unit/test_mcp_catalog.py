@@ -1,3 +1,8 @@
+import re
+import subprocess
+from dataclasses import replace
+from pathlib import Path
+
 import pytest
 
 from proliferate.config import settings
@@ -18,6 +23,10 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     EnvTemplate,
     HttpLaunchTemplate,
     StaticUrl,
+)
+from proliferate.server.cloud.plugins.catalog.first_party import (
+    _package_version,
+    first_party_package_for_catalog_entry,
 )
 
 
@@ -233,6 +242,78 @@ def test_catalog_entry_invariants() -> None:
                 assert template.field_id in secret_field_ids
             if template.kind == "setting":
                 assert template.field_id in setting_field_ids
+
+
+def test_cloud_catalog_includes_separate_plugin_packages() -> None:
+    response = catalog_service.get_cloud_mcp_catalog()
+    entries_by_id = {entry.id: entry for entry in response.entries}
+    packages_by_catalog_entry_id = {
+        package.catalog_entry_id: package for package in response.plugin_packages
+    }
+
+    assert set(packages_by_catalog_entry_id) == set(entries_by_id)
+    assert packages_by_catalog_entry_id["context7"].skills == []
+
+    github_package = packages_by_catalog_entry_id["github"]
+    assert github_package.id == "github"
+    assert [skill.id for skill in github_package.skills] == [
+        "triage",
+        "address-comments",
+        "fix-ci",
+    ]
+    assert all(skill.provenance.source_sha256 for skill in github_package.skills)
+    assert all(skill.provenance.adapted_sha256 for skill in github_package.skills)
+    assert all(skill.provenance.review_status == "reviewed" for skill in github_package.skills)
+    assert all(skill.required_mcp_server_refs == ["github"] for skill in github_package.skills)
+
+
+def test_first_party_plugin_skill_provenance_is_reviewed_and_pinned() -> None:
+    response = catalog_service.get_cloud_mcp_catalog()
+    skills = [skill for package in response.plugin_packages for skill in package.skills]
+
+    assert skills
+    for skill in skills:
+        assert skill.provenance.review_status == "reviewed"
+        assert re.fullmatch(r"[a-f0-9]{40}", skill.provenance.source_ref)
+        assert re.fullmatch(r"[a-f0-9]{64}", skill.provenance.source_sha256)
+        assert re.fullmatch(r"[a-f0-9]{64}", skill.provenance.adapted_sha256)
+        assert skill.provenance.source_license
+        assert skill.required_mcp_server_refs
+
+
+def test_first_party_plugin_skill_files_are_tracked() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    skill_root = repo_root / "server/proliferate/server/cloud/plugins/catalog/first_party"
+    skill_files = sorted(skill_root.rglob("*.md"))
+
+    assert skill_files
+    for skill_file in skill_files:
+        relative_path = skill_file.relative_to(repo_root)
+        subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(relative_path)],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+
+def test_plugin_package_version_changes_with_full_package_payload() -> None:
+    entry = get_catalog_entry("github")
+    assert entry is not None
+    package = first_party_package_for_catalog_entry(entry)
+    base = replace(package, version="")
+    mutated_skill = replace(
+        package.skills[0],
+        requires_credential_binding=not package.skills[0].requires_credential_binding,
+    )
+    mutated = replace(
+        package,
+        version="",
+        skills=(mutated_skill, *package.skills[1:]),
+    )
+
+    assert _package_version(entry.version, base) != _package_version(entry.version, mutated)
 
 
 def test_localhost_launch_urls_are_local_materialization_only() -> None:

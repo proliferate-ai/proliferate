@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from proliferate.server.cloud.plugins.catalog.models import PluginPackageModel
+
 McpWarningKind = Literal[
     "needs_reconnect",
     "unsupported_target",
@@ -134,6 +136,11 @@ class MaterializeCloudMcpResponse(BaseModel):
     )
     local_stdio_candidates: list[LocalStdioCandidateModel] = Field(
         serialization_alias="localStdioCandidates",
+        repr=False,
+    )
+    plugin_packages: list[PluginPackageModel] = Field(
+        default_factory=list,
+        serialization_alias="pluginPackages",
         repr=False,
     )
     warnings: list[CloudMcpMaterializationWarningModel]

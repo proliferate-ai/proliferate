@@ -92,6 +92,40 @@ describe("cloud MCP launch resolution", () => {
           outcome: "applied",
         },
       ],
+      pluginPackages: [
+        {
+          id: "context7",
+          catalogEntryId: "context7",
+          version: "1",
+          displayName: "Context7",
+          description: "Docs",
+          skills: [
+            {
+              id: "docs",
+              displayName: "Context7 docs",
+              description: "Use docs.",
+              instructions: "# Context7 docs",
+              requiredMcpServerRefs: ["context7"],
+              requiresCredentialBinding: true,
+              resources: [],
+              defaultEnabled: true,
+              provenance: {
+                sourceRepoUrl: "https://example.com",
+                sourcePath: "skills/context7/SKILL.md",
+                sourceRef: "test",
+                sourceSha256: "source",
+                adaptedSha256: "adapted",
+                sourceLicense: "MIT",
+                importMode: "adapted",
+                reviewStatus: "reviewed",
+                reviewer: "test",
+                reviewedAt: "2026-05-13",
+                notes: "",
+              },
+            },
+          ],
+        },
+      ],
     }));
 
     const resolution = await resolveSessionMcpServersForLaunch(launchContext({
@@ -117,6 +151,31 @@ describe("cloud MCP launch resolution", () => {
         transport: "http",
       }),
     ]);
+    expect(resolution.pluginBundle).toEqual({
+      plugins: [
+        expect.objectContaining({
+          pluginId: "connector.conn_context7",
+          mcpServers: [
+            expect.objectContaining({
+              catalogEntryId: "context7",
+              transport: "http",
+            }),
+          ],
+          mcpBindingSummaries: [
+            expect.objectContaining({
+              id: "conn_context7",
+              outcome: "applied",
+            }),
+          ],
+          skills: [
+            expect.objectContaining({
+              skillId: "connector.conn_context7.docs",
+              requiredMcpServers: ["context7"],
+            }),
+          ],
+        }),
+      ],
+    });
     expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("Bearer token");
     expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("/workspace");
   });
@@ -132,12 +191,39 @@ describe("cloud MCP launch resolution", () => {
     }));
 
     expect(mocks.materializeCloudMcpServersMock).not.toHaveBeenCalled();
-    expect(resolution).toEqual({
-      mcpServers: [],
-      mcpBindingSummaries: [],
-      warnings: [],
-      releaseRuntimeReservations: expect.any(Function),
-    });
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.mcpBindingSummaries).toEqual([]);
+    expect(resolution.pluginBundle).toBeUndefined();
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.releaseRuntimeReservations).toEqual(expect.any(Function));
+  });
+
+  it("returns an explicit empty plugin bundle on resume when plugin policy is disabled", async () => {
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+      policy: {
+        lifecycle: "resume",
+        enabled: false,
+      },
+    }));
+
+    expect(mocks.materializeCloudMcpServersMock).not.toHaveBeenCalled();
+    expect(resolution.pluginBundle).toEqual({ plugins: [] });
+  });
+
+  it("returns an explicit empty plugin bundle on resume when no connectors apply", async () => {
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized());
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+      policy: {
+        lifecycle: "resume",
+      },
+    }));
+
+    expect(resolution.pluginBundle).toEqual({ plugins: [] });
   });
 
   it("finalizes local stdio candidates without sending workspace paths to cloud", async () => {

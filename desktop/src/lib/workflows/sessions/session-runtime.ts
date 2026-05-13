@@ -297,9 +297,10 @@ export async function resumeSession(
     : {
       mcpServers: [],
       mcpBindingSummaries: [],
+      pluginBundle: { plugins: [] },
       releaseRuntimeReservations: async () => {},
     };
-  const { mcpServers, mcpBindingSummaries } = mcpLaunch;
+  const { mcpServers, mcpBindingSummaries, pluginBundle } = mcpLaunch;
   const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
   if (!shouldResolveLaunchMcp) {
     recordMeasurementWorkflowStep({
@@ -318,6 +319,7 @@ export async function resumeSession(
         mcpBindingSummaries: mcpBindingSummaries.length > 0
           ? mcpBindingSummaries
           : undefined,
+        pluginBundle,
       },
       getMeasurementRequestOptions({
         operationId: measurementOperationId,

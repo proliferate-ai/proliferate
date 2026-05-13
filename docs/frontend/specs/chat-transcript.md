@@ -29,6 +29,43 @@ transcript reducer immutability, plus:
 pnpm --dir desktop exec tsc --noEmit
 ```
 
+## Tool Result Rendering
+
+Tool call rows should prefer product-specific renderers before the generic JSON
+result row. The generic renderer is the fallback for unknown tools, malformed
+payloads, and tool results that have no durable product display contract.
+
+Product-specific result rendering must stay split by ownership:
+
+```text
+desktop/src/lib/domain/chat/tools/<tool>-presentation.ts
+  pure parser and display model for raw tool input/output
+
+desktop/src/components/workspace/chat/tool-calls/<Tool>Row.tsx
+  visual row/details rendering for that display model
+
+desktop/src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.tsx
+  routing only; no product-specific parsing beyond choosing the row
+```
+
+`proliferate_skills` is a product MCP and has a transcript renderer:
+
+```text
+mcp__proliferate_skills__list_available_skills
+  show listed skills as rows with skill id, description, required MCPs, and
+  resource count
+
+mcp__proliferate_skills__activate_skill
+  show the activated skill as a card and render instructions as markdown
+
+mcp__proliferate_skills__get_skill_resource
+  show the loaded resource as markdown when the content type is markdown,
+  otherwise as preformatted text
+```
+
+Do not render successful skills MCP results as raw JSON in the normal transcript
+path.
+
 ## Layout Invariants
 
 Some layout dimensions are load-bearing. They are tuned together so specific

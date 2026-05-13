@@ -7,7 +7,7 @@ use super::OriginContext;
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
-    SessionMcpBindingSummary, SessionMcpServer, UserInputQuestion,
+    SessionMcpBindingSummary, SessionMcpServer, SessionPluginBundle, UserInputQuestion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -165,6 +165,8 @@ pub struct CreateSessionRequest {
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_bundle: Option<SessionPluginBundle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subagents_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -344,6 +346,8 @@ pub struct ResumeSessionRequest {
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_bundle: Option<SessionPluginBundle>,
 }
 
 impl fmt::Debug for ResumeSessionRequest {
@@ -359,6 +363,13 @@ impl fmt::Debug for ResumeSessionRequest {
                     .mcp_binding_summaries
                     .as_ref()
                     .map(|summaries| summaries.len()),
+            )
+            .field(
+                "plugin_count",
+                &self
+                    .plugin_bundle
+                    .as_ref()
+                    .map(|bundle| bundle.plugins.len()),
             )
             .finish()
     }
@@ -667,6 +678,7 @@ mod tests {
                 }),
             ]),
             mcp_binding_summaries: None,
+            plugin_bundle: None,
             subagents_enabled: None,
             origin: None,
         };

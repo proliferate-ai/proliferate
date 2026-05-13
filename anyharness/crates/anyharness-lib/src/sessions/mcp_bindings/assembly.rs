@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyharness_contract::v1::SessionMcpBindingSummary;
@@ -69,6 +70,7 @@ pub fn assemble_session_mcp_launch(
     let mcp_binding_summaries_json =
         merge_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries)?;
     mcp_servers.extend(launch_extras.mcp_servers);
+    dedupe_mcp_servers(&mut mcp_servers);
 
     Ok(SessionMcpLaunchAssembly {
         mcp_servers,
@@ -76,6 +78,21 @@ pub fn assemble_session_mcp_launch(
         first_prompt_system_prompt_append,
         mcp_binding_summaries_json,
     })
+}
+
+fn dedupe_mcp_servers(servers: &mut Vec<SessionMcpServer>) {
+    let mut seen = HashSet::new();
+    servers.retain(|server| {
+        let key = match server {
+            SessionMcpServer::Http(server) => {
+                format!("http:{}:{}", server.connection_id, server.server_name)
+            }
+            SessionMcpServer::Stdio(server) => {
+                format!("stdio:{}:{}", server.connection_id, server.server_name)
+            }
+        };
+        seen.insert(key)
+    });
 }
 
 pub(crate) fn join_system_prompt_append(

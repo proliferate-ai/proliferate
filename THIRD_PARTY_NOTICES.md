@@ -31,3 +31,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+OpenAI Plugin Skill Examples
+----------------------------
+
+The adapted first-party plugin skill files under
+`server/proliferate/server/cloud/plugins/catalog/first_party/` are derived from
+curated plugin skill examples in the OpenAI plugins repository:
+
+- Project: https://github.com/openai/plugins
+- Package: curated plugin skill examples
+- Source ref: 7955f1db081ddb3e14387b27cd65cf96b3e33931
+- Licenses represented in the adapted sources: MIT and Apache-2.0
+- Adaptation metadata: each skill exposes source path, source hash, adapted
+  hash, license, review status, reviewer, and review date in the cloud plugin
+  package catalog response.
+
+MIT-licensed source skills use the MIT License text above.
+
+Apache-2.0-licensed source skills use the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0

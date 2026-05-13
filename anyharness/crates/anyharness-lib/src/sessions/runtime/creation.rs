@@ -1,7 +1,8 @@
-use std::time::Instant;
+use std::{collections::HashSet, time::Instant};
 
-use anyharness_contract::v1::SessionMcpBindingSummary;
+use anyharness_contract::v1::{SessionMcpBindingSummary, SessionPluginBundle};
 
+use crate::domains::plugins::validation::validate_session_plugin_bundle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::assembly::join_system_prompt_append;
@@ -24,6 +25,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        plugin_bundle: Option<SessionPluginBundle>,
         subagents_enabled: bool,
         origin: OriginContext,
         latency: Option<&LatencyRequestContext>,
@@ -49,6 +51,10 @@ impl SessionRuntime {
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.create_and_start.start"
         );
+        if let Some(bundle) = plugin_bundle.as_ref() {
+            validate_session_plugin_bundle(bundle)
+                .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        }
 
         let durable_create_started = Instant::now();
         let mut record = self.create_durable_session(
@@ -63,6 +69,17 @@ impl SessionRuntime {
             subagents_enabled,
             origin,
         )?;
+        let registered_plugin_bundle = if let Some(bundle) = plugin_bundle {
+            if bundle.plugins.is_empty() {
+                false
+            } else {
+                self.plugin_bundle_registry
+                    .set_session_bundle(record.id.clone(), bundle);
+                true
+            }
+        } else {
+            false
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -73,7 +90,15 @@ impl SessionRuntime {
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.durable_session_created"
         );
-        record = self.start_persisted_session(&record, latency).await?;
+        record = match self.start_persisted_session(&record, latency).await {
+            Ok(record) => record,
+            Err(error) => {
+                if registered_plugin_bundle {
+                    self.plugin_bundle_registry.clear_session_bundle(&record.id);
+                }
+                return Err(error);
+            }
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -122,6 +147,87 @@ impl SessionRuntime {
                 origin,
             )
             .map_err(map_create_session_service_error)
+    }
+
+    pub fn set_session_plugin_bundle(
+        &self,
+        session_id: &str,
+        plugin_bundle: SessionPluginBundle,
+    ) -> Result<(), crate::sessions::runtime::EnsureLiveSessionError> {
+        let Some(record) = self
+            .session_service
+            .get_session(session_id)
+            .map_err(crate::sessions::runtime::EnsureLiveSessionError::Internal)?
+        else {
+            return Err(
+                crate::sessions::runtime::EnsureLiveSessionError::SessionNotFound(
+                    session_id.to_string(),
+                ),
+            );
+        };
+        if plugin_bundle.plugins.is_empty() {
+            self.clear_session_plugin_bundle(session_id, &record)?;
+            return Ok(());
+        }
+        if record.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
+            return Err(crate::sessions::runtime::EnsureLiveSessionError::Invalid(
+                "plugin bundles are not allowed for internal-only sessions".to_string(),
+            ));
+        }
+        validate_session_plugin_bundle(&plugin_bundle).map_err(|error| {
+            crate::sessions::runtime::EnsureLiveSessionError::Invalid(error.to_string())
+        })?;
+        self.plugin_bundle_registry
+            .set_session_bundle(session_id.to_string(), plugin_bundle);
+        Ok(())
+    }
+
+    pub async fn has_live_session(&self, session_id: &str) -> bool {
+        self.acp_manager.get_handle(session_id).await.is_some()
+    }
+
+    fn clear_session_plugin_bundle(
+        &self,
+        session_id: &str,
+        record: &SessionRecord,
+    ) -> Result<(), crate::sessions::runtime::EnsureLiveSessionError> {
+        let existing_bundle = self.plugin_bundle_registry.get_session_bundle(session_id);
+        self.plugin_bundle_registry.clear_session_bundle(session_id);
+        let Some(existing_bundle) = existing_bundle else {
+            return Ok(());
+        };
+        let plugin_summary_ids: HashSet<String> = existing_bundle
+            .plugins
+            .iter()
+            .flat_map(|plugin| plugin.mcp_binding_summaries.iter())
+            .map(|summary| summary.id.clone())
+            .collect();
+        if plugin_summary_ids.is_empty() {
+            return Ok(());
+        }
+
+        let mut summaries = record
+            .to_contract()
+            .mcp_binding_summaries
+            .unwrap_or_default();
+        let original_len = summaries.len();
+        summaries.retain(|summary| !plugin_summary_ids.contains(&summary.id));
+        if summaries.len() == original_len {
+            return Ok(());
+        }
+        let summaries_json = if summaries.is_empty() {
+            None
+        } else {
+            serialize_binding_summaries(Some(summaries)).map_err(|error| {
+                crate::sessions::runtime::EnsureLiveSessionError::Internal(anyhow::anyhow!(
+                    "serialize MCP binding summaries after plugin clear: {error}"
+                ))
+            })?
+        };
+        self.session_service
+            .store()
+            .update_mcp_binding_summaries(session_id, summaries_json)
+            .map_err(crate::sessions::runtime::EnsureLiveSessionError::Internal)
     }
 }
 

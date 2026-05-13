@@ -1,7 +1,10 @@
 import type {
   SessionMcpBindingSummary,
   SessionMcpServer,
+  SessionPluginBundle,
 } from "@anyharness/sdk";
+import { buildSessionPluginBundle } from "@/lib/domain/plugins/session-plugin-bundle";
+import { cloudPluginPackageToLocal } from "@/lib/domain/plugins/cloud-plugin-package";
 import { finalizeLocalStdioCandidates } from "@/lib/workflows/mcp/finalize-local-stdio-candidates";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { materializeCloudMcpServers } from "@/lib/access/cloud/mcp_materialization";
@@ -37,6 +40,7 @@ export async function resolveSessionMcpServersForLaunch(
   mcpServers: SessionMcpServer[];
   mcpBindingSummaries: SessionMcpBindingSummary[];
   warnings: ConnectorLaunchResolutionWarning[];
+  pluginBundle?: SessionPluginBundle;
   releaseRuntimeReservations: () => Promise<void>;
 }> {
   if (!launchContext.policy.enabled) {
@@ -44,6 +48,9 @@ export async function resolveSessionMcpServersForLaunch(
       mcpServers: [],
       mcpBindingSummaries: [],
       warnings: [],
+      pluginBundle: launchContext.policy.lifecycle === "resume"
+        ? { plugins: [] }
+        : undefined,
       releaseRuntimeReservations: async () => {},
     };
   }
@@ -60,27 +67,36 @@ export async function resolveSessionMcpServersForLaunch(
     materialized.localStdioCandidates.map((candidate) => candidate.connectionId),
   );
 
+  const mcpServers = [
+    ...materialized.mcpServers.map((server) => ({
+      ...server,
+      ...(server.transport === "http" ? { headers: server.headers ?? [] } : {}),
+      ...(server.transport === "stdio"
+        ? { args: server.args ?? [], env: server.env ?? [] }
+        : {}),
+    } as SessionMcpServer)),
+    ...finalizedStdio.mcpServers,
+  ];
+  const mcpBindingSummaries = [
+    ...materialized.mcpBindingSummaries
+      .filter((summary) => !finalizedStdioIds.has(summary.id))
+      .map((summary) => ({
+        ...summary,
+        displayName: summary.displayName ?? undefined,
+        reason: summary.reason ?? undefined,
+      } as SessionMcpBindingSummary)),
+    ...finalizedStdio.summaries,
+  ];
+
+  const pluginBundle = buildSessionPluginBundle({
+    mcpServers,
+    mcpBindingSummaries,
+    pluginPackages: (materialized.pluginPackages ?? []).map(cloudPluginPackageToLocal),
+  });
+
   return {
-    mcpServers: [
-      ...materialized.mcpServers.map((server) => ({
-        ...server,
-        ...(server.transport === "http" ? { headers: server.headers ?? [] } : {}),
-        ...(server.transport === "stdio"
-          ? { args: server.args ?? [], env: server.env ?? [] }
-          : {}),
-      } as SessionMcpServer)),
-      ...finalizedStdio.mcpServers,
-    ],
-    mcpBindingSummaries: [
-      ...materialized.mcpBindingSummaries
-        .filter((summary) => !finalizedStdioIds.has(summary.id))
-        .map((summary) => ({
-          ...summary,
-          displayName: summary.displayName ?? undefined,
-          reason: summary.reason ?? undefined,
-        } as SessionMcpBindingSummary)),
-      ...finalizedStdio.summaries,
-    ],
+    mcpServers,
+    mcpBindingSummaries,
     warnings: [
       ...materialized.warnings.map((warning) => ({
         connectionId: warning.connectionId,
@@ -90,13 +106,18 @@ export async function resolveSessionMcpServersForLaunch(
       } as ConnectorLaunchResolutionWarning)),
       ...finalizedStdio.warnings,
     ],
+    pluginBundle: pluginBundle ?? (
+      launchContext.policy.lifecycle === "resume" ? { plugins: [] } : undefined
+    ),
     releaseRuntimeReservations: async () => {
-      await Promise.all(finalizedStdio.runtimeReservations.map((reservation) =>
-        releaseGoogleWorkspaceMcpRuntimeEnv({
-          connectionId: reservation.connectionId,
-          launchId: reservation.launchId,
-        }).catch(() => undefined)
-      ));
+      await Promise.all(
+        finalizedStdio.runtimeReservations.map((reservation) =>
+          releaseGoogleWorkspaceMcpRuntimeEnv({
+            connectionId: reservation.connectionId,
+            launchId: reservation.launchId,
+          }).catch(() => undefined)
+        ),
+      );
     },
   };
 }

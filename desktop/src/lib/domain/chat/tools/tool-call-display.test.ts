@@ -33,6 +33,46 @@ describe("describeToolCallDisplay", () => {
     });
   });
 
+  it("formats proliferate skills MCP tool calls", () => {
+    expect(describeToolCallDisplay(
+      toolCallItem({
+        nativeToolName: "mcp__proliferate_skills__list_available_skills",
+      }),
+      "mcp__proliferate_skills__list_available_skills",
+    )).toEqual({
+      label: "List skills",
+      hint: "Skills",
+      iconKey: "proliferate",
+    });
+
+    expect(describeToolCallDisplay(
+      toolCallItem({
+        nativeToolName: "mcp__proliferate_skills__activate_skill",
+        rawInput: { skillId: "connector.conn_github.triage" },
+      }),
+      "mcp__proliferate_skills__activate_skill",
+    )).toEqual({
+      label: "Activate skill",
+      hint: "connector.conn_github.triage",
+      iconKey: "proliferate",
+    });
+
+    expect(describeToolCallDisplay(
+      toolCallItem({
+        nativeToolName: "mcp__proliferate_skills__get_skill_resource",
+        rawInput: {
+          skillId: "connector.conn_github.triage",
+          resourceId: "guide",
+        },
+      }),
+      "mcp__proliferate_skills__get_skill_resource",
+    )).toEqual({
+      label: "Load skill resource",
+      hint: "connector.conn_github.triage/guide",
+      iconKey: "proliferate",
+    });
+  });
+
   it("keeps cowork artifact semantic kinds specialized", () => {
     const display = describeToolCallDisplay(
       toolCallItem({ semanticKind: "cowork_artifact_update" }),

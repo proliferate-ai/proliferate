@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Search } from "@/components/ui/icons";
 import {
-  AvailableConnectorCard,
-  ConnectedConnectorCard,
-} from "./ConnectorCard";
+  AvailablePluginPackageRow,
+  ConnectedPluginPackageRow,
+} from "./PluginPackageRow";
 import { ConnectorDetailModal } from "@/components/plugins/detail/ConnectorDetailModal";
 import { DeleteConnectorDialog } from "@/components/plugins/detail/DeleteConnectorDialog";
 
@@ -22,7 +22,7 @@ export function ConnectorCatalogPage() {
     && state.connected.length === 0
     && state.availableCards.length === 0;
   const showAllConnected = state.connected.length > 0 && state.availableCards.length === 0;
-  const showNoAvailableIntegrations =
+  const showNoAvailablePlugins =
     state.connected.length === 0 && state.availableCards.length === 0;
 
   return (
@@ -36,22 +36,22 @@ export function ConnectorCatalogPage() {
             <Input
               value={state.searchQuery}
               onChange={(event) => state.setSearchQuery(event.target.value)}
-              placeholder="Search integrations..."
+              placeholder="Search plugins..."
               className="pl-9"
-              aria-label="Search integrations"
+              aria-label="Search plugins"
             />
           </div>
         </div>
 
         {showLoadingState ? (
           <LoadingState
-            message="Loading integrations"
-            subtext="Fetching the latest Plugins catalog and connection state."
+            message="Loading plugins"
+            subtext="Fetching package availability and connection state."
           />
         ) : showLoadError ? (
           <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
             <div className="text-sm font-medium text-foreground">
-              Couldn&apos;t load integrations
+              Couldn&apos;t load plugins
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {state.loadError}
@@ -69,7 +69,7 @@ export function ConnectorCatalogPage() {
         ) : state.searchEmpty ? (
           <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
             <div className="text-sm font-medium text-foreground">
-              No integrations match "{state.searchQuery}"
+              No plugins match "{state.searchQuery}"
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               Try a different search term.
@@ -78,11 +78,13 @@ export function ConnectorCatalogPage() {
         ) : (
           <>
             {state.connected.length > 0 && (
-              <section className="space-y-3">
-                <h3 className="text-sm font-medium text-foreground">Connected</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <section className="space-y-4">
+                <div className="border-b border-border/60 pb-2">
+                  <h3 className="text-lg leading-6 text-foreground">Installed</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {state.connected.map((model) => (
-                    <ConnectedConnectorCard
+                    <ConnectedPluginPackageRow
                       key={model.record.metadata.connectionId}
                       model={model}
                       pending={actions.installedConnectorActions.isPending(
@@ -101,24 +103,25 @@ export function ConnectorCatalogPage() {
               </section>
             )}
 
-            <section className="space-y-3">
-              <h3 className="text-sm font-medium text-foreground">Available</h3>
+            <section className="space-y-4">
+              <div className="border-b border-border/60 pb-2">
+                <h3 className="text-lg leading-6 text-foreground">Available</h3>
+              </div>
               {state.firstRunEmpty && state.availableCards.length > 0 && (
-                <div className="rounded-lg border border-border bg-card/50 px-4 py-4">
+                <div className="rounded-2xl border border-border/40 bg-foreground/5 px-4 py-3">
                   <div className="text-sm font-medium text-foreground">
-                    No integrations configured
+                    No plugins installed
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Pick an integration below. Connected integrations are
-                    available to new sessions when plugins are enabled for that
-                    session type.
+                    Install a package below. Enabled packages add MCP tools and
+                    plugin skills to compatible new sessions.
                   </p>
                 </div>
               )}
               {state.availableCards.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {state.availableCards.map((model) => (
-                    <AvailableConnectorCard
+                    <AvailablePluginPackageRow
                       key={model.entry.id}
                       model={model}
                       onConnect={() => state.openConnect(model.entry.id)}
@@ -129,9 +132,9 @@ export function ConnectorCatalogPage() {
                 !state.isSearching && (
                   <p className="text-sm text-muted-foreground">
                     {showAllConnected
-                      ? "All available integrations are connected."
-                      : showNoAvailableIntegrations
-                        ? "No integrations are available right now."
+                      ? "All available plugins are installed."
+                      : showNoAvailablePlugins
+                        ? "No plugins are available right now."
                         : null}
                   </p>
                 )

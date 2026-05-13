@@ -11,7 +11,7 @@ export function PluginsScreen() {
         header={(
           <PageHeader
             title="Plugins"
-            description="Integrations Proliferate can use inside every session."
+            description="Packages of apps, MCP tools, and skills agents can use in sessions."
           />
         )}
       >

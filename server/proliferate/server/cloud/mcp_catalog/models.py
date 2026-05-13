@@ -13,6 +13,11 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogSettingOption,
     EnvTemplate,
 )
+from proliferate.server.cloud.plugins.catalog.domain.types import PluginPackage
+from proliferate.server.cloud.plugins.catalog.models import (
+    PluginPackageModel,
+    plugin_package_payload,
+)
 
 
 class ConnectorCatalogFieldModel(BaseModel):
@@ -123,6 +128,10 @@ class ConnectorCatalogEntryModel(BaseModel):
 class ConnectorCatalogResponse(BaseModel):
     catalog_version: str = Field(serialization_alias="catalogVersion")
     entries: list[ConnectorCatalogEntryModel]
+    plugin_packages: list[PluginPackageModel] = Field(
+        default_factory=list,
+        serialization_alias="pluginPackages",
+    )
 
 
 def _field_model(field: CatalogSecretField) -> ConnectorCatalogFieldModel:
@@ -245,8 +254,12 @@ def catalog_entry_payload(entry: CatalogEntry) -> ConnectorCatalogEntryModel:
     )
 
 
-def catalog_response(entries: list[CatalogEntry]) -> ConnectorCatalogResponse:
+def catalog_response(
+    entries: list[CatalogEntry],
+    plugin_packages: list[PluginPackage] | None = None,
+) -> ConnectorCatalogResponse:
     return ConnectorCatalogResponse(
         catalog_version=CATALOG_VERSION,
         entries=[catalog_entry_payload(entry) for entry in entries],
+        plugin_packages=[plugin_package_payload(package) for package in (plugin_packages or [])],
     )

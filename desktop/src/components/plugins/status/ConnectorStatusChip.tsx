@@ -1,4 +1,5 @@
 import type { ConnectorCardStatus } from "@/lib/domain/mcp/connector-catalog-view-model";
+import { Button } from "@/components/ui/Button";
 
 const TONE_CLASSES: Record<ConnectorCardStatus["tone"], string> = {
   neutral:
@@ -38,8 +39,10 @@ export function ConnectorStatusChip({
   }
 
   return (
-    <button
+    <Button
       type="button"
+      variant="unstyled"
+      size="unstyled"
       onClick={(event) => {
         event.stopPropagation();
         onClick();
@@ -47,6 +50,6 @@ export function ConnectorStatusChip({
       className={`${base} ${toneClass} ${INTERACTIVE_TONE_HOVER[status.tone]}`}
     >
       {status.label}
-    </button>
+    </Button>
   );
 }
