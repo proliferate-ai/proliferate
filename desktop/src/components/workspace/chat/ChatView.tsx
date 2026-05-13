@@ -242,15 +242,17 @@ export const ChatView = memo(function ChatView({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-      <div className="flex flex-1 min-h-0 flex-col">
-        <ChatContent
-          dockSafeAreaPx={dockSafeAreaPx}
-          freezeTranscriptPane={freezeTranscriptPane}
-          mode={mode}
-          scrollBottomInsetPx={scrollBottomInsetPx}
-          stickyBottomInsetPx={stickyBottomInsetPx}
-        />
-      </div>
+      <DebugProfiler id="chat-content">
+        <div className="flex flex-1 min-h-0 flex-col">
+          <ChatContent
+            dockSafeAreaPx={dockSafeAreaPx}
+            freezeTranscriptPane={freezeTranscriptPane}
+            mode={mode}
+            scrollBottomInsetPx={scrollBottomInsetPx}
+            stickyBottomInsetPx={stickyBottomInsetPx}
+          />
+        </div>
+      </DebugProfiler>
       {fileDragOver && (
         <div
           className="pointer-events-none absolute inset-2 z-40 rounded-[var(--radius-composer)] border border-dashed border-primary/70 bg-primary/5"
@@ -268,20 +270,22 @@ export const ChatView = memo(function ChatView({
           </div>
         </div>
       ) : (
-        <ChatComposerDock
-          ref={dockRef}
-          backdrop={isSessionMode}
-          outboundSlot={composerDockSlots.outboundSlot}
-          activeSlot={composerDockSlots.activeSlot}
-          attachedSlot={composerDockSlots.attachedSlot}
-          footerSlot={footerSlot}
-          lowerBackdropTopPx={lowerBackdropTopPx}
-          shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
-          data-telemetry-block
-          data-focus-zone="chat"
-        >
-          {chatInput}
-        </ChatComposerDock>
+        <DebugProfiler id="chat-composer-dock-region">
+          <ChatComposerDock
+            ref={dockRef}
+            backdrop={isSessionMode}
+            outboundSlot={composerDockSlots.outboundSlot}
+            activeSlot={composerDockSlots.activeSlot}
+            attachedSlot={composerDockSlots.attachedSlot}
+            footerSlot={footerSlot}
+            lowerBackdropTopPx={lowerBackdropTopPx}
+            shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
+            data-telemetry-block
+            data-focus-zone="chat"
+          >
+            {chatInput}
+          </ChatComposerDock>
+        </DebugProfiler>
       )}
       </div>
     </DebugProfiler>

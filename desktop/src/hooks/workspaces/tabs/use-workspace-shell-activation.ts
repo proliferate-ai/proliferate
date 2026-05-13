@@ -44,6 +44,10 @@ const HOT_SWITCH_SURFACES = [
   "chat-surface",
   "session-transcript-pane",
   "transcript-list",
+  "transcript-context-providers",
+  "transcript-row-list-router",
+  "transcript-virtualized-viewport",
+  "transcript-full-list",
   "header-tabs",
   "workspace-sidebar",
 ] satisfies readonly MeasurementSurface[];

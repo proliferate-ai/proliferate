@@ -6,6 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import {
   CHAT_COLUMN_CLASSNAME,
@@ -27,6 +28,7 @@ import {
   type TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 type TranscriptRowRenderer = (
   row: TranscriptVirtualRow,
@@ -220,43 +222,62 @@ export function FullTranscriptRowList({
     rows,
     scrollToBottom,
   ]);
+  useDebugValueChange("transcript_virtualization.inputs", "full_state", {
+    activeSessionId,
+    selectedWorkspaceId,
+    rowCount: rows.length,
+    firstRowKey: rows[0]?.key ?? null,
+    lastRowKey: rows[rows.length - 1]?.key ?? null,
+    hasOlderHistory,
+    isLoadingOlderHistory,
+    olderHistoryCursor,
+    fallbackReason,
+    virtualizationMode,
+    bottomInsetPx,
+    isSessionBusy,
+    pendingPromptTextLength: pendingPromptText?.length ?? 0,
+    pendingPrependAnchorSet: pendingPrependAnchorRef.current !== null,
+    shouldStickToBottom: shouldStickToBottomRef.current,
+  });
 
   return (
-    <AutoHideScrollArea
-      className="h-full"
-      ref={scrollRef}
-      onViewportScroll={handleViewportScroll}
-    >
-      <div
-        className={`${CHAT_SURFACE_GUTTER_CLASSNAME} min-h-full`}
-        data-transcript-virtualization-mode="full"
-        data-transcript-virtualization-setting={virtualizationMode}
-        data-transcript-virtualization-fallback={fallbackReason ?? undefined}
+    <DebugProfiler id="transcript-full-list">
+      <AutoHideScrollArea
+        className="h-full"
+        ref={scrollRef}
+        onViewportScroll={handleViewportScroll}
       >
         <div
-          ref={selectionRootRef}
-          data-chat-transcript-root="true"
-          tabIndex={-1}
-          className={`${CHAT_COLUMN_CLASSNAME} select-none outline-none`}
+          className={`${CHAT_SURFACE_GUTTER_CLASSNAME} min-h-full`}
+          data-transcript-virtualization-mode="full"
+          data-transcript-virtualization-setting={virtualizationMode}
+          data-transcript-virtualization-fallback={fallbackReason ?? undefined}
         >
-          {TRANSCRIPT_TOP_PADDING_PX > 0 && (
-            <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
-          )}
-          {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
-          {rows.map((row, rowIndex) => (
-            <MemoizedFullTranscriptRow
-              key={row.key}
-              row={row}
-              rowIndex={rowIndex}
-              renderRow={renderRow}
-            />
-          ))}
-          {bottomInsetPx > 0 && (
-            <div aria-hidden="true" style={{ height: bottomInsetPx }} />
-          )}
+          <div
+            ref={selectionRootRef}
+            data-chat-transcript-root="true"
+            tabIndex={-1}
+            className={`${CHAT_COLUMN_CLASSNAME} select-none outline-none`}
+          >
+            {TRANSCRIPT_TOP_PADDING_PX > 0 && (
+              <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
+            )}
+            {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
+            {rows.map((row, rowIndex) => (
+              <MemoizedFullTranscriptRow
+                key={row.key}
+                row={row}
+                rowIndex={rowIndex}
+                renderRow={renderRow}
+              />
+            ))}
+            {bottomInsetPx > 0 && (
+              <div aria-hidden="true" style={{ height: bottomInsetPx }} />
+            )}
+          </div>
         </div>
-      </div>
-    </AutoHideScrollArea>
+      </AutoHideScrollArea>
+    </DebugProfiler>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
 import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
@@ -26,6 +26,7 @@ import { buildHeaderStripRows } from "@/lib/domain/workspaces/tabs/group-rows";
 import {
   resolveManualChatGroupColor,
   deriveManualChatGroupsForDisplay,
+  type DisplayManualChatGroup,
 } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
   includeVisibleLinkedChildSessionIds,
@@ -51,6 +52,7 @@ import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
   resolveWithWorkspaceFallback,
+  sameStringArray,
 } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
@@ -59,6 +61,8 @@ import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/life
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
+const EMPTY_SESSION_ID_LIST: string[] = [];
+const EMPTY_MANUAL_GROUPS: DisplayManualChatGroup[] = [];
 
 const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};
 const EMPTY_TAB_MODES: Record<string, FileViewerMode> = {};
@@ -150,7 +154,9 @@ export function useWorkspaceHeaderTabsViewModel() {
       selectedWorkspaceId,
       workspaceSessionsQuery.data,
     ]);
-  const knownSessionIds = useMemo(() => Array.from(knownSessions.keys()), [knownSessions]);
+  const knownSessionIds = useStableStringArray(
+    useMemo(() => Array.from(knownSessions.keys()), [knownSessions]),
+  );
   const hierarchy = useWorkspaceHeaderSubagentHierarchy({
     workspaceId: selectedWorkspaceId,
     sessionIds: knownSessionIds,
@@ -178,10 +184,10 @@ export function useWorkspaceHeaderTabsViewModel() {
     })),
     [hierarchy.childToParent, hierarchyChildren.visibilityCandidates, knownSessionIds],
   );
-  const liveChatSessionIds = useMemo(
+  const liveChatSessionIds = useStableStringArray(useMemo(
     () => liveVisibilityCandidates.map((candidate) => candidate.sessionId),
     [liveVisibilityCandidates],
-  );
+  ));
 
   const persistedVisibleFallback = resolveWithWorkspaceFallback(
     visibleByWorkspace,
@@ -204,9 +210,9 @@ export function useWorkspaceHeaderTabsViewModel() {
     materializedWorkspaceId,
   );
   const persistedVisibleIds = persistedVisibleFallback.value;
-  const recentlyHiddenIds = recentlyHiddenFallback.value ?? [];
-  const collapsedParentIds = collapsedParentFallback.value ?? [];
-  const persistedManualGroups = manualGroupsFallback.value ?? [];
+  const recentlyHiddenIds = recentlyHiddenFallback.value ?? EMPTY_SESSION_ID_LIST;
+  const collapsedParentIds = collapsedParentFallback.value ?? EMPTY_SESSION_ID_LIST;
+  const persistedManualGroups = manualGroupsFallback.value ?? EMPTY_MANUAL_GROUPS;
   const persistedVisibleIdsForResolution = useMemo(
     () => persistedVisibleIds?.filter((sessionId) =>
       sessionId === activeSessionId || !hierarchyChildren.rowsBySessionId.has(sessionId)
@@ -228,8 +234,8 @@ export function useWorkspaceHeaderTabsViewModel() {
       recentlyHiddenIds,
     ],
   );
-  const visibleChatSessionIds = visibleResolution.visibleSessionIds;
-  const stripVisibleChatSessionIds = useMemo(
+  const visibleChatSessionIds = useStableStringArray(visibleResolution.visibleSessionIds);
+  const stripVisibleChatSessionIds = useStableStringArray(useMemo(
     () => includeVisibleLinkedChildSessionIds({
       visibleSessionIds: visibleResolution.visibleSessionIds,
       linkedChildrenByParentSessionId: hierarchyChildren.childIdsByParentSessionId,
@@ -240,7 +246,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       recentlyHiddenIds,
       visibleResolution.visibleSessionIds,
     ],
-  );
+  ));
 
   const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
 
@@ -322,10 +328,10 @@ export function useWorkspaceHeaderTabsViewModel() {
       hierarchy.childrenByParentSessionId,
     ],
   );
-  const stripChatSessionIds = useMemo(
+  const stripChatSessionIds = useStableStringArray(useMemo(
     () => selectHeaderStripChatSessionIds(stripRows),
     [stripRows],
-  );
+  ));
   const {
     activeShellTab,
     activeShellTabKey,
@@ -520,4 +526,14 @@ export function useWorkspaceHeaderTabsViewModel() {
     visibleChatSessionIds,
     workspaceUiKey,
   ]);
+}
+
+function useStableStringArray<T extends readonly string[]>(value: T): T {
+  const previousRef = useRef<T | null>(null);
+  const previous = previousRef.current;
+  if (previous && sameStringArray(previous, value)) {
+    return previous;
+  }
+  previousRef.current = value;
+  return value;
 }

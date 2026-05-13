@@ -18,6 +18,8 @@ import type {
   PendingSessionConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
 
+export const EMPTY_INTENT_PENDING_CONFIG_CHANGES: PendingSessionConfigChanges = {};
+
 export function selectNextDispatchableSessionIntent(
   state: SessionIntentStateShape,
   clientSessionId: string,
@@ -49,17 +51,18 @@ export function selectNextDispatchableOutboxEntry(
 export function pendingConfigChangesForSessionIntents(
   intents: readonly SessionIntent[],
 ): PendingSessionConfigChanges {
-  const pendingConfigChanges: PendingSessionConfigChanges = {};
+  let pendingConfigChanges: PendingSessionConfigChanges | null = null;
   for (const intent of intents) {
     if (intent.kind !== "update_config") {
       continue;
     }
     const pendingChange = pendingConfigChangeFromIntent(intent);
     if (pendingChange) {
+      pendingConfigChanges ??= {};
       pendingConfigChanges[intent.configId] = pendingChange;
     }
   }
-  return pendingConfigChanges;
+  return pendingConfigChanges ?? EMPTY_INTENT_PENDING_CONFIG_CHANGES;
 }
 
 export function renderableOutboxEntriesForTranscript(

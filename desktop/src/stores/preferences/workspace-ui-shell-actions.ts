@@ -1,5 +1,8 @@
 import { sameStringArray } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
-import { recordDebugActionDiagnostic } from "@/lib/infra/measurement/debug-action-diagnostic";
+import {
+  recordDebugActionDiagnostic,
+  recordDebugStoreTransition,
+} from "@/lib/infra/measurement/debug-action-diagnostic";
 import type { WorkspaceUiGet, WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 
 type WorkspaceUiShellActions = Pick<
@@ -48,12 +51,18 @@ export function createWorkspaceUiShellActions(
           previousCount: current.length,
         },
       });
-      set({
+      const nextState = {
         shellTabOrderByWorkspace: {
           ...get().shellTabOrderByWorkspace,
           [workspaceId]: order,
         },
+      };
+      recordWorkspaceUiTransition(get(), "set_shell_tab_order", nextState, {
+        workspaceId,
+        count: order.length,
+        previousCount: current.length,
       });
+      set(nextState);
     },
 
     writeShellIntent: ({ workspaceId, intent }) => {
@@ -94,7 +103,7 @@ export function createWorkspaceUiShellActions(
           nextEpoch,
         },
       });
-      set({
+      const nextState = {
         activeShellTabKeyByWorkspace: {
           ...get().activeShellTabKeyByWorkspace,
           [workspaceId]: intent,
@@ -103,7 +112,15 @@ export function createWorkspaceUiShellActions(
           ...get().shellActivationEpochByWorkspace,
           [workspaceId]: nextEpoch,
         },
+      };
+      recordWorkspaceUiTransition(get(), "write_shell_intent", nextState, {
+        workspaceId,
+        previousIntent: current,
+        intent,
+        previousEpoch,
+        nextEpoch,
       });
+      set(nextState);
       return {
         changed: true,
         previousIntent: current,
@@ -227,12 +244,22 @@ export function createWorkspaceUiShellActions(
           guardToken: pending.guardToken,
         },
       });
-      set({
+      const nextState = {
         pendingChatActivationByWorkspace: {
           ...get().pendingChatActivationByWorkspace,
           [workspaceId]: pending,
         },
+      };
+      recordWorkspaceUiTransition(get(), "set_pending_chat_activation", nextState, {
+        workspaceId,
+        sessionId: pending.sessionId,
+        attemptId: pending.attemptId,
+        previousAttemptId: current?.attemptId ?? null,
+        intent: pending.intent,
+        shellEpochAtWrite: pending.shellEpochAtWrite,
+        guardToken: pending.guardToken,
       });
+      set(nextState);
       return { set: true };
     },
 
@@ -268,7 +295,7 @@ export function createWorkspaceUiShellActions(
           nextEpoch,
         },
       });
-      set({
+      const nextState = {
         pendingChatActivationByWorkspace: {
           ...get().pendingChatActivationByWorkspace,
           [workspaceId]: null,
@@ -279,7 +306,16 @@ export function createWorkspaceUiShellActions(
             [workspaceId]: nextEpoch,
           }
           : get().shellActivationEpochByWorkspace,
+      };
+      recordWorkspaceUiTransition(get(), "clear_pending_chat_activation", nextState, {
+        workspaceId,
+        sessionId: pending.sessionId,
+        attemptId,
+        bumpIfCurrent,
+        epoch,
+        nextEpoch,
       });
+      set(nextState);
       return { cleared: true, bumped: bumpIfCurrent, epoch: nextEpoch };
     },
 
@@ -292,12 +328,31 @@ export function createWorkspaceUiShellActions(
       delete order[workspaceId];
       delete epoch[workspaceId];
       delete pending[workspaceId];
-      set({
+      const nextState = {
         activeShellTabKeyByWorkspace: active,
         shellTabOrderByWorkspace: order,
         shellActivationEpochByWorkspace: epoch,
         pendingChatActivationByWorkspace: pending,
+      };
+      recordWorkspaceUiTransition(get(), "reset_workspace_shell_tabs", nextState, {
+        workspaceId,
       });
+      set(nextState);
     },
   };
+}
+
+function recordWorkspaceUiTransition(
+  current: WorkspaceUiState,
+  label: string,
+  next: Partial<WorkspaceUiState>,
+  detail?: Record<string, unknown>,
+): void {
+  recordDebugStoreTransition({
+    category: "workspace_ui_store.transition",
+    label,
+    before: current,
+    after: next,
+    detail,
+  });
 }

@@ -128,49 +128,51 @@ export const GlobalHeader = memo(function GlobalHeader({
       </div>
 
       {/* Right side - branch + open-in + git + panel toggle */}
-      <div className="flex shrink-0 items-center gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          loading={runLoading}
-          disabled={runDisabled}
-          onClick={onRun}
-          aria-label={runTitle}
-          title={runTitle}
-          className="h-6 gap-1.5 rounded-lg bg-background px-2 text-xs font-medium"
-        >
-          <Play className="size-3.5" />
-          <span>{runLabel}</span>
-        </Button>
-        {workspacePath && (
-          <SplitButton
-            label={preferredTarget?.label ?? "Open"}
-            onClick={handleDefaultOpen}
-            targets={targets}
-            onTargetClick={handleTargetClick}
-            preferredTarget={preferredTarget}
+      <DebugProfiler id="global-header-actions">
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={runLoading}
+            disabled={runDisabled}
+            onClick={onRun}
+            aria-label={runTitle}
+            title={runTitle}
+            className="h-6 gap-1.5 rounded-lg bg-background px-2 text-xs font-medium"
+          >
+            <Play className="size-3.5" />
+            <span>{runLabel}</span>
+          </Button>
+          {workspacePath && (
+            <SplitButton
+              label={preferredTarget?.label ?? "Open"}
+              onClick={handleDefaultOpen}
+              targets={targets}
+              onTargetClick={handleTargetClick}
+              preferredTarget={preferredTarget}
+            />
+          )}
+          <GitActionsButton
+            gitStatus={gitStatus}
+            existingPr={existingPr}
+            disabled={disableGitActions}
+            onCommit={onCommit}
+            onPush={onPush}
+            onCreatePr={onCreatePr}
+            onViewPr={onViewPr}
           />
-        )}
-        <GitActionsButton
-          gitStatus={gitStatus}
-          existingPr={existingPr}
-          disabled={disableGitActions}
-          onCommit={onCommit}
-          onPush={onPush}
-          onCreatePr={onCreatePr}
-          onViewPr={onViewPr}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onTogglePanel}
-          aria-label={rightPanelOpen ? "Hide side panel" : "Show side panel"}
-          title={rightPanelOpen ? "Hide side panel" : "Show side panel"}
-          className="h-7 px-1.5 text-xs rounded-md"
-        >
-          <SplitPanel className="size-3.5 text-muted-foreground" />
-        </Button>
-      </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onTogglePanel}
+            aria-label={rightPanelOpen ? "Hide side panel" : "Show side panel"}
+            title={rightPanelOpen ? "Hide side panel" : "Show side panel"}
+            className="h-7 px-1.5 text-xs rounded-md"
+          >
+            <SplitPanel className="size-3.5 text-muted-foreground" />
+          </Button>
+        </div>
+      </DebugProfiler>
       </div>
     </DebugProfiler>
   );

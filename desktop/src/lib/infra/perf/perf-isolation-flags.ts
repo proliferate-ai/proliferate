@@ -1,6 +1,6 @@
 export interface ProliferatePerfFlags {
   disableDebugMeasurement?: boolean;
-  disablePromptFlushSync?: boolean;
+  forcePromptFlushSync?: boolean;
   freezeHeaderTabsViewModel?: boolean;
   freezeComposerDock?: boolean;
   freezeMainScreenDataQueries?: boolean;
@@ -32,7 +32,7 @@ export type ProliferatePerfFlagName = keyof ProliferatePerfFlags;
 const listeners = new Set<() => void>();
 const KNOWN_PERF_FLAGS = [
   "disableDebugMeasurement",
-  "disablePromptFlushSync",
+  "forcePromptFlushSync",
   "freezeComposerDock",
   "freezeHeaderTabs",
   "freezeHeaderTabsViewModel",

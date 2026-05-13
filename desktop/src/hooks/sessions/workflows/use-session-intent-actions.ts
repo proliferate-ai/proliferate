@@ -130,10 +130,10 @@ export function useSessionIntentActions() {
         latencyFlowId,
       });
     };
-    if (isProliferatePerfFlagEnabled("disablePromptFlushSync")) {
-      enqueuePrompt();
-    } else {
+    if (isProliferatePerfFlagEnabled("forcePromptFlushSync")) {
       flushSync(enqueuePrompt);
+    } else {
+      enqueuePrompt();
     }
     logLatency("session.intent.prompt.enqueue", {
       clientPromptId,

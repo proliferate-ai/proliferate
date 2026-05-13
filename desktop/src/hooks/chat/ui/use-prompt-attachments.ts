@@ -34,6 +34,8 @@ export function usePromptAttachments(
   scopeKey: string | null | undefined,
   capabilities: PromptCapabilities | null | undefined,
 ) {
+  const canAttachImages = capabilities?.image === true;
+  const canAttachEmbeddedContext = capabilities?.embeddedContext === true;
   const [entries, setEntries] = useState<AttachmentEntry[]>([]);
   const entriesRef = useRef<AttachmentEntry[]>([]);
 
@@ -49,12 +51,15 @@ export function usePromptAttachments(
 
   useEffect(() => {
     setEntries((current) => {
+      if (current.length === 0) {
+        return current;
+      }
       for (const entry of current) {
         revokeAttachmentObjectUrl(entry);
       }
       return [];
     });
-  }, [scopeKey, capabilities?.embeddedContext, capabilities?.image]);
+  }, [scopeKey, canAttachEmbeddedContext, canAttachImages]);
 
   const descriptors = useMemo(
     () => entries.map((entry) => entry.descriptor),
@@ -70,7 +75,7 @@ export function usePromptAttachments(
       }
 
       if (file.type.startsWith("image/")) {
-        if (!capabilities?.image || file.size > PROMPT_IMAGE_MAX_BYTES) {
+        if (!canAttachImages || file.size > PROMPT_IMAGE_MAX_BYTES) {
           continue;
         }
         next.push({
@@ -89,7 +94,7 @@ export function usePromptAttachments(
         continue;
       }
 
-      if (capabilities?.embeddedContext && isTextFileCandidate(file)) {
+      if (canAttachEmbeddedContext && isTextFileCandidate(file)) {
         if (file.size > PROMPT_TEXT_RESOURCE_MAX_BYTES) {
           continue;
         }
@@ -114,10 +119,10 @@ export function usePromptAttachments(
     }
 
     setEntries((current) => [...current, ...next].slice(0, MAX_PROMPT_ATTACHMENTS));
-  }, [capabilities?.embeddedContext, capabilities?.image]);
+  }, [canAttachEmbeddedContext, canAttachImages]);
 
   const addTextPaste = useCallback((text: string): boolean => {
-    if (!capabilities?.embeddedContext || !shouldCreatePasteAttachment(text)) {
+    if (!canAttachEmbeddedContext || !shouldCreatePasteAttachment(text)) {
       return false;
     }
     if (entriesRef.current.length >= MAX_PROMPT_ATTACHMENTS) {
@@ -141,7 +146,7 @@ export function usePromptAttachments(
     };
     setEntries((current) => [...current, entry].slice(0, MAX_PROMPT_ATTACHMENTS));
     return true;
-  }, [capabilities?.embeddedContext]);
+  }, [canAttachEmbeddedContext]);
 
   const removeAttachment = useCallback((id: string) => {
     setEntries((current) => {

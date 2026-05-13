@@ -102,6 +102,53 @@ export interface MeasurementMemoryEvent extends MeasurementMemorySnapshot {
   recentSummaries: number;
 }
 
+export type DebugActivityKind =
+  | "diagnostic"
+  | "frame_gap"
+  | "long_task"
+  | "react_commit"
+  | "request"
+  | "state_count"
+  | "store"
+  | "store_action"
+  | "stream"
+  | "workflow";
+
+export interface DebugActivityEvent {
+  tag: "debug_activity";
+  seq: number;
+  timestampMs: number;
+  timeOriginMs: number | null;
+  kind: DebugActivityKind;
+  label: string;
+  startedAtMs: number | null;
+  endedAtMs: number | null;
+  durationMs: number | null;
+  operationIds: MeasurementOperationId[];
+  metadata: Record<string, unknown>;
+}
+
+export interface JankIncidentCanarySnapshot {
+  kind: string;
+  count: number;
+}
+
+export interface JankIncident {
+  tag: "jank_incident";
+  seq: number;
+  timestampMs: number;
+  timeOriginMs: number | null;
+  previousFrameAtMs: number;
+  frameAtMs: number;
+  frameGapMs: number;
+  activeOperationIds: MeasurementOperationId[];
+  activeOperationKinds: string[];
+  visibleCanaries: JankIncidentCanarySnapshot[];
+  overlappingActivities: DebugActivityEvent[];
+  precedingActivities: DebugActivityEvent[];
+  likelyCauses: string[];
+}
+
 export interface MeasurementDebugDump {
   tag: "measurement_dump";
   version: 1;
@@ -121,12 +168,16 @@ export interface MeasurementDebugDump {
     categoryBindings: number;
     recentOperationEvents: number;
     recentMetrics: number;
+    recentDebugActivities: number;
+    recentJankIncidents: number;
     recentMemorySamples: number;
     recentSummaries: number;
   };
   activeOperations: MeasurementOperationSnapshot[];
   recentOperationEvents: MeasurementOperationEvent[];
   recentMetrics: MeasurementMetricEvent[];
+  recentDebugActivities: DebugActivityEvent[];
+  recentJankIncidents: JankIncident[];
   recentMemorySamples: MeasurementMemoryEvent[];
   recentSummaries: MeasurementSummaryPayload[];
 }

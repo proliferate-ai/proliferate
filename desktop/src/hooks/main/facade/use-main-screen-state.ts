@@ -345,6 +345,41 @@ export function useMainScreenState(): MainScreenState {
   const rightPanelOpen = rightPanelDurableState.open
     && (!rightPanelSuppressed || userOpenOverrideActive);
 
+  useDebugValueChange("main_screen.inputs", "state_signature", {
+    pendingAttemptId: pendingWorkspaceEntry?.attemptId ?? null,
+    pendingRequestKind: pendingWorkspaceEntry?.request.kind ?? null,
+    selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
+    hotPaintPending,
+    sidebarOpen,
+    sidebarWidth,
+    rightPanelOpen,
+    rightPanelWidth,
+    rightPanelActiveEntryKey: rightPanelState.activeEntryKey,
+    rightPanelHeaderCount: rightPanelState.headerOrder.length,
+    terminalActivationToken: terminalActivationRequest?.token ?? null,
+    terminalActivationWorkspaceId: terminalActivationRequest?.workspaceId ?? null,
+    publishDialogOpen: publishDialog.open,
+    publishDialogInitialIntent: publishDialog.initialIntent,
+    publishDialogWorkspaceId: publishDialog.workspaceId,
+    commandPaletteOpen,
+    activeLaunchIntentId: activeLaunchIntent?.id ?? null,
+    selectedCloudRuntimePhase: selectedCloudRuntime.state?.phase ?? null,
+    workspaceCount: workspaceCollections?.workspaces.length ?? 0,
+    cloudWorkspaceCount: workspaceCollections?.cloudWorkspaces.length ?? 0,
+    selectedWorkspacePath: selectedWorkspace?.path ?? null,
+    selectedWorkspaceKind: selectedWorkspace?.kind ?? null,
+    selectedCloudWorkspaceId,
+    gitBranch: gitStatus?.currentBranch ?? null,
+    existingPrNumber: currentPullRequest?.pullRequest?.number ?? null,
+    hasWorkspaceShell,
+    hasLaunchIntentOnlyShell,
+    hasRuntimeReadyWorkspace,
+    shouldKeepRuntimePanelsVisible,
+  });
+
   useDebugValueChange("main_screen.inputs", "state_refs", {
     pendingWorkspaceEntry,
     selectedWorkspaceId,

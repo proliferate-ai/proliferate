@@ -16,6 +16,7 @@ import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript/transcript
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
+  measureDebugComputation,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
@@ -57,6 +58,7 @@ import {
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "./TranscriptContexts";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "./TranscriptTurnRow";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
@@ -132,7 +134,12 @@ export function MessageList({
     )
     : null;
   const visibleOutboxEntries = useMemo(
-    () => renderableOutboxEntriesForTranscript(outboxEntries, transcript),
+    () => measureDebugComputation({
+      category: "transcript_list.derive",
+      label: "visible_outbox_entries",
+      keys: ["outboxEntries", "transcript"],
+      count: (entries) => entries.length,
+    }, () => renderableOutboxEntriesForTranscript(outboxEntries, transcript)),
     [outboxEntries, transcript],
   );
   const outboxStartedAtByPromptId = useMemo(
@@ -146,6 +153,35 @@ export function MessageList({
     visibleOutboxEntries,
     latestTurnId,
     latestTurnHasAssistantRenderableContent,
+  });
+  const virtualRowSignature = useMemo(
+    () => summarizeVirtualRows(virtualRows),
+    [virtualRows],
+  );
+  useDebugValueChange("transcript_list.inputs", "row_model_refs", {
+    activeSessionId,
+    transcript,
+    optimisticPrompt,
+    visibleOptimisticPrompt,
+    outboxEntries,
+    visibleOutboxEntries,
+    sessionViewState,
+    virtualRows,
+    latestTurnId,
+    latestTurn,
+  });
+  useDebugValueChange("transcript_list.inputs", "row_model_signature", {
+    activeSessionId,
+    selectedWorkspaceId,
+    turnCount: transcript.turnOrder.length,
+    itemCount: Object.keys(transcript.itemsById).length,
+    latestTurnId,
+    latestTurnItemCount: latestTurn?.itemOrder.length ?? null,
+    latestTurnCompleted: latestTurn ? Boolean(latestTurn.completedAt) : null,
+    sessionViewState,
+    optimisticPromptId: visibleOptimisticPrompt?.promptId ?? null,
+    visibleOutboxCount: visibleOutboxEntries.length,
+    ...virtualRowSignature,
   });
   const visibleTurnIds = useMemo(
     () => {
@@ -262,7 +298,15 @@ export function MessageList({
     const operationId = startMeasurementOperation({
       kind: "transcript_scroll",
       sampleKey: "transcript",
-      surfaces: ["transcript-list", "session-transcript-pane", "chat-surface"],
+      surfaces: [
+        "transcript-list",
+        "transcript-context-providers",
+        "transcript-row-list-router",
+        "transcript-virtualized-viewport",
+        "transcript-full-list",
+        "session-transcript-pane",
+        "chat-surface",
+      ],
       idleTimeoutMs: 750,
       maxDurationMs: 8000,
       cooldownMs: 1500,
@@ -271,6 +315,10 @@ export function MessageList({
       scrollSampleOperationRef.current = operationId;
       markOperationForNextCommit(operationId, [
         "transcript-list",
+        "transcript-context-providers",
+        "transcript-row-list-router",
+        "transcript-virtualized-viewport",
+        "transcript-full-list",
         "session-transcript-pane",
         "chat-surface",
       ]);
@@ -355,29 +403,63 @@ export function MessageList({
   return (
     <DebugProfiler id="transcript-list">
       <div className="flex-1 min-h-0" data-telemetry-block>
-        <TranscriptContextProviders
-          sessionId={activeSessionId}
-          onOpenSession={onOpenSession}
-          canOpenSession={canOpenSession}
-        >
-          <VirtualTranscriptRowList
-            key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
-            rows={virtualRows}
-            selectionRootRef={selectionRootRef}
-            hasOlderHistory={hasOlderHistory}
-            isLoadingOlderHistory={isLoadingOlderHistory}
-            olderHistoryCursor={olderHistoryCursor}
-            bottomInsetPx={bottomInsetPx}
-            selectedWorkspaceId={selectedWorkspaceId}
-            activeSessionId={activeSessionId}
-            isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
-            pendingPromptText={visibleOptimisticPrompt?.text ?? null}
-            onLoadOlderHistory={onLoadOlderHistory ?? noop}
-            onScrollSample={handleTranscriptScroll}
-            renderRow={renderVirtualRow}
-          />
-        </TranscriptContextProviders>
+        <DebugProfiler id="transcript-context-providers">
+          <TranscriptContextProviders
+            sessionId={activeSessionId}
+            onOpenSession={onOpenSession}
+            canOpenSession={canOpenSession}
+          >
+            <DebugProfiler id="transcript-row-list-router">
+              <VirtualTranscriptRowList
+                key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
+                rows={virtualRows}
+                selectionRootRef={selectionRootRef}
+                hasOlderHistory={hasOlderHistory}
+                isLoadingOlderHistory={isLoadingOlderHistory}
+                olderHistoryCursor={olderHistoryCursor}
+                bottomInsetPx={bottomInsetPx}
+                selectedWorkspaceId={selectedWorkspaceId}
+                activeSessionId={activeSessionId}
+                isSessionBusy={sessionViewState === "working" || sessionViewState === "needs_input"}
+                pendingPromptText={visibleOptimisticPrompt?.text ?? null}
+                onLoadOlderHistory={onLoadOlderHistory ?? noop}
+                onScrollSample={handleTranscriptScroll}
+                renderRow={renderVirtualRow}
+              />
+            </DebugProfiler>
+          </TranscriptContextProviders>
+        </DebugProfiler>
       </div>
     </DebugProfiler>
   );
+}
+
+function summarizeVirtualRows(rows: readonly TranscriptVirtualRow[]) {
+  let turnRowCount = 0;
+  let pendingPromptRowCount = 0;
+  let outboxPromptRowCount = 0;
+  let visibleTurnCount = 0;
+  let previousTurnId: string | null = null;
+  for (const row of rows) {
+    if (row.kind === "turn") {
+      turnRowCount += 1;
+      if (row.turnId !== previousTurnId) {
+        visibleTurnCount += 1;
+        previousTurnId = row.turnId;
+      }
+    } else if (row.kind === "pending_prompt") {
+      pendingPromptRowCount += 1;
+    } else if (row.kind === "outbox_prompt") {
+      outboxPromptRowCount += 1;
+    }
+  }
+  return {
+    virtualRowCount: rows.length,
+    firstVirtualRowKey: rows[0]?.key ?? null,
+    lastVirtualRowKey: rows[rows.length - 1]?.key ?? null,
+    visibleTurnCount,
+    turnRowCount,
+    pendingPromptRowCount,
+    outboxPromptRowCount,
+  };
 }

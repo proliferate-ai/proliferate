@@ -8,6 +8,8 @@ import type {
   MeasurementSurface,
 } from "./debug-measurement-catalog-types";
 import type {
+  DebugActivityEvent,
+  JankIncident,
   MeasurementMemoryEvent,
   MeasurementMetricEvent,
   MeasurementOperationEvent,
@@ -17,6 +19,8 @@ import type {
 export const RECENT_METRIC_LIMIT = 50_000;
 export const RECENT_OPERATION_EVENT_LIMIT = 1_000;
 export const RECENT_MEMORY_SAMPLE_LIMIT = 1_000;
+export const RECENT_DEBUG_ACTIVITY_LIMIT = 5_000;
+export const RECENT_JANK_INCIDENT_LIMIT = 500;
 export const MEMORY_SAMPLE_INTERVAL_MS = 5_000;
 
 export const operations = new Map<MeasurementOperationId, MeasurementOperationRecord>();
@@ -29,6 +33,8 @@ export const operationFinishListeners = new Map<
   Set<MeasurementOperationFinishListener>
 >();
 export const recentMetrics: MeasurementMetricEvent[] = [];
+export const recentDebugActivities: DebugActivityEvent[] = [];
+export const recentJankIncidents: JankIncident[] = [];
 export const recentOperationEvents: MeasurementOperationEvent[] = [];
 export const recentMemorySamples: MeasurementMemoryEvent[] = [];
 export const recentSummaries: MeasurementSummaryPayload[] = [];
@@ -36,6 +42,8 @@ export const recentSummaries: MeasurementSummaryPayload[] = [];
 let operationSeq = 0;
 let bindingSeq = 0;
 let metricEventSeq = 0;
+let debugActivitySeq = 0;
+let jankIncidentSeq = 0;
 let operationEventSeq = 0;
 let memoryEventSeq = 0;
 
@@ -51,6 +59,14 @@ export function nextMeasurementMetricEventSeq(): number {
   return ++metricEventSeq;
 }
 
+export function nextDebugActivitySeq(): number {
+  return ++debugActivitySeq;
+}
+
+export function nextJankIncidentSeq(): number {
+  return ++jankIncidentSeq;
+}
+
 export function nextMeasurementOperationEventSeq(): number {
   return ++operationEventSeq;
 }
@@ -63,6 +79,8 @@ export function resetMeasurementSequencesForTest(): void {
   operationSeq = 0;
   bindingSeq = 0;
   metricEventSeq = 0;
+  debugActivitySeq = 0;
+  jankIncidentSeq = 0;
   operationEventSeq = 0;
   memoryEventSeq = 0;
 }

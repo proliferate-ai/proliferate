@@ -14,6 +14,8 @@ import {
   MemoizedVirtualTranscriptRow,
 } from "@/components/workspace/chat/transcript/VirtualTranscriptRow";
 import type { TranscriptVirtualizationMode } from "@/lib/domain/chat/transcript/transcript-virtualization-config";
+import { useDebugRenderReason } from "@/hooks/ui/use-debug-render-reason";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 export function VirtualTranscriptViewport({
   bottomSpacerHeight,
@@ -38,6 +40,30 @@ export function VirtualTranscriptViewport({
   virtualItems: readonly VirtualItem[];
   virtualizationMode: TranscriptVirtualizationMode;
 }) {
+  useDebugRenderReason("VirtualTranscriptViewport", {
+    bottomSpacerHeight,
+    measureElement,
+    onViewportScroll,
+    renderableRows,
+    renderRow,
+    scrollRef,
+    selectionRootRef,
+    topSpacerHeight,
+    virtualItems,
+    virtualizationMode,
+  });
+  useDebugValueChange("transcript_virtualization.inputs", "viewport_window", {
+    renderableRowCount: renderableRows.length,
+    virtualItemCount: virtualItems.length,
+    firstVirtualIndex: virtualItems[0]?.index ?? null,
+    lastVirtualIndex: virtualItems[virtualItems.length - 1]?.index ?? null,
+    firstRenderableKey: renderableRows[virtualItems[0]?.index ?? -1]?.key ?? null,
+    lastRenderableKey: renderableRows[virtualItems[virtualItems.length - 1]?.index ?? -1]?.key ?? null,
+    topSpacerHeight: Math.round(topSpacerHeight),
+    bottomSpacerHeight: Math.round(bottomSpacerHeight),
+    virtualizationMode,
+  });
+
   return (
     <AutoHideScrollArea
       className="h-full"

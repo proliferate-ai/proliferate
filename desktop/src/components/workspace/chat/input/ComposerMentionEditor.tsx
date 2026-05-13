@@ -121,6 +121,10 @@ export function ComposerMentionEditor({
       surfaces: [
         "chat-composer",
         "chat-composer-dock",
+        "chat-composer-dock-region",
+        "chat-composer-dock-slots",
+        "chat-composer-dock-input",
+        "chat-composer-dock-footer",
         "chat-surface",
         "transcript-list",
         "header-tabs",
@@ -135,6 +139,10 @@ export function ComposerMentionEditor({
       markOperationForNextCommit(operationId, [
         "chat-composer",
         "chat-composer-dock",
+        "chat-composer-dock-region",
+        "chat-composer-dock-slots",
+        "chat-composer-dock-input",
+        "chat-composer-dock-footer",
         "chat-surface",
         "transcript-list",
         "header-tabs",

@@ -24,6 +24,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -110,24 +111,37 @@ export function useWorkspaceSidebarState({
     return counts;
   }, [deferredLaunchesById]);
 
-  const groups = useMemo(() => buildSidebarGroupStates({
-    repoRoots,
-    logicalWorkspaces,
-    showArchived,
-    workspaceTypes,
-    archivedSet,
-    hiddenRepoRootIds: hiddenRepoRootSet,
-    selectedLogicalWorkspaceId,
-    selectedWorkspaceId,
-    pendingWorkspaceEntry,
-    workspaceActivities,
-    pendingPromptCounts,
-    gitStatus,
-    activeSessionTitle,
-    lastViewedAt,
-    workspaceLastInteracted,
-    finishSuggestionsByWorkspaceId,
-  }), [
+  const groups = useMemo(() => measureDebugComputation({
+    category: "workspace_sidebar_state.derive",
+    label: "groups",
+    keys: [
+      "repoRoots",
+      "logicalWorkspaces",
+      "workspaceTypes",
+      "selection",
+      "pendingWorkspaceEntry",
+      "workspaceActivities",
+      "gitStatus",
+    ],
+    count: (value) => value.length,
+  }, () => buildSidebarGroupStates({
+      repoRoots,
+      logicalWorkspaces,
+      showArchived,
+      workspaceTypes,
+      archivedSet,
+      hiddenRepoRootIds: hiddenRepoRootSet,
+      selectedLogicalWorkspaceId,
+      selectedWorkspaceId,
+      pendingWorkspaceEntry,
+      workspaceActivities,
+      pendingPromptCounts,
+      gitStatus,
+      activeSessionTitle,
+      lastViewedAt,
+      workspaceLastInteracted,
+      finishSuggestionsByWorkspaceId,
+    })), [
     activeSessionTitle,
     archivedSet,
     gitStatus,

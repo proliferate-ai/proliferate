@@ -11,6 +11,9 @@ import {
 } from "@/lib/domain/chat/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@/lib/domain/chat/transcript/transcript-virtualization-config";
 import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
+import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   buildRenderableRows,
   estimateRenderableRowHeight,
@@ -66,7 +69,12 @@ export function VirtualizedTranscriptRowList({
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
   const renderableRows = useMemo(
-    () => buildRenderableRows(rows, isLoadingOlderHistory),
+    () => measureDebugComputation({
+      category: "transcript_virtualization.derive",
+      label: "renderable_rows",
+      keys: ["rows", "isLoadingOlderHistory"],
+      count: (nextRows) => nextRows.length,
+    }, () => buildRenderableRows(rows, isLoadingOlderHistory)),
     [isLoadingOlderHistory, rows],
   );
   const estimatedInitialBottomOffset =
@@ -93,6 +101,33 @@ export function VirtualizedTranscriptRowList({
   const bottomSpacerHeight = lastVirtualItem
     ? Math.max(totalContentHeight - lastVirtualItem.end, 0)
     : 0;
+  useDebugValueChange("transcript_virtualization.inputs", "virtualized_state", {
+    activeSessionId,
+    selectedWorkspaceId,
+    rowCount: rows.length,
+    firstRowKey: rows[0]?.key ?? null,
+    lastRowKey: rows[rows.length - 1]?.key ?? null,
+    renderableRowCount: renderableRows.length,
+    firstRenderableRowKey: renderableRows[0]?.key ?? null,
+    lastRenderableRowKey: renderableRows[renderableRows.length - 1]?.key ?? null,
+    virtualItemCount: virtualItems.length,
+    firstVirtualIndex: firstVirtualItem?.index ?? null,
+    lastVirtualIndex: lastVirtualItem?.index ?? null,
+    firstVirtualStart: firstVirtualItem ? Math.round(firstVirtualItem.start) : null,
+    lastVirtualEnd: lastVirtualItem ? Math.round(lastVirtualItem.end) : null,
+    totalContentHeight: Math.round(totalContentHeight),
+    topSpacerHeight: Math.round(topSpacerHeight),
+    bottomSpacerHeight: Math.round(bottomSpacerHeight),
+    bottomInsetPx,
+    hasOlderHistory,
+    isLoadingOlderHistory,
+    olderHistoryCursor,
+    isSessionBusy,
+    pendingPromptTextLength: pendingPromptText?.length ?? 0,
+    pendingAnchorSet: pendingAnchorRef.current !== null,
+    pendingPrependAnchorSet: pendingPrependAnchorRef.current !== null,
+    shouldStickToBottom: shouldStickToBottomRef.current,
+  });
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;
@@ -333,17 +368,19 @@ export function VirtualizedTranscriptRowList({
   });
 
   return (
-    <VirtualTranscriptViewport
-      bottomSpacerHeight={bottomSpacerHeight}
-      measureElement={virtualizer.measureElement}
-      onViewportScroll={handleViewportScroll}
-      renderableRows={renderableRows}
-      renderRow={renderRow}
-      scrollRef={scrollRef}
-      selectionRootRef={selectionRootRef}
-      topSpacerHeight={topSpacerHeight}
-      virtualItems={virtualItems}
-      virtualizationMode={virtualizationMode}
-    />
+    <DebugProfiler id="transcript-virtualized-viewport">
+      <VirtualTranscriptViewport
+        bottomSpacerHeight={bottomSpacerHeight}
+        measureElement={virtualizer.measureElement}
+        onViewportScroll={handleViewportScroll}
+        renderableRows={renderableRows}
+        renderRow={renderRow}
+        scrollRef={scrollRef}
+        selectionRootRef={selectionRootRef}
+        topSpacerHeight={topSpacerHeight}
+        virtualItems={virtualItems}
+        virtualizationMode={virtualizationMode}
+      />
+    </DebugProfiler>
   );
 }

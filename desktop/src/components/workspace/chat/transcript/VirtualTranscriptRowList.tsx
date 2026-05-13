@@ -10,6 +10,7 @@ import type {
   TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
 import { VirtualizedTranscriptRowList } from "./VirtualizedTranscriptRowList";
+import { useDebugValueChange } from "@/hooks/ui/use-debug-value-change";
 
 const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:enableTranscriptVirtualization";
 const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:disableTranscriptVirtualization";
@@ -26,6 +27,15 @@ export function VirtualTranscriptRowList(props: TranscriptRowListBaseProps) {
     rowCount: rows.length,
   });
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  useDebugValueChange("transcript_virtualization.selector", "mode", {
+    activeSessionId,
+    selectedWorkspaceId,
+    rowCount: rows.length,
+    virtualizationMode,
+    virtualizationEnabled,
+    fallbackReason,
+    resolvedRenderer: !virtualizationEnabled || fallbackReason !== null ? "full" : "virtual",
+  });
 
   useLayoutEffect(() => {
     setFallbackReason(null);
