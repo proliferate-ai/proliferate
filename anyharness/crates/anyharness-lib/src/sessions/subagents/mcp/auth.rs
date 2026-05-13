@@ -16,12 +16,13 @@ pub struct SubagentMcpAuth {
 impl SubagentMcpAuth {
     pub fn new(runtime_home: PathBuf) -> Self {
         Self {
-            // Subagents used the legacy SHA256-dot token format before the
-            // generic Product MCP endpoint. Keep the same secret algorithm so
-            // already-running legacy sessions can still validate old headers.
+            // Fresh generic-header tokens use the shared product HMAC envelope.
+            // The legacy header still validates old SHA256-dot workspace/session
+            // tokens for already-running sessions.
             inner: ProductMcpAuth::new(
                 runtime_home,
                 SECRET_FILE_NAME,
+                McpCapabilityTokenSignature::HmacSha256,
                 McpCapabilityTokenSignature::LegacySha256Dot,
                 super::definition::DEFINITION.id,
                 LEGACY_CAPABILITY_HEADER_NAME,

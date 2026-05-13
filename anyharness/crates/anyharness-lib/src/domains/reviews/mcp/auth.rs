@@ -20,6 +20,7 @@ impl ReviewMcpAuth {
                 runtime_home,
                 SECRET_FILE_NAME,
                 McpCapabilityTokenSignature::HmacSha256,
+                McpCapabilityTokenSignature::HmacSha256,
                 super::definition::DEFINITION.id,
                 LEGACY_CAPABILITY_HEADER_NAME,
             ),

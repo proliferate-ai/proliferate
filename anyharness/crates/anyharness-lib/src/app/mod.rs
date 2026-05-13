@@ -35,7 +35,7 @@ use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistry,
+    ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration, ProductMcpEndpointRegistry,
 };
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
@@ -56,7 +56,7 @@ use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::workspaces::files_runtime::WorkspaceFilesRuntime;
 use crate::workspaces::inventory::WorktreeInventoryService;
-use crate::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::workspaces::purge::WorkspacePurgeService;
 use crate::workspaces::retention::WorkspaceRetentionService;
 use crate::workspaces::retention_policy::WorktreeRetentionPolicyStore;
@@ -74,6 +74,8 @@ pub enum AppStateInitError {
     MissingBearerToken,
     #[error("Invalid {DATA_KEY_ENV_VAR}: {0}")]
     InvalidDataKey(String),
+    #[error("Invalid product MCP endpoint registry: {0}")]
+    InvalidProductMcpRegistry(#[source] anyhow::Error),
 }
 
 #[derive(Clone)]
@@ -313,26 +315,26 @@ impl AppState {
         review_runtime
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
-        let product_mcp_endpoint_registry = Arc::new(ProductMcpEndpointRegistry::new(vec![
-            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+        let product_mcp_endpoint_registrations = vec![
+            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
                 Arc::new(ReviewProductMcpServer::new(
                     review_runtime.clone(),
                     review_mcp_auth,
                 )),
-                Some(crate::workspaces::operation_gate::WorkspaceOperationKind::ReviewWrite),
+                Some(WorkspaceOperationKind::ReviewWrite),
                 review_mcp_tools::MUTATING_TOOL_NAMES,
-            )),
-            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+            ))),
+            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
                 Arc::new(SubagentProductMcpServer::new(
                     subagent_service.clone(),
                     session_runtime.clone(),
                     workspace_runtime.clone(),
                     subagent_mcp_auth,
                 )),
-                Some(crate::workspaces::operation_gate::WorkspaceOperationKind::SubagentWrite),
+                Some(WorkspaceOperationKind::SubagentWrite),
                 subagent_mcp_tools::MUTATING_TOOL_NAMES,
-            )),
-            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+            ))),
+            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
                 Arc::new(WorkspaceNamingProductMcpServer::new(
                     workspace_runtime.clone(),
                     workspace_access_gate.clone(),
@@ -341,8 +343,12 @@ impl AppState {
                 )),
                 None,
                 &[],
-            )),
-        ]));
+            ))),
+        ];
+        let product_mcp_endpoint_registry = Arc::new(
+            ProductMcpEndpointRegistry::new(product_mcp_endpoint_registrations)
+                .map_err(AppStateInitError::InvalidProductMcpRegistry)?,
+        );
         #[cfg(not(test))]
         workspace_retention_service.clone().spawn_startup_pass();
         Ok(Self {

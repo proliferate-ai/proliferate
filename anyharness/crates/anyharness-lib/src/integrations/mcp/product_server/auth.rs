@@ -11,7 +11,8 @@ const TOKEN_TTL_SECONDS: i64 = 60 * 60 * 12;
 
 #[derive(Clone)]
 pub struct ProductMcpAuth {
-    issuer: McpCapabilityTokenIssuer,
+    product_issuer: McpCapabilityTokenIssuer,
+    legacy_issuer: McpCapabilityTokenIssuer,
     product_mcp_id: &'static str,
     legacy_header_name: &'static str,
 }
@@ -20,15 +21,22 @@ impl ProductMcpAuth {
     pub fn new(
         runtime_home: PathBuf,
         secret_file_name: &'static str,
-        signature: McpCapabilityTokenSignature,
+        product_signature: McpCapabilityTokenSignature,
+        legacy_signature: McpCapabilityTokenSignature,
         product_mcp_id: &'static str,
         legacy_header_name: &'static str,
     ) -> Self {
         Self {
-            issuer: McpCapabilityTokenIssuer::new(
+            product_issuer: McpCapabilityTokenIssuer::new(
+                runtime_home.clone(),
+                secret_file_name,
+                product_signature,
+                TOKEN_TTL_SECONDS,
+            ),
+            legacy_issuer: McpCapabilityTokenIssuer::new(
                 runtime_home,
                 secret_file_name,
-                signature,
+                legacy_signature,
                 TOKEN_TTL_SECONDS,
             ),
             product_mcp_id,
@@ -41,7 +49,7 @@ impl ProductMcpAuth {
         workspace_id: &str,
         session_id: &str,
     ) -> anyhow::Result<String> {
-        self.issuer
+        self.product_issuer
             .mint_product_mcp_token(ProductMcpCapabilityScope {
                 workspace_id,
                 session_id,
@@ -55,18 +63,20 @@ impl ProductMcpAuth {
         request: &ProductMcpRequestContext,
     ) -> anyhow::Result<ProductMcpTokenValidation> {
         let valid = match header {
-            ProductMcpAuthHeader::Product { value } => self.issuer.validate_product_mcp_token(
-                value,
-                ProductMcpCapabilityScope {
-                    workspace_id: &request.workspace_id,
-                    session_id: &request.session_id,
-                    product_mcp_id: &request.product_mcp_id,
-                },
-            )?,
+            ProductMcpAuthHeader::Product { value } => {
+                self.product_issuer.validate_product_mcp_token(
+                    value,
+                    ProductMcpCapabilityScope {
+                        workspace_id: &request.workspace_id,
+                        session_id: &request.session_id,
+                        product_mcp_id: &request.product_mcp_id,
+                    },
+                )?
+            }
             ProductMcpAuthHeader::Legacy { name, value }
                 if name.eq_ignore_ascii_case(self.legacy_header_name) =>
             {
-                self.issuer.validate_workspace_session_token(
+                self.legacy_issuer.validate_workspace_session_token(
                     value,
                     &request.workspace_id,
                     &request.session_id,
@@ -102,6 +112,7 @@ mod tests {
         let auth = ProductMcpAuth::new(
             home.clone(),
             "test-product.key",
+            McpCapabilityTokenSignature::HmacSha256,
             McpCapabilityTokenSignature::HmacSha256,
             "reviews",
             "x-review-session-token",
@@ -146,6 +157,67 @@ mod tests {
             auth.validate_capability_header(
                 ProductMcpAuthHeader::Legacy {
                     name: "x-review-session-token",
+                    value: &legacy_token,
+                },
+                &request,
+            )
+            .expect("validate legacy header"),
+            ProductMcpTokenValidation::Valid,
+        );
+        assert_eq!(
+            auth.validate_capability_header(
+                ProductMcpAuthHeader::Product {
+                    value: &legacy_token,
+                },
+                &request,
+            )
+            .expect("reject legacy token in product header"),
+            ProductMcpTokenValidation::Invalid,
+        );
+
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn fresh_product_tokens_can_use_hmac_while_legacy_headers_use_legacy_sha256_dot() {
+        let home = runtime_home("split-signatures");
+        let auth = ProductMcpAuth::new(
+            home.clone(),
+            "test-product.key",
+            McpCapabilityTokenSignature::HmacSha256,
+            McpCapabilityTokenSignature::LegacySha256Dot,
+            "subagents",
+            "x-subagent-session-token",
+        );
+        let request = ProductMcpRequestContext::new("workspace-1", "session-1", "subagents");
+        let product_token = auth
+            .mint_capability_token("workspace-1", "session-1")
+            .expect("mint product token");
+
+        assert_eq!(
+            auth.validate_capability_header(
+                ProductMcpAuthHeader::Product {
+                    value: &product_token,
+                },
+                &request,
+            )
+            .expect("validate product header"),
+            ProductMcpTokenValidation::Valid,
+        );
+
+        let legacy_issuer = McpCapabilityTokenIssuer::new(
+            home.clone(),
+            "test-product.key",
+            McpCapabilityTokenSignature::LegacySha256Dot,
+            60,
+        );
+        let legacy_token = legacy_issuer
+            .mint_workspace_session_token("workspace-1", "session-1")
+            .expect("mint legacy token");
+        assert_eq!(
+            auth.validate_capability_header(
+                ProductMcpAuthHeader::Legacy {
+                    name: "x-subagent-session-token",
                     value: &legacy_token,
                 },
                 &request,
