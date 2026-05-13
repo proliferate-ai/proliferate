@@ -104,12 +104,12 @@ fn outcome_label(outcome: &AgentReconcileOutcome) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::resolve_requested_agents;
+    use anyharness_lib::domains::agents::model::AgentKind;
 
     #[test]
     fn resolve_requested_agents_defaults_to_all_agents() {
         let agents = resolve_requested_agents(&[]).expect("expected default agents");
-        assert_eq!(agents.len(), 6);
-        assert!(agents.iter().any(|agent| agent.as_str() == "codex"));
+        assert_eq!(agents.as_slice(), AgentKind::all());
     }
 
     #[test]
