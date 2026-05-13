@@ -36,8 +36,8 @@ Implementation reality after the completed migration phases:
 - `SessionStore` is split under `sessions/store/**`.
 - `SessionRuntime` is split under `sessions/runtime/**`.
 - `SessionEventSink` is split under `acp/event_sink/**`.
-- `acp/session_actor.rs` remains the current actor implementation; the actor
-  loop rewrite is deferred/manual.
+- `acp/session_actor.rs` remains the current actor implementation; the target
+  actor rewrite is specified in `specs/session-actor.md`.
 
 ## Role Map
 
@@ -124,8 +124,7 @@ One running agent session state machine:
 - shutdown/error handling
 
 The current implementation remains a single `acp/session_actor.rs` file. The
-rewrite into an actor folder requires a dedicated actor spec and is explicitly
-deferred.
+rewrite into an actor folder is specified in `specs/session-actor.md`.
 
 ### AcpClient
 
@@ -182,6 +181,24 @@ API handler
     -> SessionEventSink persists and broadcasts events
 ```
 
+Prompt submission and transcript streaming are separate interfaces:
+
+```text
+Command path:
+  client -> HTTP command -> SessionRuntime -> LiveSessionHandle.command_tx -> SessionActor
+
+Event path:
+  SessionEventSink -> SQLite append -> live broadcast channel -> SSE stream
+```
+
+The command response reports acceptance, not the agent response. For prompts,
+the actor returns `Started { turn_id }` when it begins a turn and
+`Queued { seq }` when the session is already busy and the prompt is durably
+queued. The agent response arrives later as ordered `SessionEventEnvelope`
+records over the event stream. Clients reconnect with `after_seq`; the SSE
+handler replays missed SQLite events and then subscribes to the live broadcast
+channel.
+
 ## Create Flow
 
 ```text
@@ -195,6 +212,101 @@ API handler
     -> actor starts ACP client/subprocess
     -> SessionEventSink emits normalized events
 ```
+
+## Session Actor Shape
+
+`SessionActor` is the serialized owner of one live ACP session. Its job is
+ordering: it decides how product commands, ACP notifications, prompt execution,
+background work, pending interactions, config updates, and shutdown interleave.
+
+The actor should not own prompt attachment validation, transcript rendering,
+MCP schemas, plan product semantics, raw SQL query families, or API
+request/response mapping. It should call the modules that own those concerns.
+
+High-level target actor files:
+
+```text
+live/sessions/actor/
+  mod.rs
+  command.rs
+  state.rs
+  loop.rs
+  turn/
+  config/
+  notifications/
+  interactions/
+  shutdown/
+```
+
+See `specs/session-actor.md` for the concern-folder grammar and migration
+plan.
+
+The high-level loop should read as dispatch:
+
+```text
+startup
+loop:
+  command received       -> idle or busy command handler
+  ACP notification       -> notification handler
+  background work update -> background work handler
+  shutdown               -> finalization
+```
+
+The active prompt loop should be equally explicit:
+
+```text
+accept prompt
+  -> start turn
+  -> run ACP prompt while handling notifications, busy commands, and background work
+  -> finish turn
+  -> apply queued config
+  -> drain next pending prompt if one exists
+```
+
+Split idle and busy command handling. While idle, prompt/config/fork/close can
+usually execute immediately. While busy, a prompt is queued, config is queued,
+cancel is forwarded to ACP, interaction resolution is allowed, and close/dismiss
+records intent to finish safely.
+
+Core actor invariants:
+
+- one live actor owns one ACP native session
+- the actor is the only writer of `busy`
+- prompt queue handoff is durable before `PendingPromptRemoved { Executed }`
+- ACP notifications are persisted raw before normalized event handling
+- config changes apply immediately only when idle; otherwise they queue
+- shutdown resolves pending interactions and emits terminal session state
+
+## Event Sink Shape
+
+`SessionEventSink` is the transcript writer. The actor decides when something
+happened; the sink decides how that becomes durable `SessionEventEnvelope`
+records.
+
+Target sink files:
+
+```text
+live/sessions/event_sink/
+  mod.rs
+  state.rs
+  publish.rs
+  turns.rs
+  assistant.rs
+  reasoning.rs
+  tools.rs
+  plans.rs
+  config.rs
+  interactions.rs
+  pending_prompts.rs
+  background_work.rs
+  lifecycle.rs
+  runtime_events.rs
+  normalization/
+```
+
+The sink may assign sequence numbers, persist normalized events, and broadcast
+them. It should not decide actor lifecycle, prompt queueing, config timing, or
+pending interaction waits.
 
 ## Target File Shape
 
@@ -218,6 +330,6 @@ live/sessions/
   actor/
   event_sink/
   interactions/
-  acp_client.rs
+  acp_client/
   replay_actor.rs
 ```

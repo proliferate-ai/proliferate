@@ -62,24 +62,51 @@ InteractionBroker -> currently acp/permission_broker/**; target live/sessions/in
 
 ## Actor Files
 
-An actor file should not grow into a whole subsystem. Split by actor concern:
+An actor file should not grow into a whole subsystem. The loop owns ordering;
+handlers own behavior. A reader should be able to open the loop file and see
+the live state machine without also reading prompt payload conversion,
+transcript normalization, MCP schemas, or plan ingestion.
+
+Split by actor concern:
 
 ```text
 live/sessions/actor/
   mod.rs
   command.rs
+  state.rs
+  events.rs
+  loop.rs
   startup.rs
-  prompt_queue.rs
-  prompt.rs
-  config.rs
-  interactions.rs
-  fork.rs
-  lifecycle.rs
+  notifications.rs
+  background_work.rs
+  exit.rs
   stderr.rs
+  commands/
+    idle.rs
+    busy.rs
+    prompt.rs
+    config.rs
+    interactions.rs
+    plans.rs
+    fork.rs
+    close.rs
+  turn/
+    start.rs
+    run.rs
+    finish.rs
+    queue.rs
+    diagnostics.rs
+  config/
+    apply.rs
+    restore.rs
+    snapshot.rs
+    selectors.rs
 ```
 
-Keep `mod.rs` focused on the public actor surface and high-level loop. Move
-state transitions and helpers into named files.
+Keep `mod.rs` focused on the public actor surface. Keep `loop.rs` focused on
+selecting the next actor event and dispatching it. Split idle and busy command
+handling because the same command can have different legal behavior while a
+prompt is running.
 
 ## Event Sink Files
 
@@ -90,18 +117,34 @@ normalization by event family:
 live/sessions/event_sink/
   mod.rs
   state.rs
-  emit.rs
+  publish.rs
+  turns.rs
   assistant.rs
+  reasoning.rs
   tools.rs
-  terminals.rs
   plans.rs
+  config.rs
+  interactions.rs
+  pending_prompts.rs
   background_work.rs
-  metadata.rs
-  file_references.rs
+  lifecycle.rs
+  runtime_events.rs
+  normalization/
 ```
 
 The sink may persist and broadcast normalized events. It should not decide
 durable session business rules.
+
+Use the actor/sink boundary strictly:
+
+```text
+actor      decides when something happens
+event_sink decides how that becomes a durable SessionEventEnvelope
+```
+
+The actor may call sink methods such as `begin_turn`, `turn_ended`,
+`interaction_requested`, or `ingest_tool_call`. The sink should not own prompt
+queueing, busy/idle rules, ACP subprocess lifecycle, or interaction waiting.
 
 ## Interaction Broker
 
