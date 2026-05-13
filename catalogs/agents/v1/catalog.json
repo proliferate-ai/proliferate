@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-05-05.1",
-  "generatedAt": "2026-05-05T23:00:00Z",
+  "catalogVersion": "2026-05-13.1",
+  "generatedAt": "2026-05-13T18:00:00Z",
   "compatibility": {
     "minRuntimeVersion": "0.1.0",
     "maxRuntimeVersion": null,
@@ -68,8 +68,8 @@
         "dynamicModels": false,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
-            "us.anthropic.claude-sonnet-4-6",
             "us.anthropic.claude-opus-4-7",
+            "us.anthropic.claude-sonnet-4-6",
             "haiku"
           ],
           "allowUserVisibleModelSelection": true,
@@ -82,77 +82,9 @@
         },
         "models": [
           {
-            "id": "us.anthropic.claude-sonnet-4-6",
-            "displayName": "Sonnet",
-            "description": "Sonnet 4.6 \u00b7 Best for everyday tasks",
-            "aliases": [
-              "sonnet",
-              "claude-sonnet-4-6",
-              "claude-sonnet-4-5"
-            ],
-            "status": "active",
-            "isDefault": true,
-            "provider": "anthropic",
-            "tags": [
-              "recommended"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "us.anthropic.claude-sonnet-4-6[1m]",
-            "displayName": "Sonnet (1M context)",
-            "description": "Sonnet 4.6 for long sessions",
-            "aliases": [
-              "sonnet[1m]",
-              "claude-sonnet-4-6-1m",
-              "claude-sonnet-4-5-1m"
-            ],
-            "status": "active",
-            "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "long-context"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": "1m"
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "opus",
-            "displayName": "Opus 4.1",
-            "description": "Opus 4.1 \u00b7 Legacy",
-            "aliases": [
-              "claude-opus-4-1",
-              "claude-opus-4.1"
-            ],
-            "status": "active",
-            "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "legacy"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null
-          },
-          {
             "id": "us.anthropic.claude-opus-4-7",
             "displayName": "Opus 4.7",
-            "description": "Opus 4.7 \u00b7 Most capable for complex work",
+            "description": "Opus 4.7 · Most capable for complex work",
             "aliases": [
               "claude-opus-4-7"
             ],
@@ -168,7 +100,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "us.anthropic.claude-opus-4-7[1m]",
@@ -193,12 +126,13 @@
               "contextWindow": "1m"
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "us.anthropic.claude-opus-4-6-v1",
             "displayName": "Opus 4.6",
-            "description": "Opus 4.6 \u00b7 Most capable for complex work",
+            "description": "Opus 4.6 · Most capable for complex work",
             "aliases": [
               "claude-opus-4-6"
             ],
@@ -214,7 +148,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "us.anthropic.claude-opus-4-6-v1[1m]",
@@ -234,12 +169,84 @@
               "contextWindow": "1m"
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
+          },
+          {
+            "id": "opus",
+            "displayName": "Opus 4.1",
+            "description": "Opus 4.1 · Legacy",
+            "aliases": [
+              "claude-opus-4-1",
+              "claude-opus-4.1"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "legacy"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null,
+            "defaultOptIn": false
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6",
+            "displayName": "Sonnet",
+            "description": "Sonnet 4.6 · Best for everyday tasks",
+            "aliases": [
+              "sonnet",
+              "claude-sonnet-4-6",
+              "claude-sonnet-4-5"
+            ],
+            "status": "active",
+            "isDefault": true,
+            "provider": "anthropic",
+            "tags": [
+              "recommended"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "200k"
+            },
+            "compatibility": {},
+            "launchRemediation": null,
+            "defaultOptIn": true
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6[1m]",
+            "displayName": "Sonnet (1M context)",
+            "description": "Sonnet 4.6 for long sessions",
+            "aliases": [
+              "sonnet[1m]",
+              "claude-sonnet-4-6-1m",
+              "claude-sonnet-4-5-1m"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "long-context"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "1m"
+            },
+            "compatibility": {},
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "haiku",
             "displayName": "Haiku",
-            "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+            "description": "Haiku 4.5 · Fastest for quick answers",
             "aliases": [
               "claude-haiku-4-5"
             ],
@@ -255,7 +262,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           }
         ],
         "controls": [
@@ -539,11 +547,12 @@
             "launchRemediation": {
               "kind": "managed_reinstall",
               "message": "Update Codex tools and retry."
-            }
+            },
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.4",
-            "displayName": "gpt-5.4",
+            "displayName": "GPT-5.4",
             "description": "Strong model for everyday coding.",
             "aliases": [],
             "status": "active",
@@ -556,11 +565,12 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.4-mini",
-            "displayName": "GPT-5.4-Mini",
+            "displayName": "GPT-5.4 Mini",
             "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
             "aliases": [],
             "status": "active",
@@ -575,11 +585,12 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.3-codex",
-            "displayName": "gpt-5.3-codex",
+            "displayName": "GPT-5.3 Codex",
             "description": "Coding-optimized model.",
             "aliases": [],
             "status": "active",
@@ -592,11 +603,12 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.3-codex-spark",
-            "displayName": "GPT-5.3-Codex-Spark",
+            "displayName": "GPT-5.3 Codex Spark",
             "description": "Ultra-fast coding model.",
             "aliases": [],
             "status": "active",
@@ -611,11 +623,12 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.2",
-            "displayName": "gpt-5.2",
+            "displayName": "GPT-5.2",
             "description": "Optimized for professional work and long-running agents.",
             "aliases": [],
             "status": "active",
@@ -628,7 +641,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           }
         ],
         "controls": [
@@ -923,7 +937,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gemini-2.5-pro",
@@ -940,7 +955,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gemini-2.5-flash",
@@ -959,7 +975,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "gemini-2.5-flash-lite",
@@ -978,7 +995,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "auto-gemini-3",
@@ -997,7 +1015,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "gemini-3-pro-preview",
@@ -1016,7 +1035,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gemini-3-flash-preview",
@@ -1036,7 +1056,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "gemini-3.1-flash-lite-preview",
@@ -1056,7 +1077,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": false
           },
           {
             "id": "gemini-3.1-pro-preview",
@@ -1077,7 +1099,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           }
         ],
         "controls": [
@@ -1209,19 +1232,20 @@
         "docsUrl": "https://docs.cursor.com/cli/acp"
       },
       "session": {
-        "defaultModelId": "default[]",
+        "defaultModelId": "composer-2-fast",
         "defaultModeId": "agent",
-        "dynamicModels": false,
+        "dynamicModels": true,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
-            "default[]",
-            "composer-2[fast=true]",
-            "gpt-5.5[context=272k,reasoning=medium,fast=false]",
-            "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
-            "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]"
+            "auto",
+            "composer-2-fast",
+            "gpt-5.3-codex",
+            "gpt-5.3-codex-high",
+            "claude-4.6-sonnet-medium",
+            "claude-opus-4-7-xhigh"
           ],
           "allowUserVisibleModelSelection": true,
-          "moreModelsSource": "none"
+          "moreModelsSource": "lastKnownLiveSnapshot"
         },
         "promptCapabilities": {
           "image": true,
@@ -1230,411 +1254,800 @@
         },
         "models": [
           {
-            "id": "default[]",
+            "id": "auto",
             "displayName": "Auto",
-            "description": null,
-            "aliases": [],
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true,
+            "aliases": [
+              "default[]"
+            ]
+          },
+          {
+            "id": "composer-2-fast",
+            "displayName": "Composer 2 Fast",
             "status": "active",
             "isDefault": true,
-            "provider": "cursor",
-            "tags": [
-              "recommended"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": true,
+            "aliases": [
+              "composer-2[fast=true]"
+            ]
           },
           {
-            "id": "composer-2[fast=true]",
-            "displayName": "composer-2",
-            "description": null,
-            "aliases": [],
+            "id": "composer-2",
+            "displayName": "Composer 2",
             "status": "active",
             "isDefault": false,
-            "provider": "cursor",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "composer-1.5[]",
-            "displayName": "composer-1.5",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.3-codex-low",
+            "displayName": "Codex 5.3 Low",
             "status": "active",
             "isDefault": false,
-            "provider": "cursor",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.3-codex[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.3-codex",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.3-codex-low-fast",
+            "displayName": "Codex 5.3 Low Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
-            "displayName": "claude-sonnet-4-6",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.3-codex",
+            "displayName": "Codex 5.3",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [],
-            "capabilities": {
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": true,
+            "aliases": [
+              "gpt-5.3-codex[reasoning=medium,fast=false]"
+            ]
           },
           {
-            "id": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
-            "displayName": "gpt-5.5",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.3-codex-fast",
+            "displayName": "Codex 5.3 Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [
-              "frontier"
-            ],
-            "capabilities": {
-              "contextWindow": "272k"
-            },
-            "compatibility": {},
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-high",
+            "displayName": "Codex 5.3 High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "gpt-5.3-codex-high-fast",
+            "displayName": "Codex 5.3 High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-xhigh",
+            "displayName": "Codex 5.3 Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-xhigh-fast",
+            "displayName": "Codex 5.3 Extra High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2",
+            "displayName": "GPT-5.2",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-spark-preview-low",
+            "displayName": "Codex 5.3 Spark Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-spark-preview",
+            "displayName": "Codex 5.3 Spark",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-spark-preview-high",
+            "displayName": "Codex 5.3 Spark High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.3-codex-spark-preview-xhigh",
+            "displayName": "Codex 5.3 Spark Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-low",
+            "displayName": "Codex 5.2 Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-low-fast",
+            "displayName": "Codex 5.2 Low Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex",
+            "displayName": "Codex 5.2",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-fast",
+            "displayName": "Codex 5.2 Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-high",
+            "displayName": "Codex 5.2 High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-high-fast",
+            "displayName": "Codex 5.2 High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-xhigh",
+            "displayName": "Codex 5.2 Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-codex-xhigh-fast",
+            "displayName": "Codex 5.2 Extra High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-low",
+            "displayName": "Codex 5.1 Max Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-low-fast",
+            "displayName": "Codex 5.1 Max Low Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-medium",
+            "displayName": "Codex 5.1 Max",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-medium-fast",
+            "displayName": "Codex 5.1 Max Medium Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-high",
+            "displayName": "Codex 5.1 Max High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-high-fast",
+            "displayName": "Codex 5.1 Max High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-xhigh",
+            "displayName": "Codex 5.1 Max Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-max-xhigh-fast",
+            "displayName": "Codex 5.1 Max Extra High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-high",
+            "displayName": "GPT-5.5 1M High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-high-fast",
+            "displayName": "GPT-5.5 High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-7-thinking-high",
+            "displayName": "Opus 4.7 1M High Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-high",
+            "displayName": "GPT-5.4 1M High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-high-fast",
+            "displayName": "GPT-5.4 High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-high-thinking",
+            "displayName": "Opus 4.6 1M Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-high-thinking-fast",
+            "displayName": "Opus 4.6 1M Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-none",
+            "displayName": "GPT-5.5 1M None",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-none-fast",
+            "displayName": "GPT-5.5 None Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-low",
+            "displayName": "GPT-5.5 1M Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-low-fast",
+            "displayName": "GPT-5.5 Low Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.5-medium",
+            "displayName": "GPT-5.5 1M",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false,
             "launchRemediation": {
               "kind": "external_update",
               "message": "Update Cursor tools from Agent Settings, then retry."
             }
           },
           {
-            "id": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]",
-            "displayName": "claude-opus-4-7",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.5-medium-fast",
+            "displayName": "GPT-5.5 Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "frontier"
-            ],
-            "capabilities": {
-              "contextWindow": "300k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
-            "displayName": "gpt-5.4",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.5-extra-high",
+            "displayName": "GPT-5.5 1M Extra High",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [],
-            "capabilities": {
-              "contextWindow": "272k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
-            "displayName": "claude-opus-4-6",
-            "description": null,
-            "aliases": [],
+            "id": "gpt-5.5-extra-high-fast",
+            "displayName": "GPT-5.5 Extra High Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [],
-            "capabilities": {
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "claude-opus-4-5[thinking=true]",
-            "displayName": "claude-opus-4-5",
-            "description": null,
-            "aliases": [],
+            "id": "claude-4.6-sonnet-medium",
+            "displayName": "Sonnet 4.6 1M",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": true,
+            "aliases": [
+              "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]"
+            ]
           },
           {
-            "id": "gpt-5.2[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.2",
-            "description": null,
-            "aliases": [],
+            "id": "claude-4.6-sonnet-medium-thinking",
+            "displayName": "Sonnet 4.6 1M Thinking",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gemini-3.1-pro[]",
-            "displayName": "gemini-3.1-pro",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-low",
+            "displayName": "Opus 4.7 1M Low",
             "status": "active",
             "isDefault": false,
-            "provider": "google",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.4-mini[reasoning=medium]",
-            "displayName": "gpt-5.4-mini",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-low-fast",
+            "displayName": "Opus 4.7 1M Low Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.4-nano[reasoning=medium]",
-            "displayName": "gpt-5.4-nano",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-medium",
+            "displayName": "Opus 4.7 1M Medium",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "claude-haiku-4-5[thinking=true]",
-            "displayName": "claude-haiku-4-5",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-medium-fast",
+            "displayName": "Opus 4.7 1M Medium Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.3-codex-spark[reasoning=medium]",
-            "displayName": "gpt-5.3-codex-spark",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-high",
+            "displayName": "Opus 4.7 1M High",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "grok-4.3[context=200k]",
-            "displayName": "grok-4.3",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-high-fast",
+            "displayName": "Opus 4.7 1M High Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "xai",
-            "tags": [],
-            "capabilities": {
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "grok-4-20[thinking=true]",
-            "displayName": "grok-4-20",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-xhigh",
+            "displayName": "Opus 4.7 1M",
             "status": "active",
             "isDefault": false,
-            "provider": "xai",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": true,
+            "aliases": [
+              "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]"
+            ]
           },
           {
-            "id": "claude-sonnet-4-5[thinking=true,context=200k]",
-            "displayName": "claude-sonnet-4-5",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-xhigh-fast",
+            "displayName": "Opus 4.7 1M Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [],
-            "capabilities": {
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.2-codex[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.2-codex",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-max",
+            "displayName": "Opus 4.7 1M Max",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
-            "displayName": "gpt-5.1-codex-max",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-max-fast",
+            "displayName": "Opus 4.7 1M Max Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.1[reasoning=medium]",
-            "displayName": "gpt-5.1",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-low",
+            "displayName": "Opus 4.7 1M Low Thinking",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gemini-3-flash[]",
-            "displayName": "gemini-3-flash",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-low-fast",
+            "displayName": "Opus 4.7 1M Low Thinking Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "google",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5.1-codex-mini[reasoning=medium]",
-            "displayName": "gpt-5.1-codex-mini",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-medium",
+            "displayName": "Opus 4.7 1M Medium Thinking",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "claude-sonnet-4[thinking=false,context=200k]",
-            "displayName": "claude-sonnet-4",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-medium-fast",
+            "displayName": "Opus 4.7 1M Medium Thinking Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
-            "tags": [],
-            "capabilities": {
-              "contextWindow": "200k"
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gpt-5-mini[]",
-            "displayName": "gpt-5-mini",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-high-fast",
+            "displayName": "Opus 4.7 1M High Thinking Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "openai",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "gemini-2.5-flash[]",
-            "displayName": "gemini-2.5-flash",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-xhigh",
+            "displayName": "Opus 4.7 1M Thinking",
             "status": "active",
             "isDefault": false,
-            "provider": "google",
-            "tags": [
-              "fast"
-            ],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
           },
           {
-            "id": "kimi-k2.5[]",
-            "displayName": "kimi-k2.5",
-            "description": null,
-            "aliases": [],
+            "id": "claude-opus-4-7-thinking-xhigh-fast",
+            "displayName": "Opus 4.7 1M Thinking Fast",
             "status": "active",
             "isDefault": false,
-            "provider": "moonshot",
-            "tags": [],
-            "capabilities": {},
-            "compatibility": {},
-            "launchRemediation": null
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-7-thinking-max",
+            "displayName": "Opus 4.7 1M Max Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-7-thinking-max-fast",
+            "displayName": "Opus 4.7 1M Max Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "grok-4.3",
+            "displayName": "Grok 4.3 1M",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-low",
+            "displayName": "GPT-5.4 1M Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-medium",
+            "displayName": "GPT-5.4 1M",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-medium-fast",
+            "displayName": "GPT-5.4 Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-xhigh",
+            "displayName": "GPT-5.4 1M Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-xhigh-fast",
+            "displayName": "GPT-5.4 Extra High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-high",
+            "displayName": "Opus 4.6 1M",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-max",
+            "displayName": "Opus 4.6 1M Max",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-max-thinking",
+            "displayName": "Opus 4.6 1M Max Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-max-thinking-fast",
+            "displayName": "Opus 4.6 1M Max Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.5-opus-high",
+            "displayName": "Opus 4.5",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.5-opus-high-thinking",
+            "displayName": "Opus 4.5 Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-low",
+            "displayName": "GPT-5.2 Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-low-fast",
+            "displayName": "GPT-5.2 Low Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-fast",
+            "displayName": "GPT-5.2 Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-high",
+            "displayName": "GPT-5.2 High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-high-fast",
+            "displayName": "GPT-5.2 High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-xhigh",
+            "displayName": "GPT-5.2 Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.2-xhigh-fast",
+            "displayName": "GPT-5.2 Extra High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gemini-3.1-pro",
+            "displayName": "Gemini 3.1 Pro",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-mini-none",
+            "displayName": "GPT-5.4 Mini None",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-mini-low",
+            "displayName": "GPT-5.4 Mini Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-mini-medium",
+            "displayName": "GPT-5.4 Mini",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-mini-high",
+            "displayName": "GPT-5.4 Mini High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-mini-xhigh",
+            "displayName": "GPT-5.4 Mini Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-nano-none",
+            "displayName": "GPT-5.4 Nano None",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-nano-low",
+            "displayName": "GPT-5.4 Nano Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-nano-medium",
+            "displayName": "GPT-5.4 Nano",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-nano-high",
+            "displayName": "GPT-5.4 Nano High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.4-nano-xhigh",
+            "displayName": "GPT-5.4 Nano Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.5-sonnet",
+            "displayName": "Sonnet 4.5",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.5-sonnet-thinking",
+            "displayName": "Sonnet 4.5 Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-low",
+            "displayName": "GPT-5.1 Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1",
+            "displayName": "GPT-5.1",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-high",
+            "displayName": "GPT-5.1 High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gemini-3-flash",
+            "displayName": "Gemini 3 Flash",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-mini-low",
+            "displayName": "Codex 5.1 Mini Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-mini",
+            "displayName": "Codex 5.1 Mini",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5.1-codex-mini-high",
+            "displayName": "Codex 5.1 Mini High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4-sonnet",
+            "displayName": "Sonnet 4",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4-sonnet-thinking",
+            "displayName": "Sonnet 4 Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "gpt-5-mini",
+            "displayName": "GPT-5 Mini",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "kimi-k2.5",
+            "displayName": "Kimi K2.5",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
           }
         ],
         "controls": [
@@ -1644,7 +2057,7 @@
             "description": "Controls which model is used for responses",
             "type": "select",
             "category": "model",
-            "defaultValue": "default[]",
+            "defaultValue": "composer-2-fast",
             "apply": {
               "createField": "modelId",
               "liveConfigId": "model",
@@ -1751,12 +2164,10 @@
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
             "opencode/big-pickle",
-            "opencode/gpt-5-nano",
-            "opencode/nemotron-3-super-free",
+            "opencode/deepseek-v4-flash-free",
             "opencode/minimax-m2.5-free",
-            "opencode/hy3-preview-free",
-            "anthropic/claude-sonnet-4-6",
-            "anthropic/claude-opus-4-7"
+            "opencode/nemotron-3-super-free",
+            "opencode/ring-2.6-1t-free"
           ],
           "allowUserVisibleModelSelection": true,
           "moreModelsSource": "lastKnownLiveSnapshot"
@@ -1769,7 +2180,7 @@
         "models": [
           {
             "id": "opencode/big-pickle",
-            "displayName": "OpenCode Zen/Big Pickle",
+            "displayName": "Big Pickle",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1784,17 +2195,19 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
-            "id": "opencode/gpt-5-nano",
-            "displayName": "OpenCode Zen/GPT-5 Nano",
+            "id": "opencode/deepseek-v4-flash-free",
+            "displayName": "DeepSeek V4 Flash Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",
             "tags": [
+              "free",
               "fast"
             ],
             "capabilities": {
@@ -1803,30 +2216,12 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "opencode/nemotron-3-super-free",
-            "displayName": "OpenCode Zen/Nemotron 3 Super Free",
-            "description": null,
-            "aliases": [],
-            "status": "active",
-            "isDefault": false,
-            "provider": "opencode",
-            "tags": [
-              "free"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
             "id": "opencode/minimax-m2.5-free",
-            "displayName": "OpenCode Zen/MiniMax M2.5 Free",
+            "displayName": "MiniMax M2.5 Free",
             "description": null,
             "aliases": [],
             "status": "active",
@@ -1841,19 +2236,19 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
-            "id": "opencode/hy3-preview-free",
-            "displayName": "OpenCode Zen/Hy3 preview Free",
+            "id": "opencode/nemotron-3-super-free",
+            "displayName": "Nemotron 3 Super Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",
             "tags": [
-              "free",
-              "preview"
+              "free"
             ],
             "capabilities": {
               "image": true,
@@ -1861,18 +2256,19 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           },
           {
-            "id": "anthropic/claude-sonnet-4-6",
-            "displayName": "Anthropic/Claude Sonnet 4.6",
+            "id": "opencode/ring-2.6-1t-free",
+            "displayName": "Ring 2.6 1T Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
-            "provider": "anthropic",
+            "provider": "opencode",
             "tags": [
-              "recommended"
+              "free"
             ],
             "capabilities": {
               "image": true,
@@ -1880,26 +2276,8 @@
               "contextWindow": null
             },
             "compatibility": {},
-            "launchRemediation": null
-          },
-          {
-            "id": "anthropic/claude-opus-4-7",
-            "displayName": "Anthropic/Claude Opus 4.7",
-            "description": null,
-            "aliases": [],
-            "status": "active",
-            "isDefault": false,
-            "provider": "anthropic",
-            "tags": [
-              "frontier"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null
+            "launchRemediation": null,
+            "defaultOptIn": true
           }
         ],
         "controls": [

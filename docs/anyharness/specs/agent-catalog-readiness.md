@@ -29,7 +29,7 @@ code must live outside `catalog/**`.
 
 ## Truth Sources
 
-There are three distinct truths. Do not collapse them.
+There are four distinct truths. Do not collapse them.
 
 ```text
 Cloud product catalog
@@ -40,6 +40,12 @@ AnyHarness agent catalog
   Target-runtime support manifest. It says what this runtime knows how to
   install, discover, authenticate, and launch.
 
+AnyHarness dynamic model registry snapshot
+  Target-local, runtime-refreshed model list for provider-agnostic harnesses
+  such as Cursor and OpenCode. It may be workspace-scoped when the provider's
+  model list depends on workspace config. It never carries trusted executable,
+  install, auth, or launch metadata.
+
 Live ACP session config
   Actual truth for an active session after the agent process starts and reports
   its live model/config capabilities.
@@ -49,6 +55,8 @@ Consequences:
 
 - Desktop may render optimistically from cloud/catalog product data.
 - AnyHarness must still validate and resolve what the target can actually run.
+- Dynamic model registry snapshots may refine target model availability but
+  must not mutate the bundled catalog or influence trusted executable behavior.
 - A live session's active model/config truth comes from ACP live config, not
   from the static AnyHarness catalog.
 - AnyHarness catalog endpoints, if exposed, are target capability/readiness
@@ -87,6 +95,8 @@ legacy split launch catalog directory
 
 Runtime catalog refresh/fetch/cache behavior is not supported in the migrated
 runtime. The bundled `AgentCatalogDocument` is the only runtime catalog input.
+Dynamic model refresh is a separate `model_registry/**` concern and stores
+target-local snapshots in SQLite; it must not rewrite catalog JSON.
 
 ## Trust Boundary
 
@@ -123,6 +133,14 @@ anyharness-lib/src/domains/agents/
     mod.rs
     launch_options.rs
     resolver.rs
+  model_registry/
+    mod.rs
+    model.rs
+    store.rs
+    projection.rs
+    refresh.rs
+    resolution.rs
+    service.rs
   credentials/
     mod.rs
   installer.rs                # transitional: outside catalog/**

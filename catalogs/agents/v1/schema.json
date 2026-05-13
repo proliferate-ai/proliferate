@@ -144,6 +144,12 @@
         },
         "isDefault": {
           "type": "boolean"
+        },
+        "defaultOptIn": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },

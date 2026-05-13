@@ -27,6 +27,7 @@ describe("user preference migration", () => {
       defaultChatModelIdByAgentKind: {
         " claude ": " claude-opus-4-5 ",
         assistant: " gpt-5 ",
+        cursor: " gpt-5.3-codex[reasoning=medium,fast=false] ",
         " ": "ignored",
         empty: " ",
       },
@@ -54,6 +55,7 @@ describe("user preference migration", () => {
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
       claude: "opus[1m]",
       assistant: "gpt-5",
+      cursor: "gpt-5.3-codex",
     });
     expect(result.preferences.defaultSessionModeByAgentKind).toEqual({
       assistant: " plan ",

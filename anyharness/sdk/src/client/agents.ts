@@ -1,9 +1,13 @@
 import type {
   AgentSummary,
+  AgentLaunchOptionsResponse,
+  AgentModelRegistrySnapshotResponse,
   InstallAgentRequest,
   InstallAgentResponse,
   ReconcileAgentsRequest,
   ReconcileAgentsResponse,
+  RefreshAgentModelRegistryRequest,
+  RefreshAgentModelRegistryResponse,
   StartAgentLoginResponse,
 } from "../types/agents.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
@@ -19,6 +23,37 @@ export class AgentsClient {
     return this.transport.get<AgentSummary>(
       `/v1/agents/${encodeURIComponent(kind)}`,
       options,
+    );
+  }
+
+  async getLaunchOptions(
+    workspaceId?: string | null,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<AgentLaunchOptionsResponse> {
+    return this.transport.get<AgentLaunchOptionsResponse>(
+      `/v1/agents/launch-options${workspaceQuery(workspaceId)}`,
+      options,
+    );
+  }
+
+  async getModelRegistry(
+    kind: string,
+    workspaceId?: string | null,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<AgentModelRegistrySnapshotResponse> {
+    return this.transport.get<AgentModelRegistrySnapshotResponse>(
+      `/v1/agents/${encodeURIComponent(kind)}/model-registry${workspaceQuery(workspaceId)}`,
+      options,
+    );
+  }
+
+  async refreshModelRegistry(
+    kind: string,
+    request: RefreshAgentModelRegistryRequest = {},
+  ): Promise<RefreshAgentModelRegistryResponse> {
+    return this.transport.post<RefreshAgentModelRegistryResponse>(
+      `/v1/agents/${encodeURIComponent(kind)}/model-registry/refresh`,
+      request,
     );
   }
 
@@ -51,4 +86,9 @@ export class AgentsClient {
       request,
     );
   }
+}
+
+function workspaceQuery(workspaceId?: string | null): string {
+  const trimmed = workspaceId?.trim() ?? "";
+  return trimmed ? `?workspace_id=${encodeURIComponent(trimmed)}` : "";
 }

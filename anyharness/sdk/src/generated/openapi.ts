@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/launch-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_agent_launch_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/reconcile": {
         parameters: {
             query?: never;
@@ -94,6 +110,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["start_agent_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/model-registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_agent_model_registry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/model-registry/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh_agent_model_registry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1615,6 +1663,44 @@ export interface components {
         AgentCredentialState: "ready" | "missing_env" | "login_required" | "unknown";
         /** @enum {string} */
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
+        AgentLaunchModelOption: {
+            aliases?: string[];
+            defaultOptIn?: boolean | null;
+            displayName: string;
+            id: string;
+            isDefault: boolean;
+        };
+        AgentLaunchOption: {
+            defaultModelId?: string | null;
+            displayName: string;
+            kind: string;
+            models: components["schemas"]["AgentLaunchModelOption"][];
+        };
+        AgentLaunchOptionsResponse: {
+            agents: components["schemas"]["AgentLaunchOption"][];
+            workspaceId?: string | null;
+        };
+        AgentModelRegistryModel: {
+            aliases: string[];
+            defaultOptIn?: boolean | null;
+            description?: string | null;
+            displayName: string;
+            id: string;
+            isDefault: boolean;
+            provider?: string | null;
+            status: components["schemas"]["ModelCatalogStatus"];
+        };
+        AgentModelRegistrySnapshotResponse: {
+            errorMessage?: string | null;
+            expiresAt?: string | null;
+            kind: string;
+            models: components["schemas"]["AgentModelRegistryModel"][];
+            refreshedAt: string;
+            source: components["schemas"]["ModelRegistrySource"];
+            status: components["schemas"]["ModelRegistryStatus"];
+            warnings: string[];
+            workspaceId?: string | null;
+        };
         /** @enum {string} */
         AgentReadinessState: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
         /** @enum {string} */
@@ -2566,6 +2652,12 @@ export interface components {
             title?: string | null;
             updatedAt: string;
         };
+        /** @enum {string} */
+        ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
+        /** @enum {string} */
+        ModelRegistrySource: "bundled_catalog" | "provider_cli";
+        /** @enum {string} */
+        ModelRegistryStatus: "available" | "refresh_failed" | "agent_not_ready" | "unsupported";
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
@@ -2966,6 +3058,13 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
+        RefreshAgentModelRegistryRequest: {
+            forceProviderRefresh?: boolean;
+            workspaceId?: string | null;
+        };
+        RefreshAgentModelRegistryResponse: {
+            snapshot: components["schemas"]["AgentModelRegistrySnapshotResponse"];
+        };
         RenameWorkspaceFileEntryRequest: {
             newPath: string;
             path: string;
@@ -4034,6 +4133,29 @@ export interface operations {
             };
         };
     };
+    get_agent_launch_options: {
+        parameters: {
+            query?: {
+                /** @description Optional workspace scope for target-discovered model registries */
+                workspace_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List launchable agents and model options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLaunchOptionsResponse"];
+                };
+            };
+        };
+    };
     get_reconcile_status: {
         parameters: {
             query?: never;
@@ -4196,6 +4318,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_agent_model_registry: {
+        parameters: {
+            query?: {
+                /** @description Optional workspace scope for target-discovered model registries */
+                workspace_id?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Last known model registry snapshot for one agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModelRegistrySnapshotResponse"];
+                };
+            };
+            /** @description Agent or model registry snapshot not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    refresh_agent_model_registry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshAgentModelRegistryRequest"];
+            };
+        };
+        responses: {
+            /** @description Refreshed or attempted model registry snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshAgentModelRegistryResponse"];
                 };
             };
             /** @description Agent not found */

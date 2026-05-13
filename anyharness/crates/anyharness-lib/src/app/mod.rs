@@ -4,6 +4,8 @@ use std::sync::Arc;
 use crate::acp::manager::AcpManager;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
+use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
+use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::seed::AgentSeedStore;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -89,6 +91,7 @@ pub struct AppState {
     pub bearer_token: Option<String>,
     pub agent_seed_store: AgentSeedStore,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
+    pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
@@ -143,6 +146,11 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
+        let dynamic_model_registry_service = Arc::new(DynamicModelRegistryService::new(
+            DynamicModelRegistryStore::new(db.clone()),
+            WorkspaceStore::new(db.clone()),
+            runtime_home.clone(),
+        ));
         let process_service = Arc::new(ProcessService::new());
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
@@ -158,6 +166,7 @@ impl AppState {
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
+            DynamicModelRegistryStore::new(db.clone()),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
@@ -376,6 +385,7 @@ impl AppState {
             bearer_token,
             agent_seed_store,
             agent_reconcile_service,
+            dynamic_model_registry_service,
             repo_root_service,
             workspace_runtime,
             files_runtime,

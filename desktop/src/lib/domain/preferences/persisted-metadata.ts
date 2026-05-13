@@ -31,6 +31,8 @@ export function selectPersistedUserPreferencesSlice(
     readableCodeFontSizeId: preferences.readableCodeFontSizeId,
     defaultChatAgentKind: preferences.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: preferences.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind:
+      preferences.chatModelVisibilityOverridesByAgentKind,
     defaultSessionModeByAgentKind: preferences.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
       preferences.defaultLiveSessionControlValuesByAgentKind,

@@ -78,14 +78,17 @@ start of the task, not after implementation has already started.
 - `docs/analytics/customerio.md`
   - Customer.io lifecycle messaging integration
 
-## Product architecture reference
+## Architecture reference
 
-- `docs/architecture/plugins-and-skills.md`
-  - reference architecture for plugin packages, skill bundles, plugin-owned
-    MCP servers, the plugins UI, and the session bundle boundary
+- `docs/architecture/model-catalog-and-dynamic-registries.md`
+  - model catalog, target-discovered model registry, user visibility intent,
+    and launch-time model resolution boundaries
 - `docs/architecture/cloud-worker-control-plane.md`
   - reference architecture for target workers, Cloud-mediated session control,
     command delivery, event ingestion, and projections
+- `docs/architecture/plugins-and-skills.md`
+  - reference architecture for plugin packages, skill bundles, plugin-owned
+    MCP servers, the plugins UI, and the session bundle boundary
 
 ## Deployment and environment reference
 

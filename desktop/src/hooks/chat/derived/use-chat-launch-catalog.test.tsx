@@ -13,6 +13,7 @@ import type {
 const mocks = vi.hoisted(() => ({
   useCloudAgentCatalog: vi.fn(),
   useAgentCatalog: vi.fn(),
+  useAgentLaunchOptionsQuery: vi.fn(),
 }));
 
 vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
@@ -21,6 +22,10 @@ vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: mocks.useAgentCatalog,
+}));
+
+vi.mock("@anyharness/sdk-react", () => ({
+  useAgentLaunchOptionsQuery: mocks.useAgentLaunchOptionsQuery,
 }));
 
 function launchAgent(
@@ -79,6 +84,12 @@ describe("useChatLaunchCatalog", () => {
         ["claude", { readiness: "ready" }],
       ]),
     });
+    mocks.useAgentLaunchOptionsQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
     useSessionSelectionStore.setState({
       pendingWorkspaceEntry: null,
       selectedWorkspaceId: "workspace-1",
@@ -99,6 +110,9 @@ describe("useChatLaunchCatalog", () => {
     const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
 
     expect(mocks.useCloudAgentCatalog).toHaveBeenCalledWith(true);
+    expect(mocks.useAgentLaunchOptionsQuery).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+    });
     expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual([
       "claude",
       "codex",
@@ -157,6 +171,64 @@ describe("useChatLaunchCatalog", () => {
       modelId: "gpt-5.5",
     });
     expect(result.current.snapshot?.agents.map((agent) => agent.kind)).toEqual(["codex"]);
+  });
+
+  it("uses runtime launch options when the target has refreshed dynamic models", () => {
+    mocks.useCloudAgentCatalog.mockReturnValue({
+      data: catalog([
+        {
+          ...launchAgent("cursor", "auto", "Cursor"),
+          dynamicModels: true,
+          modelDisplayPolicy: {
+            defaultVisibleModelIds: ["auto"],
+            allowUserVisibleModelSelection: true,
+            moreModelsSource: "lastKnownLiveSnapshot",
+          },
+        },
+      ]),
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    mocks.useAgentCatalog.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      error: null,
+      agentsByKind: new Map([["cursor", { readiness: "ready" }]]),
+    });
+    mocks.useAgentLaunchOptionsQuery.mockReturnValue({
+      data: {
+        workspaceId: "workspace-1",
+        agents: [{
+          kind: "cursor",
+          displayName: "Cursor",
+          defaultModelId: "gpt-5.4-medium",
+          models: [{
+            id: "gpt-5.4-medium",
+            displayName: "GPT-5.4 1M",
+            isDefault: true,
+            defaultOptIn: true,
+          }],
+        }],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "cursor",
+      defaultChatModelIdByAgentKind: { cursor: "gpt-5.4-medium" },
+    });
+
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+
+    expect(result.current.launchAgents[0]?.models.map((model) => model.id)).toEqual([
+      "gpt-5.4-medium",
+    ]);
+    expect(result.current.defaultLaunchSelection).toEqual({
+      kind: "cursor",
+      modelId: "gpt-5.4-medium",
+    });
   });
 
   it("surfaces target readiness errors distinctly from cloud catalog errors", () => {

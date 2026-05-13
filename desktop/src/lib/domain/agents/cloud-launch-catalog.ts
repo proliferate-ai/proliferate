@@ -77,6 +77,7 @@ export interface DesktopLaunchModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
+  defaultOptIn?: boolean | null;
   launchRemediation?: DesktopAgentLaunchRemediation | null;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
 }
@@ -128,6 +129,19 @@ export interface DesktopLaunchModelRegistry {
   models: DesktopLaunchModelRegistryModel[];
 }
 
+export interface RuntimeAgentLaunchOptions {
+  kind: string;
+  displayName: string;
+  defaultModelId?: string | null;
+  models: Array<{
+    id: string;
+    displayName: string;
+    aliases?: string[];
+    isDefault: boolean;
+    defaultOptIn?: boolean | null;
+  }>;
+}
+
 interface CloudAgentCatalogResponseInput {
   schemaVersion: 1;
   catalogVersion: string;
@@ -162,6 +176,7 @@ interface CloudAgentCatalogModelInput {
   aliases?: string[];
   status: DesktopAgentCatalogStatus;
   isDefault: boolean;
+  defaultOptIn?: boolean | null;
   provider?: string | null;
   tags?: string[];
   capabilities?: Record<string, unknown> | null;
@@ -230,6 +245,135 @@ export function buildDesktopLaunchModelRegistries(
   }));
 }
 
+export function mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries(
+  cloudRegistries: readonly DesktopLaunchModelRegistry[],
+  runtimeAgents: readonly RuntimeAgentLaunchOptions[] | null | undefined,
+  options: { includeCloudOnlyAgents?: boolean } = {},
+): DesktopLaunchModelRegistry[] {
+  return buildDesktopLaunchModelRegistries(
+    mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      cloudRegistries.map((registry) => ({
+        kind: registry.kind,
+        displayName: registry.displayName,
+        description: null,
+        defaultModelId: registry.defaultModelId ?? null,
+        defaultModeId: null,
+        dynamicModels: true,
+        modelDisplayPolicy: null,
+        promptCapabilities: null,
+        models: registry.models.map((model) => ({
+          ...model,
+          aliases: model.aliases ?? [],
+          status: model.status ?? "active",
+          provider: null,
+          tags: [],
+          launchRemediation: model.launchRemediation ?? null,
+        })),
+        launchControls: [],
+      })),
+      runtimeAgents,
+      options,
+    ),
+  );
+}
+
+export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+  cloudAgents: readonly DesktopAgentLaunchAgent[],
+  runtimeAgents: readonly RuntimeAgentLaunchOptions[] | null | undefined,
+  options: { includeCloudOnlyAgents?: boolean } = {},
+): DesktopAgentLaunchAgent[] {
+  if (!runtimeAgents || runtimeAgents.length === 0) {
+    return [...cloudAgents];
+  }
+
+  const cloudByKind = new Map(cloudAgents.map((agent) => [agent.kind, agent]));
+  const runtimeKinds = new Set(runtimeAgents.map((agent) => agent.kind));
+
+  const mergedAgents = runtimeAgents.map((agent) => {
+    const cloud = cloudByKind.get(agent.kind);
+    const cloudModelsByIdOrAlias = buildCloudModelLookup(cloud);
+    const defaultModelId = agent.defaultModelId ?? cloud?.defaultModelId ?? null;
+
+    return {
+      kind: agent.kind,
+      displayName: cloud?.displayName ?? agent.displayName,
+      description: cloud?.description ?? null,
+      defaultModelId,
+      defaultModeId: cloud?.defaultModeId ?? null,
+      dynamicModels: cloud?.dynamicModels ?? true,
+      modelDisplayPolicy: cloud?.modelDisplayPolicy ?? null,
+      promptCapabilities: cloud?.promptCapabilities ?? null,
+      models: agent.models.map((model) => {
+        const cloudModel =
+          cloudModelsByIdOrAlias.get(model.id)
+          ?? model.aliases?.map((alias) => cloudModelsByIdOrAlias.get(alias)).find(Boolean)
+          ?? null;
+        return {
+          ...cloudModel,
+          id: model.id,
+          displayName: model.displayName,
+          description: cloudModel?.description ?? null,
+          aliases: mergeModelAliases(model.id, model.aliases ?? [], cloudModel),
+          status: cloudModel?.status ?? "active",
+          isDefault: model.isDefault || model.id === defaultModelId,
+          defaultOptIn: model.defaultOptIn ?? cloudModel?.defaultOptIn ?? null,
+          provider: cloudModel?.provider ?? null,
+          tags: cloudModel?.tags ?? [],
+          launchRemediation: cloudModel?.launchRemediation ?? null,
+          sessionDefaultControls: cloudModel?.sessionDefaultControls ?? [],
+        };
+      }),
+      launchControls: cloud?.launchControls ?? [],
+    };
+  });
+
+  if (!options.includeCloudOnlyAgents) {
+    return mergedAgents;
+  }
+
+  return [
+    ...mergedAgents,
+    ...cloudAgents.filter((agent) => !runtimeKinds.has(agent.kind)),
+  ];
+}
+
+function buildCloudModelLookup(
+  cloud: DesktopAgentLaunchAgent | undefined,
+): Map<string, DesktopAgentLaunchModel> {
+  const modelsByIdOrAlias = new Map<string, DesktopAgentLaunchModel>();
+  for (const model of cloud?.models ?? []) {
+    modelsByIdOrAlias.set(model.id, model);
+    for (const alias of model.aliases) {
+      if (!modelsByIdOrAlias.has(alias)) {
+        modelsByIdOrAlias.set(alias, model);
+      }
+    }
+  }
+  return modelsByIdOrAlias;
+}
+
+function mergeModelAliases(
+  runtimeModelId: string,
+  runtimeAliases: readonly string[],
+  cloudModel: DesktopAgentLaunchModel | null,
+): string[] {
+  const aliases = new Set<string>();
+  for (const alias of runtimeAliases) {
+    if (alias !== runtimeModelId) {
+      aliases.add(alias);
+    }
+  }
+  if (cloudModel && cloudModel.id !== runtimeModelId) {
+    aliases.add(cloudModel.id);
+  }
+  for (const alias of cloudModel?.aliases ?? []) {
+    if (alias !== runtimeModelId) {
+      aliases.add(alias);
+    }
+  }
+  return [...aliases];
+}
+
 export function dynamicLaunchAgentAcceptsModel(
   agent: Pick<DesktopAgentLaunchAgent, "dynamicModels" | "modelDisplayPolicy">,
 ): boolean {
@@ -284,6 +428,7 @@ function projectCloudModel(model: CloudAgentCatalogModelInput): DesktopAgentLaun
     aliases: model.aliases ?? [],
     status: model.status,
     isDefault: model.isDefault,
+    defaultOptIn: model.defaultOptIn ?? null,
     provider: model.provider ?? null,
     tags: model.tags ?? [],
     launchRemediation: model.launchRemediation

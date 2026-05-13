@@ -1,73 +1,35 @@
-import { useMemo, type ReactNode } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { type ReactNode } from "react";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
-import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
+import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
 import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
-  buildSettingsAgentDefaultRows,
   withUpdatedDefaultLiveSessionControlValueByAgentKind,
 } from "@/lib/domain/settings/agent-defaults";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-
-const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
-const AGENT_DEFAULT_SECTION_ORDER: readonly string[] = [
-  "claude",
-  "codex",
-  "gemini",
-  "cursor",
-  "opencode",
-];
 
 export function AgentDefaultsPane() {
-  const { connectionState, runtimeError } = useHarnessConnectionStore(useShallow((state) => ({
-    connectionState: state.connectionState,
-    runtimeError: state.error,
-  })));
   const {
-    data: modelRegistries = EMPTY_MODEL_REGISTRIES,
-    isLoading: modelRegistriesLoading,
-  } = useCloudLaunchModelRegistries();
-  const { agents, isLoading: agentsLoading, readyAgentKinds } = useAgentCatalog();
-  const preferences = useUserPreferencesStore(useShallow((state) => ({
-    defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
-    defaultLiveSessionControlValuesByAgentKind:
-      state.defaultLiveSessionControlValuesByAgentKind,
-    set: state.set,
-    setMultiple: state.setMultiple,
-  })));
-
-  const agentDefaultRows = useMemo(
-    () => buildSettingsAgentDefaultRows({
-      modelRegistries,
-      readyAgentKinds,
-      preferences,
-    }),
-    [modelRegistries, preferences, readyAgentKinds],
-  );
-  const orderedAgentDefaultRows = useMemo(() => {
-    const rank = new Map(AGENT_DEFAULT_SECTION_ORDER.map((kind, index) => [kind, index]));
-    return [...agentDefaultRows].sort((a, b) => {
-      const leftRank = rank.get(a.kind) ?? Number.MAX_SAFE_INTEGER;
-      const rightRank = rank.get(b.kind) ?? Number.MAX_SAFE_INTEGER;
-      return leftRank === rightRank
-        ? a.displayName.localeCompare(b.displayName)
-        : leftRank - rightRank;
-    });
-  }, [agentDefaultRows]);
-  const primaryHarnessLabel =
-    agentDefaultRows.find((row) => row.isPrimary)?.displayName ?? "Choose harness";
+    connectionState,
+    runtimeError,
+    agents,
+    agentsLoading,
+    modelRegistries,
+    modelRegistriesLoading,
+    runtimeLaunchOptions,
+    refreshModelRegistry,
+    preferences,
+    agentDefaultRows,
+    orderedAgentDefaultRows,
+    primaryHarnessLabel,
+  } = useModelRegistrySettings();
 
   return (
     <section className="space-y-5">
@@ -89,7 +51,7 @@ export function AgentDefaultsPane() {
                 {runtimeError ?? "Reconnect the runtime to edit launch defaults."}
               </p>
             </div>
-          ) : ((agentsLoading || modelRegistriesLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
+          ) : ((agentsLoading || modelRegistriesLoading || runtimeLaunchOptions.isLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
             <div className="p-3">
               <LoadingState
                 message="Loading agent defaults"
@@ -234,6 +196,51 @@ export function AgentDefaultsPane() {
                 />
               </SettingsCardRow>
             ))}
+
+            <ModelRegistryPane
+              agentKind={row.kind}
+              models={row.visibilityModels}
+              refreshable={row.kind === "cursor" || row.kind === "opencode"}
+              refreshing={refreshModelRegistry.isPending}
+              onRefresh={() => {
+                refreshModelRegistry.mutate({
+                  kind: row.kind,
+                  request: { forceProviderRefresh: false },
+                });
+              }}
+              onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {
+                if (!visible) {
+                  const visibleRows = row.visibilityModels.filter((model) => model.isVisible);
+                  if (visibleRows.length <= 1 && visibleRows.some((model) => model.id === modelId)) {
+                    return;
+                  }
+                }
+
+                const nextVisibilityOverrides = withUpdatedModelVisibilityOverride(
+                  preferences.chatModelVisibilityOverridesByAgentKind,
+                  row.kind,
+                  modelId,
+                  visible,
+                  catalogDefaultOptIn,
+                );
+                const nextVisibleModel = row.visibilityModels.find((model) =>
+                  model.id !== modelId && model.isVisible
+                ) ?? null;
+                const nextDefaultModelIds =
+                  !visible && row.selectedModel.id === modelId && nextVisibleModel
+                    ? withUpdatedDefaultModelIdByAgentKind(
+                      preferences.defaultChatModelIdByAgentKind,
+                      row.kind,
+                      nextVisibleModel.id,
+                    )
+                    : preferences.defaultChatModelIdByAgentKind;
+
+                preferences.setMultiple({
+                  chatModelVisibilityOverridesByAgentKind: nextVisibilityOverrides,
+                  defaultChatModelIdByAgentKind: nextDefaultModelIds,
+                });
+              }}
+            />
           </SettingsCard>
         </AgentDefaultsSection>
       ))}

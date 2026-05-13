@@ -13,6 +13,7 @@ export function useConfiguredLaunchReadiness(
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
   })));
   const launchCatalog = useChatLaunchCatalog({ activeSelection });
   const { agentsByKind } = useAgentCatalog();

@@ -20,7 +20,11 @@ import {
 import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-selection";
 import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import {
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  type DesktopAgentLaunchAgent,
+} from "@/lib/domain/agents/cloud-launch-catalog";
+import { getAgentLaunchOptions } from "@/lib/access/anyharness/agents";
 import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import {
   elapsedMs,
@@ -156,6 +160,7 @@ export function useWorkspaceBootstrapActions() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
   })));
   const lastViewedSessionByWorkspace = useWorkspaceUiStore(
     (state) => state.lastViewedSessionByWorkspace,
@@ -458,8 +463,27 @@ export function useWorkspaceBootstrapActions() {
         return { sessions };
       }
 
+      const runtimeLaunchOptionsStartedAt = startLatencyTimer();
+      const runtimeLaunchOptions = await getAgentLaunchOptions(
+        workspaceConnection,
+        workspaceConnection.anyharnessWorkspaceId,
+      ).catch(() => null);
+
+      logLatency("workspace.select.runtime_launch_options_loaded", {
+        workspaceId,
+        agentCount: runtimeLaunchOptions?.agents?.length ?? 0,
+        elapsedMs: elapsedMs(runtimeLaunchOptionsStartedAt),
+      });
+
+      if (!isCurrent()) {
+        return { sessions };
+      }
+
       const launchAgents = orderLaunchAgents(
-        launchCatalog?.agents ?? [],
+        mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+          launchCatalog?.agents ?? [],
+          runtimeLaunchOptions?.agents ?? null,
+        ),
         agentsByKind,
       );
       const defaultLaunch = resolveEffectiveLaunchSelection(

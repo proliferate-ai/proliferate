@@ -20,6 +20,12 @@ const selectionMocks = vi.hoisted(() => ({
     isError: false,
     error: null as Error | null,
   },
+  runtimeLaunchOptions: {
+    data: null as { agents: unknown[] } | null,
+    isLoading: false,
+    isError: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
@@ -28,6 +34,10 @@ vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
 
 vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
   useCloudLaunchModelRegistries: () => selectionMocks.modelRegistriesQuery,
+}));
+
+vi.mock("@anyharness/sdk-react", () => ({
+  useAgentLaunchOptionsQuery: () => selectionMocks.runtimeLaunchOptions,
 }));
 
 function agent(kind: string): AgentSummary {
@@ -63,6 +73,19 @@ function registry(kind: string): ModelRegistry {
   };
 }
 
+function registryWithModels(
+  kind: string,
+  models: ModelRegistry["models"],
+  defaultModelId = models[0]?.id ?? null,
+): ModelRegistry {
+  return {
+    kind,
+    displayName: kind,
+    defaultModelId,
+    models,
+  };
+}
+
 function resetMocks() {
   selectionMocks.agentCatalog.readyAgents = [];
   selectionMocks.agentCatalog.isLoading = false;
@@ -72,9 +95,14 @@ function resetMocks() {
   selectionMocks.modelRegistriesQuery.isLoading = false;
   selectionMocks.modelRegistriesQuery.isError = false;
   selectionMocks.modelRegistriesQuery.error = null;
+  selectionMocks.runtimeLaunchOptions.data = null;
+  selectionMocks.runtimeLaunchOptions.isLoading = false;
+  selectionMocks.runtimeLaunchOptions.isError = false;
+  selectionMocks.runtimeLaunchOptions.error = null;
   useUserPreferencesStore.setState({
     defaultChatAgentKind: "codex",
     defaultChatModelIdByAgentKind: {},
+    chatModelVisibilityOverridesByAgentKind: {},
   });
 }
 
@@ -135,5 +163,93 @@ describe("useHomeNextModelSelection", () => {
     }));
 
     expect(result.current.modelAvailabilityState).toBe("launchable");
+  });
+
+  it("uses visible model preferences for the home default launch selection", () => {
+    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
+    selectionMocks.modelRegistriesQuery.data = [
+      registryWithModels("codex", [
+        {
+          id: "default-model",
+          displayName: "Default Model",
+          isDefault: true,
+          status: "active",
+          defaultOptIn: true,
+        },
+        {
+          id: "fast-model",
+          displayName: "Fast Model",
+          isDefault: false,
+          status: "active",
+          defaultOptIn: true,
+        },
+      ], "default-model"),
+    ];
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "codex",
+      defaultChatModelIdByAgentKind: { codex: "default-model" },
+      chatModelVisibilityOverridesByAgentKind: {
+        codex: {
+          "default-model": false,
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+    }));
+
+    expect(result.current.effectiveModelSelection).toEqual({
+      kind: "codex",
+      modelId: "fast-model",
+    });
+    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
+      .toEqual(["fast-model"]);
+  });
+
+  it("uses runtime-refreshed dynamic models for home launch defaults", () => {
+    selectionMocks.agentCatalog.readyAgents = [agent("cursor")];
+    selectionMocks.modelRegistriesQuery.data = [
+      registryWithModels("cursor", [
+        {
+          id: "auto",
+          displayName: "Auto",
+          isDefault: true,
+          status: "active",
+          defaultOptIn: true,
+        },
+      ], "auto"),
+    ];
+    selectionMocks.runtimeLaunchOptions.data = {
+      agents: [{
+        kind: "cursor",
+        displayName: "Cursor",
+        defaultModelId: "anthropic/claude-sonnet-4-6",
+        models: [{
+          id: "anthropic/claude-sonnet-4-6",
+          displayName: "Claude Sonnet 4.6",
+          isDefault: true,
+          defaultOptIn: true,
+        }],
+      }],
+    };
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "cursor",
+      defaultChatModelIdByAgentKind: {
+        cursor: "anthropic/claude-sonnet-4-6",
+      },
+      chatModelVisibilityOverridesByAgentKind: {},
+    });
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+    }));
+
+    expect(result.current.effectiveModelSelection).toEqual({
+      kind: "cursor",
+      modelId: "anthropic/claude-sonnet-4-6",
+    });
+    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
+      .toEqual(["anthropic/claude-sonnet-4-6"]);
   });
 });
