@@ -10,17 +10,24 @@ use crate::domains::agents::model::ModelRegistryMetadata;
 use crate::domains::agents::readiness::launch_options::{
     workspace_session_launch_options_with_dynamic_registry, ResolvedWorkspaceLaunchOptions,
 };
+use crate::workspaces::store::WorkspaceStore;
 
 #[derive(Clone)]
 pub struct DynamicModelRegistryService {
     store: DynamicModelRegistryStore,
+    workspace_store: WorkspaceStore,
     runtime_home: PathBuf,
 }
 
 impl DynamicModelRegistryService {
-    pub fn new(store: DynamicModelRegistryStore, runtime_home: PathBuf) -> Self {
+    pub fn new(
+        store: DynamicModelRegistryStore,
+        workspace_store: WorkspaceStore,
+        runtime_home: PathBuf,
+    ) -> Self {
         Self {
             store,
+            workspace_store,
             runtime_home,
         }
     }
@@ -56,9 +63,20 @@ impl DynamicModelRegistryService {
             .get(agent_kind, options.workspace_id.as_deref())?
             .map(|snapshot| snapshot.models)
             .unwrap_or_default();
+        let workspace_path = options
+            .workspace_id
+            .as_deref()
+            .map(|workspace_id| {
+                self.workspace_store
+                    .find_by_id(workspace_id)?
+                    .map(|workspace| PathBuf::from(workspace.path))
+                    .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))
+            })
+            .transpose()?;
         let snapshot = refresh_snapshot_for_descriptor(
             &descriptor,
             &self.runtime_home,
+            workspace_path.as_deref(),
             options.workspace_id,
             options.force_provider_refresh,
             previous_models,

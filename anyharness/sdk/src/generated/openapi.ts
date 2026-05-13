@@ -1664,6 +1664,7 @@ export interface components {
         /** @enum {string} */
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
         AgentLaunchModelOption: {
+            aliases?: string[];
             defaultOptIn?: boolean | null;
             displayName: string;
             id: string;
@@ -4354,7 +4355,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentModelRegistrySnapshotResponse"];
                 };
             };
-            /** @description Agent not found */
+            /** @description Agent or model registry snapshot not found */
             404: {
                 headers: {
                     [name: string]: unknown;

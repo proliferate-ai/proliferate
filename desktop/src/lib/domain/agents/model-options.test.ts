@@ -27,12 +27,18 @@ function registry(overrides: Partial<AgentModelRegistry> & { kind: string }): Ag
   };
 }
 
-function model(id: string, displayName: string, isDefault: boolean): AgentModelRegistryModel {
+function model(
+  id: string,
+  displayName: string,
+  isDefault: boolean,
+  overrides: Partial<AgentModelRegistryModel> = {},
+): AgentModelRegistryModel {
   return {
     id,
     displayName,
     isDefault,
     status: "active",
+    ...overrides,
   };
 }
 
@@ -99,6 +105,34 @@ describe("resolveEffectiveAgentModelSelection", () => {
         codex: "gpt-5.4-mini",
       },
     })).toEqual({ kind: "codex", modelId: "gpt-5.4-mini" });
+  });
+
+  it("resolves preferred model aliases to canonical model ids", () => {
+    const groups = buildAgentModelGroups({
+      agents: [agent({ kind: "cursor" })],
+      modelRegistries: [
+        registry({
+          kind: "cursor",
+          defaultModelId: "us.anthropic.claude-sonnet-4-6",
+          models: [
+            model("us.anthropic.claude-sonnet-4-6", "Sonnet", true, {
+              aliases: ["sonnet"],
+            }),
+          ],
+        }),
+      ],
+      selected: null,
+    });
+
+    expect(resolveEffectiveAgentModelSelection(groups, null, {
+      defaultAgentKind: "cursor",
+      defaultModelIdByAgentKind: {
+        cursor: "sonnet",
+      },
+    })).toEqual({
+      kind: "cursor",
+      modelId: "us.anthropic.claude-sonnet-4-6",
+    });
   });
 
   it("keeps the primary harness when its preferred model is unavailable", () => {

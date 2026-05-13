@@ -9,6 +9,7 @@ export interface AgentModelSelection {
 export interface AgentModelOption extends AgentModelSelection {
   displayName: string;
   description: string | null;
+  aliases: string[];
   isDefault: boolean;
   isSelected: boolean;
 }
@@ -27,6 +28,7 @@ export interface AgentModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
+  defaultOptIn?: boolean | null;
 }
 
 export interface AgentModelRegistry {
@@ -97,8 +99,11 @@ export function buildAgentModelGroups({
           modelId: model.id,
           displayName: model.displayName,
           description: model.description ?? null,
+          aliases: model.aliases ?? [],
           isDefault: model.isDefault,
-          isSelected: selected?.kind === registry.kind && selected.modelId === model.id,
+          isSelected:
+            selected?.kind === registry.kind
+            && modelMatchesId(model, selected.modelId),
         })),
       } satisfies AgentModelGroup;
     })
@@ -121,7 +126,9 @@ export function findAgentModelSelection(
   }
 
   const group = groups.find((candidate) => candidate.kind === selection.kind) ?? null;
-  const model = group?.models.find((candidate) => candidate.modelId === selection.modelId) ?? null;
+  const model =
+    group?.models.find((candidate) => modelOptionMatchesId(candidate, selection.modelId))
+    ?? null;
   return group && model ? { group, model } : null;
 }
 
@@ -139,7 +146,7 @@ export function preferredAgentModelForGroup(
 ): AgentModelOption | null {
   const preferredModelId = defaultModelIdByAgentKind[group.kind];
   return preferredModelId
-    ? group.models.find((candidate) => candidate.modelId === preferredModelId) ?? null
+    ? group.models.find((candidate) => modelOptionMatchesId(candidate, preferredModelId)) ?? null
     : null;
 }
 
@@ -214,7 +221,7 @@ export function resolveAgentModelInfo(
 
   const group = groups.find((candidate) => candidate.kind === selection.kind);
   const registry = modelRegistries.find((candidate) => candidate.kind === selection.kind);
-  const model = registry?.models.find((candidate) => candidate.id === selection.modelId);
+  const model = registry?.models.find((candidate) => modelMatchesId(candidate, selection.modelId));
 
   return group && model
     ? {
@@ -223,4 +230,18 @@ export function resolveAgentModelInfo(
       model,
     }
     : null;
+}
+
+function modelMatchesId(
+  model: Pick<AgentModelRegistryModel, "id" | "aliases">,
+  modelId: string,
+): boolean {
+  return model.id === modelId || (model.aliases ?? []).includes(modelId);
+}
+
+function modelOptionMatchesId(
+  model: Pick<AgentModelOption, "modelId" | "aliases">,
+  modelId: string,
+): boolean {
+  return model.modelId === modelId || model.aliases.includes(modelId);
 }

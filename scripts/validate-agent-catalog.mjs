@@ -63,8 +63,8 @@ function validateModel(model, agentKind, modelIds, aliasIds) {
   if (model.isDefault !== true && model.isDefault !== false) {
     fail(`${agentKind}.${model.id}.isDefault must be boolean`);
   }
-  if (model.defaultOptIn !== undefined && model.defaultOptIn !== true && model.defaultOptIn !== false) {
-    fail(`${agentKind}.${model.id}.defaultOptIn must be boolean when present`);
+  if (model.defaultOptIn !== undefined && model.defaultOptIn !== null && model.defaultOptIn !== true && model.defaultOptIn !== false) {
+    fail(`${agentKind}.${model.id}.defaultOptIn must be boolean or null when present`);
   }
   if (model.defaultOptIn === true && model.status !== "active") {
     fail(`${agentKind}.${model.id}.defaultOptIn is only valid for active models`);

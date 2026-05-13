@@ -7,7 +7,7 @@ compute lifecycle, and cloud sync.
 Scope:
 
 - `server/proliferate/server/cloud/**`
-- `server/proliferate/db/models/cloud/**`
+- `server/proliferate/db/models/**`
 - `server/proliferate/db/store/cloud_sync/**`
 - `server/alembic/versions/**`
 - `anyharness/crates/proliferate-worker/**`
@@ -806,16 +806,16 @@ integrations/anyharness/
 
 ## Server Database Shape
 
-Use ORM models under `db/models/cloud/**`, stores under
+Use ORM models under flat files in `db/models/**`, stores under
 `db/store/cloud_sync/**`, and migrations under `server/alembic/versions/**`.
 
 ```text
-server/proliferate/db/models/cloud/
-  targets.py              # CloudTarget, CloudWorker, TargetInventory, status
-  commands.py             # CloudCommand, CloudCommandLease
-  events.py               # CloudSessionEvent, EventIngestCursor
-  projections.py          # WorkspaceSnapshot, SessionSnapshot, TranscriptSnapshot
-  artifacts.py            # CloudArtifactRef / blob retention metadata
+server/proliferate/db/models/
+  cloud_targets.py        # CloudTarget, CloudWorker, TargetInventory, status
+  cloud_commands.py       # CloudCommand, CloudCommandLease
+  cloud_events.py         # CloudSessionEvent, EventIngestCursor
+  cloud_projections.py    # WorkspaceSnapshot, SessionSnapshot, TranscriptSnapshot
+  cloud_artifacts.py      # CloudArtifactRef / blob retention metadata
 
 server/proliferate/db/store/cloud_sync/
   __init__.py
@@ -1110,6 +1110,10 @@ POST /v1/sessions/{session_id}/cancel
 
 GET  /v1/sessions/{session_id}/events?after_seq=...
 GET  /v1/sessions/{session_id}/stream?after_seq=...
+
+GET  /v1/agents/launch-options?workspace_id=...
+GET  /v1/agents/{kind}/model-registry?workspace_id=...
+POST /v1/agents/{kind}/model-registry/refresh
 ```
 
 If current routes use slightly different paths, keep the public route stable

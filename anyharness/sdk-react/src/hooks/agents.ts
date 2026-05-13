@@ -14,6 +14,7 @@ import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentLaunchOptionsKey,
+  anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentModelRegistryKey,
   anyHarnessAgentsKey,
   anyHarnessReconcileAgentsMutationKey,
@@ -99,7 +100,9 @@ export function useRefreshAgentModelRegistryMutation() {
         response.snapshot,
       );
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId),
+        queryKey: input.request?.workspaceId
+          ? anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId)
+          : anyHarnessAgentLaunchOptionsPrefixKey(runtimeUrl),
       });
       await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
     },

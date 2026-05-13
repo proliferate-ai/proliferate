@@ -75,4 +75,79 @@ describe("buildSettingsAgentDefaultRows", () => {
       staleStoredValue: null,
     });
   });
+
+  it("falls back to a visible model and marks the final visible model as required", () => {
+    const registries: ModelRegistry[] = [{
+      kind: "cursor",
+      displayName: "Cursor",
+      defaultModelId: "auto",
+      models: [
+        {
+          id: "auto",
+          displayName: "Auto",
+          isDefault: true,
+          status: "active",
+          defaultOptIn: false,
+        },
+        {
+          id: "hidden",
+          displayName: "Hidden",
+          isDefault: false,
+          status: "active",
+          defaultOptIn: false,
+        },
+      ],
+    }];
+
+    const rows = buildSettingsAgentDefaultRows({
+      modelRegistries: registries,
+      readyAgentKinds: new Set(["cursor"]),
+      preferences: {
+        defaultChatAgentKind: "cursor",
+        defaultChatModelIdByAgentKind: { cursor: "hidden" },
+        chatModelVisibilityOverridesByAgentKind: {},
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+    });
+
+    expect(rows[0].selectedModel.id).toBe("auto");
+    expect(rows[0].models.map((model) => model.id)).toEqual(["auto"]);
+    expect(rows[0].visibilityModels).toEqual([
+      expect.objectContaining({ id: "auto", isVisible: true, canHide: false }),
+      expect.objectContaining({ id: "hidden", isVisible: false, canHide: true }),
+    ]);
+  });
+
+  it("uses known model aliases for dynamic provider labels", () => {
+    const registries: ModelRegistry[] = [{
+      kind: "claude",
+      displayName: "Claude",
+      defaultModelId: "us.anthropic.claude-sonnet-4-6",
+      models: [{
+        id: "us.anthropic.claude-sonnet-4-6",
+        displayName: "Sonnet",
+        isDefault: true,
+        status: "active",
+        defaultOptIn: true,
+      }],
+    }];
+
+    const rows = buildSettingsAgentDefaultRows({
+      modelRegistries: registries,
+      readyAgentKinds: new Set(["claude"]),
+      preferences: {
+        defaultChatAgentKind: "claude",
+        defaultChatModelIdByAgentKind: {},
+        chatModelVisibilityOverridesByAgentKind: {},
+        defaultSessionModeByAgentKind: {},
+        defaultLiveSessionControlValuesByAgentKind: {},
+      },
+    });
+
+    expect(rows[0].selectedModel.displayName).toBe("Sonnet 4.6");
+    expect(rows[0].visibilityModels[0]).toMatchObject({
+      displayName: "Sonnet 4.6",
+    });
+  });
 });

@@ -8,9 +8,10 @@ import {
   listConfiguredSessionControlValues,
 } from "@/lib/domain/chat/session-controls/session-mode-control";
 import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
+import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
 import {
   filterVisibleRegistryModels,
-  isModelVisibleByPreference,
+  resolveVisibleRegistryModelIds,
   resolveRegistryModelCatalogDefaultOptIn,
 } from "@/lib/domain/chat/models/model-visibility";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
@@ -60,6 +61,7 @@ export interface SettingsAgentModelVisibilityRow {
   isVisible: boolean;
   catalogDefaultOptIn: boolean;
   hasManualOverride: boolean;
+  canHide: boolean;
 }
 
 const SUPPORTED_LIVE_DEFAULT_KEYS = new Set<DefaultLiveSessionControlKey>([
@@ -83,19 +85,18 @@ export function buildSettingsAgentDefaultRows({
       return [];
     }
 
-    const storedModelId = preferences.defaultChatModelIdByAgentKind[registry.kind] ?? null;
-    const selectedModel = resolveModelForRegistry(
+    const visibleModels = filterVisibleRegistryModels({
       registry,
-      storedModelId,
+      selectedModelId: null,
+      overrides: preferences.chatModelVisibilityOverridesByAgentKind,
+    }).map((model) => presentSettingsModel(registry.kind, model));
+    const selectedModel = resolveModelForRegistry(
+      { ...registry, models: visibleModels },
+      preferences.defaultChatModelIdByAgentKind[registry.kind] ?? null,
     );
     if (!selectedModel) {
       return [];
     }
-    const visibleModels = filterVisibleRegistryModels({
-      registry,
-      selectedModelId: selectedModel.id,
-      overrides: preferences.chatModelVisibilityOverridesByAgentKind,
-    });
 
     const modeOptions = listConfiguredSessionControlValues(registry.kind, "mode");
     const selectedMode = modeOptions.length > 0
@@ -130,21 +131,38 @@ function buildVisibilityRows(
   registry: SettingsAgentModelRegistry,
   overrides: ChatModelVisibilityOverridesByAgentKind,
 ): SettingsAgentModelVisibilityRow[] {
+  const visibleModelIds = resolveVisibleRegistryModelIds({
+    registry,
+    selectedModelId: null,
+    overrides,
+  });
   return registry.models.map((model) => {
     const catalogDefaultOptIn = resolveRegistryModelCatalogDefaultOptIn(model);
+    const isVisible = visibleModelIds.has(model.id);
     return {
       id: model.id,
-      displayName: model.displayName,
+      displayName: presentSettingsModel(registry.kind, model).displayName,
       catalogDefaultOptIn,
-      isVisible: isModelVisibleByPreference(
-        registry.kind,
-        model.id,
-        catalogDefaultOptIn,
-        overrides,
-      ),
+      isVisible,
       hasManualOverride: overrides[registry.kind]?.[model.id] !== undefined,
+      canHide: !isVisible || visibleModelIds.size > 1,
     };
   });
+}
+
+function presentSettingsModel<T extends SettingsAgentModel>(
+  agentKind: string,
+  model: T,
+): T {
+  return {
+    ...model,
+    displayName: resolveModelDisplayName({
+      agentKind,
+      modelId: model.id,
+      sourceLabels: [model.displayName],
+      preferKnownAlias: true,
+    }) ?? model.displayName,
+  };
 }
 
 export function withUpdatedDefaultLiveSessionControlValueByAgentKind(

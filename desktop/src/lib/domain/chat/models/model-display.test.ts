@@ -75,6 +75,17 @@ describe("resolveModelDisplayName", () => {
     ).toBe("Sonnet 4.6");
   });
 
+  it("derives Claude versions for dynamic harness provider ids", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "opencode",
+        modelId: "us.anthropic.claude-sonnet-4-6-20251101-v1:0",
+        sourceLabels: ["Sonnet"],
+        preferKnownAlias: true,
+      }),
+    ).toBe("Sonnet 4.6");
+  });
+
   it("has a fallback label for the next Codex candidate", () => {
     expect(
       resolveModelDisplayName({

@@ -343,7 +343,7 @@
             }
           },
           "404": {
-            "description": "Agent not found",
+            "description": "Agent or model registry snapshot not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -5465,6 +5465,12 @@
           "isDefault"
         ],
         "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "defaultOptIn": {
             "type": [
               "boolean",

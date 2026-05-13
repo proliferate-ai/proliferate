@@ -148,6 +148,7 @@ impl AppState {
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
         let dynamic_model_registry_service = Arc::new(DynamicModelRegistryService::new(
             DynamicModelRegistryStore::new(db.clone()),
+            WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
         ));
         let process_service = Arc::new(ProcessService::new());
@@ -165,6 +166,7 @@ impl AppState {
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
+            DynamicModelRegistryStore::new(db.clone()),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));

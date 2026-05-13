@@ -23,6 +23,37 @@ const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   opus: "opus[1m]",
 };
 
+const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
+  "default[]": "auto",
+  "composer-2[fast=true]": "composer-2-fast",
+  "composer-1.5[]": "composer-2",
+  "gpt-5.3-codex[reasoning=medium,fast=false]": "gpt-5.3-codex",
+  "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]": "claude-4.6-sonnet-medium-thinking",
+  "gpt-5.5[context=272k,reasoning=medium,fast=false]": "gpt-5.5-medium",
+  "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]": "claude-opus-4-7-thinking-xhigh",
+  "gpt-5.4[context=272k,reasoning=medium,fast=false]": "gpt-5.4-medium",
+  "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]": "claude-4.6-opus-high-thinking",
+  "claude-opus-4-5[thinking=true]": "claude-4.5-opus-high-thinking",
+  "gpt-5.2[reasoning=medium,fast=false]": "gpt-5.2",
+  "gemini-3.1-pro[]": "gemini-3.1-pro",
+  "gpt-5.4-mini[reasoning=medium]": "gpt-5.4-mini-medium",
+  "gpt-5.4-nano[reasoning=medium]": "gpt-5.4-nano-medium",
+  "claude-haiku-4-5[thinking=true]": "claude-4.5-sonnet",
+  "gpt-5.3-codex-spark[reasoning=medium]": "gpt-5.3-codex-spark-preview",
+  "grok-4.3[context=200k]": "grok-4.3",
+  "grok-4-20[thinking=true]": "grok-4.3",
+  "claude-sonnet-4-5[thinking=true,context=200k]": "claude-4.5-sonnet-thinking",
+  "gpt-5.2-codex[reasoning=medium,fast=false]": "gpt-5.2-codex",
+  "gpt-5.1-codex-max[reasoning=medium,fast=false]": "gpt-5.1-codex-max-medium",
+  "gpt-5.1[reasoning=medium]": "gpt-5.1",
+  "gemini-3-flash[]": "gemini-3-flash",
+  "gpt-5.1-codex-mini[reasoning=medium]": "gpt-5.1-codex-mini",
+  "claude-sonnet-4[thinking=false,context=200k]": "claude-4-sonnet",
+  "gpt-5-mini[]": "gpt-5-mini",
+  "gemini-2.5-flash[]": "gemini-3-flash",
+  "kimi-k2.5[]": "kimi-k2.5",
+};
+
 const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>([
   "collaboration_mode",
   "reasoning",
@@ -124,7 +155,11 @@ export function sanitizeChatModelVisibilityOverridesByAgentKind(
 }
 
 export function normalizeDefaultChatModelId(agentKind: string, modelId: string): string {
-  return agentKind === "claude"
-    ? LEGACY_CLAUDE_MODEL_IDS[modelId] ?? modelId
-    : modelId;
+  if (agentKind === "claude") {
+    return LEGACY_CLAUDE_MODEL_IDS[modelId] ?? modelId;
+  }
+  if (agentKind === "cursor") {
+    return LEGACY_CURSOR_MODEL_IDS[modelId] ?? modelId;
+  }
+  return modelId;
 }

@@ -11,8 +11,9 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, cowork, files, git, health, hosting, mobility, plans, processes, product_mcp, replay,
-    repo_roots, reviews, sessions, subagents, terminals, workspaces, worktrees,
+    agents, agents_model_registry, cowork, files, git, health, hosting, mobility, plans, processes,
+    product_mcp, replay, repo_roots, reviews, sessions, subagents, terminals, workspaces,
+    worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -25,7 +26,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/agents", get(agents::list_agents))
         .route(
             "/agents/launch-options",
-            get(agents::get_agent_launch_options),
+            get(agents_model_registry::get_agent_launch_options),
         )
         .route(
             "/agents/reconcile",
@@ -34,11 +35,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/agents/{kind}", get(agents::get_agent))
         .route(
             "/agents/{kind}/model-registry",
-            get(agents::get_agent_model_registry),
+            get(agents_model_registry::get_agent_model_registry),
         )
         .route(
             "/agents/{kind}/model-registry/refresh",
-            post(agents::refresh_agent_model_registry),
+            post(agents_model_registry::refresh_agent_model_registry),
         )
         .route("/agents/{kind}/install", post(agents::install_agent))
         .route(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDesktopLaunchModelRegistries,
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
   projectCloudAgentCatalogToDesktopLaunchCatalog,
 } from "@/lib/domain/agents/cloud-launch-catalog";
 
@@ -257,5 +258,60 @@ describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
         },
       ],
     }]);
+  });
+});
+
+describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
+  it("preserves curated catalog metadata when runtime ids match catalog aliases", () => {
+    const base = cloudCatalog();
+    const baseAgent = base.agents[0]!;
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog({
+      ...base,
+      agents: [{
+        ...baseAgent,
+        session: {
+          ...baseAgent.session,
+          defaultModelId: "sonnet",
+          models: [{
+            id: "sonnet",
+            displayName: "Sonnet",
+            aliases: ["us.anthropic.claude-sonnet-4-6"],
+            status: "active",
+            isDefault: true,
+            defaultOptIn: true,
+            provider: "anthropic",
+            tags: ["recommended"],
+            capabilities: null,
+            compatibility: null,
+            launchRemediation: null,
+          }],
+        },
+      }],
+    });
+
+    const merged = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{
+        kind: "opencode",
+        displayName: "OpenCode",
+        defaultModelId: "us.anthropic.claude-sonnet-4-6",
+        models: [{
+          id: "us.anthropic.claude-sonnet-4-6",
+          displayName: "Claude Sonnet 4.6",
+          isDefault: true,
+          defaultOptIn: null,
+        }],
+      }],
+    );
+
+    expect(merged[0]?.models[0]).toMatchObject({
+      id: "us.anthropic.claude-sonnet-4-6",
+      displayName: "Claude Sonnet 4.6",
+      description: null,
+      aliases: ["sonnet"],
+      provider: "anthropic",
+      tags: ["recommended"],
+      defaultOptIn: true,
+    });
   });
 });

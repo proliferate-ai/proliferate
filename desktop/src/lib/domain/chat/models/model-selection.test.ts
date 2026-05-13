@@ -24,7 +24,12 @@ function launchAgent(
   };
 }
 
-function model(id: string, displayName: string, isDefault: boolean) {
+function model(
+  id: string,
+  displayName: string,
+  isDefault: boolean,
+  overrides: Partial<DesktopAgentLaunchAgent["models"][number]> = {},
+) {
   return {
     id,
     displayName,
@@ -33,6 +38,7 @@ function model(id: string, displayName: string, isDefault: boolean) {
     isDefault,
     tags: [],
     launchRemediation: null,
+    ...overrides,
   };
 }
 
@@ -197,6 +203,41 @@ describe("buildModelSelectorGroups", () => {
       },
     ]);
   });
+
+  it("applies visibility preferences to active model controls", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent(
+          "cursor",
+          [
+            model("cursor/auto", "Auto", true, { defaultOptIn: true }),
+            model("cursor/gpt-5.4", "GPT 5.4", false, { defaultOptIn: true }),
+          ],
+          {
+            displayName: "Cursor",
+          },
+        ),
+      ],
+      { kind: "cursor", modelId: "cursor/auto" },
+      { kind: "cursor", modelId: "cursor/auto" },
+      {
+        kind: "cursor",
+        values: [
+          { value: "cursor/auto", label: "Auto" },
+          { value: "cursor/gpt-5.4", label: "GPT 5.4" },
+        ],
+      },
+      {
+        cursor: {
+          "cursor/gpt-5.4": false,
+        },
+      },
+    );
+
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual([
+      "cursor/auto",
+    ]);
+  });
 });
 
 describe("resolveEffectiveLaunchSelection", () => {
@@ -228,6 +269,45 @@ describe("resolveEffectiveLaunchSelection", () => {
     expect(selection).toEqual({
       kind: "opencode",
       modelId: "anthropic/claude-sonnet-4-6",
+    });
+  });
+
+  it("does not restore a hidden known model through dynamic fallback", () => {
+    const selection = resolveEffectiveLaunchSelection(
+      [
+        launchAgent(
+          "cursor",
+          [
+            model("cursor/auto", "Auto", true),
+            model("cursor/gpt-5.4", "GPT 5.4", false, { defaultOptIn: true }),
+          ],
+          {
+            displayName: "Cursor",
+            dynamicModels: true,
+            modelDisplayPolicy: {
+              defaultVisibleModelIds: ["cursor/auto", "cursor/gpt-5.4"],
+              allowUserVisibleModelSelection: true,
+              moreModelsSource: "lastKnownLiveSnapshot",
+            },
+          },
+        ),
+      ],
+      {
+        defaultChatAgentKind: "cursor",
+        defaultChatModelIdByAgentKind: {
+          cursor: "cursor/gpt-5.4",
+        },
+        chatModelVisibilityOverridesByAgentKind: {
+          cursor: {
+            "cursor/gpt-5.4": false,
+          },
+        },
+      },
+    );
+
+    expect(selection).toEqual({
+      kind: "cursor",
+      modelId: "cursor/auto",
     });
   });
 });

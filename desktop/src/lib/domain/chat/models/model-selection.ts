@@ -91,16 +91,25 @@ export function resolveEffectiveLaunchSelection(
   preferences: ChatLaunchPreferences,
 ): ModelSelectorSelection | null {
   const visibleAgents = agentsWithVisibleModels(agents, preferences, null);
+  const sourceAgentsByKind = new Map(agents.map((agent) => [agent.kind, agent]));
   const preferredAgent = visibleAgents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
-    const selection = resolveAgentLaunchSelection(preferredAgent, preferences);
+    const selection = resolveAgentLaunchSelection(
+      preferredAgent,
+      preferences,
+      sourceAgentsByKind.get(preferredAgent.kind),
+    );
     if (selection) {
       return selection;
     }
   }
 
   for (const agent of visibleAgents) {
-    const selection = resolveAgentLaunchSelection(agent, preferences);
+    const selection = resolveAgentLaunchSelection(
+      agent,
+      preferences,
+      sourceAgentsByKind.get(agent.kind),
+    );
     if (selection) {
       return selection;
     }
@@ -122,6 +131,7 @@ export function resolveConfiguredLaunchAgentSelection(
     return resolveAgentLaunchSelection(
       agentWithVisibleModels(preferredAgent, preferences, null),
       preferences,
+      preferredAgent,
     );
   }
 
@@ -131,6 +141,7 @@ export function resolveConfiguredLaunchAgentSelection(
 function resolveAgentLaunchSelection(
   agent: DesktopAgentLaunchAgent,
   preferences: ChatLaunchPreferences,
+  sourceAgent: DesktopAgentLaunchAgent = agent,
 ): ModelSelectorSelection | null {
   const preferredModelId = preferences.defaultChatModelIdByAgentKind[agent.kind]?.trim();
   if (preferredModelId) {
@@ -144,7 +155,11 @@ function resolveAgentLaunchSelection(
         modelId: preferredModel.id,
       };
     }
-    if (dynamicLaunchAgentAcceptsModel(agent)) {
+    const knownSourceModel =
+      sourceAgent.models.find((model) => model.id === preferredModelId)
+      ?? sourceAgent.models.find((model) => model.aliases.includes(preferredModelId))
+      ?? null;
+    if (!knownSourceModel && dynamicLaunchAgentAcceptsModel(agent)) {
       return {
         kind: agent.kind,
         modelId: preferredModelId,
@@ -176,11 +191,17 @@ export function buildModelSelectorGroups(
   activeModelControl?: ActiveModelSelectorControl | null,
   visibilityOverrides: ChatModelVisibilityOverridesByAgentKind = {},
 ): ModelSelectorGroup[] {
+  const sourceAgentsByKind = new Map(agents.map((agent) => [agent.kind, agent]));
   return agentsWithVisibleModels(agents, { chatModelVisibilityOverridesByAgentKind: visibilityOverrides }, selected)
     .map((agent) => ({
     kind: agent.kind,
     providerDisplayName: agent.displayName,
-    models: resolveSelectorModels(agent, activeModelControl, selected).map((model) => ({
+    models: resolveSelectorModels(
+      agent,
+      activeModelControl,
+      selected,
+      sourceAgentsByKind.get(agent.kind) ?? agent,
+    ).map((model) => ({
       kind: agent.kind,
       modelId: model.id,
       displayName: model.displayName,
@@ -195,12 +216,17 @@ function resolveSelectorModels(
   agent: DesktopAgentLaunchAgent,
   activeModelControl: ActiveModelSelectorControl | null | undefined,
   selected: ModelSelectorSelection | null,
+  sourceAgent: DesktopAgentLaunchAgent,
 ): Array<{ id: string; displayName: string }> {
   if (activeModelControl?.kind === agent.kind && activeModelControl.values.length > 0) {
+    const knownModelIds = new Set(sourceAgent.models.map((model) => model.id));
+    const visibleModelIds = new Set(agent.models.map((model) => model.id));
     return activeModelControl.values.flatMap((value) => {
       const isSelected = selected?.kind === agent.kind && selected.modelId === value.value;
-      const isHidden = shouldHideSelectorModel(agent.kind, value);
-      if (isHidden && !isSelected) {
+      const isFilteredByVisibility =
+        knownModelIds.has(value.value) && !visibleModelIds.has(value.value);
+      const isHiddenByProductPolicy = shouldHideSelectorModel(agent.kind, value);
+      if ((isFilteredByVisibility || isHiddenByProductPolicy) && !isSelected) {
         return [];
       }
 
@@ -208,7 +234,7 @@ function resolveSelectorModels(
         agentKind: agent.kind,
         modelId: value.value,
         sourceLabels: [value.label],
-        preferKnownAlias: !isHidden,
+        preferKnownAlias: !isHiddenByProductPolicy,
       }) ?? value.label;
 
       return [{

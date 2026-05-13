@@ -1677,6 +1677,8 @@ export interface components {
             status: "active" | "candidate" | "deprecated" | "hidden";
             /** Isdefault */
             isDefault: boolean;
+            /** Defaultoptin */
+            defaultOptIn?: boolean | null;
             /** Provider */
             provider?: string | null;
             /**

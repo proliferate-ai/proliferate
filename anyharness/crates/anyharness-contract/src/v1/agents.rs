@@ -149,6 +149,8 @@ pub struct RefreshAgentModelRegistryResponse {
 pub struct AgentLaunchModelOption {
     pub id: String,
     pub display_name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
     pub is_default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_opt_in: Option<bool>,

@@ -12,9 +12,13 @@ import {
 } from "@/lib/domain/chat/models/model-selection";
 import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import {
+  mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
+  type DesktopAgentLaunchAgent,
+} from "@/lib/domain/agents/cloud-launch-catalog";
 import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
+import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
@@ -36,18 +40,28 @@ export function useChatLaunchCatalog({
 
   const query = useCloudAgentCatalog(true);
   const agentCatalog = useAgentCatalog();
+  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({
+    workspaceId: selectedWorkspaceId,
+  });
   const catalogData = query.data ?? null;
-  const catalogLoading = query.isLoading || agentCatalog.isLoading;
+  const catalogLoading = query.isLoading || agentCatalog.isLoading || runtimeLaunchOptions.isLoading;
   const cloudCatalogError = query.error ?? null;
-  const targetReadinessError = agentCatalog.isError ? agentCatalog.error : null;
+  const targetReadinessError = agentCatalog.isError
+    ? agentCatalog.error
+    : runtimeLaunchOptions.isError
+      ? runtimeLaunchOptions.error
+      : null;
   const launchCatalogError = cloudCatalogError ?? targetReadinessError;
 
   const launchAgents = useMemo(
     () => orderLaunchAgents(
-      catalogData?.agents ?? EMPTY_AGENTS,
+      mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+        catalogData?.agents ?? EMPTY_AGENTS,
+        runtimeLaunchOptions.data?.agents ?? null,
+      ),
       agentCatalog.agentsByKind,
     ),
-    [agentCatalog.agentsByKind, catalogData?.agents],
+    [agentCatalog.agentsByKind, catalogData?.agents, runtimeLaunchOptions.data?.agents],
   );
 
   const snapshot = useMemo<LaunchCatalogSnapshot | null>(() => {

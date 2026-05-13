@@ -108,10 +108,10 @@ use anyharness_contract::v1::{
     paths(
         super::http::health::get_health,
         super::http::agents::list_agents,
-        super::http::agents::get_agent_launch_options,
+        super::http::agents_model_registry::get_agent_launch_options,
         super::http::agents::get_agent,
-        super::http::agents::get_agent_model_registry,
-        super::http::agents::refresh_agent_model_registry,
+        super::http::agents_model_registry::get_agent_model_registry,
+        super::http::agents_model_registry::refresh_agent_model_registry,
         super::http::agents::install_agent,
         super::http::agents::start_agent_login,
         super::http::agents::get_reconcile_status,

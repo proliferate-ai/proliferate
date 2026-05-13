@@ -151,7 +151,7 @@ export function resolveModelDisplayName(args: {
     return withContextHint(alias, sourceLabels);
   }
 
-  if (preferKnownAlias && agentKind === "claude") {
+  if (preferKnownAlias) {
     const formatted = formatClaudeModelId(modelId);
     if (formatted) {
       return withContextHint(formatted, sourceLabels);

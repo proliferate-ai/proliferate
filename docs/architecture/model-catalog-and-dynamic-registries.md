@@ -81,11 +81,8 @@ anyharness/crates/anyharness-lib/src/domains/agents/
     resolver.rs
 
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/
-  cursor_models.rs
-    Run and parse `cursor-agent models` / `cursor-agent --list-models`.
-
-  opencode_models.rs
-    Run and parse `opencode models` / `opencode models --verbose`.
+  model_discovery.rs
+    Run and parse Cursor/OpenCode model discovery commands.
 
 anyharness/crates/anyharness-lib/src/persistence/sql/
   00xx_agent_model_registry_snapshots.sql
@@ -118,7 +115,7 @@ desktop/src/lib/domain/settings/
 
 desktop/src/hooks/
   chat/derived/use-chat-launch-catalog.ts
-  settings/use-model-registry-settings.ts
+  settings/workflows/use-model-registry-settings.ts
     Query/mutation wiring and UI orchestration.
 
 desktop/src/components/settings/
@@ -147,8 +144,8 @@ server/proliferate/server/cloud/
       visibility.py
       resolution.py
 
-server/proliferate/db/models/cloud/
-  model_registries.py        # promote when first-class persistence is needed
+server/proliferate/db/models/
+  cloud_model_registries.py  # promote when first-class persistence is needed
 
 server/proliferate/db/store/cloud_sync/
   model_registries.py        # store synced user/target registry snapshots
@@ -387,6 +384,11 @@ defaultOptIn
   the user has no explicit override. Defaults to false for unknown live-only
   models.
 
+  `true` and `false` are explicit product policy. An absent or `null`
+  `defaultOptIn` is a compatibility state only: clients may derive legacy
+  defaults from `modelDisplayPolicy.defaultVisibleModelIds`, `isDefault`, or a
+  `recommended` tag. New catalog rows should set `defaultOptIn` explicitly.
+
 capabilities
   image/audio/context/tool support where known.
 
@@ -410,6 +412,10 @@ Rules:
 - `aliases` are for resolution and migration, not for rendering.
 - Unknown live models are allowed. They should be marked `source = live` and
   usually have `defaultOptIn = false` unless product policy decides otherwise.
+- Provider refresh output should leave `defaultOptIn` absent/null unless the
+  provider itself supplies a trustworthy visibility policy. Projection then
+  reapplies bundled catalog policy by id or alias and only defaults truly
+  live-only rows to hidden.
 - Catalog-only models may still be shown in Cloud/global setup, but target
   launch must validate them.
 
@@ -436,7 +442,9 @@ launchable
 Effective picker rule:
 
 ```text
-visible = user override when present, otherwise model.defaultOptIn
+visible = user override when present,
+          otherwise explicit model.defaultOptIn,
+          otherwise legacy fallback for old catalog rows
 ```
 
 Truth table:
@@ -449,11 +457,19 @@ true          opt_in         yes
 false         none           no
 false         opt_out        no
 false         opt_in         yes
+absent/null   none           legacy fallback only
 ```
 
 The current/previous selected model may be shown with a stale/missing warning
 even when the visibility rule would otherwise hide it, so users can understand
 and repair old selections.
+
+Picker and settings surfaces must never produce an empty visible model set for
+a harness that has available models. If the visibility rule hides everything,
+fall back to the stored/default/isDefault/first model in that order and prevent
+the user from hiding the final visible model. When a user hides the current
+default model in Agent Defaults, immediately move that harness default to the
+next visible model.
 
 Agent Defaults is the main management surface:
 
@@ -478,6 +494,11 @@ Agent Defaults
 
 Each harness should be an expandable section. The normal model picker remains
 compact and only uses the effective visible model list.
+
+Home launch defaults, automation defaults, Slack defaults, and other
+cloud-mediated launch pickers must consume the same effective visible model
+list. Existing saved or active selections may be preserved for repair, but new
+default resolution should not choose a hidden model.
 
 ## Saved Model Intent
 
@@ -512,11 +533,15 @@ Launch resolution happens at the AnyHarness/target boundary.
 ResolveModelIntent(target, intent):
   1. Load latest model registry snapshot for harness and scope.
   2. If dynamic registry is stale and target is online, refresh if policy allows.
-  3. Match exact liveId.
-  4. Match modelKey against discovered ids.
-  5. Match modelKey against catalog aliases.
-  6. Apply fallback policy.
-  7. Return exact liveId or fail with actionable error.
+     If current V1 launch path cannot refresh synchronously, fail with an
+     actionable stale/unavailable registry error.
+  3. Do not silently fall back to bundled catalog truth when a dynamic
+     Cursor/OpenCode snapshot exists but is stale, empty, or failed.
+  4. Match exact liveId.
+  5. Match modelKey against discovered ids.
+  6. Match modelKey against catalog aliases.
+  7. Apply fallback policy.
+  8. Return exact liveId or fail with actionable error.
 ```
 
 Resolution outputs:
@@ -627,13 +652,27 @@ OpenCode may expose provider config overrides, plugin-mutated models,
 provider-level whitelist/blacklist behavior, and models from remote/cached
 metadata. Treat the discovered registry as target/config dependent.
 
+Discovery executable resolution:
+
+- use the resolved provider CLI executable for discovery, not the ACP session
+  launcher when those differ
+- managed npm installs may expose both a generated `*-launcher` and the real
+  `node_modules/.bin/...` binary; refresh must run the real provider binary
+  that supports `models`
+- PATH fallback is allowed only after checking the resolved/managed target
+  install
+- run commands without shell interpolation
+- apply timeouts and cancellation
+- capture stdout/stderr in a way that cannot deadlock on large model lists
+- strip ANSI output and redact stderr before surfacing user-facing errors
+
 ## AnyHarness Placement
 
 Target shape:
 
 ```text
-anyharness/crates/anyharness-lib/src/api/http/agents.rs
-  Route handlers only:
+anyharness/crates/anyharness-lib/src/api/http/agents_model_registry.rs
+  Thin route handlers only:
     GET launch options
     GET model registry snapshot
     POST refresh model registry
@@ -703,13 +742,9 @@ anyharness/crates/anyharness-lib/src/domains/agents/
       Still owns install/auth/readiness status. It does not run model refresh.
 
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/
-  cursor_models.rs
-    Run and parse `cursor-agent models` / `cursor-agent --list-models`.
-    Return neutral discovered model records.
-
-  opencode_models.rs
-    Run and parse `opencode models` / `opencode models --verbose`.
-    Return neutral discovered model records.
+  model_discovery.rs
+    Run and parse `cursor-agent models`, `opencode models`, and related
+    provider commands. Return neutral discovered model records.
 
 anyharness/crates/anyharness-lib/src/persistence/sql/
   00xx_agent_model_registry_snapshots.sql
@@ -826,8 +861,8 @@ server/proliferate/server/cloud/model_registries/  # optional if it grows
     resolution.py
       Cloud-side preflight only. Final resolution remains AnyHarness-side.
 
-server/proliferate/db/models/cloud/
-  model_registries.py
+server/proliferate/db/models/
+  cloud_model_registries.py
     CloudUserModelRegistrySnapshot, CloudModelVisibilityPreference if promoted
     to first-class tables.
 
@@ -963,6 +998,9 @@ desktop/src/lib/domain/chat/models/
 
   model-selection.ts
     Current selected model resolution for picker state.
+    Any branch that reads live active-session model controls must still
+    intersect with visible model ids from the effective launch registry,
+    preserving only the selected hidden/stale value for repair.
 
   model-visibility.ts
     Pure defaultOptIn + user opt_in/opt_out override rules.
@@ -978,13 +1016,20 @@ desktop/src/lib/domain/settings/
   model-registries.ts
     Agent Defaults section view models for dynamic harness registry management,
     search, and visibility toggles.
+    Merge logic must preserve catalog aliases so old/default preference ids can
+    continue resolving after runtime launch options are merged.
 
 desktop/src/hooks/
   chat/derived/use-chat-launch-catalog.ts
     Reads effective launch options and feeds chat picker state.
 
-  settings/use-model-registry-settings.ts
+  settings/workflows/use-model-registry-settings.ts
     Query/mutation wiring for refresh and visibility overrides.
+
+  workspaces/use-workspace-bootstrap-actions.ts
+    Empty-workspace auto-launch must use the same Cloud catalog + AnyHarness
+    runtime launch-option merge as the chat picker before resolving the default
+    model to launch.
 
 desktop/src/components/
   workspace/chat/input/ModelSelector.tsx
@@ -1042,6 +1087,9 @@ Rules:
 - Cursor/OpenCode sections include a clean refresh button
 - refresh button refreshes target-discovered models; it does not mutate
   bundled `catalog.json`
+- a global, non-workspace-scoped refresh invalidates all workspace-scoped
+  launch-option caches for that runtime because model availability may affect
+  workspace-scoped picker state
 
 The UI should render:
 
