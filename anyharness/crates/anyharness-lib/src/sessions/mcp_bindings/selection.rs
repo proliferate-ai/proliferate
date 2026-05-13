@@ -60,9 +60,11 @@ pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaun
     for product in selected {
         match product {
             SelectedProductMcp::Reviews => {
-                extras
-                    .system_prompt_append
-                    .extend(reviews_mcp::definition::system_prompt_append());
+                // The review MCP server is preloaded broadly so parent sessions
+                // can become review parents after launch. Do not also preload
+                // review-specific prompt text into unrelated sessions; review
+                // runtime prompts add role-specific instructions when review
+                // work actually starts.
                 extras
                     .mcp_binding_summaries
                     .push(reviews_mcp::definition::binding_summary());
@@ -128,5 +130,13 @@ mod tests {
         assert!(!should_preload_reviews_mcp_until_live_refresh(&workspace(
             "cowork-1", "cowork"
         )));
+    }
+
+    #[test]
+    fn broad_reviews_selection_does_not_add_review_prompt_text() {
+        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Reviews]);
+
+        assert!(extras.system_prompt_append.is_empty());
+        assert_eq!(extras.mcp_binding_summaries.len(), 1);
     }
 }
