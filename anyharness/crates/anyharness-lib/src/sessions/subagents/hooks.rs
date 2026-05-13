@@ -1,22 +1,14 @@
 use std::sync::Arc;
 
-use anyharness_contract::v1::{
-    SessionMcpBindingNotAppliedReason, SessionMcpBindingOutcome, SessionMcpBindingSummary,
-    SessionMcpTransport, SubagentTurnCompletedPayload, SubagentTurnOutcome,
-};
+use anyharness_contract::v1::{SubagentTurnCompletedPayload, SubagentTurnOutcome};
 use uuid::Uuid;
 
-use super::mcp_server::auth::SubagentMcpAuth;
 use super::model::SubagentCompletionRecord;
 use super::service::SubagentService;
 use crate::acp::manager::AcpManager;
 use crate::acp::session_actor::SessionCommand;
 use crate::sessions::extensions::{
-    SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
-    SessionTurnOutcome,
-};
-use crate::sessions::mcp_bindings::model::{
-    SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
+    SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
 use crate::sessions::prompt::PromptPayload;
 use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
@@ -24,9 +16,6 @@ use crate::sessions::store::SessionStore;
 
 #[derive(Clone)]
 pub struct SubagentSessionHooks {
-    runtime_base_url: String,
-    runtime_bearer_token: Option<String>,
-    mcp_auth: Arc<SubagentMcpAuth>,
     service: Arc<SubagentService>,
     acp_manager: AcpManager,
     session_store: SessionStore,
@@ -34,97 +23,19 @@ pub struct SubagentSessionHooks {
 
 impl SubagentSessionHooks {
     pub fn new(
-        runtime_base_url: String,
-        runtime_bearer_token: Option<String>,
-        mcp_auth: Arc<SubagentMcpAuth>,
         service: Arc<SubagentService>,
         acp_manager: AcpManager,
         session_store: SessionStore,
     ) -> Self {
         Self {
-            runtime_base_url,
-            runtime_bearer_token,
-            mcp_auth,
             service,
             acp_manager,
             session_store,
         }
     }
-
-    pub fn validate_capability_token(
-        &self,
-        token: &str,
-        workspace_id: &str,
-        session_id: &str,
-    ) -> anyhow::Result<bool> {
-        self.mcp_auth
-            .validate_capability_token(token, workspace_id, session_id)
-    }
-
-    pub fn capability_header_name(&self) -> &'static str {
-        self.mcp_auth.capability_header_name()
-    }
 }
 
 impl SessionExtension for SubagentSessionHooks {
-    fn resolve_launch_extras(
-        &self,
-        ctx: &SessionLaunchContext<'_>,
-    ) -> anyhow::Result<SessionLaunchExtras> {
-        if ctx.workspace.surface != "standard" {
-            return Ok(SessionLaunchExtras::default());
-        }
-        if !ctx.session.subagents_enabled {
-            return Ok(SessionLaunchExtras::default());
-        }
-        if self
-            .service
-            .find_subagent_parent(&ctx.session.id)?
-            .is_some()
-        {
-            return Ok(SessionLaunchExtras::default());
-        }
-
-        let capability_token = self
-            .mcp_auth
-            .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?;
-        let url = format!(
-            "{}/v1/workspaces/{}/sessions/{}/subagents/mcp",
-            self.runtime_base_url, ctx.workspace.id, ctx.session.id
-        );
-
-        let mut headers = Vec::new();
-        if let Some(token) = self.runtime_bearer_token.as_ref() {
-            headers.push(SessionMcpHeader {
-                name: "authorization".to_string(),
-                value: format!("Bearer {token}"),
-            });
-        }
-        headers.push(SessionMcpHeader {
-            name: self.mcp_auth.capability_header_name().to_string(),
-            value: capability_token,
-        });
-
-        tracing::info!(
-            workspace_id = %ctx.workspace.id,
-            session_id = %ctx.session.id,
-            "injecting subagents MCP server into session launch"
-        );
-
-        Ok(SessionLaunchExtras {
-            system_prompt_append: subagent_system_prompt_append(),
-            first_prompt_system_prompt_append: Vec::new(),
-            mcp_servers: vec![SessionMcpServer::Http(SessionMcpHttpServer {
-                connection_id: "subagents".to_string(),
-                catalog_entry_id: None,
-                server_name: "subagents".to_string(),
-                url,
-                headers,
-            })],
-            mcp_binding_summaries: vec![subagent_binding_summary()],
-        })
-    }
-
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
         let service = self.service.clone();
         let acp_manager = self.acp_manager.clone();
@@ -258,19 +169,4 @@ fn wake_prompt_text(
         "Subagent \"{label}\" completed a turn.\n\nChild session: {child_session_id}\nSession link: {session_link_id}\nOutcome: {}\nLast child event seq: {child_last_event_seq}\n\nUse the subagent tools to inspect the child session before continuing.",
         outcome.as_str()
     )
-}
-
-fn subagent_system_prompt_append() -> Vec<String> {
-    vec![r#"You can use the subagents MCP tools to delegate bounded work to same-workspace child sessions. Call get_subagent_launch_options before choosing a non-default agentKind, modelId, or modeId. Child sessions are normal agent sessions linked back to you. Child completions are passive by default: after creating or messaging a child, call schedule_subagent_wake when you want AnyHarness to prompt you after that child's next completed turn. Use read_subagent_events before relying on a child result."#.to_string()]
-}
-
-fn subagent_binding_summary() -> SessionMcpBindingSummary {
-    SessionMcpBindingSummary {
-        id: "internal:subagents".to_string(),
-        server_name: "subagents".to_string(),
-        display_name: Some("Subagents".to_string()),
-        transport: SessionMcpTransport::Http,
-        outcome: SessionMcpBindingOutcome::Applied,
-        reason: None::<SessionMcpBindingNotAppliedReason>,
-    }
 }

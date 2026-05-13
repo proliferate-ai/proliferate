@@ -368,6 +368,7 @@ impl SessionRuntime {
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
+            &self.product_mcp_launch_catalog,
             &workspace,
             record,
             system_prompt_append,

@@ -5,11 +5,11 @@ use crate::integrations::mcp::tools::tool_definition;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct SetWorkspaceDisplayNameArgs {
+pub struct SetWorkspaceDisplayNameArgs {
     pub display_name: String,
 }
 
-pub(super) fn build_tool_list() -> Vec<Value> {
+pub fn build_tool_list() -> Vec<Value> {
     vec![tool_definition(
         "set_workspace_display_name",
         "Set a concise human-readable display name for this workspace. During the first turn, call this directly before any user-visible response, clarification, plan, or other tool call. If tools are namespaced, this is mcp__workspace_naming__set_workspace_display_name. This tool is already available in the active tool list; do not use ToolSearch or subagents for workspace naming, and do not use this to rename git branches.",

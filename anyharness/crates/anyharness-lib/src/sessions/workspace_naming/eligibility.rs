@@ -3,6 +3,14 @@ use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::model::WorkspaceRecord;
 
+#[derive(Debug, thiserror::Error)]
+pub enum WorkspaceNamingAvailabilityError {
+    #[error("{0}")]
+    Unavailable(String),
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
 pub fn eligible_for_launch(
     session_store: &SessionStore,
     workspace: &WorkspaceRecord,
@@ -28,22 +36,53 @@ pub fn validate_tool_call(
     workspace: &WorkspaceRecord,
     session: &SessionRecord,
 ) -> anyhow::Result<()> {
+    validate_tool_call_availability(session_store, workspace, session).map_err(
+        |error| match error {
+            WorkspaceNamingAvailabilityError::Unavailable(message) => anyhow::anyhow!(message),
+            WorkspaceNamingAvailabilityError::Internal(error) => error,
+        },
+    )
+}
+
+pub fn validate_tool_call_availability(
+    session_store: &SessionStore,
+    workspace: &WorkspaceRecord,
+    session: &SessionRecord,
+) -> Result<(), WorkspaceNamingAvailabilityError> {
     if session.workspace_id != workspace.id {
-        anyhow::bail!("session does not belong to workspace");
+        return Err(WorkspaceNamingAvailabilityError::Unavailable(
+            "session does not belong to workspace".to_string(),
+        ));
     }
     if !workspace_display_name_empty(workspace) {
-        anyhow::bail!("workspace already has a display name");
+        return Err(WorkspaceNamingAvailabilityError::Unavailable(
+            "workspace already has a display name".to_string(),
+        ));
     }
-    if !current_session_is_visible_and_first_prompted(session_store, &workspace.id, &session.id)? {
-        anyhow::bail!(
+    if !current_session_is_visible_and_first_prompted(session_store, &workspace.id, &session.id)
+        .map_err(WorkspaceNamingAvailabilityError::Internal)?
+    {
+        return Err(WorkspaceNamingAvailabilityError::Unavailable(
             "workspace naming is only available before another visible session starts work"
-        );
+                .to_string(),
+        ));
     }
-    if session_store.count_turn_started_events(&session.id)? > 1 {
-        anyhow::bail!("workspace naming is only available during the first turn");
+    if session_store
+        .count_turn_started_events(&session.id)
+        .map_err(|error| WorkspaceNamingAvailabilityError::Internal(error.into()))?
+        > 1
+    {
+        return Err(WorkspaceNamingAvailabilityError::Unavailable(
+            "workspace naming is only available during the first turn".to_string(),
+        ));
     }
-    if session_store.has_terminal_turn_event(&session.id)? {
-        anyhow::bail!("workspace naming is no longer available after the first turn completes");
+    if session_store
+        .has_terminal_turn_event(&session.id)
+        .map_err(|error| WorkspaceNamingAvailabilityError::Internal(error.into()))?
+    {
+        return Err(WorkspaceNamingAvailabilityError::Unavailable(
+            "workspace naming is no longer available after the first turn completes".to_string(),
+        ));
     }
     Ok(())
 }

@@ -12,8 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
-    workspace_naming, workspaces, worktrees,
+    product_mcp, provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
+    workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -145,16 +145,22 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp",
-            get(subagents::get_subagents_mcp_endpoint).post(subagents::post_subagents_mcp_endpoint),
+            get(product_mcp::get_subagents_legacy_mcp_endpoint)
+                .post(product_mcp::post_subagents_legacy_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp",
-            get(reviews::get_reviews_mcp_endpoint).post(reviews::post_reviews_mcp_endpoint),
+            get(product_mcp::get_reviews_legacy_mcp_endpoint)
+                .post(product_mcp::post_reviews_legacy_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/workspace-naming/mcp",
-            get(workspace_naming::get_workspace_naming_mcp_endpoint)
-                .post(workspace_naming::post_workspace_naming_mcp_endpoint),
+            get(product_mcp::get_workspace_naming_legacy_mcp_endpoint)
+                .post(product_mcp::post_workspace_naming_legacy_mcp_endpoint),
+        )
+        .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_slug}",
+            get(product_mcp::get_product_mcp_endpoint).post(product_mcp::post_product_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/display-name",
