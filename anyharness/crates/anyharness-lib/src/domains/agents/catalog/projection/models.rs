@@ -15,10 +15,6 @@ pub fn bundled_model_registries() -> Vec<ModelRegistryMetadata> {
         .expect("bundled agents catalog model registry projection must validate")
 }
 
-pub fn bundled_catalog_version() -> String {
-    bundled_agent_catalog_document().catalog_version.clone()
-}
-
 pub fn bundled_create_mode_ids(agent_kind: &str) -> Option<Vec<String>> {
     let catalog = bundled_agent_catalog_document();
     let agent = catalog
@@ -41,7 +37,7 @@ pub fn bundled_create_mode_ids(agent_kind: &str) -> Option<Vec<String>> {
         })
 }
 
-pub fn agent_catalog_to_model_registries(
+fn agent_catalog_to_model_registries(
     catalog: &AgentCatalogDocument,
 ) -> anyhow::Result<Vec<ModelRegistryMetadata>> {
     validate_agent_catalog_document(catalog)?;

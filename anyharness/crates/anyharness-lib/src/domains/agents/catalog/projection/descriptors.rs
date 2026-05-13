@@ -18,7 +18,7 @@ pub fn bundled_agent_descriptors() -> Vec<AgentDescriptor> {
         .expect("bundled agents catalog descriptor projection must validate")
 }
 
-pub fn agent_catalog_to_descriptors(
+fn agent_catalog_to_descriptors(
     catalog: &AgentCatalogDocument,
 ) -> anyhow::Result<Vec<AgentDescriptor>> {
     validate_agent_catalog_document(catalog)?;

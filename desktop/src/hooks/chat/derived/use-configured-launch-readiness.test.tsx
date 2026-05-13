@@ -150,7 +150,7 @@ describe("useConfiguredLaunchReadiness", () => {
 
     expect(result.current).toMatchObject({
       selection: null,
-      disabledReason: "opencode is not ready yet.",
+      disabledReason: "opencode isn't supported by this runtime yet.",
       status: "unavailable",
       isReady: false,
     });

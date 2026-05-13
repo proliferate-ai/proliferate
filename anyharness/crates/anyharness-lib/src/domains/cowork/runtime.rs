@@ -720,14 +720,14 @@ impl CoworkRuntime {
             .list_source_workspace_options(parent_session_id)
     }
 
-    pub fn workspace_session_launch_catalog(
+    pub fn resolved_workspace_launch_options(
         &self,
         workspace_id: &str,
     ) -> anyhow::Result<
-        crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData,
+        crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions,
     > {
         self.session_runtime
-            .workspace_session_launch_catalog(workspace_id)
+            .resolved_workspace_launch_options(workspace_id)
     }
 
     pub fn validate_managed_coding_workspace(

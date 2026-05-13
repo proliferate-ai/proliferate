@@ -13,6 +13,7 @@ import {
 import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
@@ -106,11 +107,7 @@ function orderLaunchAgents(
   agents: readonly DesktopAgentLaunchAgent[],
   agentsByKind: ReadonlyMap<string, { readiness: string }>,
 ): DesktopAgentLaunchAgent[] {
-  return [...agents]
-    .filter((agent) =>
-      agent.models.length > 0
-      && agentsByKind.get(agent.kind)?.readiness === "ready"
-    )
+  return filterTargetReadyLaunchAgents(agents, agentsByKind)
     .sort((left, right) =>
       compareChatLaunchKinds(
         left.kind,

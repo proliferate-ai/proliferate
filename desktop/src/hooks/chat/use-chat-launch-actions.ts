@@ -4,7 +4,6 @@ import type { Workspace } from "@anyharness/sdk";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { formatSessionCreateToastMessage } from "@/lib/domain/sessions/creation/create-session-error";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
@@ -112,9 +111,6 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
         setWorkspaceArrivalEvent(null);
       })
       .catch((error) => {
-        if (isSessionModelAvailabilityInterruption(error)) {
-          return;
-        }
         failLatencyFlow(latencyFlowId, "session_create_failed");
         showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
       });

@@ -6,7 +6,7 @@ use super::tools::{
     CreateCodingWorkspaceArgs, DeleteArtifactArgs, GetArtifactArgs, ReadCodingEventsArgs,
     SendCodingMessageArgs, UpdateArtifactArgs,
 };
-use crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData;
+use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::cowork::artifacts::{
     CoworkArtifactRuntime, CreateCoworkArtifactInput, UpdateCoworkArtifactInput,
 };
@@ -186,7 +186,7 @@ fn get_coding_workspace_launch_options(
     let workspaces = options
         .into_iter()
         .map(|option| {
-            let catalog = cowork_runtime.workspace_session_launch_catalog(&option.workspace.id)?;
+            let catalog = cowork_runtime.resolved_workspace_launch_options(&option.workspace.id)?;
             let base_branch = cowork_runtime
                 .repo_default_branch_for_workspace(&option.workspace)?
                 .or(option.workspace.original_branch.clone())
@@ -288,7 +288,7 @@ fn get_coding_session_launch_options(
         .or(parent.current_mode_id.clone())
         .or(parent.requested_mode_id.clone())
         .or_else(|| live_mode_control.and_then(|control| control.current_value.clone()));
-    let catalog = cowork_runtime.workspace_session_launch_catalog(&args.workspace_id)?;
+    let catalog = cowork_runtime.resolved_workspace_launch_options(&args.workspace_id)?;
     Ok(json!({
         "parentSessionId": parent_session_id,
         "workspaceId": args.workspace_id,
@@ -429,7 +429,7 @@ fn read_coding_events(
     }))
 }
 
-fn launch_agents_to_json(catalog: WorkspaceSessionLaunchCatalogData) -> Vec<Value> {
+fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> Vec<Value> {
     catalog
         .agents
         .into_iter()

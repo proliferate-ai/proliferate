@@ -62,7 +62,7 @@ export function useConfiguredLaunchReadiness(
   const disabledReason = isConfiguredAgentNotReady
     ? `${configuredAgent.displayName} is ${AGENT_READINESS_LABELS[configuredAgent.readiness].toLowerCase()}.`
     : isConfiguredAgentMissing
-      ? `${preferences.defaultChatAgentKind} is not ready yet.`
+      ? `${preferences.defaultChatAgentKind} isn't supported by this runtime yet.`
     : resolution.reason;
   const isBlockedByReadiness = isConfiguredAgentMissing || isConfiguredAgentNotReady;
 

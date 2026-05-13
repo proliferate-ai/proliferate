@@ -394,6 +394,9 @@ The remaining public target capability endpoints are:
 
 SessionRuntime, cowork, and subagent flows may use internal target-local launch
 options projected from the bundled agents catalog plus readiness filtering.
+That internal projection should be named as resolved launch options, not as a
+public catalog response, and should carry only the fields those internal flows
+need.
 
 ## Banned Shapes
 

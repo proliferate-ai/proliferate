@@ -257,7 +257,7 @@ function projectCloudAgent(agent: CloudAgentCatalogAgentInput): DesktopAgentLaun
       control.key !== "model"
       && (control.surfaces.start || control.surfaces.session)
     )
-    .map((control) => projectCloudControl(control, models, defaultModelId));
+    .map((control) => projectCloudControl(control, defaultModelId));
 
   return {
     kind: agent.kind,
@@ -308,7 +308,6 @@ function resolveDefaultModelId(
 
 function projectCloudControl(
   control: CloudAgentCatalogControlInput,
-  models: readonly DesktopAgentLaunchModel[],
   defaultModelId: string | null,
 ): DesktopAgentLaunchControl {
   const createField = control.apply.createField ?? null;
@@ -333,7 +332,7 @@ function projectCloudControl(
     },
     missingLiveConfigPolicy: control.missingLiveConfigPolicy,
     valueSource: control.valueSource,
-    values: resolveControlValues(control, models),
+    values: resolveControlValues(control),
     queueWhileMaterializing: control.queueWhileMaterializing,
     mutableAfterMaterialized: control.mutableAfterMaterialized,
   };
@@ -341,21 +340,7 @@ function projectCloudControl(
 
 function resolveControlValues(
   control: CloudAgentCatalogControlInput,
-  models: readonly DesktopAgentLaunchModel[],
 ): DesktopAgentLaunchControlValue[] {
-  if (
-    (control.valueSource === "agentModels" || control.valueSource === "discoveredModels")
-    && control.values.length === 0
-  ) {
-    return models.map((model) => ({
-      value: model.id,
-      label: model.displayName,
-      description: model.description,
-      isDefault: model.isDefault,
-      status: model.status,
-    }));
-  }
-
   return control.values
     .filter((value) => value.status !== "hidden")
     .map(projectCloudControlValue);

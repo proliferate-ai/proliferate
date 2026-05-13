@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
     WorkspaceExecutionSummary,
 };
 
-use crate::domains::agents::readiness::launch_options::WorkspaceSessionLaunchCatalogData;
+use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::sessions::execution_summary::{
     idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
 };
@@ -88,12 +88,12 @@ impl SessionRuntime {
         Ok(summaries)
     }
 
-    pub fn workspace_session_launch_catalog(
+    pub fn resolved_workspace_launch_options(
         &self,
         workspace_id: &str,
-    ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
+    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
         self.session_service
-            .get_workspace_session_launch_catalog(workspace_id)
+            .resolved_workspace_launch_options(workspace_id)
     }
 
     pub fn live_config_snapshot(

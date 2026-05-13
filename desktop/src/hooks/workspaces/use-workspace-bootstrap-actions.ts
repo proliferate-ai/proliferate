@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { compareChatLaunchKinds } from "@/config/chat-launch";
 import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -12,7 +13,6 @@ import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-sessi
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
@@ -21,6 +21,7 @@ import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collect
 import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-selection";
 import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
 import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import {
   elapsedMs,
   logLatency,
@@ -150,6 +151,7 @@ export function useWorkspaceBootstrapActions() {
     loadWorkspaceSessions,
   } = useWorkspaceBootstrapCache();
   const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
+  const { agentsByKind } = useAgentCatalog();
   const workspaceCollections = useWorkspaces().data;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
@@ -458,6 +460,7 @@ export function useWorkspaceBootstrapActions() {
 
       const launchAgents = orderLaunchAgents(
         launchCatalog?.agents ?? [],
+        agentsByKind,
       );
       const defaultLaunch = resolveEffectiveLaunchSelection(
         launchAgents,
@@ -479,20 +482,13 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionDispatchStartedAt = startLatencyTimer();
-        try {
-          await createEmptySessionWithResolvedConfig({
-            workspaceId,
-            agentKind: defaultLaunch.kind,
-            modelId: defaultLaunch.modelId,
-            latencyFlowId,
-            reuseInFlightEmptySession: true,
-          });
-        } catch (error) {
-          if (isSessionModelAvailabilityInterruption(error)) {
-            return { sessions };
-          }
-          throw error;
-        }
+        await createEmptySessionWithResolvedConfig({
+          workspaceId,
+          agentKind: defaultLaunch.kind,
+          modelId: defaultLaunch.modelId,
+          latencyFlowId,
+          reuseInFlightEmptySession: true,
+        });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.initial_session",
@@ -592,6 +588,7 @@ export function useWorkspaceBootstrapActions() {
     cancelDeferredFileTreePrefetch,
     lastViewedSessionByWorkspace,
     createEmptySessionWithResolvedConfig,
+    agentsByKind,
     prepareFileWorkspace,
     preferences,
     ensureCloudAgentCatalog,
@@ -807,9 +804,9 @@ export function useWorkspaceBootstrapActions() {
 
 function orderLaunchAgents(
   agents: readonly DesktopAgentLaunchAgent[],
+  agentsByKind: ReadonlyMap<string, { readiness: string }>,
 ): DesktopAgentLaunchAgent[] {
-  return [...agents]
-    .filter((agent) => agent.models.length > 0)
+  return filterTargetReadyLaunchAgents(agents, agentsByKind)
     .sort((left, right) =>
       compareChatLaunchKinds(
         left.kind,

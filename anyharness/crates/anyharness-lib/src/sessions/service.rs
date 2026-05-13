@@ -15,7 +15,7 @@ use crate::domains::agents::catalog::projection::models::{
 };
 use crate::domains::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
 use crate::domains::agents::readiness::launch_options::{
-    workspace_session_launch_options, WorkspaceSessionLaunchCatalogData,
+    workspace_session_launch_options, ResolvedWorkspaceLaunchOptions,
 };
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::agents::resolver::resolve_agent;
@@ -471,18 +471,15 @@ impl SessionService {
             .map_err(GetLiveConfigSnapshotError::Internal)
     }
 
-    pub fn get_workspace_session_launch_catalog(
+    pub fn resolved_workspace_launch_options(
         &self,
         workspace_id: &str,
-    ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
+    ) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
         self.workspace_store
             .find_by_id(workspace_id)?
             .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
 
-        Ok(workspace_session_launch_options(
-            workspace_id,
-            &self.runtime_home,
-        ))
+        Ok(workspace_session_launch_options(&self.runtime_home))
     }
 }
 
