@@ -382,6 +382,7 @@ pub struct ModelRegistryModelMetadata {
     pub display_name: String,
     pub description: Option<String>,
     pub is_default: bool,
+    pub default_opt_in: Option<bool>,
     pub status: ModelCatalogStatus,
     pub aliases: Vec<String>,
     pub min_runtime_version: Option<String>,

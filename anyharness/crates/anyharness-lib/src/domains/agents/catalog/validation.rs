@@ -120,6 +120,13 @@ fn validate_agent_catalog_agent(
                 );
             }
         }
+        if model.default_opt_in == Some(true) && model.status != ModelCatalogStatus::Active {
+            anyhow::bail!(
+                "agent catalog agent '{}' model '{}' has defaultOptIn but is not active",
+                agent.kind,
+                model.id
+            );
+        }
     }
     if default_count != 1 {
         anyhow::bail!(

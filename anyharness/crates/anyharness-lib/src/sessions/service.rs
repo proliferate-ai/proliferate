@@ -664,6 +664,7 @@ mod tests {
             display_name: id.to_string(),
             description: None,
             is_default,
+            default_opt_in: None,
             status: ModelCatalogStatus::Active,
             aliases: vec![],
             min_runtime_version: None,

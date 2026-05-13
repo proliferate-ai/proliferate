@@ -8,8 +8,14 @@ import {
   listConfiguredSessionControlValues,
 } from "@/lib/domain/chat/session-controls/session-mode-control";
 import { resolveModelForRegistry } from "@/lib/domain/chat/launch/session-config";
+import {
+  filterVisibleRegistryModels,
+  isModelVisibleByPreference,
+  resolveRegistryModelCatalogDefaultOptIn,
+} from "@/lib/domain/chat/models/model-visibility";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 import type {
+  ChatModelVisibilityOverridesByAgentKind,
   DefaultLiveSessionControlKey,
   DefaultLiveSessionControlValuesByAgentKind,
 } from "@/lib/domain/preferences/user/session-defaults";
@@ -22,6 +28,7 @@ export type SessionDefaultControlValueMetadata =
 export interface SettingsAgentDefaultPreferences {
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
+  chatModelVisibilityOverridesByAgentKind: ChatModelVisibilityOverridesByAgentKind;
   defaultSessionModeByAgentKind: Record<string, string>;
   defaultLiveSessionControlValuesByAgentKind: DefaultLiveSessionControlValuesByAgentKind;
 }
@@ -40,10 +47,19 @@ export interface SettingsAgentDefaultRow {
   displayName: string;
   isPrimary: boolean;
   models: SettingsAgentModel[];
+  visibilityModels: SettingsAgentModelVisibilityRow[];
   selectedModel: SettingsAgentModel;
   modeOptions: ConfiguredSessionControlValue[];
   selectedMode: ConfiguredSessionControlValue | null;
   liveDefaultControls: SettingsAgentLiveDefaultControlRow[];
+}
+
+export interface SettingsAgentModelVisibilityRow {
+  id: string;
+  displayName: string;
+  isVisible: boolean;
+  catalogDefaultOptIn: boolean;
+  hasManualOverride: boolean;
 }
 
 const SUPPORTED_LIVE_DEFAULT_KEYS = new Set<DefaultLiveSessionControlKey>([
@@ -67,13 +83,19 @@ export function buildSettingsAgentDefaultRows({
       return [];
     }
 
+    const storedModelId = preferences.defaultChatModelIdByAgentKind[registry.kind] ?? null;
     const selectedModel = resolveModelForRegistry(
       registry,
-      preferences.defaultChatModelIdByAgentKind[registry.kind] ?? null,
+      storedModelId,
     );
     if (!selectedModel) {
       return [];
     }
+    const visibleModels = filterVisibleRegistryModels({
+      registry,
+      selectedModelId: selectedModel.id,
+      overrides: preferences.chatModelVisibilityOverridesByAgentKind,
+    });
 
     const modeOptions = listConfiguredSessionControlValues(registry.kind, "mode");
     const selectedMode = modeOptions.length > 0
@@ -88,7 +110,11 @@ export function buildSettingsAgentDefaultRows({
       kind: registry.kind,
       displayName: registry.displayName,
       isPrimary: preferences.defaultChatAgentKind === registry.kind,
-      models: registry.models,
+      models: visibleModels,
+      visibilityModels: buildVisibilityRows(
+        registry,
+        preferences.chatModelVisibilityOverridesByAgentKind,
+      ),
       selectedModel,
       modeOptions,
       selectedMode,
@@ -97,6 +123,27 @@ export function buildSettingsAgentDefaultRows({
         preferences.defaultLiveSessionControlValuesByAgentKind[registry.kind] ?? {},
       ),
     }];
+  });
+}
+
+function buildVisibilityRows(
+  registry: SettingsAgentModelRegistry,
+  overrides: ChatModelVisibilityOverridesByAgentKind,
+): SettingsAgentModelVisibilityRow[] {
+  return registry.models.map((model) => {
+    const catalogDefaultOptIn = resolveRegistryModelCatalogDefaultOptIn(model);
+    return {
+      id: model.id,
+      displayName: model.displayName,
+      catalogDefaultOptIn,
+      isVisible: isModelVisibleByPreference(
+        registry.kind,
+        model.id,
+        catalogDefaultOptIn,
+        overrides,
+      ),
+      hasManualOverride: overrides[registry.kind]?.[model.id] !== undefined,
+    };
   });
 }
 

@@ -2,6 +2,8 @@ use std::path::Path;
 
 use crate::domains::agents::catalog::projection::models::bundled_model_registries;
 use crate::domains::agents::model::ResolvedAgentStatus;
+use crate::domains::agents::model_registry::projection::effective_registry_for_kind;
+use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::readiness::resolver::resolve_agent;
 use crate::domains::agents::registry::built_in_registry;
 
@@ -10,6 +12,7 @@ pub struct ResolvedLaunchModelOption {
     pub id: String,
     pub display_name: String,
     pub is_default: bool,
+    pub default_opt_in: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +29,26 @@ pub struct ResolvedWorkspaceLaunchOptions {
 }
 
 pub fn workspace_session_launch_options(runtime_home: &Path) -> ResolvedWorkspaceLaunchOptions {
+    workspace_session_launch_options_with_snapshots(runtime_home, None, None)
+}
+
+pub fn workspace_session_launch_options_with_dynamic_registry(
+    runtime_home: &Path,
+    model_registry_store: &DynamicModelRegistryStore,
+    workspace_id: Option<&str>,
+) -> anyhow::Result<ResolvedWorkspaceLaunchOptions> {
+    Ok(workspace_session_launch_options_with_snapshots(
+        runtime_home,
+        Some(model_registry_store),
+        workspace_id,
+    ))
+}
+
+fn workspace_session_launch_options_with_snapshots(
+    runtime_home: &Path,
+    model_registry_store: Option<&DynamicModelRegistryStore>,
+    workspace_id: Option<&str>,
+) -> ResolvedWorkspaceLaunchOptions {
     let registry = built_in_registry();
     let agents = bundled_model_registries()
         .into_iter()
@@ -37,6 +60,13 @@ pub fn workspace_session_launch_options(runtime_home: &Path) -> ResolvedWorkspac
             if resolved.status != ResolvedAgentStatus::Ready {
                 return None;
             }
+            let model_registry = model_registry_store
+                .and_then(|store| store.get(&model_registry.kind, workspace_id).ok().flatten())
+                .as_ref()
+                .and_then(|snapshot| {
+                    effective_registry_for_kind(&model_registry.kind, Some(snapshot))
+                })
+                .unwrap_or(model_registry);
 
             Some(ResolvedLaunchAgentOption {
                 kind: model_registry.kind,
@@ -49,6 +79,7 @@ pub fn workspace_session_launch_options(runtime_home: &Path) -> ResolvedWorkspac
                         id: model.id,
                         display_name: model.display_name,
                         is_default: model.is_default,
+                        default_opt_in: model.default_opt_in,
                     })
                     .collect(),
             })

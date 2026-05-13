@@ -161,6 +161,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0043_prompt_attachment_file_storage",
         include_str!("sql/0043_prompt_attachment_file_storage.sql"),
     ),
+    (
+        "0044_agent_model_registry_snapshots",
+        include_str!("sql/0044_agent_model_registry_snapshots.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

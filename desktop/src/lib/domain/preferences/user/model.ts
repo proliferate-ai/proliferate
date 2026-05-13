@@ -1,6 +1,7 @@
 import type { ColorMode, ThemePreset } from "@/config/theme";
 import type { ReadableCodeFontSizeId, UiFontSizeId } from "@/lib/domain/preferences/appearance";
 import type {
+  ChatModelVisibilityOverridesByAgentKind,
   DefaultLiveSessionControlValuesByAgentKind,
 } from "@/lib/domain/preferences/user/session-defaults";
 import { WORKTREE_AUTO_DELETE_LIMIT_DEFAULT } from "@/lib/domain/preferences/user/worktree-auto-delete";
@@ -19,6 +20,7 @@ export interface UserPreferences {
   readableCodeFontSizeId: ReadableCodeFontSizeId;
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
+  chatModelVisibilityOverridesByAgentKind: ChatModelVisibilityOverridesByAgentKind;
   defaultSessionModeByAgentKind: Record<string, string>;
   defaultLiveSessionControlValuesByAgentKind: DefaultLiveSessionControlValuesByAgentKind;
   defaultOpenInTargetId: string;
@@ -43,6 +45,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   readableCodeFontSizeId: "default",
   defaultChatAgentKind: "",
   defaultChatModelIdByAgentKind: {},
+  chatModelVisibilityOverridesByAgentKind: {},
   defaultSessionModeByAgentKind: {},
   defaultLiveSessionControlValuesByAgentKind: {},
   defaultOpenInTargetId: "",
@@ -67,6 +70,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   readableCodeFontSizeId: "default",
   defaultChatAgentKind: "",
   defaultChatModelIdByAgentKind: {},
+  chatModelVisibilityOverridesByAgentKind: {},
   defaultSessionModeByAgentKind: {},
   defaultLiveSessionControlValuesByAgentKind: {},
   defaultOpenInTargetId: "",

@@ -24,10 +24,22 @@ pub fn build_router(state: AppState) -> Router {
         // Agents
         .route("/agents", get(agents::list_agents))
         .route(
+            "/agents/launch-options",
+            get(agents::get_agent_launch_options),
+        )
+        .route(
             "/agents/reconcile",
             get(agents::get_reconcile_status).post(agents::reconcile_agents),
         )
         .route("/agents/{kind}", get(agents::get_agent))
+        .route(
+            "/agents/{kind}/model-registry",
+            get(agents::get_agent_model_registry),
+        )
+        .route(
+            "/agents/{kind}/model-registry/refresh",
+            post(agents::refresh_agent_model_registry),
+        )
         .route("/agents/{kind}/install", post(agents::install_agent))
         .route(
             "/agents/{kind}/login/start",

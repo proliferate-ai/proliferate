@@ -7,6 +7,7 @@ export type DefaultLiveSessionControlValuesByAgentKind = Record<
   string,
   Partial<Record<DefaultLiveSessionControlKey, string>>
 >;
+export type ChatModelVisibilityOverridesByAgentKind = Record<string, Record<string, boolean>>;
 
 const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-5": "sonnet",
@@ -89,6 +90,34 @@ export function sanitizeDefaultChatModelIdByAgentKind(
       const trimmedModelId = typeof modelId === "string" ? modelId.trim() : "";
       return trimmedAgentKind && trimmedModelId
         ? [[trimmedAgentKind, normalizeDefaultChatModelId(trimmedAgentKind, trimmedModelId)]]
+        : [];
+    }),
+  );
+}
+
+export function sanitizeChatModelVisibilityOverridesByAgentKind(
+  value: unknown,
+): ChatModelVisibilityOverridesByAgentKind {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([agentKind, overrides]) => {
+      const trimmedAgentKind = agentKind.trim();
+      if (!trimmedAgentKind || !overrides || typeof overrides !== "object" || Array.isArray(overrides)) {
+        return [];
+      }
+      const sanitizedOverrides = Object.fromEntries(
+        Object.entries(overrides).flatMap(([modelId, visible]) => {
+          const trimmedModelId = modelId.trim();
+          return trimmedModelId && typeof visible === "boolean"
+            ? [[trimmedModelId, visible]]
+            : [];
+        }),
+      );
+      return Object.keys(sanitizedOverrides).length > 0
+        ? [[trimmedAgentKind, sanitizedOverrides]]
         : [];
     }),
   );

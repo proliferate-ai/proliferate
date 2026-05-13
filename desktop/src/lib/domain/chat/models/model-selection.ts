@@ -9,6 +9,10 @@ import {
   type DesktopAgentLaunchAgent,
   type DesktopAgentLaunchModel,
 } from "@/lib/domain/agents/cloud-launch-catalog";
+import {
+  filterVisibleLaunchModels,
+} from "@/lib/domain/chat/models/model-visibility";
+import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
 
 export interface ModelSelectorSelection {
   kind: string;
@@ -18,6 +22,7 @@ export interface ModelSelectorSelection {
 export interface ChatLaunchPreferences {
   defaultChatAgentKind: string;
   defaultChatModelIdByAgentKind: Record<string, string>;
+  chatModelVisibilityOverridesByAgentKind?: ChatModelVisibilityOverridesByAgentKind;
 }
 
 export type ModelSelectionActionKind =
@@ -85,7 +90,8 @@ export function resolveEffectiveLaunchSelection(
   agents: DesktopAgentLaunchAgent[],
   preferences: ChatLaunchPreferences,
 ): ModelSelectorSelection | null {
-  const preferredAgent = agents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
+  const visibleAgents = agentsWithVisibleModels(agents, preferences, null);
+  const preferredAgent = visibleAgents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
     const selection = resolveAgentLaunchSelection(preferredAgent, preferences);
     if (selection) {
@@ -93,7 +99,7 @@ export function resolveEffectiveLaunchSelection(
     }
   }
 
-  for (const agent of agents) {
+  for (const agent of visibleAgents) {
     const selection = resolveAgentLaunchSelection(agent, preferences);
     if (selection) {
       return selection;
@@ -113,7 +119,10 @@ export function resolveConfiguredLaunchAgentSelection(
 
   const preferredAgent = agents.find((agent) => agent.kind === preferences.defaultChatAgentKind);
   if (preferredAgent) {
-    return resolveAgentLaunchSelection(preferredAgent, preferences);
+    return resolveAgentLaunchSelection(
+      agentWithVisibleModels(preferredAgent, preferences, null),
+      preferences,
+    );
   }
 
   return null;
@@ -165,8 +174,10 @@ export function buildModelSelectorGroups(
   selected: ModelSelectorSelection | null,
   activeSelection: ModelSelectorSelection | null | undefined,
   activeModelControl?: ActiveModelSelectorControl | null,
+  visibilityOverrides: ChatModelVisibilityOverridesByAgentKind = {},
 ): ModelSelectorGroup[] {
-  return agents.map((agent) => ({
+  return agentsWithVisibleModels(agents, { chatModelVisibilityOverridesByAgentKind: visibilityOverrides }, selected)
+    .map((agent) => ({
     kind: agent.kind,
     providerDisplayName: agent.displayName,
     models: resolveSelectorModels(agent, activeModelControl, selected).map((model) => ({
@@ -208,6 +219,31 @@ function resolveSelectorModels(
   }
 
   return agent.models;
+}
+
+function agentsWithVisibleModels(
+  agents: DesktopAgentLaunchAgent[],
+  preferences: Pick<ChatLaunchPreferences, "chatModelVisibilityOverridesByAgentKind">,
+  selected: ModelSelectorSelection | null,
+): DesktopAgentLaunchAgent[] {
+  return agents
+    .map((agent) => agentWithVisibleModels(agent, preferences, selected))
+    .filter((agent) => agent.models.length > 0);
+}
+
+function agentWithVisibleModels(
+  agent: DesktopAgentLaunchAgent,
+  preferences: Pick<ChatLaunchPreferences, "chatModelVisibilityOverridesByAgentKind">,
+  selected: ModelSelectorSelection | null,
+): DesktopAgentLaunchAgent {
+  return {
+    ...agent,
+    models: filterVisibleLaunchModels({
+      agent,
+      selectedModelId: selected?.kind === agent.kind ? selected.modelId : null,
+      overrides: preferences.chatModelVisibilityOverridesByAgentKind ?? {},
+    }),
+  };
 }
 
 function shouldHideSelectorModel(

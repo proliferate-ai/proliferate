@@ -10,6 +10,21 @@ export function anyHarnessAgentsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "agents"] as const;
 }
 
+export function anyHarnessAgentLaunchOptionsKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId?: string | null,
+) {
+  return [...anyHarnessAgentsKey(runtimeUrl), "launch-options", workspaceId ?? null] as const;
+}
+
+export function anyHarnessAgentModelRegistryKey(
+  runtimeUrl: string | null | undefined,
+  kind: string | null | undefined,
+  workspaceId?: string | null,
+) {
+  return [...anyHarnessAgentsKey(runtimeUrl), kind ?? "", "model-registry", workspaceId ?? null] as const;
+}
+
 export function anyHarnessAgentReconcileStatusKey(
   runtimeUrl: string | null | undefined,
 ) {

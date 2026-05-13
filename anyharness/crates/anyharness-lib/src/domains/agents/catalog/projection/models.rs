@@ -65,6 +65,7 @@ fn agent_catalog_agent_to_registry(
             display_name: model.display_name.clone(),
             description: model.description.clone(),
             is_default: model.is_default,
+            default_opt_in: model.default_opt_in,
             status: model.status,
             aliases: model.aliases.clone(),
             min_runtime_version: model.min_runtime_version.clone(),
@@ -253,7 +254,7 @@ mod tests {
         let gpt_55 = cursor
             .models
             .iter()
-            .find(|model| model.id == "gpt-5.5[context=272k,reasoning=medium,fast=false]")
+            .find(|model| model.id == "gpt-5.5-medium")
             .expect("cursor gpt 5.5 model");
         assert_eq!(
             gpt_55
@@ -282,6 +283,7 @@ mod tests {
                 aliases: vec![],
                 status: ModelCatalogStatus::Candidate,
                 is_default: false,
+                default_opt_in: None,
                 min_runtime_version: None,
                 launch_remediation: None,
             });
@@ -295,6 +297,7 @@ mod tests {
                 aliases: vec![],
                 status: ModelCatalogStatus::Active,
                 is_default: false,
+                default_opt_in: None,
                 min_runtime_version: Some("999.0.0".to_string()),
                 launch_remediation: None,
             });
@@ -308,6 +311,7 @@ mod tests {
                 aliases: vec![],
                 status: ModelCatalogStatus::Hidden,
                 is_default: false,
+                default_opt_in: None,
                 min_runtime_version: None,
                 launch_remediation: None,
             });

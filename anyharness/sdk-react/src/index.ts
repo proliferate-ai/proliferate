@@ -24,6 +24,8 @@ export {
   anyHarnessRuntimeKey,
   anyHarnessRuntimeHealthKey,
   anyHarnessAgentsKey,
+  anyHarnessAgentLaunchOptionsKey,
+  anyHarnessAgentModelRegistryKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessRuntimeWorkspacesKey,
@@ -76,7 +78,10 @@ export {
 } from "./hooks/runtime.js";
 export {
   useAgentsQuery,
+  useAgentLaunchOptionsQuery,
+  useAgentModelRegistryQuery,
   useAgentReconcileStatusQuery,
+  useRefreshAgentModelRegistryMutation,
   useInstallAgentMutation,
   useStartAgentLoginMutation,
   useReconcileAgentsMutation,

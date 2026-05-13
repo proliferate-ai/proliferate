@@ -7,6 +7,7 @@ const USER_PREFERENCE_KEYS = [
   "readableCodeFontSizeId",
   "defaultChatAgentKind",
   "defaultChatModelIdByAgentKind",
+  "chatModelVisibilityOverridesByAgentKind",
   "defaultSessionModeByAgentKind",
   "defaultLiveSessionControlValuesByAgentKind",
   "defaultOpenInTargetId",

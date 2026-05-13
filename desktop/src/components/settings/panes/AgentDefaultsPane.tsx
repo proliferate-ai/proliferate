@@ -1,6 +1,11 @@
 import { useMemo, type ReactNode } from "react";
+import {
+  useAgentLaunchOptionsQuery,
+  useRefreshAgentModelRegistryMutation,
+} from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
@@ -10,6 +15,7 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import type { DesktopLaunchModelRegistry as ModelRegistry } from "@/lib/domain/agents/cloud-launch-catalog";
+import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
 import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
 import {
   buildSettingsAgentDefaultRows,
@@ -34,13 +40,25 @@ export function AgentDefaultsPane() {
     runtimeError: state.error,
   })));
   const {
-    data: modelRegistries = EMPTY_MODEL_REGISTRIES,
+    data: cloudModelRegistries = EMPTY_MODEL_REGISTRIES,
     isLoading: modelRegistriesLoading,
   } = useCloudLaunchModelRegistries();
+  const runtimeLaunchOptions = useAgentLaunchOptionsQuery({
+    enabled: connectionState !== "failed",
+  });
+  const refreshModelRegistry = useRefreshAgentModelRegistryMutation();
+  const modelRegistries = useMemo(
+    () => mergeRuntimeLaunchOptionsIntoModelRegistries(
+      cloudModelRegistries,
+      runtimeLaunchOptions.data?.agents ?? null,
+    ),
+    [cloudModelRegistries, runtimeLaunchOptions.data?.agents],
+  );
   const { agents, isLoading: agentsLoading, readyAgentKinds } = useAgentCatalog();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
       state.defaultLiveSessionControlValuesByAgentKind,
@@ -89,7 +107,7 @@ export function AgentDefaultsPane() {
                 {runtimeError ?? "Reconnect the runtime to edit launch defaults."}
               </p>
             </div>
-          ) : ((agentsLoading || modelRegistriesLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
+          ) : ((agentsLoading || modelRegistriesLoading || runtimeLaunchOptions.isLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
             <div className="p-3">
               <LoadingState
                 message="Loading agent defaults"
@@ -234,11 +252,72 @@ export function AgentDefaultsPane() {
                 />
               </SettingsCardRow>
             ))}
+
+            <ModelRegistryPane
+              agentKind={row.kind}
+              models={row.visibilityModels}
+              refreshable={row.kind === "cursor" || row.kind === "opencode"}
+              refreshing={refreshModelRegistry.isPending}
+              onRefresh={() => {
+                refreshModelRegistry.mutate({
+                  kind: row.kind,
+                  request: { forceProviderRefresh: false },
+                });
+              }}
+              onVisibilityChange={(modelId, visible) => {
+                preferences.set(
+                  "chatModelVisibilityOverridesByAgentKind",
+                  withUpdatedModelVisibilityOverride(
+                    preferences.chatModelVisibilityOverridesByAgentKind,
+                    row.kind,
+                    modelId,
+                    visible,
+                  ),
+                );
+              }}
+            />
           </SettingsCard>
         </AgentDefaultsSection>
       ))}
     </section>
   );
+}
+
+function mergeRuntimeLaunchOptionsIntoModelRegistries(
+  cloudRegistries: ModelRegistry[],
+  runtimeAgents: Array<{
+    kind: string;
+    displayName: string;
+    defaultModelId?: string | null;
+    models: Array<{
+      id: string;
+      displayName: string;
+      isDefault: boolean;
+      defaultOptIn?: boolean | null;
+    }>;
+  }> | null,
+): ModelRegistry[] {
+  if (!runtimeAgents || runtimeAgents.length === 0) {
+    return cloudRegistries;
+  }
+
+  const cloudByKind = new Map(cloudRegistries.map((registry) => [registry.kind, registry]));
+  return runtimeAgents.map((agent) => {
+    const cloud = cloudByKind.get(agent.kind);
+    const cloudModelsById = new Map(cloud?.models.map((model) => [model.id, model]) ?? []);
+    return {
+      kind: agent.kind,
+      displayName: cloud?.displayName ?? agent.displayName,
+      defaultModelId: agent.defaultModelId ?? cloud?.defaultModelId ?? null,
+      models: agent.models.map((model) => ({
+        ...cloudModelsById.get(model.id),
+        id: model.id,
+        displayName: model.displayName,
+        isDefault: model.isDefault,
+        defaultOptIn: model.defaultOptIn ?? cloudModelsById.get(model.id)?.defaultOptIn ?? null,
+      })),
+    };
+  });
 }
 
 function AgentDefaultsSection({

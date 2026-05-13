@@ -6,12 +6,15 @@ import {
 import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
+  RefreshAgentModelRegistryRequest,
 } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
   anyHarnessAgentReconcileStatusKey,
+  anyHarnessAgentLaunchOptionsKey,
+  anyHarnessAgentModelRegistryKey,
   anyHarnessAgentsKey,
   anyHarnessReconcileAgentsMutationKey,
 } from "../lib/query-keys.js";
@@ -30,6 +33,75 @@ export function useAgentsQuery(options?: RuntimeQueryOptions) {
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agents.list(requestOptionsWithSignal(undefined, signal));
+    },
+  });
+}
+
+export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
+  workspaceId?: string | null;
+}) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const workspaceId = options?.workspaceId ?? null;
+
+  return useQuery({
+    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId),
+    enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
+    queryFn: async ({ signal }) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.getLaunchOptions(
+        workspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
+    },
+  });
+}
+
+export function useAgentModelRegistryQuery(options: RuntimeQueryOptions & {
+  kind: string;
+  workspaceId?: string | null;
+}) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const workspaceId = options.workspaceId ?? null;
+
+  return useQuery({
+    queryKey: anyHarnessAgentModelRegistryKey(runtimeUrl, options.kind, workspaceId),
+    enabled: (options.enabled ?? true) && runtimeUrl.length > 0 && options.kind.trim().length > 0,
+    queryFn: async ({ signal }) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.getModelRegistry(
+        options.kind,
+        workspaceId,
+        requestOptionsWithSignal(undefined, signal),
+      );
+    },
+  });
+}
+
+export function useRefreshAgentModelRegistryMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useMutation({
+    mutationFn: async (input: {
+      kind: string;
+      request?: RefreshAgentModelRegistryRequest;
+    }) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.refreshModelRegistry(input.kind, input.request ?? {});
+    },
+    onSuccess: async (response, input) => {
+      const workspaceId = response.snapshot.workspaceId ?? input.request?.workspaceId ?? null;
+      queryClient.setQueryData(
+        anyHarnessAgentModelRegistryKey(runtimeUrl, input.kind, workspaceId),
+        response.snapshot,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId),
+      });
+      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
     },
   });
 }

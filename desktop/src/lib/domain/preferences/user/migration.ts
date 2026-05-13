@@ -5,6 +5,7 @@ import {
 } from "@/lib/domain/preferences/review-preferences";
 import {
   normalizeDefaultChatModelId,
+  sanitizeChatModelVisibilityOverridesByAgentKind,
   sanitizeDefaultChatModelIdByAgentKind,
   sanitizeDefaultLiveSessionControlValuesByAgentKind,
   sanitizeDefaultSessionModeByAgentKind,
@@ -168,6 +169,19 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     !== JSON.stringify(next.defaultSessionModeByAgentKind)
   ) {
     next.defaultSessionModeByAgentKind = sanitizedDefaultSessionModeByAgentKind;
+    changed = true;
+  }
+
+  const sanitizedChatModelVisibilityOverridesByAgentKind =
+    sanitizeChatModelVisibilityOverridesByAgentKind(
+      next.chatModelVisibilityOverridesByAgentKind,
+    );
+  if (
+    JSON.stringify(sanitizedChatModelVisibilityOverridesByAgentKind)
+    !== JSON.stringify(next.chatModelVisibilityOverridesByAgentKind)
+  ) {
+    next.chatModelVisibilityOverridesByAgentKind =
+      sanitizedChatModelVisibilityOverridesByAgentKind;
     changed = true;
   }
 

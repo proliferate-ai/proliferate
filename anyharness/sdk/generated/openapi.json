@@ -53,6 +53,37 @@
         }
       }
     },
+    "/v1/agents/launch-options": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "get_agent_launch_options",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Optional workspace scope for target-discovered model registries",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List launchable agents and model options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentLaunchOptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/reconcile": {
       "get": {
         "tags": [
@@ -257,6 +288,107 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/model-registry": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "get_agent_model_registry",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Optional workspace scope for target-discovered model registries",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Last known model registry snapshot for one agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentModelRegistrySnapshotResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/model-registry/refresh": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "refresh_agent_model_registry",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshAgentModelRegistryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Refreshed or attempted model registry snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshAgentModelRegistryResponse"
                 }
               }
             }
@@ -5325,6 +5457,182 @@
           "failed"
         ]
       },
+      "AgentLaunchModelOption": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName",
+          "isDefault"
+        ],
+        "properties": {
+          "defaultOptIn": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentLaunchOption": {
+        "type": "object",
+        "required": [
+          "kind",
+          "displayName",
+          "models"
+        ],
+        "properties": {
+          "defaultModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentLaunchModelOption"
+            }
+          }
+        }
+      },
+      "AgentLaunchOptionsResponse": {
+        "type": "object",
+        "required": [
+          "agents"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentLaunchOption"
+            }
+          },
+          "workspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AgentModelRegistryModel": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName",
+          "aliases",
+          "status",
+          "isDefault"
+        ],
+        "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultOptIn": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelCatalogStatus"
+          }
+        }
+      },
+      "AgentModelRegistrySnapshotResponse": {
+        "type": "object",
+        "required": [
+          "kind",
+          "source",
+          "status",
+          "refreshedAt",
+          "models",
+          "warnings"
+        ],
+        "properties": {
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentModelRegistryModel"
+            }
+          },
+          "refreshedAt": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ModelRegistrySource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelRegistryStatus"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "AgentReadinessState": {
         "type": "string",
         "enum": [
@@ -9636,6 +9944,31 @@
           }
         }
       },
+      "ModelCatalogStatus": {
+        "type": "string",
+        "enum": [
+          "candidate",
+          "active",
+          "deprecated",
+          "hidden"
+        ]
+      },
+      "ModelRegistrySource": {
+        "type": "string",
+        "enum": [
+          "bundled_catalog",
+          "provider_cli"
+        ]
+      },
+      "ModelRegistryStatus": {
+        "type": "string",
+        "enum": [
+          "available",
+          "refresh_failed",
+          "agent_not_ready",
+          "unsupported"
+        ]
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -11238,6 +11571,31 @@
           "skipped",
           "failed"
         ]
+      },
+      "RefreshAgentModelRegistryRequest": {
+        "type": "object",
+        "properties": {
+          "forceProviderRefresh": {
+            "type": "boolean"
+          },
+          "workspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "RefreshAgentModelRegistryResponse": {
+        "type": "object",
+        "required": [
+          "snapshot"
+        ],
+        "properties": {
+          "snapshot": {
+            "$ref": "#/components/schemas/AgentModelRegistrySnapshotResponse"
+          }
+        }
       },
       "RenameWorkspaceFileEntryRequest": {
         "type": "object",

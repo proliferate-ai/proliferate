@@ -69,6 +69,109 @@ pub struct AgentSummary {
     pub message: Option<String>,
 }
 
+// --- Model registries / launch options ---
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelRegistrySource {
+    BundledCatalog,
+    ProviderCli,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelRegistryStatus {
+    Available,
+    RefreshFailed,
+    AgentNotReady,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelCatalogStatus {
+    Candidate,
+    Active,
+    Deprecated,
+    Hidden,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModelRegistryModel {
+    pub id: String,
+    pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub aliases: Vec<String>,
+    pub status: ModelCatalogStatus,
+    pub is_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_opt_in: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModelRegistrySnapshotResponse {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    pub source: ModelRegistrySource,
+    pub status: ModelRegistryStatus,
+    pub refreshed_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    pub models: Vec<AgentModelRegistryModel>,
+    pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshAgentModelRegistryRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
+    pub force_provider_refresh: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshAgentModelRegistryResponse {
+    pub snapshot: AgentModelRegistrySnapshotResponse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLaunchModelOption {
+    pub id: String,
+    pub display_name: String,
+    pub is_default: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_opt_in: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLaunchOption {
+    pub kind: String,
+    pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_model_id: Option<String>,
+    pub models: Vec<AgentLaunchModelOption>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLaunchOptionsResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    pub agents: Vec<AgentLaunchOption>,
+}
+
 // --- Install ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

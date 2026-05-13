@@ -77,6 +77,7 @@ export interface DesktopLaunchModelRegistryModel {
   aliases?: string[];
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
+  defaultOptIn?: boolean | null;
   launchRemediation?: DesktopAgentLaunchRemediation | null;
   sessionDefaultControls?: DesktopSessionDefaultControl[];
 }
@@ -162,6 +163,7 @@ interface CloudAgentCatalogModelInput {
   aliases?: string[];
   status: DesktopAgentCatalogStatus;
   isDefault: boolean;
+  defaultOptIn?: boolean | null;
   provider?: string | null;
   tags?: string[];
   capabilities?: Record<string, unknown> | null;
@@ -284,6 +286,7 @@ function projectCloudModel(model: CloudAgentCatalogModelInput): DesktopAgentLaun
     aliases: model.aliases ?? [],
     status: model.status,
     isDefault: model.isDefault,
+    defaultOptIn: model.defaultOptIn ?? null,
     provider: model.provider ?? null,
     tags: model.tags ?? [],
     launchRemediation: model.launchRemediation

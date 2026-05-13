@@ -48,6 +48,7 @@ describe("buildSettingsAgentDefaultRows", () => {
       preferences: {
         defaultChatAgentKind: "claude",
         defaultChatModelIdByAgentKind: { claude: "opus" },
+        chatModelVisibilityOverridesByAgentKind: {},
         defaultSessionModeByAgentKind: {},
         defaultLiveSessionControlValuesByAgentKind: {
           claude: {

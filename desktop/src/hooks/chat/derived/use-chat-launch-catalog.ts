@@ -31,6 +31,7 @@ export function useChatLaunchCatalog({
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
+    chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
   })));
 
   const query = useCloudAgentCatalog(true);
@@ -82,8 +83,15 @@ export function useChatLaunchCatalog({
       selectedLaunchSelection,
       activeSelection,
       activeModelControl,
+      preferences.chatModelVisibilityOverridesByAgentKind,
     ),
-    [activeModelControl, activeSelection, launchAgents, selectedLaunchSelection],
+    [
+      activeModelControl,
+      activeSelection,
+      launchAgents,
+      preferences.chatModelVisibilityOverridesByAgentKind,
+      selectedLaunchSelection,
+    ],
   );
 
   return {

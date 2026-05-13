@@ -68,6 +68,7 @@ class AgentCatalogModel(BaseModel):
     aliases: list[str] = []
     status: Literal["active", "candidate", "deprecated", "hidden"]
     isDefault: bool
+    defaultOptIn: bool | None = None
     provider: str | None = None
     tags: list[str] = []
     capabilities: dict[str, object] | None = None

@@ -50,6 +50,8 @@ pub struct AgentCatalogModel {
     pub status: ModelCatalogStatus,
     pub is_default: bool,
     #[serde(default)]
+    pub default_opt_in: Option<bool>,
+    #[serde(default)]
     pub min_runtime_version: Option<String>,
     #[serde(default)]
     pub launch_remediation: Option<ModelLaunchRemediationMetadata>,
