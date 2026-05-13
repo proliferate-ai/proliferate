@@ -20,7 +20,6 @@ pub mod reviews;
 pub mod sessions;
 pub mod subagents;
 pub mod terminals;
-pub mod workspace_naming;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod worktrees;

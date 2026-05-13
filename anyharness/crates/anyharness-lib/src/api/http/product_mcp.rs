@@ -9,11 +9,14 @@ use serde_json::Value;
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::reviews::mcp::definition as reviews_mcp_definition;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDispatchError,
     ProductMcpRequestContext, PRODUCT_MCP_TOKEN_HEADER_NAME,
 };
 use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointServer;
+use crate::sessions::subagents::mcp::definition as subagents_mcp_definition;
+use crate::sessions::workspace_naming::mcp::definition as workspace_naming_mcp_definition;
 
 pub async fn get_product_mcp_endpoint(
     State(_state): State<AppState>,
@@ -33,6 +36,78 @@ pub async fn post_product_mcp_endpoint(
         &workspace_id,
         &session_id,
         &product_mcp_slug,
+        headers,
+        body,
+    )
+    .await
+}
+
+pub async fn get_subagents_legacy_mcp_endpoint(
+    State(_state): State<AppState>,
+    Path((_workspace_id, _session_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    StatusCode::NO_CONTENT
+}
+
+pub async fn post_subagents_legacy_mcp_endpoint(
+    State(state): State<AppState>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Response, ApiError> {
+    dispatch_product_mcp(
+        &state,
+        &workspace_id,
+        &session_id,
+        subagents_mcp_definition::ROUTE_SLUG,
+        headers,
+        body,
+    )
+    .await
+}
+
+pub async fn get_reviews_legacy_mcp_endpoint(
+    State(_state): State<AppState>,
+    Path((_workspace_id, _session_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    StatusCode::NO_CONTENT
+}
+
+pub async fn post_reviews_legacy_mcp_endpoint(
+    State(state): State<AppState>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Response, ApiError> {
+    dispatch_product_mcp(
+        &state,
+        &workspace_id,
+        &session_id,
+        reviews_mcp_definition::ROUTE_SLUG,
+        headers,
+        body,
+    )
+    .await
+}
+
+pub async fn get_workspace_naming_legacy_mcp_endpoint(
+    State(_state): State<AppState>,
+    Path((_workspace_id, _session_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    StatusCode::NO_CONTENT
+}
+
+pub async fn post_workspace_naming_legacy_mcp_endpoint(
+    State(state): State<AppState>,
+    Path((workspace_id, session_id)): Path<(String, String)>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Response, ApiError> {
+    dispatch_product_mcp(
+        &state,
+        &workspace_id,
+        &session_id,
+        workspace_naming_mcp_definition::ROUTE_SLUG,
         headers,
         body,
     )

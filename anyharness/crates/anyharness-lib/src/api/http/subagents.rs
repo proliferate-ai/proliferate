@@ -4,17 +4,12 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
     Json,
 };
-use serde_json::Value;
 
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
-use super::product_mcp;
 use crate::app::AppState;
-use crate::sessions::subagents::mcp::definition::ROUTE_SLUG;
 use crate::sessions::subagents::service::SubagentError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -83,30 +78,6 @@ pub async fn schedule_subagent_wake(
         wake_scheduled: true,
         already_scheduled: !inserted,
     }))
-}
-
-pub async fn get_subagents_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_subagents_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<impl IntoResponse, ApiError> {
-    product_mcp::dispatch_product_mcp(
-        &state,
-        &workspace_id,
-        &session_id,
-        ROUTE_SLUG,
-        headers,
-        body,
-    )
-    .await
 }
 
 #[allow(dead_code)]

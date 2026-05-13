@@ -5,17 +5,12 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
     Json,
 };
-use serde_json::Value;
 
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
-use super::product_mcp;
 use crate::app::AppState;
-use crate::domains::reviews::mcp::definition::ROUTE_SLUG;
 use crate::domains::reviews::service::ReviewError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -220,30 +215,6 @@ pub async fn mark_review_revision_ready(
         .await
         .map_err(map_review_error)?;
     Ok(Json(ReviewRunResponse { run }))
-}
-
-pub async fn get_reviews_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_reviews_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<impl IntoResponse, ApiError> {
-    product_mcp::dispatch_product_mcp(
-        &state,
-        &workspace_id,
-        &session_id,
-        ROUTE_SLUG,
-        headers,
-        body,
-    )
-    .await
 }
 
 fn map_review_error(error: ReviewError) -> ApiError {
