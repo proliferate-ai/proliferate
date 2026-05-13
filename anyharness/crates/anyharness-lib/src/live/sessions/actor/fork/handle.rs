@@ -5,6 +5,7 @@ use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 
 use crate::live::sessions::actor::command::{ForkSessionCommandError, ForkSessionCommandResult};
+use crate::live::sessions::connection::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::mcp_bindings::acp::to_acp_servers;
 use crate::sessions::mcp_bindings::model::SessionMcpServer;
@@ -67,4 +68,12 @@ pub(in crate::live::sessions::actor) async fn verify_fork_ready(
     }
 
     Ok(())
+}
+
+pub(in crate::live::sessions::actor) async fn close_native_child_session(
+    conn: &acp::ClientSideConnection,
+    native_session_id: &str,
+    supports_close: bool,
+) -> anyhow::Result<()> {
+    close_native_session(conn, native_session_id, supports_close).await
 }

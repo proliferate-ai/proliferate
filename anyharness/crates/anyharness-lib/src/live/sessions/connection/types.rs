@@ -1,35 +1,6 @@
 use crate::sessions::live_config::{LegacyModeOption, LegacyModeState};
 use agent_client_protocol as acp;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionStartupStrategy {
-    Fresh,
-    ResumeSeqFreshNative,
-    LoadNative(String),
-    LoadNativeNoFallback(String),
-    ForkFromNative { parent_native_session_id: String },
-}
-
-impl SessionStartupStrategy {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Fresh => "fresh",
-            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
-            Self::LoadNative(_) => "load_native",
-            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
-            Self::ForkFromNative { .. } => "fork_from_native",
-        }
-    }
-
-    pub fn resumes_durable_history(&self) -> bool {
-        !matches!(self, Self::Fresh)
-    }
-
-    pub(in crate::live::sessions) fn allows_missing_load_fallback(&self) -> bool {
-        matches!(self, Self::LoadNative(_))
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::live::sessions) enum NativeSessionStartupDisposition {
     CreatedFresh,

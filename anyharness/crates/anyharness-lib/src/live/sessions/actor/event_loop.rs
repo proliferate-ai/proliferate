@@ -6,7 +6,9 @@ use tokio::sync::mpsc;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::command::{InteractionResolution, SessionCommand};
 use crate::live::sessions::actor::config::handle::handle_idle_config_command;
-use crate::live::sessions::actor::fork::handle::{fork_native_session, verify_fork_ready};
+use crate::live::sessions::actor::fork::handle::{
+    close_native_child_session, fork_native_session, verify_fork_ready,
+};
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
 use crate::live::sessions::actor::interactions::handle::{
     handle_apply_plan_decision, handle_resolve_interaction,
@@ -22,7 +24,6 @@ use crate::live::sessions::actor::turn::handle::{handle_idle_prompt_command, Idl
 use crate::live::sessions::actor::turn::queue::{
     handle_delete_pending_prompt, handle_edit_pending_prompt,
 };
-use crate::live::sessions::connection::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
 
 pub(in crate::live::sessions::actor) async fn run_actor(
@@ -148,7 +149,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::CloseNativeSession { native_session_id, respond_to }) => {
-                        let result = close_native_session(
+                        let result = close_native_child_session(
                             &conn,
                             &native_session_id,
                             supports_native_close,

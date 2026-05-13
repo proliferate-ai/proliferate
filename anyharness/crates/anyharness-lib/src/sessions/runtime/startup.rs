@@ -6,7 +6,7 @@ use std::time::Instant;
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::agents::resolver::resolve_agent;
-use crate::live::sessions::connection::types::SessionStartupStrategy;
+use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::extensions::SessionTurnFinishedContext;

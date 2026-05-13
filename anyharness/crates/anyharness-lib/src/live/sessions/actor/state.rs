@@ -12,12 +12,40 @@ use crate::live::sessions::actor::config::selection::find_select_option_by_purpo
 use crate::live::sessions::actor::config::types::ConfigPurpose;
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::connection::types::NativeSessionStartupState;
-use crate::live::sessions::connection::types::SessionStartupStrategy;
 use crate::observability::latency::LatencyRequestContext;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionStartupStrategy {
+    Fresh,
+    ResumeSeqFreshNative,
+    LoadNative(String),
+    LoadNativeNoFallback(String),
+    ForkFromNative { parent_native_session_id: String },
+}
+
+impl SessionStartupStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
+            Self::LoadNative(_) => "load_native",
+            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
+            Self::ForkFromNative { .. } => "fork_from_native",
+        }
+    }
+
+    pub fn resumes_durable_history(&self) -> bool {
+        !matches!(self, Self::Fresh)
+    }
+
+    pub(in crate::live::sessions) fn allows_missing_load_fallback(&self) -> bool {
+        matches!(self, Self::LoadNative(_))
+    }
+}
 
 pub struct SessionActorConfig {
     pub session: SessionRecord,

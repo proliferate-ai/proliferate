@@ -15,8 +15,8 @@ use crate::live::sessions::actor::spawn::{
     spawn_session_actor_pending, ActorReadyResult, PendingSessionActor,
 };
 use crate::live::sessions::actor::state::SessionActorConfig;
+use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
-use crate::live::sessions::connection::types::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
@@ -433,7 +433,7 @@ mod tests {
     use crate::domains::agents::registry::built_in_registry;
     use crate::domains::plans::{service::PlanService, store::PlanStore};
     use crate::live::sessions::actor::command::SessionCommand;
-    use crate::live::sessions::connection::types::SessionStartupStrategy;
+    use crate::live::sessions::actor::state::SessionStartupStrategy;
     use crate::live::sessions::handle::LiveSessionHandle;
     use crate::persistence::Db;
     use crate::sessions::model::{SessionEventRecord, SessionRecord};

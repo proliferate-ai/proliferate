@@ -1,7 +1,8 @@
 use super::*;
+use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::connection::start::start_new_session;
 use crate::live::sessions::connection::types::{
-    NativeSessionStartupDisposition, NativeSessionStartupState, SessionStartupStrategy,
+    NativeSessionStartupDisposition, NativeSessionStartupState,
 };
 use acp::Agent as _;
 use anyharness_contract::v1::SessionActionCapabilities;
