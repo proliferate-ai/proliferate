@@ -14,15 +14,8 @@ use crate::domains::agents::model::{
 
 /// Returns trusted process/auth descriptors from the bundled catalog only.
 pub fn bundled_agent_descriptors() -> Vec<AgentDescriptor> {
-    match bundled_agent_catalog_document()
-        .and_then(|catalog| agent_catalog_to_descriptors(&catalog))
-    {
-        Ok(descriptors) => descriptors,
-        Err(error) => {
-            tracing::error!(error = %error, "bundled agent catalog process descriptors are invalid");
-            vec![]
-        }
-    }
+    agent_catalog_to_descriptors(bundled_agent_catalog_document())
+        .expect("bundled agents catalog descriptor projection must validate")
 }
 
 pub fn agent_catalog_to_descriptors(

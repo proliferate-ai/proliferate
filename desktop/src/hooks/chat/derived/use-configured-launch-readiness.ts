@@ -16,21 +16,29 @@ export function useConfiguredLaunchReadiness(
   })));
   const launchCatalog = useChatLaunchCatalog({ activeSelection });
   const { agentsByKind } = useAgentCatalog();
-  const hasCatalogLoadError = Boolean(launchCatalog.error && !launchCatalog.data);
+  const hasLaunchReadinessError = Boolean(launchCatalog.error);
+  const launchReadinessErrorReason = launchCatalog.targetReadinessError
+    ? "Couldn't load target agent readiness. Retry once AnyHarness is reachable."
+    : "Couldn't load the agent catalog. Retry once cloud is reachable.";
 
   const resolution = useMemo(
-    () => hasCatalogLoadError
+    () => hasLaunchReadinessError
       ? {
         selection: null,
         displayName: null,
-        reason: "Couldn't load the agent catalog. Retry once cloud is reachable.",
+        reason: launchReadinessErrorReason,
         status: "unavailable" as const,
       }
       : resolveConfiguredLaunchSelection(
         launchCatalog.launchAgents,
         preferences,
       ),
-    [hasCatalogLoadError, launchCatalog.launchAgents, preferences],
+    [
+      hasLaunchReadinessError,
+      launchCatalog.launchAgents,
+      launchReadinessErrorReason,
+      preferences,
+    ],
   );
 
   const configuredAgent = preferences.defaultChatAgentKind
@@ -38,12 +46,12 @@ export function useConfiguredLaunchReadiness(
     : null;
 
   const isConfiguredAgentMissing =
-    !hasCatalogLoadError
+    !hasLaunchReadinessError
     && !launchCatalog.isLoading
     && Boolean(preferences.defaultChatAgentKind)
     && configuredAgent === null;
   const isConfiguredAgentNotReady =
-    !hasCatalogLoadError
+    !hasLaunchReadinessError
     && !launchCatalog.isLoading
     && Boolean(preferences.defaultChatAgentKind)
     && configuredAgent !== null
@@ -64,7 +72,7 @@ export function useConfiguredLaunchReadiness(
     displayName: resolution.displayName,
     disabledReason,
     status: effectiveStatus,
-    isLoading: !hasCatalogLoadError && launchCatalog.isLoading,
+    isLoading: !hasLaunchReadinessError && launchCatalog.isLoading,
     isReady: effectiveStatus === "ready",
     launchCatalog,
   };

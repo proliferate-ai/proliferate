@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
 import type { Workspace } from "@anyharness/sdk";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { formatSessionCreateToastMessage } from "@/lib/domain/sessions/creation/create-session-error";
 import { useSessionConfigActions } from "@/hooks/sessions/workflows/use-session-config-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
@@ -92,8 +93,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
         })
         .catch((error) => {
           failLatencyFlow(latencyFlowId, "session_create_failed");
-          const message = error instanceof Error ? error.message : String(error);
-          showToast(`Failed to open chat: ${message}`);
+          showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
         });
       return;
     }
@@ -116,8 +116,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
           return;
         }
         failLatencyFlow(latencyFlowId, "session_create_failed");
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(`Failed to open chat: ${message}`);
+        showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
       });
   }, [
     createThreadFromSelection,

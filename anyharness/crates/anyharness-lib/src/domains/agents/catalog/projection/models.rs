@@ -11,28 +11,16 @@ use crate::domains::agents::model::{
 
 /// Returns target-bundled fallback model metadata for all supported agents.
 pub fn bundled_model_registries() -> Vec<ModelRegistryMetadata> {
-    match bundled_agent_catalog_document()
-        .and_then(|catalog| agent_catalog_to_model_registries(&catalog))
-    {
-        Ok(registries) => registries,
-        Err(error) => {
-            tracing::error!(error = %error, "bundled agent catalog model registry is invalid");
-            vec![]
-        }
-    }
+    agent_catalog_to_model_registries(bundled_agent_catalog_document())
+        .expect("bundled agents catalog model registry projection must validate")
 }
 
 pub fn bundled_catalog_version() -> String {
-    bundled_agent_catalog_document()
-        .map(|catalog| catalog.catalog_version)
-        .unwrap_or_else(|error| {
-            tracing::error!(error = %error, "bundled agent catalog version is unavailable");
-            "bundled-invalid".to_string()
-        })
+    bundled_agent_catalog_document().catalog_version.clone()
 }
 
 pub fn bundled_create_mode_ids(agent_kind: &str) -> Option<Vec<String>> {
-    let catalog = bundled_agent_catalog_document().ok()?;
+    let catalog = bundled_agent_catalog_document();
     let agent = catalog
         .agents
         .iter()
@@ -282,7 +270,7 @@ mod tests {
 
     #[test]
     fn hidden_candidate_and_too_new_models_are_not_selectable() {
-        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let mut catalog = bundled_agent_catalog_document().clone();
         let codex = catalog
             .agents
             .iter_mut()
@@ -342,7 +330,7 @@ mod tests {
 
     #[test]
     fn validates_launch_remediation_metadata() {
-        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let mut catalog = bundled_agent_catalog_document().clone();
         let codex = catalog
             .agents
             .iter_mut()

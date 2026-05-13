@@ -267,7 +267,10 @@ fn validate_agent_catalog_control_key_shape(
                     agent_kind
                 );
             }
-            if !matches!(control.value_source.as_str(), "agentModels" | "discoveredModels") {
+            if !matches!(
+                control.value_source.as_str(),
+                "agentModels" | "discoveredModels"
+            ) {
                 anyhow::bail!(
                     "agent catalog agent '{}' model control has unsupported valueSource '{}'",
                     agent_kind,
@@ -309,12 +312,12 @@ mod tests {
 
     #[test]
     fn bundled_agent_catalog_is_valid() {
-        bundled_agent_catalog_document().expect("bundled catalog should validate");
+        bundled_agent_catalog_document();
     }
 
     #[test]
     fn agent_catalog_rejects_unsupported_create_field() {
-        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let mut catalog = bundled_agent_catalog_document().clone();
         let codex = catalog
             .agents
             .iter_mut()
@@ -338,7 +341,7 @@ mod tests {
 
     #[test]
     fn agent_catalog_rejects_unsupported_value_source() {
-        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let mut catalog = bundled_agent_catalog_document().clone();
         let codex = catalog
             .agents
             .iter_mut()
@@ -362,7 +365,7 @@ mod tests {
 
     #[test]
     fn agent_catalog_rejects_model_control_with_inline_values() {
-        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let mut catalog = bundled_agent_catalog_document().clone();
         let codex = catalog
             .agents
             .iter_mut()
@@ -379,7 +382,9 @@ mod tests {
         let error = validate_agent_catalog_document(&catalog).expect_err("invalid model control");
 
         assert!(
-            error.to_string().contains("model control has unsupported valueSource"),
+            error
+                .to_string()
+                .contains("model control has unsupported valueSource"),
             "unexpected error: {error}"
         );
     }

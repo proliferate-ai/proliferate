@@ -1,7 +1,7 @@
 # Agent Catalog And Readiness
 
-Status: authoritative for the fully migrated AnyHarness agent catalog,
-installation, credentials, and readiness architecture.
+Status: authoritative for AnyHarness agent catalog/readiness truth sources and
+the current catalog migration.
 
 ## Goal
 
@@ -20,9 +20,12 @@ It does not answer:
 - how to speak provider-specific CLI, ACP registry, or MCP protocols
 - how a session actor processes turns
 
-The fully migrated architecture has one supported catalog input, one agents
-domain, and separate modules for catalog, install, credentials, readiness, and
-launch resolution.
+The current migration establishes one supported catalog input and removes the
+old split model/launch catalog paths. It does not require every existing
+agents-domain file to be promoted into a same-named folder in the same PR.
+Install, credentials, registry, reconcile, and seed code must live outside
+`catalog/**`; deeper folder promotion for those areas is explicit follow-up
+topology work.
 
 ## Truth Sources
 
@@ -101,9 +104,9 @@ The trusted bundled catalog may define:
 This boundary should be visible in code. The projection that produces
 `AgentDescriptor` must be sourced from trusted catalog data only.
 
-## Target Source Shape
+## Catalog Migration Source Shape
 
-Final agents domain:
+Required shape for this migration:
 
 ```text
 anyharness-lib/src/domains/agents/
@@ -116,6 +119,25 @@ anyharness-lib/src/domains/agents/
     projection/
       descriptors.rs
       models.rs
+  readiness/
+    mod.rs
+    launch_options.rs
+  credentials.rs              # transitional: outside catalog/**
+  installer.rs                # transitional: outside catalog/**
+  install_lock.rs             # transitional: outside catalog/**
+  registry.rs                 # transitional: outside catalog/**
+  resolver.rs                 # transitional readiness resolver
+  reconcile.rs                # transitional: outside catalog/**
+  reconcile_execution.rs      # transitional: outside catalog/**
+  seed/
+    mod.rs
+```
+
+Follow-up topology may promote those transitional files into focused folders
+once their boundaries are split cleanly:
+
+```text
+anyharness-lib/src/domains/agents/
   registry/
     mod.rs
   credentials/
@@ -135,6 +157,8 @@ anyharness-lib/src/domains/agents/
   reconcile/
     mod.rs
   seed/
+    mod.rs
+  portability/
     mod.rs
 ```
 
@@ -167,7 +191,7 @@ Banned:
 - treating static model metadata as active-session truth
 - parsing old model/launch catalog formats
 
-### `registry/`
+### `registry/` Or `registry.rs`
 
 Owns the supported-agent registry exposed to runtime callers.
 
@@ -180,7 +204,7 @@ Which agent kinds does this runtime know how to support?
 It is built from trusted catalog descriptor projection. It should not perform
 readiness checks or installation.
 
-### `credentials/`
+### `credentials/` Or `credentials.rs`
 
 Owns runtime credential readiness mapping.
 
@@ -228,7 +252,7 @@ Dynamic providers such as OpenCode may expose model lists at live ACP runtime.
 Readiness should say whether the provider is launchable; it should not try to
 precompute every live model choice when the provider owns that dynamically.
 
-### `install/`
+### `install/` Or Transitional Install Files
 
 Owns managed install/update workflows.
 
@@ -251,7 +275,7 @@ Banned:
 Low-level vendor mechanics belong under `integrations/agent_cli/**`.
 `install/` uses those mechanics to implement product install/update behavior.
 
-### `reconcile/`
+### `reconcile/` Or Transitional Reconcile Files
 
 Owns batch repair/sync.
 
@@ -388,7 +412,7 @@ Do not add:
 
 ## Migration Acceptance
 
-A full migration is done only when:
+The catalog migration is done only when:
 
 - `domains/agents/catalog.rs` is gone.
 - `domains/agents/catalog/**` exists with focused submodules.
@@ -398,16 +422,20 @@ A full migration is done only when:
   `AgentCatalogDocument`.
 - executable/process/auth descriptor projection is sourced only from trusted
   catalog data.
-- install, credential detection, readiness, reconcile, and seed behavior live
-  outside `catalog/**`.
+- install, credential detection, readiness, reconcile, seed, and portability
+  behavior live outside `catalog/**`.
 - tests are split by responsibility:
   - catalog validation
   - descriptor projection
   - fallback model projection
   - internal launch-option projection
-  - readiness
-  - install
-  - credentials
+  - readiness code touched by the migration
+
+Agents-domain topology promotion is a separate cleanup. It is not complete
+until transitional files such as `credentials.rs`, `installer.rs`,
+`install_lock.rs`, `registry.rs`, `resolver.rs`, `reconcile.rs`, and
+`reconcile_execution.rs` are either promoted into focused folders or documented
+as intentionally flat.
 
 Verification examples:
 

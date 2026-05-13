@@ -72,6 +72,8 @@ describe("useChatLaunchCatalog", () => {
     });
     mocks.useAgentCatalog.mockReturnValue({
       isLoading: false,
+      isError: false,
+      error: null,
       agentsByKind: new Map([
         ["codex", { readiness: "ready" }],
         ["claude", { readiness: "ready" }],
@@ -128,14 +130,18 @@ describe("useChatLaunchCatalog", () => {
     const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
 
     expect(result.current.error).toBe(error);
+    expect(result.current.cloudCatalogError).toBe(error);
+    expect(result.current.targetReadinessError).toBeNull();
     expect(result.current.launchAgents).toEqual([]);
     expect(result.current.hasLaunchableAgents).toBe(false);
-    expect(result.current.isEmpty).toBe(true);
+    expect(result.current.isEmpty).toBe(false);
   });
 
   it("filters cloud launch options to target-ready agents", () => {
     mocks.useAgentCatalog.mockReturnValue({
       isLoading: false,
+      isError: false,
+      error: null,
       agentsByKind: new Map([
         ["codex", { readiness: "ready" }],
         ["claude", { readiness: "login_required" }],
@@ -151,5 +157,24 @@ describe("useChatLaunchCatalog", () => {
       modelId: "gpt-5.5",
     });
     expect(result.current.snapshot?.agents.map((agent) => agent.kind)).toEqual(["codex"]);
+  });
+
+  it("surfaces target readiness errors distinctly from cloud catalog errors", () => {
+    const error = new Error("runtime unavailable");
+    mocks.useAgentCatalog.mockReturnValue({
+      isLoading: false,
+      isError: true,
+      error,
+      agentsByKind: new Map(),
+    });
+
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+
+    expect(result.current.error).toBe(error);
+    expect(result.current.cloudCatalogError).toBeNull();
+    expect(result.current.targetReadinessError).toBe(error);
+    expect(result.current.launchAgents).toEqual([]);
+    expect(result.current.hasLaunchableAgents).toBe(false);
+    expect(result.current.isEmpty).toBe(false);
   });
 });

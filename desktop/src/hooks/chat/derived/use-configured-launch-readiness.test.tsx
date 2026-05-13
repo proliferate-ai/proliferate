@@ -29,6 +29,7 @@ describe("useConfiguredLaunchReadiness", () => {
     mocks.useChatLaunchCatalog.mockReturnValue({
       data: undefined,
       error: null,
+      targetReadinessError: null,
       isLoading: false,
       launchAgents: [],
     });
@@ -46,6 +47,7 @@ describe("useConfiguredLaunchReadiness", () => {
     mocks.useChatLaunchCatalog.mockReturnValue({
       data: undefined,
       error: new Error("cloud unavailable"),
+      targetReadinessError: null,
       isLoading: false,
       launchAgents: [],
     });
@@ -61,10 +63,32 @@ describe("useConfiguredLaunchReadiness", () => {
     });
   });
 
+  it("blocks configured pre-session launch when target readiness is unavailable", () => {
+    const targetError = new Error("runtime unavailable");
+    mocks.useChatLaunchCatalog.mockReturnValue({
+      data: {},
+      error: targetError,
+      targetReadinessError: targetError,
+      isLoading: false,
+      launchAgents: [],
+    });
+
+    const { result } = renderHook(() => useConfiguredLaunchReadiness());
+
+    expect(result.current).toMatchObject({
+      selection: null,
+      disabledReason: "Couldn't load target agent readiness. Retry once AnyHarness is reachable.",
+      status: "unavailable",
+      isLoading: false,
+      isReady: false,
+    });
+  });
+
   it("blocks configured pre-session launch when the target agent is not ready", () => {
     mocks.useChatLaunchCatalog.mockReturnValue({
       data: {},
       error: null,
+      targetReadinessError: null,
       isLoading: false,
       launchAgents: [{
         kind: "opencode",
@@ -103,6 +127,7 @@ describe("useConfiguredLaunchReadiness", () => {
     mocks.useChatLaunchCatalog.mockReturnValue({
       data: {},
       error: null,
+      targetReadinessError: null,
       isLoading: false,
       launchAgents: [{
         kind: "opencode",

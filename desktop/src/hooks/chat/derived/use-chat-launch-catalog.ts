@@ -36,6 +36,9 @@ export function useChatLaunchCatalog({
   const agentCatalog = useAgentCatalog();
   const catalogData = query.data ?? null;
   const catalogLoading = query.isLoading || agentCatalog.isLoading;
+  const cloudCatalogError = query.error ?? null;
+  const targetReadinessError = agentCatalog.isError ? agentCatalog.error : null;
+  const launchCatalogError = cloudCatalogError ?? targetReadinessError;
 
   const launchAgents = useMemo(
     () => orderLaunchAgents(
@@ -86,14 +89,16 @@ export function useChatLaunchCatalog({
     ...query,
     data: catalogData ?? undefined,
     isLoading: catalogLoading,
-    error: query.error,
+    error: launchCatalogError,
+    cloudCatalogError,
+    targetReadinessError,
     launchAgents,
     defaultLaunchSelection,
     selectedLaunchSelection,
     groups,
     snapshot,
     hasLaunchableAgents: launchAgents.length > 0,
-    isEmpty: !catalogLoading && launchAgents.length === 0,
+    isEmpty: !catalogLoading && !launchCatalogError && launchAgents.length === 0,
   };
 }
 

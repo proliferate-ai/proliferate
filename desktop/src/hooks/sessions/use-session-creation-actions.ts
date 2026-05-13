@@ -10,6 +10,10 @@ import { resolveRuntimeTargetForWorkspace } from "@/lib/access/anyharness/runtim
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
 import {
+  formatSessionCreateFailureMessage,
+  toSessionCreateFailureDisplayError,
+} from "@/lib/domain/sessions/creation/create-session-error";
+import {
   mergeLiveDefaultLaunchControls,
   pickLiveDefaultLaunchControls,
 } from "@/lib/domain/sessions/creation/launch-controls";
@@ -618,8 +622,7 @@ export function useSessionCreationActions() {
     if (hasPrompt) {
       void createPromise.catch((error) => {
         cleanupCreateFailure(error);
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(`Failed to start chat session: ${message}`, "error");
+        showToast(formatSessionCreateFailureMessage(error), "error");
       }).finally(cleanupInFlight);
       return pendingSessionId;
     }
@@ -628,7 +631,7 @@ export function useSessionCreationActions() {
       return await createPromise;
     } catch (error) {
       cleanupCreateFailure(error);
-      throw error;
+      throw toSessionCreateFailureDisplayError(error);
     } finally {
       cleanupInFlight();
     }
