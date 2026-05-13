@@ -23,7 +23,6 @@ use std::time::Instant;
 use super::access::assert_workspace_not_retired;
 use super::blocking::run_blocking;
 use super::error::ApiError;
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
 use crate::domains::mobility::model::{
     ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData,
@@ -31,6 +30,7 @@ use crate::domains::mobility::model::{
     WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::domains::mobility::service::MobilityError;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::links::model::{

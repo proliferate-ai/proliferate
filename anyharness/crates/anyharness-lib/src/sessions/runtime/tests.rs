@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use super::fork::validate_fork_parent;
 use super::startup::{build_session_launch_env, choose_session_startup_strategy};
-use crate::acp::session_actor::SessionStartupStrategy;
 use crate::domains::agents::model::{
     AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
 };
 use crate::domains::agents::registry::built_in_registry;
+use crate::live::sessions::connection::types::SessionStartupStrategy;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 use crate::sessions::links::model::{

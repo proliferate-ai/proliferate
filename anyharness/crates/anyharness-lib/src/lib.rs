@@ -4,6 +4,8 @@ pub mod api;
 pub mod app;
 pub mod domains;
 pub mod integrations;
+pub mod live;
+pub mod observability;
 pub mod origin;
 pub mod persistence;
 pub mod repo_roots;

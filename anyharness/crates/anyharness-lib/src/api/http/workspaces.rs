@@ -19,13 +19,13 @@ use axum::{
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
 use super::blocking::run_blocking;
 use super::error::ApiError;
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces_contract::{
     detection_result_to_contract, map_set_workspace_display_name_error,
     setup_command_run_to_contract, workspace_cleanup_operation_to_contract,
     workspace_session_launch_catalog_to_contract, workspace_to_contract_with_summary,
 };
 use crate::app::AppState;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;

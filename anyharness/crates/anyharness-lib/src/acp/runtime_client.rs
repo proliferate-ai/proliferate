@@ -14,8 +14,8 @@ use super::mcp_elicitation::{
 use super::permission_broker::{InteractionBroker, PermissionOutcome, UserInputOutcome};
 use super::permission_context::permission_context_from_meta;
 use super::permission_payload::{bound_raw_json, permission_option_mappings, permission_options};
-use super::session_actor::LiveSessionHandle;
 use crate::domains::plans::service::PlanService;
+use crate::live::sessions::handle::LiveSessionHandle;
 use anyharness_contract::v1::{
     InteractionKind, InteractionPayload, InteractionRequestedEvent, InteractionSource,
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,

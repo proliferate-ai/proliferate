@@ -2,10 +2,10 @@ use std::time::Instant;
 
 use anyharness_contract::v1::PromptInputBlock;
 
-use crate::acp::session_actor::{PromptAcceptError, PromptAcceptance, SessionCommand};
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanService;
+use crate::live::sessions::actor::command::{PromptAcceptError, PromptAcceptance, SessionCommand};
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::PromptAttachmentState;
 use crate::sessions::prompt::{

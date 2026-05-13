@@ -12,8 +12,8 @@ use tokio::time::sleep;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::api::http::error::ApiError;
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 const LIVE_HANDLE_ATTACH_TIMEOUT: Duration = Duration::from_secs(30);

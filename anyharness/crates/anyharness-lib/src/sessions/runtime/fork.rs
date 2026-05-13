@@ -1,7 +1,8 @@
 use anyharness_contract::v1::SessionExecutionPhase;
 
-use crate::acp::session_actor::{ForkSessionCommandError, SessionCommand, SessionStartupStrategy};
 use crate::domains::agents::model::AgentKind;
+use crate::live::sessions::actor::command::{ForkSessionCommandError, SessionCommand};
+use crate::live::sessions::connection::types::SessionStartupStrategy;
 use crate::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };

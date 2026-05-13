@@ -404,13 +404,15 @@ Known transitional issues:
   type remains the caller-facing store surface.
 - `SessionEventSink` is split under `acp/event_sink/**`. It has not moved to
   final `live/sessions/event_sink/**` topology yet.
-- Some runtime/domain modules import `crate::api::http::latency`; latency
-  helpers should move to `observability/`.
+- Latency helpers live under `observability/latency.rs`; lower layers should
+  not import API transport modules for latency context.
 - Contract request/response types leak below `api/`. Contract event payloads
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
-- Core live/session cleanup still remaining is centered on
-  `acp/session_actor.rs`; the actor loop rewrite is deferred/manual.
+- The live session actor is split under `live/sessions/actor/**`,
+  `live/sessions/connection/**`, and `live/sessions/handle.rs`. `AcpManager`,
+  `RuntimeClient`, `InteractionBroker`, `BackgroundWorkRegistry`, and
+  `replay_actor` remain transitional under `acp/**`.
 - Some product MCP endpoint scaffolding may still be feature-local. Common
   protocol/auth scaffolding should use `integrations/mcp/`; product tool
   semantics stay with their owning domain.

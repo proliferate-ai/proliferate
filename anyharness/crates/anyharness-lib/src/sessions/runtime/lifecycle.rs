@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use crate::acp::session_actor::SessionCommand;
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::live::sessions::actor::command::SessionCommand;
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 

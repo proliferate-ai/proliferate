@@ -19,8 +19,8 @@ use super::delegation::service::{CoworkDelegationError, CoworkDelegationService}
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
 use crate::acp::manager::AcpManager;
-use crate::acp::session_actor::SessionCommand;
 use crate::adapters::git::GitService;
+use crate::live::sessions::actor::command::SessionCommand;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;

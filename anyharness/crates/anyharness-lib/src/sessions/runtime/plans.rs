@@ -1,8 +1,8 @@
 use anyharness_contract::v1::ProposedPlanDecisionState;
 
-use crate::acp::session_actor::SessionCommand;
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanDecisionError;
+use crate::live::sessions::actor::command::SessionCommand;
 
 use super::SessionRuntime;
 

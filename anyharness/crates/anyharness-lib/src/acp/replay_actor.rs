@@ -10,12 +10,13 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc};
 
 use super::event_sink::publish::publish_session_event;
-use super::session_actor::{
-    ActorReadyResult, ForkSessionCommandError, LiveSessionHandle, PromptAcceptError,
-    QueueMutationError, ResolveInteractionCommandError, SessionCommand,
-    SetConfigOptionCommandError,
-};
 use crate::domains::plans::service::PlanDecisionError;
+use crate::live::sessions::actor::command::{
+    ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
+    SessionCommand, SetConfigOptionCommandError,
+};
+use crate::live::sessions::actor::startup::ActorReadyResult;
+use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::sessions::store::SessionStore;

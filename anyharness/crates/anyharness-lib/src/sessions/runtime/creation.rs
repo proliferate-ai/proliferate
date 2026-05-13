@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use anyharness_contract::v1::SessionMcpBindingSummary;
 
-use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
