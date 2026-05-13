@@ -141,7 +141,8 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/workspaces/{workspace_id}/cowork/sessions/{session_id}/mcp",
-            get(cowork::get_cowork_mcp_endpoint).post(cowork::post_cowork_mcp_endpoint),
+            get(product_mcp::get_cowork_legacy_mcp_endpoint)
+                .post(product_mcp::post_cowork_legacy_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp",

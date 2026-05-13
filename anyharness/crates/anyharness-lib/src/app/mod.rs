@@ -9,7 +9,9 @@ use crate::domains::agents::reconcile_execution::AgentReconcileService;
 use crate::domains::agents::seed::AgentSeedStore;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::delegation::service::CoworkDelegationService;
-use crate::domains::cowork::mcp_server::auth::CoworkMcpAuth;
+use crate::domains::cowork::mcp::{
+    auth::CoworkMcpAuth, tools as cowork_mcp_tools, CoworkProductMcpServer,
+};
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::CoworkStore;
@@ -198,9 +200,6 @@ impl AppState {
             workspace_access_gate.clone(),
         );
         let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
-            runtime_base_url.clone(),
-            bearer_token.clone(),
-            cowork_mcp_auth,
             cowork_delegation_service.clone(),
             acp_manager.clone(),
             SessionStore::new(db.clone()),
@@ -235,6 +234,7 @@ impl AppState {
             review_mcp_auth.clone(),
             subagent_mcp_auth.clone(),
             workspace_naming_mcp_auth.clone(),
+            cowork_mcp_auth.clone(),
             subagent_service.clone(),
             SessionStore::new(db.clone()),
         );
@@ -343,6 +343,15 @@ impl AppState {
                 )),
                 None,
                 &[],
+            ))),
+            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(CoworkProductMcpServer::new(
+                    cowork_artifact_runtime.clone(),
+                    cowork_runtime.clone(),
+                    cowork_mcp_auth,
+                )),
+                Some(WorkspaceOperationKind::CoworkWrite),
+                cowork_mcp_tools::MUTATING_TOOL_NAMES,
             ))),
         ];
         let product_mcp_endpoint_registry = Arc::new(

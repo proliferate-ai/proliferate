@@ -13,7 +13,7 @@ and expose it through a reusable product MCP.
 id: artifacts
 owner domain: domains/artifacts
 target implementation: anyharness-lib/src/domains/artifacts/mcp/**
-current implementation: anyharness-lib/src/domains/cowork/mcp_server/** artifact tools
+current implementation: anyharness-lib/src/domains/cowork/mcp/** artifact tools
 visibility: user_selectable
 route slug: artifacts
 server name: proliferate-artifacts
@@ -65,31 +65,34 @@ anyharness-lib/src/domains/cowork/artifacts.rs
   per-workspace artifact locks
   temp-file commit/rollback helpers
 
-anyharness-lib/src/domains/cowork/mcp_server/protocol.rs
+anyharness-lib/src/domains/cowork/mcp/tools.rs
   artifact MCP tool definitions
   cowork delegation tool definitions
   current server instructions
 
-anyharness-lib/src/domains/cowork/mcp_server/tools.rs
+anyharness-lib/src/domains/cowork/mcp/calls.rs
   tools/call implementation for create/update/delete/list/get artifact tools
   cowork delegation tools in the same file
 
-anyharness-lib/src/domains/cowork/mcp_server/server.rs
-  cowork MCP JSON-RPC dispatch
-  initialize/tools/list/tools/call handling
+anyharness-lib/src/domains/cowork/mcp/mod.rs
+  cowork ProductMcpServer implementation
   workspace delegation gating
 
-anyharness-lib/src/domains/cowork/mcp_server/auth.rs
+anyharness-lib/src/domains/cowork/mcp/auth.rs
   cowork MCP capability token wrapper
 ```
 
 Current injection and prompt text:
 
 ```text
-anyharness-lib/src/domains/cowork/runtime.rs
-  CoworkSessionHooks launch extras
+anyharness-lib/src/sessions/mcp_bindings/selection.rs
+  cowork MCP selection for cowork-surface sessions
   cowork artifact system prompt append
-  cowork MCP server URL/header construction
+  cowork binding summary
+
+anyharness-lib/src/sessions/mcp_bindings/injection.rs
+  cowork HTTP MCP server config
+  cowork product capability-token minting
 ```
 
 Current app wiring:
@@ -112,8 +115,11 @@ anyharness-lib/src/api/router.rs
 anyharness-lib/src/api/http/cowork.rs
   get_cowork_manifest
   get_cowork_artifact
-  post_cowork_mcp_endpoint
   cowork artifact error mapping
+
+anyharness-lib/src/api/http/product_mcp.rs
+  cowork legacy MCP endpoint wrapper
+  shared product MCP endpoint dispatch
 ```
 
 Current file-write protection:
@@ -606,8 +612,8 @@ CREATE
   domains/artifacts/mcp/calls.rs
 
 MOVE
-  artifact tools from domains/cowork/mcp_server/protocol.rs
-  artifact tool calls from domains/cowork/mcp_server/tools.rs
+  artifact tools from domains/cowork/mcp/tools.rs
+  artifact tool calls from domains/cowork/mcp/calls.rs
 
 LEAVE
   cowork delegation tools in cowork
@@ -686,7 +692,7 @@ Done when:
 - generic artifact manifest logic is no longer owned by
   `domains/cowork/manifest.rs`.
 - generic artifact MCP tools are no longer owned by
-  `domains/cowork/mcp_server/**`.
+  `domains/cowork/mcp/**`.
 - `domains/artifacts/**` owns artifact model, manifest, service/runtime,
   protection, and MCP behavior.
 - cowork delegates to artifacts when it needs artifact tools.
@@ -697,4 +703,3 @@ Done when:
 - shared JSON-RPC dispatch lives in `integrations/mcp/product_server/**`.
 - desktop/web/mobile artifact reads can use artifact HTTP routes instead of
   cowork-specific routes.
-

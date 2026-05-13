@@ -3,9 +3,22 @@ use serde_json::{json, Value};
 
 use crate::integrations::mcp::tools::tool_definition;
 
-pub(super) const DEFAULT_PROTOCOL_VERSION: &str = "2025-11-25";
-pub(super) const SERVER_NAME: &str = "proliferate-cowork";
-pub(super) const SERVER_INSTRUCTIONS: &str = "Use cowork artifact tools to manage cowork artifacts for this workspace. When workspace delegation is available, use get_coding_workspace_launch_options to choose a source workspace, then create_coding_workspace to provision a normal coding worktree. create_coding_workspace does not start agent work. Use get_coding_session_launch_options for that managed workspace, then create_coding_session to start a linked coding session with a prompt. Set wakeOnCompletion or call schedule_coding_wake when you want this cowork thread prompted after the coding session's next completed turn. Inspect coding work with get_coding_status and read_coding_events.";
+pub const MUTATING_TOOL_NAMES: &[&str] = &[
+    "create_artifact",
+    "update_artifact",
+    "delete_artifact",
+    "list_artifacts",
+    "get_artifact",
+    "get_coding_workspace_launch_options",
+    "create_coding_workspace",
+    "list_coding_workspaces",
+    "get_coding_session_launch_options",
+    "create_coding_session",
+    "send_coding_message",
+    "schedule_coding_wake",
+    "get_coding_status",
+    "read_coding_events",
+];
 
 #[derive(Debug, Deserialize)]
 pub(super) struct CreateArtifactArgs {
@@ -97,7 +110,7 @@ pub(super) struct ReadCodingEventsArgs {
     pub limit: Option<usize>,
 }
 
-pub(super) fn tool_list(include_delegation_tools: bool) -> Vec<Value> {
+pub fn build_tool_list(include_delegation_tools: bool) -> Vec<Value> {
     let mut tools = artifact_tool_definitions();
     if include_delegation_tools {
         tools.extend(delegation_tool_definitions());
@@ -292,4 +305,49 @@ fn delegation_tool_definitions() -> Vec<Value> {
             }),
         ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    fn tool_names(tools: Vec<Value>) -> HashSet<String> {
+        tools
+            .into_iter()
+            .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_string))
+            .collect()
+    }
+
+    #[test]
+    fn artifact_tools_are_always_available() {
+        let names = tool_names(build_tool_list(false));
+
+        assert!(names.contains("create_artifact"));
+        assert!(names.contains("update_artifact"));
+        assert!(names.contains("delete_artifact"));
+        assert!(names.contains("list_artifacts"));
+        assert!(names.contains("get_artifact"));
+        assert!(!names.contains("create_coding_workspace"));
+    }
+
+    #[test]
+    fn delegation_tools_are_available_when_enabled() {
+        let names = tool_names(build_tool_list(true));
+
+        assert!(names.contains("create_coding_workspace"));
+        assert!(names.contains("create_coding_session"));
+        assert!(names.contains("send_coding_message"));
+        assert!(names.contains("read_coding_events"));
+    }
+
+    #[test]
+    fn mutating_tool_names_are_all_advertised_when_delegation_is_enabled() {
+        let names = tool_names(build_tool_list(true));
+
+        for tool_name in MUTATING_TOOL_NAMES {
+            assert!(names.contains(*tool_name), "missing tool: {tool_name}");
+        }
+    }
 }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::sessions::extensions::SessionLaunchExtras;
 use crate::sessions::mcp_bindings::injection::{inject_product_mcps, ProductMcpInjectionContext};
@@ -22,6 +23,7 @@ struct ProductMcpLaunchCatalogInner {
     review_auth: Arc<ReviewMcpAuth>,
     subagent_auth: Arc<SubagentMcpAuth>,
     workspace_naming_auth: Arc<WorkspaceNamingMcpAuth>,
+    cowork_auth: Arc<CoworkMcpAuth>,
     subagent_service: Arc<SubagentService>,
     session_store: SessionStore,
 }
@@ -33,6 +35,7 @@ impl ProductMcpLaunchCatalog {
         review_auth: Arc<ReviewMcpAuth>,
         subagent_auth: Arc<SubagentMcpAuth>,
         workspace_naming_auth: Arc<WorkspaceNamingMcpAuth>,
+        cowork_auth: Arc<CoworkMcpAuth>,
         subagent_service: Arc<SubagentService>,
         session_store: SessionStore,
     ) -> Self {
@@ -43,6 +46,7 @@ impl ProductMcpLaunchCatalog {
                 review_auth,
                 subagent_auth,
                 workspace_naming_auth,
+                cowork_auth,
                 subagent_service,
                 session_store,
             })),
@@ -75,6 +79,7 @@ impl ProductMcpLaunchCatalog {
                 review_auth: &inner.review_auth,
                 subagent_auth: &inner.subagent_auth,
                 workspace_naming_auth: &inner.workspace_naming_auth,
+                cowork_auth: &inner.cowork_auth,
                 workspace,
                 session,
             },

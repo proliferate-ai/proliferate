@@ -7,8 +7,7 @@ Status: authoritative target definition for the Reviews product MCP.
 ```text
 id: reviews
 owner domain: domains/reviews
-target implementation: domains/reviews/mcp/**
-current implementation: domains/reviews/mcp_server/**
+implementation: domains/reviews/mcp/**
 visibility: internal
 route slug: reviews
 server name: proliferate-reviews
@@ -161,4 +160,3 @@ Done when:
 - shared JSON-RPC dispatch lives in `integrations/mcp/product_server`.
 - session selection/injection for review roles lives in
   `domains/sessions/mcp_bindings/**`.
-

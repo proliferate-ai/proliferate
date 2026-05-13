@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 
-use super::protocol::{
+use super::context::CoworkMcpContext;
+use super::tools::{
     self, CodingSessionArgs, CodingWorkspaceArgs, CreateArtifactArgs, CreateCodingSessionArgs,
     CreateCodingWorkspaceArgs, DeleteArtifactArgs, GetArtifactArgs, ReadCodingEventsArgs,
     SendCodingMessageArgs, UpdateArtifactArgs,
@@ -13,35 +14,26 @@ use crate::domains::cowork::delegation::model::{
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
-use crate::integrations::mcp::json_rpc::{deserialize_args, jsonrpc_error, CallToolParams};
-use crate::integrations::mcp::tools::jsonrpc_tool_result;
+use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::sessions::runtime::SendPromptOutcome;
 use crate::sessions::service::WorkspaceSessionLaunchCatalogData;
-use crate::workspaces::model::WorkspaceRecord;
 
-pub(super) async fn handle_tool_call(
+pub async fn call_tool(
     artifact_runtime: &CoworkArtifactRuntime,
     cowork_runtime: &CoworkRuntime,
-    workspace: &WorkspaceRecord,
-    parent_session_id: &str,
-    workspace_delegation_enabled: bool,
-    id: Option<Value>,
-    params: CallToolParams,
+    ctx: &CoworkMcpContext,
+    name: &str,
+    arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
-    if protocol::is_delegation_tool(&params.name) && !workspace_delegation_enabled {
-        return Ok(jsonrpc_tool_result::<Value, _>(
-            id,
-            Err(anyhow::anyhow!(
-                "cowork workspace delegation is disabled for this thread"
-            )),
-        ));
+    if tools::is_delegation_tool(name) && !ctx.workspace_delegation_enabled {
+        anyhow::bail!("cowork workspace delegation is disabled for this thread");
     }
 
-    match params.name.as_str() {
+    match name {
         "create_artifact" => {
-            let args: CreateArtifactArgs = deserialize_args(params.arguments)?;
+            let args: CreateArtifactArgs = deserialize_args(arguments)?;
             let artifact_runtime = artifact_runtime.clone();
-            let workspace = workspace.clone();
+            let workspace = ctx.workspace.clone();
             let artifact = tokio::task::spawn_blocking(move || {
                 artifact_runtime.create_artifact(
                     &workspace,
@@ -53,13 +45,13 @@ pub(super) async fn handle_tool_call(
                     },
                 )
             })
-            .await?;
-            Ok(jsonrpc_tool_result(id, artifact))
+            .await??;
+            Ok(serde_json::to_value(artifact)?)
         }
         "update_artifact" => {
-            let args: UpdateArtifactArgs = deserialize_args(params.arguments)?;
+            let args: UpdateArtifactArgs = deserialize_args(arguments)?;
             let artifact_runtime = artifact_runtime.clone();
-            let workspace = workspace.clone();
+            let workspace = ctx.workspace.clone();
             let artifact = tokio::task::spawn_blocking(move || {
                 artifact_runtime.update_artifact(
                     &workspace,
@@ -71,13 +63,13 @@ pub(super) async fn handle_tool_call(
                     },
                 )
             })
-            .await?;
-            Ok(jsonrpc_tool_result(id, artifact))
+            .await??;
+            Ok(serde_json::to_value(artifact)?)
         }
         "delete_artifact" => {
-            let args: DeleteArtifactArgs = deserialize_args(params.arguments)?;
+            let args: DeleteArtifactArgs = deserialize_args(arguments)?;
             let artifact_runtime = artifact_runtime.clone();
-            let workspace = workspace.clone();
+            let workspace = ctx.workspace.clone();
             let result = tokio::task::spawn_blocking(move || {
                 artifact_runtime
                     .delete_artifact(&workspace, &args.id)
@@ -88,37 +80,31 @@ pub(super) async fn handle_tool_call(
                         })
                     })
             })
-            .await?;
-            Ok(jsonrpc_tool_result(id, result))
+            .await??;
+            Ok(result)
         }
         "list_artifacts" => {
             let artifact_runtime = artifact_runtime.clone();
-            let workspace = workspace.clone();
+            let workspace = ctx.workspace.clone();
             let manifest =
                 tokio::task::spawn_blocking(move || artifact_runtime.get_manifest(&workspace))
-                    .await?;
-            Ok(jsonrpc_tool_result(id, manifest))
+                    .await??;
+            Ok(serde_json::to_value(manifest)?)
         }
         "get_artifact" => {
-            let args: GetArtifactArgs = deserialize_args(params.arguments)?;
+            let args: GetArtifactArgs = deserialize_args(arguments)?;
             let artifact_runtime = artifact_runtime.clone();
-            let workspace = workspace.clone();
+            let workspace = ctx.workspace.clone();
             let artifact = tokio::task::spawn_blocking(move || {
                 artifact_runtime.get_artifact(&workspace, &args.id)
             })
-            .await?;
-            Ok(jsonrpc_tool_result(id, artifact))
+            .await??;
+            Ok(serde_json::to_value(artifact)?)
         }
-        name if protocol::is_delegation_tool(name) => Ok(jsonrpc_tool_result(
-            id,
-            handle_delegation_tool_call(cowork_runtime, parent_session_id, name, params.arguments)
-                .await,
-        )),
-        _ => Ok(jsonrpc_error(
-            id,
-            -32601,
-            format!("unknown tool: {}", params.name),
-        )),
+        name if tools::is_delegation_tool(name) => {
+            handle_delegation_tool_call(cowork_runtime, &ctx.session_id, name, arguments).await
+        }
+        _ => anyhow::bail!("unknown tool: {name}"),
     }
 }
 

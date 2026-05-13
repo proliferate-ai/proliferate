@@ -7,8 +7,7 @@ Status: authoritative target definition for the Subagents product MCP.
 ```text
 id: subagents
 owner domain: domains/sessions/subagents
-target implementation: domains/sessions/subagents/mcp/**
-current implementation: sessions/subagents/mcp_server/**
+implementation: sessions/subagents/mcp/**
 visibility: internal
 route slug: subagents
 server name: proliferate-subagents
@@ -173,4 +172,3 @@ Done when:
 - product behavior lives in subagents domain service/runtime calls.
 - temporary header/signature names are either migrated to the shared product
   MCP token envelope or explicitly documented as compatibility aliases.
-

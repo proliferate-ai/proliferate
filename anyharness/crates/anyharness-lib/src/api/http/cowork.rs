@@ -5,19 +5,14 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
     Json,
 };
-use serde_json::Value;
 
-use super::access::assert_workspace_mutable;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract_with_summary;
 use crate::app::AppState;
 use crate::domains::cowork::manifest::CoworkArtifactError;
-use crate::domains::cowork::mcp_server::server::handle_json_rpc;
 use crate::domains::cowork::model::CoworkRootRecord;
 use crate::domains::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
@@ -25,7 +20,6 @@ use crate::sessions::mcp_bindings::contract::bindings_from_contract;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     get,
@@ -184,62 +178,6 @@ pub async fn get_cowork_artifact(
     .await?
     .map_err(map_cowork_artifact_error)?;
     Ok(Json(artifact))
-}
-
-pub async fn get_cowork_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_cowork_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<impl IntoResponse, ApiError> {
-    let capability_header = headers
-        .get(state.cowork_session_hooks.capability_header_name())
-        .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| {
-            ApiError::unauthorized(
-                "Missing cowork capability token.",
-                "COWORK_MCP_UNAUTHORIZED",
-            )
-        })?;
-    let is_valid = state
-        .cowork_session_hooks
-        .validate_capability_token(capability_header, &workspace_id, &session_id)
-        .map_err(|error| ApiError::internal(error.to_string()))?;
-    if !is_valid {
-        return Err(ApiError::unauthorized(
-            "Invalid cowork capability token.",
-            "COWORK_MCP_UNAUTHORIZED",
-        ));
-    }
-    let _operation = state
-        .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::CoworkWrite)
-        .await;
-    assert_workspace_mutable(&state, &workspace_id)?;
-
-    let artifact_runtime = state.cowork_artifact_runtime.clone();
-    let cowork_runtime = state.cowork_runtime.clone();
-    let response = handle_json_rpc(
-        &artifact_runtime,
-        &cowork_runtime,
-        &workspace_id,
-        &session_id,
-        body,
-    )
-    .await
-    .map_err(|error| ApiError::bad_request(error.to_string(), "COWORK_MCP_REQUEST_INVALID"))?;
-
-    match response {
-        Some(payload) => Ok((StatusCode::OK, Json(payload)).into_response()),
-        None => Ok(StatusCode::ACCEPTED.into_response()),
-    }
 }
 
 #[utoipa::path(
