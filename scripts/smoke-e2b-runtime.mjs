@@ -84,12 +84,6 @@ const PROVIDERS = [
     modelId: null,
   },
   {
-    kind: "amp",
-    displayName: "Amp",
-    envVars: ["AMP_API_KEY"],
-    modelId: null,
-  },
-  {
     kind: "opencode",
     displayName: "OpenCode",
     envVars: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],

@@ -13,6 +13,7 @@ import {
 import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 
@@ -32,12 +33,16 @@ export function useChatLaunchCatalog({
   })));
 
   const query = useCloudAgentCatalog(true);
+  const agentCatalog = useAgentCatalog();
   const catalogData = query.data ?? null;
-  const catalogLoading = query.isLoading;
+  const catalogLoading = query.isLoading || agentCatalog.isLoading;
 
   const launchAgents = useMemo(
-    () => orderLaunchAgents(catalogData?.agents ?? EMPTY_AGENTS),
-    [catalogData?.agents],
+    () => orderLaunchAgents(
+      catalogData?.agents ?? EMPTY_AGENTS,
+      agentCatalog.agentsByKind,
+    ),
+    [agentCatalog.agentsByKind, catalogData?.agents],
   );
 
   const snapshot = useMemo<LaunchCatalogSnapshot | null>(() => {
@@ -55,10 +60,10 @@ export function useChatLaunchCatalog({
       workspaceId: snapshotWorkspaceId,
       runtimeUrl: null,
       catalogVersion,
-      agents: catalogData.agents ?? EMPTY_AGENTS,
+      agents: launchAgents,
       createdAt: Date.now(),
     };
-  }, [catalogData, selectedWorkspaceId]);
+  }, [catalogData, launchAgents, selectedWorkspaceId]);
 
   const defaultLaunchSelection = useMemo(
     () => resolveEffectiveLaunchSelection(launchAgents, preferences),
@@ -94,9 +99,13 @@ export function useChatLaunchCatalog({
 
 function orderLaunchAgents(
   agents: readonly DesktopAgentLaunchAgent[],
+  agentsByKind: ReadonlyMap<string, { readiness: string }>,
 ): DesktopAgentLaunchAgent[] {
   return [...agents]
-    .filter((agent) => agent.models.length > 0)
+    .filter((agent) =>
+      agent.models.length > 0
+      && agentsByKind.get(agent.kind)?.readiness === "ready"
+    )
     .sort((left, right) =>
       compareChatLaunchKinds(
         left.kind,

@@ -253,7 +253,10 @@ function projectCloudAgent(agent: CloudAgentCatalogAgentInput): DesktopAgentLaun
     sessionDefaultControls: defaultSessionControls,
   }));
   const launchControls = agent.session.controls
-    .filter((control) => control.surfaces.start || control.surfaces.session)
+    .filter((control) =>
+      control.key !== "model"
+      && (control.surfaces.start || control.surfaces.session)
+    )
     .map((control) => projectCloudControl(control, models, defaultModelId));
 
   return {
@@ -271,7 +274,7 @@ function projectCloudAgent(agent: CloudAgentCatalogAgentInput): DesktopAgentLaun
 }
 
 function isLaunchVisibleModel(model: CloudAgentCatalogModelInput): boolean {
-  return model.status !== "hidden";
+  return model.status === "active";
 }
 
 function projectCloudModel(model: CloudAgentCatalogModelInput): DesktopAgentLaunchModel {

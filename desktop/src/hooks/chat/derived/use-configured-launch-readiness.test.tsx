@@ -60,4 +60,74 @@ describe("useConfiguredLaunchReadiness", () => {
       isReady: false,
     });
   });
+
+  it("blocks configured pre-session launch when the target agent is not ready", () => {
+    mocks.useChatLaunchCatalog.mockReturnValue({
+      data: {},
+      error: null,
+      isLoading: false,
+      launchAgents: [{
+        kind: "opencode",
+        displayName: "OpenCode",
+        defaultModelId: "opencode/custom-model",
+        dynamicModels: true,
+        modelDisplayPolicy: {
+          defaultVisibleModelIds: [],
+          allowUserVisibleModelSelection: true,
+          moreModelsSource: "lastKnownLiveSnapshot",
+        },
+        models: [],
+      }],
+    });
+    mocks.useAgentCatalog.mockReturnValue({
+      agentsByKind: new Map([
+        ["opencode", {
+          kind: "opencode",
+          displayName: "OpenCode",
+          readiness: "login_required",
+        }],
+      ]),
+    });
+
+    const { result } = renderHook(() => useConfiguredLaunchReadiness());
+
+    expect(result.current).toMatchObject({
+      selection: null,
+      disabledReason: "OpenCode is login required.",
+      status: "unavailable",
+      isReady: false,
+    });
+  });
+
+  it("blocks configured pre-session launch when target readiness is missing", () => {
+    mocks.useChatLaunchCatalog.mockReturnValue({
+      data: {},
+      error: null,
+      isLoading: false,
+      launchAgents: [{
+        kind: "opencode",
+        displayName: "OpenCode",
+        defaultModelId: "opencode/custom-model",
+        dynamicModels: true,
+        modelDisplayPolicy: {
+          defaultVisibleModelIds: [],
+          allowUserVisibleModelSelection: true,
+          moreModelsSource: "lastKnownLiveSnapshot",
+        },
+        models: [],
+      }],
+    });
+    mocks.useAgentCatalog.mockReturnValue({
+      agentsByKind: new Map(),
+    });
+
+    const { result } = renderHook(() => useConfiguredLaunchReadiness());
+
+    expect(result.current).toMatchObject({
+      selection: null,
+      disabledReason: "opencode is not ready yet.",
+      status: "unavailable",
+      isReady: false,
+    });
+  });
 });

@@ -55,6 +55,30 @@ function cloudCatalog(): Parameters<typeof projectCloudAgentCatalogToDesktopLaun
             compatibility: null,
             launchRemediation: null,
           },
+          {
+            id: "opencode/candidate",
+            displayName: "Candidate",
+            aliases: [],
+            status: "candidate",
+            isDefault: false,
+            provider: "opencode",
+            tags: [],
+            capabilities: null,
+            compatibility: null,
+            launchRemediation: null,
+          },
+          {
+            id: "opencode/deprecated",
+            displayName: "Deprecated",
+            aliases: [],
+            status: "deprecated",
+            isDefault: false,
+            provider: "opencode",
+            tags: [],
+            capabilities: null,
+            compatibility: null,
+            launchRemediation: null,
+          },
         ],
         controls: [
           {
@@ -190,16 +214,7 @@ describe("projectCloudAgentCatalogToDesktopLaunchCatalog", () => {
       "opencode/big-pickle",
     ]);
     expect(projected.agents[0]?.launchControls.find((control) => control.key === "model"))
-      .toMatchObject({
-        createField: "modelId",
-        defaultValue: "opencode/big-pickle",
-        valueSource: "discoveredModels",
-        values: [{
-          value: "opencode/big-pickle",
-          label: "OpenCode Zen/Big Pickle",
-          isDefault: true,
-        }],
-      });
+      .toBeUndefined();
     expect(projected.agents[0]?.launchControls.find((control) => control.key === "mode")
       ?.values).toEqual([
         {

@@ -185,6 +185,17 @@ fn validate_agent_catalog_control(
             control.missing_live_config_policy
         );
     }
+    if !matches!(
+        control.value_source.as_str(),
+        "inline" | "agentModels" | "discoveredModels"
+    ) {
+        anyhow::bail!(
+            "agent catalog agent '{}' control '{}' has unsupported valueSource '{}'",
+            agent_kind,
+            control.key,
+            control.value_source
+        );
+    }
     if let Some(create_field) = control.apply.create_field.as_deref() {
         if !supported_agent_catalog_create_field(&control.key, create_field) {
             anyhow::bail!(
@@ -195,6 +206,7 @@ fn validate_agent_catalog_control(
             );
         }
     }
+    validate_agent_catalog_control_key_shape(agent_kind, control)?;
     if control.value_source == "inline" {
         if control.values.is_empty() {
             anyhow::bail!(
@@ -243,6 +255,46 @@ fn validate_agent_catalog_control(
     Ok(())
 }
 
+fn validate_agent_catalog_control_key_shape(
+    agent_kind: &str,
+    control: &AgentCatalogControl,
+) -> anyhow::Result<()> {
+    match control.key.as_str() {
+        "model" => {
+            if control.apply.create_field.as_deref() != Some("modelId") {
+                anyhow::bail!(
+                    "agent catalog agent '{}' model control must create modelId",
+                    agent_kind
+                );
+            }
+            if !matches!(control.value_source.as_str(), "agentModels" | "discoveredModels") {
+                anyhow::bail!(
+                    "agent catalog agent '{}' model control has unsupported valueSource '{}'",
+                    agent_kind,
+                    control.value_source
+                );
+            }
+        }
+        "mode" => {
+            if control.apply.create_field.as_deref() != Some("modeId") {
+                anyhow::bail!(
+                    "agent catalog agent '{}' mode control must create modeId",
+                    agent_kind
+                );
+            }
+            if control.value_source != "inline" {
+                anyhow::bail!(
+                    "agent catalog agent '{}' mode control has unsupported valueSource '{}'",
+                    agent_kind,
+                    control.value_source
+                );
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub(crate) fn supported_agent_catalog_create_field(control_key: &str, create_field: &str) -> bool {
     matches!(
         (control_key, create_field),
@@ -280,6 +332,54 @@ mod tests {
 
         assert!(
             error.to_string().contains("unsupported createField"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn agent_catalog_rejects_unsupported_value_source() {
+        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let codex = catalog
+            .agents
+            .iter_mut()
+            .find(|agent| agent.kind == "codex")
+            .expect("codex agent");
+        let effort = codex
+            .session
+            .controls
+            .iter_mut()
+            .find(|control| control.key == "effort")
+            .expect("effort control");
+        effort.value_source = "inlinee".to_string();
+
+        let error = validate_agent_catalog_document(&catalog).expect_err("invalid value source");
+
+        assert!(
+            error.to_string().contains("unsupported valueSource"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn agent_catalog_rejects_model_control_with_inline_values() {
+        let mut catalog = bundled_agent_catalog_document().expect("bundled catalog");
+        let codex = catalog
+            .agents
+            .iter_mut()
+            .find(|agent| agent.kind == "codex")
+            .expect("codex agent");
+        let model = codex
+            .session
+            .controls
+            .iter_mut()
+            .find(|control| control.key == "model")
+            .expect("model control");
+        model.value_source = "inline".to_string();
+
+        let error = validate_agent_catalog_document(&catalog).expect_err("invalid model control");
+
+        assert!(
+            error.to_string().contains("model control has unsupported valueSource"),
             "unexpected error: {error}"
         );
     }

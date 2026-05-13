@@ -12,10 +12,15 @@ import type {
 
 const mocks = vi.hoisted(() => ({
   useCloudAgentCatalog: vi.fn(),
+  useAgentCatalog: vi.fn(),
 }));
 
 vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
   useCloudAgentCatalog: mocks.useCloudAgentCatalog,
+}));
+
+vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+  useAgentCatalog: mocks.useAgentCatalog,
 }));
 
 function launchAgent(
@@ -64,6 +69,13 @@ describe("useChatLaunchCatalog", () => {
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+    });
+    mocks.useAgentCatalog.mockReturnValue({
+      isLoading: false,
+      agentsByKind: new Map([
+        ["codex", { readiness: "ready" }],
+        ["claude", { readiness: "ready" }],
+      ]),
     });
     useSessionSelectionStore.setState({
       pendingWorkspaceEntry: null,
@@ -119,5 +131,25 @@ describe("useChatLaunchCatalog", () => {
     expect(result.current.launchAgents).toEqual([]);
     expect(result.current.hasLaunchableAgents).toBe(false);
     expect(result.current.isEmpty).toBe(true);
+  });
+
+  it("filters cloud launch options to target-ready agents", () => {
+    mocks.useAgentCatalog.mockReturnValue({
+      isLoading: false,
+      agentsByKind: new Map([
+        ["codex", { readiness: "ready" }],
+        ["claude", { readiness: "login_required" }],
+      ]),
+    });
+
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+
+    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual(["codex"]);
+    expect(result.current.groups.map((group) => group.kind)).toEqual(["codex"]);
+    expect(result.current.defaultLaunchSelection).toEqual({
+      kind: "codex",
+      modelId: "gpt-5.5",
+    });
+    expect(result.current.snapshot?.agents.map((agent) => agent.kind)).toEqual(["codex"]);
   });
 });

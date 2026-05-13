@@ -37,18 +37,35 @@ export function useConfiguredLaunchReadiness(
     ? agentsByKind.get(preferences.defaultChatAgentKind) ?? null
     : null;
 
-  const disabledReason = resolution.status === "unavailable" && configuredAgent && configuredAgent.readiness !== "ready"
+  const isConfiguredAgentMissing =
+    !hasCatalogLoadError
+    && !launchCatalog.isLoading
+    && Boolean(preferences.defaultChatAgentKind)
+    && configuredAgent === null;
+  const isConfiguredAgentNotReady =
+    !hasCatalogLoadError
+    && !launchCatalog.isLoading
+    && Boolean(preferences.defaultChatAgentKind)
+    && configuredAgent !== null
+    && configuredAgent.readiness !== "ready";
+  const effectiveStatus = isConfiguredAgentMissing || isConfiguredAgentNotReady
+    ? "unavailable"
+    : resolution.status;
+  const disabledReason = isConfiguredAgentNotReady
     ? `${configuredAgent.displayName} is ${AGENT_READINESS_LABELS[configuredAgent.readiness].toLowerCase()}.`
+    : isConfiguredAgentMissing
+      ? `${preferences.defaultChatAgentKind} is not ready yet.`
     : resolution.reason;
+  const isBlockedByReadiness = isConfiguredAgentMissing || isConfiguredAgentNotReady;
 
   return {
     configuredKind: preferences.defaultChatAgentKind || null,
-    selection: resolution.selection,
+    selection: isBlockedByReadiness ? null : resolution.selection,
     displayName: resolution.displayName,
     disabledReason,
-    status: resolution.status,
+    status: effectiveStatus,
     isLoading: !hasCatalogLoadError && launchCatalog.isLoading,
-    isReady: resolution.status === "ready",
+    isReady: effectiveStatus === "ready",
     launchCatalog,
   };
 }
