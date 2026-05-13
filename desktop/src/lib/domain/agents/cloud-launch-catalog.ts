@@ -78,7 +78,6 @@ export interface DesktopLaunchModelRegistryModel {
   status?: DesktopAgentCatalogStatus;
   isDefault: boolean;
   launchRemediation?: DesktopAgentLaunchRemediation | null;
-  launchControls?: DesktopAgentLaunchControl[];
   sessionDefaultControls?: DesktopSessionDefaultControl[];
 }
 

@@ -134,6 +134,8 @@ anyharness-lib/src/domains/agents/
     execution.rs
   seed/
     mod.rs
+  portability/
+    mod.rs
 ```
 
 Follow-up topology may promote those transitional files into focused folders
@@ -161,8 +163,6 @@ anyharness-lib/src/domains/agents/
   reconcile/
     mod.rs
   seed/
-    mod.rs
-  portability/
     mod.rs
 ```
 

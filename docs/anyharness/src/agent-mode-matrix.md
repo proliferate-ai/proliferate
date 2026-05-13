@@ -13,8 +13,7 @@ The runtime does not hardcode per-agent mode values, but create-session mode
 values are now validated against the bundled AnyHarness agent catalog:
 
 - The HTTP create-session request takes an opaque `mode_id` string
-  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs:64`,
-  `sessions.rs:104`).
+  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs`).
 - Session creation resolves the agent's bundled catalog row and validates an
   explicit `mode_id` against the catalog's create-session `mode` control before
   launch.
@@ -27,10 +26,9 @@ values are now validated against the bundled AnyHarness agent catalog:
 - `build_live_config_snapshot` normalizes whatever the agent exposed into the
   common `NormalizedSessionControls` buckets (`model`, `collaboration_mode`,
   `mode`, `reasoning`, `effort`, `fast_mode`, plus `extras`)
-  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs:45-130`,
-  `live_config.rs:173-215`).
+  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`).
 - The contract shape with the six normalized buckets is declared at
-  `anyharness/crates/anyharness-contract/src/v1/session_config.rs:95-120`.
+  `anyharness/crates/anyharness-contract/src/v1/session_config.rs`.
 
 Consequence: the pre-launch legal set is the bundled AnyHarness catalog's
 create-session `mode` control for that agent. Once the process is live, the
@@ -42,19 +40,18 @@ table at `desktop/src/lib/domain/chat/session-controls/presentation.ts`. This ta
 is what defines which values the UI renders as selectable, with labels,
 tones, icons, and a per-agent `isDefault`. The `ConfiguredSessionControlKey`
 type only recognises `mode` and `collaboration_mode`
-(`presentation.ts:1`).
+(`desktop/src/lib/domain/chat/session-controls/presentation.ts`).
 
 Desktop keeps a user preference `defaultSessionModeByAgentKind`
-(`desktop/src/stores/preferences/user-preferences-store.ts:13`) as an
+(`desktop/src/lib/domain/preferences/user/model.ts`) as an
 unvalidated `Record<string, string>` — it is sanitized for shape only
-(`user-preferences-store.ts:101-115`), not against the presentation table.
+(`desktop/src/lib/domain/preferences/user/session-defaults.ts`), not against
+the presentation table.
 
 Cowork uses that preference verbatim when creating threads
-(`desktop/src/hooks/cowork/use-cowork-thread-workflow.ts:94`,
-`use-cowork-thread-workflow.ts:114`), and session creation reads the same
-preference directly from the store
-(`desktop/src/hooks/sessions/use-session-creation-actions.ts:288-290`,
-`use-session-creation-actions.ts:335`).
+(`desktop/src/hooks/cowork/workflows/use-cowork-thread-workflow.ts`), and
+session creation reads the same preference directly from the store
+(`desktop/src/hooks/sessions/use-session-creation-actions.ts`).
 
 Registered agent kinds come from
 `anyharness/crates/anyharness-lib/src/domains/agents/model.rs`: `claude`,
@@ -70,13 +67,12 @@ as a first-class selector in the UI. Values not in the table still travel
 through the runtime unchanged, but the desktop UI will only see them if the
 ACP binary surfaces them in live config and then uses fallback
 icon/tone rendering
-(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts:18-22`,
-`session-controls/session-mode-control.ts:88-101`).
+(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts`).
 
 ### Claude (`claude`)
 
 Control key: `mode` — source:
-`desktop/src/lib/domain/chat/session-controls/presentation.ts:34-78`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts`.
 
 | Value               | Label         | Meaning (from desktop copy)  | Default | Tone         |
 | ------------------- | ------------- | ---------------------------- | ------- | ------------ |
@@ -99,7 +95,7 @@ configured for Claude.
 ### Codex (`codex`)
 
 Control keys: **both** `mode` and `collaboration_mode` — source:
-`desktop/src/lib/domain/chat/session-controls/presentation.ts:79-126`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts`.
 
 `mode` values:
 
@@ -119,9 +115,8 @@ Control keys: **both** `mode` and `collaboration_mode` — source:
 Both keys are exposed in desktop config. Codex is the only family where the
 normalizer expects two distinct controls — see the `collaboration_mode`
 detection branch at
-`anyharness/crates/anyharness-lib/src/sessions/live_config.rs:182-194` and
-the test at `live_config.rs:538-600` that asserts the two keep distinct
-values.
+`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`; the tests in
+that file assert that the two controls keep distinct values.
 
 - Most permissive: **`mode = full-access`**.
 - Caveat: the desktop UI lets the user set `collaboration_mode` independently,
@@ -129,19 +124,20 @@ values.
   layer — the runtime will not reject that combination. "Most permissive" is
   unambiguous only if you also leave `collaboration_mode` at `default`.
 - Caveat 2: cowork's `defaultSessionModeByAgentKind` is a single string per
-  agent kind (`user-preferences-store.ts:13`) and the create-session path
-  only carries `mode_id`
-  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs:104`). There is
+  agent kind (`desktop/src/lib/domain/preferences/user/model.ts`) and the
+  create-session path only carries `mode_id`
+  (`anyharness/crates/anyharness-contract/src/v1/sessions.rs`). There is
   no parallel `collaboration_mode_id` on session creation — collaboration
   mode is only mutable at live-config time via
-  `SetSessionConfigOptionRequest` (`session_config.rs:148-156`). A cowork
-  thread created from the default will therefore start with whatever
+  `SetSessionConfigOptionRequest`
+  (`anyharness/crates/anyharness-contract/src/v1/session_config.rs`). A
+  cowork thread created from the default will therefore start with whatever
   `collaboration_mode` the codex ACP binary picks as its own default.
 
 ### Gemini (`gemini`)
 
 Control key: `mode` — source:
-`desktop/src/lib/domain/chat/session-controls/presentation.ts:127-163`.
+`desktop/src/lib/domain/chat/session-controls/presentation.ts`.
 
 | Value      | Label     | Meaning                    | Default | Tone        |
 | ---------- | --------- | -------------------------- | ------- | ----------- |
@@ -168,8 +164,8 @@ through `catalogs/agents/v1/catalog.json` and
 **No entry in `desktop/src/lib/domain/chat/session-controls/presentation.ts`.**
 Because `SESSION_CONTROL_PRESENTATIONS` has no `cursor` key,
 `listConfiguredSessionControlValues("cursor", ...)` returns the empty array
-(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts:26-35`), so the
-desktop UI has no first-class mode selector for Cursor.
+(`desktop/src/lib/domain/chat/session-controls/session-mode-control.ts`), so
+the desktop UI has no first-class mode selector for Cursor.
 
 - Most permissive: **unknown from the repo.** The runtime will forward any
   `mode_id` string the client sends through to cursor-acp, and the normalized
@@ -204,7 +200,7 @@ will pass `mode_id` through verbatim.
 - Codex's `plan` appears in both `mode` and `collaboration_mode` as distinct
   options. The UI treats them as independent controls; the runtime
   normalizer explicitly keeps them separate
-  (`live_config.rs:182-194`, `live_config.rs:538-600`).
+  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`).
 - Cursor and OpenCode have zero desktop mode metadata. A cowork thread
   created against one of these families today will send `mode_id = undefined`
   (since `defaultSessionModeByAgentKind` has no entry for them unless the
