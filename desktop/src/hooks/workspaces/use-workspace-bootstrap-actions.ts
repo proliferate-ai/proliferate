@@ -10,6 +10,7 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
+import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/workflows/use-session-model-availability-workflow";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
@@ -485,7 +486,12 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionSelectStartedAt = performance.now();
-        await selectSession(targetSession.id, { latencyFlowId });
+        await selectSessionWithShellIntentRollback({
+          workspaceId,
+          sessionId: targetSession.id,
+          options: { latencyFlowId },
+          selectSession,
+        });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.session_select",
