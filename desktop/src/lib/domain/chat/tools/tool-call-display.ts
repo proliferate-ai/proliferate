@@ -113,6 +113,9 @@ export function describeToolCallDisplay(
       };
     default:
       if (parsedMcp) {
+        if (parsedMcp.server === "proliferate_skills") {
+          return describeSkillsMcpDisplay(parsedMcp.action, raw);
+        }
         return {
           label: formatMcpActionLabel(parsedMcp.action),
           hint: formatMcpServerHint(parsedMcp.server),
@@ -137,6 +140,43 @@ export function describeToolCallDisplay(
         label: "Tool call",
         hint: item.toolKind !== "other" ? item.toolKind : undefined,
         iconKey: "settings",
+      };
+  }
+}
+
+function describeSkillsMcpDisplay(
+  action: string,
+  raw: Record<string, unknown> | null,
+): ToolCallDisplay {
+  switch (action) {
+    case "list_available_skills":
+      return {
+        label: "List skills",
+        hint: "Skills",
+        iconKey: "proliferate",
+      };
+    case "activate_skill":
+      return {
+        label: "Activate skill",
+        hint: readString(raw?.skillId) ?? readString(raw?.skill_id) ?? "Skills",
+        iconKey: "proliferate",
+      };
+    case "get_skill_resource": {
+      const skillId = readString(raw?.skillId) ?? readString(raw?.skill_id);
+      const resourceId = readString(raw?.resourceId) ?? readString(raw?.resource_id);
+      return {
+        label: "Load skill resource",
+        hint: skillId && resourceId
+          ? `${skillId}/${resourceId}`
+          : skillId ?? "Skills",
+        iconKey: "proliferate",
+      };
+    }
+    default:
+      return {
+        label: formatMcpActionLabel(action),
+        hint: "Skills",
+        iconKey: "proliferate",
       };
   }
 }

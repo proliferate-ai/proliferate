@@ -1,8 +1,9 @@
 use std::time::Instant;
 
-use anyharness_contract::v1::SessionMcpBindingSummary;
+use anyharness_contract::v1::{SessionMcpBindingSummary, SessionPluginBundle};
 
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::domains::plugins::validation::validate_session_plugin_bundle;
 use crate::origin::OriginContext;
 use crate::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
@@ -24,6 +25,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        plugin_bundle: Option<SessionPluginBundle>,
         subagents_enabled: bool,
         origin: OriginContext,
         latency: Option<&LatencyRequestContext>,
@@ -49,6 +51,10 @@ impl SessionRuntime {
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.create_and_start.start"
         );
+        if let Some(bundle) = plugin_bundle.as_ref() {
+            validate_session_plugin_bundle(bundle)
+                .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        }
 
         let durable_create_started = Instant::now();
         let mut record = self.create_durable_session(
@@ -63,6 +69,17 @@ impl SessionRuntime {
             subagents_enabled,
             origin,
         )?;
+        let registered_plugin_bundle = if let Some(bundle) = plugin_bundle {
+            if bundle.plugins.is_empty() {
+                false
+            } else {
+                self.plugin_bundle_registry
+                    .set_session_bundle(record.id.clone(), bundle);
+                true
+            }
+        } else {
+            false
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -73,7 +90,15 @@ impl SessionRuntime {
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.durable_session_created"
         );
-        record = self.start_persisted_session(&record, latency).await?;
+        record = match self.start_persisted_session(&record, latency).await {
+            Ok(record) => record,
+            Err(error) => {
+                if registered_plugin_bundle {
+                    self.plugin_bundle_registry.clear_session_bundle(&record.id);
+                }
+                return Err(error);
+            }
+        };
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -122,6 +147,23 @@ impl SessionRuntime {
                 origin,
             )
             .map_err(map_create_session_service_error)
+    }
+
+    pub fn set_session_plugin_bundle(
+        &self,
+        session_id: &str,
+        plugin_bundle: SessionPluginBundle,
+    ) -> Result<(), crate::sessions::runtime::EnsureLiveSessionError> {
+        if plugin_bundle.plugins.is_empty() {
+            self.plugin_bundle_registry.clear_session_bundle(session_id);
+            return Ok(());
+        }
+        validate_session_plugin_bundle(&plugin_bundle).map_err(|error| {
+            crate::sessions::runtime::EnsureLiveSessionError::Invalid(error.to_string())
+        })?;
+        self.plugin_bundle_registry
+            .set_session_bundle(session_id.to_string(), plugin_bundle);
+        Ok(())
     }
 }
 

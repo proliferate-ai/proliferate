@@ -235,6 +235,36 @@ def test_catalog_entry_invariants() -> None:
                 assert template.field_id in setting_field_ids
 
 
+def test_cloud_catalog_includes_separate_plugin_packages() -> None:
+    response = catalog_service.get_cloud_mcp_catalog()
+    entries_by_id = {entry.id: entry for entry in response.entries}
+    packages_by_catalog_entry_id = {
+        package.catalog_entry_id: package
+        for package in response.plugin_packages
+    }
+
+    assert set(packages_by_catalog_entry_id) == set(entries_by_id)
+    assert packages_by_catalog_entry_id["context7"].skills == []
+
+    github_package = packages_by_catalog_entry_id["github"]
+    assert github_package.id == "github"
+    assert [skill.id for skill in github_package.skills] == [
+        "triage",
+        "address-comments",
+        "fix-ci",
+    ]
+    assert all(skill.provenance.source_sha256 for skill in github_package.skills)
+    assert all(skill.provenance.adapted_sha256 for skill in github_package.skills)
+    assert all(
+        skill.provenance.review_status == "reviewed"
+        for skill in github_package.skills
+    )
+    assert all(
+        skill.required_mcp_server_refs == ["github"]
+        for skill in github_package.skills
+    )
+
+
 def test_localhost_launch_urls_are_local_materialization_only() -> None:
     entry = CatalogEntry(
         id="local_http",

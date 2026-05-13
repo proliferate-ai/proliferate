@@ -2386,6 +2386,8 @@ export interface components {
             catalogVersion: string;
             /** Entries */
             entries: components["schemas"]["ConnectorCatalogEntryModel"][];
+            /** Pluginpackages */
+            pluginPackages?: components["schemas"]["PluginPackageModel"][];
         };
         /** ConnectorEnvTemplateModel */
         ConnectorEnvTemplateModel: {
@@ -2838,6 +2840,8 @@ export interface components {
             mcpBindingSummaries: components["schemas"]["SessionMcpBindingSummaryModel"][];
             /** Localstdiocandidates */
             localStdioCandidates: components["schemas"]["LocalStdioCandidateModel"][];
+            /** Pluginpackages */
+            pluginPackages?: components["schemas"]["PluginPackageModel"][];
             /** Warnings */
             warnings: components["schemas"]["CloudMcpMaterializationWarningModel"][];
         };
@@ -3187,6 +3191,86 @@ export interface components {
             usageMinutes: number;
             /** Probillingenabled */
             proBillingEnabled: boolean;
+        };
+        /** PluginPackageModel */
+        PluginPackageModel: {
+            /** Id */
+            id: string;
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Version */
+            version: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description: string;
+            /** Skills */
+            skills?: components["schemas"]["PluginPackageSkillModel"][];
+        };
+        /** PluginPackageSkillModel */
+        PluginPackageSkillModel: {
+            /** Id */
+            id: string;
+            /** Displayname */
+            displayName: string;
+            /** Description */
+            description: string;
+            /** Instructions */
+            instructions: string;
+            /** Requiredmcpserverrefs */
+            requiredMcpServerRefs: string[];
+            /** Requirescredentialbinding */
+            requiresCredentialBinding: boolean;
+            /** Resources */
+            resources?: components["schemas"]["PluginSkillResourceModel"][];
+            /** Defaultenabled */
+            defaultEnabled: boolean;
+            provenance: components["schemas"]["PluginSkillProvenanceModel"];
+        };
+        /** PluginSkillProvenanceModel */
+        PluginSkillProvenanceModel: {
+            /** Sourcerepourl */
+            sourceRepoUrl: string;
+            /** Sourcepath */
+            sourcePath: string;
+            /** Sourceref */
+            sourceRef: string;
+            /** Sourcesha256 */
+            sourceSha256: string;
+            /** Adaptedsha256 */
+            adaptedSha256: string;
+            /** Sourcelicense */
+            sourceLicense: string;
+            /**
+             * Importmode
+             * @enum {string}
+             */
+            importMode: "adapted" | "vendored";
+            /**
+             * Reviewstatus
+             * @enum {string}
+             */
+            reviewStatus: "reviewed" | "pending";
+            /** Reviewer */
+            reviewer: string;
+            /** Reviewedat */
+            reviewedAt: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+        };
+        /** PluginSkillResourceModel */
+        PluginSkillResourceModel: {
+            /** Resourceid */
+            resourceId: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Contenttype */
+            contentType: string;
+            /** Content */
+            content: string;
         };
         /** PutCloudMcpSecretAuthRequest */
         PutCloudMcpSecretAuthRequest: {

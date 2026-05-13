@@ -20,6 +20,8 @@ use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
+use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, SkillsProductMcpServer};
+use crate::domains::plugins::{PluginBundleRegistry, PluginSessionLaunchExtension};
 use crate::domains::reviews::hooks::ReviewSessionHooks;
 use crate::domains::reviews::mcp::{
     auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
@@ -228,6 +230,14 @@ impl AppState {
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(review_hook_event_tx));
         let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
+        let plugin_bundle_registry = PluginBundleRegistry::default();
+        let skills_mcp_auth = Arc::new(SkillsMcpAuth::new(runtime_home.clone()));
+        let plugin_session_launch_extension = Arc::new(PluginSessionLaunchExtension::new(
+            plugin_bundle_registry.clone(),
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            skills_mcp_auth.clone(),
+        ));
         let product_mcp_launch_catalog = ProductMcpLaunchCatalog::new(
             runtime_base_url.clone(),
             bearer_token.clone(),
@@ -242,6 +252,7 @@ impl AppState {
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
+            plugin_session_launch_extension,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
@@ -252,6 +263,7 @@ impl AppState {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
+            plugin_bundle_registry.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
         ));
@@ -352,6 +364,14 @@ impl AppState {
                 )),
                 Some(WorkspaceOperationKind::CoworkWrite),
                 cowork_mcp_tools::MUTATING_TOOL_NAMES,
+            ))),
+            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(SkillsProductMcpServer::new(
+                    plugin_bundle_registry,
+                    skills_mcp_auth,
+                )),
+                None,
+                &[],
             ))),
         ];
         let product_mcp_endpoint_registry = Arc::new(

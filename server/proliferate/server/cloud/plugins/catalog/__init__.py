@@ -1,0 +1,2 @@
+"""Plugin package catalog."""
+

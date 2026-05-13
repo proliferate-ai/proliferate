@@ -115,6 +115,7 @@ pub async fn create_session(
             req.system_prompt_append,
             mcp_servers,
             req.mcp_binding_summaries,
+            req.plugin_bundle,
             req.subagents_enabled.unwrap_or(true),
             origin,
             latency.as_ref(),
@@ -580,6 +581,12 @@ pub async fn resume_session(
     } else {
         None
     };
+    if let Some(plugin_bundle) = req.plugin_bundle {
+        state
+            .session_runtime
+            .set_session_plugin_bundle(&session_id, plugin_bundle)
+            .map_err(map_ensure_live_session_error)?;
+    }
     let _lease =
         acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
             .await?;

@@ -473,6 +473,7 @@ export function useSessionCreationActions() {
       const {
         mcpServers,
         mcpBindingSummaries,
+        pluginBundle,
         warnings: connectorWarnings,
       } = mcpLaunch;
       const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
@@ -487,6 +488,7 @@ export function useSessionCreationActions() {
             mcpBindingSummaries: mcpBindingSummaries.length > 0
               ? mcpBindingSummaries
               : undefined,
+            pluginBundle,
             subagentsEnabled,
             origin: DESKTOP_ORIGIN,
           }, requestOptions);

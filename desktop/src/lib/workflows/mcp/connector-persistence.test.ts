@@ -293,6 +293,56 @@ describe("cloud MCP connector persistence", () => {
     ]);
   });
 
+  it("attaches plugin package skills from the cloud catalog", async () => {
+    mocks.getCloudMcpCatalogMock.mockResolvedValue({
+      catalogVersion: "test",
+      entries: [secretCatalogEntry("github")],
+      pluginPackages: [
+        {
+          id: "github",
+          catalogEntryId: "github",
+          version: "1",
+          displayName: "GitHub",
+          description: "GitHub package",
+          skills: [
+            {
+              id: "triage",
+              displayName: "GitHub triage",
+              description: "Inspect GitHub.",
+              instructions: "# GitHub triage",
+              requiredMcpServerRefs: ["github"],
+              requiresCredentialBinding: true,
+              resources: [],
+              defaultEnabled: true,
+              provenance: {
+                sourceRepoUrl: "https://example.com",
+                sourcePath: "skills/github/SKILL.md",
+                sourceRef: "test",
+                sourceSha256: "source",
+                adaptedSha256: "adapted",
+                sourceLicense: "MIT",
+                importMode: "adapted",
+                reviewStatus: "reviewed",
+                reviewer: "test",
+                reviewedAt: "2026-05-13",
+                notes: "",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    mocks.listCloudMcpConnectionsMock.mockResolvedValue({
+      connections: [],
+    });
+
+    const paneData = await loadConnectorPaneData();
+
+    expect(paneData.available[0]?.pluginPackage?.skills[0]?.id).toBe("triage");
+    expect(paneData.available[0]?.pluginPackage?.skills[0]?.provenance?.sourceSha256)
+      .toBe("source");
+  });
+
   it("drops installed rows whose catalog entry was removed", async () => {
     mocks.listCloudMcpConnectionsMock.mockResolvedValue({
       connections: [
