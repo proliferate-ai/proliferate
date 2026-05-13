@@ -32,6 +32,7 @@ import {
   includeVisibleLinkedChildSessionIds,
   resolveVisibleChatSessionIds,
   type ChatVisibilityCandidate,
+  uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
 import {
   useWorkspaceShellTabsState,
@@ -122,15 +123,60 @@ export function useWorkspaceHeaderTabsViewModel() {
     workspaceId: selectedWorkspaceId,
     enabled: !!selectedWorkspaceId && !hotPaintPending,
   });
+  const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
+
+  const persistedVisibleFallback = resolveWithWorkspaceFallback(
+    visibleByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const recentlyHiddenFallback = resolveWithWorkspaceFallback(
+    hiddenByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const collapsedParentFallback = resolveWithWorkspaceFallback(
+    collapsedGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const manualGroupsFallback = resolveWithWorkspaceFallback(
+    manualGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const persistedVisibleIds = persistedVisibleFallback.value;
+  const recentlyHiddenIds = recentlyHiddenFallback.value ?? EMPTY_SESSION_ID_LIST;
+  const collapsedParentIds = collapsedParentFallback.value ?? EMPTY_SESSION_ID_LIST;
+  const persistedManualGroups = manualGroupsFallback.value ?? EMPTY_MANUAL_GROUPS;
+  const optimisticHeaderSessionIds = useStableStringArray(useMemo(
+    () => workspaceSessionsLoaded
+      ? EMPTY_SESSION_ID_LIST
+      : uniqueIds([
+        ...(persistedVisibleIds ?? []),
+        activeSessionId ?? "",
+      ]).filter(Boolean),
+    [
+      activeSessionId,
+      persistedVisibleIds,
+      workspaceSessionsLoaded,
+    ],
+  ));
 
   const knownSessions = useMemo<Map<string, KnownHeaderSession>>(() =>
     measureDebugComputation({
       category: "header_tabs.derive",
       label: "known_sessions",
-      keys: ["liveSlots", "workspaceSessionsQuery.data", "selectedWorkspaceId"],
+      keys: [
+        "liveSlots",
+        "optimisticHeaderSessionIds",
+        "workspaceSessionsQuery.data",
+        "selectedWorkspaceId",
+      ],
       count: (map) => map.size,
     }, () => {
       return buildKnownHeaderSessions({
+        optimisticSessionIds: optimisticHeaderSessionIds,
         sessions: workspaceSessionsQuery.data,
         selectedWorkspaceId,
         clientSessionIdByMaterializedSessionId,
@@ -139,6 +185,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     }), [
       clientSessionIdByMaterializedSessionId,
       liveSlots,
+      optimisticHeaderSessionIds,
       selectedWorkspaceId,
       workspaceSessionsQuery.data,
     ]);
@@ -176,31 +223,6 @@ export function useWorkspaceHeaderTabsViewModel() {
     () => liveVisibilityCandidates.map((candidate) => candidate.sessionId),
     [liveVisibilityCandidates],
   ));
-
-  const persistedVisibleFallback = resolveWithWorkspaceFallback(
-    visibleByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const recentlyHiddenFallback = resolveWithWorkspaceFallback(
-    hiddenByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const collapsedParentFallback = resolveWithWorkspaceFallback(
-    collapsedGroupsByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const manualGroupsFallback = resolveWithWorkspaceFallback(
-    manualGroupsByWorkspace,
-    workspaceUiKey,
-    materializedWorkspaceId,
-  );
-  const persistedVisibleIds = persistedVisibleFallback.value;
-  const recentlyHiddenIds = recentlyHiddenFallback.value ?? EMPTY_SESSION_ID_LIST;
-  const collapsedParentIds = collapsedParentFallback.value ?? EMPTY_SESSION_ID_LIST;
-  const persistedManualGroups = manualGroupsFallback.value ?? EMPTY_MANUAL_GROUPS;
   const persistedVisibleIdsForResolution = useMemo(
     () => persistedVisibleIds?.filter((sessionId) =>
       sessionId === activeSessionId || !hierarchyChildren.rowsBySessionId.has(sessionId)
@@ -210,6 +232,7 @@ export function useWorkspaceHeaderTabsViewModel() {
 
   const visibleResolution = useMemo(
     () => resolveVisibleChatSessionIds({
+      includeUnresolvedPersistedIds: !workspaceSessionsLoaded,
       liveSessions: liveVisibilityCandidates,
       persistedVisibleIds: persistedVisibleIdsForResolution,
       recentlyHiddenIds,
@@ -220,6 +243,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       liveVisibilityCandidates,
       persistedVisibleIdsForResolution,
       recentlyHiddenIds,
+      workspaceSessionsLoaded,
     ],
   );
   const visibleChatSessionIds = useStableStringArray(visibleResolution.visibleSessionIds);
@@ -235,9 +259,6 @@ export function useWorkspaceHeaderTabsViewModel() {
       visibleResolution.visibleSessionIds,
     ],
   ));
-
-  const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
-
   const groupedTabs = useMemo(
     () => buildGroupedChatTabs({
       visibleSessionIds: stripVisibleChatSessionIds,

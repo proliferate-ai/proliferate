@@ -47,6 +47,17 @@ describe("chat tab visibility", () => {
     expect(result.prunedRecentlyHiddenIds).toEqual(["live"]);
   });
 
+  it("can use persisted tabs optimistically before the session list loads", () => {
+    const result = resolveVisibleChatSessionIds({
+      liveSessions: [],
+      includeUnresolvedPersistedIds: true,
+      persistedVisibleIds: ["remembered"],
+      activeSessionId: "active",
+    });
+
+    expect(result.visibleSessionIds).toEqual(["remembered", "active"]);
+  });
+
   it("includes linked child sessions for visible parents without waiting for persisted visibility", () => {
     const result = includeVisibleLinkedChildSessionIds({
       visibleSessionIds: ["parent", "other"],

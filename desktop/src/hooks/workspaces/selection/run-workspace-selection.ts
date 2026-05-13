@@ -1,6 +1,12 @@
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import {
+  createEmptySessionRecord,
+  getSessionRecord,
+  patchSessionRecord,
+  putSessionRecord,
+} from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
 import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import {
@@ -15,6 +21,11 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
+import {
+  OPTIMISTIC_WORKSPACE_SESSION_AGENT_KIND,
+  OPTIMISTIC_WORKSPACE_SESSION_TITLE,
+  resolveOptimisticWorkspaceSessionId,
+} from "@/lib/domain/workspaces/selection/optimistic-session-shell";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
@@ -31,18 +42,71 @@ import type {
 
 function resolveInitialActiveSessionId(
   workspaceId: string,
+  workspaceUiKey: string,
   options: WorkspaceSelectionOptions | undefined,
-  cachedSessionId: string | null,
+  workspaceUiState: {
+    lastViewedSessionByWorkspace: Record<string, string>;
+    visibleChatSessionIdsByWorkspace: Record<string, string[]>;
+  },
 ): string | null {
-  if (options && "initialActiveSessionId" in options) {
-    return options.initialActiveSessionId ?? null;
-  }
-  if (!cachedSessionId) {
+  const candidate = resolveOptimisticWorkspaceSessionId({
+    explicitInitialSessionId: options?.initialActiveSessionId,
+    hasExplicitInitialSessionId: !!options && "initialActiveSessionId" in options,
+    lastViewedSessionByWorkspace: workspaceUiState.lastViewedSessionByWorkspace,
+    materializedWorkspaceId: workspaceId,
+    visibleChatSessionIdsByWorkspace: workspaceUiState.visibleChatSessionIdsByWorkspace,
+    workspaceUiKey,
+  });
+  if (!candidate) {
     return null;
   }
 
-  const cachedSlot = getSessionRecord(cachedSessionId);
-  return cachedSlot?.workspaceId === workspaceId ? cachedSessionId : null;
+  const cachedSlot = getSessionRecord(candidate);
+  return cachedSlot?.workspaceId && cachedSlot.workspaceId !== workspaceId
+    ? null
+    : candidate;
+}
+
+function prepareOptimisticWorkspaceSessionShell(input: {
+  sessionId: string | null;
+  workspaceId: string;
+  workspaceUiKey: string;
+}): void {
+  if (!input.sessionId) {
+    return;
+  }
+
+  const existing = getSessionRecord(input.sessionId);
+  if (!existing) {
+    putSessionRecord(createEmptySessionRecord(
+      input.sessionId,
+      OPTIMISTIC_WORKSPACE_SESSION_AGENT_KIND,
+      {
+        materializedSessionId: input.sessionId,
+        sessionRelationship: { kind: "root" },
+        title: OPTIMISTIC_WORKSPACE_SESSION_TITLE,
+        workspaceId: input.workspaceId,
+      },
+    ));
+  } else if (!existing.workspaceId || !existing.materializedSessionId) {
+    patchSessionRecord(input.sessionId, {
+      materializedSessionId: existing.materializedSessionId ?? input.sessionId,
+      workspaceId: existing.workspaceId ?? input.workspaceId,
+    });
+  }
+
+  writeChatShellIntentForSession({
+    workspaceId: input.workspaceId,
+    shellWorkspaceId: input.workspaceUiKey,
+    sessionId: input.sessionId,
+    invalidateSessionIntent: false,
+  });
+  logLatency("workspace.select.optimistic_session_shell", {
+    workspaceId: input.workspaceId,
+    workspaceUiKey: input.workspaceUiKey,
+    sessionId: input.sessionId,
+    createdRecord: !existing,
+  });
 }
 
 async function invalidateCloudWorkspaceStartState(
@@ -114,12 +178,12 @@ export async function runWorkspaceSelection(
         preservePending: !!request.options?.preservePending,
       });
 
-      const cachedSessionId =
-        useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[directWorkspace.id] ?? null;
+      const workspaceUiState = useWorkspaceUiStore.getState();
       const initialActiveSessionId = resolveInitialActiveSessionId(
         directWorkspace.id,
+        directWorkspace.id,
         request.options,
-        cachedSessionId,
+        workspaceUiState,
       );
       deps.cache.cancelPreviousWorkspaceDisplayQueries({
         runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
@@ -133,6 +197,11 @@ export async function runWorkspaceSelection(
       deps.setSelectedWorkspace(directWorkspace.id, {
         clearPending: !request.options?.preservePending,
         initialActiveSessionId,
+      });
+      prepareOptimisticWorkspaceSessionShell({
+        sessionId: initialActiveSessionId,
+        workspaceId: directWorkspace.id,
+        workspaceUiKey: directWorkspace.id,
       });
 
       const context: WorkspaceSelectionContext = {
@@ -204,12 +273,12 @@ export async function runWorkspaceSelection(
     preservePending: !!request.options?.preservePending,
   });
 
-  const cachedSessionId =
-    useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[logicalWorkspace.id] ?? null;
+  const workspaceUiState = useWorkspaceUiStore.getState();
   const initialActiveSessionId = resolveInitialActiveSessionId(
     resolvedWorkspaceId,
+    logicalWorkspace.id,
     request.options,
-    cachedSessionId,
+    workspaceUiState,
   );
   deps.cache.cancelPreviousWorkspaceDisplayQueries({
     runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
@@ -223,6 +292,11 @@ export async function runWorkspaceSelection(
   deps.setSelectedWorkspace(resolvedWorkspaceId, {
     clearPending: !request.options?.preservePending,
     initialActiveSessionId,
+  });
+  prepareOptimisticWorkspaceSessionShell({
+    sessionId: initialActiveSessionId,
+    workspaceId: resolvedWorkspaceId,
+    workspaceUiKey: logicalWorkspace.id,
   });
 
   const baseContext: WorkspaceSelectionContext = {
