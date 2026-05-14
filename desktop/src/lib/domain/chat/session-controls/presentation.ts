@@ -12,6 +12,7 @@ export type SessionControlTone =
   | "info";
 
 export type SessionControlIconKey =
+  | "build"
   | "chat"
   | "edit"
   | "plan"
@@ -135,6 +136,35 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
       },
     ],
   },
+  cursor: {
+    mode: [
+      {
+        value: "agent",
+        label: "Agent",
+        shortLabel: "Agent",
+        description: "Full agent capabilities.",
+        tone: "success",
+        icon: "edit",
+        isDefault: true,
+      },
+      {
+        value: "plan",
+        label: "Plan",
+        shortLabel: "Plan",
+        description: "Plan before applying changes.",
+        tone: "accent",
+        icon: "plan",
+      },
+      {
+        value: "ask",
+        label: "Ask",
+        shortLabel: "Ask",
+        description: "Answer without making changes.",
+        tone: "info",
+        icon: "chat",
+      },
+    ],
+  },
   gemini: {
     mode: [
       {
@@ -143,7 +173,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Ask before each action.",
         tone: "info",
-        icon: "read",
+        icon: "chat",
         isDefault: true,
       },
       {
@@ -167,6 +197,27 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Plan",
         shortLabel: "Plan",
         description: "Plan without execution.",
+        tone: "accent",
+        icon: "plan",
+      },
+    ],
+  },
+  opencode: {
+    mode: [
+      {
+        value: "build",
+        label: "Build",
+        shortLabel: "Build",
+        description: "Default build mode.",
+        tone: "success",
+        icon: "build",
+        isDefault: true,
+      },
+      {
+        value: "plan",
+        label: "Plan",
+        shortLabel: "Plan",
+        description: "Plan before applying changes.",
         tone: "accent",
         icon: "plan",
       },

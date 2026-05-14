@@ -151,7 +151,7 @@ export function ModelSelector({
                 <button
                   type="button"
                   onClick={toggleAddProvider}
-                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-muted-foreground hover:bg-popover-accent hover:text-popover-foreground"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-muted-foreground hover:bg-popover-accent hover:text-popover-foreground"
                 >
                   <Plus className="size-3.5 shrink-0" />
                   <span>{CHAT_MODEL_SELECTOR_LABELS.addProvider}</span>
@@ -166,7 +166,7 @@ export function ModelSelector({
                     key={agent.kind}
                     type="button"
                     onClick={() => openSetupAgent(agent)}
-                    className="flex w-full cursor-default items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground hover:bg-popover-accent focus:bg-popover-accent"
+                    className="flex w-full cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-popover-foreground hover:bg-popover-accent focus:bg-popover-accent"
                   >
                     <ProviderIcon kind={agent.kind} className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="flex-1 truncate text-left">{agent.displayName}</span>
@@ -238,7 +238,7 @@ function ModelRow({
     <button
       type="button"
       onClick={onSelect}
-      className="flex w-full cursor-default items-center gap-1.5 rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground hover:bg-popover-accent focus:bg-popover-accent"
+      className="flex w-full cursor-default items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-popover-foreground hover:bg-popover-accent focus:bg-popover-accent"
     >
       <ProviderIcon kind={kind} className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="flex-1 truncate text-left">{displayName}</span>

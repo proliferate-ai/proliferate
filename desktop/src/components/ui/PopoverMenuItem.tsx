@@ -30,7 +30,7 @@ export function PopoverMenuItem({
     <button
       type={type}
       className={twMerge(
-        "group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent",
+        "group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-popover-foreground outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent",
         hoverClassName,
         className,
       )}
@@ -40,7 +40,7 @@ export function PopoverMenuItem({
         onClick?.(event);
       }}
     >
-      <span className="flex w-full items-center gap-1.5">
+      <span className="flex w-full items-center gap-2">
         {icon && (
           <span className="flex shrink-0 items-center justify-center text-muted-foreground">
             {icon}
@@ -54,8 +54,8 @@ export function PopoverMenuItem({
         )}
       </span>
       {hasDescription && (
-        <span className={`flex w-full items-center gap-1.5 ${icon ? "pl-5" : ""}`}>
-          <span className="min-w-0 flex-1 text-left text-sm leading-4 text-muted-foreground [&_*]:text-sm [&_*]:leading-4">
+        <span className={`mt-0.5 flex w-full items-center gap-2 ${icon ? "pl-6" : ""}`}>
+          <span className="min-w-0 flex-1 text-left text-sm leading-5 text-muted-foreground [&_*]:text-sm [&_*]:leading-5">
             {children}
           </span>
         </span>

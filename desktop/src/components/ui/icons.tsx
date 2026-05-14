@@ -359,6 +359,14 @@ export function EditModeFilled({ className, ...props }: IconProps) {
   );
 }
 
+export function BuildModeFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M14.9 2.62a2.1 2.1 0 0 1 2.97 0l1.5 1.5a2.1 2.1 0 0 1 0 2.97l-.71.71a1 1 0 0 1-1.42 0l-.52-.52-2.38 2.38 6.28 6.28a2 2 0 0 1 0 2.82l-1.86 1.86a2 2 0 0 1-2.82 0L9.66 14.34l-2.27 2.27.5.5a1 1 0 0 1 0 1.42l-.8.8a2.1 2.1 0 0 1-2.97 0l-1.45-1.45a2.1 2.1 0 0 1 0-2.97l.8-.8a1 1 0 0 1 1.42 0l.5.5 2.27-2.27-.45-.45a2.2 2.2 0 0 1 0-3.11l1.57-1.57a2.2 2.2 0 0 1 3.11 0l.45.45 2.38-2.38-.52-.52a1 1 0 0 1 0-1.42l.7-.72Z" />
+    </svg>
+  );
+}
+
 export function ShieldCheckFilled({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>

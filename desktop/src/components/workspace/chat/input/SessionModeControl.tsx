@@ -18,9 +18,14 @@ type ModeControlDescriptor = LiveSessionControlDescriptor & {
 interface SessionModeControlProps {
   agentKind: string | null;
   control: ModeControlDescriptor;
+  triggerStyle?: "full" | "value";
 }
 
-export function SessionModeControl({ agentKind, control }: SessionModeControlProps) {
+export function SessionModeControl({
+  agentKind,
+  control,
+  triggerStyle = "full",
+}: SessionModeControlProps) {
   const currentOption = control.options.find((option) => option.selected) ?? null;
   const currentValue = currentOption?.value ?? null;
   const currentPresentation = resolveSessionControlPresentation(
@@ -29,6 +34,8 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
     currentValue,
   );
   const currentDetail = currentPresentation.shortLabel ?? currentOption?.label ?? control.detail;
+  const triggerLabel = triggerStyle === "value" ? currentDetail ?? control.label : control.label;
+  const triggerDetail = triggerStyle === "value" ? null : currentDetail;
 
   if (!control.settable) {
     return (
@@ -36,8 +43,8 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
         disabled
         tone={currentPresentation.tone}
         icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
-        label={control.label}
-        detail={currentDetail}
+        label={triggerLabel}
+        detail={triggerDetail}
         trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
         className="max-w-[12rem]"
       />
@@ -50,8 +57,8 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
         <ComposerControlButton
           tone={currentPresentation.tone}
           icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
-          label={control.label}
-          detail={currentDetail}
+          label={triggerLabel}
+          detail={triggerDetail}
           trailing={
             <span className="flex items-center gap-1">
               <PendingConfigIndicator pendingState={control.pendingState} />

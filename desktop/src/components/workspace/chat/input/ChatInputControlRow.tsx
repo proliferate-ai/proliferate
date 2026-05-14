@@ -1,8 +1,13 @@
 import type { ComponentProps } from "react";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
-import { ModelSelector } from "./ModelSelector";
-import { SessionConfigControls } from "./SessionConfigControls";
+import { ComposerModelConfigSelector } from "./ComposerModelConfigSelector";
+import type { ModelSelector } from "./ModelSelector";
+import type { SessionConfigControls } from "./SessionConfigControls";
+import { SessionModeControl } from "./SessionModeControl";
+import {
+  buildComposerSessionControlGroups,
+} from "@/lib/domain/chat/session-controls/composer-control-groups";
 
 export interface ChatInputControlRowProps {
   runtimeControlsDisabled: boolean;
@@ -59,6 +64,7 @@ export function ChatInputControlRow({
 }: ChatInputControlRowProps) {
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
+  const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
   const canAttachFile = canUseUtilityActions && canAttachFiles;
   // Plan references resolve to markdown text in the runtime, so they do not
   // depend on file/image attachment capabilities.
@@ -89,17 +95,8 @@ export function ChatInputControlRow({
         : "Review agents are unavailable right now";
 
   return (
-    <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-      <div
-        className={`flex min-w-0 flex-nowrap items-center gap-[5px] ${
-          runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-        }`}
-      >
-        <ModelSelector {...modelSelectorProps} />
-        <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
-      </div>
-
-      <div className="flex items-center gap-[5px]">
+    <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[5px] px-2">
+      <div className="flex min-w-0 items-center gap-[5px]">
         {!isEditingQueuedPrompt && (
           <ComposerAddActionPopover
             canAttachFile={canAttachFile}
@@ -115,6 +112,35 @@ export function ChatInputControlRow({
             onConfigureReview={onConfigureReview}
           />
         )}
+        {controlGroups.modeControl && (
+          <span
+            className={`inline-flex min-w-0 ${
+              runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+            }`}
+          >
+            <SessionModeControl
+              agentKind={agentKind}
+              control={controlGroups.modeControl}
+              triggerStyle="value"
+            />
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0" aria-hidden="true" />
+
+      <div className="flex min-w-0 items-center gap-[5px]">
+        <div
+          className={`flex min-w-0 items-center gap-[5px] ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerModelConfigSelector
+            modelSelectorProps={modelSelectorProps}
+            agentKind={agentKind}
+            controls={controlGroups.modelConfigControls}
+          />
+        </div>
         <ChatComposerActions
           isRunning={isRunning}
           isEmpty={isEmpty}

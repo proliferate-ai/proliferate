@@ -9,6 +9,7 @@ import {
   SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
 } from "@/components/settings/settings-navigation";
+import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
@@ -30,13 +31,26 @@ interface SettingsSidebarProps {
 }
 
 const SETTINGS_SIDEBAR_ROOT_CLASS =
-  "flex h-full w-64 shrink-0 select-none flex-col bg-sidebar-background text-sidebar-foreground";
-const SETTINGS_NAV_CLASS = "flex min-h-0 flex-1 flex-col px-2 pb-2";
-const SETTINGS_GROUPS_CLASS = "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2";
-const SETTINGS_GROUP_CLASS = "flex flex-col gap-1";
+  "flex h-full w-64 shrink-0 select-none flex-col border-r border-sidebar-border bg-sidebar";
+const SETTINGS_NAV_CLASS = "flex-1 overflow-y-auto px-2 pb-4";
+const SETTINGS_GROUPS_CLASS = "flex flex-col";
+const SETTINGS_GROUP_CLASS = "flex flex-col gap-0.5";
+const SETTINGS_GROUP_SPACING_CLASS = "mt-3";
 const SETTINGS_GROUP_HEADING_CLASS =
-  "px-2 pb-0.5 pt-1 text-base leading-5 text-sidebar-muted-foreground opacity-75";
-const SETTINGS_ROW_STACK_CLASS = "flex flex-col gap-px";
+  "px-2 pb-1 pt-1.5 text-xs font-medium uppercase tracking-[0.08em] text-sidebar-muted-foreground/80";
+const SETTINGS_ROW_INACTIVE_CLASS =
+  "!text-sidebar-muted-foreground hover:!text-sidebar-foreground";
+const SETTINGS_ROW_ACTIVE_CLASS =
+  "!font-medium !text-sidebar-foreground";
+const SETTINGS_ROW_DISABLED_CLASS =
+  "!text-sidebar-muted-foreground hover:!text-sidebar-muted-foreground";
+
+function settingsRowClass(active: boolean, disabled = false) {
+  return [
+    active ? SETTINGS_ROW_ACTIVE_CLASS : SETTINGS_ROW_INACTIVE_CLASS,
+    disabled ? SETTINGS_ROW_DISABLED_CLASS : "",
+  ].filter(Boolean).join(" ");
+}
 
 function isSettingsItemActive(item: SettingsNavItem, activeSection: SettingsSection) {
   return item.kind === "section" && activeSection === item.id;
@@ -87,6 +101,7 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
   const location = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
+  const appVersion = useAppVersion().data?.trim();
 
   function handleItemClick(item: SettingsNavItem) {
     if (item.kind === "action") {
@@ -147,6 +162,7 @@ export function SettingsSidebar({
         disabled={disabled}
         label={label}
         status={status}
+        className={settingsRowClass(false, disabled)}
       />
     );
   }
@@ -163,53 +179,62 @@ export function SettingsSidebar({
           }}
         />
       )}
-      <div className="h-[46px] pl-[82px]" data-tauri-drag-region="true" />
+      <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
-      <nav className={SETTINGS_NAV_CLASS} aria-label="Settings">
+      <div className="mb-4 px-2">
         <SidebarNavRow
           icon={<ArrowLeft className="size-4" />}
           label={SETTINGS_COPY.back}
           onPress={onNavigateHome}
-          className="mb-2"
+          className={`w-fit ${SETTINGS_ROW_INACTIVE_CLASS}`}
         />
+      </div>
 
+      <nav className={SETTINGS_NAV_CLASS} aria-label="Settings">
         <div className={SETTINGS_GROUPS_CLASS}>
-          {SETTINGS_NAV_GROUPS.map((group) => (
-            <div key={group.id} className={SETTINGS_GROUP_CLASS}>
+          {SETTINGS_NAV_GROUPS.map((group, index) => (
+            <div
+              key={group.id}
+              className={`${SETTINGS_GROUP_CLASS} ${index > 0 ? SETTINGS_GROUP_SPACING_CLASS : ""}`}
+            >
               <div className={SETTINGS_GROUP_HEADING_CLASS}>
                 {group.heading}
               </div>
-              <div className={SETTINGS_ROW_STACK_CLASS}>
-                {group.items.map((item) => {
-                  const active = isSettingsItemActive(item, activeSection);
-                  const disabled = isSettingsItemDisabled(
-                    item,
-                    disabledSections,
-                    updateActionState,
-                  );
-                  const Icon = item.icon;
-                  return (
-                    <Fragment key={item.id}>
-                      <SidebarNavRow
-                        icon={<Icon className="size-4" />}
-                        label={item.label}
-                        status={settingsItemStatus(item, updateActionState)}
-                        onPress={() => handleItemClick(item)}
-                        active={active}
-                        disabled={disabled}
-                        aria-current={active ? "page" : undefined}
-                      />
-                      {item.kind === "action" && item.id === "checkForUpdates"
-                        ? renderUpdateCommand()
-                        : null}
-                    </Fragment>
-                  );
-                })}
-              </div>
+              {group.items.map((item) => {
+                const active = isSettingsItemActive(item, activeSection);
+                const disabled = isSettingsItemDisabled(
+                  item,
+                  disabledSections,
+                  updateActionState,
+                );
+                const Icon = item.icon;
+                return (
+                  <Fragment key={item.id}>
+                    <SidebarNavRow
+                      icon={<Icon className="size-4" />}
+                      label={item.label}
+                      status={settingsItemStatus(item, updateActionState)}
+                      onPress={() => handleItemClick(item)}
+                      active={active}
+                      disabled={disabled}
+                      aria-current={active ? "page" : undefined}
+                      className={settingsRowClass(active, disabled)}
+                    />
+                    {item.kind === "action" && item.id === "checkForUpdates"
+                      ? renderUpdateCommand()
+                      : null}
+                  </Fragment>
+                );
+              })}
             </div>
           ))}
         </div>
       </nav>
+      {appVersion ? (
+        <div className="shrink-0 border-t border-sidebar-border px-3 py-2 text-xs text-sidebar-muted-foreground">
+          Proliferate v{appVersion}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/presentation";
 import {
+  BuildModeFilled,
   CircleQuestion,
   EditModeFilled,
   MessageSquareFilled,
@@ -16,6 +17,7 @@ interface SessionControlIconProps {
 }
 
 const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<{ className?: string }>> = {
+  build: BuildModeFilled,
   chat: MessageSquareFilled,
   edit: EditModeFilled,
   plan: PlanningIcon,

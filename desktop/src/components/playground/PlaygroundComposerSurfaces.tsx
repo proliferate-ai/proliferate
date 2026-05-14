@@ -1,8 +1,9 @@
 import { useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
-import { ArrowRight, ArrowUp } from "@/components/ui/icons";
+import { ArrowRight } from "@/components/ui/icons";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { ChatInputControlRow } from "@/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/ComposerFileMentionBadge";
 import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
@@ -15,6 +16,8 @@ import type { ScenarioKey } from "@/config/playground";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
 import {
+  createPlaygroundModelSelectorProps,
+  createPlaygroundSessionConfigControls,
   FILE_MENTION_SEARCH_RESULTS,
   PLAYGROUND_LONG_COMPOSER_DRAFT,
 } from "@/lib/domain/chat/__fixtures__/playground/composer-surface-fixtures";
@@ -48,17 +51,7 @@ export function PlaygroundComposerSurface() {
             className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
-        <div className="flex items-center justify-end gap-1 px-2 pb-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon-sm"
-            disabled
-            aria-label="Send (playground — disabled)"
-          >
-            <ArrowUp className="size-3.5" />
-          </Button>
-        </div>
+        <PlaygroundComposerControlRow />
       </form>
     </ChatComposerSurface>
   );
@@ -90,17 +83,7 @@ function PlaygroundLongInputComposerSurface() {
             readOnly
           />
         </ComposerTextareaFrame>
-        <div className="flex items-center justify-end gap-1 px-2 pb-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon-sm"
-            disabled
-            aria-label="Send (playground — disabled)"
-          >
-            <ArrowUp className="size-3.5" />
-          </Button>
-        </div>
+        <PlaygroundComposerControlRow />
       </form>
     </ChatComposerSurface>
   );
@@ -144,20 +127,41 @@ function PlaygroundFileMentionComposerSurface() {
               {" "}and @chat
             </span>
           </div>
-          <div className="flex items-center justify-end gap-1 px-2 pb-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon-sm"
-              disabled
-              aria-label="Send (playground — disabled)"
-            >
-              <ArrowUp className="size-3.5" />
-            </Button>
-          </div>
+          <PlaygroundComposerControlRow />
         </form>
       </ChatComposerSurface>
     </>
+  );
+}
+
+function PlaygroundComposerControlRow() {
+  return (
+    <ChatInputControlRow
+      runtimeControlsDisabled={false}
+      modelSelectorProps={createPlaygroundModelSelectorProps()}
+      agentKind="codex"
+      sessionConfigControls={createPlaygroundSessionConfigControls()}
+      isEditingQueuedPrompt={false}
+      chatDisabled={false}
+      isSubmitting={false}
+      supportsAttachments
+      canAttachFiles
+      activeSessionId="playground-session"
+      workspaceUiKey="playground-workspace"
+      sdkWorkspaceId="playground-workspace"
+      suppressActiveSessionState={false}
+      canStartCodeReview
+      hasBlockingReview={false}
+      startingReview={false}
+      hasUnresolvedPlans={false}
+      onAttachFile={noop}
+      onStartReview={noop}
+      onConfigureReview={() => undefined}
+      isRunning={false}
+      isEmpty
+      onSubmit={noop}
+      onCancel={noop}
+    />
   );
 }
 

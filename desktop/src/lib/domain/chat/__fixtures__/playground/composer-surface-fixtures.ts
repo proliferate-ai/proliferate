@@ -1,4 +1,6 @@
 import type { SearchWorkspaceFilesResponse } from "@anyharness/sdk";
+import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selection";
+import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 
 export const FILE_MENTION_SEARCH_RESULTS: SearchWorkspaceFilesResponse["results"] = [
   {
@@ -37,3 +39,144 @@ export const PLAYGROUND_LONG_COMPOSER_DRAFT = [
   "It should not require a live AnyHarness session.",
   "It should share the production frame and autosize hook.",
 ].join("\n");
+
+export function createPlaygroundModelSelectorProps(): ModelSelectorProps {
+  return {
+    connectionState: "healthy",
+    currentModel: {
+      kind: "codex",
+      displayName: "GPT 5.5",
+      pendingState: null,
+    },
+    groups: [
+      {
+        kind: "codex",
+        providerDisplayName: "Proliferate",
+        models: [
+          {
+            kind: "codex",
+            modelId: "gpt-5.5",
+            displayName: "GPT 5.5",
+            actionKind: "select",
+            isSelected: true,
+          },
+          {
+            kind: "codex",
+            modelId: "gpt-5.4",
+            displayName: "GPT 5.4",
+            actionKind: "select",
+            isSelected: false,
+          },
+        ],
+      },
+      {
+        kind: "claude",
+        providerDisplayName: "Claude Code",
+        models: [
+          {
+            kind: "claude",
+            modelId: "opus-4.1",
+            displayName: "Opus 4.1",
+            actionKind: "open_new_chat",
+            isSelected: false,
+          },
+        ],
+      },
+    ],
+    hasAgents: true,
+    isLoading: false,
+    notReadyAgents: [],
+    onSelect: () => undefined,
+  };
+}
+
+export function createPlaygroundSessionConfigControls(): LiveSessionControlDescriptor[] {
+  return [
+    {
+      key: "collaboration_mode",
+      label: "Mode",
+      detail: "Default",
+      rawConfigId: "collaboration_mode",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        {
+          value: "default",
+          label: "Default",
+          description: "Standard collaboration behavior.",
+          selected: true,
+        },
+        {
+          value: "plan",
+          label: "Plan",
+          description: "Plan before applying changes.",
+          selected: false,
+        },
+      ],
+      onSelect: () => undefined,
+    },
+    {
+      key: "mode",
+      label: "Permissions",
+      detail: "Auto",
+      rawConfigId: "mode",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        {
+          value: "read-only",
+          label: "Read Only",
+          description: "Inspect and plan without editing.",
+          selected: false,
+        },
+        {
+          value: "auto",
+          label: "Auto",
+          description: "Auto-approve standard edits.",
+          selected: true,
+        },
+        {
+          value: "full-access",
+          label: "Full Access",
+          description: "Allow unrestricted changes.",
+          selected: false,
+        },
+      ],
+      onSelect: () => undefined,
+    },
+    {
+      key: "effort",
+      label: "Reasoning effort",
+      detail: "Xhigh",
+      rawConfigId: "effort",
+      settable: true,
+      pendingState: null,
+      kind: "select",
+      options: [
+        { value: "low", label: "Low", selected: false },
+        { value: "medium", label: "Medium", selected: false },
+        { value: "xhigh", label: "Extra High", selected: true },
+      ],
+      onSelect: () => undefined,
+    },
+    {
+      key: "fast_mode",
+      label: "Fast mode",
+      detail: "On",
+      rawConfigId: "fast_mode",
+      settable: true,
+      pendingState: null,
+      kind: "toggle",
+      enabledValue: "on",
+      disabledValue: "off",
+      isEnabled: true,
+      options: [
+        { value: "off", label: "Off", selected: false },
+        { value: "on", label: "On", selected: true },
+      ],
+      onSelect: () => undefined,
+    },
+  ];
+}
