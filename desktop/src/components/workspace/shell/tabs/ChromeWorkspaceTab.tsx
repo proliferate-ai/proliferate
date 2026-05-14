@@ -83,26 +83,30 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         />
         <div
           className={`absolute inset-0 flex items-center overflow-hidden rounded-lg py-1 ${
-            isMini ? "px-1" : "px-2"
+            isMini ? "gap-1 px-1" : isSmall ? "gap-1 px-2" : "gap-2 px-2"
           }`}
         >
           {showCloseButton && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              data-tab-drag-ignore="true"
-              onClick={(event) => {
-                event.stopPropagation();
-                onClose();
-              }}
-              title="Close tab"
-              aria-label="Close tab"
-              className="workspace-shell-tab__close pointer-events-none absolute top-1.5 z-20 size-4 shrink-0 rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:pointer-events-auto group-hover/tab:opacity-90 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-90 focus-visible:pointer-events-auto focus-visible:opacity-100"
-              style={{ left: isMini ? 4 : 8 }}
-            >
-              <X className="size-2.5" />
-            </Button>
+            <span className="workspace-shell-tab__leading relative z-20 flex size-4 shrink-0 items-center justify-center">
+              <span className="workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center group-hover/tab:hidden group-focus-within/tab:hidden">
+                {icon}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                data-tab-drag-ignore="true"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClose();
+                }}
+                title="Close tab"
+                aria-label="Close tab"
+                className="workspace-shell-tab__close hidden size-4 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground group-hover/tab:inline-flex group-focus-within/tab:inline-flex focus-visible:inline-flex"
+              >
+                <X className="size-2.5" />
+              </Button>
+            </span>
           )}
           <Button
             type="button"
@@ -120,15 +124,11 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                 : "font-medium text-muted-foreground group-hover/tab:text-foreground"
             } ${isSmall ? "gap-1" : "gap-2"}`}
           >
-            <span
-              className={`workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center transition-opacity ${
-                showCloseButton
-                  ? "group-hover/tab:invisible group-hover/tab:opacity-0 group-focus-within/tab:invisible group-focus-within/tab:opacity-0"
-                  : ""
-              }`}
-            >
-              {icon}
-            </span>
+            {!showCloseButton && (
+              <span className="workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center">
+                {icon}
+              </span>
+            )}
             {showTitle && (
               <span
                 className="workspace-shell-tab__label min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left text-base"
