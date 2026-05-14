@@ -1,6 +1,7 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::Value;
 
 use crate::{error::WorkerError, identity::credentials::WorkerIdentity};
 
@@ -13,6 +14,16 @@ pub struct SyncSession {
     pub session_id: String,
     pub workspace_id: Option<String>,
     pub last_uploaded_seq: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingCommandResult {
+    pub command_id: String,
+    pub lease_id: String,
+    pub status: String,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub result: Option<Value>,
 }
 
 impl Clone for WorkerStore {
@@ -39,7 +50,15 @@ impl WorkerStore {
     }
 
     fn connection(&self) -> Result<Connection, WorkerError> {
-        Ok(Connection::open(&self.path)?)
+        let conn = Connection::open(&self.path)?;
+        conn.busy_timeout(Duration::from_secs(5))?;
+        conn.execute_batch(
+            r#"
+            PRAGMA foreign_keys = ON;
+            PRAGMA journal_mode = WAL;
+            "#,
+        )?;
+        Ok(conn)
     }
 
     fn migrate(&self) -> Result<(), WorkerError> {
@@ -57,6 +76,20 @@ impl WorkerStore {
                 session_id TEXT PRIMARY KEY,
                 workspace_id TEXT,
                 last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS sync_workspaces (
+                workspace_id TEXT PRIMARY KEY,
+                cloud_workspace_id TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS pending_command_results (
+                command_id TEXT PRIMARY KEY,
+                lease_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                error_code TEXT,
+                error_message TEXT,
+                result_json TEXT,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             "#,
@@ -122,6 +155,41 @@ impl WorkerStore {
         Ok(())
     }
 
+    pub fn upsert_sync_mappings(
+        &self,
+        workspace_mappings: &[(String, String)],
+        session_mappings: &[(String, Option<String>)],
+    ) -> Result<(), WorkerError> {
+        let mut conn = self.connection()?;
+        let tx = conn.transaction()?;
+        for (workspace_id, cloud_workspace_id) in workspace_mappings {
+            tx.execute(
+                r#"
+                INSERT INTO sync_workspaces (workspace_id, cloud_workspace_id, updated_at)
+                VALUES (?1, ?2, CURRENT_TIMESTAMP)
+                ON CONFLICT(workspace_id) DO UPDATE SET
+                    cloud_workspace_id = excluded.cloud_workspace_id,
+                    updated_at = CURRENT_TIMESTAMP
+                "#,
+                params![workspace_id, cloud_workspace_id],
+            )?;
+        }
+        for (session_id, workspace_id) in session_mappings {
+            tx.execute(
+                r#"
+                INSERT INTO sync_sessions (session_id, workspace_id, last_uploaded_seq, updated_at)
+                VALUES (?1, ?2, 0, CURRENT_TIMESTAMP)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    workspace_id = COALESCE(excluded.workspace_id, sync_sessions.workspace_id),
+                    updated_at = CURRENT_TIMESTAMP
+                "#,
+                params![session_id, workspace_id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn list_sync_sessions(&self) -> Result<Vec<SyncSession>, WorkerError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
@@ -155,6 +223,93 @@ impl WorkerStore {
             WHERE session_id = ?1
             "#,
             params![session_id, last_uploaded_seq],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_pending_command_result(
+        &self,
+        result: &PendingCommandResult,
+    ) -> Result<(), WorkerError> {
+        let conn = self.connection()?;
+        let result_json = match &result.result {
+            Some(value) => Some(serde_json::to_string(value)?),
+            None => None,
+        };
+        conn.execute(
+            r#"
+            INSERT INTO pending_command_results (
+                command_id,
+                lease_id,
+                status,
+                error_code,
+                error_message,
+                result_json,
+                updated_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, CURRENT_TIMESTAMP)
+            ON CONFLICT(command_id) DO UPDATE SET
+                lease_id = excluded.lease_id,
+                status = excluded.status,
+                error_code = excluded.error_code,
+                error_message = excluded.error_message,
+                result_json = excluded.result_json,
+                updated_at = CURRENT_TIMESTAMP
+            "#,
+            params![
+                result.command_id,
+                result.lease_id,
+                result.status,
+                result.error_code,
+                result.error_message,
+                result_json
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_pending_command_results(&self) -> Result<Vec<PendingCommandResult>, WorkerError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT command_id, lease_id, status, error_code, error_message, result_json
+            FROM pending_command_results
+            ORDER BY updated_at ASC
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let result_json: Option<String> = row.get(5)?;
+            let result = match result_json {
+                Some(value) => Some(serde_json::from_str(&value).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        5,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?),
+                None => None,
+            };
+            Ok(PendingCommandResult {
+                command_id: row.get(0)?,
+                lease_id: row.get(1)?,
+                status: row.get(2)?,
+                error_code: row.get(3)?,
+                error_message: row.get(4)?,
+                result,
+            })
+        })?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+        Ok(results)
+    }
+
+    pub fn delete_pending_command_result(&self, command_id: &str) -> Result<(), WorkerError> {
+        let conn = self.connection()?;
+        conn.execute(
+            "DELETE FROM pending_command_results WHERE command_id = ?1",
+            params![command_id],
         )?;
         Ok(())
     }

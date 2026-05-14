@@ -23,6 +23,7 @@ from proliferate.server.cloud.events.domain.projection import (
 )
 from proliferate.server.cloud.events.models import (
     CloudSessionPatchResponse,
+    CloudSessionProjectionResponse,
     CloudSessionSnapshotResponse,
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,
@@ -221,6 +222,26 @@ async def get_session_snapshot(
     )
 
 
+async def list_session_summaries(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    user_id: UUID,
+    cloud_workspace_id: UUID | None = None,
+    workspace_id: str | None = None,
+    limit: int = 100,
+) -> list[CloudSessionProjectionResponse]:
+    await ensure_visible_target(db, target_id=target_id, user_id=user_id)
+    sessions = await events_store.list_session_projections(
+        db,
+        target_id=target_id,
+        cloud_workspace_id=cloud_workspace_id,
+        workspace_id=workspace_id,
+        limit=min(max(limit, 1), 200),
+    )
+    return [session_projection_response(session) for session in sessions]
+
+
 async def ensure_visible_session_target(
     db: AsyncSession,
     *,
@@ -251,6 +272,26 @@ async def ensure_visible_session_target(
             status_code=404,
         )
     return target_id
+
+
+async def ensure_visible_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    user_id: UUID,
+) -> targets_store.CloudTargetSnapshot:
+    target = await targets_store.get_visible_target_by_id(
+        db,
+        target_id=target_id,
+        user_id=user_id,
+    )
+    if target is None:
+        raise CloudApiError(
+            "cloud_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    return target
 
 
 async def _apply_projection(

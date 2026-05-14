@@ -75,6 +75,35 @@ class CloudEventIngestState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class CloudSyncedWorkspace(Base):
+    __tablename__ = "cloud_synced_workspaces"
+    __table_args__ = (
+        UniqueConstraint(
+            "target_id",
+            "workspace_id",
+            name="uq_cloud_synced_workspaces_target_workspace",
+        ),
+        Index("ix_cloud_synced_workspaces_cloud_workspace", "cloud_workspace_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    target_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="CASCADE"),
+        index=True,
+    )
+    cloud_workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_workspace.id", ondelete="CASCADE"),
+        index=True,
+    )
+    workspace_id: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
 class CloudSessionProjection(Base):
     __tablename__ = "cloud_sessions"
     __table_args__ = (

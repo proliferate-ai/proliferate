@@ -89,6 +89,7 @@ module = [
     "proliferate.server.health",
     "proliferate.auth.models",
     "proliferate.auth.desktop.models",
+    "proliferate.server.cloud.backfill.models",
     "proliferate.server.cloud.commands.models",
     "proliferate.server.cloud.mcp_catalog.models",
     "proliferate.server.cloud.mcp_connections.models",

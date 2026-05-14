@@ -18,6 +18,8 @@ pub enum WorkerError {
     },
     #[error("worker database error")]
     Store(#[from] rusqlite::Error),
+    #[error("worker JSON serialization error")]
+    Json(#[from] serde_json::Error),
     #[error("cloud request failed")]
     Http(#[from] reqwest::Error),
     #[error("failed to build http client")]

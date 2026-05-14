@@ -17,7 +17,8 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
-    store::WorkerStore,
+    store::{PendingCommandResult, WorkerStore},
+    sync,
 };
 
 const EMPTY_LEASE_SLEEP: Duration = Duration::from_secs(2);
@@ -39,6 +40,9 @@ pub async fn run_loop(
         .map(|kind| (*kind).to_string())
         .collect::<Vec<_>>();
     loop {
+        if let Err(error) = flush_pending_command_results(&cloud, &identity, &store).await {
+            warn!(?error, "failed to flush pending command results");
+        }
         if !anyharness_health::probe(&anyharness).await {
             warn!("worker command loop paused because anyharness health check failed");
             sleep(ERROR_LEASE_SLEEP).await;
@@ -89,6 +93,12 @@ async fn process_command(
         lease_expires_at = %command.lease_expires_at,
         "processing cloud command"
     );
+    if command.kind == "sync_existing_workspace" {
+        return process_sync_existing_workspace_command(
+            cloud, identity, anyharness, store, command,
+        )
+        .await;
+    }
     let mapped = match map_cloud_command(&command) {
         Ok(mapped) => mapped,
         Err(error) => {
@@ -99,9 +109,7 @@ async fn process_command(
                 error_message: Some(error.message),
                 result: None,
             };
-            cloud
-                .report_command_result(&identity.worker_token, &command.command_id, &result)
-                .await?;
+            report_command_result(cloud, identity, store, &command.command_id, &result).await?;
             return Ok(());
         }
     };
@@ -128,9 +136,100 @@ async fn process_command(
         }
     }
     let result = command_result(&command, &mapped, response);
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn process_sync_existing_workspace_command(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    anyharness: &AnyHarnessClient,
+    store: &WorkerStore,
+    command: CloudCommandEnvelope,
+) -> Result<(), WorkerError> {
     cloud
-        .report_command_result(&identity.worker_token, &command.command_id, &result)
-        .await
+        .report_command_delivery(
+            &identity.worker_token,
+            &command.command_id,
+            &CommandDeliveryRequest {
+                lease_id: command.lease_id.clone(),
+                status: "delivered".to_string(),
+                error_code: None,
+                error_message: None,
+            },
+        )
+        .await?;
+    let response = sync::backfill::sync_existing_workspace(
+        store,
+        anyharness,
+        cloud,
+        identity,
+        command.workspace_id.as_deref(),
+    )
+    .await;
+    let result = match response {
+        Ok(result) => CommandResultRequest {
+            lease_id: command.lease_id.clone(),
+            status: "accepted".to_string(),
+            error_code: None,
+            error_message: None,
+            result: Some(json!({
+                "mappedWorkspaceCount": result.mapped_workspace_count,
+                "mappedSessionCount": result.mapped_session_count,
+            })),
+        },
+        Err(error) => CommandResultRequest {
+            lease_id: command.lease_id.clone(),
+            status: "failed_delivery".to_string(),
+            error_code: Some("backfill_failed".to_string()),
+            error_message: Some(error.to_string()),
+            result: None,
+        },
+    };
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn flush_pending_command_results(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+) -> Result<(), WorkerError> {
+    for pending in store.list_pending_command_results()? {
+        let request = CommandResultRequest {
+            lease_id: pending.lease_id,
+            status: pending.status,
+            error_code: pending.error_code,
+            error_message: pending.error_message,
+            result: pending.result,
+        };
+        cloud
+            .report_command_result(&identity.worker_token, &pending.command_id, &request)
+            .await?;
+        store.delete_pending_command_result(&pending.command_id)?;
+    }
+    Ok(())
+}
+
+async fn report_command_result(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    command_id: &str,
+    result: &CommandResultRequest,
+) -> Result<(), WorkerError> {
+    let pending = PendingCommandResult {
+        command_id: command_id.to_string(),
+        lease_id: result.lease_id.clone(),
+        status: result.status.clone(),
+        error_code: result.error_code.clone(),
+        error_message: result.error_message.clone(),
+        result: result.result.clone(),
+    };
+    store.save_pending_command_result(&pending)?;
+    cloud
+        .report_command_result(&identity.worker_token, command_id, result)
+        .await?;
+    store.delete_pending_command_result(command_id)?;
+    Ok(())
 }
 
 async fn dispatch_anyharness(
@@ -187,12 +286,18 @@ fn command_result(
             })),
         },
         Ok(response) => {
-            let (status, error_code) =
-                if response.status.as_u16() == 401 || response.status.as_u16() == 403 {
-                    ("failed_delivery", "anyharness_auth_failed")
-                } else {
-                    ("rejected", "anyharness_rejected")
-                };
+            let status_code = response.status.as_u16();
+            let (status, error_code) = if status_code == 401 || status_code == 403 {
+                ("failed_delivery", "anyharness_auth_failed")
+            } else if response.status.is_server_error()
+                || status_code == 408
+                || status_code == 409
+                || status_code == 429
+            {
+                ("failed_delivery", "anyharness_temporarily_unavailable")
+            } else {
+                ("rejected", "anyharness_rejected")
+            };
             CommandResultRequest {
                 lease_id: command.lease_id.clone(),
                 status: status.to_string(),

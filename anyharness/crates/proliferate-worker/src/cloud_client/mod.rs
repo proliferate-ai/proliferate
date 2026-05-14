@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod backfill;
 pub mod commands;
 pub mod events;
 pub mod heartbeat;

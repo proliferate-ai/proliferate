@@ -12,14 +12,40 @@ from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
-from proliferate.server.cloud.events.models import CloudSessionSnapshotResponse
+from proliferate.server.cloud.events.models import (
+    CloudSessionProjectionResponse,
+    CloudSessionSnapshotResponse,
+)
 from proliferate.server.cloud.events.service import (
     ensure_visible_session_target,
     get_session_snapshot,
+    list_session_summaries,
 )
 from proliferate.server.cloud.live.service import stream_session_events
 
 router = APIRouter(prefix="/sessions", tags=["cloud-sessions"])
+
+
+@router.get("", response_model=list[CloudSessionProjectionResponse])
+async def list_sessions_endpoint(
+    target_id: UUID = Query(alias="targetId"),
+    cloud_workspace_id: UUID | None = Query(default=None, alias="cloudWorkspaceId"),
+    workspace_id: str | None = Query(default=None, alias="workspaceId"),
+    limit: int = Query(default=100, ge=1, le=200),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
+) -> list[CloudSessionProjectionResponse]:
+    try:
+        return await list_session_summaries(
+            db,
+            target_id=target_id,
+            user_id=user.id,
+            cloud_workspace_id=cloud_workspace_id,
+            workspace_id=workspace_id,
+            limit=limit,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
 
 
 @router.get("/{session_id}/snapshot", response_model=CloudSessionSnapshotResponse)

@@ -43,7 +43,10 @@ def validate_command_shape(
     session_id: str | None,
     preconditions: dict[str, object] | None,
 ) -> None:
-    if kind == CloudCommandKind.start_session.value and not workspace_id:
+    if kind in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.sync_existing_workspace.value,
+    } and not workspace_id:
         raise CloudApiError(
             "cloud_command_workspace_required",
             f"Cloud command kind requires workspaceId: {kind}",
