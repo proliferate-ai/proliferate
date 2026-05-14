@@ -1827,6 +1827,13 @@ body {
   --workspace-shell-tab-font-weight: 500;
   --workspace-shell-tab-icon-size: 1rem;
   --workspace-shell-tab-content-gap: 0.5rem;
+  --workspace-shell-action-size: 1.75rem; /* 28px */
+  --workspace-shell-action-radius: 0.5rem;
+  --workspace-shell-action-border: var(--color-border);
+  --workspace-shell-action-background: var(--color-background);
+  --workspace-shell-action-foreground: var(--color-muted-foreground);
+  --workspace-shell-action-hover-background: var(--color-accent);
+  --workspace-shell-action-hover-foreground: var(--color-foreground);
 }
 
 .workspace-shell-tab {
@@ -1846,12 +1853,46 @@ body {
   height: var(--workspace-shell-tab-icon-size);
 }
 
+.workspace-shell-action-button,
+.workspace-shell-icon-button {
+  box-sizing: border-box;
+  border: 1px solid var(--workspace-shell-action-border);
+  border-radius: var(--workspace-shell-action-radius);
+  background-color: var(--workspace-shell-action-background);
+  color: var(--workspace-shell-action-foreground);
+  line-height: 1;
+}
+
+.workspace-shell-action-button {
+  height: var(--workspace-shell-action-size);
+  min-height: var(--workspace-shell-action-size);
+  gap: 0.375rem;
+  padding-inline: 0.5rem;
+}
+
+.workspace-shell-icon-button {
+  width: var(--workspace-shell-action-size);
+  height: var(--workspace-shell-action-size);
+  min-width: var(--workspace-shell-action-size);
+  min-height: var(--workspace-shell-action-size);
+  justify-content: center;
+  padding: 0;
+}
+
+.workspace-shell-action-button:hover:not(:disabled),
+.workspace-shell-icon-button:hover:not(:disabled),
+.workspace-shell-action-button[data-state="open"],
+.workspace-shell-icon-button[data-state="open"] {
+  background-color: var(--workspace-shell-action-hover-background);
+  color: var(--workspace-shell-action-hover-foreground);
+}
+
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
   --tab-system-height: 46px;
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
-  --tab-height: var(--workspace-shell-tab-height);
+  --tab-height: var(--workspace-shell-action-size);
   --tab-container-padding: 9px;
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;
@@ -2362,26 +2403,7 @@ body {
 }
 
 .right-panel-tab-system .glass-editor-panel-new-tab-menu-trigger {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
-  width: var(--tab-height);
-  height: var(--tab-height);
-  min-width: var(--tab-height);
-  min-height: var(--tab-height);
-  border-radius: var(--right-panel-tab-radius);
-  padding: 0;
-  background-color: transparent;
-  color: var(--right-panel-tab-text-tertiary);
-  line-height: 1;
-}
-
-.right-panel-tab-system .glass-editor-panel-new-tab-menu-trigger:hover:not(:disabled),
-.right-panel-tab-system .glass-editor-panel-new-tab-menu-trigger[data-state="open"] {
-  background-color: var(--right-panel-tab-active-bg);
-  color: var(--right-panel-tab-text-primary);
 }
 
 .right-panel-tab-system .right-panel-tab-drop-target {

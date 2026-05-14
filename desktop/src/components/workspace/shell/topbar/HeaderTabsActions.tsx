@@ -11,9 +11,9 @@ import type {
 import { SHORTCUTS } from "@/config/shortcuts";
 
 const HEADER_ICON_BUTTON_CLASS =
-  "size-7 shrink-0 rounded-lg border border-border bg-background px-0 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
+  "workspace-shell-icon-button shrink-0 disabled:pointer-events-none disabled:opacity-40";
 const HEADER_FILTER_BUTTON_CLASS =
-  "h-7 shrink-0 gap-1 rounded-lg border border-border bg-background px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
+  "workspace-shell-action-button shrink-0 gap-1 px-1.5 text-xs disabled:pointer-events-none disabled:opacity-40";
 
 interface HeaderTabsActionsProps {
   closedChatTabs: HeaderChatMenuEntry[];

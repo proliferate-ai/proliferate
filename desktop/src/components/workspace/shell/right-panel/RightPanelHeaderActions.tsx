@@ -23,7 +23,7 @@ export function RightPanelHeaderActions({
             size="xs"
             tone="sidebar"
             title="Repo's settings"
-            className="ui-icon-button glass-editor-panel-new-tab-menu-trigger"
+            className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
             onClick={onOpenRepoSettings}
           >
             <Settings className="ui-icon" />
@@ -40,7 +40,7 @@ export function RightPanelHeaderActions({
             size="xs"
             tone="sidebar"
             title="Hide side panel"
-            className="ui-icon-button glass-editor-panel-new-tab-menu-trigger"
+            className="ui-icon-button workspace-shell-icon-button glass-editor-panel-new-tab-menu-trigger"
             onClick={onTogglePanel}
           >
             <AppShellPanelToggleIcon className="ui-icon" />

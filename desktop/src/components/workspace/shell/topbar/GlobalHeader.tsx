@@ -24,9 +24,9 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
 
 const HEADER_ICON_BUTTON_CLASS =
-  "size-7 rounded-lg border border-border bg-background px-0 text-muted-foreground hover:bg-accent hover:text-foreground";
+  "workspace-shell-icon-button";
 const HEADER_RUN_BUTTON_CLASS =
-  "h-7 gap-1.5 rounded-lg border border-border bg-background px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground";
+  "workspace-shell-action-button text-xs font-medium";
 
 interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
