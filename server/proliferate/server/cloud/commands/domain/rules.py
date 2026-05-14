@@ -40,6 +40,7 @@ def validate_command_shape(
     *,
     kind: str,
     session_id: str | None,
+    preconditions: dict[str, object] | None,
 ) -> None:
     if kind in {
         CloudCommandKind.send_prompt.value,
@@ -50,6 +51,12 @@ def validate_command_shape(
         raise CloudApiError(
             "cloud_command_session_required",
             f"Cloud command kind requires sessionId: {kind}",
+            status_code=400,
+        )
+    if preconditions:
+        raise CloudApiError(
+            "cloud_command_preconditions_unsupported",
+            "Cloud command preconditions are not supported in phase 3.",
             status_code=400,
         )
 

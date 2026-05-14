@@ -1005,6 +1005,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue Command Endpoint */
+        post: operations["enqueue_command_endpoint_v1_cloud_commands_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/commands/{command_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Command Status Endpoint */
+        get: operations["get_command_status_endpoint_v1_cloud_commands__command_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/enroll": {
         parameters: {
             query?: never;
@@ -1050,6 +1084,57 @@ export interface paths {
         put?: never;
         /** Worker Inventory Endpoint */
         post: operations["worker_inventory_endpoint_v1_cloud_worker_inventory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/commands/lease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Command Lease Endpoint */
+        post: operations["worker_command_lease_endpoint_v1_cloud_worker_commands_lease_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/commands/{command_id}/delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Command Delivery Endpoint */
+        post: operations["worker_command_delivery_endpoint_v1_cloud_worker_commands__command_id__delivery_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/commands/{command_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Command Result Endpoint */
+        post: operations["worker_command_result_endpoint_v1_cloud_worker_commands__command_id__result_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2156,6 +2241,43 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** CloudCommandResponse */
+        CloudCommandResponse: {
+            /** Commandid */
+            commandId: string;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /** Targetid */
+            targetId: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Kind */
+            kind: string;
+            /** Source */
+            source: string;
+            /** Status */
+            status: string;
+            /** Leaseid */
+            leaseId?: string | null;
+            /** Leaseexpiresat */
+            leaseExpiresAt?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Deliveredat */
+            deliveredAt?: string | null;
+            /** Acceptedat */
+            acceptedAt?: string | null;
+            /** Rejectedat */
+            rejectedAt?: string | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
         /** CloudCredentialMutationResponse */
         CloudCredentialMutationResponse: {
             /**
@@ -2762,6 +2884,34 @@ export interface components {
             modeId?: string | null;
             /** Reasoningeffort */
             reasoningEffort?: string | null;
+        };
+        /** CreateCloudCommandRequest */
+        CreateCloudCommandRequest: {
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Kind */
+            kind: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** Observedeventseq */
+            observedEventSeq?: number | null;
+            /** Preconditions */
+            preconditions?: {
+                [key: string]: unknown;
+            } | null;
+            /** Source */
+            source?: string | null;
         };
         /** CreateCloudMcpConnectionRequest */
         CreateCloudMcpConnectionRequest: {
@@ -4051,6 +4201,86 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorkerCommandDeliveryRequest */
+        WorkerCommandDeliveryRequest: {
+            /** Leaseid */
+            leaseId: string;
+            /**
+             * Status
+             * @default delivered
+             */
+            status: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** WorkerCommandEnvelope */
+        WorkerCommandEnvelope: {
+            /** Commandid */
+            commandId: string;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /** Targetid */
+            targetId: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Kind */
+            kind: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Observedeventseq */
+            observedEventSeq?: number | null;
+            /** Preconditions */
+            preconditions?: {
+                [key: string]: unknown;
+            } | null;
+            /** Leaseid */
+            leaseId: string;
+            /** Leaseexpiresat */
+            leaseExpiresAt: string;
+        };
+        /** WorkerCommandLeaseRequest */
+        WorkerCommandLeaseRequest: {
+            /** Supportedkinds */
+            supportedKinds?: string[];
+            /** Leasetimeoutseconds */
+            leaseTimeoutSeconds?: number | null;
+        };
+        /** WorkerCommandLeaseResponse */
+        WorkerCommandLeaseResponse: {
+            command?: components["schemas"]["WorkerCommandEnvelope"] | null;
+            /** Servertime */
+            serverTime: string;
+        };
+        /** WorkerCommandResultRequest */
+        WorkerCommandResultRequest: {
+            /** Leaseid */
+            leaseId: string;
+            /** Status */
+            status: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkerCommandStatusResponse */
+        WorkerCommandStatusResponse: {
+            /** Commandid */
+            commandId: string;
+            /** Status */
+            status: string;
+            /** Updated */
+            updated: boolean;
         };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
@@ -6604,6 +6834,70 @@ export interface operations {
             };
         };
     };
+    enqueue_command_endpoint_v1_cloud_commands_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCloudCommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCommandResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_command_status_endpoint_v1_cloud_commands__command_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                command_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCommandResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     enroll_worker_endpoint_v1_cloud_worker_enroll_post: {
         parameters: {
             query?: never;
@@ -6694,6 +6988,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerInventoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_command_lease_endpoint_v1_cloud_worker_commands_lease_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerCommandLeaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerCommandLeaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_command_delivery_endpoint_v1_cloud_worker_commands__command_id__delivery_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                command_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerCommandDeliveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerCommandStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_command_result_endpoint_v1_cloud_worker_commands__command_id__result_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                command_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerCommandResultRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerCommandStatusResponse"];
                 };
             };
             /** @description Validation Error */

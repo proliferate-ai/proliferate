@@ -131,6 +131,18 @@ async def assert_current_schema(
     )
     assert "ck_cloud_worktree_retention_policy_limit" in worktree_policy_checks
 
+    command_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("cloud_commands")
+        }
+    )
+    assert {
+        "uq_cloud_commands_idempotency_scope_key",
+        "ix_cloud_commands_target_status_created",
+        "ix_cloud_commands_session_status_created",
+        "ix_cloud_commands_lease_expires_at",
+    } <= command_indexes
+
     billing_grant_columns = await conn.run_sync(
         lambda sync_conn: {
             column["name"]: column for column in inspect(sync_conn).get_columns("billing_grant")

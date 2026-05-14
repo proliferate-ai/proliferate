@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
@@ -24,10 +25,22 @@ from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.errors import CloudApiError
 
 
-def _idempotency_scope_for_target(target: targets_store.CloudTargetSnapshot) -> str:
+def _idempotency_scope_for_command(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    kind: str,
+    session_id: str | None,
+) -> str:
+    session_scope = session_id or "-"
     if target.organization_id is not None:
-        return f"organization:{target.organization_id}"
-    return f"user:{target.owner_user_id}"
+        return (
+            f"organization:{target.organization_id}:target:{target.id}:"
+            f"session:{session_scope}:kind:{kind}"
+        )
+    return (
+        f"user:{target.owner_user_id}:target:{target.id}:"
+        f"session:{session_scope}:kind:{kind}"
+    )
 
 
 async def enqueue_command(
@@ -55,8 +68,16 @@ async def enqueue_command(
         )
     kind = validate_phase3_command_kind(body.kind)
     source = validate_command_source(body.source)
-    validate_command_shape(kind=kind, session_id=body.session_id)
-    idempotency_scope = _idempotency_scope_for_target(target)
+    validate_command_shape(
+        kind=kind,
+        session_id=body.session_id,
+        preconditions=body.preconditions,
+    )
+    idempotency_scope = _idempotency_scope_for_command(
+        target=target,
+        kind=kind,
+        session_id=body.session_id,
+    )
     existing = await commands_store.get_command_by_idempotency(
         db,
         idempotency_scope=idempotency_scope,
@@ -73,23 +94,34 @@ async def enqueue_command(
             ),
         }
     )
-    return await commands_store.create_command(
-        db,
-        idempotency_scope=idempotency_scope,
-        idempotency_key=body.idempotency_key,
-        target_id=target.id,
-        organization_id=target.organization_id,
-        actor_user_id=user.id,
-        actor_kind=CloudCommandActorKind.user.value,
-        source=source,
-        workspace_id=body.workspace_id,
-        session_id=body.session_id,
-        kind=kind,
-        payload_json=compact_command_json(body.payload) or "{}",
-        observed_event_seq=body.observed_event_seq,
-        preconditions_json=compact_command_json(body.preconditions),
-        authorization_context_json=authorization_context_json,
-    )
+    try:
+        async with db.begin_nested():
+            return await commands_store.create_command(
+                db,
+                idempotency_scope=idempotency_scope,
+                idempotency_key=body.idempotency_key,
+                target_id=target.id,
+                organization_id=target.organization_id,
+                actor_user_id=user.id,
+                actor_kind=CloudCommandActorKind.user.value,
+                source=source,
+                workspace_id=body.workspace_id,
+                session_id=body.session_id,
+                kind=kind,
+                payload_json=compact_command_json(body.payload) or "{}",
+                observed_event_seq=body.observed_event_seq,
+                preconditions_json=compact_command_json(body.preconditions),
+                authorization_context_json=authorization_context_json,
+            )
+    except IntegrityError:
+        duplicate = await commands_store.get_command_by_idempotency(
+            db,
+            idempotency_scope=idempotency_scope,
+            idempotency_key=body.idempotency_key,
+        )
+        if duplicate is not None:
+            return duplicate
+        raise
 
 
 async def get_command_status(

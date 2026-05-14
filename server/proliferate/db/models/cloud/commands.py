@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
@@ -41,7 +41,7 @@ class CloudCommand(Base):
             unique=True,
         ),
         Index("ix_cloud_commands_target_status_created", "target_id", "status", "created_at"),
-        Index("ix_cloud_commands_session_created", "session_id", "created_at"),
+        Index("ix_cloud_commands_session_status_created", "session_id", "status", "created_at"),
         Index("ix_cloud_commands_lease_expires_at", "lease_expires_at"),
     )
 
@@ -78,7 +78,7 @@ class CloudCommand(Base):
         index=True,
         nullable=True,
     )
-    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

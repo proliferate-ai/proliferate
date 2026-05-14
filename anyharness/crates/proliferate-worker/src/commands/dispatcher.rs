@@ -3,7 +3,9 @@ use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
 
 use crate::{
-    anyharness_client::{sessions::AnyHarnessCommandResponse, AnyHarnessClient},
+    anyharness_client::{
+        health as anyharness_health, sessions::AnyHarnessCommandResponse, AnyHarnessClient,
+    },
     cloud_client::{
         commands::{
             CloudCommandEnvelope, CommandDeliveryRequest, CommandResultRequest,
@@ -35,10 +37,14 @@ pub async fn run_loop(
         .map(|kind| (*kind).to_string())
         .collect::<Vec<_>>();
     loop {
+        if !anyharness_health::probe(&anyharness).await {
+            warn!("worker command loop paused because anyharness health check failed");
+            sleep(ERROR_LEASE_SLEEP).await;
+            continue;
+        }
         let lease = LeaseCommandRequest {
             supported_kinds: supported_kinds.clone(),
             lease_timeout_seconds: Some(30),
-            max_wait_seconds: Some(30),
         };
         match cloud.lease_command(&identity.worker_token, &lease).await {
             Ok(response) => {

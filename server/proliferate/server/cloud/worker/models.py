@@ -65,7 +65,6 @@ class WorkerInventoryResponse(BaseModel):
 class WorkerCommandLeaseRequest(BaseModel):
     supported_kinds: list[str] = Field(default_factory=list, alias="supportedKinds")
     lease_timeout_seconds: int | None = Field(default=None, alias="leaseTimeoutSeconds")
-    max_wait_seconds: int | None = Field(default=None, alias="maxWaitSeconds")
 
 
 class WorkerCommandEnvelope(BaseModel):

@@ -10,12 +10,14 @@ from tests.e2e.cloud.helpers.auth import AuthSession, create_user_and_login
 async def _create_enrolled_target(
     client: AsyncClient,
     auth: AuthSession,
+    *,
+    suffix: str = "command",
 ) -> tuple[str, dict[str, str]]:
     create = await client.post(
         "/v1/cloud/targets/enrollments",
         headers=auth.headers,
         json={
-            "displayName": "Command Target",
+            "displayName": f"Command Target {suffix}",
             "kind": "ssh",
             "ownerScope": "personal",
         },
@@ -26,8 +28,8 @@ async def _create_enrolled_target(
         "/v1/cloud/worker/enroll",
         json={
             "enrollmentToken": enrollment["enrollmentToken"],
-            "machineFingerprint": "command-machine",
-            "hostname": "command-target",
+            "machineFingerprint": f"{suffix}-machine",
+            "hostname": f"{suffix}-target",
             "workerVersion": "0.1.0",
         },
     )
@@ -122,6 +124,18 @@ class TestCloudCommandsApi:
         assert status.status_code == 200
         assert status.json()["status"] == "accepted"
 
+        duplicate_result = await client.post(
+            f"/v1/cloud/worker/commands/{command['commandId']}/result",
+            headers=worker_headers,
+            json={
+                "leaseId": leased_command["leaseId"],
+                "status": "rejected",
+                "errorCode": "late_duplicate",
+            },
+        )
+        assert duplicate_result.status_code == 200
+        assert duplicate_result.json()["status"] == "accepted"
+
     @pytest.mark.asyncio
     async def test_stale_command_lease_can_be_recovered(
         self,
@@ -175,6 +189,128 @@ class TestCloudCommandsApi:
         assert stale_result.json()["detail"]["code"] == "cloud_worker_command_not_leased"
 
     @pytest.mark.asyncio
+    async def test_delivered_command_is_not_released_after_lease_expires(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-delivered",
+        )
+        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "delivered-lease",
+                "targetId": target_id,
+                "sessionId": "session-1",
+                "kind": "send_prompt",
+                "payload": {"text": "do not duplicate"},
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        first = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["send_prompt"], "leaseTimeoutSeconds": 0},
+        )
+        assert first.status_code == 200
+        first_lease = first.json()["command"]["leaseId"]
+
+        delivery = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/delivery",
+            headers=worker_headers,
+            json={"leaseId": first_lease, "status": "delivered"},
+        )
+        assert delivery.status_code == 200
+        assert delivery.json()["status"] == "delivered"
+
+        recovered = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["send_prompt"], "leaseTimeoutSeconds": 30},
+        )
+        assert recovered.status_code == 200
+        assert recovered.json()["command"] is None
+
+        result = await client.post(
+            f"/v1/cloud/worker/commands/{command_id}/result",
+            headers=worker_headers,
+            json={"leaseId": first_lease, "status": "accepted"},
+        )
+        assert result.status_code == 200
+        assert result.json()["status"] == "accepted"
+
+    @pytest.mark.asyncio
+    async def test_idempotency_key_is_scoped_to_target(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-idempotency",
+        )
+        first_target_id, _first_worker_headers = await _create_enrolled_target(
+            client,
+            auth,
+            suffix="first",
+        )
+        second_target_id, _second_worker_headers = await _create_enrolled_target(
+            client,
+            auth,
+            suffix="second",
+        )
+
+        first = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "same-key",
+                "targetId": first_target_id,
+                "sessionId": "session-1",
+                "kind": "cancel_turn",
+                "payload": {},
+            },
+        )
+        assert first.status_code == 200
+
+        second = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "same-key",
+                "targetId": second_target_id,
+                "sessionId": "session-1",
+                "kind": "cancel_turn",
+                "payload": {},
+            },
+        )
+        assert second.status_code == 200
+        assert second.json()["commandId"] != first.json()["commandId"]
+        assert second.json()["targetId"] == second_target_id
+
+        same_target_different_session = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "same-key",
+                "targetId": first_target_id,
+                "sessionId": "session-2",
+                "kind": "cancel_turn",
+                "payload": {},
+            },
+        )
+        assert same_target_different_session.status_code == 200
+        assert same_target_different_session.json()["commandId"] != first.json()["commandId"]
+
+    @pytest.mark.asyncio
     async def test_unsupported_command_kind_is_rejected(
         self,
         client: AsyncClient,
@@ -199,3 +335,31 @@ class TestCloudCommandsApi:
         )
         assert created.status_code == 400
         assert created.json()["detail"]["code"] == "cloud_command_kind_unsupported"
+
+    @pytest.mark.asyncio
+    async def test_preconditions_are_rejected_until_supported(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-preconditions",
+        )
+        target_id, _worker_headers = await _create_enrolled_target(client, auth)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "with-preconditions",
+                "targetId": target_id,
+                "sessionId": "session-1",
+                "kind": "send_prompt",
+                "payload": {"text": "hello"},
+                "preconditions": {"interactionVersion": 1},
+            },
+        )
+        assert created.status_code == 400
+        assert created.json()["detail"]["code"] == "cloud_command_preconditions_unsupported"
