@@ -114,10 +114,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             onPointerDownCapture={onSelectPointerDownCapture}
             className={`relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 text-sm leading-4 hover:bg-transparent ${
               isActive
-                ? "font-normal text-foreground"
+                ? "font-medium text-foreground"
                 : isMultiSelected
                   ? "font-medium text-foreground"
-                : "font-normal text-muted-foreground group-hover/tab:text-foreground"
+                : "font-medium text-muted-foreground group-hover/tab:text-foreground"
             } ${isSmall ? "gap-1" : "gap-2"}`}
           >
             <span
@@ -131,7 +131,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             </span>
             {showTitle && (
               <span
-                className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left"
+                className="min-w-0 font-foreground flex-1 text-base overflow-hidden whitespace-nowrap text-left"
                 style={{
                   WebkitMaskImage: titleMask,
                   maskImage: titleMask,
