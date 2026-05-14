@@ -172,11 +172,6 @@ async def lease_next_command(
                         CloudCommand.lease_expires_at.is_not(None),
                         CloudCommand.lease_expires_at <= now,
                     ),
-                    and_(
-                        CloudCommand.status == CloudCommandStatus.delivered.value,
-                        CloudCommand.lease_expires_at.is_not(None),
-                        CloudCommand.lease_expires_at <= now,
-                    ),
                 )
             )
             .order_by(CloudCommand.created_at.asc())
@@ -215,6 +210,10 @@ async def mark_command_delivered(
     )
     if row is None:
         return None
+    if row.status == CloudCommandStatus.delivered.value:
+        return _snapshot(row)
+    if _is_terminal_status(row.status) or row.status != CloudCommandStatus.leased.value:
+        return None
     row.status = CloudCommandStatus.delivered.value
     row.delivered_at = now
     row.updated_at = now
@@ -239,6 +238,13 @@ async def mark_command_failed_delivery(
         lease_id=lease_id,
     )
     if row is None:
+        return None
+    if _is_terminal_status(row.status):
+        return _snapshot(row)
+    if row.status not in {
+        CloudCommandStatus.leased.value,
+        CloudCommandStatus.delivered.value,
+    }:
         return None
     row.status = CloudCommandStatus.failed_delivery.value
     row.error_code = error_code
@@ -268,6 +274,13 @@ async def record_command_result(
     )
     if row is None:
         return None
+    if _is_terminal_status(row.status):
+        return _snapshot(row)
+    if row.status not in {
+        CloudCommandStatus.leased.value,
+        CloudCommandStatus.delivered.value,
+    }:
+        return None
     row.status = status
     row.error_code = error_code
     row.error_message = error_message
@@ -283,6 +296,17 @@ async def record_command_result(
         row.rejected_at = now
     await db.flush()
     return _snapshot(row)
+
+
+def _is_terminal_status(status: str) -> bool:
+    return status in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.expired.value,
+        CloudCommandStatus.superseded.value,
+        CloudCommandStatus.failed_delivery.value,
+    }
 
 
 async def _get_worker_leased_command(

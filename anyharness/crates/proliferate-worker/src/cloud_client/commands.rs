@@ -10,7 +10,6 @@ use super::{auth, parse_empty_response, parse_json_response, CloudClient};
 pub struct LeaseCommandRequest {
     pub supported_kinds: Vec<String>,
     pub lease_timeout_seconds: Option<u64>,
-    pub max_wait_seconds: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

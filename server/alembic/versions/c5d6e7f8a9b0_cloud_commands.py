@@ -65,7 +65,7 @@ def upgrade() -> None:
             sa.Column("status", sa.String(length=32), nullable=False),
             sa.Column("lease_id", sa.String(length=64), nullable=True),
             sa.Column("leased_by_worker_id", sa.Uuid(), nullable=True),
-            sa.Column("attempt_count", sa.Integer(), nullable=False),
+            sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
@@ -128,9 +128,9 @@ def upgrade() -> None:
         ["target_id", "status", "created_at"],
     )
     _create_index_once(
-        "ix_cloud_commands_session_created",
+        "ix_cloud_commands_session_status_created",
         "cloud_commands",
-        ["session_id", "created_at"],
+        ["session_id", "status", "created_at"],
     )
     _create_index_once(
         "ix_cloud_commands_lease_expires_at",
