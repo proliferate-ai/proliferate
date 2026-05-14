@@ -2,6 +2,8 @@ packages:
   - "anyharness/sdk"
   - "anyharness/sdk-react"
   - "anyharness/tests"
+  - "cloud/sdk"
+  - "cloud/sdk-react"
   - "desktop"
   - "server/artifact-runtime"
 
