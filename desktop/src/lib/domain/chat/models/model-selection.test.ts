@@ -238,6 +238,180 @@ describe("buildModelSelectorGroups", () => {
       "cursor/auto",
     ]);
   });
+
+  it("applies visibility preferences to active model controls by alias", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent(
+          "cursor",
+          [
+            model("cursor/auto", "Auto", true, {
+              aliases: ["auto"],
+              defaultOptIn: true,
+            }),
+            model("cursor/gpt-5.4", "GPT 5.4", false, {
+              aliases: ["gpt-5.4"],
+              defaultOptIn: true,
+            }),
+          ],
+          {
+            displayName: "Cursor",
+          },
+        ),
+      ],
+      { kind: "cursor", modelId: "auto" },
+      { kind: "cursor", modelId: "auto" },
+      {
+        kind: "cursor",
+        values: [
+          { value: "auto", label: "Auto" },
+          { value: "gpt-5.4", label: "GPT 5.4" },
+        ],
+      },
+      {
+        cursor: {
+          "cursor/gpt-5.4": false,
+        },
+      },
+    );
+
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual([
+      "auto",
+    ]);
+  });
+
+  it("keeps canonical selected models visible when live controls use aliases", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent(
+          "cursor",
+          [
+            model("cursor/auto", "Auto", true, {
+              aliases: ["auto"],
+              defaultOptIn: true,
+            }),
+            model("cursor/gpt-5.4", "GPT 5.4", false, {
+              aliases: ["gpt-5.4"],
+              defaultOptIn: true,
+            }),
+          ],
+          {
+            displayName: "Cursor",
+          },
+        ),
+      ],
+      { kind: "cursor", modelId: "cursor/gpt-5.4" },
+      { kind: "cursor", modelId: "cursor/gpt-5.4" },
+      {
+        kind: "cursor",
+        values: [
+          { value: "auto", label: "Auto" },
+          { value: "gpt-5.4", label: "GPT 5.4" },
+        ],
+      },
+      {
+        cursor: {
+          "cursor/gpt-5.4": false,
+        },
+      },
+    );
+
+    expect(groups[0]?.models).toEqual([
+      {
+        kind: "cursor",
+        modelId: "auto",
+        displayName: "Auto",
+        actionKind: "update_current_chat",
+        isSelected: false,
+      },
+      {
+        kind: "cursor",
+        modelId: "gpt-5.4",
+        displayName: "GPT 5.4",
+        actionKind: "select",
+        isSelected: true,
+      },
+    ]);
+  });
+
+  it("hides unknown live control models for dynamic agents unless selected", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent(
+          "cursor",
+          [
+            model("cursor/auto", "Auto", true, {
+              aliases: ["auto"],
+              defaultOptIn: true,
+            }),
+          ],
+          {
+            displayName: "Cursor",
+            dynamicModels: true,
+            modelDisplayPolicy: {
+              defaultVisibleModelIds: ["cursor/auto"],
+              allowUserVisibleModelSelection: true,
+              moreModelsSource: "lastKnownLiveSnapshot",
+            },
+          },
+        ),
+      ],
+      { kind: "cursor", modelId: "auto" },
+      { kind: "cursor", modelId: "auto" },
+      {
+        kind: "cursor",
+        values: [
+          { value: "auto", label: "Auto" },
+          { value: "gpt-5.4", label: "GPT 5.4" },
+          { value: "grok-4.3", label: "Grok 4.3" },
+        ],
+      },
+    );
+
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual([
+      "auto",
+    ]);
+  });
+
+  it("keeps selected unknown live control models visible for dynamic agents", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent(
+          "cursor",
+          [
+            model("cursor/auto", "Auto", true, {
+              aliases: ["auto"],
+              defaultOptIn: true,
+            }),
+          ],
+          {
+            displayName: "Cursor",
+            dynamicModels: true,
+            modelDisplayPolicy: {
+              defaultVisibleModelIds: ["cursor/auto"],
+              allowUserVisibleModelSelection: true,
+              moreModelsSource: "lastKnownLiveSnapshot",
+            },
+          },
+        ),
+      ],
+      { kind: "cursor", modelId: "gpt-5.4" },
+      { kind: "cursor", modelId: "gpt-5.4" },
+      {
+        kind: "cursor",
+        values: [
+          { value: "auto", label: "Auto" },
+          { value: "gpt-5.4", label: "GPT 5.4" },
+          { value: "grok-4.3", label: "Grok 4.3" },
+        ],
+      },
+    );
+
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual([
+      "auto",
+      "gpt-5.4",
+    ]);
+  });
 });
 
 describe("resolveEffectiveLaunchSelection", () => {
