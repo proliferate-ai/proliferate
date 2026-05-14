@@ -1936,6 +1936,10 @@ body {
   --right-panel-tab-content-gap: var(--workspace-shell-tab-content-gap);
   --right-panel-tab-dot-size: 5px;
   --right-panel-tab-dot-gap: 2px;
+  --right-panel-tab-close-size: 1rem;
+  --right-panel-tab-close-offset: calc(
+    8px - ((var(--right-panel-tab-close-size) - var(--right-panel-tab-icon-size)) / 2)
+  );
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -2324,16 +2328,16 @@ body {
 
 .right-panel-tab-system .right-panel-terminal-tab-shell .ui-tab-system-tab__close-container {
   position: absolute;
-  left: 0;
+  left: var(--right-panel-tab-close-offset);
   top: 0;
   bottom: 0;
-  width: var(--tab-height);
+  width: var(--right-panel-tab-close-size);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1;
-  border-radius: var(--right-panel-tab-radius);
-  background-color: var(--right-panel-tab-active-bg);
+  border-radius: 9999px;
+  background-color: transparent;
   color: var(--right-panel-tab-text-tertiary);
   opacity: 0;
   pointer-events: none;
@@ -2345,15 +2349,20 @@ body {
     opacity: 1;
     pointer-events: auto;
   }
+
+  .right-panel-tab-system .right-panel-terminal-tab-shell:hover .ui-tab-system-tab__icon {
+    visibility: hidden;
+    opacity: 0;
+  }
 }
 
 .right-panel-tab-system .ui-tab-system-tab__close,
 .right-panel-tab-system .right-panel-terminal-edit-action {
   box-sizing: border-box;
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  min-height: 16px;
+  width: var(--right-panel-tab-close-size);
+  height: var(--right-panel-tab-close-size);
+  min-width: var(--right-panel-tab-close-size);
+  min-height: var(--right-panel-tab-close-size);
   padding: 0;
   border-radius: 9999px;
   background-color: transparent;
