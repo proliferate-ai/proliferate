@@ -8,6 +8,7 @@ import { resolveSubagentLaunchDisplay } from "@/lib/domain/chat/subagents/subage
 import {
   formatSubagentMcpActionLabel,
 } from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+import { formatReviewMcpActionLabel } from "@/lib/domain/chat/tools/review-tool-presentation";
 
 export type ToolDisplayIconKey =
   | "terminal"
@@ -116,10 +117,28 @@ export function describeToolCallDisplay(
         hint: "Cowork",
         iconKey: "proliferate",
       };
+    case "review": {
+      const reviewActionLabel = parsedMcp?.server === "reviews"
+        ? formatReviewMcpActionLabel(parsedMcp.action)
+        : null;
+      return {
+        label: reviewActionLabel ?? "Review action",
+        hint: "Reviews",
+        iconKey: "clipboard-list",
+      };
+    }
     default:
       if (parsedMcp) {
         if (parsedMcp.server === "proliferate_skills") {
           return describeSkillsMcpDisplay(parsedMcp.action, raw);
+        }
+        if (parsedMcp.server === "reviews") {
+          return {
+            label: formatReviewMcpActionLabel(parsedMcp.action)
+              ?? formatMcpActionLabel(parsedMcp.action),
+            hint: "Reviews",
+            iconKey: "clipboard-list",
+          };
         }
         return {
           label: formatMcpActionLabel(parsedMcp.action),

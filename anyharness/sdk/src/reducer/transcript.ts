@@ -1415,6 +1415,13 @@ function deriveToolCallSemanticKind(
   ) {
     return "subagent";
   }
+  if (
+    normalizedEffectiveToolName === "mcp__reviews__submit_review_result"
+    || normalizedEffectiveToolName === "mcp__reviews__get_review_status"
+    || normalizedEffectiveToolName === "mcp__reviews__mark_review_revision_ready"
+  ) {
+    return "review";
+  }
 
   if (nativeToolName === "Agent" || normalizedToolKind === "think") {
     return "subagent";
