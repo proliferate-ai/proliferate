@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 
-interface SidebarNavRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "children" | "onClick"> {
+interface SidebarNavRowProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
   icon?: ReactNode;
   label: string;
   active?: boolean;
@@ -30,16 +30,17 @@ export function SidebarNavRow({
 }: SidebarNavRowProps) {
   return (
     <SidebarRowSurface
+      as="button"
       active={active}
       disabled={disabled}
       onPress={onPress}
-      className={`${SIDEBAR_NAV_ROW_CLASS} ${active ? "font-medium" : ""} ${className}`}
+      className={`${SIDEBAR_NAV_ROW_CLASS} ${className}`}
       {...props}
     >
       <div className="flex w-4 shrink-0 items-center justify-center">
         {icon}
       </div>
-      <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-sidebar-foreground">
+      <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-current">
         <span className="truncate">{label}</span>
       </div>
       {status ? (

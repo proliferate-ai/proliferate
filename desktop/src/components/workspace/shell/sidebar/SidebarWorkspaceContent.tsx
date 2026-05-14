@@ -50,7 +50,7 @@ interface SidebarWorkspaceContentProps {
 function SidebarLoadingState() {
   return (
     <div className="flex flex-col items-center gap-2 px-3 py-6 text-center">
-      <BrailleSweepBadge className="text-base text-foreground" />
+      <BrailleSweepBadge className="text-base text-sidebar-muted-foreground" />
       <p className="text-xs text-sidebar-muted-foreground">Loading workspaces</p>
     </div>
   );

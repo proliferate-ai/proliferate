@@ -1,7 +1,8 @@
-import type { HTMLAttributes, KeyboardEvent, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
-interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLDivElement>, "onClick"> {
+interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLElement>, "onClick"> {
   children: ReactNode;
+  as?: "button" | "div";
   active?: boolean;
   disabled?: boolean;
   onPress?: () => void;
@@ -9,6 +10,7 @@ interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLDivElement>, "o
 
 export function SidebarRowSurface({
   children,
+  as = "div",
   active = false,
   disabled = false,
   onPress,
@@ -19,10 +21,16 @@ export function SidebarRowSurface({
   const stateClass = active
     ? "bg-sidebar-accent text-sidebar-foreground"
     : disabled
-      ? "text-sidebar-foreground/45"
-      : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground";
+      ? "text-sidebar-muted-foreground"
+      : "text-sidebar-foreground hover:bg-sidebar-accent";
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const rowClassName = `group relative flex w-full min-w-0 items-center rounded-lg text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
+    interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
+  } ${
+    disabled ? "cursor-not-allowed opacity-60" : ""
+  } ${stateClass} ${className}`;
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!interactive) {
       return;
     }
@@ -31,6 +39,22 @@ export function SidebarRowSurface({
       onPress();
     }
   };
+
+  if (as === "button") {
+    const buttonProps = props as ButtonHTMLAttributes<HTMLButtonElement>;
+    return (
+      <button
+        {...buttonProps}
+        type={buttonProps.type ?? "button"}
+        disabled={disabled}
+        data-active={active}
+        onClick={interactive ? onPress : undefined}
+        className={rowClassName}
+      >
+        {children}
+      </button>
+    );
+  }
 
   return (
     <div
@@ -41,11 +65,7 @@ export function SidebarRowSurface({
       data-active={active}
       onClick={interactive ? onPress : undefined}
       onKeyDown={handleKeyDown}
-      className={`group relative flex w-full min-w-0 items-center rounded-lg transition-[background-color,color,opacity] duration-150 ${
-        interactive ? "cursor-pointer select-none" : ""
-      } ${
-        disabled ? "cursor-not-allowed opacity-60" : ""
-      } ${stateClass} ${className}`}
+      className={rowClassName}
     >
       {children}
     </div>

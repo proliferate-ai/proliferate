@@ -1,7 +1,7 @@
 export const CHROME_TAB_MIN_WIDTH = 48;
 export const CHROME_TAB_COMPACT_WIDTH = 60;
 export const CHROME_TAB_SMALL_WIDTH = 84;
-export const CHROME_TAB_MAX_WIDTH = 184;
+export const CHROME_TAB_MAX_WIDTH = 160;
 export const CHROME_TAB_GAP = 3;
 export const CHROME_TAB_CONTENT_MARGIN = 0;
 export const CHROME_TAB_CONTENT_OVERLAP_WIDTH = -CHROME_TAB_GAP;

@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_FRAME_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 
 interface WorkspaceRenamePopoverProps {
   /**
@@ -60,7 +60,7 @@ export function WorkspaceRenamePopover({
       align="start"
       side="bottom"
       offset={6}
-      className="w-72 rounded-xl border border-border bg-popover p-3 shadow-floating"
+      className={`w-72 ${POPOVER_FRAME_CLASS} p-3`}
       externalOpen={externalOpen}
       onOpenChange={onOpenChange}
     >

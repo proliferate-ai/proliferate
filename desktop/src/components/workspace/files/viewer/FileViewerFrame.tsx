@@ -15,7 +15,7 @@ import {
   SplitPanel,
 } from "@/components/ui/icons";
 import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { DiffScopeOption } from "@/lib/domain/workspaces/viewer/file-diff-options";
@@ -223,7 +223,7 @@ function DiffScopePicker({
         </Button>
       )}
       align="end"
-      className="w-48 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      className={`w-48 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <PickerPopoverContent className="max-h-72">
@@ -240,7 +240,7 @@ function DiffScopePicker({
                 close();
               }}
             >
-              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              <span className="block truncate text-sm leading-4 text-muted-foreground">
                 {option.description}
               </span>
             </PopoverMenuItem>

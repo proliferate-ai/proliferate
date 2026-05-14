@@ -1,6 +1,6 @@
 import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { IconButton } from "@/components/ui/IconButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
@@ -49,7 +49,7 @@ export function RightPanelNewTabMenu({
             <Plus className="ui-icon" />
           </IconButton>
         }
-        className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
+        className={`w-40 ${POPOVER_SURFACE_CLASS}`}
       >
         {(close) => (
           <NewTabMenuContent

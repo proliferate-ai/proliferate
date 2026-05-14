@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Button } from "@/components/ui/Button";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
@@ -34,7 +34,7 @@ interface RepoGroupProps {
 }
 
 const POPOVER_ROW =
-  "h-auto w-full justify-start gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
+  "h-auto w-full justify-start gap-1.5 rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground hover:bg-popover-accent";
 
 export function RepoGroup({
   name,
@@ -73,7 +73,8 @@ export function RepoGroup({
     <SidebarRowSurface
       onPress={onToggleCollapsed}
       onContextMenuCapture={onContextMenuCapture}
-      className="group/folder-row h-[30px] justify-between overflow-x-hidden py-0.5 text-sm focus-visible:outline-offset-[-2px]"
+      aria-expanded={!collapsed}
+      className="group/folder-row h-[30px] justify-between overflow-x-hidden py-1 text-sm leading-4 focus-visible:outline-offset-[-2px]"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
         <span className="relative flex h-6 w-6 items-center justify-center">
@@ -88,12 +89,12 @@ export function RepoGroup({
             />
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm text-sidebar-foreground">
+        <span className="min-w-0 flex-1 truncate text-base leading-5 text-current">
           {name}
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className="absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-foreground/40 transition-opacity group-hover/folder-row:opacity-0">
+          <span className="absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-sidebar-muted-foreground transition-opacity group-hover/folder-row:opacity-0">
             {count}
           </span>
           <PopoverButton
@@ -108,7 +109,7 @@ export function RepoGroup({
             }
             side="right"
             stopPropagation
-            className="w-64 rounded-xl border border-border bg-popover p-1 shadow-floating"
+            className={`w-64 ${POPOVER_SURFACE_CLASS}`}
           >
             {(close) => (
               <>
@@ -194,7 +195,7 @@ export function RepoGroup({
         trigger={headerRow}
         triggerMode="contextMenu"
         stopPropagation
-        className="w-52 rounded-xl border border-border bg-popover p-1 shadow-floating"
+        className={`w-52 ${POPOVER_SURFACE_CLASS}`}
       >
         {(close) => (
           <RepoContextMenuContent

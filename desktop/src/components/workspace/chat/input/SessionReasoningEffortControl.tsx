@@ -3,16 +3,14 @@ import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { Brain, Check, ChevronDown } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface SessionReasoningEffortControlProps {
   control: LiveSessionControlDescriptor;
 }
-
-const POPOVER_ROW =
-  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-accent";
 
 export function SessionReasoningEffortControl({ control }: SessionReasoningEffortControlProps) {
   const currentOption = control.options.find((option) => option.selected) ?? null;
@@ -65,24 +63,21 @@ export function SessionReasoningEffortControl({ control }: SessionReasoningEffor
         </span>
       }
       side="top"
-      className="w-56 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      className={`w-56 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <>
           {control.options.map((option) => (
-            <button
+            <PopoverMenuItem
               key={option.value}
-              type="button"
+              icon={<Brain className="size-3.5 shrink-0" />}
+              label={option.label}
+              trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
               onClick={() => {
                 control.onSelect(option.value);
                 close();
               }}
-              className={POPOVER_ROW}
-            >
-              <Brain className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-left">{option.label}</span>
-              {option.selected && <Check className="size-3.5 shrink-0 text-foreground/60" />}
-            </button>
+            />
           ))}
         </>
       )}

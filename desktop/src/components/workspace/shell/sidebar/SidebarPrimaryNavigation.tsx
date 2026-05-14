@@ -33,7 +33,7 @@ export function SidebarPrimaryNavigation({
       <div className="flex flex-col gap-px">
         <SidebarNavRow
           active={homeActive}
-          icon={<Home className="size-3" />}
+          icon={<Home className="size-4" />}
           label="Home"
           shortcutLabel={SHORTCUTS.goHome.label}
           onPress={onGoHome}

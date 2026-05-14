@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {
   BrailleSweepBadge,
@@ -98,7 +98,7 @@ export function renderChatTabDelegatedIndicators(
       side="bottom"
       offset={6}
       stopPropagation
-      className="w-64 rounded-lg border border-border bg-popover p-1 shadow-floating"
+      className={`w-64 ${POPOVER_SURFACE_CLASS}`}
       trigger={(
         <button
           type="button"
@@ -131,7 +131,7 @@ export function renderChatTabDelegatedIndicators(
                 options.onOpenSession?.(indicator);
               }}
             >
-              <span className="block truncate text-xs text-muted-foreground">
+              <span className="block truncate text-sm leading-4 text-muted-foreground">
                 {indicator.avatarName}
               </span>
             </PopoverMenuItem>
@@ -146,13 +146,13 @@ function renderDelegatedIndicatorTrailing(
   indicator: HeaderDelegatedWorkIndicator,
 ): ReactNode {
   if (indicator.statusLabel === "Failed") {
-    return <span className="text-xs text-destructive">Failed</span>;
+    return <span className="text-xs leading-4 text-destructive">Failed</span>;
   }
   if (indicator.statusLabel === "Working") {
-    return <span className="text-xs text-foreground">Working</span>;
+    return <span className="text-xs leading-4 text-popover-foreground">Working</span>;
   }
   return (
-    <span className="text-xs text-muted-foreground">
+    <span className="text-xs leading-4 text-muted-foreground">
       {indicator.statusLabel}
     </span>
   );

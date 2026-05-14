@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { ListFilter, Plus } from "@/components/ui/icons";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { ClosedChatTabsMenu } from "@/components/workspace/shell/tabs/ClosedChatTabsMenu";
 import {
   renderChatTabIcon,
@@ -68,7 +68,7 @@ export function HeaderTabsActions({
         <PopoverButton
           align="end"
           trigger={closedSessionsTrigger}
-          className="w-72 rounded-xl border border-border bg-popover/95 p-1 shadow-floating backdrop-blur-xl"
+          className={`w-72 ${POPOVER_SURFACE_CLASS}`}
         >
           {(close) => (
             <ClosedChatTabsMenu

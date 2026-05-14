@@ -2,9 +2,9 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Check, ChevronUpDown } from "@/components/ui/icons";
+import { Check, ChevronDown } from "@/components/ui/icons";
 import { matchesPickerSearch } from "@/lib/infra/search/search";
 
 export interface EnvironmentSearchSelectOption {
@@ -55,16 +55,16 @@ export function EnvironmentSearchSelect({
         <Button
           type="button"
           variant="outline"
-          size="md"
+          size="sm"
           disabled={disabled}
-          className={`justify-between bg-background px-2.5 text-foreground shadow-none hover:bg-accent/50 ${className}`}
+          className={`h-8 justify-between rounded-xl border-transparent bg-accent px-3 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-accent/80 data-[state=open]:bg-accent/80 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-          <ChevronUpDown className="size-3 shrink-0 text-muted-foreground" />
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         </Button>
       )}
-      className={`${menuClassName} rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating`}
+      className={`${menuClassName} ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <PickerPopoverContent
@@ -81,7 +81,6 @@ export function EnvironmentSearchSelect({
               key={option.id}
               label={option.label}
               disabled={option.disabled}
-              className={option.selected ? "text-foreground" : "text-muted-foreground"}
               trailing={option.selected ? <Check className="size-3.5" /> : undefined}
               onClick={() => {
                 option.onSelect();
@@ -91,7 +90,7 @@ export function EnvironmentSearchSelect({
               }}
             >
               {option.detail ? (
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="block truncate text-sm leading-4 text-muted-foreground">
                   {option.detail}
                 </span>
               ) : null}

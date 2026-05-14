@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
 import { TabGroupPill } from "@/components/workspace/shell/tabs/TabGroupPill";
@@ -67,7 +67,7 @@ export function TabGroupPillWithMenu({
     <PopoverButton
       triggerMode="contextMenu"
       stopPropagation
-      className="w-48 rounded-lg border border-border bg-popover p-1 shadow-floating"
+      className={`w-48 ${POPOVER_SURFACE_CLASS}`}
       trigger={(
         <span
           className="inline-flex min-w-0 shrink-0 app-region-no-drag"

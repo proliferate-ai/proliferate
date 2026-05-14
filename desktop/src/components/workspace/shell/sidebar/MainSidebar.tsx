@@ -149,7 +149,7 @@ export const MainSidebar = memo(function MainSidebar() {
 
   return (
     <DebugProfiler id="workspace-sidebar">
-      <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
+      <div className="h-full bg-sidebar-background text-sidebar-foreground select-none flex flex-col gap-2 pb-2">
       {supportOpen && (
         <SupportDialog
           onClose={() => setSupportOpen(false)}
