@@ -17,6 +17,8 @@ pub struct WorkerConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anyharness_bearer_token: Option<String>,
     pub worker_db_path: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub materialization_root: Option<PathBuf>,
     #[serde(default = "default_heartbeat_interval_seconds")]
     pub heartbeat_interval_seconds: u64,
     #[serde(skip)]

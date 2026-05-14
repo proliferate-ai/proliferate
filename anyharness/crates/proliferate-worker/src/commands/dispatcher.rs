@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde_json::{json, Value};
 use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
@@ -17,12 +19,14 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
+    materialization::{materialize_plan, parse_materialize_environment_payload},
     store::{PendingCommandResult, WorkerStore},
     sync,
 };
 
 const EMPTY_LEASE_SLEEP: Duration = Duration::from_secs(2);
 const ERROR_LEASE_SLEEP: Duration = Duration::from_secs(5);
+const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
 
 pub async fn run_loop(
     config: WorkerConfig,
@@ -30,33 +34,50 @@ pub async fn run_loop(
     identity: WorkerIdentity,
     store: WorkerStore,
 ) -> Result<(), WorkerError> {
-    let Some(base_url) = config.anyharness_base_url.clone() else {
-        warn!("worker command loop disabled because anyharness_base_url is not configured");
-        return Ok(());
+    let anyharness = match config.anyharness_base_url.clone() {
+        Some(base_url) => Some(AnyHarnessClient::new(
+            base_url,
+            config.anyharness_bearer_token.clone(),
+        )?),
+        None => {
+            warn!("worker command loop running in materialization-only mode because anyharness_base_url is not configured");
+            None
+        }
     };
-    let anyharness = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
-    let supported_kinds = SUPPORTED_COMMAND_KINDS
+    let full_supported_kinds = SUPPORTED_COMMAND_KINDS
         .iter()
         .map(|kind| (*kind).to_string())
         .collect::<Vec<_>>();
+    let materialization_only_kinds = vec![MATERIALIZE_ENVIRONMENT_KIND.to_string()];
     loop {
         if let Err(error) = flush_pending_command_results(&cloud, &identity, &store).await {
             warn!(?error, "failed to flush pending command results");
         }
-        if !anyharness_health::probe(&anyharness).await {
-            warn!("worker command loop paused because anyharness health check failed");
-            sleep(ERROR_LEASE_SLEEP).await;
-            continue;
-        }
+        let anyharness_healthy = match &anyharness {
+            Some(client) => anyharness_health::probe(client).await,
+            None => false,
+        };
+        let supported_kinds = if anyharness_healthy {
+            full_supported_kinds.clone()
+        } else {
+            materialization_only_kinds.clone()
+        };
         let lease = LeaseCommandRequest {
-            supported_kinds: supported_kinds.clone(),
+            supported_kinds,
             lease_timeout_seconds: Some(30),
         };
         match cloud.lease_command(&identity.worker_token, &lease).await {
             Ok(response) => {
                 if let Some(command) = response.command {
-                    if let Err(error) =
-                        process_command(&cloud, &identity, &anyharness, &store, command).await
+                    if let Err(error) = process_command(
+                        &cloud,
+                        &identity,
+                        anyharness.as_ref(),
+                        &store,
+                        config.materialization_root.as_deref(),
+                        command,
+                    )
+                    .await
                     {
                         warn!(?error, "worker command processing failed");
                         sleep(ERROR_LEASE_SLEEP).await;
@@ -77,8 +98,9 @@ pub async fn run_loop(
 async fn process_command(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
-    anyharness: &AnyHarnessClient,
+    anyharness: Option<&AnyHarnessClient>,
     store: &WorkerStore,
+    materialization_root: Option<&Path>,
     command: CloudCommandEnvelope,
 ) -> Result<(), WorkerError> {
     info!(
@@ -93,6 +115,27 @@ async fn process_command(
         lease_expires_at = %command.lease_expires_at,
         "processing cloud command"
     );
+    if command.kind == MATERIALIZE_ENVIRONMENT_KIND {
+        return process_materialize_environment_command(
+            cloud,
+            identity,
+            store,
+            materialization_root,
+            command,
+        )
+        .await;
+    }
+    let Some(anyharness) = anyharness else {
+        let result = CommandResultRequest {
+            lease_id: command.lease_id.clone(),
+            status: "failed_delivery".to_string(),
+            error_code: Some("anyharness_unavailable".to_string()),
+            error_message: Some("AnyHarness is not configured or healthy.".to_string()),
+            result: None,
+        };
+        report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+        return Ok(());
+    };
     if command.kind == "sync_existing_workspace" {
         return process_sync_existing_workspace_command(
             cloud, identity, anyharness, store, command,
@@ -136,6 +179,107 @@ async fn process_command(
         }
     }
     let result = command_result(&command, &mapped, response);
+    report_command_result(cloud, identity, store, &command.command_id, &result).await
+}
+
+async fn process_materialize_environment_command(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    materialization_root: Option<&Path>,
+    command: CloudCommandEnvelope,
+) -> Result<(), WorkerError> {
+    let payload = match parse_materialize_environment_payload(&command.payload) {
+        Ok(payload) => payload,
+        Err(error) => {
+            let result = CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "rejected".to_string(),
+                error_code: Some("invalid_materialize_environment_payload".to_string()),
+                error_message: Some(error.to_string()),
+                result: None,
+            };
+            report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+            return Ok(());
+        }
+    };
+    let _ = cloud
+        .report_target_config_status(
+            &identity.worker_token,
+            &payload.target_config_id,
+            &crate::cloud_client::target_config::TargetConfigStatusRequest {
+                status: "materializing".to_string(),
+                command_id: command.command_id.clone(),
+                config_version: payload.config_version,
+                lease_id: command.lease_id.clone(),
+                error_code: None,
+                error_message: None,
+            },
+        )
+        .await;
+    let response = async {
+        let plan = cloud
+            .fetch_target_config_materialization(
+                &identity.worker_token,
+                &payload.target_config_id,
+                &command.command_id,
+                payload.config_version,
+                &command.lease_id,
+            )
+            .await?;
+        materialize_plan(materialization_root, payload.config_version, &plan)
+    }
+    .await;
+    let result = match response {
+        Ok(outcome) => {
+            cloud
+                .report_target_config_status(
+                    &identity.worker_token,
+                    &payload.target_config_id,
+                    &crate::cloud_client::target_config::TargetConfigStatusRequest {
+                        status: "applied".to_string(),
+                        command_id: command.command_id.clone(),
+                        config_version: payload.config_version,
+                        lease_id: command.lease_id.clone(),
+                        error_code: None,
+                        error_message: None,
+                    },
+                )
+                .await
+                .ok();
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "accepted".to_string(),
+                error_code: None,
+                error_message: None,
+                result: Some(serde_json::to_value(outcome)?),
+            }
+        }
+        Err(error) => {
+            let message = error.to_string();
+            let _ = cloud
+                .report_target_config_status(
+                    &identity.worker_token,
+                    &payload.target_config_id,
+                    &crate::cloud_client::target_config::TargetConfigStatusRequest {
+                        status: "failed".to_string(),
+                        command_id: command.command_id.clone(),
+                        config_version: payload.config_version,
+                        lease_id: command.lease_id.clone(),
+                        error_code: Some("target_materialization_failed".to_string()),
+                        error_message: Some(message.clone()),
+                    },
+                )
+                .await;
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: "failed_delivery".to_string(),
+                error_code: Some("target_materialization_failed".to_string()),
+                error_message: Some(message),
+                result: None,
+            }
+        }
+    };
     report_command_result(cloud, identity, store, &command.command_id, &result).await
 }
 

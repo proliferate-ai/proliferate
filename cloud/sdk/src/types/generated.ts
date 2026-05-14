@@ -180,4 +180,9 @@ export type CloudAgentCatalogControlValue =
   components["schemas"]["AgentCatalogControlValue"];
 export type CloudAgentCatalogLaunchRemediation =
   components["schemas"]["AgentCatalogLaunchRemediation"];
-
+export type CloudTargetConfig = components["schemas"]["CloudTargetConfigResponse"];
+export type TargetConfigSummary = components["schemas"]["TargetConfigSummaryModel"];
+export type MaterializeTargetConfigRequest =
+  components["schemas"]["MaterializeTargetConfigRequest"];
+export type MaterializeTargetConfigResponse =
+  components["schemas"]["MaterializeTargetConfigResponse"];

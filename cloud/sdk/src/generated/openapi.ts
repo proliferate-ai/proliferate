@@ -1005,6 +1005,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/targets/{target_id}/configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Target Configs Endpoint */
+        get: operations["list_target_configs_endpoint_v1_cloud_targets__target_id__configs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/targets/{target_id}/configs/{config_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Target Config Endpoint */
+        get: operations["get_target_config_endpoint_v1_cloud_targets__target_id__configs__config_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/targets/{target_id}/configs/materialize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Materialize Target Config Endpoint */
+        post: operations["materialize_target_config_endpoint_v1_cloud_targets__target_id__configs_materialize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/commands": {
         parameters: {
             query?: never;
@@ -1203,6 +1254,40 @@ export interface paths {
         put?: never;
         /** Worker Backfill Endpoint */
         post: operations["worker_backfill_endpoint_v1_cloud_worker_backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/target-configs/{config_id}/materialization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Worker Target Config Materialization Endpoint */
+        get: operations["worker_target_config_materialization_endpoint_v1_cloud_worker_target_configs__config_id__materialization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/target-configs/{config_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Target Config Status Endpoint */
+        post: operations["worker_target_config_status_endpoint_v1_cloud_worker_target_configs__config_id__status_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2779,6 +2864,46 @@ export interface components {
             /** Pendinginteractions */
             pendingInteractions: components["schemas"]["CloudPendingInteractionResponse"][];
         };
+        /** CloudTargetConfigResponse */
+        CloudTargetConfigResponse: {
+            /** Id */
+            id: string;
+            /** Targetid */
+            targetId: string;
+            /** Gitprovider */
+            gitProvider: string;
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Workspaceroot */
+            workspaceRoot: string;
+            /** Configversion */
+            configVersion: number;
+            /** Envvarsversion */
+            envVarsVersion: number;
+            /** Filesversion */
+            filesVersion: number;
+            /** Credentialsnapshotversion */
+            credentialSnapshotVersion: number;
+            /** Mcpmaterializationversion */
+            mcpMaterializationVersion: number;
+            /** Materializationstatus */
+            materializationStatus: string;
+            /** Lastcommandid */
+            lastCommandId?: string | null;
+            /** Lastmaterializedat */
+            lastMaterializedAt?: string | null;
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage?: string | null;
+            summary: components["schemas"]["TargetConfigSummaryModel"];
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
         /** CloudTargetDetail */
         CloudTargetDetail: {
             /** Id */
@@ -3590,6 +3715,42 @@ export interface components {
             /** Warnings */
             warnings: components["schemas"]["CloudMcpMaterializationWarningModel"][];
         };
+        /** MaterializeTargetConfigRequest */
+        MaterializeTargetConfigRequest: {
+            /**
+             * Gitprovider
+             * @default github
+             * @constant
+             */
+            gitProvider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Workspaceroot */
+            workspaceRoot?: string | null;
+            /** Mcpconnectionids */
+            mcpConnectionIds?: string[] | null;
+            /**
+             * Includeagentcredentials
+             * @default true
+             */
+            includeAgentCredentials: boolean;
+            /**
+             * Includegitcredentials
+             * @default true
+             */
+            includeGitCredentials: boolean;
+            /** Source */
+            source?: string | null;
+            /** Idempotencykey */
+            idempotencyKey?: string | null;
+        };
+        /** MaterializeTargetConfigResponse */
+        MaterializeTargetConfigResponse: {
+            targetConfig: components["schemas"]["CloudTargetConfigResponse"];
+            command: components["schemas"]["CloudCommandResponse"];
+        };
         /** MobilityHandoffSummary */
         MobilityHandoffSummary: {
             /** Id */
@@ -4373,6 +4534,109 @@ export interface components {
             /** Contentbase64 */
             contentBase64: string;
         };
+        /** TargetConfigGitCredentialModel */
+        TargetConfigGitCredentialModel: {
+            /**
+             * Provider
+             * @default github
+             * @constant
+             */
+            provider: "github";
+            /** Accesstoken */
+            accessToken: string;
+            /** Username */
+            username?: string | null;
+            /** Email */
+            email?: string | null;
+        };
+        /** TargetConfigMaterializationPlan */
+        TargetConfigMaterializationPlan: {
+            /** Targetconfigid */
+            targetConfigId: string;
+            /** Targetid */
+            targetId: string;
+            /** Configversion */
+            configVersion: number;
+            /** Workspaceroot */
+            workspaceRoot: string;
+            repo: components["schemas"]["TargetConfigRepoModel"];
+            /** Envvars */
+            envVars: {
+                [key: string]: string;
+            };
+            /** Trackedfiles */
+            trackedFiles: components["schemas"]["TargetConfigTrackedFileModel"][];
+            /**
+             * Setupscript
+             * @default
+             */
+            setupScript: string;
+            /**
+             * Runcommand
+             * @default
+             */
+            runCommand: string;
+            gitCredential?: components["schemas"]["TargetConfigGitCredentialModel"] | null;
+            /** Agentcredentials */
+            agentCredentials?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Mcp */
+            mcp?: {
+                [key: string]: unknown;
+            } | null;
+            /** Skills */
+            skills?: {
+                [key: string]: unknown;
+            }[];
+            /** Readinessrequirements */
+            readinessRequirements?: {
+                [key: string]: unknown;
+            };
+        };
+        /** TargetConfigRepoModel */
+        TargetConfigRepoModel: {
+            /**
+             * Provider
+             * @default github
+             * @constant
+             */
+            provider: "github";
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
+        };
+        /** TargetConfigSummaryModel */
+        TargetConfigSummaryModel: {
+            /** Envvarcount */
+            envVarCount: number;
+            /** Trackedfilecount */
+            trackedFileCount: number;
+            /** Hasgitcredential */
+            hasGitCredential: boolean;
+            /** Agentcredentialproviders */
+            agentCredentialProviders: string[];
+            /** Mcpbindingcount */
+            mcpBindingCount: number;
+            /** Mcpwarningcount */
+            mcpWarningCount: number;
+            /** Requiredtools */
+            requiredTools: string[];
+        };
+        /** TargetConfigTrackedFileModel */
+        TargetConfigTrackedFileModel: {
+            /** Relativepath */
+            relativePath: string;
+            /** Content */
+            content: string;
+            /** Contentsha256 */
+            contentSha256: string;
+            /** Bytesize */
+            byteSize: number;
+        };
         /**
          * TokenRequest
          * @description POST body the desktop app sends to exchange an auth code for tokens.
@@ -4905,6 +5169,36 @@ export interface components {
             event: {
                 [key: string]: unknown;
             };
+        };
+        /** WorkerTargetConfigStatusRequest */
+        WorkerTargetConfigStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "materializing" | "applied" | "failed";
+            /**
+             * Commandid
+             * Format: uuid
+             */
+            commandId: string;
+            /** Configversion */
+            configVersion: number;
+            /** Leaseid */
+            leaseId: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** WorkerTargetConfigStatusResponse */
+        WorkerTargetConfigStatusResponse: {
+            /** Targetconfigid */
+            targetConfigId: string;
+            /** Status */
+            status: string;
+            /** Updated */
+            updated: boolean;
         };
         /** WorkspaceConnection */
         WorkspaceConnection: {
@@ -7310,6 +7604,104 @@ export interface operations {
             };
         };
     };
+    list_target_configs_endpoint_v1_cloud_targets__target_id__configs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTargetConfigResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_target_config_endpoint_v1_cloud_targets__target_id__configs__config_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTargetConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    materialize_target_config_endpoint_v1_cloud_targets__target_id__configs_materialize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterializeTargetConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterializeTargetConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     enqueue_command_endpoint_v1_cloud_commands_post: {
         parameters: {
             query?: never;
@@ -7695,6 +8087,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerBackfillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_target_config_materialization_endpoint_v1_cloud_worker_target_configs__config_id__materialization_get: {
+        parameters: {
+            query: {
+                command_id: string;
+                config_version: number;
+                lease_id: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetConfigMaterializationPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_target_config_status_endpoint_v1_cloud_worker_target_configs__config_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                config_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerTargetConfigStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerTargetConfigStatusResponse"];
                 };
             };
             /** @description Validation Error */

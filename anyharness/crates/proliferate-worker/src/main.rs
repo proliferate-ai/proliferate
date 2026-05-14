@@ -6,6 +6,7 @@ mod error;
 mod identity;
 mod inventory;
 mod logging;
+mod materialization;
 mod runtime;
 mod store;
 mod sync;

@@ -52,6 +52,12 @@ def validate_command_shape(
             f"Cloud command kind requires workspaceId: {kind}",
             status_code=400,
         )
+    if kind == CloudCommandKind.materialize_environment.value and (workspace_id or session_id):
+        raise CloudApiError(
+            "cloud_command_target_only",
+            "materialize_environment commands must be scoped only to a target.",
+            status_code=400,
+        )
     if kind in {
         CloudCommandKind.send_prompt.value,
         CloudCommandKind.resolve_interaction.value,
