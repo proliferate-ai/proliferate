@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
-import { getCloudWorkspaceConnection } from "@/lib/access/cloud/workspaces";
+import { getCloudWorkspaceConnection } from "@proliferate/cloud-sdk/client/workspaces";
 
 export function useCloudWorkspaceConnectionCache() {
   const queryClient = useQueryClient();

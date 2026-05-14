@@ -10,7 +10,10 @@ platform APIs directly.
 lib/access/
   cloud/
     client.ts
-    <resource>.ts
+    credential-sync.ts
+    credential-recovery.ts
+    health.ts
+    timing.ts
   anyharness/
     runtime-target.ts
     runtime-bootstrap.ts
@@ -187,20 +190,30 @@ cross-boundary product projections.
 
 ## Cloud
 
-`lib/access/cloud/**` owns raw Proliferate cloud API access:
+`@proliferate/cloud-sdk` owns shared raw Proliferate Cloud API resource
+helpers. Desktop code should import reusable request helpers directly from the
+SDK, such as `@proliferate/cloud-sdk/client/workspaces`, instead of adding
+Desktop re-export wrappers.
+
+`lib/access/cloud/**` owns Desktop-specific Cloud access setup and native
+bridges:
 
 - singleton OpenAPI client setup
 - auth/refresh middleware
-- named request helpers
-- generated OpenAPI request/response types
-- transport normalization
+- Desktop auth/session storage integration
+- Desktop base-url resolution
+- Desktop-only credential sync/recovery helpers
+- control-plane health checks used during Desktop startup
+- request timing integration
 
 File naming:
 
 - `client.ts` for client setup, auth/refresh middleware, and shared transport
   error types
-- `<resource>.ts` for named request helpers such as `workspaces.ts`,
-  `billing.ts`, or `credentials.ts`
+- `credential-sync.ts` and `credential-recovery.ts` for Desktop-native
+  credential export/import coordination
+- `health.ts` for Desktop control-plane reachability checks
+- `timing.ts` for Desktop request measurement wiring
 - no React hooks, Zustand stores, query invalidation, navigation, or JSX
 
 `hooks/access/cloud/**` owns React-facing access:

@@ -3,7 +3,7 @@ import type {
   CloudMobilityWorkspaceDetail,
   EnsureCloudMobilityWorkspaceRequest,
 } from "@/lib/access/cloud/client";
-import { ensureCloudMobilityWorkspace } from "@/lib/access/cloud/mobility";
+import { ensureCloudMobilityWorkspace } from "@proliferate/cloud-sdk/client/mobility";
 import { applyCloudMobilityWorkspaceDetail } from "./mobility-cache";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 

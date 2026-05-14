@@ -10,7 +10,7 @@ import {
   markLocalAutomationRunDispatching,
   markLocalAutomationRunFailed,
   markLocalAutomationRunProvisioningWorkspace,
-} from "@/lib/access/cloud/automations";
+} from "@proliferate/cloud-sdk/client/automations";
 
 export function useLocalAutomationRunClaims() {
   return useMemo(() => ({

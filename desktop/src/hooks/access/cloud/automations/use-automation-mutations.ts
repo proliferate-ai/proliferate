@@ -12,7 +12,7 @@ import {
   resumeAutomation,
   runAutomationNow,
   updateAutomation,
-} from "@/lib/access/cloud/automations";
+} from "@proliferate/cloud-sdk/client/automations";
 import {
   automationDetailKey,
   automationRunsKey,

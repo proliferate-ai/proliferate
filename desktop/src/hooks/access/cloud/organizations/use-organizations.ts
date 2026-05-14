@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { OrganizationListResponse } from "@/lib/access/cloud/client";
-import { listOrganizations } from "@/lib/access/cloud/organizations";
+import { listOrganizations } from "@proliferate/cloud-sdk/client/organizations";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { organizationsListKey } from "./query-keys";
 

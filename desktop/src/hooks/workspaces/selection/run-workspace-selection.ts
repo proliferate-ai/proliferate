@@ -27,7 +27,7 @@ import {
   resolveOptimisticWorkspaceSessionId,
 } from "@/lib/domain/workspaces/selection/optimistic-session-shell";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
+import { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";

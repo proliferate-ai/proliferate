@@ -2,7 +2,7 @@ import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/cl
 import {
   getCloudWorkspace,
   getCloudWorkspaceConnection,
-} from "@/lib/access/cloud/workspaces";
+} from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 
 export interface RuntimeTarget {

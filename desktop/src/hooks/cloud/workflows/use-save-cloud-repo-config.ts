@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { saveCloudRepoConfig } from "@/lib/access/cloud/repo-configs";
+import { saveCloudRepoConfig } from "@proliferate/cloud-sdk/client/repo-configs";
 import { readRepoTrackedTextFile } from "@/lib/access/anyharness/workspace-file-transport";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";

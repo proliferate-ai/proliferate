@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CloudRepoBranchesResponse } from "@/lib/access/cloud/client";
-import { listCloudRepoBranches } from "@/lib/access/cloud/repos";
+import { listCloudRepoBranches } from "@proliferate/cloud-sdk/client/repos";
 import { cloudRepoBranchesKey } from "./query-keys";
 
 export function useCloudRepoBranches(

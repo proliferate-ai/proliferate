@@ -47,7 +47,7 @@ vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
   useTauriShellActions: () => tauriShellActions,
 }));
 
-vi.mock("@/lib/access/cloud/workspaces", () => ({
+vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
   updateCloudWorkspaceBranch: vi.fn(async () => undefined),
 }));
 

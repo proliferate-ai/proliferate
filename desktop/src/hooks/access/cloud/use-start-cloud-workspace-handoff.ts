@@ -3,7 +3,7 @@ import type {
   CloudMobilityHandoffSummary,
   StartCloudWorkspaceMobilityHandoffRequest,
 } from "@/lib/access/cloud/client";
-import { startCloudWorkspaceHandoff } from "@/lib/access/cloud/mobility";
+import { startCloudWorkspaceHandoff } from "@proliferate/cloud-sdk/client/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";

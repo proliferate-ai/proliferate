@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import {
   sendSupportMessage,
   type SendSupportMessageRequest,
-} from "@/lib/access/cloud/support";
+} from "@proliferate/cloud-sdk/client/support";
 
 export function useSendSupportMessage() {
   const mutation = useMutation<void, Error, SendSupportMessageRequest>({

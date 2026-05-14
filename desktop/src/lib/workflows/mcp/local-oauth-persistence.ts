@@ -1,6 +1,6 @@
 import { normalizeConnectorSettings, connectorSettingsToCloud as domainConnectorSettingsToCloud } from "@/lib/domain/mcp/settings-schema";
 import type { ConnectorCatalogEntry, ConnectorSettings, ConnectOAuthConnectorResult, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
-import { createCloudMcpConnection, deleteCloudMcpConnectionV2 } from "@/lib/access/cloud/mcp_connections";
+import { createCloudMcpConnection, deleteCloudMcpConnectionV2 } from "@proliferate/cloud-sdk/client/mcp_connections";
 import type { CloudMcpConnection } from "@/lib/access/cloud/client";
 import {
   cancelGoogleWorkspaceMcpAuth,

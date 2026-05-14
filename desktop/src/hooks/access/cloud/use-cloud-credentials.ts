@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import { listCloudCredentialStatuses } from "@/lib/access/cloud/credentials";
+import { listCloudCredentialStatuses } from "@proliferate/cloud-sdk/client/credentials";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useTauriCredentialsActions } from "@/hooks/access/tauri/use-credentials-actions";
 import { cloudCredentialsKey } from "@/hooks/access/cloud/query-keys";

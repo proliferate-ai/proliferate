@@ -14,7 +14,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";
 import { useCloudWorkspaceConnection } from "@/hooks/access/cloud/use-cloud-workspace-connection";
-import { startCloudWorkspace as startCloudWorkspaceRequest } from "@/lib/access/cloud/workspaces";
+import { startCloudWorkspace as startCloudWorkspaceRequest } from "@proliferate/cloud-sdk/client/workspaces";
 import { useWorkspaceSelectionCache } from "@/hooks/workspaces/cache/use-workspace-selection-cache";
 import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";

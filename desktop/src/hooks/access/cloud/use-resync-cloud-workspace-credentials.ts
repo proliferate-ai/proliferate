@@ -3,7 +3,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
-import { resyncCloudWorkspaceCredentials } from "@/lib/access/cloud/workspaces";
+import { resyncCloudWorkspaceCredentials } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   captureTelemetryException,

@@ -9,7 +9,7 @@ import {
   createRefillCheckoutSession,
   getCloudBillingPlan,
   updateOverageSettings,
-} from "@/lib/access/cloud/billing";
+} from "@proliferate/cloud-sdk/client/billing";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

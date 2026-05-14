@@ -6,7 +6,7 @@ import type {
 import {
   getCloudWorktreeRetentionPolicy,
   putCloudWorktreeRetentionPolicy,
-} from "@/lib/access/cloud/worktree-policy";
+} from "@proliferate/cloud-sdk/client/worktree-policy";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { cloudWorktreeRetentionPolicyKey } from "@/hooks/access/cloud/query-keys";
 
