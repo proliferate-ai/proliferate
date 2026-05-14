@@ -1,7 +1,7 @@
 # Cloud Worker And Control Plane V1 Spec
 
 Status: implementation spec for Cloud-mediated session control, Proliferate
-Worker, target enrollment, command delivery, event ingestion, projections,
+Worker, target enrollment, command delivery, event ingestion, snapshots,
 compute lifecycle, and cloud sync.
 
 Scope:
@@ -22,6 +22,7 @@ Related docs:
 - `docs/anyharness/specs/session-engine.md`
 - `docs/anyharness/specs/product-mcps.md`
 - `docs/server/README.md`
+- `docs/architecture/cloud-worker-implementation-phases.md`
 - `docs/architecture/plugins-and-skills.md`
 
 This spec treats plugin and MCP bundles as resolved session launch input.
@@ -55,8 +56,8 @@ The target-side Proliferate Worker:
 - reports inventory, readiness, versions, activity, and safe-stop state
 
 AnyHarness remains the execution source of truth. Cloud stores command history,
-normalized events, projections, policy, audit, billing, target state, and
-artifact references. Cloud does not become a second AnyHarness runtime
+normalized events, snapshots/read models, policy, audit, billing, target state,
+and artifact references. Cloud does not become a second AnyHarness runtime
 database.
 
 ## Non-Goals For V1
@@ -93,7 +94,7 @@ Event path
   AnyHarness normalized events
     -> local Proliferate Worker
     -> Cloud ingest
-    -> event log + projections
+    -> event log + snapshots/read models
     -> live fanout
     -> web / mobile / Slack / API / desktop cloud views
 ```
@@ -110,11 +111,11 @@ Proliferate Worker:
   readiness, activity reporting, update participation.
 
 Cloud:
-  org/team auth, target registry, command queue, event ingest, projections,
+  org/team auth, target registry, command queue, event ingest, snapshots,
   fanout, automations, credential grants, audit, billing, compute policy.
 
 Clients:
-  render Cloud projections or direct AnyHarness state. They do not invent
+  render Cloud snapshots or direct AnyHarness state. They do not invent
   durable runtime truth.
 ```
 
@@ -179,14 +180,14 @@ Proliferate Cloud
   Postgres
   Redis/NATS/pubsub for live fanout
   object storage for blobs/artifacts
-  background workers for projection, expiry, pruning, notifications
+  background workers for snapshot updates, expiry, pruning, notifications
 ```
 
 V1 should use conventional infrastructure:
 
 ```text
 Postgres:
-  durable commands, events, projections, targets, workspaces, sessions,
+  durable commands, events, snapshots, targets, workspaces, sessions,
   auth/policy, audit, billing.
 
 Redis/NATS/pubsub:
@@ -407,7 +408,7 @@ automation workspace:
   prune after completion unless configured to retain artifacts
 
 cloud event history:
-  keep semantic events/projections while workspace exists
+  keep semantic events/snapshots while workspace exists
   after prune, keep slim transcript and audit record
   delete raw large payloads unless pinned as artifacts
 ```
@@ -416,7 +417,7 @@ cloud event history:
 
 Cloud-mediated clients write commands to Cloud. Workers lease commands for the
 targets they own. Worker calls local AnyHarness. AnyHarness emits canonical
-events that reconcile command status and projections.
+events that reconcile command status and snapshots.
 
 Command envelope:
 
@@ -621,12 +622,22 @@ soft cap: 5,000 durable events or 15 MB payload per session
 hard cap: 10,000 durable events or 25 MB payload per session
 ```
 
-When caps are exceeded:
+When inline caps are exceeded:
 
 - truncate inline payloads with explicit truncation metadata
 - move large payloads to object storage only when retention is required
-- compact older turns into transcript projections and summaries
+- compact older turns into transcript snapshots and summaries
 - keep AnyHarness local SQLite as exact runtime truth while target exists
+
+When a durable session crosses the soft cap, Cloud should schedule compaction
+before accepting more low-value durable rows. When a durable session reaches
+the hard cap, ingest must follow one deterministic path: compact eligible older
+events in the ingest transaction; if the session still exceeds the cap, append
+only bounded lifecycle/command/request records and explicit
+`retention_exceeded` markers, exclude or artifact-link non-critical transcript
+and tool metadata, mark the session sync state degraded, and only then advance
+the cursor for the processed events. Workers must not make independent cap
+decisions.
 
 Do not store inline by default:
 
@@ -677,7 +688,7 @@ Cloud stores:
 - commands and command leases
 - normalized durable events
 - ingest cursors
-- projections/read models
+- snapshots/read models
 - automation definitions and runs
 - credential grant metadata
 - artifact/blob references
@@ -693,7 +704,7 @@ Cloud does not store:
 - full workspace filesystem contents
 - local desktop tab/layout state as runtime truth
 
-Cloud sync is command routing plus event ingestion plus projection building,
+Cloud sync is command routing plus event ingestion plus snapshot building,
 not runtime database replication.
 
 ## Server Target File Structure
@@ -702,81 +713,49 @@ The Cloud sync implementation lives under the existing `cloud` server domain,
 split by product responsibility. Do not put all worker behavior in
 `cloud/runtime`.
 
+Implementation phase details live in
+`docs/architecture/cloud-worker-implementation-phases.md`. This section defines
+the stable server folder contract.
+
+Cloud areas use the same default module shape. Do not create bespoke
+area-specific file sets up front.
+
+```text
+server/proliferate/server/cloud/<area>/
+  api.py          # HTTP/SSE transport only
+  models.py       # Pydantic request/response schemas only
+  service.py      # orchestration, transactions, store calls, integrations
+  access.py       # optional resource-access route deps
+  errors.py       # optional area-specific errors
+  domain/
+    types.py      # optional frozen dataclasses/enums used by pure rules
+    rules.py      # optional pure validators, reducers, status transitions
+    policy.py     # optional pure access/control policy verdicts
+```
+
+Default Cloud areas:
+
 ```text
 server/proliferate/server/cloud/
-  targets/
-    api.py                 # user/admin target CRUD and enrollment-token API
-    access.py              # target access route deps
-    models.py              # target, inventory, enrollment, status schemas
-    service.py             # target registry orchestration
-    domain/
-      capabilities.py      # pure capability merge/diff/check helpers
-      enrollment.py        # enrollment token rules and expiry decisions
-      idle_policy.py       # pure stop/prune/extend policy decisions
-      policy.py            # target view/control policy verdicts
-      readiness.py         # pure readiness verdicts for launch requirements
-      versions.py          # desired/installed version reconciliation rules
-
-  commands/
-    api.py                 # client command creation and status reads
-    models.py              # command request/response schemas
-    service.py             # auth, preconditions, enqueue, status lookup
-    domain/
-      envelope.py          # command envelope dataclasses/enums
-      expiry.py            # pure expiry/supersede rules
-      preconditions.py     # pure precondition validation
-      routing.py           # target/session routing decisions
-      status.py            # legal command status transitions
-
-  worker/
-    api.py                 # worker-only endpoints: enroll, heartbeat, lease, upload
-    models.py              # worker request/response schemas
-    service.py             # worker auth, leases, heartbeat, ingest dispatch
-    domain/
-      auth.py              # pure token/cert state decisions, no secret material
-      heartbeat.py         # heartbeat status derivation
-      leases.py            # lease timeout and retry decisions
-      sync_window.py       # batch size/cursor/window decisions
-
-  events/
-    api.py                 # optional admin/debug event reads
-    models.py              # event payload and debug schemas
-    service.py             # ingest validation, dedupe, append, cursor update
-    domain/
-      cursors.py           # contiguous cursor/gap decisions
-      dedupe.py            # dedupe key helpers
-      payload_policy.py    # inline/blob/truncate decision
-      schema.py            # event type/schema version validation
-
-  projections/
-    api.py                 # snapshot reads: workspace/session/transcript/target
-    models.py              # projection response schemas
-    service.py             # rebuild/apply events/read snapshots
-    domain/
-      patches.py           # event -> projection patch decisions
-      session.py           # session snapshot projection
-      target.py            # target snapshot projection
-      transcript.py        # transcript projection
-      workspace.py         # workspace snapshot projection
-
-  live/
-    api.py                 # SSE subscriptions for session/workspace/target streams
-    models.py              # stream query and event schemas
-    service.py             # subscribe, catch-up, publish patches
-    domain/
-      channels.py          # channel naming and authorization scope
-      coalescing.py        # patch coalescing rules
-      replay.py            # initial snapshot + cursor replay rules
-
-  compute/
-    api.py                 # user/admin compute lifecycle commands when needed
-    models.py              # stop/prune/extend schemas
-    service.py             # quotas, command enqueue, provider calls if direct
-    domain/
-      quotas.py            # pure quota verdicts
-      safe_stop.py         # pure safe-stop decision helpers
-      retention.py         # pure retention/prune policy
+  targets/        target registry, SSH enrollment, inventory/readiness
+  worker/         worker-only auth, heartbeat, command lease, event upload
+  commands/       CloudCommand enqueue/status/routing/idempotency
+  events/         ingest, dedupe, cursor, payload policy, event log
+  sessions/       CloudSession, messages, requests, config, transcript reads
+  live/           Redis/NATS pubsub, SSE streams, replay
+  compute/        stop/prune/extend/provider lifecycle policy
+  target_config/  env/credentials/files/git/MCP materialization model
+  runtime/        managed compute provisioning; direct-AnyHarness mutation paths transitional
 ```
+
+Promotion rule:
+
+- Start with `domain/types.py`, `domain/rules.py`, and `domain/policy.py`.
+- Promote a specific `domain/<concern>.py` only when a default file becomes
+  too large or mixes unrelated rule families.
+- Do not pre-create `capabilities.py`, `enrollment.py`, `readiness.py`,
+  `versions.py`, `routing.py`, `payload_policy.py`, or similar files as a
+  default structure.
 
 Existing folders keep their current ownership:
 
@@ -788,7 +767,7 @@ cloud/runtime/
 
 cloud/workspaces/
   user-facing cloud workspace behavior. It should call targets/commands/
-  projections/compute services instead of owning worker sync internals.
+  sessions/live/compute services instead of owning worker sync internals.
 
 cloud/credentials/
 cloud/mcp_*/
@@ -806,27 +785,43 @@ integrations/anyharness/
 
 ## Server Database Shape
 
-Use ORM models under flat files in `db/models/**`, stores under
-`db/store/cloud_sync/**`, and migrations under `server/alembic/versions/**`.
+New worker-sync ORM models live under `db/models/cloud/**`, new worker-sync
+stores live under `db/store/cloud_sync/**`, and migrations live under
+`server/alembic/versions/**`. Existing cloud product stores stay in their
+current owner until the Phase 0 implementation audit assigns an explicit
+disposition; do not create a second store for an existing ORM resource.
 
 ```text
-server/proliferate/db/models/
-  cloud_targets.py        # CloudTarget, CloudWorker, TargetInventory, status
-  cloud_commands.py       # CloudCommand, CloudCommandLease
-  cloud_events.py         # CloudSessionEvent, EventIngestCursor
-  cloud_projections.py    # WorkspaceSnapshot, SessionSnapshot, TranscriptSnapshot
-  cloud_artifacts.py      # CloudArtifactRef / blob retention metadata
+server/proliferate/db/models/cloud/
+  targets.py              # CloudTarget, CloudWorker, TargetInventory, status
+  commands.py             # CloudCommand, CloudCommandLease
+  events.py               # CloudSessionEvent, EventIngestCursor
+  sessions.py             # CloudSession, messages, tool calls, requests, config state
+  artifacts.py            # CloudArtifactRef / blob retention metadata
+  target_config.py        # target env/credential/materialization state
 
 server/proliferate/db/store/cloud_sync/
   __init__.py
   targets.py              # target/worker/enrollment CRUD
+  worker_auth.py          # worker credential/token state
+  inventory.py            # inventory/status read-write helpers
   commands.py             # enqueue, lease, status transition, expiry
+  leases.py               # lease transitions and stale lease recovery
   events.py               # append/dedupe/read event log
   cursors.py              # ingest cursor and backfill progress
-  projections.py          # projection read/write
+  sessions.py             # session row read/write
+  messages.py             # transcript message row read/write
+  tool_calls.py           # tool call summary row read/write
+  requests.py             # pending/resolved interaction row read/write
+  config.py               # session config state row read/write
   artifacts.py            # blob ref metadata
-  leases.py               # lease transitions and stale lease recovery
+  target_config.py        # target config/materialization read-write
 ```
+
+`db/models/cloud/sessions.py` owns the ORM tables for `CloudSession`,
+`CloudMessage`, `CloudToolCallSummary`, `CloudRequest`, and
+`CloudSessionConfigState`; separate store files own the per-resource access
+paths listed above.
 
 Stores return frozen dataclasses. ORM objects do not leave store boundaries.
 Services thread `AsyncSession` into stores. Stores do not commit and do not
@@ -858,9 +853,18 @@ cloud_session_events:
 cloud_event_ingest_cursors:
   unique(target_id, session_id)
 
-cloud_projection_snapshots:
-  unique(projection_kind, projection_id)
-  index(org_id, updated_at)
+cloud_sessions:
+  unique(target_id, anyharness_session_id)
+  index(org_id, workspace_id, updated_at)
+
+cloud_messages:
+  index(session_id, created_at)
+
+cloud_tool_call_summaries:
+  index(session_id, message_id, created_at)
+
+cloud_requests:
+  index(session_id, status, created_at)
 
 cloud_artifact_refs:
   index(org_id, retention_expires_at)
@@ -939,7 +943,7 @@ anyharness/crates/proliferate-worker/
     updates/
       mod.rs
       desired.rs             # desired version reconcile
-      staging.rs             # download/stage update artifacts
+      staging.rs             # download/stage signed artifacts
       supervisor.rs          # ask supervisor/platform manager to restart
 
     store/
@@ -1138,7 +1142,7 @@ anyharness/crates/anyharness-lib/src/domains/runtime_inventory/
   mod.rs
   model.rs                 # InventorySnapshot, ActivitySnapshot, SafeStopState
   service.rs               # collects from domains/live/adapters
-  readiness.rs             # provider/MCP readiness projection
+  readiness.rs             # provider/MCP readiness calculation
 
 anyharness/crates/anyharness-lib/src/domains/workspaces/
   retention.rs             # existing workspace retention meaning
@@ -1165,116 +1169,68 @@ upload logic into AnyHarness.
 Client/admin endpoints:
 
 ```text
-POST /v1/cloud/targets/enrollments
+POST /api/v1/cloud/targets/enrollments
   create enrollment token for SSH/self-hosted/desktop dispatch.
 
-GET /v1/cloud/targets
+GET /api/v1/cloud/targets
   list targets visible to actor.
 
-GET /v1/cloud/targets/{target_id}
+GET /api/v1/cloud/targets/{target_id}
   target snapshot.
 
-POST /v1/cloud/targets/{target_id}/archive
+POST /api/v1/cloud/targets/{target_id}/archive
   archive target, revoke active worker tokens after safe shutdown if possible.
 
-POST /v1/cloud/commands
+POST /api/v1/cloud/commands
   enqueue command.
 
-GET /v1/cloud/commands/{command_id}
+GET /api/v1/cloud/commands/{command_id}
   command status.
 
-GET /v1/cloud/workspaces
-GET /v1/cloud/workspaces/{workspace_id}
-GET /v1/cloud/sessions/{session_id}
-GET /v1/cloud/sessions/{session_id}/transcript
-GET /v1/cloud/sessions/{session_id}/events?cursor=...
+GET /api/v1/cloud/workspaces
+GET /api/v1/cloud/workspaces/{workspace_id}
+GET /api/v1/cloud/sessions/{session_id}
+GET /api/v1/cloud/sessions/{session_id}/transcript
+GET /api/v1/cloud/sessions/{session_id}/events?cursor=...
 
-GET /v1/cloud/workspaces/{workspace_id}/stream
-GET /v1/cloud/sessions/{session_id}/stream
-GET /v1/cloud/targets/{target_id}/stream
-
-POST /v1/cloud/compute/targets/{target_id}/desired-versions
-  set desired AnyHarness / Worker / Supervisor versions and increment the
-  target update generation.
-
-POST /v1/cloud/compute/targets/{target_id}/safe-stop-check
-  return whether the target can safely stop based on active cloud-visible
-  sessions, active commands, active update state, and worker-reported safe-stop
-  state when available.
-
-POST /v1/cloud/compute/targets/{target_id}/revoke-workers
-  revoke active worker credentials for a target. This rejects archived targets
-  and targets with active cloud-visible sessions or commands.
+GET /api/v1/cloud/workspaces/{workspace_id}/stream
+GET /api/v1/cloud/sessions/{session_id}/stream
+GET /api/v1/cloud/targets/{target_id}/stream
 ```
 
 Worker-only endpoints:
 
 ```text
-POST /v1/cloud/worker/enroll
+POST /api/v1/cloud/worker/enroll
   enrollment token + inventory -> worker credentials.
 
-POST /v1/cloud/worker/heartbeat
-  status + activity + current component versions. The response includes
-  desiredVersions:
-    shouldUpdate
-    updateChannel
-    updateGeneration
-    anyharnessVersion
-    workerVersion
-    supervisorVersion
+POST /api/v1/cloud/worker/heartbeat
+  status + activity + safe-stop summary.
 
-POST /v1/cloud/worker/inventory
+POST /api/v1/cloud/worker/inventory
   full inventory/readiness report.
 
-POST /v1/cloud/worker/commands/lease
+POST /api/v1/cloud/worker/commands/lease
   long-poll/lease commands for target.
 
-POST /v1/cloud/worker/commands/{command_id}/delivery
+POST /api/v1/cloud/worker/commands/{command_id}/delivery
   delivered/failed_delivery status.
 
-POST /v1/cloud/worker/commands/{command_id}/result
+POST /api/v1/cloud/worker/commands/{command_id}/result
   local AnyHarness accepted/rejected/queued result when available.
 
-POST /v1/cloud/worker/events/batches
+POST /api/v1/cloud/worker/events/batches
   upload normalized durable event batch.
 
-POST /v1/cloud/worker/sync/backfill-status
+POST /api/v1/cloud/worker/sync/backfill-status
   report backfill progress for a workspace/session.
 
-POST /v1/cloud/worker/update-status
-  report update state for the desired update generation. Requests must include
-  updateGeneration; staged/applying/applied component reports must also include
-  component + version matching the target's current desired versions.
+POST /api/v1/cloud/worker/update-status
+  report staged/applied/failed update state.
 ```
 
 Worker endpoints authenticate with worker credentials. Client endpoints
 authenticate with user/session/API-key auth. Do not share auth mechanisms.
-
-Current rollout boundary:
-
-- Cloud desired-version APIs are live control-plane state and are safe to expose
-  to operator/admin clients.
-- The Worker reconciles desired versions by writing a supervisor-owned
-  `desired-update.json` mailbox containing `updateChannel`, `updateGeneration`,
-  and stale components only.
-- The full supervisor applier loop that consumes that mailbox, verifies
-  artifact authenticity, swaps binaries, rolls back, and reports staged/applying/
-  applied is intentionally a separate implementation step.
-- Until that applier exists, the Worker may report a failed staging attempt,
-  but it should not claim staged/applying/applied merely because it wrote the
-  mailbox.
-- Cloud treats `updateGeneration` as the freshness fence: stale update status
-  reports cannot mutate a newer desired-version rollout.
-
-Safe-stop boundary:
-
-- In this phase, Cloud derives active session and command counts from synced
-  projections. Worker-reported target-safe-stop state is not persisted yet, so
-  `safe-stop-check` returns `safe_stop_state_unknown` when no stronger allow
-  signal exists.
-- `revoke-workers` is not a force-stop primitive. It revokes credentials only
-  when the target is not archived and has no active cloud-visible sessions or
-  commands.
 
 ## Enrollment Flows
 
@@ -1285,7 +1241,7 @@ Safe-stop boundary:
 2. cloud/runtime provisions sandbox through integrations/sandbox.
 3. Sandbox image starts AnyHarness and Proliferate Worker.
 4. Worker uses one-time bootstrap token from sandbox metadata/env.
-5. Worker calls /v1/cloud/worker/enroll.
+5. Worker calls /api/v1/cloud/worker/enroll.
 6. Cloud creates target + worker records or attaches to pre-created target.
 7. Worker reports inventory/readiness.
 8. Cloud marks target online.
@@ -1308,7 +1264,7 @@ Managed cloud should preinstall:
 1. User/admin creates enrollment token in Cloud.
 2. UI shows install command.
 3. User runs install command on SSH host.
-4. Installer downloads verified AnyHarness + Worker artifacts.
+4. Installer downloads signed AnyHarness + Worker artifacts.
 5. Installer writes worker config with Cloud base URL and enrollment token.
 6. Worker starts and enrolls outbound.
 7. Worker reports inventory/readiness.
@@ -1337,7 +1293,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 ## Command Flow: Web Sends Prompt
 
 ```text
-1. Web calls POST /v1/cloud/commands:
+1. Web calls POST /api/v1/cloud/commands:
    kind = send_prompt
    session_id = S
    idempotency_key = K
@@ -1346,7 +1302,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 2. Cloud authenticates user and authorizes control.
 
 3. commands.service validates:
-   session exists in projection
+   session exists in CloudSession snapshot
    target is cloud-sync addressable
    command kind is allowed
    idempotency key is unique or returns existing command
@@ -1356,7 +1312,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 
 5. live.service publishes optimistic CommandStatus patch.
 
-6. Worker lease loop long-polls /v1/cloud/worker/commands/lease.
+6. Worker lease loop long-polls /api/v1/cloud/worker/commands/lease.
 
 7. Cloud leases command to worker:
    status = leased
@@ -1373,9 +1329,9 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 
 12. Cloud ingest dedupes/appends events.
 
-13. projections.service applies events to transcript/session snapshots.
+13. sessions.service applies events to transcript/session snapshots.
 
-14. live.service fans out durable projection patches to subscribers.
+14. live.service fans out durable snapshot patches to subscribers.
 ```
 
 The UI may show the prompt optimistically, but the canonical prompt row comes
@@ -1395,7 +1351,7 @@ Backfill is required when enabling sync for an existing workspace/session.
 7. Worker uploads batches.
 8. Cloud dedupes by target_id/session_id/seq.
 9. Cloud advances ingest cursor only across contiguous sequences.
-10. Cloud rebuilds or updates projections.
+10. Cloud rebuilds or updates snapshots.
 11. Worker deletes acknowledged outbox batches.
 12. Worker starts live tail from acknowledged seq.
 ```
@@ -1405,7 +1361,7 @@ Gaps:
 - If Cloud sees seq 100 and 102 but not 101, it stores both but only advances
   contiguous cursor to 100.
 - Worker retries missing seq/batch.
-- Projection can either wait for contiguous order or apply out-of-order only
+- Snapshot updates can either wait for contiguous order or apply out-of-order only
   for event types proven commutative. V1 should prefer contiguous order.
 
 Duplicates:
@@ -1420,12 +1376,12 @@ Duplicates:
 Client live streams subscribe to Cloud, not to targets.
 
 ```text
-GET /v1/cloud/sessions/{session_id}/stream?cursor=C
+GET /api/v1/cloud/sessions/{session_id}/stream?cursor=C
   -> authorize actor
   -> send current snapshot if requested
-  -> replay projection patches/events after C
+  -> replay snapshot patches/events after C
   -> subscribe to session channel
-  -> send SSE patches as Cloud projections change
+  -> send SSE patches as Cloud snapshots change
 ```
 
 V1 channels:
@@ -1438,14 +1394,14 @@ session:{session_id}
 command:{command_id}
 ```
 
-V1 stream payloads should be projection patches, not raw target protocol.
+V1 stream payloads should be snapshot patches, not raw target protocol.
 
 ```text
 event: snapshot
 data: SessionSnapshot
 
 event: patch
-data: ProjectionPatch
+data: SnapshotPatch
 
 event: command_status
 data: CommandStatus
@@ -1455,9 +1411,10 @@ data: stream keepalive
 ```
 
 Live-only deltas may be published with short TTL while subscribers are present,
-but the durable projection must still converge from semantic events.
+but durable session/message/request/config rows must still converge from
+semantic events.
 
-## Projection Models
+## Snapshot Models
 
 WorkspaceSnapshot:
 
@@ -1532,12 +1489,14 @@ active counts
 quota/billing summary when authorized
 ```
 
-Projection rebuild:
+Snapshot rebuild:
 
-- projections can be rebuilt from durable normalized events plus target/session
+- snapshots can be rebuilt from durable normalized events plus target/session
   records
-- projection code belongs in `cloud/projections/domain/**`
-- projection writes belong in `db/store/cloud_sync/projections.py`
+- session/transcript/config/request snapshot code belongs in
+  `cloud/sessions/domain/rules.py` until promotion is earned
+- snapshot writes belong in `db/store/cloud_sync/sessions.py`,
+  `messages.py`, `tool_calls.py`, `requests.py`, and `config.py`
 - clients should not duplicate event replay logic
 
 ## Credentials And MCP Grants
@@ -1596,7 +1555,7 @@ Runtime binary updates are separate from product configuration updates.
 ```text
 Cloud desired version
   -> worker reports installed version
-  -> worker stages verified artifact
+  -> worker stages signed artifact
   -> worker asks supervisor/platform manager for safe restart
   -> update applies only at safe boundary
   -> worker reports success/failure
@@ -1617,7 +1576,7 @@ Rules:
 
 - do not hot-swap AnyHarness underneath an active turn
 - do not update worker without preserving identity and outbox
-- production updates must use signed, versioned artifacts
+- updates are signed and versioned
 - worker reports installed/staged/desired versions
 - Cloud can pin org/target update channels
 - failed update rolls back or marks target degraded
@@ -1653,14 +1612,14 @@ Event upload duplicate:
 Event upload gap:
 
 - cursor does not advance past gap
-- projection waits or marks sync degraded
+- snapshot update waits or marks sync degraded
 - worker retries outbox/backfill
 
-Cloud projection failure:
+Cloud snapshot update failure:
 
 - event log remains appended
-- projection worker retries
-- clients may see stale projection with sync health warning
+- sessions/live worker retries
+- clients may see stale snapshots with sync health warning
 
 AnyHarness rejects command:
 
@@ -1689,7 +1648,7 @@ command_expired_count
 event_batch_ingest_latency
 event_dedupe_count
 event_gap_count
-projection_apply_latency
+snapshot_apply_latency
 sse_subscriber_count
 target_safe_stop_blocked_count
 ```
@@ -1708,106 +1667,24 @@ Worker logs:
 Do not log raw prompts, secrets, raw tool bodies, or credential material in
 worker or Cloud logs.
 
-## Implementation Phases
+## Execution Plan
 
-Phase 1: Contracts and DB
+The executable migration plan, concrete file paths, phase numbers, and
+mechanical acceptance gates live in
+`docs/architecture/cloud-worker-implementation-phases.md`. This spec remains
+the source of truth for the architecture model and invariants; do not infer
+phase numbering from this document.
 
-- add Cloud DB models/stores/migrations
-- add command/event/projection dataclasses and Pydantic schemas
-- add target registry and enrollment-token API
-- add command enqueue/status API
-- add worker auth skeleton
+If you are about to write code for this migration, read the phases doc next.
 
-Acceptance:
+At a high level, implementation must cover:
 
-- user can create enrollment token
-- command can be queued with idempotency
-- command status can be read
-- target/worker rows can be created in tests
-
-Phase 2: Worker skeleton
-
-- add `proliferate-worker` crate
-- implement config, identity, enrollment, heartbeat
-- implement local AnyHarness health check
-- implement inventory report
-
-Acceptance:
-
-- worker enrolls against local server
-- worker heartbeat updates target status
-- inventory appears in Cloud target snapshot
-
-Phase 3: Command delivery
-
-- implement command lease endpoint
-- implement worker command dispatcher
-- support `send_prompt`, `resolve_interaction`, `update_session_config`,
-  `cancel_turn`
-- map AnyHarness accepted/rejected results to command status
-
-Acceptance:
-
-- web/API command reaches local AnyHarness through worker
-- duplicate idempotency key returns same command
-- stale lease recovers
-
-Phase 4: Event ingest and projections
-
-- implement AnyHarness stream tailer
-- implement worker outbox and batch upload
-- implement Cloud event append/dedupe/cursors
-- implement session/transcript/target projections
-- implement SSE session stream
-
-Acceptance:
-
-- local AnyHarness events appear in Cloud transcript
-- duplicate upload is harmless
-- reconnect resumes from cursor
-- web stream receives transcript/status patches
-
-Phase 5: Backfill and dispatch
-
-- implement sync existing workspace/session
-- implement mapping local ids to cloud ids
-- implement desktop dispatch opt-in path
-- implement initial Slack/mobile/web narrow read model
-
-Acceptance:
-
-- existing local session can become cloud-visible
-- Cloud shows prior transcript after backfill
-- new events continue streaming after backfill
-
-Phase 6: Compute lifecycle
-
-- add activity/safe-stop reporting
-- add stop/hibernate/prune/extend commands
-- integrate managed cloud runtime provisioning
-- enforce default idle/retention policy
-
-Acceptance:
-
-- idle managed workspace stops/prunes according to policy
-- active turn blocks safe stop
-- completed automation terminates after final sync
-
-Phase 7: Updates and hardening
-
-- version reporting
-- desired version reconciliation
-- artifact staging with authenticity verification
-- token rotation/revocation
-- payload caps and blob references
-- audit/billing hooks
-
-Acceptance:
-
-- target version visible in Cloud
-- update status visible
-- revoked worker cannot lease/upload
-- large payloads are truncated or blobbed by policy
+- contract, DB, and SDK foundations
+- target enrollment, worker identity, heartbeat, and inventory
+- command queueing, leasing, dispatch, and status reconciliation
+- direct server-to-AnyHarness command-path migration
+- event ingest, snapshots/read models, live streams, and backfill
+- target config materialization, compute policy, updates, and hardening
 
 ## Verification
 
@@ -1819,7 +1696,7 @@ Server tests:
 - target access policy
 - event dedupe and hash mismatch
 - cursor gap behavior
-- projection rebuild from event log
+- snapshot rebuild from event log
 - payload policy
 - safe-stop policy
 
@@ -1861,7 +1738,7 @@ Manual smoke:
 
 - AnyHarness owns execution truth.
 - Worker is delivery, upload, readiness, activity, and update plumbing.
-- Cloud owns policy, command queueing, event ingest, projections, fanout,
+- Cloud owns policy, command queueing, event ingest, snapshots, fanout,
   credential grants, audit, billing, quotas, and compute lifecycle decisions.
 - Cloud-mediated surfaces never need target credentials or direct AnyHarness
   endpoints.
@@ -1869,7 +1746,7 @@ Manual smoke:
   the same AnyHarness command/event contract.
 - Target differences are expressed as capabilities and readiness, not separate
   session architectures.
-- Cloud stores normalized durable events and projections, not full runtime
+- Cloud stores normalized durable events and snapshots, not full runtime
   databases.
 - Large live streams are not durable by default.
 - Every mutating remote action has a command id, idempotency key, actor,
