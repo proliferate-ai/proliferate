@@ -4503,7 +4503,7 @@ export interface components {
         /** SetDesiredVersionsRequest */
         SetDesiredVersionsRequest: {
             /** Updatechannel */
-            updateChannel?: string | null;
+            updateChannel?: ("stable" | "beta" | "pinned") | null;
             /** Anyharnessversion */
             anyharnessVersion?: string | null;
             /** Workerversion */

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from proliferate.server.cloud.targets.models import CloudTargetDetail
 
+UpdateChannel = Literal["stable", "beta", "pinned"]
+
 
 class SetDesiredVersionsRequest(BaseModel):
-    update_channel: str | None = Field(default=None, alias="updateChannel")
+    update_channel: UpdateChannel | None = Field(default=None, alias="updateChannel")
     anyharness_version: str | None = Field(default=None, alias="anyharnessVersion")
     worker_version: str | None = Field(default=None, alias="workerVersion")
     supervisor_version: str | None = Field(default=None, alias="supervisorVersion")
