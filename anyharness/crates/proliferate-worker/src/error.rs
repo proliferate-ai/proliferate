@@ -37,4 +37,6 @@ pub enum WorkerError {
     WriteConfig { path: PathBuf, source: io::Error },
     #[error("failed to set private permissions on {path}")]
     SetPrivatePermissions { path: PathBuf, source: io::Error },
+    #[error("target materialization failed: {0}")]
+    Materialization(String),
 }

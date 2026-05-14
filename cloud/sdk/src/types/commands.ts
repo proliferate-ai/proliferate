@@ -1,10 +1,12 @@
 export type CloudCommandKind =
   | "start_session"
+  | "materialize_environment"
   | "resume_session"
   | "send_prompt"
   | "resolve_interaction"
   | "update_session_config"
   | "cancel_turn"
+  | "close_session"
   | "cancel_session"
   | "stop_workspace"
   | "hibernate_workspace"

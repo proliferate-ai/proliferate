@@ -230,6 +230,7 @@ CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180
 
 class CloudCommandKind(StrEnum):
     start_session = "start_session"
+    materialize_environment = "materialize_environment"
     resume_session = "resume_session"
     send_prompt = "send_prompt"
     resolve_interaction = "resolve_interaction"
@@ -277,6 +278,7 @@ class CloudCommandSource(StrEnum):
 SUPPORTED_CLOUD_COMMAND_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudCommandKind)
 ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
+    CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
@@ -286,6 +288,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
 )
 DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.start_session.value,
+    CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
@@ -306,3 +309,16 @@ SUPPORTED_CLOUD_COMMAND_SOURCES: tuple[str, ...] = tuple(
 CLOUD_COMMAND_DEFAULT_LEASE_SECONDS: Final = 30
 CLOUD_COMMAND_MAX_LEASE_SECONDS: Final = 300
 CLOUD_COMMAND_MAX_PAYLOAD_BYTES: Final = 262_144
+
+
+class CloudTargetConfigStatus(StrEnum):
+    pending = "pending"
+    queued = "queued"
+    materializing = "materializing"
+    applied = "applied"
+    failed = "failed"
+
+
+SUPPORTED_CLOUD_TARGET_CONFIG_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in CloudTargetConfigStatus
+)

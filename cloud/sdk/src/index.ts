@@ -19,6 +19,7 @@ export * from "./client/repo-configs.js";
 export * from "./client/repos.js";
 export * from "./client/sessions.js";
 export * from "./client/support.js";
+export * from "./client/target-configs.js";
 export * from "./client/targets.js";
 export * from "./client/timing.js";
 export * from "./client/workspaces.js";

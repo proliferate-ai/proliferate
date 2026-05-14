@@ -4,6 +4,7 @@ pub mod commands;
 pub mod events;
 pub mod heartbeat;
 pub mod inventory;
+pub mod target_config;
 
 use std::time::Duration;
 

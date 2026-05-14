@@ -56,6 +56,7 @@ pub struct CommandResultRequest {
 
 pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "start_session",
+    "materialize_environment",
     "send_prompt",
     "resolve_interaction",
     "update_session_config",
