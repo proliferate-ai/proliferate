@@ -228,6 +228,36 @@ async def test_finish_github_desktop_callback_skips_customerio_when_oauth_fails(
 
 
 @pytest.mark.asyncio
+async def test_finish_github_desktop_callback_sanitizes_provider_error_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = object()
+    request = _make_request()
+    user_manager = SimpleNamespace(oauth_callback=AsyncMock())
+
+    monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
+    monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
+
+    response = await desktop_service.finish_github_desktop_callback(
+        db,  # type: ignore[arg-type]
+        request,
+        code=None,
+        state=None,
+        error="invalid_request_<raw-oauth-error>",
+        error_description="refresh-token leaked from provider",
+        desktop_github_csrf=None,
+        user_manager=user_manager,
+    )
+
+    html = response.body.decode()
+    assert response.status_code == 200
+    assert "The browser flow could not be completed" in html
+    assert "raw-oauth-error" not in html
+    assert "refresh-token" not in html
+    user_manager.oauth_callback.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_creation_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

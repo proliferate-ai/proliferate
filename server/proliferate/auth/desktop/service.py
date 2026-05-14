@@ -263,10 +263,9 @@ async def finish_github_desktop_callback(
         )
 
     if error is not None:
-        detail = error_description or error
         return make_browser_flow_page(
             title="GitHub sign-in failed",
-            message=f"The browser flow returned: {detail}",
+            message="The browser flow could not be completed. Start again from Proliferate.",
         )
 
     if code is None or state is None:
