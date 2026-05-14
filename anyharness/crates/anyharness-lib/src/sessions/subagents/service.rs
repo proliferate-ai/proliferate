@@ -415,8 +415,7 @@ impl SubagentService {
         link: &crate::sessions::links::model::SessionLinkRecord,
         closed_at: &str,
     ) -> anyhow::Result<bool> {
-        let _ = self.subagent_store.delete_wake_schedule(&link.id)?;
-        self.link_service.mark_closed(&link.id, closed_at)
+        self.link_service.close_link(&link.id, closed_at)
     }
 
     pub fn delete_wake_schedule_for_link(&self, session_link_id: &str) -> anyhow::Result<bool> {
@@ -557,7 +556,7 @@ impl SubagentService {
             {
                 if session_ids.contains(&link.child_session_id) {
                     links.push(link);
-                } else {
+                } else if link.closed_at.is_none() {
                     blockers.push(link.child_session_id);
                 }
             }
@@ -565,7 +564,7 @@ impl SubagentService {
                 .link_service
                 .list_by_child_including_closed(session_id)?
             {
-                if !session_ids.contains(&link.parent_session_id) {
+                if !session_ids.contains(&link.parent_session_id) && link.closed_at.is_none() {
                     blockers.push(link.parent_session_id);
                 }
             }

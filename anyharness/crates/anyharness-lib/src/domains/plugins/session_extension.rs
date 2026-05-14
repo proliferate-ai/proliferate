@@ -134,6 +134,34 @@ mod tests {
         assert!(extras.system_prompt_append.is_empty());
     }
 
+    #[test]
+    fn product_subagent_skill_requires_standard_subagents_session() {
+        let extension = extension(PluginBundleRegistry::default());
+        let mut workspace = workspace_record();
+        workspace.surface = "standard".to_string();
+        let mut session = session_record();
+        session.subagents_enabled = true;
+
+        let extras = extension
+            .resolve_launch_extras(&SessionLaunchContext {
+                workspace: &workspace,
+                session: &session,
+            })
+            .expect("launch extras should resolve");
+        assert_eq!(extras.mcp_servers.len(), 1);
+        assert!(extras.system_prompt_append[0].contains("proliferate.subagents.workflow"));
+
+        workspace.surface = "cowork".to_string();
+        let extras = extension
+            .resolve_launch_extras(&SessionLaunchContext {
+                workspace: &workspace,
+                session: &session,
+            })
+            .expect("launch extras should resolve");
+        assert!(extras.mcp_servers.is_empty());
+        assert!(extras.system_prompt_append.is_empty());
+    }
+
     fn extension(registry: PluginBundleRegistry) -> PluginSessionLaunchExtension {
         PluginSessionLaunchExtension::new(
             registry,
@@ -283,7 +311,9 @@ impl SessionExtension for PluginSessionLaunchExtension {
             .unwrap_or_else(|| SessionPluginBundle {
                 plugins: Vec::new(),
             });
-        let product_skills = product_skills_for_session(ctx.session.subagents_enabled);
+        let product_skills = product_skills_for_session(
+            ctx.session.subagents_enabled && ctx.workspace.surface == "standard",
+        );
         let bundle = effective_bundle_with_product_skills(stored_bundle, product_skills);
         if bundle.plugins.is_empty() {
             return Ok(SessionLaunchExtras::default());

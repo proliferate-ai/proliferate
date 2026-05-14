@@ -121,16 +121,7 @@ export function renderChatTabDelegatedIndicators(
                 </span>
               )}
               trailing={renderDelegatedIndicatorTrailing(indicator)}
-              disabled={indicator.source === "review"}
-              title={
-                indicator.source === "review"
-                  ? "Review agents are managed by the review run"
-                  : undefined
-              }
               onClick={() => {
-                if (indicator.source === "review") {
-                  return;
-                }
                 close();
                 options.onOpenSession?.(indicator.sessionId);
               }}

@@ -271,10 +271,7 @@ function appendOrderedEffect(
 
 function isSubagentMcpMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__subagents__create_subagent"
-    || nativeToolName === "mcp__subagents__send_subagent_message"
-    || nativeToolName === "mcp__subagents__schedule_subagent_wake"
-    || nativeToolName === "mcp__subagents__close_subagent";
+  return nativeToolName === "mcp__subagents__create_subagent";
 }
 
 function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {

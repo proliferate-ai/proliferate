@@ -68,17 +68,23 @@ pub async fn call_tool(
         }
         "read_subagent_latest_turns" => {
             let args: ReadSubagentLatestTurnsArgs = deserialize_args(arguments)?;
+            let link = service.authorize_target(
+                &ctx.parent_session_id,
+                args.subagent_id.as_deref(),
+                args.child_session_id.as_deref(),
+            )?;
             service
                 .read_latest_turns(
                     &ctx.parent_session_id,
-                    args.subagent_id.as_deref(),
-                    args.child_session_id.as_deref(),
+                    link.public_id.as_deref(),
+                    Some(&link.child_session_id),
                     args.limit,
                 )
                 .map(|turns| {
                     json!({
-                        "subagentId": args.subagent_id,
-                        "childSessionId": args.child_session_id,
+                        "sessionLinkId": link.id,
+                        "subagentId": link.public_id,
+                        "childSessionId": link.child_session_id,
                         "turns": turns.into_iter().map(|turn| json!({
                             "childTurnId": turn.child_turn_id,
                             "outcome": turn.outcome,

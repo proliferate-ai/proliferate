@@ -28,7 +28,7 @@ export interface HeaderDelegatedWorkIndicator {
   initial: string;
   colorClassName: string;
   statusLabel: string;
-  source: "subagent" | "review";
+  source: "subagent" | "review" | "cowork";
 }
 
 export interface HeaderChatMenuEntry {

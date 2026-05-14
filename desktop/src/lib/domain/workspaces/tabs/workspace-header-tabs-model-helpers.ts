@@ -19,7 +19,7 @@ export interface HeaderHierarchyChildRow {
   parentSessionId: string;
   title: string;
   agentKind: string;
-  source: "subagent" | "review";
+  source: "subagent" | "review" | "cowork";
   meta: string | null;
   statusLabel: string;
   wakeScheduled: boolean;

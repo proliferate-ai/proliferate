@@ -66,9 +66,9 @@ pub fn effective_bundle_with_product_skills(
     bundle
 }
 
-pub fn product_skills_for_session(subagents_enabled: bool) -> Vec<SessionPluginSkill> {
+pub fn product_skills_for_session(subagents_workflow_available: bool) -> Vec<SessionPluginSkill> {
     let mut skills = Vec::new();
-    if subagents_enabled {
+    if subagents_workflow_available {
         skills.push(subagents_workflow_skill());
     }
     skills

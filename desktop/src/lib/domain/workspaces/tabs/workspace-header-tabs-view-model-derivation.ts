@@ -84,7 +84,7 @@ export function buildHeaderChatTabs(args: {
 function buildDelegatedIndicators(
   children: readonly HeaderHierarchyChildRow[],
 ): HeaderDelegatedWorkIndicator[] {
-  return children.map((child) => {
+  return [...children].sort(compareDelegatedChildrenForBubbles).map((child) => {
     const identity = delegatedWorkVisualIdentity(child.sessionLinkId || child.sessionId);
     return {
       id: child.sessionLinkId || child.sessionId,
@@ -98,6 +98,22 @@ function buildDelegatedIndicators(
       source: child.source,
     };
   });
+}
+
+function compareDelegatedChildrenForBubbles(
+  left: HeaderHierarchyChildRow,
+  right: HeaderHierarchyChildRow,
+): number {
+  return delegatedBubblePriority(left) - delegatedBubblePriority(right);
+}
+
+function delegatedBubblePriority(child: HeaderHierarchyChildRow): number {
+  if (child.statusLabel === "Failed") return 0;
+  if (child.statusLabel === "Working" || child.statusLabel === "Starting") return 1;
+  if (child.wakeScheduled) return 2;
+  if (child.statusLabel === "Done" || child.statusLabel === "Idle") return 3;
+  if (child.statusLabel === "Closed") return 4;
+  return 5;
 }
 
 export function selectHeaderStripChatSessionIds(

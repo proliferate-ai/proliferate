@@ -75,16 +75,22 @@ impl SessionRuntime {
             .session_link_service
             .list_by_parent(parent_session_id)
             .map_err(SessionLifecycleError::Internal)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        self.session_service
+            .store()
+            .mark_cowork_managed_workspaces_closed_by_parent(parent_session_id, &now)
+            .map_err(SessionLifecycleError::Internal)?;
         for link in links {
             if !matches!(
                 link.relation,
-                SessionLinkRelation::Subagent | SessionLinkRelation::CoworkCodingSession
+                SessionLinkRelation::Subagent
+                    | SessionLinkRelation::CoworkCodingSession
+                    | SessionLinkRelation::ReviewAgent
             ) {
                 continue;
             }
-            let now = chrono::Utc::now().to_rfc3339();
             self.session_link_service
-                .mark_closed(&link.id, &now)
+                .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
             if let Some(child) = self
                 .session_service

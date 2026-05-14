@@ -1228,6 +1228,10 @@ fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> ApiError {
             format!("Session not found: {session_id}"),
             "SESSION_NOT_FOUND",
         ),
+        EnsureLiveSessionError::SessionClosed => ApiError::conflict(
+            "session is closed",
+            "SESSION_CLOSED",
+        ),
         EnsureLiveSessionError::RestartRequired(detail) => {
             ApiError::conflict(detail, "SESSION_RESTART_REQUIRED")
         }
@@ -1261,6 +1265,10 @@ fn map_send_prompt_error(error: SendPromptError) -> ApiError {
         SendPromptError::SessionNotFound(session_id) => ApiError::not_found(
             format!("Session not found: {session_id}"),
             "SESSION_NOT_FOUND",
+        ),
+        SendPromptError::SessionClosed => ApiError::conflict(
+            "session is closed",
+            "SESSION_CLOSED",
         ),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),

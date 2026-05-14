@@ -102,6 +102,89 @@ fn visible_session_lists_exclude_dismissed_and_closed_sessions() {
 }
 
 #[test]
+fn live_state_updates_do_not_reopen_closed_sessions() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let record = session_record();
+    store.insert(&record).expect("insert session");
+    store
+        .mark_closed("session-1", "2026-03-25T03:00:00Z")
+        .expect("close session");
+    store
+        .update_native_session_id("session-1", "native-2", "2026-03-25T04:00:00Z")
+        .expect("ignore native update");
+    store
+        .update_status("session-1", "idle", "2026-03-25T04:00:00Z")
+        .expect("ignore status update");
+    store
+        .mark_closed("session-1", "2026-03-25T05:00:00Z")
+        .expect("repeat close");
+
+    let stored = store
+        .find_by_id("session-1")
+        .expect("find session")
+        .expect("session record");
+    assert_eq!(stored.status, "closed");
+    assert_eq!(stored.native_session_id.as_deref(), Some("native-1"));
+    assert_eq!(stored.closed_at.as_deref(), Some("2026-03-25T03:00:00Z"));
+    assert_eq!(stored.updated_at, "2026-03-25T03:00:00Z");
+}
+
+#[test]
+fn marks_cowork_managed_workspaces_closed_by_parent() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    db.with_conn(|conn| {
+        conn.execute(
+            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+             VALUES ('workspace-2', 'repo', '/tmp/workspace-2', '/tmp/workspace-2', ?1, ?1)",
+            ["2026-03-25T00:00:00Z"],
+        )?;
+        Ok(())
+    })
+    .expect("seed cowork workspace");
+
+    let store = SessionStore::new(db.clone());
+    let record = session_record();
+    store.insert(&record).expect("insert session");
+    db.with_conn(|conn| {
+        conn.execute(
+            "INSERT INTO cowork_managed_workspaces (
+                id, public_id, parent_session_id, workspace_id, source_workspace_id,
+                label, created_at, closed_at
+             ) VALUES (
+                'ownership-1', 'cowork_workspace_1', 'session-1', 'workspace-2',
+                'workspace-1', 'Feature slice', ?1, NULL
+             )",
+            ["2026-03-25T00:00:00Z"],
+        )?;
+        Ok(())
+    })
+    .expect("insert managed workspace");
+
+    let updated = store
+        .mark_cowork_managed_workspaces_closed_by_parent(
+            "session-1",
+            "2026-03-25T04:00:00Z",
+        )
+        .expect("close managed workspaces");
+    let closed_at: Option<String> = db
+        .with_conn(|conn| {
+            conn.query_row(
+                "SELECT closed_at FROM cowork_managed_workspaces WHERE id = 'ownership-1'",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .expect("read closed_at");
+
+    assert_eq!(updated, 1);
+    assert_eq!(closed_at.as_deref(), Some("2026-03-25T04:00:00Z"));
+}
+
+#[test]
 fn mark_dismissed_is_idempotent_and_restore_uses_latest_timestamp() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

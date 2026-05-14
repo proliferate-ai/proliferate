@@ -35,9 +35,11 @@ export function describeToolCallDisplay(
 
   switch (item.semanticKind) {
     case "subagent": {
-      if (normalizedNativeName === "mcp__subagents__schedule_subagent_wake") {
+      const subagentActionLabel =
+        subagentMcpActionLabel(normalizedNativeName || normalizedToolName);
+      if (subagentActionLabel) {
         return {
-          label: "Schedule wake",
+          label: subagentActionLabel,
           hint: "Subagent",
           iconKey: "clipboard-list",
         };
@@ -141,6 +143,27 @@ export function describeToolCallDisplay(
         hint: item.toolKind !== "other" ? item.toolKind : undefined,
         iconKey: "settings",
       };
+  }
+}
+
+function subagentMcpActionLabel(toolName: string): string | null {
+  switch (toolName) {
+    case "mcp__subagents__send_subagent_message":
+      return "Sent subagent message";
+    case "mcp__subagents__schedule_subagent_wake":
+      return "Scheduled subagent wake";
+    case "mcp__subagents__get_subagent_status":
+      return "Checked subagent status";
+    case "mcp__subagents__read_subagent_events":
+      return "Read subagent events";
+    case "mcp__subagents__read_subagent_latest_turns":
+      return "Read subagent turns";
+    case "mcp__subagents__search_subagent_transcript":
+      return "Searched subagent transcript";
+    case "mcp__subagents__close_subagent":
+      return "Closed subagent";
+    default:
+      return null;
   }
 }
 

@@ -377,8 +377,7 @@ impl CoworkDelegationService {
         link: &SessionLinkRecord,
         closed_at: &str,
     ) -> anyhow::Result<bool> {
-        let _ = self.completion_store.delete_wake_schedule(&link.id)?;
-        self.link_service.mark_closed(&link.id, closed_at)
+        self.link_service.close_link(&link.id, closed_at)
     }
 
     pub fn insert_completion_and_consume_schedule(

@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import {
+  anyHarnessCoworkManagedWorkspacesKey,
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
   resolveWorkspaceConnectionFromContext,
@@ -9,6 +10,7 @@ import {
 } from "@anyharness/sdk-react";
 import type {
   ChildSubagentSummary,
+  CoworkManagedWorkspacesResponse,
   ParentSubagentLinkSummary,
   ReviewRunDetail,
   SessionSubagentsResponse,
@@ -25,6 +27,7 @@ import {
 } from "@/lib/domain/reviews/session-relationship-hints";
 import { getSessionSubagents } from "@/lib/access/anyharness/sessions";
 import { listSessionReviews } from "@/lib/access/anyharness/reviews";
+import { getCoworkManagedWorkspaces } from "@/lib/access/anyharness/cowork";
 import {
   collectSubagentSessionRelationshipHints,
   type SubagentSessionRelationshipHint,
@@ -34,7 +37,14 @@ import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-st
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   resolveHierarchyMaterializedSessionId,
+  type HeaderHierarchyChildRow,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+import {
+  buildCoworkChildRows,
+  buildCoworkRelationshipHintSignature,
+  coworkResponseSignature,
+  type HeaderCoworkRelationshipHint,
+} from "@/lib/domain/workspaces/tabs/workspace-header-cowork-hierarchy";
 
 export interface HeaderSubagentParentRow {
   sessionId: string;
@@ -43,18 +53,7 @@ export interface HeaderSubagentParentRow {
   meta: string | null;
 }
 
-export interface HeaderSubagentChildRow {
-  sessionLinkId: string;
-  sessionId: string;
-  parentSessionId: string;
-  title: string;
-  agentKind: string;
-  source: "subagent" | "review";
-  meta: string | null;
-  statusLabel: string;
-  wakeScheduled: boolean;
-  isActive: boolean;
-}
+export type HeaderSubagentChildRow = HeaderHierarchyChildRow;
 
 export interface WorkspaceHeaderSubagentHierarchy {
   childToParent: Map<string, string>;
@@ -108,6 +107,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           return getSessionSubagents(resolved.connection, materializedSessionId, { signal });
         },
         staleTime: 5_000,
+        retry: false,
       };
     }),
   });
@@ -128,6 +128,31 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           return listSessionReviews(resolved.connection, materializedSessionId, { signal });
         },
         staleTime: 2_500,
+      };
+    }),
+  });
+  const coworkQueries = useQueries({
+    queries: uniqueSessionIds.map((sessionId, index) => {
+      const materializedSessionId = materializedSessionIds[index];
+      return {
+        queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, materializedSessionId),
+        enabled: !!args.workspaceId && !!sessionId && !!materializedSessionId,
+        queryFn: async ({ signal }): Promise<CoworkManagedWorkspacesResponse> => {
+          if (!materializedSessionId) {
+            throw new Error("Session is still starting. Try again in a moment.");
+          }
+          const resolved = await resolveWorkspaceConnectionFromContext(
+            workspace,
+            args.workspaceId,
+          );
+          return getCoworkManagedWorkspaces(
+            resolved.connection,
+            materializedSessionId,
+            { signal },
+          );
+        },
+        staleTime: 5_000,
+        retry: false,
       };
     }),
   });
@@ -170,10 +195,36 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [reviewRelationshipHintSignature],
   );
+  const coworkRelationshipHintRows: HeaderCoworkRelationshipHint[] =
+    coworkQueries.flatMap((query, index) => {
+      const parentSessionId = uniqueSessionIds[index];
+      if (!parentSessionId) {
+        return [];
+      }
+      return (query.data?.workspaces ?? []).flatMap((managedWorkspace) =>
+        managedWorkspace.sessions.map((session) => ({
+          sessionId: resolveClientSessionId(session.codingSessionId),
+          parentSessionId,
+          sessionLinkId: session.sessionLinkId,
+          workspaceId: managedWorkspace.workspaceId,
+        }))
+      );
+    });
+  const coworkRelationshipHintSignature =
+    buildCoworkRelationshipHintSignature(coworkRelationshipHintRows);
+  const coworkRelationshipHints = useMemo(
+    () => coworkRelationshipHintRows,
+    // The query result array is intentionally not a dependency: useQueries returns
+    // a new array each render, while this signature only changes when the
+    // relationship hints we record into the store actually change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [coworkRelationshipHintSignature],
+  );
   const hierarchyQuerySignature = buildHierarchyQuerySignature({
     sessionIds: uniqueSessionIds,
     subagentQueries,
     reviewQueries,
+    coworkQueries,
   });
   const hierarchyQueryRows = useMemo(
     () => uniqueSessionIds.map((sessionId, index) => ({
@@ -182,6 +233,8 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       subagentData: subagentQueries[index]?.data ?? null,
       reviewSuccess: reviewQueries[index]?.isSuccess === true,
       reviewData: reviewQueries[index]?.data ?? null,
+      coworkSuccess: coworkQueries[index]?.isSuccess === true,
+      coworkData: coworkQueries[index]?.data ?? null,
     })),
     // useQueries returns new wrapper arrays every render. The signature captures
     // the response fields that affect the header hierarchy model.
@@ -213,10 +266,28 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     }
   }, [args.workspaceId, recordSessionRelationshipHint, reviewRelationshipHints]);
 
+  useEffect(() => {
+    for (const hint of coworkRelationshipHints) {
+      recordSessionRelationshipHint(hint.sessionId, {
+        kind: "cowork_child",
+        parentSessionId: hint.parentSessionId,
+        sessionLinkId: hint.sessionLinkId,
+        relation: "cowork_coding_session",
+        workspaceId: hint.workspaceId,
+      });
+    }
+  }, [coworkRelationshipHints, recordSessionRelationshipHint]);
+
   return useMemo(() => measureDebugComputation({
     category: "header_subagent_hierarchy.derive",
     label: "build_hierarchy",
-    keys: ["activeSessionId", "subagentQueries", "reviewQueries", "uniqueSessionIds"],
+    keys: [
+      "activeSessionId",
+      "subagentQueries",
+      "reviewQueries",
+      "coworkQueries",
+      "uniqueSessionIds",
+    ],
     count: (hierarchy) => hierarchy.resolvedSessionIds.size,
   }, () => {
     const childToParent = new Map<string, string>();
@@ -274,6 +345,20 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
           childToParent.set(child.sessionId, sessionId);
         }
       }
+
+      if (row.coworkSuccess) {
+        resolvedSessionIds.add(sessionId);
+      }
+      const coworkChildren = row.coworkData
+        ? buildCoworkChildRows(row.coworkData.workspaces, sessionId, resolveClientSessionId)
+        : [];
+      if (coworkChildren.length > 0) {
+        const existing = childrenByParentSessionId.get(sessionId) ?? [];
+        childrenByParentSessionId.set(sessionId, [...existing, ...coworkChildren]);
+        for (const child of coworkChildren) {
+          childToParent.set(child.sessionId, sessionId);
+        }
+      }
     }
 
     return {
@@ -292,6 +377,7 @@ function buildHierarchyQuerySignature({
   sessionIds,
   subagentQueries,
   reviewQueries,
+  coworkQueries,
 }: {
   sessionIds: readonly string[];
   subagentQueries: readonly {
@@ -302,6 +388,10 @@ function buildHierarchyQuerySignature({
     data?: SessionReviewsResponse;
     isSuccess: boolean;
   }[];
+  coworkQueries: readonly {
+    data?: CoworkManagedWorkspacesResponse;
+    isSuccess: boolean;
+  }[];
 }): string {
   return sessionIds.map((sessionId, index) => [
     sessionId,
@@ -309,6 +399,8 @@ function buildHierarchyQuerySignature({
     subagentResponseSignature(subagentQueries[index]?.data),
     reviewQueries[index]?.isSuccess ? "reviews:ok" : "reviews:pending",
     reviewResponseSignature(reviewQueries[index]?.data),
+    coworkQueries[index]?.isSuccess ? "cowork:ok" : "cowork:pending",
+    coworkResponseSignature(coworkQueries[index]?.data),
   ].join("\u001f")).join("\u001e");
 }
 
@@ -458,7 +550,7 @@ function buildSubagentRelationshipHintSignature(
     .join("|");
 }
 
-function formatSessionStatus(status: ChildSubagentSummary["status"]): string {
+function formatSessionStatus(status: string): string {
   switch (status) {
     case "running":
       return "Working";
@@ -472,5 +564,7 @@ function formatSessionStatus(status: ChildSubagentSummary["status"]): string {
       return "Starting";
     case "closed":
       return "Closed";
+    default:
+      return status;
   }
 }

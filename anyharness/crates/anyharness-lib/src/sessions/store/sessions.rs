@@ -165,7 +165,9 @@ impl SessionStore {
     pub fn update_status(&self, id: &str, status: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
-                "UPDATE sessions SET status = ?1, updated_at = ?2 WHERE id = ?3",
+                "UPDATE sessions
+                 SET status = ?1, updated_at = ?2
+                 WHERE id = ?3 AND closed_at IS NULL",
                 params![status, now, id],
             )?;
             Ok(())
@@ -180,7 +182,9 @@ impl SessionStore {
     ) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
-                "UPDATE sessions SET native_session_id = ?1, updated_at = ?2 WHERE id = ?3",
+                "UPDATE sessions
+                 SET native_session_id = ?1, updated_at = ?2
+                 WHERE id = ?3 AND closed_at IS NULL",
                 params![native_session_id, now, id],
             )?;
             Ok(())
@@ -256,10 +260,30 @@ impl SessionStore {
     pub fn mark_closed(&self, id: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
-                "UPDATE sessions SET status = 'closed', closed_at = ?1, updated_at = ?1 WHERE id = ?2",
+                "UPDATE sessions
+                 SET status = 'closed',
+                     closed_at = COALESCE(closed_at, ?1),
+                     updated_at = CASE WHEN closed_at IS NULL THEN ?1 ELSE updated_at END
+                 WHERE id = ?2",
                 params![now, id],
             )?;
             Ok(())
+        })
+    }
+
+    pub fn mark_cowork_managed_workspaces_closed_by_parent(
+        &self,
+        parent_session_id: &str,
+        closed_at: &str,
+    ) -> anyhow::Result<usize> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE cowork_managed_workspaces
+                 SET closed_at = COALESCE(closed_at, ?1)
+                 WHERE parent_session_id = ?2",
+                params![closed_at, parent_session_id],
+            )
+            .map_err(Into::into)
         })
     }
 

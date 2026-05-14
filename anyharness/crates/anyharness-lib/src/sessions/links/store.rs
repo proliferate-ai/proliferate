@@ -127,6 +127,22 @@ impl SessionLinkStore {
         })
     }
 
+    pub fn close_link(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "DELETE FROM session_link_wake_schedules WHERE session_link_id = ?1",
+                [id],
+            )?;
+            let updated = conn.execute(
+                "UPDATE session_links
+                 SET closed_at = COALESCE(closed_at, ?1)
+                 WHERE id = ?2",
+                params![closed_at, id],
+            )?;
+            Ok(updated > 0)
+        })
+    }
+
     pub fn delete_by_id(&self, id: &str) -> anyhow::Result<bool> {
         self.db.with_conn(|conn| {
             let deleted = conn.execute("DELETE FROM session_links WHERE id = ?1", [id])?;

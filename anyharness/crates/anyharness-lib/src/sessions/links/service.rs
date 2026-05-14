@@ -269,8 +269,8 @@ impl SessionLinkService {
         self.store.find_by_public_id(public_id)
     }
 
-    pub fn mark_closed(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
-        self.store.mark_closed(id, closed_at)
+    pub fn close_link(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
+        self.store.close_link(id, closed_at)
     }
 
     pub fn delete_link(&self, id: &str) -> anyhow::Result<bool> {
@@ -500,7 +500,7 @@ mod tests {
             .expect("create link");
 
         service
-            .mark_closed(&link.id, "2026-03-25T00:02:00Z")
+            .close_link(&link.id, "2026-03-25T00:02:00Z")
             .expect("mark closed");
 
         assert!(service
