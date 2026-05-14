@@ -235,6 +235,7 @@ class CloudCommandKind(StrEnum):
     resolve_interaction = "resolve_interaction"
     update_session_config = "update_session_config"
     cancel_turn = "cancel_turn"
+    close_session = "close_session"
     cancel_session = "cancel_session"
     stop_workspace = "stop_workspace"
     hibernate_workspace = "hibernate_workspace"
@@ -274,12 +275,15 @@ class CloudCommandSource(StrEnum):
 
 
 SUPPORTED_CLOUD_COMMAND_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudCommandKind)
-PHASE3_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
+ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
+    CloudCommandKind.start_session.value,
     CloudCommandKind.send_prompt.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,
+    CloudCommandKind.close_session.value,
 )
+PHASE3_CLOUD_COMMAND_KINDS: tuple[str, ...] = ACTIVE_CLOUD_COMMAND_KINDS
 SUPPORTED_CLOUD_COMMAND_STATUSES: tuple[str, ...] = tuple(
     status.value for status in CloudCommandStatus
 )

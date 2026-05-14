@@ -55,10 +55,12 @@ pub struct CommandResultRequest {
 }
 
 pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
+    "start_session",
     "send_prompt",
     "resolve_interaction",
     "update_session_config",
     "cancel_turn",
+    "close_session",
 ];
 
 impl CloudClient {

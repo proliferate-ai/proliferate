@@ -149,6 +149,34 @@ async def get_command_by_idempotency(
     return _snapshot(row) if row is not None else None
 
 
+async def expire_command_if_not_terminal(
+    db: AsyncSession,
+    *,
+    command_id: UUID,
+    error_code: str | None,
+    error_message: str | None,
+    now: datetime,
+) -> CloudCommandSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudCommand)
+            .where(CloudCommand.id == command_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    if _is_terminal_status(row.status):
+        return _snapshot(row)
+    row.status = CloudCommandStatus.expired.value
+    row.expired_at = now
+    row.error_code = error_code
+    row.error_message = error_message
+    row.updated_at = now
+    await db.flush()
+    return _snapshot(row)
+
+
 async def lease_next_command(
     db: AsyncSession,
     *,

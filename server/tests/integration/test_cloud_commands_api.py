@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.e2e.cloud.helpers.auth import AuthSession, create_user_and_login
+from proliferate.constants.cloud import CloudWorkspaceStatus
+from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
+from tests.e2e.cloud.helpers.auth import create_user_and_login
+from tests.e2e.cloud.helpers.shared import AuthSession
 
 
 async def _create_enrolled_target(
@@ -36,6 +41,42 @@ async def _create_enrolled_target(
     assert worker_enroll.status_code == 200
     worker = worker_enroll.json()
     return enrollment["target"]["id"], {"Authorization": f"Bearer {worker['workerToken']}"}
+
+
+async def _create_ready_cloud_workspace(
+    db_session: AsyncSession,
+    auth: AuthSession,
+    *,
+    target_id: str,
+    anyharness_workspace_id: str = "workspace-1",
+) -> str:
+    workspace = await cloud_workspaces.create_cloud_workspace_record(
+        db_session,
+        user_id=UUID(auth.user_id),
+        display_name="Command Workspace",
+        git_provider="github",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        git_branch="main",
+        git_base_branch="main",
+        origin_json=None,
+        template_version="test",
+        commit=False,
+    )
+    workspace.status = CloudWorkspaceStatus.ready.value
+    workspace.anyharness_workspace_id = anyharness_workspace_id
+    runtime_environment = await cloud_runtime_environments.get_runtime_environment_for_workspace(
+        db_session,
+        workspace,
+    )
+    assert runtime_environment is not None
+    await cloud_runtime_environments.attach_target_to_runtime_environment(
+        db_session,
+        runtime_environment_id=runtime_environment.id,
+        target_id=UUID(target_id),
+    )
+    await db_session.commit()
+    return str(workspace.id)
 
 
 class TestCloudCommandsApi:
@@ -135,6 +176,127 @@ class TestCloudCommandsApi:
         )
         assert duplicate_result.status_code == 200
         assert duplicate_result.json()["status"] == "accepted"
+
+    @pytest.mark.asyncio
+    async def test_start_session_command_requires_workspace_not_session(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-start-session",
+        )
+        target_id, worker_headers = await _create_enrolled_target(client, auth)
+        cloud_workspace_id = await _create_ready_cloud_workspace(
+            db_session,
+            auth,
+            target_id=target_id,
+            anyharness_workspace_id="workspace-1",
+        )
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "start-session-1",
+                "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {"agentKind": "codex"},
+                "source": "automation",
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["start_session"], "leaseTimeoutSeconds": 30},
+        )
+        assert lease.status_code == 200
+        leased_command = lease.json()["command"]
+        assert leased_command["commandId"] == command_id
+        assert leased_command["sessionId"] is None
+        assert leased_command["workspaceId"] == "workspace-1"
+        assert leased_command["payload"]["workspaceId"] == "workspace-1"
+
+        missing_workspace = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "start-session-missing-workspace",
+                "targetId": target_id,
+                "kind": "start_session",
+                "payload": {"agentKind": "codex"},
+            },
+        )
+        assert missing_workspace.status_code == 400
+        assert missing_workspace.json()["detail"]["code"] == "cloud_command_workspace_required"
+
+        arbitrary_workspace = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "start-session-arbitrary-workspace",
+                "targetId": target_id,
+                "workspaceId": "workspace-1",
+                "kind": "start_session",
+                "payload": {"agentKind": "codex"},
+            },
+        )
+        assert arbitrary_workspace.status_code == 404
+        assert arbitrary_workspace.json()["detail"]["code"] == "cloud_command_workspace_not_found"
+
+    @pytest.mark.asyncio
+    async def test_close_session_command_requires_session(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-close-session",
+        )
+        target_id, worker_headers = await _create_enrolled_target(client, auth)
+
+        missing_session = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "close-session-missing-session",
+                "targetId": target_id,
+                "kind": "close_session",
+                "payload": {},
+            },
+        )
+        assert missing_session.status_code == 400
+        assert missing_session.json()["detail"]["code"] == "cloud_command_session_required"
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "close-session-1",
+                "targetId": target_id,
+                "sessionId": "session-1",
+                "kind": "close_session",
+                "payload": {},
+            },
+        )
+        assert created.status_code == 200
+        command_id = created.json()["commandId"]
+
+        lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={"supportedKinds": ["close_session"], "leaseTimeoutSeconds": 30},
+        )
+        assert lease.status_code == 200
+        assert lease.json()["command"]["commandId"] == command_id
 
     @pytest.mark.asyncio
     async def test_stale_command_lease_can_be_recovered(
@@ -327,9 +489,9 @@ class TestCloudCommandsApi:
             "/v1/cloud/commands",
             headers=auth.headers,
             json={
-                "idempotencyKey": "start-session-not-yet",
+                "idempotencyKey": "unsupported-command-kind",
                 "targetId": target_id,
-                "kind": "start_session",
+                "kind": "archive_session",
                 "payload": {},
             },
         )

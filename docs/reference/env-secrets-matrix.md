@@ -169,6 +169,7 @@ env overrides.
 | Variable | Secret | Required | Used for |
 | --- | --- | --- | --- |
 | `CLOUD_RUNTIME_SOURCE_BINARY_PATH` | No | No | Override path for the Linux AnyHarness binary uploaded into cloud sandboxes |
+| `CLOUD_WORKER_SOURCE_BINARY_PATH` | No | No | Override path for the Linux Proliferate Worker binary uploaded into cloud sandboxes |
 | `CLOUD_RUNTIME_SENTRY_DSN` | Yes | No | Remote AnyHarness Sentry DSN |
 | `CLOUD_RUNTIME_SENTRY_ENVIRONMENT` | No | No | Remote AnyHarness Sentry environment |
 | `CLOUD_RUNTIME_SENTRY_RELEASE` | No | No | Remote AnyHarness Sentry release |

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 
 from proliferate.constants.cloud import (
+    ACTIVE_CLOUD_COMMAND_KINDS,
     CLOUD_COMMAND_MAX_PAYLOAD_BYTES,
-    PHASE3_CLOUD_COMMAND_KINDS,
     SUPPORTED_CLOUD_COMMAND_SOURCES,
     CloudCommandKind,
     CloudCommandSource,
@@ -14,8 +14,8 @@ from proliferate.constants.cloud import (
 from proliferate.server.cloud.errors import CloudApiError
 
 
-def validate_phase3_command_kind(kind: str) -> str:
-    if kind not in PHASE3_CLOUD_COMMAND_KINDS:
+def validate_active_command_kind(kind: str) -> str:
+    if kind not in ACTIVE_CLOUD_COMMAND_KINDS:
         raise CloudApiError(
             "cloud_command_kind_unsupported",
             f"Cloud command kind is not supported yet: {kind}",
@@ -39,14 +39,22 @@ def validate_command_source(source: str | None) -> str:
 def validate_command_shape(
     *,
     kind: str,
+    workspace_id: str | None,
     session_id: str | None,
     preconditions: dict[str, object] | None,
 ) -> None:
+    if kind == CloudCommandKind.start_session.value and not workspace_id:
+        raise CloudApiError(
+            "cloud_command_workspace_required",
+            f"Cloud command kind requires workspaceId: {kind}",
+            status_code=400,
+        )
     if kind in {
         CloudCommandKind.send_prompt.value,
         CloudCommandKind.resolve_interaction.value,
         CloudCommandKind.update_session_config.value,
         CloudCommandKind.cancel_turn.value,
+        CloudCommandKind.close_session.value,
     } and not session_id:
         raise CloudApiError(
             "cloud_command_session_required",

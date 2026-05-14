@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.db.store.automation_run_claim_transitions import (
@@ -10,6 +11,10 @@ from proliferate.db.store.automation_run_claim_transitions import (
     mark_run_provisioning_workspace,
 )
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
+from proliferate.db.store.automation_run_claims import (
+    ClaimTransitionRule as StoreClaimTransitionRule,
+)
+from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.automations.domain.claim_lifecycle import (
@@ -33,6 +38,10 @@ from proliferate.utils.time import utcnow
 logger = logging.getLogger("proliferate.server.automations.worker.cloud_executor")
 
 
+def _store_transition(rule: object) -> StoreClaimTransitionRule:
+    return cast(StoreClaimTransitionRule, rule)
+
+
 async def create_or_load_workspace(
     claim: AutomationRunClaimValue,
     *,
@@ -42,7 +51,7 @@ async def create_or_load_workspace(
         run_id=claim.id,
         claim_id=claim.claim_id,
         now=utcnow(),
-        transition=CREATING_WORKSPACE_TRANSITION,
+        transition=_store_transition(CREATING_WORKSPACE_TRANSITION),
         claim_is_active=claim_is_active,
     )
     if current is None:
@@ -82,7 +91,7 @@ async def provision_workspace_for_claim(
         run_id=claim.id,
         claim_id=claim.claim_id,
         now=utcnow(),
-        transition=provisioning_workspace_transition(claim.execution_target),
+        transition=_store_transition(provisioning_workspace_transition(claim.execution_target)),
         claim_is_active=claim_is_active,
     )
     if current is None or current.cloud_workspace_id is None:
@@ -93,7 +102,9 @@ async def provision_workspace_for_claim(
         and workspace.status == CloudWorkspaceStatus.ready.value
         and workspace.anyharness_workspace_id
     ):
-        return await require_current_claim(current)
+        runtime_environment = await load_runtime_environment_for_workspace(workspace)
+        if runtime_environment is not None and runtime_environment.target_id is not None:
+            return await require_current_claim(current)
     try:
         await provision_workspace(current.cloud_workspace_id)
     except Exception:
