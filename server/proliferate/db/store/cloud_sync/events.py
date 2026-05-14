@@ -16,6 +16,7 @@ from proliferate.db.models.cloud.sync import (
     CloudPendingInteraction,
     CloudSessionEvent,
     CloudSessionProjection,
+    CloudSyncedWorkspace,
     CloudTranscriptItem,
 )
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -217,6 +218,16 @@ async def resolve_cloud_workspace_id(
 ) -> UUID | None:
     if not workspace_id:
         return None
+    synced_row = (
+        await db.execute(
+            select(CloudSyncedWorkspace.cloud_workspace_id)
+            .where(CloudSyncedWorkspace.target_id == target_id)
+            .where(CloudSyncedWorkspace.workspace_id == workspace_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if synced_row is not None:
+        return synced_row
     row = (
         await db.execute(
             select(CloudWorkspace.id)
@@ -597,6 +608,33 @@ async def resolve_pending_interaction(
     return _interaction_snapshot(row)
 
 
+async def resolve_missing_pending_interactions(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+    active_request_ids: tuple[str, ...],
+    seq: int,
+    occurred_at: str | None,
+) -> None:
+    query = (
+        select(CloudPendingInteraction)
+        .where(CloudPendingInteraction.target_id == target_id)
+        .where(CloudPendingInteraction.session_id == session_id)
+        .where(CloudPendingInteraction.status == "pending")
+    )
+    if active_request_ids:
+        query = query.where(CloudPendingInteraction.request_id.not_in(active_request_ids))
+    rows = (await db.execute(query)).scalars()
+    now = utcnow()
+    for row in rows:
+        row.status = "resolved"
+        row.resolved_seq = seq
+        row.resolved_at = occurred_at
+        row.updated_at = now
+    await db.flush()
+
+
 async def get_session_projection(
     db: AsyncSession,
     *,
@@ -627,6 +665,30 @@ async def get_session_projection_by_session_id(
         )
     ).scalar_one_or_none()
     return _session_snapshot(row) if row is not None else None
+
+
+async def list_session_projections(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    cloud_workspace_id: UUID | None = None,
+    workspace_id: str | None = None,
+    limit: int = 100,
+) -> tuple[CloudSessionProjectionSnapshot, ...]:
+    query = select(CloudSessionProjection).where(CloudSessionProjection.target_id == target_id)
+    if cloud_workspace_id is not None:
+        query = query.where(CloudSessionProjection.cloud_workspace_id == cloud_workspace_id)
+    if workspace_id is not None:
+        query = query.where(CloudSessionProjection.workspace_id == workspace_id)
+    rows = (
+        await db.execute(
+            query.order_by(
+                CloudSessionProjection.updated_at.desc(),
+                CloudSessionProjection.last_event_seq.desc(),
+            ).limit(limit)
+        )
+    ).scalars()
+    return tuple(_session_snapshot(row) for row in rows)
 
 
 async def list_transcript_items(

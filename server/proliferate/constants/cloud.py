@@ -282,8 +282,17 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,
     CloudCommandKind.close_session.value,
+    CloudCommandKind.sync_existing_workspace.value,
 )
-PHASE3_CLOUD_COMMAND_KINDS: tuple[str, ...] = ACTIVE_CLOUD_COMMAND_KINDS
+DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
+    CloudCommandKind.start_session.value,
+    CloudCommandKind.send_prompt.value,
+    CloudCommandKind.resolve_interaction.value,
+    CloudCommandKind.update_session_config.value,
+    CloudCommandKind.cancel_turn.value,
+    CloudCommandKind.close_session.value,
+)
+PHASE3_CLOUD_COMMAND_KINDS: tuple[str, ...] = DEFAULT_CLOUD_WORKER_COMMAND_KINDS
 SUPPORTED_CLOUD_COMMAND_STATUSES: tuple[str, ...] = tuple(
     status.value for status in CloudCommandStatus
 )

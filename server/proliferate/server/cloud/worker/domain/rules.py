@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from proliferate.constants.cloud import (
+    ACTIVE_CLOUD_COMMAND_KINDS,
     CLOUD_COMMAND_DEFAULT_LEASE_SECONDS,
     CLOUD_COMMAND_MAX_LEASE_SECONDS,
     PHASE3_CLOUD_COMMAND_KINDS,
@@ -49,7 +50,7 @@ def compact_json(value: dict[str, object] | None) -> str | None:
 def normalize_supported_command_kinds(supported_kinds: list[str]) -> tuple[str, ...]:
     if not supported_kinds:
         return PHASE3_CLOUD_COMMAND_KINDS
-    filtered = tuple(kind for kind in supported_kinds if kind in PHASE3_CLOUD_COMMAND_KINDS)
+    filtered = tuple(kind for kind in supported_kinds if kind in ACTIVE_CLOUD_COMMAND_KINDS)
     if not filtered:
         raise CloudApiError(
             "cloud_worker_command_kinds_unsupported",

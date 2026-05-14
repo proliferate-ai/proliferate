@@ -1,3 +1,4 @@
+pub mod backfill;
 pub mod events;
 pub mod health;
 pub mod sessions;

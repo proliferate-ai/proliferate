@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from proliferate.server.cloud.backfill.api import router as backfill_router
 from proliferate.server.cloud.commands.api import router as commands_router
 from proliferate.server.cloud.credentials.api import router as credentials_router
 from proliferate.server.cloud.events.api import router as events_router
@@ -33,4 +34,5 @@ router.include_router(webhooks_router)
 router.include_router(targets_router)
 router.include_router(commands_router)
 router.include_router(events_router)
+router.include_router(backfill_router)
 router.include_router(worker_router)
