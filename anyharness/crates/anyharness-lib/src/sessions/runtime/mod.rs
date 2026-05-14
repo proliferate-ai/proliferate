@@ -17,6 +17,7 @@ use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plugins::registry::PluginBundleRegistry;
+use crate::domains::reviews::service::ReviewService;
 use crate::sessions::extensions::SessionExtension;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -47,6 +48,7 @@ pub struct SessionRuntime {
     plugin_bundle_registry: PluginBundleRegistry,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
+    review_service: Arc<ReviewService>,
 }
 
 #[derive(Debug)]
@@ -242,6 +244,7 @@ impl SessionRuntime {
         plugin_bundle_registry: PluginBundleRegistry,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
+        review_service: Arc<ReviewService>,
     ) -> Self {
         Self {
             session_service,
@@ -255,6 +258,7 @@ impl SessionRuntime {
             plugin_bundle_registry,
             access_gate,
             plan_service,
+            review_service,
         }
     }
 }

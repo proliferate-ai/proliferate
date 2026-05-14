@@ -80,6 +80,11 @@ impl SessionRuntime {
             .store()
             .mark_cowork_managed_workspaces_closed_by_parent(parent_session_id, &now)
             .map_err(SessionLifecycleError::Internal)?;
+        let review_session_ids = self
+            .review_service
+            .stop_active_run_for_parent(parent_session_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
+        let mut closed_child_session_ids = std::collections::HashSet::new();
         for link in links {
             if !matches!(
                 link.relation,
@@ -92,16 +97,26 @@ impl SessionRuntime {
             self.session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
-            if let Some(child) = self
-                .session_service
-                .store()
-                .find_by_id(&link.child_session_id)
-                .map_err(SessionLifecycleError::Internal)?
-            {
-                if child.closed_at.is_none() {
-                    self.close_session_actor_and_mark_closed(&link.child_session_id)
-                        .await?;
-                }
+            self.close_session_if_open(&link.child_session_id).await?;
+            closed_child_session_ids.insert(link.child_session_id);
+        }
+        for session_id in review_session_ids {
+            if closed_child_session_ids.insert(session_id.clone()) {
+                self.close_session_if_open(&session_id).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn close_session_if_open(&self, session_id: &str) -> Result<(), SessionLifecycleError> {
+        if let Some(child) = self
+            .session_service
+            .store()
+            .find_by_id(session_id)
+            .map_err(SessionLifecycleError::Internal)?
+        {
+            if child.closed_at.is_none() {
+                self.close_session_actor_and_mark_closed(session_id).await?;
             }
         }
         Ok(())

@@ -451,6 +451,20 @@ impl ReviewService {
         self.store.stop_run(run_id).map_err(ReviewError::Internal)
     }
 
+    pub fn stop_active_run_for_parent(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<Vec<String>, ReviewError> {
+        let Some(run) = self
+            .store
+            .find_active_run_for_parent(parent_session_id)
+            .map_err(ReviewError::Internal)?
+        else {
+            return Ok(Vec::new());
+        };
+        self.stop_run(&run.id)
+    }
+
     pub(crate) fn delete_unlaunched_reviewer_session(
         &self,
         session_id: &str,

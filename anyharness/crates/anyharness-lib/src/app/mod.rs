@@ -265,6 +265,7 @@ impl AppState {
             plugin_bundle_registry.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
+            review_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
