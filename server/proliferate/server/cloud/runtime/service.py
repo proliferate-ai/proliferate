@@ -140,6 +140,7 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         workspace_id=workspace.id,
     )
     return RuntimeConnectionTarget(
+        target_id=reloaded_environment.target_id,
         runtime_url=runtime_url,
         access_token=access_token,
         anyharness_workspace_id=reloaded_workspace.anyharness_workspace_id,

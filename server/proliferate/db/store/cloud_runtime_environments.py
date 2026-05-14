@@ -96,6 +96,21 @@ async def get_runtime_environment_by_id(
     return await db.get(CloudRuntimeEnvironment, runtime_environment_id)
 
 
+async def attach_target_to_runtime_environment(
+    db: AsyncSession,
+    *,
+    runtime_environment_id: UUID,
+    target_id: UUID,
+) -> CloudRuntimeEnvironment | None:
+    environment = await get_runtime_environment_by_id(db, runtime_environment_id)
+    if environment is None:
+        return None
+    environment.target_id = target_id
+    environment.updated_at = utcnow()
+    await db.flush()
+    return environment
+
+
 async def get_runtime_environment_for_workspace(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -205,6 +220,7 @@ async def persist_runtime_environment_state(
     root_anyharness_workspace_id: str | None | object = _UNSET,
     root_anyharness_repo_root_id: str | None | object = _UNSET,
     active_sandbox_id: UUID | None | object = _UNSET,
+    target_id: UUID | None | object = _UNSET,
     increment_runtime_generation: bool = False,
     credential_files_applied_revision: str | None | object = _UNSET,
     credential_files_applied_at: datetime | None | object = _UNSET,
@@ -229,6 +245,8 @@ async def persist_runtime_environment_state(
         environment.root_anyharness_repo_root_id = root_anyharness_repo_root_id
     if active_sandbox_id is not _UNSET:
         environment.active_sandbox_id = active_sandbox_id
+    if target_id is not _UNSET:
+        environment.target_id = target_id
     if credential_files_applied_revision is not _UNSET:
         environment.credential_files_applied_revision = credential_files_applied_revision
     if credential_files_applied_at is not _UNSET:

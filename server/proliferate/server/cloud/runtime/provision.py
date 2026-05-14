@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import logging
 import secrets
+import shlex
 import time
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
+from typing import cast
 from uuid import UUID
 
 from proliferate.config import settings
@@ -49,7 +52,7 @@ from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.session_loader import load_cloud_credentials_for_user
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.repos.service import get_linked_github_account
+from proliferate.server.cloud.repos.service import CloudRepoUserLike, get_linked_github_account
 from proliferate.server.cloud.runtime.anyharness_api import (
     prepare_remote_mobility_destination,
     reconcile_remote_agents,
@@ -58,12 +61,17 @@ from proliferate.server.cloud.runtime.anyharness_api import (
     wait_for_runtime_health,
 )
 from proliferate.server.cloud.runtime.bootstrap import (
+    build_detached_worker_launch_command,
     build_runtime_env,
     build_runtime_launch_script,
+    build_worker_config,
     check_binary_preinstalled,
     check_node_runtime,
+    check_worker_binary_preinstalled,
     install_node_runtime,
     stage_runtime_binary,
+    stage_worker_binary,
+    worker_config_path,
 )
 from proliferate.server.cloud.runtime.credential_freshness import (
     build_credential_revision_state,
@@ -105,6 +113,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
     runtime_launcher_path,
 )
+from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
 from proliferate.server.cloud.runtime.worktree_policy_sync import (
     sync_cloud_worktree_policy_to_runtime,
 )
@@ -192,12 +201,19 @@ async def _load_provision_input(
             runtime_environment.id,
             anyharness_data_key_ciphertext=encrypt_text(generate_anyharness_data_key()),
         )
+    anyharness_data_key_ciphertext = runtime_environment.anyharness_data_key_ciphertext
+    if anyharness_data_key_ciphertext is None:
+        raise CloudApiError(
+            "runtime_data_key_required",
+            "Cloud runtime data key could not be prepared.",
+            status_code=500,
+        )
 
     user = await load_user_with_oauth_accounts_by_id(workspace.user_id)
     if user is None:
         return None
 
-    github_account = get_linked_github_account(user)
+    github_account = get_linked_github_account(cast(CloudRepoUserLike, user))
     github_token = getattr(github_account, "access_token", None) if github_account else None
     if not github_token:
         raise CloudApiError(
@@ -222,7 +238,13 @@ async def _load_provision_input(
         git_repo_name=workspace.git_repo_name,
     )
 
-    repo_configured = repo_config is not None and repo_config.configured
+    if repo_config is not None and repo_config.configured:
+        repo_env_vars = repo_config.env_vars
+        repo_env_version = repo_config.env_vars_version
+    else:
+        repo_env_vars = {}
+        repo_env_version = 0
+
     return CloudProvisionInput(
         workspace_id=workspace.id,
         runtime_environment_id=runtime_environment.id,
@@ -234,18 +256,30 @@ async def _load_provision_input(
         github_token=str(github_token),
         git_user_name=git_user_name,
         git_user_email=git_user_email,
-        anyharness_data_key=decrypt_text(runtime_environment.anyharness_data_key_ciphertext),
+        anyharness_data_key=decrypt_text(anyharness_data_key_ciphertext),
         credentials=credential_revision_state.credentials,
         credential_files_revision=credential_revision_state.files_revision,
         credential_process_revision=credential_revision_state.process_revision,
-        repo_env_vars=repo_config.env_vars if repo_configured else {},
-        repo_env_version=repo_config.env_vars_version if repo_configured else 0,
+        repo_env_vars=repo_env_vars,
+        repo_env_version=repo_env_version,
         requested_base_sha=requested_base_sha,
     )
 
 
 def _emit_cloud_event(message: str, payload: dict[str, object]) -> None:
     log_cloud_event(message, **payload)  # type: ignore[arg-type]
+
+
+def _cloud_base_url() -> str:
+    for candidate in (
+        settings.api_base_url,
+        settings.cloud_mcp_oauth_callback_base_url,
+        settings.cloud_mcp_oauth_callback_fallback_base_url,
+    ):
+        normalized = candidate.strip().rstrip("/")
+        if normalized:
+            return normalized
+    return "http://localhost:8000"
 
 
 async def _set_workspace_status(
@@ -533,6 +567,86 @@ async def _prepare_runtime_template(
     #         tracker.complete(rust_version=installed_rust_version)
 
 
+async def _launch_worker_bridge(
+    tracker: _StepTracker,
+    ctx: CloudProvisionInput,
+    provider: SandboxProvider,
+    connected: ConnectedSandbox,
+    *,
+    runtime_url: str,
+    runtime_token: str,
+) -> None:
+    enrollment = await ensure_runtime_target_enrollment(
+        runtime_environment_id=ctx.runtime_environment_id,
+        user_id=ctx.user_id,
+        display_name=f"Managed cloud: {ctx.repo_label}",
+    )
+    if enrollment is None:
+        raise RuntimeError("Cloud runtime environment disappeared before worker enrollment.")
+
+    tracker.begin(ProvisionStep.start_worker_process, target_id=str(enrollment.target_id))
+    if not await check_worker_binary_preinstalled(
+        provider,
+        connected.sandbox,
+        workspace_id=ctx.workspace_id,
+        runtime_context=connected.runtime_context,
+    ):
+        await stage_worker_binary(
+            provider,
+            connected.sandbox,
+            workspace_id=ctx.workspace_id,
+            runtime_context=connected.runtime_context,
+        )
+    config_path = worker_config_path(connected.runtime_context)
+    await run_sandbox_command_logged(
+        provider,
+        connected.sandbox,
+        workspace_id=ctx.workspace_id,
+        label="mkdir_worker_config_dir",
+        command=(
+            f"mkdir -p {shlex.quote(str(PurePosixPath(config_path).parent))} "
+            f"&& chmod 700 {shlex.quote(str(PurePosixPath(config_path).parent))}"
+        ),
+        runtime_context=connected.runtime_context,
+        timeout_seconds=30,
+    )
+    await provider.write_file(
+        connected.sandbox,
+        config_path,
+        build_worker_config(
+            cloud_base_url=_cloud_base_url(),
+            enrollment_token=enrollment.enrollment_token,
+            anyharness_base_url=runtime_url,
+            anyharness_bearer_token=runtime_token,
+            runtime_context=connected.runtime_context,
+        ),
+    )
+    await run_sandbox_command_logged(
+        provider,
+        connected.sandbox,
+        workspace_id=ctx.workspace_id,
+        label="chmod_worker_config",
+        command=f"chmod 600 {shlex.quote(config_path)}",
+        runtime_context=connected.runtime_context,
+        timeout_seconds=30,
+    )
+    assert_command_succeeded(
+        await run_sandbox_command_logged(
+            provider,
+            connected.sandbox,
+            workspace_id=ctx.workspace_id,
+            label="launch_worker_nohup",
+            command=build_detached_worker_launch_command(connected.runtime_context),
+            runtime_context=connected.runtime_context,
+            cwd=connected.runtime_context.runtime_workdir,
+            timeout_seconds=30,
+            log_output_on_success=True,
+        ),
+        "Proliferate worker launch failed",
+    )
+    tracker.complete(target_id=str(enrollment.target_id))
+
+
 async def _launch_and_connect_runtime(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
@@ -627,6 +741,14 @@ async def _launch_and_connect_runtime(
         runtime_token,
         workspace_id=ctx.workspace_id,
     )
+    await _launch_worker_bridge(
+        tracker,
+        ctx,
+        provider,
+        connected,
+        runtime_url=connected.endpoint.runtime_url,
+        runtime_token=runtime_token,
+    )
     await sync_cloud_worktree_policy_to_runtime(
         user_id=ctx.user_id,
         runtime_url=connected.endpoint.runtime_url,
@@ -677,6 +799,14 @@ async def _attach_workspace_to_running_runtime(
         connected.endpoint.runtime_url,
         runtime_token,
         workspace_id=ctx.workspace_id,
+    )
+    await _launch_worker_bridge(
+        tracker,
+        ctx,
+        provider,
+        connected,
+        runtime_url=connected.endpoint.runtime_url,
+        runtime_token=runtime_token,
     )
     await sync_cloud_worktree_policy_to_runtime(
         user_id=ctx.user_id,

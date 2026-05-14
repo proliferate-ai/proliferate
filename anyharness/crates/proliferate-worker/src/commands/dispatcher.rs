@@ -31,7 +31,7 @@ pub async fn run_loop(
         warn!("worker command loop disabled because anyharness_base_url is not configured");
         return Ok(());
     };
-    let anyharness = AnyHarnessClient::new(base_url)?;
+    let anyharness = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
     let supported_kinds = SUPPORTED_COMMAND_KINDS
         .iter()
         .map(|kind| (*kind).to_string())
@@ -128,6 +128,7 @@ async fn dispatch_anyharness(
     command: &AnyHarnessCommand,
 ) -> Result<AnyHarnessCommandResponse, WorkerError> {
     match command {
+        AnyHarnessCommand::StartSession { body } => anyharness.start_session(body).await,
         AnyHarnessCommand::SendPrompt { session_id, body } => {
             anyharness.send_prompt(session_id, body).await
         }
@@ -143,7 +144,19 @@ async fn dispatch_anyharness(
         AnyHarnessCommand::UpdateSessionConfig { session_id, body } => {
             anyharness.update_session_config(session_id, body).await
         }
+        AnyHarnessCommand::UpdateNormalizedSessionConfig {
+            session_id,
+            control_id,
+            value,
+        } => {
+            anyharness
+                .update_normalized_session_config(session_id, control_id, value)
+                .await
+        }
         AnyHarnessCommand::CancelTurn { session_id } => anyharness.cancel_turn(session_id).await,
+        AnyHarnessCommand::CloseSession { session_id } => {
+            anyharness.close_session(session_id).await
+        }
     }
 }
 
@@ -163,16 +176,24 @@ fn command_result(
                 "body": response.body,
             })),
         },
-        Ok(response) => CommandResultRequest {
-            lease_id: command.lease_id.clone(),
-            status: "rejected".to_string(),
-            error_code: Some("anyharness_rejected".to_string()),
-            error_message: Some(format!("AnyHarness returned HTTP {}", response.status)),
-            result: Some(json!({
-                "anyharnessStatusCode": response.status.as_u16(),
-                "body": response.body,
-            })),
-        },
+        Ok(response) => {
+            let (status, error_code) =
+                if response.status.as_u16() == 401 || response.status.as_u16() == 403 {
+                    ("failed_delivery", "anyharness_auth_failed")
+                } else {
+                    ("rejected", "anyharness_rejected")
+                };
+            CommandResultRequest {
+                lease_id: command.lease_id.clone(),
+                status: status.to_string(),
+                error_code: Some(error_code.to_string()),
+                error_message: Some(format!("AnyHarness returned HTTP {}", response.status)),
+                result: Some(json!({
+                    "anyharnessStatusCode": response.status.as_u16(),
+                    "body": response.body,
+                })),
+            }
+        }
         Err(error) => CommandResultRequest {
             lease_id: command.lease_id.clone(),
             status: "failed_delivery".to_string(),
@@ -192,8 +213,11 @@ fn accepted_status(
     {
         return "accepted_but_queued";
     }
-    if matches!(command, AnyHarnessCommand::UpdateSessionConfig { .. })
-        && response.body.get("applyState").and_then(Value::as_str) == Some("queued")
+    if matches!(
+        command,
+        AnyHarnessCommand::UpdateSessionConfig { .. }
+            | AnyHarnessCommand::UpdateNormalizedSessionConfig { .. }
+    ) && response.body.get("applyState").and_then(Value::as_str) == Some("queued")
     {
         return "accepted_but_queued";
     }

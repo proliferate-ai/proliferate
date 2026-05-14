@@ -1955,6 +1955,7 @@ class TestCloudWorkspaces:
     ) -> None:
         async def _workspace_connection(_workspace: CloudWorkspace) -> RuntimeConnectionTarget:
             return RuntimeConnectionTarget(
+                target_id=None,
                 runtime_url="https://example-runtime.invalid",
                 access_token="runtime-token",
                 anyharness_workspace_id="workspace-123",

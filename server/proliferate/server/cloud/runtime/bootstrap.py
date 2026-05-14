@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shlex
 import sys
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import UUID
 
@@ -157,6 +158,31 @@ def resolve_local_runtime_binary_path() -> Path:
         "Build target/x86_64-unknown-linux-musl/release/anyharness "
         "(or target/x86_64-unknown-linux-gnu/release/anyharness) or set "
         "CLOUD_RUNTIME_SOURCE_BINARY_PATH."
+    )
+
+
+def resolve_local_worker_binary_path() -> Path:
+    candidates: list[Path] = []
+    source_binary_path = settings.cloud_worker_source_binary_path
+    if source_binary_path:
+        candidates.append(Path(source_binary_path).expanduser())
+    repo_root = Path(__file__).resolve().parents[5]
+    candidates.extend(
+        [
+            repo_root / "target" / "x86_64-unknown-linux-musl" / "release" / "proliferate-worker",
+            repo_root / "target" / "x86_64-unknown-linux-gnu" / "release" / "proliferate-worker",
+        ]
+    )
+    if sys.platform.startswith("linux"):
+        candidates.append(repo_root / "target" / "release" / "proliferate-worker")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(
+        "Proliferate Worker Linux binary was not found for cloud provisioning. "
+        "Build target/x86_64-unknown-linux-musl/release/proliferate-worker "
+        "(or target/x86_64-unknown-linux-gnu/release/proliferate-worker) or set "
+        "CLOUD_WORKER_SOURCE_BINARY_PATH."
     )
 
 
@@ -449,6 +475,143 @@ async def stage_runtime_binary(
         workspace_id=workspace_id,
         label="chmod_runtime_binary",
         command=f"chmod +x {shlex.quote(runtime_context.runtime_binary_path)}",
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    return binary_path
+
+
+def worker_binary_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/.proliferate/bin/proliferate-worker"
+
+
+def worker_config_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/.proliferate/worker/config.toml"
+
+
+def worker_log_path(runtime_context: SandboxRuntimeContext) -> str:
+    return f"{runtime_context.home_dir}/proliferate-worker.log"
+
+
+async def check_worker_binary_preinstalled(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> bool:
+    remote_path = worker_binary_path(runtime_context)
+    check_result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="check_worker_binary",
+        command=f"test -x {shlex.quote(remote_path)}",
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    if result_exit_code(check_result) != 0:
+        return False
+
+    try:
+        local_binary_path = resolve_local_worker_binary_path()
+    except RuntimeError:
+        return True
+
+    local_binary_hash = _sha256_file(local_binary_path)
+    hash_result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="check_worker_binary_sha256",
+        command=(
+            "bash -lc "
+            + shlex.quote(f"sha256sum {shlex.quote(remote_path)} | cut -d' ' -f1")
+        ),
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+        log_output_on_success=True,
+    )
+    if result_exit_code(hash_result) != 0:
+        return False
+
+    remote_binary_hash = result_stdout(hash_result).strip()
+    return remote_binary_hash == local_binary_hash
+
+
+def build_worker_config(
+    *,
+    cloud_base_url: str,
+    enrollment_token: str,
+    anyharness_base_url: str,
+    anyharness_bearer_token: str,
+    runtime_context: SandboxRuntimeContext,
+) -> str:
+    worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
+    values = {
+        "cloud_base_url": cloud_base_url,
+        "enrollment_token": enrollment_token,
+        "anyharness_base_url": anyharness_base_url,
+        "anyharness_bearer_token": anyharness_bearer_token,
+        "worker_db_path": f"{worker_dir}/worker.sqlite3",
+        "heartbeat_interval_seconds": 30,
+    }
+    lines = []
+    for key, value in values.items():
+        if isinstance(value, int):
+            lines.append(f"{key} = {value}")
+        else:
+            lines.append(f"{key} = {json.dumps(value)}")
+    return "\n".join(lines) + "\n"
+
+
+def build_detached_worker_launch_command(runtime_context: SandboxRuntimeContext) -> str:
+    config_path = shlex.quote(worker_config_path(runtime_context))
+    binary_path = shlex.quote(worker_binary_path(runtime_context))
+    log_path = shlex.quote(worker_log_path(runtime_context))
+    worker_process_binary = worker_binary_path(runtime_context).replace(
+        "proliferate-worker",
+        "[p]roliferate-worker",
+    )
+    process_pattern = shlex.quote(
+        f"{worker_process_binary} --config {worker_config_path(runtime_context)}"
+    )
+    return "sh -lc " + shlex.quote(
+        f"pids=$(pgrep -f {process_pattern} || true); "
+        'if [ -n "$pids" ]; then kill $pids || true; sleep 1; fi; '
+        f"nohup {binary_path} --config {config_path} > {log_path} 2>&1 < /dev/null & "
+    )
+
+
+async def stage_worker_binary(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    workspace_id: UUID,
+    runtime_context: SandboxRuntimeContext,
+) -> Path:
+    binary_path = resolve_local_worker_binary_path()
+    remote_path = worker_binary_path(runtime_context)
+    await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="mkdir_worker_binary_dir",
+        command=f"mkdir -p {shlex.quote(str(PurePosixPath(remote_path).parent))}",
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    await provider.write_file(
+        sandbox,
+        remote_path,
+        binary_path.read_bytes(),
+    )
+    await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="chmod_worker_binary",
+        command=f"chmod +x {shlex.quote(remote_path)}",
         runtime_context=runtime_context,
         timeout_seconds=30,
     )

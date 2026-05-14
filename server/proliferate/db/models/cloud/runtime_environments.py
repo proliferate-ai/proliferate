@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -49,6 +49,11 @@ class CloudRuntimeEnvironment(Base):
 
     status: Mapped[str] = mapped_column(String(32), default="pending")
     active_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     runtime_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)

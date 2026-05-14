@@ -383,6 +383,12 @@
   description: Path to the Linux AnyHarness binary uploaded into cloud sandboxes
   tags: [self-hosted, production]
 
+- name: CLOUD_WORKER_SOURCE_BINARY_PATH
+  secret: false
+  default: ""
+  description: Path to the Linux Proliferate Worker binary uploaded into cloud sandboxes
+  tags: [self-hosted, production]
+
 - name: CLOUD_RUNTIME_SENTRY_DSN
   secret: true
   default: ""

@@ -31,6 +31,7 @@ class ProvisionStep(StrEnum):
     configure_git_identity = "configure_git_identity"
     start_runtime_process = "start_runtime_process"
     wait_for_runtime_health = "wait_for_runtime_health"
+    start_worker_process = "start_worker_process"
     reconcile_agents = "reconcile_agents"
     resolve_remote_workspace = "resolve_remote_workspace"
 
@@ -85,6 +86,7 @@ class RuntimeHandshake:
 
 @dataclass(frozen=True)
 class RuntimeConnectionTarget:
+    target_id: UUID | None
     runtime_url: str
     access_token: str
     anyharness_workspace_id: str | None

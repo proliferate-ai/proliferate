@@ -17,7 +17,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     let cloud = CloudClient::new(&config)?;
     let identity = ensure_identity(&config, &store, &cloud).await?;
     if let Some(base_url) = config.anyharness_base_url.clone() {
-        let client = AnyHarnessClient::new(base_url)?;
+        let client = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
         let healthy = anyharness_health::probe(&client).await;
         info!(healthy, "anyharness health probe completed");
     }
