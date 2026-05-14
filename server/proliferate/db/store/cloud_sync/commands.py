@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandStatus
@@ -147,6 +147,29 @@ async def get_command_by_idempotency(
         )
     ).scalar_one_or_none()
     return _snapshot(row) if row is not None else None
+
+
+async def count_active_commands_for_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+) -> int:
+    count_value = (
+        await db.execute(
+            select(func.count(CloudCommand.id))
+            .where(CloudCommand.target_id == target_id)
+            .where(
+                CloudCommand.status.in_(
+                    (
+                        CloudCommandStatus.queued.value,
+                        CloudCommandStatus.leased.value,
+                        CloudCommandStatus.delivered.value,
+                    )
+                )
+            )
+        )
+    ).scalar_one()
+    return int(count_value or 0)
 
 
 async def expire_command_if_not_terminal(

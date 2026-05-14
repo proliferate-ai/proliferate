@@ -10,6 +10,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_CLOUD_TARGET_ENROLLMENT_STATUSES,
     SUPPORTED_CLOUD_TARGET_KINDS,
     SUPPORTED_CLOUD_TARGET_STATUSES,
+    SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES,
     SUPPORTED_CLOUD_WORKER_STATUSES,
 )
 from proliferate.db.models.base import Base, utcnow
@@ -29,6 +30,10 @@ class CloudTarget(Base):
         CheckConstraint(
             f"status IN {SUPPORTED_CLOUD_TARGET_STATUSES}",
             name="ck_cloud_targets_status",
+        ),
+        CheckConstraint(
+            f"update_status IS NULL OR update_status IN {SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES}",
+            name="ck_cloud_targets_update_status",
         ),
         Index("ix_cloud_targets_owner_user_status", "owner_user_id", "status"),
         Index("ix_cloud_targets_organization_status", "organization_id", "status"),
@@ -53,6 +58,18 @@ class CloudTarget(Base):
         index=True,
     )
     default_workspace_root: Mapped[str | None] = mapped_column(Text, nullable=True)
+    update_channel: Mapped[str] = mapped_column(String(32), default="stable")
+    desired_anyharness_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    desired_worker_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    desired_supervisor_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    update_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    update_status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    update_component: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    update_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    update_reported_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

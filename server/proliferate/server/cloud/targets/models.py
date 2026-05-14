@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from proliferate.db.store.cloud_sync.targets import (
+    CloudTargetCurrentVersionsSnapshot,
     CloudTargetInventorySnapshot,
     CloudTargetSnapshot,
     CloudTargetStatusSnapshot,
@@ -50,6 +51,48 @@ class CloudTargetStatusModel(BaseModel):
     updated_at: str | None = Field(default=None, serialization_alias="updatedAt")
 
 
+class CloudTargetDesiredVersionsModel(BaseModel):
+    anyharness_version: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessVersion",
+    )
+    worker_version: str | None = Field(default=None, serialization_alias="workerVersion")
+    supervisor_version: str | None = Field(
+        default=None,
+        serialization_alias="supervisorVersion",
+    )
+
+
+class CloudTargetCurrentVersionsModel(BaseModel):
+    worker_id: str = Field(serialization_alias="workerId")
+    anyharness_version: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessVersion",
+    )
+    worker_version: str | None = Field(default=None, serialization_alias="workerVersion")
+    supervisor_version: str | None = Field(
+        default=None,
+        serialization_alias="supervisorVersion",
+    )
+    reported_at: str | None = Field(default=None, serialization_alias="reportedAt")
+
+
+class CloudTargetUpdateModel(BaseModel):
+    channel: str
+    desired_versions: CloudTargetDesiredVersionsModel = Field(
+        serialization_alias="desiredVersions",
+    )
+    current_versions: CloudTargetCurrentVersionsModel | None = Field(
+        default=None,
+        serialization_alias="currentVersions",
+    )
+    status: str | None = None
+    status_detail: str | None = Field(default=None, serialization_alias="statusDetail")
+    component: str | None = None
+    version: str | None = None
+    reported_at: str | None = Field(default=None, serialization_alias="reportedAt")
+
+
 class CloudTargetSummary(BaseModel):
     id: str
     display_name: str = Field(serialization_alias="displayName")
@@ -66,6 +109,7 @@ class CloudTargetSummary(BaseModel):
         default=None,
         serialization_alias="statusDetail",
     )
+    update: CloudTargetUpdateModel
     archived_at: str | None = Field(default=None, serialization_alias="archivedAt")
     created_at: str = Field(serialization_alias="createdAt")
     updated_at: str = Field(serialization_alias="updatedAt")
@@ -134,6 +178,37 @@ def status_payload(
     )
 
 
+def current_versions_payload(
+    value: CloudTargetCurrentVersionsSnapshot | None,
+) -> CloudTargetCurrentVersionsModel | None:
+    if value is None:
+        return None
+    return CloudTargetCurrentVersionsModel(
+        worker_id=str(value.worker_id),
+        anyharness_version=value.anyharness_version,
+        worker_version=value.worker_version,
+        supervisor_version=value.supervisor_version,
+        reported_at=_to_iso(value.reported_at),
+    )
+
+
+def update_payload(value: CloudTargetSnapshot) -> CloudTargetUpdateModel:
+    return CloudTargetUpdateModel(
+        channel=value.update_channel,
+        desired_versions=CloudTargetDesiredVersionsModel(
+            anyharness_version=value.desired_anyharness_version,
+            worker_version=value.desired_worker_version,
+            supervisor_version=value.desired_supervisor_version,
+        ),
+        current_versions=current_versions_payload(value.current_versions),
+        status=value.update_status,
+        status_detail=value.update_status_detail,
+        component=value.update_component,
+        version=value.update_version,
+        reported_at=_to_iso(value.update_reported_at),
+    )
+
+
 def target_summary_payload(value: CloudTargetSnapshot) -> CloudTargetSummary:
     return CloudTargetSummary(
         id=str(value.id),
@@ -145,6 +220,7 @@ def target_summary_payload(value: CloudTargetSnapshot) -> CloudTargetSummary:
         default_workspace_root=value.default_workspace_root,
         inventory=inventory_payload(value.inventory),
         status_detail=status_payload(value.status_record),
+        update=update_payload(value),
         archived_at=_to_iso(value.archived_at),
         created_at=_to_iso(value.created_at),
         updated_at=_to_iso(value.updated_at),

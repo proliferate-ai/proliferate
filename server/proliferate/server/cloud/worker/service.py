@@ -35,12 +35,16 @@ from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
     publish_target_patch_after_commit,
 )
+from proliferate.server.cloud.observability import log_worker_update_status
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,
     compact_json,
     normalize_supported_command_kinds,
     validate_delivery_status,
     validate_result_status,
+    validate_update_component,
+    validate_update_status,
+    validate_update_version,
     validate_worker_status,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
@@ -51,6 +55,7 @@ from proliferate.server.cloud.worker.models import (
     WorkerCommandLeaseResponse,
     WorkerCommandResultRequest,
     WorkerCommandStatusResponse,
+    WorkerDesiredVersionsResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatRequest,
@@ -58,6 +63,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerInventoryPayload,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerUpdateStatusRequest,
+    WorkerUpdateStatusResponse,
 )
 from proliferate.utils.time import utcnow
 
@@ -127,6 +134,71 @@ def _command_envelope(
         lease_id=command.lease_id or "",
         lease_expires_at=command.lease_expires_at.isoformat() if command.lease_expires_at else "",
     )
+
+
+def _desired_versions_response(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    worker: worker_auth_store.CloudWorkerSnapshot,
+) -> WorkerDesiredVersionsResponse:
+    should_update = any(
+        (
+            target.desired_anyharness_version is not None
+            and target.desired_anyharness_version != worker.anyharness_version,
+            target.desired_worker_version is not None
+            and target.desired_worker_version != worker.worker_version,
+            target.desired_supervisor_version is not None
+            and target.desired_supervisor_version != worker.supervisor_version,
+        )
+    )
+    return WorkerDesiredVersionsResponse(
+        should_update=should_update,
+        update_channel=target.update_channel,
+        anyharness_version=target.desired_anyharness_version,
+        worker_version=target.desired_worker_version,
+        supervisor_version=target.desired_supervisor_version,
+    )
+
+
+def _desired_version_for_component(
+    target: targets_store.CloudTargetSnapshot,
+    component: str,
+) -> str | None:
+    if component == "anyharness":
+        return target.desired_anyharness_version
+    if component == "worker":
+        return target.desired_worker_version
+    if component == "supervisor":
+        return target.desired_supervisor_version
+    return None
+
+
+def _require_expected_update_version(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    status_value: str,
+    component: str | None,
+    version: str | None,
+) -> None:
+    if status_value not in {
+        "staged",
+        "applying",
+        "applied",
+    }:
+        return
+    if component is None or version is None:
+        raise CloudApiError(
+            "cloud_worker_update_component_required",
+            "Worker update component and version are required for this update status.",
+            status_code=400,
+        )
+    desired_version = _desired_version_for_component(target, component)
+    if desired_version != version:
+        raise CloudApiError(
+            "cloud_worker_update_version_stale",
+            "Worker update version does not match the target desired version.",
+            status_code=409,
+        )
 
 
 async def enroll_worker(
@@ -271,11 +343,19 @@ async def record_heartbeat(
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
     await _publish_current_target_patch(db, target_id=auth.target_id)
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
     return WorkerHeartbeatResponse(
         target_id=str(auth.target_id),
         worker_id=str(auth.worker_id),
         status=status_value,
         server_time=now.isoformat(),
+        desired_versions=_desired_versions_response(target=target, worker=worker),
     )
 
 
@@ -302,6 +382,59 @@ async def record_inventory(
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
     await _publish_current_target_patch(db, target_id=auth.target_id)
     return WorkerInventoryResponse(
+        target_id=str(auth.target_id),
+        worker_id=str(auth.worker_id),
+        updated=True,
+    )
+
+
+async def record_update_status(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerUpdateStatusRequest,
+) -> WorkerUpdateStatusResponse:
+    status_value = validate_update_status(body.status)
+    component = validate_update_component(body.component)
+    version = validate_update_version(body.version)
+    detail = body.detail or body.error_message
+    current_target = await targets_store.get_target_by_id(db, auth.target_id)
+    if current_target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    _require_expected_update_version(
+        target=current_target,
+        status_value=status_value,
+        component=component,
+        version=version,
+    )
+    target = await targets_store.record_target_update_status(
+        db,
+        target_id=auth.target_id,
+        status_value=status_value,
+        status_detail=detail,
+        component=component,
+        version=version,
+        reported_at=utcnow(),
+    )
+    if target is None:
+        raise CloudApiError(
+            "cloud_worker_target_missing",
+            "Worker target no longer exists.",
+            status_code=401,
+        )
+    log_worker_update_status(
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        status=status_value,
+        component=component,
+        version=version,
+    )
+    await publish_target_patch_after_commit(db, target)
+    return WorkerUpdateStatusResponse(
         target_id=str(auth.target_id),
         worker_id=str(auth.worker_id),
         updated=True,

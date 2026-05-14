@@ -10,11 +10,12 @@ from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from proliferate.constants.cloud import CloudTargetStatus
+from proliferate.constants.cloud import CloudTargetStatus, CloudTargetUpdateStatus
 from proliferate.constants.organizations import ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE
 from proliferate.db.models.cloud.targets import (
     CloudTarget,
     CloudTargetInventory,
+    CloudWorker,
 )
 from proliferate.db.models.cloud.targets import (
     CloudTargetStatus as CloudTargetStatusRow,
@@ -54,6 +55,15 @@ class CloudTargetStatusSnapshot:
 
 
 @dataclass(frozen=True)
+class CloudTargetCurrentVersionsSnapshot:
+    worker_id: UUID
+    worker_version: str | None
+    anyharness_version: str | None
+    supervisor_version: str | None
+    reported_at: datetime | None
+
+
+@dataclass(frozen=True)
 class CloudTargetSnapshot:
     id: UUID
     display_name: str
@@ -64,6 +74,16 @@ class CloudTargetSnapshot:
     organization_id: UUID | None
     created_by_user_id: UUID
     default_workspace_root: str | None
+    update_channel: str
+    desired_anyharness_version: str | None
+    desired_worker_version: str | None
+    desired_supervisor_version: str | None
+    update_status: str | None
+    update_status_detail: str | None
+    update_component: str | None
+    update_version: str | None
+    update_reported_at: datetime | None
+    current_versions: CloudTargetCurrentVersionsSnapshot | None
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -107,10 +127,25 @@ def _inventory_snapshot(row: CloudTargetInventory | None) -> CloudTargetInventor
     )
 
 
+def _current_versions_snapshot(
+    worker: CloudWorker | None,
+) -> CloudTargetCurrentVersionsSnapshot | None:
+    if worker is None:
+        return None
+    return CloudTargetCurrentVersionsSnapshot(
+        worker_id=worker.id,
+        worker_version=worker.worker_version,
+        anyharness_version=worker.anyharness_version,
+        supervisor_version=worker.supervisor_version,
+        reported_at=worker.last_heartbeat_at,
+    )
+
+
 def _target_snapshot(
     target: CloudTarget,
     status: CloudTargetStatusRow | None,
     inventory: CloudTargetInventory | None,
+    worker: CloudWorker | None,
 ) -> CloudTargetSnapshot:
     return CloudTargetSnapshot(
         id=target.id,
@@ -122,6 +157,16 @@ def _target_snapshot(
         organization_id=target.organization_id,
         created_by_user_id=target.created_by_user_id,
         default_workspace_root=target.default_workspace_root,
+        update_channel=target.update_channel,
+        desired_anyharness_version=target.desired_anyharness_version,
+        desired_worker_version=target.desired_worker_version,
+        desired_supervisor_version=target.desired_supervisor_version,
+        update_status=target.update_status,
+        update_status_detail=target.update_status_detail,
+        update_component=target.update_component,
+        update_version=target.update_version,
+        update_reported_at=target.update_reported_at,
+        current_versions=_current_versions_snapshot(worker),
         archived_at=target.archived_at,
         created_at=target.created_at,
         updated_at=target.updated_at,
@@ -173,6 +218,7 @@ async def create_target(
         organization_id=organization_id,
         created_by_user_id=created_by_user_id,
         default_workspace_root=default_workspace_root,
+        update_channel="stable",
         archived_at=None,
         created_at=now,
         updated_at=now,
@@ -190,7 +236,7 @@ async def create_target(
     )
     db.add(status)
     await db.flush()
-    return _target_snapshot(target, status, None)
+    return _target_snapshot(target, status, None, None)
 
 
 async def get_target_by_id(
@@ -199,16 +245,17 @@ async def get_target_by_id(
 ) -> CloudTargetSnapshot | None:
     row = (
         await db.execute(
-            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory)
+            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory, CloudWorker)
             .outerjoin(CloudTargetStatusRow, CloudTargetStatusRow.target_id == CloudTarget.id)
             .outerjoin(CloudTargetInventory, CloudTargetInventory.target_id == CloudTarget.id)
+            .outerjoin(CloudWorker, CloudWorker.id == CloudTargetStatusRow.worker_id)
             .where(CloudTarget.id == target_id)
         )
     ).one_or_none()
     if row is None:
         return None
-    target, status, inventory = row
-    return _target_snapshot(target, status, inventory)
+    target, status, inventory, worker = row
+    return _target_snapshot(target, status, inventory, worker)
 
 
 async def get_visible_target_by_id(
@@ -219,17 +266,18 @@ async def get_visible_target_by_id(
 ) -> CloudTargetSnapshot | None:
     row = (
         await db.execute(
-            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory)
+            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory, CloudWorker)
             .outerjoin(CloudTargetStatusRow, CloudTargetStatusRow.target_id == CloudTarget.id)
             .outerjoin(CloudTargetInventory, CloudTargetInventory.target_id == CloudTarget.id)
+            .outerjoin(CloudWorker, CloudWorker.id == CloudTargetStatusRow.worker_id)
             .where(CloudTarget.id == target_id)
             .where(_visible_target_filter(user_id))
         )
     ).one_or_none()
     if row is None:
         return None
-    target, status, inventory = row
-    return _target_snapshot(target, status, inventory)
+    target, status, inventory, worker = row
+    return _target_snapshot(target, status, inventory, worker)
 
 
 async def list_visible_targets(
@@ -239,15 +287,19 @@ async def list_visible_targets(
 ) -> tuple[CloudTargetSnapshot, ...]:
     rows = (
         await db.execute(
-            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory)
+            select(CloudTarget, CloudTargetStatusRow, CloudTargetInventory, CloudWorker)
             .outerjoin(CloudTargetStatusRow, CloudTargetStatusRow.target_id == CloudTarget.id)
             .outerjoin(CloudTargetInventory, CloudTargetInventory.target_id == CloudTarget.id)
+            .outerjoin(CloudWorker, CloudWorker.id == CloudTargetStatusRow.worker_id)
             .where(CloudTarget.status != CloudTargetStatus.archived.value)
             .where(_visible_target_filter(user_id))
             .order_by(CloudTarget.updated_at.desc(), CloudTarget.created_at.desc())
         )
     ).all()
-    return tuple(_target_snapshot(target, status, inventory) for target, status, inventory in rows)
+    return tuple(
+        _target_snapshot(target, status, inventory, worker)
+        for target, status, inventory, worker in rows
+    )
 
 
 async def archive_target(
@@ -269,7 +321,70 @@ async def archive_target(
         status.updated_at = now
     await db.flush()
     inventory = await db.get(CloudTargetInventory, target_id)
-    return _target_snapshot(target, status, inventory)
+    worker = await _get_worker_for_status(db, status)
+    return _target_snapshot(target, status, inventory, worker)
+
+
+async def set_target_desired_versions(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    update_channel: str,
+    desired_anyharness_version: str | None,
+    desired_worker_version: str | None,
+    desired_supervisor_version: str | None,
+) -> CloudTargetSnapshot | None:
+    target = await db.get(CloudTarget, target_id)
+    if target is None:
+        return None
+    desired_versions_changed = (
+        target.update_channel != update_channel
+        or target.desired_anyharness_version != desired_anyharness_version
+        or target.desired_worker_version != desired_worker_version
+        or target.desired_supervisor_version != desired_supervisor_version
+    )
+    target.update_channel = update_channel
+    target.desired_anyharness_version = desired_anyharness_version
+    target.desired_worker_version = desired_worker_version
+    target.desired_supervisor_version = desired_supervisor_version
+    if desired_versions_changed:
+        target.update_status = CloudTargetUpdateStatus.idle.value
+        target.update_status_detail = "Desired versions changed."
+        target.update_component = None
+        target.update_version = None
+        target.update_reported_at = None
+    target.updated_at = utcnow()
+    await db.flush()
+    status = await db.get(CloudTargetStatusRow, target_id)
+    inventory = await db.get(CloudTargetInventory, target_id)
+    worker = await _get_worker_for_status(db, status)
+    return _target_snapshot(target, status, inventory, worker)
+
+
+async def record_target_update_status(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    status_value: str,
+    status_detail: str | None,
+    component: str | None,
+    version: str | None,
+    reported_at: datetime,
+) -> CloudTargetSnapshot | None:
+    target = await db.get(CloudTarget, target_id)
+    if target is None:
+        return None
+    target.update_status = status_value
+    target.update_status_detail = status_detail
+    target.update_component = component
+    target.update_version = version
+    target.update_reported_at = reported_at
+    target.updated_at = reported_at
+    await db.flush()
+    status = await db.get(CloudTargetStatusRow, target_id)
+    inventory = await db.get(CloudTargetInventory, target_id)
+    worker = await _get_worker_for_status(db, status)
+    return _target_snapshot(target, status, inventory, worker)
 
 
 async def set_target_status(
@@ -284,3 +399,12 @@ async def set_target_status(
     target.status = status_value
     target.updated_at = utcnow()
     await db.flush()
+
+
+async def _get_worker_for_status(
+    db: AsyncSession,
+    status: CloudTargetStatusRow | None,
+) -> CloudWorker | None:
+    if status is None or status.worker_id is None:
+        return None
+    return await db.get(CloudWorker, status.worker_id)
