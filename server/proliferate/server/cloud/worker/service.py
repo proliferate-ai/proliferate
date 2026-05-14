@@ -30,6 +30,11 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchResponse,
 )
 from proliferate.server.cloud.events.service import ingest_worker_event_batch
+from proliferate.server.cloud.live.service import (
+    defer_live_publishes_until_commit,
+    publish_command_status_after_commit,
+    publish_target_patch_after_commit,
+)
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,
     compact_json,
@@ -89,6 +94,12 @@ async def _record_inventory_payload(
         mcp_json=compact_json(payload.mcp),
         raw_json=None,
     )
+
+
+async def _publish_current_target_patch(db: AsyncSession, *, target_id: UUID) -> None:
+    target = await targets_store.get_target_by_id(db, target_id)
+    if target is not None:
+        await publish_target_patch_after_commit(db, target)
 
 
 def _parse_json_dict(value: str | None) -> dict[str, object] | None:
@@ -169,6 +180,7 @@ async def enroll_worker(
             worker_id=worker.id,
             payload=body.inventory,
         )
+    await _publish_current_target_patch(db, target_id=worker.target_id)
     return WorkerEnrollResponse(
         target_id=str(worker.target_id),
         worker_id=str(worker.id),
@@ -258,6 +270,7 @@ async def record_heartbeat(
         status_detail=body.status_detail,
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
+    await _publish_current_target_patch(db, target_id=auth.target_id)
     return WorkerHeartbeatResponse(
         target_id=str(auth.target_id),
         worker_id=str(auth.worker_id),
@@ -287,6 +300,7 @@ async def record_inventory(
         status_detail=body.status_detail,
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
+    await _publish_current_target_patch(db, target_id=auth.target_id)
     return WorkerInventoryResponse(
         target_id=str(auth.target_id),
         worker_id=str(auth.worker_id),
@@ -312,6 +326,8 @@ async def lease_worker_command(
         lease_expires_at=now + timedelta(seconds=lease_seconds),
         now=now,
     )
+    if command is not None:
+        await publish_command_status_after_commit(db, command)
     return WorkerCommandLeaseResponse(
         command=_command_envelope(command) if command is not None else None,
         server_time=now.isoformat(),
@@ -351,6 +367,7 @@ async def record_command_delivery(
             "Command is not leased by this worker.",
             status_code=404,
         )
+    await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
         status=command.status,
@@ -383,6 +400,7 @@ async def record_command_result(
             "Command is not leased by this worker.",
             status_code=404,
         )
+    await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
         status=command.status,
@@ -396,4 +414,5 @@ async def record_event_batch(
     auth: WorkerAuthContext,
     body: WorkerEventBatchRequest,
 ) -> WorkerEventBatchResponse:
-    return await ingest_worker_event_batch(db, auth=auth, body=body)
+    with defer_live_publishes_until_commit(db):
+        return await ingest_worker_event_batch(db, auth=auth, body=body)

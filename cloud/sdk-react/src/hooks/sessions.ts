@@ -11,20 +11,40 @@ import {
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
-export function useCloudSessionSnapshot(sessionId: string | null, enabled = true) {
+export function useCloudSessionSnapshot(
+  targetId: string | null,
+  sessionId: string | null,
+  enabled = true,
+) {
   const client = useCloudClient();
+  const canQuery =
+    enabled &&
+    targetId !== null &&
+    targetId !== undefined &&
+    sessionId !== null &&
+    sessionId !== undefined;
   return useQuery<CloudSessionSnapshot>({
-    queryKey: cloudSessionSnapshotKey(sessionId),
-    queryFn: () => getSessionSnapshot(sessionId!, client),
-    enabled: enabled && sessionId !== null,
+    queryKey: cloudSessionSnapshotKey(targetId, sessionId),
+    queryFn: () => getSessionSnapshot(sessionId!, { targetId: targetId! }, client),
+    enabled: canQuery,
   });
 }
 
-export function useCloudTranscriptSnapshot(sessionId: string | null, enabled = true) {
+export function useCloudTranscriptSnapshot(
+  targetId: string | null,
+  sessionId: string | null,
+  enabled = true,
+) {
   const client = useCloudClient();
+  const canQuery =
+    enabled &&
+    targetId !== null &&
+    targetId !== undefined &&
+    sessionId !== null &&
+    sessionId !== undefined;
   return useQuery<CloudTranscriptSnapshot>({
-    queryKey: cloudTranscriptSnapshotKey(sessionId),
-    queryFn: () => getTranscriptSnapshot(sessionId!, client),
-    enabled: enabled && sessionId !== null,
+    queryKey: cloudTranscriptSnapshotKey(targetId, sessionId),
+    queryFn: () => getTranscriptSnapshot(sessionId!, { targetId: targetId! }, client),
+    enabled: canQuery,
   });
 }

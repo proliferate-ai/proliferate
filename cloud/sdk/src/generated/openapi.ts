@@ -1039,6 +1039,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions Endpoint */
+        get: operations["list_sessions_endpoint_v1_cloud_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sessions/{session_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session Snapshot Endpoint */
+        get: operations["get_session_snapshot_endpoint_v1_cloud_sessions__session_id__snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session Snapshot Alias Endpoint */
+        get: operations["get_session_snapshot_alias_endpoint_v1_cloud_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sessions/{session_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transcript Snapshot Endpoint */
+        get: operations["get_transcript_snapshot_endpoint_v1_cloud_sessions__session_id__transcript_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Session Events Endpoint */
+        get: operations["list_session_events_endpoint_v1_cloud_sessions__session_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workspace Snapshot Endpoint */
+        get: operations["get_workspace_snapshot_endpoint_v1_cloud_workspaces__workspace_id__snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sessions/{session_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Session Endpoint */
+        get: operations["stream_session_endpoint_v1_cloud_sessions__session_id__stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Workspace Endpoint */
+        get: operations["stream_workspace_endpoint_v1_cloud_workspaces__workspace_id__stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/targets/{target_id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Target Endpoint */
+        get: operations["stream_target_endpoint_v1_cloud_targets__target_id__stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Backfill Endpoint */
+        post: operations["worker_backfill_endpoint_v1_cloud_worker_backfill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/enroll": {
         parameters: {
             query?: never;
@@ -1135,6 +1305,23 @@ export interface paths {
         put?: never;
         /** Worker Command Result Endpoint */
         post: operations["worker_command_result_endpoint_v1_cloud_worker_commands__command_id__result_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/events/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Event Batch Endpoint */
+        post: operations["worker_event_batch_endpoint_v1_cloud_worker_events_batches_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2374,6 +2561,31 @@ export interface components {
             /** Failurecode */
             failureCode?: string | null;
         };
+        /** CloudPendingInteractionResponse */
+        CloudPendingInteractionResponse: {
+            /** Requestid */
+            requestId: string;
+            /** Kind */
+            kind?: string | null;
+            /** Status */
+            status: string;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Requestedseq */
+            requestedSeq: number;
+            /** Resolvedseq */
+            resolvedSeq?: number | null;
+            /** Requestedat */
+            requestedAt?: string | null;
+            /** Resolvedat */
+            resolvedAt?: string | null;
+        };
         /** CloudPlanInfo */
         CloudPlanInfo: {
             /**
@@ -2495,6 +2707,77 @@ export interface components {
             updatedAt: string;
             /** Lastsyncedat */
             lastSyncedAt: string;
+        };
+        /** CloudSessionEventResponse */
+        CloudSessionEventResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Sessionid */
+            sessionId: string;
+            /** Seq */
+            seq: number;
+            /** Eventtype */
+            eventType: string;
+            /** Sourcekind */
+            sourceKind: string;
+            /** Turnid */
+            turnId?: string | null;
+            /** Itemid */
+            itemId?: string | null;
+            /** Occurredat */
+            occurredAt?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** CloudSessionEventsResponse */
+        CloudSessionEventsResponse: {
+            /** Events */
+            events: components["schemas"]["CloudSessionEventResponse"][];
+            /** Nextcursor */
+            nextCursor?: number | null;
+        };
+        /** CloudSessionProjectionResponse */
+        CloudSessionProjectionResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Sessionid */
+            sessionId: string;
+            /** Nativesessionid */
+            nativeSessionId?: string | null;
+            /** Sourceagentkind */
+            sourceAgentKind?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status: string;
+            /** Phase */
+            phase?: string | null;
+            /** Liveconfig */
+            liveConfig?: {
+                [key: string]: unknown;
+            } | null;
+            /** Lasteventseq */
+            lastEventSeq: number;
+            /** Lasteventat */
+            lastEventAt?: string | null;
+            /** Startedat */
+            startedAt?: string | null;
+            /** Endedat */
+            endedAt?: string | null;
+        };
+        /** CloudSessionSnapshotResponse */
+        CloudSessionSnapshotResponse: {
+            session: components["schemas"]["CloudSessionProjectionResponse"];
+            /** Transcriptitems */
+            transcriptItems: components["schemas"]["CloudTranscriptItemResponse"][];
+            /** Pendinginteractions */
+            pendingInteractions: components["schemas"]["CloudPendingInteractionResponse"][];
         };
         /** CloudTargetDetail */
         CloudTargetDetail: {
@@ -2636,6 +2919,47 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        /** CloudTranscriptItemResponse */
+        CloudTranscriptItemResponse: {
+            /** Itemid */
+            itemId: string;
+            /** Turnid */
+            turnId?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Sourceagentkind */
+            sourceAgentKind?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Text */
+            text?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Firstseq */
+            firstSeq: number;
+            /** Lastseq */
+            lastSeq: number;
+            /** Completedseq */
+            completedSeq?: number | null;
+            /** Firsteventat */
+            firstEventAt?: string | null;
+            /** Lasteventat */
+            lastEventAt?: string | null;
+        };
+        /** CloudTranscriptSnapshotResponse */
+        CloudTranscriptSnapshotResponse: {
+            session: components["schemas"]["CloudSessionProjectionResponse"];
+            /** Transcriptitems */
+            transcriptItems: components["schemas"]["CloudTranscriptItemResponse"][];
+            /** Pendinginteractions */
+            pendingInteractions: components["schemas"]["CloudPendingInteractionResponse"][];
+            /** Lasteventseq */
+            lastEventSeq: number;
+        };
         /** CloudWorkspaceRepoConfigStatusResponse */
         CloudWorkspaceRepoConfigStatusResponse: {
             /** Currentrepofilesversion */
@@ -2664,6 +2988,12 @@ export interface components {
             lastApplyFailedPath: string | null;
             /** Lastapplyerror */
             lastApplyError: string | null;
+        };
+        /** CloudWorkspaceSnapshotResponse */
+        CloudWorkspaceSnapshotResponse: {
+            workspace: components["schemas"]["WorkspaceDetail"];
+            /** Sessions */
+            sessions: components["schemas"]["CloudSessionProjectionResponse"][];
         };
         /** CloudWorktreeRetentionPolicyRequest */
         CloudWorktreeRetentionPolicyRequest: {
@@ -4202,6 +4532,110 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** WorkerBackfillPendingInteraction */
+        WorkerBackfillPendingInteraction: {
+            /** Requestid */
+            requestId: string;
+            /** Kind */
+            kind?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkerBackfillRepoRef */
+        WorkerBackfillRepoRef: {
+            /** Provider */
+            provider?: string | null;
+            /** Owner */
+            owner?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Branch */
+            branch?: string | null;
+            /** Basebranch */
+            baseBranch?: string | null;
+        };
+        /** WorkerBackfillRequest */
+        WorkerBackfillRequest: {
+            /** Workspaces */
+            workspaces?: components["schemas"]["WorkerBackfillWorkspace"][];
+            /** Sessions */
+            sessions?: components["schemas"]["WorkerBackfillSession"][];
+        };
+        /** WorkerBackfillResponse */
+        WorkerBackfillResponse: {
+            /** Mappedworkspaces */
+            mappedWorkspaces: components["schemas"]["WorkerBackfillWorkspaceMapping"][];
+            /** Mappedsessions */
+            mappedSessions: components["schemas"]["WorkerBackfillSessionMapping"][];
+        };
+        /** WorkerBackfillSession */
+        WorkerBackfillSession: {
+            /** Sessionid */
+            sessionId: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Nativesessionid */
+            nativeSessionId?: string | null;
+            /** Sourceagentkind */
+            sourceAgentKind?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Phase */
+            phase?: string | null;
+            /** Liveconfig */
+            liveConfig?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Lasteventseq
+             * @default 0
+             */
+            lastEventSeq: number;
+            /** Lasteventat */
+            lastEventAt?: string | null;
+            /** Startedat */
+            startedAt?: string | null;
+            /** Endedat */
+            endedAt?: string | null;
+            /** Pendinginteractions */
+            pendingInteractions?: components["schemas"]["WorkerBackfillPendingInteraction"][];
+        };
+        /** WorkerBackfillSessionMapping */
+        WorkerBackfillSessionMapping: {
+            /** Sessionid */
+            sessionId: string;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+        };
+        /** WorkerBackfillWorkspace */
+        WorkerBackfillWorkspace: {
+            /** Workspaceid */
+            workspaceId: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Path */
+            path?: string | null;
+            repo?: components["schemas"]["WorkerBackfillRepoRef"] | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
+        /** WorkerBackfillWorkspaceMapping */
+        WorkerBackfillWorkspaceMapping: {
+            /** Workspaceid */
+            workspaceId: string;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string;
+        };
         /** WorkerCommandDeliveryRequest */
         WorkerCommandDeliveryRequest: {
             /** Leaseid */
@@ -4308,6 +4742,29 @@ export interface components {
             workerToken: string;
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
+        };
+        /** WorkerEventBatchRequest */
+        WorkerEventBatchRequest: {
+            /** Events */
+            events?: components["schemas"]["WorkerSessionEventEnvelope"][];
+        };
+        /** WorkerEventBatchResponse */
+        WorkerEventBatchResponse: {
+            /** Acceptedevents */
+            acceptedEvents: number;
+            /** Duplicateevents */
+            duplicateEvents: number;
+            /** Liveonlyevents */
+            liveOnlyEvents: number;
+            /** Sessionacks */
+            sessionAcks: components["schemas"]["WorkerEventSessionAck"][];
+        };
+        /** WorkerEventSessionAck */
+        WorkerEventSessionAck: {
+            /** Sessionid */
+            sessionId: string;
+            /** Lastcontiguousseq */
+            lastContiguousSeq: number;
         };
         /** WorkerHeartbeatRequest */
         WorkerHeartbeatRequest: {
@@ -4429,6 +4886,25 @@ export interface components {
             workerId: string;
             /** Updated */
             updated: boolean;
+        };
+        /** WorkerSessionEventEnvelope */
+        WorkerSessionEventEnvelope: {
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Sessionid */
+            sessionId: string;
+            /** Seq */
+            seq: number;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Turnid */
+            turnId?: string | null;
+            /** Itemid */
+            itemId?: string | null;
+            /** Event */
+            event: {
+                [key: string]: unknown;
+            };
         };
         /** WorkspaceConnection */
         WorkspaceConnection: {
@@ -6898,6 +7374,340 @@ export interface operations {
             };
         };
     };
+    list_sessions_endpoint_v1_cloud_sessions_get: {
+        parameters: {
+            query: {
+                targetId: string;
+                cloudWorkspaceId?: string | null;
+                workspaceId?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionProjectionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_snapshot_endpoint_v1_cloud_sessions__session_id__snapshot_get: {
+        parameters: {
+            query: {
+                targetId: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_snapshot_alias_endpoint_v1_cloud_sessions__session_id__get: {
+        parameters: {
+            query: {
+                targetId: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transcript_snapshot_endpoint_v1_cloud_sessions__session_id__transcript_get: {
+        parameters: {
+            query: {
+                targetId: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTranscriptSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_events_endpoint_v1_cloud_sessions__session_id__events_get: {
+        parameters: {
+            query: {
+                targetId: string;
+                afterSeq?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSessionEventsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_snapshot_endpoint_v1_cloud_workspaces__workspace_id__snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudWorkspaceSnapshotResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_session_endpoint_v1_cloud_sessions__session_id__stream_get: {
+        parameters: {
+            query: {
+                afterSeq?: number;
+                targetId: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_workspace_endpoint_v1_cloud_workspaces__workspace_id__stream_get: {
+        parameters: {
+            query?: {
+                afterSeq?: number;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_target_endpoint_v1_cloud_targets__target_id__stream_get: {
+        parameters: {
+            query?: {
+                afterSeq?: number;
+            };
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_backfill_endpoint_v1_cloud_worker_backfill_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerBackfillRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerBackfillResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     enroll_worker_endpoint_v1_cloud_worker_enroll_post: {
         parameters: {
             query?: never;
@@ -7097,6 +7907,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerCommandStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_event_batch_endpoint_v1_cloud_worker_events_batches_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerEventBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerEventBatchResponse"];
                 };
             };
             /** @description Validation Error */

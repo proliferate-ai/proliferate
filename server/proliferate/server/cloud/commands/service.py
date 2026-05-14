@@ -26,6 +26,7 @@ from proliferate.server.cloud.commands.domain.rules import (
 )
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
 
 
 def _idempotency_scope_for_command(
@@ -152,6 +153,7 @@ async def enqueue_command(
         idempotency_key=body.idempotency_key,
     )
     if existing is not None:
+        await publish_command_status_after_commit(db, existing)
         return existing
     authorization_context_json = compact_command_json(
         {
@@ -165,7 +167,7 @@ async def enqueue_command(
     )
     try:
         async with db.begin_nested():
-            return await commands_store.create_command(
+            command = await commands_store.create_command(
                 db,
                 idempotency_scope=idempotency_scope,
                 idempotency_key=body.idempotency_key,
@@ -182,6 +184,8 @@ async def enqueue_command(
                 preconditions_json=compact_command_json(body.preconditions),
                 authorization_context_json=authorization_context_json,
             )
+        await publish_command_status_after_commit(db, command)
+        return command
     except IntegrityError:
         duplicate = await commands_store.get_command_by_idempotency(
             db,

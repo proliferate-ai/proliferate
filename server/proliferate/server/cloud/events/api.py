@@ -5,7 +5,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
@@ -21,7 +20,14 @@ from proliferate.server.cloud.events.service import (
     get_session_snapshot,
     list_session_summaries,
 )
-from proliferate.server.cloud.live.service import stream_session_events
+from proliferate.server.cloud.live.models import (
+    CloudSessionEventsResponse,
+    CloudTranscriptSnapshotResponse,
+)
+from proliferate.server.cloud.live.service import (
+    get_transcript_snapshot,
+    list_session_events_after,
+)
 
 router = APIRouter(prefix="/sessions", tags=["cloud-sessions"])
 
@@ -71,14 +77,13 @@ async def get_session_snapshot_endpoint(
         raise_cloud_error(error)
 
 
-@router.get("/{session_id}/stream")
-async def stream_session_endpoint(
+@router.get("/{session_id}", response_model=CloudSessionSnapshotResponse)
+async def get_session_snapshot_alias_endpoint(
     session_id: str,
     target_id: UUID = Query(alias="targetId"),
-    after_seq: int = Query(default=0, alias="afterSeq"),
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_active_user),
-) -> StreamingResponse:
+) -> CloudSessionSnapshotResponse:
     try:
         resolved_target_id = await ensure_visible_session_target(
             db,
@@ -86,14 +91,60 @@ async def stream_session_endpoint(
             session_id=session_id,
             user_id=user.id,
         )
+        return await get_session_snapshot(
+            db,
+            target_id=resolved_target_id,
+            session_id=session_id,
+        )
     except CloudApiError as error:
         raise_cloud_error(error)
 
-    return StreamingResponse(
-        stream_session_events(
+
+@router.get("/{session_id}/transcript", response_model=CloudTranscriptSnapshotResponse)
+async def get_transcript_snapshot_endpoint(
+    session_id: str,
+    target_id: UUID = Query(alias="targetId"),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
+) -> CloudTranscriptSnapshotResponse:
+    try:
+        resolved_target_id = await ensure_visible_session_target(
+            db,
+            target_id=target_id,
+            session_id=session_id,
+            user_id=user.id,
+        )
+        return await get_transcript_snapshot(
+            db,
+            target_id=resolved_target_id,
+            session_id=session_id,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.get("/{session_id}/events", response_model=CloudSessionEventsResponse)
+async def list_session_events_endpoint(
+    session_id: str,
+    target_id: UUID = Query(alias="targetId"),
+    after_seq: int = Query(default=0, alias="afterSeq"),
+    limit: int = Query(default=100, ge=1, le=200),
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
+) -> CloudSessionEventsResponse:
+    try:
+        resolved_target_id = await ensure_visible_session_target(
+            db,
+            target_id=target_id,
+            session_id=session_id,
+            user_id=user.id,
+        )
+        return await list_session_events_after(
+            db,
             target_id=resolved_target_id,
             session_id=session_id,
             after_seq=after_seq,
-        ),
-        media_type="text/event-stream",
-    )
+            limit=limit,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
