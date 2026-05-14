@@ -4,6 +4,7 @@ use tracing::{info, warn};
 use crate::{
     anyharness_client::{health as anyharness_health, AnyHarnessClient},
     cloud_client::{heartbeat, inventory as cloud_inventory, CloudClient},
+    commands,
     config::WorkerConfig,
     error::WorkerError,
     identity::{credentials::WorkerIdentity, enrollment},
@@ -34,6 +35,16 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     if once {
         return Ok(());
     }
+    let command_config = config.clone();
+    let command_cloud = cloud.clone();
+    let command_identity = identity.clone();
+    tokio::spawn(async move {
+        if let Err(error) =
+            commands::dispatcher::run_loop(command_config, command_cloud, command_identity).await
+        {
+            warn!(?error, "worker command loop exited");
+        }
+    });
     loop {
         sleep(Duration::from_secs(
             config.heartbeat_interval_seconds.max(10),

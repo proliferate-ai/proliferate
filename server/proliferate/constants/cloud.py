@@ -221,3 +221,75 @@ CLOUD_WORKER_TOKEN_DOMAIN: Final = "cloud-worker"
 CLOUD_TARGET_DEFAULT_ENROLLMENT_TTL_SECONDS: Final = 3600
 CLOUD_TARGET_MAX_ENROLLMENT_TTL_SECONDS: Final = 86_400
 CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180
+
+
+# ---------------------------------------------------------------------------
+# Cloud commands
+# ---------------------------------------------------------------------------
+
+
+class CloudCommandKind(StrEnum):
+    start_session = "start_session"
+    resume_session = "resume_session"
+    send_prompt = "send_prompt"
+    resolve_interaction = "resolve_interaction"
+    update_session_config = "update_session_config"
+    cancel_turn = "cancel_turn"
+    cancel_session = "cancel_session"
+    stop_workspace = "stop_workspace"
+    hibernate_workspace = "hibernate_workspace"
+    resume_workspace = "resume_workspace"
+    prune_workspace = "prune_workspace"
+    extend_workspace_ttl = "extend_workspace_ttl"
+    sync_existing_workspace = "sync_existing_workspace"
+
+
+class CloudCommandStatus(StrEnum):
+    queued = "queued"
+    leased = "leased"
+    delivered = "delivered"
+    accepted = "accepted"
+    accepted_but_queued = "accepted_but_queued"
+    rejected = "rejected"
+    expired = "expired"
+    superseded = "superseded"
+    failed_delivery = "failed_delivery"
+
+
+class CloudCommandActorKind(StrEnum):
+    user = "user"
+    automation = "automation"
+    slack = "slack"
+    api_key = "api_key"
+    system = "system"
+
+
+class CloudCommandSource(StrEnum):
+    web = "web"
+    mobile = "mobile"
+    slack = "slack"
+    api = "api"
+    automation = "automation"
+    desktop_cloud_view = "desktop_cloud_view"
+
+
+SUPPORTED_CLOUD_COMMAND_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudCommandKind)
+PHASE3_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
+    CloudCommandKind.send_prompt.value,
+    CloudCommandKind.resolve_interaction.value,
+    CloudCommandKind.update_session_config.value,
+    CloudCommandKind.cancel_turn.value,
+)
+SUPPORTED_CLOUD_COMMAND_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in CloudCommandStatus
+)
+SUPPORTED_CLOUD_COMMAND_ACTOR_KINDS: tuple[str, ...] = tuple(
+    actor_kind.value for actor_kind in CloudCommandActorKind
+)
+SUPPORTED_CLOUD_COMMAND_SOURCES: tuple[str, ...] = tuple(
+    source.value for source in CloudCommandSource
+)
+
+CLOUD_COMMAND_DEFAULT_LEASE_SECONDS: Final = 30
+CLOUD_COMMAND_MAX_LEASE_SECONDS: Final = 300
+CLOUD_COMMAND_MAX_PAYLOAD_BYTES: Final = 262_144

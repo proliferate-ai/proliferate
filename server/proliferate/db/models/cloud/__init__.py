@@ -5,6 +5,7 @@ Callers should import concrete models from the owning module in this package.
 """
 
 from . import credentials as credentials  # noqa: F401
+from . import commands as commands  # noqa: F401
 from . import mcp as mcp  # noqa: F401
 from . import mobility as mobility  # noqa: F401
 from . import repo_config as repo_config  # noqa: F401
