@@ -14,6 +14,13 @@ fi
 
 PROLIFERATE_HOME="${PROLIFERATE_HOME:-$HOME/.proliferate}"
 PROLIFERATE_ANYHARNESS_BASE_URL="${PROLIFERATE_ANYHARNESS_BASE_URL:-http://127.0.0.1:8457}"
+PROLIFERATE_SERVICE_NAME="${PROLIFERATE_SERVICE_NAME:-proliferate-target}"
+case "$PROLIFERATE_SERVICE_NAME" in
+  ""|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.@-]*)
+    echo "PROLIFERATE_SERVICE_NAME must be a simple systemd unit name" >&2
+    exit 1
+    ;;
+esac
 BIN_DIR="$PROLIFERATE_HOME/bin"
 WORKER_DIR="$PROLIFERATE_HOME/worker"
 SUPERVISOR_DIR="$PROLIFERATE_HOME/supervisor"
@@ -77,7 +84,7 @@ chmod 600 "$SUPERVISOR_DIR/config.toml"
 if command -v systemctl >/dev/null 2>&1; then
   systemd_dir="$HOME/.config/systemd/user"
   mkdir -p "$systemd_dir"
-  cat > "$systemd_dir/proliferate-target.service" <<EOF
+  cat > "$systemd_dir/$PROLIFERATE_SERVICE_NAME.service" <<EOF
 [Unit]
 Description=Proliferate target supervisor
 After=network-online.target
@@ -92,9 +99,9 @@ RestartSec=5
 WantedBy=default.target
 EOF
   if systemctl --user daemon-reload \
-    && systemctl --user enable --now proliferate-target.service \
-    && systemctl --user is-active --quiet proliferate-target.service; then
-    echo "Proliferate target installed. Check status with: systemctl --user status proliferate-target.service"
+    && systemctl --user enable --now "$PROLIFERATE_SERVICE_NAME.service" \
+    && systemctl --user is-active --quiet "$PROLIFERATE_SERVICE_NAME.service"; then
+    echo "Proliferate target installed. Check status with: systemctl --user status $PROLIFERATE_SERVICE_NAME.service"
   else
     echo "Proliferate target files installed, but the user systemd service did not start." >&2
     echo "Start manually with:" >&2

@@ -24,6 +24,8 @@ PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
 LOCAL_CODEX_ACP ?= $(HOME)/codex-acp/target/debug/codex-acp
+CLOUD_SSH_WORKER_API_PORT ?= 8044
+CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
 DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
 DESKTOP_RELEASE_TARGET_OS ?= macos
@@ -59,6 +61,7 @@ endif
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
         cloud-runtime-build publish-cloud-template-env-local \
+        test-cloud-ssh-worker dev-cloud-ssh-worker \
         test-cloud-e2b test-cloud-daytona test-cloud-all test-cloud-webhooks \
         cloud-openapi cloud-client-generate \
         stripe-setup-test \
@@ -485,6 +488,35 @@ test-cloud-webhooks: server-db-ready
 
 test-cloud-all: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
+
+test-cloud-ssh-worker:
+	@test -n "$(SSH_TARGET)" || { \
+		echo "SSH_TARGET is required, for example:"; \
+		echo "  make test-cloud-ssh-worker SSH_TARGET=ubuntu@44.247.206.119 SSH_KEY=/path/to/key.pem"; \
+		exit 1; \
+	}
+	SSH_TARGET="$(SSH_TARGET)" \
+	SSH_KEY="$(SSH_KEY)" \
+	NGROK_URL="$(NGROK_URL)" \
+	CLOUD_SSH_WORKER_API_PORT="$(CLOUD_SSH_WORKER_API_PORT)" \
+	CLOUD_SSH_WORKER_DB="$(CLOUD_SSH_WORKER_DB)" \
+	CLOUD_SSH_WORKER_SKIP_BUILD="$(CLOUD_SSH_WORKER_SKIP_BUILD)" \
+	python3 scripts/cloud-ssh-worker-smoke.py
+
+dev-cloud-ssh-worker:
+	@test -n "$(SSH_TARGET)" || { \
+		echo "SSH_TARGET is required, for example:"; \
+		echo "  make dev-cloud-ssh-worker SSH_TARGET=ubuntu@44.247.206.119 SSH_KEY=/path/to/key.pem"; \
+		exit 1; \
+	}
+	SSH_TARGET="$(SSH_TARGET)" \
+	SSH_KEY="$(SSH_KEY)" \
+	NGROK_URL="$(NGROK_URL)" \
+	CLOUD_SSH_WORKER_API_PORT="$(CLOUD_SSH_WORKER_API_PORT)" \
+	CLOUD_SSH_WORKER_DB="$(CLOUD_SSH_WORKER_DB)" \
+	CLOUD_SSH_WORKER_SKIP_BUILD="$(CLOUD_SSH_WORKER_SKIP_BUILD)" \
+	CLOUD_SSH_WORKER_KEEP_RUNNING=1 \
+	python3 scripts/cloud-ssh-worker-smoke.py
 
 stripe-setup-test:
 	@command -v stripe >/dev/null 2>&1 || { \
