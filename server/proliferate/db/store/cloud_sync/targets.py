@@ -92,6 +92,12 @@ class CloudTargetSnapshot:
     inventory: CloudTargetInventorySnapshot | None
 
 
+@dataclass(frozen=True)
+class TargetUpdateStatusWriteResult:
+    target: CloudTargetSnapshot | None
+    generation_matched: bool
+
+
 def _status_snapshot(row: CloudTargetStatusRow | None) -> CloudTargetStatusSnapshot | None:
     if row is None:
         return None
@@ -337,7 +343,9 @@ async def set_target_desired_versions(
     desired_worker_version: str | None,
     desired_supervisor_version: str | None,
 ) -> CloudTargetSnapshot | None:
-    target = await db.get(CloudTarget, target_id)
+    target = (
+        await db.execute(select(CloudTarget).where(CloudTarget.id == target_id).with_for_update())
+    ).scalar_one_or_none()
     if target is None:
         return None
     desired_versions_changed = (
@@ -365,19 +373,24 @@ async def set_target_desired_versions(
     return _target_snapshot(target, status, inventory, worker)
 
 
-async def record_target_update_status(
+async def record_target_update_status_for_generation(
     db: AsyncSession,
     *,
     target_id: UUID,
+    expected_update_generation: int,
     status_value: str,
     status_detail: str | None,
     component: str | None,
     version: str | None,
     reported_at: datetime,
-) -> CloudTargetSnapshot | None:
-    target = await db.get(CloudTarget, target_id)
+) -> TargetUpdateStatusWriteResult:
+    target = (
+        await db.execute(select(CloudTarget).where(CloudTarget.id == target_id).with_for_update())
+    ).scalar_one_or_none()
     if target is None:
-        return None
+        return TargetUpdateStatusWriteResult(target=None, generation_matched=True)
+    if target.update_generation != expected_update_generation:
+        return TargetUpdateStatusWriteResult(target=None, generation_matched=False)
     target.update_status = status_value
     target.update_status_detail = status_detail
     target.update_component = component
@@ -388,7 +401,10 @@ async def record_target_update_status(
     status = await db.get(CloudTargetStatusRow, target_id)
     inventory = await db.get(CloudTargetInventory, target_id)
     worker = await _get_worker_for_status(db, status)
-    return _target_snapshot(target, status, inventory, worker)
+    return TargetUpdateStatusWriteResult(
+        target=_target_snapshot(target, status, inventory, worker),
+        generation_matched=True,
+    )
 
 
 async def set_target_status(

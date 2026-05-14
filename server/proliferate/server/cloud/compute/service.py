@@ -18,7 +18,7 @@ from proliferate.server.cloud.compute.domain.policy import (
     decide_compute_target_admin_membership,
 )
 from proliferate.server.cloud.compute.domain.rules import (
-    TERMINAL_SESSION_STATUSES,
+    ACTIVE_UPDATE_STATUSES,
     decide_safe_stop,
     normalize_optional_version,
     normalize_update_channel,
@@ -95,11 +95,28 @@ async def set_desired_versions(
             "Target is archived.",
             status_code=409,
         )
+    fields = body.model_fields_set
     try:
-        update_channel = normalize_update_channel(body.update_channel)
-        desired_anyharness_version = normalize_optional_version(body.anyharness_version)
-        desired_worker_version = normalize_optional_version(body.worker_version)
-        desired_supervisor_version = normalize_optional_version(body.supervisor_version)
+        update_channel = (
+            normalize_update_channel(body.update_channel)
+            if "update_channel" in fields
+            else target.update_channel
+        )
+        desired_anyharness_version = (
+            normalize_optional_version(body.anyharness_version)
+            if "anyharness_version" in fields
+            else target.desired_anyharness_version
+        )
+        desired_worker_version = (
+            normalize_optional_version(body.worker_version)
+            if "worker_version" in fields
+            else target.desired_worker_version
+        )
+        desired_supervisor_version = (
+            normalize_optional_version(body.supervisor_version)
+            if "supervisor_version" in fields
+            else target.desired_supervisor_version
+        )
     except ComputeRuleError as error:
         raise _cloud_compute_rule_error(error) from error
     updated = await targets_store.set_target_desired_versions(
@@ -127,10 +144,9 @@ async def check_safe_stop(
     user: User,
 ) -> SafeStopCheckResponse:
     target = await _require_admin_target(db, target_id=target_id, user=user)
-    active_session_count = await events_store.count_sessions_for_target_excluding_statuses(
+    active_session_count = await events_store.count_active_sessions_for_target(
         db,
         target_id=target.id,
-        excluded_statuses=TERMINAL_SESSION_STATUSES,
     )
     active_command_count = await commands_store.count_active_commands_for_target(
         db,
@@ -165,10 +181,9 @@ async def revoke_workers_for_target(
             "Target is archived.",
             status_code=409,
         )
-    active_session_count = await events_store.count_sessions_for_target_excluding_statuses(
+    active_session_count = await events_store.count_active_sessions_for_target(
         db,
         target_id=target.id,
-        excluded_statuses=TERMINAL_SESSION_STATUSES,
     )
     active_command_count = await commands_store.count_active_commands_for_target(
         db,
@@ -178,6 +193,12 @@ async def revoke_workers_for_target(
         raise CloudApiError(
             "cloud_compute_target_active_work",
             "Target has active sessions or commands.",
+            status_code=409,
+        )
+    if target.update_status in ACTIVE_UPDATE_STATUSES:
+        raise CloudApiError(
+            "cloud_compute_target_update_in_progress",
+            "Target has an update in progress.",
             status_code=409,
         )
     await worker_auth_store.archive_workers_for_target(db, target_id=target.id, now=utcnow())

@@ -20,7 +20,7 @@ pub fn build_enroll_request(
         hostname: fingerprint::hostname(),
         worker_version: versions::worker_version(),
         anyharness_version: None,
-        supervisor_version: versions::supervisor_version(),
+        supervisor_version: versions::supervisor_version_or_configured(&config.supervisor_version),
         inventory,
     })
 }

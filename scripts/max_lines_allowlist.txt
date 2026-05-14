@@ -47,8 +47,10 @@ server/tests/integration/test_billing_api.py
 server/tests/integration/test_stripe_webhooks.py
 server/proliferate/db/store/billing.py
 server/proliferate/db/store/cloud_mobility.py
+server/proliferate/db/store/cloud_sync/events.py
 server/tests/unit/test_cloud_runtime_provision.py
 server/proliferate/server/billing/service.py
 server/proliferate/db/store/cloud_workspaces.py
+server/proliferate/server/cloud/runtime/bootstrap.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py

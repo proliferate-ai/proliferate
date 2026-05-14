@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from proliferate.constants.cloud import CloudTargetUpdateChannel
+
 
 class WorkerInventoryPayload(BaseModel):
     os: str | None = None
@@ -46,7 +48,7 @@ class WorkerHeartbeatRequest(BaseModel):
 
 class WorkerDesiredVersionsResponse(BaseModel):
     should_update: bool = Field(serialization_alias="shouldUpdate")
-    update_channel: str = Field(serialization_alias="updateChannel")
+    update_channel: CloudTargetUpdateChannel = Field(serialization_alias="updateChannel")
     update_generation: int = Field(serialization_alias="updateGeneration")
     anyharness_version: str | None = Field(
         default=None,
@@ -71,7 +73,7 @@ class WorkerHeartbeatResponse(BaseModel):
 
 class WorkerUpdateStatusRequest(BaseModel):
     status: str
-    update_generation: int | None = Field(default=None, alias="updateGeneration")
+    update_generation: int = Field(alias="updateGeneration")
     component: str | None = None
     version: str | None = None
     detail: str | None = None

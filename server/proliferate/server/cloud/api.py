@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from proliferate.server.cloud.backfill.api import router as backfill_router
-from proliferate.server.cloud.compute.api import router as compute_router
 from proliferate.server.cloud.commands.api import router as commands_router
+from proliferate.server.cloud.compute.api import router as compute_router
 from proliferate.server.cloud.credentials.api import router as credentials_router
 from proliferate.server.cloud.events.api import router as events_router
 from proliferate.server.cloud.live.api import router as live_router

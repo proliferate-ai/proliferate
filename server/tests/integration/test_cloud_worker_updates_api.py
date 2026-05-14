@@ -73,6 +73,19 @@ class TestCloudWorkerUpdatesApi:
         generation = desired_update["generation"]
         assert desired_update["desiredVersions"]["workerVersion"] == "0.2.0"
 
+        patch = await client.post(
+            f"/v1/cloud/compute/targets/{target_id}/desired-versions",
+            headers=auth.headers,
+            json={"workerVersion": "0.2.1"},
+        )
+        assert patch.status_code == 200
+        patch_update = patch.json()["target"]["update"]
+        generation = patch_update["generation"]
+        assert patch_update["channel"] == "stable"
+        assert patch_update["desiredVersions"]["anyharnessVersion"] == "0.2.0"
+        assert patch_update["desiredVersions"]["workerVersion"] == "0.2.1"
+        assert patch_update["desiredVersions"]["supervisorVersion"] == "0.2.0"
+
         invalid_channel = await client.post(
             f"/v1/cloud/compute/targets/{target_id}/desired-versions",
             headers=auth.headers,
@@ -97,7 +110,7 @@ class TestCloudWorkerUpdatesApi:
         desired_versions = heartbeat.json()["desiredVersions"]
         assert desired_versions["shouldUpdate"] is True
         assert desired_versions["updateGeneration"] == generation
-        assert desired_versions["workerVersion"] == "0.2.0"
+        assert desired_versions["workerVersion"] == "0.2.1"
 
         update_status = await client.post(
             "/v1/cloud/worker/update-status",
@@ -106,7 +119,7 @@ class TestCloudWorkerUpdatesApi:
                 "status": "staged",
                 "updateGeneration": generation,
                 "component": "worker",
-                "version": "0.2.0",
+                "version": "0.2.1",
                 "detail": "Artifacts staged.",
             },
         )
@@ -121,7 +134,7 @@ class TestCloudWorkerUpdatesApi:
         assert update["currentVersions"]["supervisorVersion"] == "0.1.0"
         assert update["status"] == "staged"
         assert update["component"] == "worker"
-        assert update["version"] == "0.2.0"
+        assert update["version"] == "0.2.1"
 
         reset = await client.post(
             f"/v1/cloud/compute/targets/{target_id}/desired-versions",
@@ -263,12 +276,35 @@ class TestCloudWorkerUpdatesApi:
         assert idle.json()["allowed"] is False
         assert "safe_stop_state_unknown" in idle.json()["reasons"]
 
-        update_status = await client.post(
+        unsolicited_update_status = await client.post(
             "/v1/cloud/worker/update-status",
             headers=worker_headers,
             json={
                 "status": "staging",
                 "updateGeneration": 0,
+                "detail": "Update request received.",
+            },
+        )
+        assert unsolicited_update_status.status_code == 409
+        assert (
+            unsolicited_update_status.json()["detail"]["code"]
+            == "cloud_worker_update_not_requested"
+        )
+
+        desired = await client.post(
+            f"/v1/cloud/compute/targets/{target_id}/desired-versions",
+            headers=auth.headers,
+            json={"workerVersion": "0.2.0"},
+        )
+        assert desired.status_code == 200
+        generation = desired.json()["target"]["update"]["generation"]
+
+        update_status = await client.post(
+            "/v1/cloud/worker/update-status",
+            headers=worker_headers,
+            json={
+                "status": "staging",
+                "updateGeneration": generation,
                 "detail": "Update request received.",
             },
         )
@@ -282,6 +318,13 @@ class TestCloudWorkerUpdatesApi:
         assert update_in_progress.json()["allowed"] is False
         assert "update_in_progress" in update_in_progress.json()["reasons"]
 
+        update_revoke = await client.post(
+            f"/v1/cloud/compute/targets/{target_id}/revoke-workers",
+            headers=auth.headers,
+        )
+        assert update_revoke.status_code == 409
+        assert update_revoke.json()["detail"]["code"] == "cloud_compute_target_update_in_progress"
+
         await events_store.upsert_session_projection(
             db_session,
             target_id=UUID(target_id),
@@ -290,7 +333,7 @@ class TestCloudWorkerUpdatesApi:
             session_id="session-1",
             seq=1,
             occurred_at="2026-05-14T00:00:00+00:00",
-            status="running",
+            status="idle",
         )
         await db_session.commit()
 
