@@ -122,11 +122,13 @@ impl SessionRuntime {
 pub(crate) fn session_link_to_summary(record: &SessionLinkRecord) -> SessionLinkSummary {
     SessionLinkSummary {
         id: record.id.clone(),
+        public_id: record.public_id.clone(),
         relation: record.relation.as_str().to_string(),
         parent_session_id: record.parent_session_id.clone(),
         child_session_id: record.child_session_id.clone(),
         workspace_relation: record.workspace_relation.as_str().to_string(),
         label: record.label.clone(),
         created_at: record.created_at.clone(),
+        closed_at: record.closed_at.clone(),
     }
 }

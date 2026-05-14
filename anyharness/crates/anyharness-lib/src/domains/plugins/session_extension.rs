@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
+use anyharness_contract::v1::SessionPluginBundle;
+
 use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, definition};
 use crate::domains::plugins::registry::PluginBundleRegistry;
 use crate::domains::plugins::skills::{
-    bundle_has_skills, render_skill_index, SKILLS_MCP_CONNECTION_ID, SKILLS_MCP_SERVER_NAME,
+    bundle_has_skills, effective_bundle_with_product_skills, product_skills_for_session,
+    render_skill_index, SKILLS_MCP_CONNECTION_ID, SKILLS_MCP_SERVER_NAME,
 };
 use crate::integrations::mcp::product_server::PRODUCT_MCP_TOKEN_HEADER_NAME;
 use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
@@ -274,9 +277,21 @@ impl SessionExtension for PluginSessionLaunchExtension {
         if ctx.session.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
             return Ok(SessionLaunchExtras::default());
         }
-        let Some(bundle) = self.registry.get_session_bundle(&ctx.session.id) else {
+        let stored_bundle = self
+            .registry
+            .get_session_bundle(&ctx.session.id)
+            .unwrap_or_else(|| SessionPluginBundle {
+                plugins: Vec::new(),
+            });
+        let product_skills = product_skills_for_session(ctx.session.subagents_enabled);
+        let bundle = effective_bundle_with_product_skills(stored_bundle, product_skills);
+        if bundle.plugins.is_empty() {
             return Ok(SessionLaunchExtras::default());
-        };
+        }
+        if bundle_has_skills(&bundle) {
+            self.registry
+                .set_session_bundle(ctx.session.id.clone(), bundle.clone());
+        }
 
         let mut extras = SessionLaunchExtras::default();
         for plugin in &bundle.plugins {

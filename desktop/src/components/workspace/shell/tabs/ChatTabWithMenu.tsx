@@ -10,6 +10,7 @@ import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWork
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
 import {
+  renderChatTabDelegatedIndicators,
   renderChatTabIcon,
   renderChatTabStatusBadge,
 } from "@/components/workspace/shell/tabs/tab-rendering";
@@ -121,6 +122,7 @@ export function ChatTabWithMenu({
       onSelectPointerDownCapture={onSelectPointerDownCapture}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
+      rightAccessory={renderChatTabDelegatedIndicators(tab.delegatedIndicators)}
       data-chat-tab
       data-chat-tab-id={tab.id}
       data-chat-tab-active={tab.isActive ? "true" : "false"}

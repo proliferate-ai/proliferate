@@ -1380,20 +1380,38 @@ function deriveToolCallSemanticKind(
   }
   if (
     normalizedEffectiveToolName === "mcp__cowork__get_coding_workspace_launch_options"
+    || normalizedEffectiveToolName === "mcp__cowork__get_cowork_workspace_launch_options"
     || normalizedEffectiveToolName === "mcp__cowork__create_coding_workspace"
+    || normalizedEffectiveToolName === "mcp__cowork__create_cowork_workspace"
     || normalizedEffectiveToolName === "mcp__cowork__list_coding_workspaces"
+    || normalizedEffectiveToolName === "mcp__cowork__list_cowork_workspaces"
     || normalizedEffectiveToolName === "mcp__cowork__get_coding_session_launch_options"
+    || normalizedEffectiveToolName === "mcp__cowork__get_cowork_agent_launch_options"
     || normalizedEffectiveToolName === "mcp__cowork__create_coding_session"
+    || normalizedEffectiveToolName === "mcp__cowork__create_cowork_agent"
     || normalizedEffectiveToolName === "mcp__cowork__send_coding_message"
+    || normalizedEffectiveToolName === "mcp__cowork__send_cowork_agent_message"
     || normalizedEffectiveToolName === "mcp__cowork__schedule_coding_wake"
+    || normalizedEffectiveToolName === "mcp__cowork__schedule_cowork_agent_wake"
     || normalizedEffectiveToolName === "mcp__cowork__get_coding_status"
+    || normalizedEffectiveToolName === "mcp__cowork__get_cowork_agent_status"
     || normalizedEffectiveToolName === "mcp__cowork__read_coding_events"
+    || normalizedEffectiveToolName === "mcp__cowork__read_cowork_agent_events"
+    || normalizedEffectiveToolName === "mcp__cowork__read_cowork_agent_latest_turns"
+    || normalizedEffectiveToolName === "mcp__cowork__search_cowork_agent_transcript"
+    || normalizedEffectiveToolName === "mcp__cowork__close_cowork_agent"
   ) {
     return "cowork_coding";
   }
   if (
     normalizedEffectiveToolName === "mcp__subagents__create_subagent"
+    || normalizedEffectiveToolName === "mcp__subagents__send_subagent_message"
     || normalizedEffectiveToolName === "mcp__subagents__schedule_subagent_wake"
+    || normalizedEffectiveToolName === "mcp__subagents__get_subagent_status"
+    || normalizedEffectiveToolName === "mcp__subagents__read_subagent_events"
+    || normalizedEffectiveToolName === "mcp__subagents__read_subagent_latest_turns"
+    || normalizedEffectiveToolName === "mcp__subagents__search_subagent_transcript"
+    || normalizedEffectiveToolName === "mcp__subagents__close_subagent"
   ) {
     return "subagent";
   }

@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::sessions::links::model::SessionLinkRelation;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 
@@ -36,7 +37,19 @@ impl SessionRuntime {
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let _record = self.get_session_or_not_found(session_id)?;
+        self.close_delegated_children(session_id).await?;
+        self.close_session_actor_and_mark_closed(session_id).await?;
 
+        self.session_service
+            .get_session(session_id)
+            .map_err(SessionLifecycleError::Internal)?
+            .ok_or_else(|| SessionLifecycleError::SessionNotFound(session_id.to_string()))
+    }
+
+    async fn close_session_actor_and_mark_closed(
+        &self,
+        session_id: &str,
+    ) -> Result<(), SessionLifecycleError> {
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
             let (tx, rx) = tokio::sync::oneshot::channel();
             let _ = handle
@@ -51,12 +64,41 @@ impl SessionRuntime {
         self.session_service
             .store()
             .mark_closed(session_id, &now)
-            .map_err(SessionLifecycleError::Internal)?;
+            .map_err(SessionLifecycleError::Internal)
+    }
 
-        self.session_service
-            .get_session(session_id)
-            .map_err(SessionLifecycleError::Internal)?
-            .ok_or_else(|| SessionLifecycleError::SessionNotFound(session_id.to_string()))
+    async fn close_delegated_children(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<(), SessionLifecycleError> {
+        let links = self
+            .session_link_service
+            .list_by_parent(parent_session_id)
+            .map_err(SessionLifecycleError::Internal)?;
+        for link in links {
+            if !matches!(
+                link.relation,
+                SessionLinkRelation::Subagent | SessionLinkRelation::CoworkCodingSession
+            ) {
+                continue;
+            }
+            if let Some(child) = self
+                .session_service
+                .store()
+                .find_by_id(&link.child_session_id)
+                .map_err(SessionLifecycleError::Internal)?
+            {
+                if child.closed_at.is_none() {
+                    self.close_session_actor_and_mark_closed(&link.child_session_id)
+                        .await?;
+                }
+            }
+            let now = chrono::Utc::now().to_rfc3339();
+            self.session_link_service
+                .mark_closed(&link.id, &now)
+                .map_err(SessionLifecycleError::Internal)?;
+        }
+        Ok(())
     }
 
     pub async fn dismiss_live_session(

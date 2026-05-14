@@ -10,6 +10,7 @@ use anyharness_contract::v1::{
     CoworkManagedWorkspacesResponse, SessionLinkTurnCompletedPayload, SessionMcpBindingSummary,
     SubagentTurnOutcome,
 };
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::delegation::model::{
@@ -739,6 +740,19 @@ impl CoworkRuntime {
             .find_managed_workspace(parent_session_id, workspace_id)
     }
 
+    pub fn resolve_managed_coding_workspace(
+        &self,
+        parent_session_id: &str,
+        cowork_workspace_id: Option<&str>,
+        workspace_id: Option<&str>,
+    ) -> Result<CoworkManagedWorkspaceRecord, CoworkDelegationError> {
+        self.delegation_service.resolve_managed_workspace_target(
+            parent_session_id,
+            cowork_workspace_id,
+            workspace_id,
+        )
+    }
+
     pub fn session_record(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
         self.session_service.get_session(session_id)
     }
@@ -824,11 +838,13 @@ impl CoworkRuntime {
         )?;
         let managed_workspace = CoworkManagedWorkspaceRecord {
             id: Uuid::new_v4().to_string(),
+            public_id: Some(format!("cowork_workspace_{}", Uuid::new_v4().simple())),
             parent_session_id: parent_session_id.to_string(),
             workspace_id: worktree.workspace.id.clone(),
             source_workspace_id: Some(source_workspace.id.clone()),
             label: label.clone(),
             created_at: chrono::Utc::now().to_rfc3339(),
+            closed_at: None,
         };
         if let Err(error) = self
             .delegation_service
@@ -989,6 +1005,20 @@ impl CoworkRuntime {
         })
     }
 
+    pub fn resolve_coding_session_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+    ) -> Result<crate::sessions::links::model::SessionLinkRecord, CoworkDelegationError> {
+        self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            false,
+        )
+    }
+
     pub fn schedule_coding_wake(
         &self,
         parent_session_id: &str,
@@ -997,6 +1027,20 @@ impl CoworkRuntime {
     {
         self.delegation_service
             .schedule_coding_wake(parent_session_id, coding_session_id)
+    }
+
+    pub fn schedule_coding_wake_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), CoworkDelegationError>
+    {
+        self.delegation_service.schedule_coding_wake_for_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+        )
     }
 
     pub async fn coding_status(
@@ -1034,6 +1078,63 @@ impl CoworkRuntime {
         })
     }
 
+    pub async fn coding_status_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+    ) -> Result<CoworkCodingStatusResult, CoworkDelegationError> {
+        let link = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            false,
+        )?;
+        self.coding_status(parent_session_id, &link.child_session_id)
+            .await
+    }
+
+    pub async fn close_coding_session_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+    ) -> Result<
+        (
+            crate::sessions::links::model::SessionLinkRecord,
+            bool,
+            String,
+        ),
+        CoworkDelegationError,
+    > {
+        let link = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            true,
+        )?;
+        let already_closed = link.closed_at.is_some();
+        let now = chrono::Utc::now().to_rfc3339();
+        if !already_closed {
+            if let Some(session) = self
+                .delegation_service
+                .session_store()
+                .find_by_id(&link.child_session_id)?
+            {
+                if session.closed_at.is_none() {
+                    self.session_runtime
+                        .close_live_session(&link.child_session_id)
+                        .await
+                        .map_err(|error| {
+                            CoworkDelegationError::Internal(anyhow::anyhow!("{error:?}"))
+                        })?;
+                }
+            }
+            self.delegation_service.close_coding_link(&link, &now)?;
+        }
+        Ok((link, already_closed, now))
+    }
+
     pub fn read_coding_events(
         &self,
         parent_session_id: &str,
@@ -1047,6 +1148,109 @@ impl CoworkRuntime {
             since_seq,
             limit,
         )
+    }
+
+    pub fn read_coding_events_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+        since_seq: Option<i64>,
+        limit: Option<usize>,
+    ) -> Result<crate::sessions::delegation::DelegatedEventSlice, CoworkDelegationError> {
+        let link = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            false,
+        )?;
+        self.read_coding_events(parent_session_id, &link.child_session_id, since_seq, limit)
+    }
+
+    pub fn read_coding_latest_turns_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<Value>, CoworkDelegationError> {
+        let link = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            false,
+        )?;
+        let limit = limit.unwrap_or(3).clamp(1, 10);
+        let mut completions = self
+            .delegation_service
+            .list_completions_for_link(&link.id)?;
+        completions.sort_by(|left, right| {
+            right
+                .created_at
+                .cmp(&left.created_at)
+                .then_with(|| right.completion_id.cmp(&left.completion_id))
+        });
+        completions.truncate(limit);
+        completions.reverse();
+        Ok(completions
+            .into_iter()
+            .map(|completion| {
+                json!({
+                    "childTurnId": completion.child_turn_id,
+                    "outcome": completion.outcome.as_str(),
+                    "createdAt": completion.created_at,
+                    "childLastEventSeq": completion.child_last_event_seq,
+                    "parentEventSeq": completion.parent_event_seq,
+                    "parentPromptSeq": completion.parent_prompt_seq,
+                })
+            })
+            .collect())
+    }
+
+    pub fn search_coding_transcript_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+        query: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<Value>, CoworkDelegationError> {
+        let link = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            false,
+        )?;
+        let query = query.trim();
+        if query.is_empty() {
+            return Err(CoworkDelegationError::Internal(anyhow::anyhow!(
+                "query is required"
+            )));
+        }
+        let needle = query.to_lowercase();
+        let limit = limit.unwrap_or(10).clamp(1, 25);
+        let mut matches = Vec::new();
+        for record in self
+            .delegation_service
+            .session_store()
+            .list_events_limited(&link.child_session_id, 500)?
+        {
+            if matches.len() >= limit {
+                break;
+            }
+            let text = record.payload_json.replace('\n', " ");
+            if !text.to_lowercase().contains(&needle) {
+                continue;
+            }
+            matches.push(json!({
+                "seq": record.seq,
+                "timestamp": record.timestamp,
+                "turnId": record.turn_id,
+                "itemId": record.item_id,
+                "snippet": trim_snippet(&text, 240),
+            }));
+        }
+        Ok(matches)
     }
 
     pub async fn managed_workspaces_context(
@@ -1093,6 +1297,7 @@ impl CoworkRuntime {
                             created_at: record.created_at,
                         });
                     Ok(CoworkCodingSessionSummary {
+                        cowork_agent_id: link.public_id.clone(),
                         session_link_id: link.id.clone(),
                         coding_session_id: session.id,
                         title: session.title,
@@ -1104,16 +1309,19 @@ impl CoworkRuntime {
                         wake_scheduled: scheduled.contains(&link.id),
                         latest_completion,
                         link_created_at: link.created_at,
+                        link_closed_at: link.closed_at,
                         session_created_at: session.created_at,
                     })
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
             summaries.push(CoworkManagedWorkspaceSummary {
+                cowork_workspace_id: managed.public_id,
                 ownership_id: managed.id,
                 workspace_id: managed.workspace_id,
                 source_workspace_id: managed.source_workspace_id,
                 label: managed.label,
                 created_at: managed.created_at,
+                closed_at: managed.closed_at,
                 sessions,
             });
         }
@@ -1235,13 +1443,12 @@ impl CoworkRuntime {
 }
 
 fn normalize_required_prompt(value: String) -> Result<String, CoworkDelegationError> {
-    let prompt = value.trim().to_string();
-    if prompt.is_empty() {
+    if value.trim().is_empty() {
         return Err(CoworkDelegationError::Internal(anyhow::anyhow!(
             "prompt is required"
         )));
     }
-    Ok(prompt)
+    Ok(value)
 }
 
 fn normalize_optional_text(value: Option<String>) -> Option<String> {
@@ -1252,6 +1459,16 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 
 fn normalize_optional_ref(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn trim_snippet(text: &str, max_chars: usize) -> String {
+    let mut iter = text.chars();
+    let trimmed = iter.by_ref().take(max_chars).collect::<String>();
+    if iter.next().is_some() {
+        format!("{trimmed}...")
+    } else {
+        trimmed
+    }
 }
 
 pub(crate) fn default_cowork_coding_mode_for_agent(agent_kind: &str) -> Option<&'static str> {

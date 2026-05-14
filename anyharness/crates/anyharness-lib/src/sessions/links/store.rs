@@ -25,11 +25,13 @@ impl SessionLinkStore {
         self.db.with_conn(|conn| {
             conn.execute(
                 "INSERT INTO session_links (
-                    id, relation, parent_session_id, child_session_id, workspace_relation,
-                    label, created_by_turn_id, created_by_tool_call_id, created_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    id, public_id, relation, parent_session_id, child_session_id,
+                    workspace_relation, label, created_by_turn_id,
+                    created_by_tool_call_id, created_at, closed_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 params![
                     record.id,
+                    record.public_id,
                     record.relation.as_str(),
                     record.parent_session_id,
                     record.child_session_id,
@@ -38,6 +40,7 @@ impl SessionLinkStore {
                     record.created_by_turn_id,
                     record.created_by_tool_call_id,
                     record.created_at,
+                    record.closed_at,
                 ],
             )?;
             Ok(())
@@ -52,17 +55,20 @@ impl SessionLinkStore {
         self.db.with_conn(|conn| {
             let inserted = conn.execute(
                 "INSERT INTO session_links (
-                    id, relation, parent_session_id, child_session_id, workspace_relation,
-                    label, created_by_turn_id, created_by_tool_call_id, created_at
+                    id, public_id, relation, parent_session_id, child_session_id,
+                    workspace_relation, label, created_by_turn_id,
+                    created_by_tool_call_id, created_at, closed_at
                  )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
                  WHERE (
                     SELECT COUNT(*)
                     FROM session_links
                     WHERE relation = 'subagent' AND parent_session_id = ?3
-                 ) < ?10",
+                      AND closed_at IS NULL
+                 ) < ?12",
                 params![
                     record.id,
+                    record.public_id,
                     record.relation.as_str(),
                     record.parent_session_id,
                     record.child_session_id,
@@ -71,6 +77,7 @@ impl SessionLinkStore {
                     record.created_by_turn_id,
                     record.created_by_tool_call_id,
                     record.created_at,
+                    record.closed_at,
                     max_children as i64,
                 ],
             )?;
@@ -94,6 +101,29 @@ impl SessionLinkStore {
                 map_session_link,
             )
             .optional()
+        })
+    }
+
+    pub fn find_by_public_id(&self, public_id: &str) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_links WHERE public_id = ?1",
+                [public_id],
+                map_session_link,
+            )
+            .optional()
+        })
+    }
+
+    pub fn mark_closed(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let updated = conn.execute(
+                "UPDATE session_links
+                 SET closed_at = COALESCE(closed_at, ?1)
+                 WHERE id = ?2",
+                params![closed_at, id],
+            )?;
+            Ok(updated > 0)
         })
     }
 
@@ -127,7 +157,25 @@ impl SessionLinkStore {
                 "SELECT * FROM session_links
                  WHERE relation = ?1
                    AND parent_session_id = ?2
-                   AND child_session_id = ?3",
+                   AND child_session_id = ?3
+                   AND closed_at IS NULL",
+                params![relation.as_str(), parent_session_id, child_session_id],
+                map_session_link,
+            )
+            .optional()
+        })
+    }
+
+    pub fn find_link_by_relation_including_closed(
+        &self,
+        relation: SessionLinkRelation,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_links
+                 WHERE relation = ?1 AND parent_session_id = ?2 AND child_session_id = ?3",
                 params![relation.as_str(), parent_session_id, child_session_id],
                 map_session_link,
             )
@@ -144,6 +192,7 @@ impl SessionLinkStore {
             let mut stmt = conn.prepare(
                 "SELECT * FROM session_links
                  WHERE relation = ?1 AND parent_session_id = ?2
+                   AND closed_at IS NULL
                  ORDER BY created_at ASC, id ASC",
             )?;
             let rows = stmt.query_map(
@@ -163,6 +212,7 @@ impl SessionLinkStore {
             conn.query_row(
                 "SELECT * FROM session_links
                  WHERE relation = ?1 AND child_session_id = ?2
+                   AND closed_at IS NULL
                  LIMIT 1",
                 params![relation.as_str(), child_session_id],
                 map_session_link,
@@ -179,6 +229,7 @@ impl SessionLinkStore {
             let mut stmt = conn.prepare(
                 "SELECT * FROM session_links
                  WHERE parent_session_id = ?1
+                   AND closed_at IS NULL
                  ORDER BY created_at ASC, id ASC",
             )?;
             let rows = stmt.query_map([parent_session_id], map_session_link)?;
@@ -191,6 +242,7 @@ impl SessionLinkStore {
             let mut stmt = conn.prepare(
                 "SELECT * FROM session_links
                  WHERE child_session_id = ?1
+                   AND closed_at IS NULL
                  ORDER BY created_at ASC, id ASC",
             )?;
             let rows = stmt.query_map([child_session_id], map_session_link)?;
@@ -218,6 +270,7 @@ fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> 
     let workspace_relation: String = row.get("workspace_relation")?;
     Ok(SessionLinkRecord {
         id: row.get("id")?,
+        public_id: row.get("public_id")?,
         relation: parse_relation_for_row(&relation)?,
         parent_session_id: row.get("parent_session_id")?,
         child_session_id: row.get("child_session_id")?,
@@ -226,6 +279,7 @@ fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> 
         created_by_turn_id: row.get("created_by_turn_id")?,
         created_by_tool_call_id: row.get("created_by_tool_call_id")?,
         created_at: row.get("created_at")?,
+        closed_at: row.get("closed_at")?,
     })
 }
 

@@ -26,6 +26,7 @@ export interface SubagentLaunchDisplay {
 }
 
 export interface SubagentLaunchResult {
+  subagentId: string | null;
   sessionLinkId: string | null;
   childSessionId: string | null;
 }
@@ -127,6 +128,7 @@ export function parseSubagentLaunchResult(
   }
 
   return {
+    subagentId: provisioningStatus.subagentId,
     sessionLinkId: provisioningStatus.sessionLinkId,
     childSessionId: provisioningStatus.childSessionId,
   };
@@ -147,6 +149,7 @@ export function parseSubagentProvisioningStatus(
   }
 
   return {
+    subagentId: readStringField(output, "subagentId"),
     sessionLinkId: readStringField(output, "sessionLinkId"),
     childSessionId: readStringField(output, "childSessionId"),
     promptStatus: readStringField(output, "promptStatus"),

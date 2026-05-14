@@ -1,9 +1,13 @@
-use anyharness_contract::v1::{SessionPluginBundle, SessionPluginSkill};
+use anyharness_contract::v1::{
+    SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 pub const SKILLS_MCP_SERVER_NAME: &str = "proliferate_skills";
 pub const SKILLS_MCP_CONNECTION_ID: &str = "proliferate-skills";
+pub const PRODUCT_SKILLS_PLUGIN_ID: &str = "proliferate.product.skills";
+pub const SUBAGENTS_WORKFLOW_SKILL_ID: &str = "proliferate.subagents.workflow";
 
 pub fn bundle_has_skills(bundle: &SessionPluginBundle) -> bool {
     bundle
@@ -40,6 +44,31 @@ pub fn render_skill_index(bundle: &SessionPluginBundle) -> Option<String> {
         ));
     }
     Some(lines.join("\n"))
+}
+
+pub fn effective_bundle_with_product_skills(
+    mut bundle: SessionPluginBundle,
+    product_skills: Vec<SessionPluginSkill>,
+) -> SessionPluginBundle {
+    if !product_skills.is_empty() {
+        bundle.plugins.push(SessionPlugin {
+            plugin_id: PRODUCT_SKILLS_PLUGIN_ID.to_string(),
+            version: Some("1".to_string()),
+            mcp_servers: Vec::new(),
+            mcp_binding_summaries: Vec::new(),
+            credential_bindings: Vec::new(),
+            skills: product_skills,
+        });
+    }
+    bundle
+}
+
+pub fn product_skills_for_session(subagents_enabled: bool) -> Vec<SessionPluginSkill> {
+    let mut skills = Vec::new();
+    if subagents_enabled {
+        skills.push(subagents_workflow_skill());
+    }
+    skills
 }
 
 pub fn list_available_skills(bundle: &SessionPluginBundle) -> Value {
@@ -116,6 +145,51 @@ fn find_skill<'a>(
 ) -> Option<&'a SessionPluginSkill> {
     iter_skills(bundle).find(|skill| skill.skill_id == skill_id)
 }
+
+fn subagents_workflow_skill() -> SessionPluginSkill {
+    SessionPluginSkill {
+        skill_id: SUBAGENTS_WORKFLOW_SKILL_ID.to_string(),
+        display_name: "Subagent workflow".to_string(),
+        description:
+            "Delegate bounded work to same-workspace subagents and read their results safely."
+                .to_string(),
+        instructions: SUBAGENTS_WORKFLOW_INSTRUCTIONS.to_string(),
+        resources: vec![SessionPluginSkillResource {
+            resource_id: "tool-flow".to_string(),
+            display_name: Some("Subagent tool flow".to_string()),
+            content_type: "text/markdown".to_string(),
+            content: SUBAGENTS_WORKFLOW_TOOL_FLOW.to_string(),
+        }],
+        required_mcp_servers: vec!["subagents".to_string()],
+        credential_binding_ids: Vec::new(),
+    }
+}
+
+const SUBAGENTS_WORKFLOW_INSTRUCTIONS: &str = r#"# Subagent Workflow
+
+Use subagents for bounded, parallel work where the child can produce a concrete result without needing your immediate next decision.
+
+Default flow:
+
+1. Call `get_subagent_launch_options` before choosing a non-default `harnessId` or `initialConfig`.
+2. Call `create_subagent` with a short `label`, the full authored `prompt`, and `wakeOnCompletion: true` when you want to be prompted after the next child completion.
+3. Use the returned `subagentId` as the handle for later calls. Legacy `childSessionId` fields are compatibility details.
+4. Prefer `read_subagent_latest_turns` for normal result reads.
+5. Use `search_subagent_transcript` when you need to find a specific mention.
+6. Use `read_subagent_events` only for bounded debugging.
+7. Call `close_subagent` when the child is no longer useful.
+
+Keep delegated tasks narrow. Do not send a subagent work that depends on hidden context it cannot access. When reporting a child result, read it first and cite the child label or `subagentId`.
+"#;
+
+const SUBAGENTS_WORKFLOW_TOOL_FLOW: &str = r#"# Subagent Tool Flow
+
+`create_subagent` starts a same-workspace child session and returns `subagentId`, `label`, applied config, prompt status, wake status, and a recommended read cursor.
+
+`send_subagent_message` sends or queues follow-up work. `wakeOnCompletion` is next-completion scoped: it prevents missed wakes after arming, but it is not a per-prompt completion guarantee if the child is already running.
+
+`read_subagent_latest_turns` is the normal result reader. `search_subagent_transcript` is the grep path. `read_subagent_events` is the raw bounded debug path.
+"#;
 
 #[cfg(test)]
 mod tests {

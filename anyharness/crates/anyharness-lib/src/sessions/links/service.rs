@@ -95,6 +95,7 @@ impl SessionLinkService {
 
         let record = SessionLinkRecord {
             id: Uuid::new_v4().to_string(),
+            public_id: Some(new_public_id(input.relation)),
             relation: input.relation,
             parent_session_id: input.parent_session_id,
             child_session_id: input.child_session_id,
@@ -103,6 +104,7 @@ impl SessionLinkService {
             created_by_turn_id: input.created_by_turn_id,
             created_by_tool_call_id: input.created_by_tool_call_id,
             created_at: chrono::Utc::now().to_rfc3339(),
+            closed_at: None,
         };
         self.store.insert(&record).map_err(|error| {
             if is_unique_constraint_error(&error) {
@@ -164,6 +166,7 @@ impl SessionLinkService {
 
         let record = SessionLinkRecord {
             id: Uuid::new_v4().to_string(),
+            public_id: Some(new_public_id(input.relation)),
             relation: input.relation,
             parent_session_id: input.parent_session_id,
             child_session_id: input.child_session_id,
@@ -172,6 +175,7 @@ impl SessionLinkService {
             created_by_turn_id: input.created_by_turn_id,
             created_by_tool_call_id: input.created_by_tool_call_id,
             created_at: chrono::Utc::now().to_rfc3339(),
+            closed_at: None,
         };
         let outcome = self
             .store
@@ -233,6 +237,27 @@ impl SessionLinkService {
             .find_link_by_relation(relation, parent_session_id, child_session_id)
     }
 
+    pub fn find_link_by_relation_including_closed(
+        &self,
+        relation: SessionLinkRelation,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.store.find_link_by_relation_including_closed(
+            relation,
+            parent_session_id,
+            child_session_id,
+        )
+    }
+
+    pub fn find_by_public_id(&self, public_id: &str) -> anyhow::Result<Option<SessionLinkRecord>> {
+        self.store.find_by_public_id(public_id)
+    }
+
+    pub fn mark_closed(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
+        self.store.mark_closed(id, closed_at)
+    }
+
     pub fn delete_link(&self, id: &str) -> anyhow::Result<bool> {
         self.store.delete_by_id(id)
     }
@@ -258,6 +283,14 @@ impl SessionLinkService {
     pub fn import_link(&self, record: &SessionLinkRecord) -> anyhow::Result<()> {
         self.store.import_link(record)
     }
+}
+
+pub fn new_public_id(relation: SessionLinkRelation) -> String {
+    format!(
+        "{}_{}",
+        relation.public_id_prefix(),
+        Uuid::new_v4().simple()
+    )
 }
 
 fn is_unique_constraint_error(error: &anyhow::Error) -> bool {

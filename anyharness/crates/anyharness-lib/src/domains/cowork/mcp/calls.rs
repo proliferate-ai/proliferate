@@ -4,7 +4,8 @@ use super::context::CoworkMcpContext;
 use super::tools::{
     self, CodingSessionArgs, CodingWorkspaceArgs, CreateArtifactArgs, CreateCodingSessionArgs,
     CreateCodingWorkspaceArgs, DeleteArtifactArgs, GetArtifactArgs, ReadCodingEventsArgs,
-    SendCodingMessageArgs, UpdateArtifactArgs,
+    ReadCodingLatestTurnsArgs, SearchCodingTranscriptArgs, SendCodingMessageArgs,
+    UpdateArtifactArgs,
 };
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::cowork::artifacts::{
@@ -139,37 +140,51 @@ async fn handle_delegation_tool_call(
     arguments: Option<Value>,
 ) -> anyhow::Result<Value> {
     match tool_name {
-        "get_coding_workspace_launch_options" => {
+        "get_cowork_workspace_launch_options" | "get_coding_workspace_launch_options" => {
             get_coding_workspace_launch_options(cowork_runtime, parent_session_id)
         }
-        "create_coding_workspace" => {
+        "create_cowork_workspace" | "create_coding_workspace" => {
             let args: CreateCodingWorkspaceArgs = deserialize_args(arguments)?;
             create_coding_workspace(cowork_runtime, parent_session_id, args).await
         }
-        "list_coding_workspaces" => list_coding_workspaces(cowork_runtime, parent_session_id).await,
-        "get_coding_session_launch_options" => {
+        "list_cowork_workspaces" | "list_coding_workspaces" => {
+            list_coding_workspaces(cowork_runtime, parent_session_id).await
+        }
+        "get_cowork_agent_launch_options" | "get_coding_session_launch_options" => {
             let args: CodingWorkspaceArgs = deserialize_args(arguments)?;
             get_coding_session_launch_options(cowork_runtime, parent_session_id, args)
         }
-        "create_coding_session" => {
+        "create_cowork_agent" | "create_coding_session" => {
             let args: CreateCodingSessionArgs = deserialize_args(arguments)?;
             create_coding_session(cowork_runtime, parent_session_id, args).await
         }
-        "send_coding_message" => {
+        "send_cowork_agent_message" | "send_coding_message" => {
             let args: SendCodingMessageArgs = deserialize_args(arguments)?;
             send_coding_message(cowork_runtime, parent_session_id, args).await
         }
-        "get_coding_status" => {
+        "get_cowork_agent_status" | "get_coding_status" => {
             let args: CodingSessionArgs = deserialize_args(arguments)?;
             get_coding_status(cowork_runtime, parent_session_id, args).await
         }
-        "schedule_coding_wake" => {
+        "schedule_cowork_agent_wake" | "schedule_coding_wake" => {
             let args: CodingSessionArgs = deserialize_args(arguments)?;
             schedule_coding_wake(cowork_runtime, parent_session_id, args)
         }
-        "read_coding_events" => {
+        "read_cowork_agent_events" | "read_coding_events" => {
             let args: ReadCodingEventsArgs = deserialize_args(arguments)?;
             read_coding_events(cowork_runtime, parent_session_id, args)
+        }
+        "read_cowork_agent_latest_turns" => {
+            let args: ReadCodingLatestTurnsArgs = deserialize_args(arguments)?;
+            read_cowork_agent_latest_turns(cowork_runtime, parent_session_id, args)
+        }
+        "search_cowork_agent_transcript" => {
+            let args: SearchCodingTranscriptArgs = deserialize_args(arguments)?;
+            search_cowork_agent_transcript(cowork_runtime, parent_session_id, args)
+        }
+        "close_cowork_agent" => {
+            let args: CodingSessionArgs = deserialize_args(arguments)?;
+            close_cowork_agent(cowork_runtime, parent_session_id, args).await
         }
         _ => anyhow::bail!("unknown cowork delegation tool: {tool_name}"),
     }
@@ -252,6 +267,7 @@ async fn create_coding_workspace(
         .next_back()
         .map(str::to_string);
     Ok(json!({
+        "coworkWorkspaceId": result.managed_workspace.public_id,
         "ownershipId": result.managed_workspace.id,
         "workspaceId": result.workspace.id,
         "sourceWorkspaceId": result.managed_workspace.source_workspace_id,
@@ -272,8 +288,12 @@ fn get_coding_session_launch_options(
     let parent = cowork_runtime
         .session_record(parent_session_id)?
         .ok_or_else(|| anyhow::anyhow!("parent session not found"))?;
-    let _managed =
-        cowork_runtime.validate_managed_coding_workspace(parent_session_id, &args.workspace_id)?;
+    let workspace_id_arg = non_empty(args.workspace_id);
+    let managed = cowork_runtime.resolve_managed_coding_workspace(
+        parent_session_id,
+        args.cowork_workspace_id.as_deref(),
+        workspace_id_arg.as_deref(),
+    )?;
     let live_config = cowork_runtime.live_config_snapshot(parent_session_id)?;
     let live_mode_control = live_config
         .as_ref()
@@ -288,10 +308,11 @@ fn get_coding_session_launch_options(
         .or(parent.current_mode_id.clone())
         .or(parent.requested_mode_id.clone())
         .or_else(|| live_mode_control.and_then(|control| control.current_value.clone()));
-    let catalog = cowork_runtime.resolved_workspace_launch_options(&args.workspace_id)?;
+    let catalog = cowork_runtime.resolved_workspace_launch_options(&managed.workspace_id)?;
     Ok(json!({
         "parentSessionId": parent_session_id,
-        "workspaceId": args.workspace_id,
+        "coworkWorkspaceId": managed.public_id,
+        "workspaceId": managed.workspace_id,
         "defaults": {
             "agentKind": default_agent_kind,
             "modelId": default_model_id,
@@ -324,12 +345,18 @@ async fn create_coding_session(
     parent_session_id: &str,
     args: CreateCodingSessionArgs,
 ) -> anyhow::Result<Value> {
-    let workspace_id = args.workspace_id.clone();
+    let managed = cowork_runtime.resolve_managed_coding_workspace(
+        parent_session_id,
+        args.cowork_workspace_id.as_deref(),
+        args.workspace_id.as_deref(),
+    )?;
+    let workspace_id = managed.workspace_id.clone();
+    let cowork_workspace_id = managed.public_id.clone();
     let result = cowork_runtime
         .create_coding_session(
             parent_session_id,
             CreateCodingSessionInput {
-                workspace_id: args.workspace_id,
+                workspace_id: managed.workspace_id,
                 prompt: args.prompt,
                 label: args.label,
                 agent_kind: args.agent_kind,
@@ -340,13 +367,22 @@ async fn create_coding_session(
         )
         .await?;
     Ok(json!({
+        "coworkWorkspaceId": cowork_workspace_id,
         "workspaceId": workspace_id,
+        "coworkAgentId": result.session_link.public_id,
         "codingSessionId": result.session.id,
         "sessionLinkId": result.session_link.id,
         "label": result.session_link.label,
         "promptStatus": result.prompt_status,
+        "wake": {
+            "scheduled": result.wake_scheduled,
+            "created": result.wake_schedule_created,
+            "scope": if result.wake_scheduled { Some("next_completion") } else { None::<&str> },
+        },
         "wakeScheduleCreated": result.wake_schedule_created,
         "wakeScheduled": result.wake_scheduled,
+        "wakeScope": if result.wake_scheduled { Some("next_completion") } else { None::<&str> },
+        "readCursor": { "sinceSeq": 0 },
     }))
 }
 
@@ -355,14 +391,33 @@ async fn send_coding_message(
     parent_session_id: &str,
     args: SendCodingMessageArgs,
 ) -> anyhow::Result<Value> {
+    let link = cowork_runtime.resolve_coding_session_target(
+        parent_session_id,
+        args.cowork_agent_id.as_deref(),
+        args.coding_session_id.as_deref(),
+    )?;
     let outcome = cowork_runtime
-        .send_coding_message(parent_session_id, args.into())
+        .send_coding_message(
+            parent_session_id,
+            SendCodingMessageInput {
+                coding_session_id: link.child_session_id.clone(),
+                prompt: args.prompt,
+                wake_on_completion: args.wake_on_completion,
+            },
+        )
         .await?;
     Ok(json!({
+        "coworkAgentId": link.public_id,
         "codingSessionId": outcome.coding_session_id,
         "status": prompt_outcome_label(&outcome.outcome),
+        "wake": {
+            "scheduled": outcome.wake_scheduled,
+            "created": outcome.wake_schedule_created,
+            "scope": if outcome.wake_scheduled { Some("next_completion") } else { None::<&str> },
+        },
         "wakeScheduleCreated": outcome.wake_schedule_created,
         "wakeScheduled": outcome.wake_scheduled,
+        "wakeScope": if outcome.wake_scheduled { Some("next_completion") } else { None::<&str> },
     }))
 }
 
@@ -371,13 +426,18 @@ fn schedule_coding_wake(
     parent_session_id: &str,
     args: CodingSessionArgs,
 ) -> anyhow::Result<Value> {
-    let (link, created) =
-        cowork_runtime.schedule_coding_wake(parent_session_id, &args.coding_session_id)?;
+    let (link, created) = cowork_runtime.schedule_coding_wake_for_target(
+        parent_session_id,
+        args.cowork_agent_id.as_deref(),
+        args.coding_session_id.as_deref(),
+    )?;
     Ok(json!({
-        "codingSessionId": args.coding_session_id,
+        "coworkAgentId": link.public_id,
+        "codingSessionId": link.child_session_id,
         "sessionLinkId": link.id,
         "wakeScheduleCreated": created,
         "wakeScheduled": true,
+        "wakeScope": "next_completion",
     }))
 }
 
@@ -387,9 +447,14 @@ async fn get_coding_status(
     args: CodingSessionArgs,
 ) -> anyhow::Result<Value> {
     let status = cowork_runtime
-        .coding_status(parent_session_id, &args.coding_session_id)
+        .coding_status_for_target(
+            parent_session_id,
+            args.cowork_agent_id.as_deref(),
+            args.coding_session_id.as_deref(),
+        )
         .await?;
     Ok(json!({
+        "coworkAgentId": status.session_link.public_id,
         "codingSessionId": status.session.id,
         "sessionLinkId": status.session_link.id,
         "status": status.session.status,
@@ -415,9 +480,10 @@ fn read_coding_events(
     parent_session_id: &str,
     args: ReadCodingEventsArgs,
 ) -> anyhow::Result<Value> {
-    let slice = cowork_runtime.read_coding_events(
+    let slice = cowork_runtime.read_coding_events_for_target(
         parent_session_id,
-        &args.coding_session_id,
+        args.cowork_agent_id.as_deref(),
+        args.coding_session_id.as_deref(),
         args.since_seq,
         args.limit,
     )?;
@@ -426,6 +492,57 @@ fn read_coding_events(
         "events": slice.events,
         "nextSinceSeq": slice.next_since_seq,
         "truncated": slice.truncated,
+    }))
+}
+
+fn read_cowork_agent_latest_turns(
+    cowork_runtime: &CoworkRuntime,
+    parent_session_id: &str,
+    args: ReadCodingLatestTurnsArgs,
+) -> anyhow::Result<Value> {
+    let turns = cowork_runtime.read_coding_latest_turns_for_target(
+        parent_session_id,
+        args.cowork_agent_id.as_deref(),
+        args.coding_session_id.as_deref(),
+        args.limit,
+    )?;
+    Ok(json!({ "turns": turns }))
+}
+
+fn search_cowork_agent_transcript(
+    cowork_runtime: &CoworkRuntime,
+    parent_session_id: &str,
+    args: SearchCodingTranscriptArgs,
+) -> anyhow::Result<Value> {
+    let matches = cowork_runtime.search_coding_transcript_for_target(
+        parent_session_id,
+        args.cowork_agent_id.as_deref(),
+        args.coding_session_id.as_deref(),
+        &args.query,
+        args.limit,
+    )?;
+    Ok(json!({ "query": args.query, "matches": matches }))
+}
+
+async fn close_cowork_agent(
+    cowork_runtime: &CoworkRuntime,
+    parent_session_id: &str,
+    args: CodingSessionArgs,
+) -> anyhow::Result<Value> {
+    let (link, already_closed, closed_at) = cowork_runtime
+        .close_coding_session_for_target(
+            parent_session_id,
+            args.cowork_agent_id.as_deref(),
+            args.coding_session_id.as_deref(),
+        )
+        .await?;
+    Ok(json!({
+        "coworkAgentId": link.public_id,
+        "codingSessionId": link.child_session_id,
+        "sessionLinkId": link.id,
+        "closed": true,
+        "alreadyClosed": already_closed,
+        "closedAt": link.closed_at.unwrap_or(closed_at),
     }))
 }
 
@@ -490,10 +607,19 @@ fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
 impl From<SendCodingMessageArgs> for SendCodingMessageInput {
     fn from(value: SendCodingMessageArgs) -> Self {
         Self {
-            coding_session_id: value.coding_session_id,
+            coding_session_id: value.coding_session_id.unwrap_or_default(),
             prompt: value.prompt,
             wake_on_completion: value.wake_on_completion,
         }
+    }
+}
+
+fn non_empty(value: String) -> Option<String> {
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
     }
 }
 

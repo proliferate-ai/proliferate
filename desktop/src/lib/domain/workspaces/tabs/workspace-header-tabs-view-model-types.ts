@@ -16,6 +16,16 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   visualGroupId: string | null;
   manualGroupId: ManualChatGroupId | null;
   isHierarchyResolved: boolean;
+  delegatedIndicators: HeaderDelegatedWorkIndicator[];
+}
+
+export interface HeaderDelegatedWorkIndicator {
+  id: string;
+  title: string;
+  avatarName: string;
+  initial: string;
+  colorClassName: string;
+  statusLabel: string;
 }
 
 export interface HeaderChatMenuEntry {

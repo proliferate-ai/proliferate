@@ -5924,6 +5924,12 @@
               }
             ]
           },
+          "linkClosedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "linkCreatedAt": {
             "type": "string"
           },
@@ -5944,6 +5950,12 @@
           },
           "status": {
             "$ref": "#/components/schemas/SessionStatus"
+          },
+          "subagentId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "title": {
             "type": [
@@ -6910,6 +6922,12 @@
           "codingSessionId": {
             "type": "string"
           },
+          "coworkAgentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "label": {
             "type": [
               "string",
@@ -6924,6 +6942,12 @@
               {
                 "$ref": "#/components/schemas/CoworkCodingCompletionSummary"
               }
+            ]
+          },
+          "linkClosedAt": {
+            "type": [
+              "string",
+              "null"
             ]
           },
           "linkCreatedAt": {
@@ -6970,6 +6994,18 @@
           "sessions"
         ],
         "properties": {
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "coworkWorkspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "createdAt": {
             "type": "string"
           },
@@ -9725,6 +9761,12 @@
           "childSessionId": {
             "type": "string"
           },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "createdAt": {
             "type": "string"
           },
@@ -9751,6 +9793,12 @@
           },
           "parentSessionId": {
             "type": "string"
+          },
+          "publicId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "relation": {
             "type": "string"
@@ -10171,6 +10219,12 @@
               "null"
             ]
           },
+          "linkClosedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "linkCreatedAt": {
             "type": "string"
           },
@@ -10194,6 +10248,12 @@
           },
           "sessionLinkId": {
             "type": "string"
+          },
+          "subagentId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -12676,6 +12736,12 @@
           "sessionLinkId": {
             "type": "string"
           },
+          "subagentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "wakeScheduled": {
             "type": "boolean"
           }
@@ -13433,6 +13499,12 @@
           "childSessionId": {
             "type": "string"
           },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "createdAt": {
             "type": "string"
           },
@@ -13447,6 +13519,12 @@
           },
           "parentSessionId": {
             "type": "string"
+          },
+          "publicId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "relation": {
             "type": "string"

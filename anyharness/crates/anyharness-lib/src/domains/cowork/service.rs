@@ -64,6 +64,13 @@ impl CoworkService {
             .find_managed_workspace(parent_session_id, workspace_id)
     }
 
+    pub fn find_managed_workspace_by_public_id(
+        &self,
+        public_id: &str,
+    ) -> anyhow::Result<Option<CoworkManagedWorkspaceRecord>> {
+        self.store.find_managed_workspace_by_public_id(public_id)
+    }
+
     pub fn list_managed_workspaces(
         &self,
         parent_session_id: &str,
@@ -82,6 +89,10 @@ impl CoworkService {
 
     pub fn delete_managed_workspace(&self, id: &str) -> anyhow::Result<()> {
         self.store.delete_managed_workspace(id)
+    }
+
+    pub fn mark_managed_workspace_closed(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
+        self.store.mark_managed_workspace_closed(id, closed_at)
     }
 
     pub fn insert_coding_session_link_with_workspace_limit(

@@ -18,7 +18,7 @@ describe("buildHeaderStripRows", () => {
     expect(rows.map(rowKey)).toEqual(["tab:a", "tab:b"]);
   });
 
-  it("emits an expanded subagent group as pill, parent, then children", () => {
+  it("emits parent-anchored subagent children without a separate pill", () => {
     const rows = buildHeaderStripRows({
       groupedTabs: [tab("p"), child("c1", "p"), child("c2", "p")],
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }, { sessionId: "c2" }]]]),
@@ -26,19 +26,10 @@ describe("buildHeaderStripRows", () => {
       resolveManualGroupColor: manualColorFor,
     });
 
-    expect(rows.map(rowKey)).toEqual(["subagent:p", "tab:p", "tab:c1", "tab:c2"]);
-    expect(rows[0]).toMatchObject({
-      kind: "pill",
-      groupKind: "subagent",
-      groupId: "p",
-      parentId: "p",
-      color: null,
-      label: "Agents",
-      isCollapsed: false,
-    });
+    expect(rows.map(rowKey)).toEqual(["tab:p", "tab:c1", "tab:c2"]);
   });
 
-  it("emits only the pill for a collapsed subagent group", () => {
+  it("ignores collapsed state for parent-anchored subagent tabs", () => {
     const rows = buildHeaderStripRows({
       groupedTabs: [tab("p"), child("c1", "p")],
       childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }]]]),
@@ -46,21 +37,7 @@ describe("buildHeaderStripRows", () => {
       resolveManualGroupColor: manualColorFor,
     });
 
-    expect(rows.map(rowKey)).toEqual(["subagent:p"]);
-    expect(rows[0]).toMatchObject({ kind: "pill", isCollapsed: true });
-  });
-
-  it("auto-expands a collapsed subagent group that contains the active session", () => {
-    const rows = buildHeaderStripRows({
-      groupedTabs: [tab("p"), child("c1", "p")],
-      childrenByParentSessionId: new Map([["p", [{ sessionId: "c1" }]]]),
-      collapsedGroupIds: ["p"],
-      activeSessionId: "c1",
-      resolveManualGroupColor: manualColorFor,
-    });
-
-    expect(rows.map(rowKey)).toEqual(["subagent:p", "tab:p", "tab:c1"]);
-    expect(rows[0]).toMatchObject({ kind: "pill", isCollapsed: false });
+    expect(rows.map(rowKey)).toEqual(["tab:p", "tab:c1"]);
   });
 
   it("emits manual groups at the first visible member", () => {
@@ -122,7 +99,7 @@ describe("buildHeaderStripRows", () => {
       resolveManualGroupColor: manualColorFor,
     });
 
-    expect(rows.map(rowKey)).toEqual(["subagent:p", "tab:p", "tab:c1", "tab:c2"]);
+    expect(rows.map(rowKey)).toEqual(["tab:p", "tab:c1", "tab:c2"]);
   });
 });
 

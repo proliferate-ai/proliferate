@@ -121,6 +121,8 @@ pub struct CoworkManagedWorkspacesResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CoworkManagedWorkspaceSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cowork_workspace_id: Option<String>,
     pub ownership_id: String,
     pub workspace_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,12 +130,16 @@ pub struct CoworkManagedWorkspaceSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<String>,
     pub sessions: Vec<CoworkCodingSessionSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CoworkCodingSessionSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cowork_agent_id: Option<String>,
     pub session_link_id: String,
     pub coding_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -150,6 +156,8 @@ pub struct CoworkCodingSessionSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_completion: Option<CoworkCodingCompletionSummary>,
     pub link_created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_closed_at: Option<String>,
     pub session_created_at: String,
 }
 

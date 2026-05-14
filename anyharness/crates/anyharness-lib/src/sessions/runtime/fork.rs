@@ -154,6 +154,9 @@ impl SessionRuntime {
         };
         let link = SessionLinkRecord {
             id: uuid::Uuid::new_v4().to_string(),
+            public_id: Some(crate::sessions::links::service::new_public_id(
+                SessionLinkRelation::Fork,
+            )),
             relation: SessionLinkRelation::Fork,
             parent_session_id: parent.id.clone(),
             child_session_id: child.id.clone(),
@@ -162,6 +165,7 @@ impl SessionRuntime {
             created_by_turn_id: None,
             created_by_tool_call_id: None,
             created_at: now,
+            closed_at: None,
         };
         let insert_result = if child_actor_forks {
             self.session_service

@@ -73,6 +73,7 @@ pub async fn schedule_subagent_wake(
 
     Ok(Json(ScheduleSubagentWakeResponse {
         parent_session_id: session_id,
+        subagent_id: link.public_id,
         child_session_id,
         session_link_id: link.id,
         wake_scheduled: true,
@@ -99,6 +100,15 @@ fn map_subagent_error(error: SubagentError) -> ApiError {
             "Child session is not owned by this parent session.",
             "SUBAGENT_NOT_OWNED",
         ),
+        SubagentError::TargetRequired => ApiError::bad_request(
+            "subagentId or childSessionId is required.",
+            "SUBAGENT_TARGET_REQUIRED",
+        ),
+        SubagentError::ConflictingTarget => ApiError::bad_request(
+            "subagentId and childSessionId refer to different subagents.",
+            "SUBAGENT_TARGET_CONFLICT",
+        ),
+        SubagentError::Closed => ApiError::conflict("Subagent is closed.", "SUBAGENT_CLOSED"),
         SubagentError::IneligibleWorkspace => ApiError::conflict(
             "Subagents are only available in standard workspaces.",
             "SUBAGENT_INELIGIBLE_WORKSPACE",

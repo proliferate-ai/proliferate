@@ -22,9 +22,11 @@ pub struct CoworkThreadRecord {
 #[derive(Debug, Clone)]
 pub struct CoworkManagedWorkspaceRecord {
     pub id: String,
+    pub public_id: Option<String>,
     pub parent_session_id: String,
     pub workspace_id: String,
     pub source_workspace_id: Option<String>,
     pub label: Option<String>,
     pub created_at: String,
+    pub closed_at: Option<String>,
 }

@@ -14,12 +14,14 @@ import {
 } from "@/lib/domain/workspaces/tabs/manual-groups";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type {
+  HeaderDelegatedWorkIndicator,
   HeaderChatMenuEntry,
   HeaderChatStripRow,
   HeaderChatTabEntry,
   HeaderWorkspaceShellStripRow,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
+import { delegatedWorkVisualIdentity } from "@/lib/domain/delegated-work/identity";
 
 export function buildManualGroupByTopLevelSessionId(
   displayManualGroups: readonly DisplayManualChatGroup[],
@@ -71,9 +73,28 @@ export function buildHeaderChatTabs(args: {
         visualGroupId: manualGroup?.id ?? (isSubagentGrouped ? grouped.groupRootSessionId : null),
         manualGroupId: manualGroup?.id ?? null,
         isHierarchyResolved: args.resolvedSessionIds.has(grouped.sessionId),
+        delegatedIndicators: grouped.isChild
+          ? []
+          : buildDelegatedIndicators(args.childrenByParentSessionId.get(grouped.sessionId) ?? []),
       } satisfies HeaderChatTabEntry;
     })
     .filter((tab): tab is HeaderChatTabEntry => !!tab);
+}
+
+function buildDelegatedIndicators(
+  children: readonly HeaderHierarchyChildRow[],
+): HeaderDelegatedWorkIndicator[] {
+  return children.map((child) => {
+    const identity = delegatedWorkVisualIdentity(child.sessionLinkId || child.sessionId);
+    return {
+      id: child.sessionLinkId || child.sessionId,
+      title: child.title,
+      avatarName: identity.avatarName,
+      initial: identity.initial,
+      colorClassName: identity.colorClassName,
+      statusLabel: child.statusLabel,
+    };
+  });
 }
 
 export function selectHeaderStripChatSessionIds(

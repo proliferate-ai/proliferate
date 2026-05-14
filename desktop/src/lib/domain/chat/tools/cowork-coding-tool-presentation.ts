@@ -12,7 +12,10 @@ export type CoworkCodingAction =
   | "send_message"
   | "schedule_wake"
   | "status"
-  | "read_events";
+  | "read_events"
+  | "read_latest_turns"
+  | "search_transcript"
+  | "close_agent";
 
 export interface CoworkCodingToolPresentation {
   action: CoworkCodingAction;
@@ -42,6 +45,9 @@ const ACTION_LABELS: Record<CoworkCodingAction, string> = {
   schedule_wake: "Scheduled coding wake",
   status: "Checked coding status",
   read_events: "Read coding events",
+  read_latest_turns: "Read cowork agent turns",
+  search_transcript: "Searched cowork agent transcript",
+  close_agent: "Closed cowork agent",
 };
 
 export function deriveCoworkCodingToolPresentation(
@@ -58,6 +64,8 @@ export function deriveCoworkCodingToolPresentation(
 
   const input = isRecord(item.rawInput) ? item.rawInput : {};
   const output = isRecord(item.rawOutput) ? item.rawOutput : parseToolResultJsonObject(item);
+  const initialConfig = readRecord(input, "initialConfig");
+  const wake = readRecord(output, "wake");
   const label = readString(input, "label")
     ?? readString(output, "label")
     ?? readString(input, "workspaceName")
@@ -65,8 +73,10 @@ export function deriveCoworkCodingToolPresentation(
     ?? readString(input, "branchName")
     ?? readString(output, "branchName");
   const promptStatus = readString(output, "promptStatus") ?? readString(output, "status");
-  const agentKind = readString(input, "agentKind");
-  const modelId = readString(input, "modelId");
+  const agentKind = readString(input, "harnessId") ?? readString(input, "agentKind");
+  const modelId = readString(initialConfig, "modelId")
+    ?? readString(initialConfig, "model")
+    ?? readString(input, "modelId");
   const eventCount = Array.isArray(output?.events) ? output.events.length : null;
   const truncated = typeof output?.truncated === "boolean" ? output.truncated : null;
 
@@ -82,37 +92,59 @@ export function deriveCoworkCodingToolPresentation(
     prompt: readString(input, "prompt"),
     promptStatus,
     sourceWorkspaceId: readString(input, "sourceWorkspaceId"),
-    workspaceId: readString(output, "workspaceId") ?? readString(input, "workspaceId"),
+    workspaceId:
+      readString(output, "coworkWorkspaceId")
+      ?? readString(input, "coworkWorkspaceId")
+      ?? readString(output, "workspaceId")
+      ?? readString(input, "workspaceId"),
     codingSessionId:
-      readString(output, "codingSessionId") ?? readString(input, "codingSessionId"),
+      readString(output, "coworkAgentId")
+      ?? readString(input, "coworkAgentId")
+      ?? readString(output, "codingSessionId")
+      ?? readString(input, "codingSessionId"),
     sessionLinkId: readString(output, "sessionLinkId") ?? readString(input, "sessionLinkId"),
     parentSessionId: readString(output, "parentSessionId") ?? readString(input, "parentSessionId"),
     eventCount,
     truncated,
-    wakeScheduled: readBoolean(output, "wakeScheduled"),
+    wakeScheduled: readBoolean(output, "wakeScheduled") ?? readBoolean(wake, "scheduled"),
   };
 }
 
 function resolveAction(nativeToolName: string | null): CoworkCodingAction | null {
   switch ((nativeToolName ?? "").trim().toLowerCase()) {
+    case "mcp__cowork__get_cowork_workspace_launch_options":
     case "mcp__cowork__get_coding_workspace_launch_options":
       return "launch_options";
+    case "mcp__cowork__create_cowork_workspace":
     case "mcp__cowork__create_coding_workspace":
       return "create_workspace";
+    case "mcp__cowork__list_cowork_workspaces":
     case "mcp__cowork__list_coding_workspaces":
       return "list_workspaces";
+    case "mcp__cowork__get_cowork_agent_launch_options":
     case "mcp__cowork__get_coding_session_launch_options":
       return "session_launch_options";
+    case "mcp__cowork__create_cowork_agent":
     case "mcp__cowork__create_coding_session":
       return "create_session";
+    case "mcp__cowork__send_cowork_agent_message":
     case "mcp__cowork__send_coding_message":
       return "send_message";
+    case "mcp__cowork__schedule_cowork_agent_wake":
     case "mcp__cowork__schedule_coding_wake":
       return "schedule_wake";
+    case "mcp__cowork__get_cowork_agent_status":
     case "mcp__cowork__get_coding_status":
       return "status";
+    case "mcp__cowork__read_cowork_agent_events":
     case "mcp__cowork__read_coding_events":
       return "read_events";
+    case "mcp__cowork__read_cowork_agent_latest_turns":
+      return "read_latest_turns";
+    case "mcp__cowork__search_cowork_agent_transcript":
+      return "search_transcript";
+    case "mcp__cowork__close_cowork_agent":
+      return "close_agent";
     default:
       return null;
   }
@@ -155,6 +187,14 @@ function readBoolean(value: unknown, key: string): boolean | null {
   }
   const field = value[key];
   return typeof field === "boolean" ? field : null;
+}
+
+function readRecord(value: unknown, key: string): Record<string, unknown> | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const field = value[key];
+  return isRecord(field) ? field : null;
 }
 
 function formatAgentKind(agentKind: string): string {

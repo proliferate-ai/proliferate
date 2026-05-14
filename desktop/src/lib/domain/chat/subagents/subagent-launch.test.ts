@@ -207,6 +207,7 @@ describe("parseSubagentProvisioningStatus", () => {
       nativeToolName: "mcp__subagents__create_subagent",
       semanticKind: "subagent",
       rawOutput: {
+        subagentId: "subagent-1",
         childSessionId: "child-1",
         sessionLinkId: "link-1",
         promptStatus: "running",
@@ -216,6 +217,7 @@ describe("parseSubagentProvisioningStatus", () => {
     });
 
     expect(parseSubagentProvisioningStatus(item)).toEqual({
+      subagentId: "subagent-1",
       childSessionId: "child-1",
       sessionLinkId: "link-1",
       promptStatus: "running",
@@ -223,6 +225,7 @@ describe("parseSubagentProvisioningStatus", () => {
       wakeScheduled: true,
     });
     expect(parseSubagentLaunchResult(item)).toEqual({
+      subagentId: "subagent-1",
       childSessionId: "child-1",
       sessionLinkId: "link-1",
     });
@@ -245,6 +248,7 @@ describe("parseSubagentProvisioningStatus", () => {
     });
 
     expect(parseSubagentProvisioningStatus(item)).toEqual({
+      subagentId: null,
       childSessionId: "child-2",
       sessionLinkId: "link-2",
       promptStatus: "running",
@@ -252,6 +256,7 @@ describe("parseSubagentProvisioningStatus", () => {
       wakeScheduled: false,
     });
     expect(parseSubagentLaunchResult(item)).toEqual({
+      subagentId: null,
       childSessionId: "child-2",
       sessionLinkId: "link-2",
     });

@@ -273,15 +273,21 @@ function isSubagentMcpMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
   return nativeToolName === "mcp__subagents__create_subagent"
     || nativeToolName === "mcp__subagents__send_subagent_message"
-    || nativeToolName === "mcp__subagents__schedule_subagent_wake";
+    || nativeToolName === "mcp__subagents__schedule_subagent_wake"
+    || nativeToolName === "mcp__subagents__close_subagent";
 }
 
 function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__cowork__create_coding_workspace"
+  return nativeToolName === "mcp__cowork__create_cowork_workspace"
+    || nativeToolName === "mcp__cowork__create_coding_workspace"
+    || nativeToolName === "mcp__cowork__create_cowork_agent"
     || nativeToolName === "mcp__cowork__create_coding_session"
+    || nativeToolName === "mcp__cowork__send_cowork_agent_message"
     || nativeToolName === "mcp__cowork__send_coding_message"
-    || nativeToolName === "mcp__cowork__schedule_coding_wake";
+    || nativeToolName === "mcp__cowork__schedule_cowork_agent_wake"
+    || nativeToolName === "mcp__cowork__schedule_coding_wake"
+    || nativeToolName === "mcp__cowork__close_cowork_agent";
 }
 
 function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {

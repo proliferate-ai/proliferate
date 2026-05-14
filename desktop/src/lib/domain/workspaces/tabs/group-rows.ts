@@ -60,7 +60,6 @@ export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
   const emittedManualGroups = new Set<string>();
   const emittedSubagentGroups = new Set<string>();
   const rows: HeaderStripRow<TTab>[] = [];
-  const subagentLabel = args.subagentLabel ?? "Agents";
 
   for (const tab of args.groupedTabs) {
     if (!tab.isChild) {
@@ -86,9 +85,6 @@ export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
 
   function pushTopLevelWithChildren(parentId: string) {
     pushTab(parentId);
-    if (isSubagentGroupCollapsed(parentId)) {
-      return;
-    }
     for (const childId of childIdsByParentId.get(parentId) ?? []) {
       pushTab(childId);
     }
@@ -122,28 +118,11 @@ export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
       return;
     }
     emittedSubagentGroups.add(parentId);
-    const isCollapsed = isSubagentGroupCollapsed(parentId);
-    rows.push({
-      kind: "pill",
-      groupKind: "subagent",
-      groupId: parentId,
-      parentId,
-      color: null,
-      label: subagentLabel,
-      isCollapsed,
-    });
-    if (isCollapsed) {
-      return;
-    }
     pushTopLevelWithChildren(parentId);
   }
 
   function isManualGroupCollapsed(group: DisplayManualChatGroup): boolean {
     return collapsedSet.has(group.id) && !manualGroupContainsActiveSession(group);
-  }
-
-  function isSubagentGroupCollapsed(parentId: string): boolean {
-    return collapsedSet.has(parentId) && !subagentGroupContainsActiveSession(parentId);
   }
 
   function manualGroupContainsActiveSession(group: DisplayManualChatGroup): boolean {
@@ -156,15 +135,6 @@ export function buildHeaderStripRows<TTab extends GroupedChatTab>(args: {
     }
     const activeTab = tabsBySessionId.get(activeSessionId);
     return !!activeTab?.isChild && group.sessionIds.includes(activeTab.groupRootSessionId);
-  }
-
-  function subagentGroupContainsActiveSession(parentId: string): boolean {
-    const activeSessionId = args.activeSessionId;
-    if (!activeSessionId) {
-      return false;
-    }
-    return activeSessionId === parentId
-      || childIdsByParentId.get(parentId)?.includes(activeSessionId) === true;
   }
 
   for (const tab of args.groupedTabs) {

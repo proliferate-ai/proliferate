@@ -116,7 +116,8 @@ impl CoworkStore {
         self.db.with_conn(|conn| {
             conn.query_row(
                 "SELECT * FROM cowork_managed_workspaces
-                 WHERE parent_session_id = ?1 AND workspace_id = ?2",
+                 WHERE parent_session_id = ?1 AND workspace_id = ?2
+                   AND closed_at IS NULL",
                 params![parent_session_id, workspace_id],
                 map_managed_workspace_row,
             )
@@ -132,10 +133,25 @@ impl CoworkStore {
             let mut stmt = conn.prepare(
                 "SELECT * FROM cowork_managed_workspaces
                  WHERE parent_session_id = ?1
+                   AND closed_at IS NULL
                  ORDER BY created_at ASC, id ASC",
             )?;
             let rows = stmt.query_map([parent_session_id], map_managed_workspace_row)?;
             rows.collect()
+        })
+    }
+
+    pub fn find_managed_workspace_by_public_id(
+        &self,
+        public_id: &str,
+    ) -> anyhow::Result<Option<CoworkManagedWorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM cowork_managed_workspaces WHERE public_id = ?1",
+                [public_id],
+                map_managed_workspace_row,
+            )
+            .optional()
         })
     }
 
@@ -147,21 +163,25 @@ impl CoworkStore {
         self.db.with_conn(|conn| {
             let inserted = conn.execute(
                 "INSERT INTO cowork_managed_workspaces (
-                    id, parent_session_id, workspace_id, source_workspace_id, label, created_at
+                    id, public_id, parent_session_id, workspace_id, source_workspace_id,
+                    label, created_at, closed_at
                  )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
                  WHERE (
                     SELECT COUNT(*)
                     FROM cowork_managed_workspaces
-                    WHERE parent_session_id = ?2
-                 ) < ?7",
+                    WHERE parent_session_id = ?3
+                      AND closed_at IS NULL
+                 ) < ?9",
                 params![
                     record.id,
+                    record.public_id,
                     record.parent_session_id,
                     record.workspace_id,
                     record.source_workspace_id,
                     record.label,
                     record.created_at,
+                    record.closed_at,
                     max_workspaces as i64,
                 ],
             )?;
@@ -176,6 +196,18 @@ impl CoworkStore {
         })
     }
 
+    pub fn mark_managed_workspace_closed(&self, id: &str, closed_at: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let updated = conn.execute(
+                "UPDATE cowork_managed_workspaces
+                 SET closed_at = COALESCE(closed_at, ?1)
+                 WHERE id = ?2",
+                params![closed_at, id],
+            )?;
+            Ok(updated > 0)
+        })
+    }
+
     pub fn insert_coding_session_link_with_workspace_limit(
         &self,
         record: &SessionLinkRecord,
@@ -185,20 +217,23 @@ impl CoworkStore {
         self.db.with_conn(|conn| {
             let inserted = conn.execute(
                 "INSERT INTO session_links (
-                    id, relation, parent_session_id, child_session_id, workspace_relation,
-                    label, created_by_turn_id, created_by_tool_call_id, created_at
+                    id, public_id, relation, parent_session_id, child_session_id,
+                    workspace_relation, label, created_by_turn_id,
+                    created_by_tool_call_id, created_at, closed_at
                  )
-                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
+                 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
                  WHERE (
                     SELECT COUNT(*)
                     FROM session_links links
                     JOIN sessions child ON child.id = links.child_session_id
-                    WHERE links.relation = ?2
-                      AND links.parent_session_id = ?3
-                      AND child.workspace_id = ?10
-                 ) < ?11",
+                    WHERE links.relation = ?3
+                      AND links.parent_session_id = ?4
+                      AND child.workspace_id = ?12
+                      AND links.closed_at IS NULL
+                 ) < ?13",
                 params![
                     record.id,
+                    record.public_id,
                     record.relation.as_str(),
                     record.parent_session_id,
                     record.child_session_id,
@@ -207,6 +242,7 @@ impl CoworkStore {
                     record.created_by_turn_id,
                     record.created_by_tool_call_id,
                     record.created_at,
+                    record.closed_at,
                     workspace_id,
                     max_sessions_per_workspace as i64,
                 ],
@@ -244,11 +280,13 @@ fn map_managed_workspace_row(
 ) -> rusqlite::Result<CoworkManagedWorkspaceRecord> {
     Ok(CoworkManagedWorkspaceRecord {
         id: row.get("id")?,
+        public_id: row.get("public_id")?,
         parent_session_id: row.get("parent_session_id")?,
         workspace_id: row.get("workspace_id")?,
         source_workspace_id: row.get("source_workspace_id")?,
         label: row.get("label")?,
         created_at: row.get("created_at")?,
+        closed_at: row.get("closed_at")?,
     })
 }
 
@@ -260,10 +298,12 @@ pub fn new_managed_workspace_record(
 ) -> CoworkManagedWorkspaceRecord {
     CoworkManagedWorkspaceRecord {
         id: Uuid::new_v4().to_string(),
+        public_id: Some(format!("cowork_workspace_{}", Uuid::new_v4().simple())),
         parent_session_id: parent_session_id.to_string(),
         workspace_id: workspace_id.to_string(),
         source_workspace_id,
         label,
         created_at: chrono::Utc::now().to_rfc3339(),
+        closed_at: None,
     }
 }

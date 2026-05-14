@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
 use anyharness_contract::v1::{
-    ChildSubagentSummary, ParentSubagentLinkSummary, SessionSubagentsResponse,
-    SubagentCompletionSummary, SubagentTurnOutcome,
+    ChildSubagentSummary, ContentPart, ParentSubagentLinkSummary, SessionEvent,
+    SessionSubagentsResponse, SubagentCompletionSummary, SubagentTurnOutcome, TranscriptItemKind,
+    TranscriptItemStatus,
 };
 
 use super::model::{
-    SubagentCompletionRecord, SubagentEventSlice, SubagentSummary, SubagentWakeScheduleRecord,
+    SubagentCompletionRecord, SubagentEventSlice, SubagentLatestTurn, SubagentSummary,
+    SubagentTranscriptSearchMatch, SubagentWakeScheduleRecord,
 };
 use super::store::{SubagentCompletionInsert, SubagentStore};
 use crate::sessions::delegation::read_child_events;
@@ -22,6 +24,15 @@ use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::runtime::WorkspaceRuntime;
 
 pub const MAX_SUBAGENTS_PER_PARENT: usize = 8;
+pub const READ_LATEST_TURNS_DEFAULT_LIMIT: usize = 3;
+pub const READ_LATEST_TURNS_MAX_LIMIT: usize = 10;
+pub const SEARCH_TRANSCRIPT_DEFAULT_LIMIT: usize = 10;
+pub const SEARCH_TRANSCRIPT_MAX_LIMIT: usize = 25;
+const LATEST_TURN_EVENT_BUDGET: i64 = 200;
+const SEARCH_EVENT_BUDGET: i64 = 500;
+const ASSISTANT_TEXT_MAX_CHARS: usize = 4_000;
+const SEARCH_SNIPPET_CONTEXT_CHARS: usize = 120;
+
 #[derive(Debug, thiserror::Error)]
 pub enum SubagentError {
     #[error("parent session not found: {0}")]
@@ -42,6 +53,12 @@ pub enum SubagentError {
     FanoutLimit,
     #[error("child session is not owned by parent")]
     NotOwned,
+    #[error("subagent target is required")]
+    TargetRequired,
+    #[error("subagentId and childSessionId refer to different subagents")]
+    ConflictingTarget,
+    #[error("subagent is closed")]
+    Closed,
     #[error("workspace mutation blocked: {0}")]
     MutationBlocked(String),
     #[error(transparent)]
@@ -168,6 +185,74 @@ impl SubagentService {
             .ok_or(SubagentError::NotOwned)
     }
 
+    pub fn authorize_target(
+        &self,
+        parent_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
+    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+        let link = self.resolve_target(parent_session_id, subagent_id, child_session_id, false)?;
+        if link.closed_at.is_some() {
+            return Err(SubagentError::Closed);
+        }
+        Ok(link)
+    }
+
+    pub fn resolve_target_including_closed(
+        &self,
+        parent_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
+    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+        self.resolve_target(parent_session_id, subagent_id, child_session_id, true)
+    }
+
+    fn resolve_target(
+        &self,
+        parent_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
+        include_closed: bool,
+    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+        let subagent_id = subagent_id.map(str::trim).filter(|value| !value.is_empty());
+        let child_session_id = child_session_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if subagent_id.is_none() && child_session_id.is_none() {
+            return Err(SubagentError::TargetRequired);
+        }
+
+        let link = if let Some(public_id) = subagent_id {
+            self.link_service
+                .find_by_public_id(public_id)?
+                .filter(|link| {
+                    link.relation == SessionLinkRelation::Subagent
+                        && link.parent_session_id == parent_session_id
+                })
+                .ok_or(SubagentError::NotOwned)?
+        } else {
+            let child_id = child_session_id.expect("checked above");
+            if include_closed {
+                self.link_service
+                    .find_link_by_relation_including_closed(
+                        SessionLinkRelation::Subagent,
+                        parent_session_id,
+                        child_id,
+                    )?
+                    .ok_or(SubagentError::NotOwned)?
+            } else {
+                self.authorize_child(parent_session_id, child_id)?
+            }
+        };
+
+        if let Some(child_id) = child_session_id {
+            if link.child_session_id != child_id {
+                return Err(SubagentError::ConflictingTarget);
+            }
+        }
+        Ok(link)
+    }
+
     pub fn list_subagents(
         &self,
         parent_session_id: &str,
@@ -181,6 +266,7 @@ impl SubagentService {
                 continue;
             };
             summaries.push(SubagentSummary {
+                subagent_id: link.public_id.clone(),
                 link_id: link.id,
                 child_session_id: child.id,
                 label: link.label,
@@ -189,6 +275,7 @@ impl SubagentService {
                 model_id: child.current_model_id.or(child.requested_model_id),
                 mode_id: child.current_mode_id.or(child.requested_mode_id),
                 created_at: child.created_at,
+                closed_at: link.closed_at,
             });
         }
         Ok(summaries)
@@ -206,6 +293,7 @@ impl SubagentService {
             self.session_store
                 .find_by_id(&link.parent_session_id)?
                 .map(|parent| ParentSubagentLinkSummary {
+                    subagent_id: link.public_id.clone(),
                     session_link_id: link.id,
                     parent_session_id: parent.id,
                     parent_title: parent.title,
@@ -213,6 +301,7 @@ impl SubagentService {
                     parent_model_id: parent.current_model_id.or(parent.requested_model_id),
                     label: link.label,
                     link_created_at: link.created_at,
+                    link_closed_at: link.closed_at,
                 })
         } else {
             None
@@ -238,6 +327,7 @@ impl SubagentService {
                 .map(completion_to_contract);
             let wake_scheduled = scheduled_link_ids.contains(&link.id);
             children.push(ChildSubagentSummary {
+                subagent_id: link.public_id.clone(),
                 session_link_id: link.id,
                 child_session_id: child.id.clone(),
                 title: child.title.clone(),
@@ -247,6 +337,7 @@ impl SubagentService {
                 model_id: child.current_model_id.or(child.requested_model_id),
                 mode_id: child.current_mode_id.or(child.requested_mode_id),
                 link_created_at: link.created_at,
+                link_closed_at: link.closed_at,
                 child_created_at: child.created_at,
                 latest_completion,
                 wake_scheduled,
@@ -290,6 +381,9 @@ impl SubagentService {
         child_session_id: &str,
     ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), SubagentError> {
         let link = self.authorize_child(parent_session_id, child_session_id)?;
+        if link.closed_at.is_some() {
+            return Err(SubagentError::Closed);
+        }
         let child = self
             .session_store
             .find_by_id(child_session_id)?
@@ -299,6 +393,33 @@ impl SubagentService {
             .map_err(map_access_error)?;
         let inserted = self.subagent_store.schedule_wake(&link.id)?;
         Ok((link, inserted))
+    }
+
+    pub fn schedule_wake_for_target(
+        &self,
+        parent_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
+    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), SubagentError> {
+        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
+        let child = self
+            .session_store
+            .find_by_id(&link.child_session_id)?
+            .ok_or_else(|| SubagentError::ChildNotFound(link.child_session_id.clone()))?;
+        self.access_gate
+            .assert_can_mutate_for_workspace(&child.workspace_id)
+            .map_err(map_access_error)?;
+        let inserted = self.subagent_store.schedule_wake(&link.id)?;
+        Ok((link, inserted))
+    }
+
+    pub fn close_link(
+        &self,
+        link: &crate::sessions::links::model::SessionLinkRecord,
+        closed_at: &str,
+    ) -> anyhow::Result<bool> {
+        let _ = self.subagent_store.delete_wake_schedule(&link.id)?;
+        self.link_service.mark_closed(&link.id, closed_at)
     }
 
     pub fn delete_wake_schedule_for_link(&self, session_link_id: &str) -> anyhow::Result<bool> {
@@ -337,16 +458,18 @@ impl SubagentService {
     pub fn read_subagent_events(
         &self,
         parent_session_id: &str,
-        child_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
         since_seq: Option<i64>,
         limit: Option<usize>,
     ) -> Result<SubagentEventSlice, SubagentError> {
+        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
         let slice = read_child_events(
             &self.session_store,
             &self.link_service,
             SessionLinkRelation::Subagent,
             parent_session_id,
-            child_session_id,
+            &link.child_session_id,
             since_seq,
             limit,
         )?;
@@ -356,6 +479,101 @@ impl SubagentService {
             next_since_seq: slice.next_since_seq,
             truncated: slice.truncated,
         })
+    }
+
+    pub fn read_latest_turns(
+        &self,
+        parent_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<SubagentLatestTurn>, SubagentError> {
+        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
+        let limit = limit
+            .unwrap_or(READ_LATEST_TURNS_DEFAULT_LIMIT)
+            .clamp(1, READ_LATEST_TURNS_MAX_LIMIT);
+        let mut completions = self
+            .subagent_store
+            .list_completions_for_links(std::slice::from_ref(&link.id))?;
+        completions.sort_by(|left, right| {
+            right
+                .created_at
+                .cmp(&left.created_at)
+                .then_with(|| right.completion_id.cmp(&left.completion_id))
+        });
+        completions.truncate(limit);
+        completions.reverse();
+
+        let event_records = self.session_store.list_events_for_latest_turns(
+            &link.child_session_id,
+            limit as i64,
+            LATEST_TURN_EVENT_BUDGET,
+        )?;
+        let mut turns = Vec::with_capacity(completions.len());
+        for completion in completions {
+            let turn_events = event_records
+                .iter()
+                .filter(|record| {
+                    record.turn_id.as_deref() == Some(completion.child_turn_id.as_str())
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let (assistant_text, tool_errors) = summarize_turn_events(&turn_events);
+            turns.push(SubagentLatestTurn {
+                child_turn_id: completion.child_turn_id,
+                outcome: completion.outcome.as_str().to_string(),
+                created_at: completion.created_at,
+                child_last_event_seq: completion.child_last_event_seq,
+                assistant_text,
+                tool_errors,
+                event_count: turn_events.len(),
+            });
+        }
+        Ok(turns)
+    }
+
+    pub fn search_transcript(
+        &self,
+        parent_session_id: &str,
+        subagent_id: Option<&str>,
+        child_session_id: Option<&str>,
+        query: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<SubagentTranscriptSearchMatch>, SubagentError> {
+        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
+        let query = query.trim();
+        if query.is_empty() {
+            return Err(SubagentError::Internal(anyhow::anyhow!(
+                "query is required"
+            )));
+        }
+        let limit = limit
+            .unwrap_or(SEARCH_TRANSCRIPT_DEFAULT_LIMIT)
+            .clamp(1, SEARCH_TRANSCRIPT_MAX_LIMIT);
+        let needle = query.to_lowercase();
+        let records = self
+            .session_store
+            .list_events_limited(&link.child_session_id, SEARCH_EVENT_BUDGET)?;
+        let mut matches = Vec::new();
+        for record in records {
+            if matches.len() >= limit {
+                break;
+            }
+            let text = transcript_search_text(&record);
+            if text.is_empty() {
+                continue;
+            }
+            if let Some(index) = text.to_lowercase().find(&needle) {
+                matches.push(SubagentTranscriptSearchMatch {
+                    seq: record.seq,
+                    timestamp: record.timestamp,
+                    turn_id: record.turn_id,
+                    item_id: record.item_id,
+                    snippet: make_snippet(&text, index, query.len()),
+                });
+            }
+        }
+        Ok(matches)
     }
 
     pub fn mobility_graph_for_sessions(
@@ -424,6 +642,128 @@ fn completion_to_contract(wake: SubagentCompletionRecord) -> SubagentCompletionS
         created_at: wake.created_at,
         parent_event_seq: wake.parent_event_seq,
         parent_prompt_seq: wake.parent_prompt_seq,
+    }
+}
+
+pub fn public_subagent_id(
+    link: &crate::sessions::links::model::SessionLinkRecord,
+) -> Option<String> {
+    link.public_id.clone()
+}
+
+fn summarize_turn_events(
+    events: &[crate::sessions::model::SessionEventRecord],
+) -> (Option<String>, Vec<String>) {
+    let mut assistant = String::new();
+    let mut tool_errors = Vec::new();
+    for record in events {
+        let Ok(event) = serde_json::from_str::<SessionEvent>(&record.payload_json) else {
+            continue;
+        };
+        if let SessionEvent::ItemCompleted(item_event) = event {
+            match item_event.item.kind {
+                TranscriptItemKind::AssistantMessage => {
+                    append_content_text(&mut assistant, &item_event.item.content_parts);
+                }
+                TranscriptItemKind::ToolInvocation => {
+                    if matches!(item_event.item.status, TranscriptItemStatus::Failed) {
+                        let label = item_event
+                            .item
+                            .title
+                            .or(item_event.item.native_tool_name)
+                            .unwrap_or_else(|| "tool invocation failed".to_string());
+                        tool_errors.push(label);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let assistant_text = if assistant.trim().is_empty() {
+        None
+    } else {
+        Some(trim_chars(assistant.trim(), ASSISTANT_TEXT_MAX_CHARS))
+    };
+    (assistant_text, tool_errors)
+}
+
+fn transcript_search_text(record: &crate::sessions::model::SessionEventRecord) -> String {
+    let Ok(event) = serde_json::from_str::<SessionEvent>(&record.payload_json) else {
+        return String::new();
+    };
+    match event {
+        SessionEvent::ItemCompleted(item_event) => {
+            let mut text = String::new();
+            if let Some(title) = item_event.item.title {
+                text.push_str(&title);
+                text.push('\n');
+            }
+            if let Some(tool) = item_event.item.native_tool_name {
+                text.push_str(&tool);
+                text.push('\n');
+            }
+            append_content_text(&mut text, &item_event.item.content_parts);
+            text
+        }
+        SessionEvent::ItemStarted(item_event) => {
+            let mut text = String::new();
+            if let Some(title) = item_event.item.title {
+                text.push_str(&title);
+                text.push('\n');
+            }
+            if let Some(tool) = item_event.item.native_tool_name {
+                text.push_str(&tool);
+                text.push('\n');
+            }
+            append_content_text(&mut text, &item_event.item.content_parts);
+            text
+        }
+        SessionEvent::Error(error) => format!("{:?}", error.details),
+        _ => String::new(),
+    }
+}
+
+fn append_content_text(target: &mut String, parts: &[ContentPart]) {
+    for part in parts {
+        if let ContentPart::Text { text } = part {
+            if !target.is_empty() {
+                target.push('\n');
+            }
+            target.push_str(text);
+        }
+    }
+}
+
+fn make_snippet(text: &str, index: usize, needle_len: usize) -> String {
+    let start = text[..index]
+        .char_indices()
+        .rev()
+        .nth(SEARCH_SNIPPET_CONTEXT_CHARS)
+        .map(|(idx, _)| idx)
+        .unwrap_or(0);
+    let raw_end = index.saturating_add(needle_len);
+    let end = text[raw_end.min(text.len())..]
+        .char_indices()
+        .nth(SEARCH_SNIPPET_CONTEXT_CHARS)
+        .map(|(idx, _)| raw_end.min(text.len()) + idx)
+        .unwrap_or(text.len());
+    let mut snippet = text[start..end].replace('\n', " ");
+    if start > 0 {
+        snippet.insert_str(0, "...");
+    }
+    if end < text.len() {
+        snippet.push_str("...");
+    }
+    snippet
+}
+
+fn trim_chars(text: &str, max_chars: usize) -> String {
+    let mut iter = text.chars();
+    let trimmed = iter.by_ref().take(max_chars).collect::<String>();
+    if iter.next().is_some() {
+        format!("{trimmed}...")
+    } else {
+        trimmed
     }
 }
 

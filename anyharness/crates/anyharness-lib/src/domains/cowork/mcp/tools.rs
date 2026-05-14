@@ -8,9 +8,14 @@ pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "update_artifact",
     "delete_artifact",
     "create_coding_workspace",
+    "create_cowork_workspace",
     "create_coding_session",
+    "create_cowork_agent",
     "send_coding_message",
+    "send_cowork_agent_message",
     "schedule_coding_wake",
+    "schedule_cowork_agent_wake",
+    "close_cowork_agent",
 ];
 
 #[cfg(test)]
@@ -18,10 +23,17 @@ const READ_ONLY_TOOL_NAMES: &[&str] = &[
     "list_artifacts",
     "get_artifact",
     "get_coding_workspace_launch_options",
+    "get_cowork_workspace_launch_options",
     "list_coding_workspaces",
+    "list_cowork_workspaces",
     "get_coding_session_launch_options",
+    "get_cowork_agent_launch_options",
     "get_coding_status",
+    "get_cowork_agent_status",
     "read_coding_events",
+    "read_cowork_agent_events",
+    "read_cowork_agent_latest_turns",
+    "search_cowork_agent_transcript",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -69,13 +81,19 @@ pub(super) struct CreateCodingWorkspaceArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct CodingWorkspaceArgs {
+    #[serde(default)]
+    pub cowork_workspace_id: Option<String>,
+    #[serde(default)]
     pub workspace_id: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct CreateCodingSessionArgs {
-    pub workspace_id: String,
+    #[serde(default)]
+    pub cowork_workspace_id: Option<String>,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     pub prompt: String,
     #[serde(default)]
     pub label: Option<String>,
@@ -92,13 +110,19 @@ pub(super) struct CreateCodingSessionArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct CodingSessionArgs {
-    pub coding_session_id: String,
+    #[serde(default)]
+    pub cowork_agent_id: Option<String>,
+    #[serde(default)]
+    pub coding_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SendCodingMessageArgs {
-    pub coding_session_id: String,
+    #[serde(default)]
+    pub cowork_agent_id: Option<String>,
+    #[serde(default)]
+    pub coding_session_id: Option<String>,
     pub prompt: String,
     #[serde(default)]
     pub wake_on_completion: bool,
@@ -107,9 +131,35 @@ pub(super) struct SendCodingMessageArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ReadCodingEventsArgs {
-    pub coding_session_id: String,
+    #[serde(default)]
+    pub cowork_agent_id: Option<String>,
+    #[serde(default)]
+    pub coding_session_id: Option<String>,
     #[serde(default)]
     pub since_seq: Option<i64>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ReadCodingLatestTurnsArgs {
+    #[serde(default)]
+    pub cowork_agent_id: Option<String>,
+    #[serde(default)]
+    pub coding_session_id: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct SearchCodingTranscriptArgs {
+    #[serde(default)]
+    pub cowork_agent_id: Option<String>,
+    #[serde(default)]
+    pub coding_session_id: Option<String>,
+    pub query: String,
     #[serde(default)]
     pub limit: Option<usize>,
 }
@@ -125,15 +175,27 @@ pub fn build_tool_list(include_delegation_tools: bool) -> Vec<Value> {
 pub(super) fn is_delegation_tool(name: &str) -> bool {
     matches!(
         name,
-        "get_coding_workspace_launch_options"
+        "get_cowork_workspace_launch_options"
+            | "get_coding_workspace_launch_options"
+            | "create_cowork_workspace"
             | "create_coding_workspace"
+            | "list_cowork_workspaces"
             | "list_coding_workspaces"
+            | "get_cowork_agent_launch_options"
             | "get_coding_session_launch_options"
+            | "create_cowork_agent"
             | "create_coding_session"
+            | "send_cowork_agent_message"
             | "send_coding_message"
+            | "schedule_cowork_agent_wake"
             | "schedule_coding_wake"
+            | "get_cowork_agent_status"
             | "get_coding_status"
+            | "read_cowork_agent_events"
             | "read_coding_events"
+            | "read_cowork_agent_latest_turns"
+            | "search_cowork_agent_transcript"
+            | "close_cowork_agent"
     )
 }
 
@@ -203,13 +265,152 @@ fn artifact_tool_definitions() -> Vec<Value> {
 fn delegation_tool_definitions() -> Vec<Value> {
     vec![
         tool_definition(
+            "get_cowork_workspace_launch_options",
+            "List source workspace options before creating cowork-managed workspaces.",
+            json!({ "type": "object", "properties": {} }),
+        ),
+        tool_definition(
+            "create_cowork_workspace",
+            "Create a cowork-managed standard worktree workspace. This only provisions the workspace; call create_cowork_agent to start agent work inside it.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sourceWorkspaceId": { "type": "string" },
+                    "label": { "type": "string" },
+                    "workspaceName": { "type": "string" },
+                    "branchName": { "type": "string" }
+                },
+                "required": ["sourceWorkspaceId"]
+            }),
+        ),
+        tool_definition(
+            "list_cowork_workspaces",
+            "List cowork-managed workspaces and linked cowork agents owned by this cowork thread.",
+            json!({ "type": "object", "properties": {} }),
+        ),
+        tool_definition(
+            "get_cowork_agent_launch_options",
+            "List supported agent/model choices and recommended mode ids before creating a cowork agent inside an owned cowork workspace.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkWorkspaceId": { "type": "string" },
+                    "workspaceId": { "type": "string", "description": "Deprecated legacy target." }
+                }
+            }),
+        ),
+        tool_definition(
+            "create_cowork_agent",
+            "Create a linked cowork agent inside an owned cowork-managed workspace and send it an initial prompt.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkWorkspaceId": { "type": "string" },
+                    "workspaceId": { "type": "string", "description": "Deprecated legacy target." },
+                    "prompt": { "type": "string" },
+                    "label": { "type": "string" },
+                    "agentKind": { "type": "string" },
+                    "modelId": { "type": "string" },
+                    "modeId": { "type": "string" },
+                    "wakeOnCompletion": { "type": "boolean" }
+                },
+                "required": ["prompt"]
+            }),
+        ),
+        tool_definition(
+            "send_cowork_agent_message",
+            "Send or queue a parent-authored prompt to an owned cowork agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "prompt": { "type": "string" },
+                    "wakeOnCompletion": { "type": "boolean" }
+                },
+                "required": ["prompt"]
+            }),
+        ),
+        tool_definition(
+            "schedule_cowork_agent_wake",
+            "Schedule a one-shot wake for the next newly completed turn of an owned cowork agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                }
+            }),
+        ),
+        tool_definition(
+            "get_cowork_agent_status",
+            "Get execution status for an owned cowork agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                }
+            }),
+        ),
+        tool_definition(
+            "read_cowork_agent_events",
+            "Read a bounded, sanitized event slice from an owned cowork agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "sinceSeq": { "type": "integer" },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+                }
+            }),
+        ),
+        tool_definition(
+            "read_cowork_agent_latest_turns",
+            "Read concise summaries for the latest completed turns from an owned cowork agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
+                }
+            }),
+        ),
+        tool_definition(
+            "search_cowork_agent_transcript",
+            "Search bounded transcript text for an owned cowork agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "query": { "type": "string" },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
+                },
+                "required": ["query"]
+            }),
+        ),
+        tool_definition(
+            "close_cowork_agent",
+            "Close an owned cowork agent and stop future prompts/wakes while preserving history.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "coworkAgentId": { "type": "string" },
+                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                }
+            }),
+        ),
+        tool_definition(
             "get_coding_workspace_launch_options",
-            "List eligible standard source workspaces, repo default base branches, supported agent/model choices, and recommended fast coding mode ids before creating cowork-managed coding workspaces.",
+            "Deprecated alias for get_cowork_workspace_launch_options.",
             json!({ "type": "object", "properties": {} }),
         ),
         tool_definition(
             "create_coding_workspace",
-            "Create a cowork-managed standard worktree workspace from the source repo default branch. This only provisions the workspace; call create_coding_session to start agent work inside it.",
+            "Deprecated alias for create_cowork_workspace.",
             json!({
                 "type": "object",
                 "properties": {
@@ -229,7 +430,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
         ),
         tool_definition(
             "list_coding_workspaces",
-            "List cowork-managed coding workspaces and linked coding sessions owned by this cowork thread.",
+            "Deprecated alias for list_cowork_workspaces.",
             json!({ "type": "object", "properties": {} }),
         ),
         tool_definition(
