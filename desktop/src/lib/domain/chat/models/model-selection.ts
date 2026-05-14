@@ -205,9 +205,18 @@ export function buildModelSelectorGroups(
       kind: agent.kind,
       modelId: model.id,
       displayName: model.displayName,
-      actionKind: resolveModelSelectionActionKind(activeSelection, agent.kind, model.id),
-      isSelected:
-        selected?.kind === agent.kind && selected?.modelId === model.id,
+      actionKind: resolveModelSelectionActionKindForModel(
+        activeSelection,
+        sourceAgentsByKind.get(agent.kind) ?? agent,
+        agent.kind,
+        model.id,
+      ),
+      isSelected: modelSelectionMatchesModel(
+        selected,
+        sourceAgentsByKind.get(agent.kind) ?? agent,
+        agent.kind,
+        model.id,
+      ),
     })),
   }));
 }
@@ -219,14 +228,24 @@ function resolveSelectorModels(
   sourceAgent: DesktopAgentLaunchAgent,
 ): Array<{ id: string; displayName: string }> {
   if (activeModelControl?.kind === agent.kind && activeModelControl.values.length > 0) {
-    const knownModelIds = new Set(sourceAgent.models.map((model) => model.id));
-    const visibleModelIds = new Set(agent.models.map((model) => model.id));
     return activeModelControl.values.flatMap((value) => {
-      const isSelected = selected?.kind === agent.kind && selected.modelId === value.value;
+      const isSelected = modelSelectionMatchesModel(
+        selected,
+        sourceAgent,
+        agent.kind,
+        value.value,
+      );
+      const knownModel = findLaunchModelByIdOrAlias(sourceAgent, value.value);
+      const visibleModel = findLaunchModelByIdOrAlias(agent, value.value);
       const isFilteredByVisibility =
-        knownModelIds.has(value.value) && !visibleModelIds.has(value.value);
+        Boolean(knownModel) && !visibleModel;
+      const isUnknownDynamicModel =
+        !knownModel && dynamicLaunchAgentAcceptsModel(sourceAgent);
       const isHiddenByProductPolicy = shouldHideSelectorModel(agent.kind, value);
-      if ((isFilteredByVisibility || isHiddenByProductPolicy) && !isSelected) {
+      if (
+        (isFilteredByVisibility || isUnknownDynamicModel || isHiddenByProductPolicy)
+        && !isSelected
+      ) {
         return [];
       }
 
@@ -245,6 +264,55 @@ function resolveSelectorModels(
   }
 
   return agent.models;
+}
+
+function resolveModelSelectionActionKindForModel(
+  activeSelection: ModelSelectorSelection | null | undefined,
+  agent: DesktopAgentLaunchAgent,
+  agentKind: string,
+  modelId: string,
+): ModelSelectionActionKind {
+  if (!activeSelection) {
+    return "select";
+  }
+  if (activeSelection.kind !== agentKind) {
+    return "open_new_chat";
+  }
+  return modelSelectionMatchesModel(activeSelection, agent, agentKind, modelId)
+    ? "select"
+    : "update_current_chat";
+}
+
+function modelSelectionMatchesModel(
+  selection: ModelSelectorSelection | null | undefined,
+  agent: DesktopAgentLaunchAgent,
+  agentKind: string,
+  modelId: string,
+): boolean {
+  if (!selection || selection.kind !== agentKind) {
+    return false;
+  }
+  if (selection.modelId === modelId) {
+    return true;
+  }
+
+  const model = findLaunchModelByIdOrAlias(agent, modelId);
+  return Boolean(
+    model
+    && (
+      model.id === selection.modelId
+      || model.aliases.includes(selection.modelId)
+    ),
+  );
+}
+
+function findLaunchModelByIdOrAlias(
+  agent: DesktopAgentLaunchAgent,
+  modelId: string,
+): DesktopAgentLaunchModel | null {
+  return agent.models.find((model) =>
+    model.id === modelId || model.aliases.includes(modelId)
+  ) ?? null;
 }
 
 function agentsWithVisibleModels(
