@@ -60,3 +60,49 @@ class WorkerInventoryResponse(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
     worker_id: str = Field(serialization_alias="workerId")
     updated: bool
+
+
+class WorkerCommandLeaseRequest(BaseModel):
+    supported_kinds: list[str] = Field(default_factory=list, alias="supportedKinds")
+    lease_timeout_seconds: int | None = Field(default=None, alias="leaseTimeoutSeconds")
+    max_wait_seconds: int | None = Field(default=None, alias="maxWaitSeconds")
+
+
+class WorkerCommandEnvelope(BaseModel):
+    command_id: str = Field(serialization_alias="commandId")
+    idempotency_key: str = Field(serialization_alias="idempotencyKey")
+    target_id: str = Field(serialization_alias="targetId")
+    workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
+    session_id: str | None = Field(default=None, serialization_alias="sessionId")
+    kind: str
+    payload: dict[str, object]
+    observed_event_seq: int | None = Field(default=None, serialization_alias="observedEventSeq")
+    preconditions: dict[str, object] | None = None
+    lease_id: str = Field(serialization_alias="leaseId")
+    lease_expires_at: str = Field(serialization_alias="leaseExpiresAt")
+
+
+class WorkerCommandLeaseResponse(BaseModel):
+    command: WorkerCommandEnvelope | None = None
+    server_time: str = Field(serialization_alias="serverTime")
+
+
+class WorkerCommandDeliveryRequest(BaseModel):
+    lease_id: str = Field(alias="leaseId")
+    status: str = "delivered"
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+
+class WorkerCommandResultRequest(BaseModel):
+    lease_id: str = Field(alias="leaseId")
+    status: str
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+    result: dict[str, object] | None = None
+
+
+class WorkerCommandStatusResponse(BaseModel):
+    command_id: str = Field(serialization_alias="commandId")
+    status: str
+    updated: bool

@@ -1,5 +1,6 @@
 mod anyharness_client;
 mod cloud_client;
+mod commands;
 mod config;
 mod error;
 mod identity;

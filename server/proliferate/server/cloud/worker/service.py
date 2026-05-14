@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import secrets
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,16 +16,31 @@ from proliferate.constants.cloud import (
     CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
     CLOUD_TARGET_HEARTBEAT_STALE_SECONDS,
     CLOUD_WORKER_TOKEN_DOMAIN,
+    CloudCommandStatus,
     CloudTargetStatus,
     CloudWorkerStatus,
 )
+from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.worker.domain.rules import compact_json, validate_worker_status
+from proliferate.server.cloud.worker.domain.rules import (
+    clamp_command_lease_seconds,
+    compact_json,
+    normalize_supported_command_kinds,
+    validate_delivery_status,
+    validate_result_status,
+    validate_worker_status,
+)
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.server.cloud.worker.models import (
+    WorkerCommandDeliveryRequest,
+    WorkerCommandEnvelope,
+    WorkerCommandLeaseRequest,
+    WorkerCommandLeaseResponse,
+    WorkerCommandResultRequest,
+    WorkerCommandStatusResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerHeartbeatRequest,
@@ -66,6 +83,35 @@ async def _record_inventory_payload(
         providers_json=compact_json(payload.providers),
         mcp_json=compact_json(payload.mcp),
         raw_json=None,
+    )
+
+
+def _parse_json_dict(value: str | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if isinstance(parsed, dict):
+        return parsed
+    return {"value": parsed}
+
+
+def _command_envelope(
+    command: commands_store.CloudCommandSnapshot,
+) -> WorkerCommandEnvelope:
+    return WorkerCommandEnvelope(
+        command_id=str(command.id),
+        idempotency_key=command.idempotency_key,
+        target_id=str(command.target_id),
+        workspace_id=command.workspace_id,
+        session_id=command.session_id,
+        kind=command.kind,
+        payload=_parse_json_dict(command.payload_json) or {},
+        observed_event_seq=command.observed_event_seq,
+        preconditions=_parse_json_dict(command.preconditions_json),
+        lease_id=command.lease_id or "",
+        lease_expires_at=command.lease_expires_at.isoformat()
+        if command.lease_expires_at
+        else "",
     )
 
 
@@ -241,5 +287,101 @@ async def record_inventory(
     return WorkerInventoryResponse(
         target_id=str(auth.target_id),
         worker_id=str(auth.worker_id),
+        updated=True,
+    )
+
+
+async def lease_worker_command(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerCommandLeaseRequest,
+) -> WorkerCommandLeaseResponse:
+    supported_kinds = normalize_supported_command_kinds(body.supported_kinds)
+    lease_seconds = clamp_command_lease_seconds(body.lease_timeout_seconds)
+    now = utcnow()
+    command = await commands_store.lease_next_command(
+        db,
+        target_id=auth.target_id,
+        worker_id=auth.worker_id,
+        supported_kinds=supported_kinds,
+        lease_id=secrets.token_urlsafe(24),
+        lease_expires_at=now + timedelta(seconds=lease_seconds),
+        now=now,
+    )
+    return WorkerCommandLeaseResponse(
+        command=_command_envelope(command) if command is not None else None,
+        server_time=now.isoformat(),
+    )
+
+
+async def record_command_delivery(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    command_id: UUID,
+    body: WorkerCommandDeliveryRequest,
+) -> WorkerCommandStatusResponse:
+    status = validate_delivery_status(body.status)
+    now = utcnow()
+    if status == CloudCommandStatus.failed_delivery.value:
+        command = await commands_store.mark_command_failed_delivery(
+            db,
+            command_id=command_id,
+            worker_id=auth.worker_id,
+            lease_id=body.lease_id,
+            error_code=body.error_code,
+            error_message=body.error_message,
+            now=now,
+        )
+    else:
+        command = await commands_store.mark_command_delivered(
+            db,
+            command_id=command_id,
+            worker_id=auth.worker_id,
+            lease_id=body.lease_id,
+            now=now,
+        )
+    if command is None:
+        raise CloudApiError(
+            "cloud_worker_command_not_leased",
+            "Command is not leased by this worker.",
+            status_code=404,
+        )
+    return WorkerCommandStatusResponse(
+        command_id=str(command.id),
+        status=command.status,
+        updated=True,
+    )
+
+
+async def record_command_result(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    command_id: UUID,
+    body: WorkerCommandResultRequest,
+) -> WorkerCommandStatusResponse:
+    status = validate_result_status(body.status)
+    command = await commands_store.record_command_result(
+        db,
+        command_id=command_id,
+        worker_id=auth.worker_id,
+        lease_id=body.lease_id,
+        status=status,
+        error_code=body.error_code,
+        error_message=body.error_message,
+        result_json=compact_json(body.result),
+        now=utcnow(),
+    )
+    if command is None:
+        raise CloudApiError(
+            "cloud_worker_command_not_leased",
+            "Command is not leased by this worker.",
+            status_code=404,
+        )
+    return WorkerCommandStatusResponse(
+        command_id=str(command.id),
+        status=command.status,
         updated=True,
     )

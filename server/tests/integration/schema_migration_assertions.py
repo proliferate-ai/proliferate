@@ -14,6 +14,7 @@ async def assert_current_schema(
         "anonymous_telemetry_local_install",
         "billing_entitlement",
         "billing_grant",
+        "cloud_commands",
         "cloud_mcp_connection",
         "cloud_mcp_connection_auth",
         "cloud_mcp_oauth_client",

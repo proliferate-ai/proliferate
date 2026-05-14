@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from proliferate.server.cloud.commands.api import router as commands_router
 from proliferate.server.cloud.credentials.api import router as credentials_router
 from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_router
 from proliferate.server.cloud.mcp_connections.api import router as mcp_connections_router
@@ -29,4 +30,5 @@ router.include_router(mcp_materialization_router)
 router.include_router(mcp_oauth_router)
 router.include_router(webhooks_router)
 router.include_router(targets_router)
+router.include_router(commands_router)
 router.include_router(worker_router)

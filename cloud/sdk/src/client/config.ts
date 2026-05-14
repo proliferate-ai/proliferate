@@ -2,8 +2,8 @@ import type { CloudSessionConfigState } from "../types/index.js";
 import { enqueueCommand } from "./commands.js";
 
 export interface UpdateSessionConfigPayload {
-  configVersion?: number | null;
-  patch: Record<string, unknown>;
+  configId: string;
+  value: string;
 }
 
 export async function updateSessionConfig(
@@ -28,4 +28,3 @@ export async function updateSessionConfig(
 }
 
 export type { CloudSessionConfigState };
-

@@ -1,4 +1,5 @@
 pub mod health;
+pub mod sessions;
 
 use std::time::Duration;
 
