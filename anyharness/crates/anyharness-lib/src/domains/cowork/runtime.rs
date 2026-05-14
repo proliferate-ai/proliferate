@@ -249,10 +249,8 @@ async fn deliver_cowork_coding_completion(
     };
     let prompt = cowork_coding_wake_prompt_text(
         link.label.as_deref(),
-        &link.child_session_id,
-        &link.id,
+        link.public_id.as_deref(),
         ctx.outcome,
-        ctx.last_event_seq,
     );
     let prompt_payload = PromptPayload::text(prompt).with_provenance(PromptProvenance::LinkWake {
         relation: SessionLinkRelation::CoworkCodingSession
@@ -328,14 +326,13 @@ async fn deliver_cowork_coding_completion(
 
 fn cowork_coding_wake_prompt_text(
     label: Option<&str>,
-    child_session_id: &str,
-    session_link_id: &str,
+    cowork_agent_id: Option<&str>,
     outcome: crate::sessions::extensions::SessionTurnOutcome,
-    child_last_event_seq: i64,
 ) -> String {
-    let label = label.unwrap_or("coding session");
+    let label = label.unwrap_or("cowork agent");
+    let cowork_agent_id = cowork_agent_id.unwrap_or("unknown");
     format!(
-        "Coding session \"{label}\" finished a turn.\n\nChild session: {child_session_id}\nSession link: {session_link_id}\nOutcome: {}\nLast child event seq: {child_last_event_seq}\n\nUse the cowork coding-session tools to inspect the child session before continuing.",
+        "Cowork agent \"{label}\" finished a turn.\n\ncoworkAgentId: {cowork_agent_id}\nOutcome: {}\n\nUse read_cowork_agent_latest_turns or search_cowork_agent_transcript with this coworkAgentId before relying on the result.",
         outcome.as_str()
     )
 }
@@ -1053,9 +1050,12 @@ impl CoworkRuntime {
         parent_session_id: &str,
         coding_session_id: &str,
     ) -> Result<CoworkCodingStatusResult, CoworkDelegationError> {
-        let link = self
-            .delegation_service
-            .authorize_coding_session(parent_session_id, coding_session_id)?;
+        let link = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            None,
+            Some(coding_session_id),
+            true,
+        )?;
         let session = self
             .delegation_service
             .session_store()
@@ -1093,7 +1093,7 @@ impl CoworkRuntime {
             parent_session_id,
             cowork_agent_id,
             coding_session_id,
-            false,
+            true,
         )?;
         self.coding_status(parent_session_id, &link.child_session_id)
             .await
@@ -1167,7 +1167,7 @@ impl CoworkRuntime {
             parent_session_id,
             cowork_agent_id,
             coding_session_id,
-            false,
+            true,
         )?;
         self.read_coding_events(parent_session_id, &link.child_session_id, since_seq, limit)
     }
@@ -1183,7 +1183,7 @@ impl CoworkRuntime {
             parent_session_id,
             cowork_agent_id,
             coding_session_id,
-            false,
+            true,
         )?;
         let limit = limit.unwrap_or(3).clamp(1, 10);
         let mut completions = self
@@ -1224,7 +1224,7 @@ impl CoworkRuntime {
             parent_session_id,
             cowork_agent_id,
             coding_session_id,
-            false,
+            true,
         )?;
         let query = query.trim();
         if query.is_empty() {

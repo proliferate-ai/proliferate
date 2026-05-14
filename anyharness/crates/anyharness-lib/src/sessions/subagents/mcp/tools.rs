@@ -119,8 +119,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                             "additionalProperties": true,
                             "properties": {
                                 "modelId": { "type": "string" },
-                                "modeId": { "type": "string" },
-                                "effort": { "type": "string" }
+                                "modeId": { "type": "string" }
                             }
                         },
                         "wakeOnCompletion": { "type": "boolean" },
@@ -147,7 +146,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["prompt"]
+                "required": ["prompt"],
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -158,7 +161,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                 "properties": {
                     "subagentId": { "type": "string" },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -169,7 +176,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                 "properties": {
                     "subagentId": { "type": "string" },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -181,7 +192,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                     "subagentId": { "type": "string" },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
-                }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -195,7 +210,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
-                "required": ["query"]
+                "required": ["query"],
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -212,7 +231,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                         "minimum": 1,
                         "maximum": READ_EVENTS_MAX_LIMIT
                     }
-                }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -223,7 +246,11 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                 "properties": {
                     "subagentId": { "type": "string" },
                     "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         ]);

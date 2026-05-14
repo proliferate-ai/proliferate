@@ -208,6 +208,22 @@ impl CoworkStore {
         })
     }
 
+    pub fn mark_managed_workspaces_closed_by_parent(
+        &self,
+        parent_session_id: &str,
+        closed_at: &str,
+    ) -> anyhow::Result<usize> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE cowork_managed_workspaces
+                 SET closed_at = COALESCE(closed_at, ?1)
+                 WHERE parent_session_id = ?2",
+                params![closed_at, parent_session_id],
+            )
+            .map_err(Into::into)
+        })
+    }
+
     pub fn insert_coding_session_link_with_workspace_limit(
         &self,
         record: &SessionLinkRecord,

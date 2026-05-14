@@ -38,6 +38,7 @@ impl SessionRuntime {
             .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let _record = self.get_session_or_not_found(session_id)?;
         self.close_delegated_children(session_id).await?;
+        self.close_inbound_delegated_links(session_id)?;
         self.close_session_actor_and_mark_closed(session_id).await?;
 
         self.session_service
@@ -76,8 +77,7 @@ impl SessionRuntime {
             .list_by_parent(parent_session_id)
             .map_err(SessionLifecycleError::Internal)?;
         let now = chrono::Utc::now().to_rfc3339();
-        self.session_service
-            .store()
+        self.cowork_service
             .mark_cowork_managed_workspaces_closed_by_parent(parent_session_id, &now)
             .map_err(SessionLifecycleError::Internal)?;
         let review_session_ids = self
@@ -104,6 +104,31 @@ impl SessionRuntime {
             if closed_child_session_ids.insert(session_id.clone()) {
                 self.close_session_if_open(&session_id).await?;
             }
+        }
+        Ok(())
+    }
+
+    fn close_inbound_delegated_links(
+        &self,
+        child_session_id: &str,
+    ) -> Result<(), SessionLifecycleError> {
+        let links = self
+            .session_link_service
+            .list_by_child(child_session_id)
+            .map_err(SessionLifecycleError::Internal)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        for link in links {
+            if !matches!(
+                link.relation,
+                SessionLinkRelation::Subagent
+                    | SessionLinkRelation::CoworkCodingSession
+                    | SessionLinkRelation::ReviewAgent
+            ) {
+                continue;
+            }
+            self.session_link_service
+                .close_link(&link.id, &now)
+                .map_err(SessionLifecycleError::Internal)?;
         }
         Ok(())
     }

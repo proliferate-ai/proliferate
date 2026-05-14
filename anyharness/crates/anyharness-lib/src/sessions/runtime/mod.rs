@@ -15,6 +15,7 @@ use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
+use crate::domains::cowork::service::CoworkService;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plugins::registry::PluginBundleRegistry;
 use crate::domains::reviews::service::ReviewService;
@@ -49,6 +50,7 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
     review_service: Arc<ReviewService>,
+    cowork_service: Arc<CoworkService>,
 }
 
 #[derive(Debug)]
@@ -245,6 +247,7 @@ impl SessionRuntime {
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
         review_service: Arc<ReviewService>,
+        cowork_service: Arc<CoworkService>,
     ) -> Self {
         Self {
             session_service,
@@ -259,6 +262,7 @@ impl SessionRuntime {
             access_gate,
             plan_service,
             review_service,
+            cowork_service,
         }
     }
 }

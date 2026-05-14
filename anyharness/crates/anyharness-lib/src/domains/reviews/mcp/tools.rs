@@ -24,6 +24,15 @@ pub struct MarkReviewRevisionReadyArgs {
     pub revised_plan_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetReviewStatusArgs {
+    #[serde(default)]
+    pub review_id: Option<String>,
+    #[serde(default)]
+    pub review_run_id: Option<String>,
+}
+
 pub fn reviewer_tool_list() -> Vec<Value> {
     vec![tool_definition(
         "submit_review_result",
@@ -58,8 +67,14 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     }
     tools.push(tool_definition(
         "get_review_status",
-        "Get active review status for this parent session.",
-        json!({ "type": "object", "properties": {} }),
+        "Get active review status for this parent session. Optionally filter by reviewId; reviewRunId is a deprecated alias.",
+        json!({
+            "type": "object",
+            "properties": {
+                "reviewId": { "type": "string" },
+                "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." }
+            }
+        }),
     ));
     tools
 }

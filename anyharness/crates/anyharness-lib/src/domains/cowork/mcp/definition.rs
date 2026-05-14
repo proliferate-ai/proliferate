@@ -11,7 +11,7 @@ pub const ID: &str = "cowork";
 pub const ROUTE_SLUG: &str = ID;
 pub const ACP_SERVER_NAME: &str = "cowork";
 
-pub const INSTRUCTIONS: &str = "Use cowork artifact tools to manage cowork artifacts for this workspace. When workspace delegation is available, use get_coding_workspace_launch_options to choose a source workspace, then create_coding_workspace to provision a normal coding worktree. create_coding_workspace does not start agent work. Use get_coding_session_launch_options for that managed workspace, then create_coding_session to start a linked coding session with a prompt. Set wakeOnCompletion or call schedule_coding_wake when you want this cowork thread prompted after the coding session's next completed turn. Inspect coding work with get_coding_status and read_coding_events.";
+pub const INSTRUCTIONS: &str = "Use cowork artifact tools to manage cowork artifacts for this workspace. When workspace delegation is available, use get_cowork_workspace_launch_options to choose a source workspace, then create_cowork_workspace to provision a normal cowork worktree. create_cowork_workspace does not start agent work. Use get_cowork_agent_launch_options for that managed workspace, then create_cowork_agent to start a linked cowork agent with a prompt. Set wakeOnCompletion or call schedule_cowork_agent_wake when you want this cowork thread prompted after the cowork agent's next completed turn. Inspect delegated work with get_cowork_agent_status, read_cowork_agent_latest_turns, search_cowork_agent_transcript, or read_cowork_agent_events.";
 
 pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
     id: ID,

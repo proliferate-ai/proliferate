@@ -71,5 +71,5 @@ export function buildCollapsedSummaryIcons(summary: {
 
 export function isSubagentItem(item: ToolCallItem): boolean {
   return item.nativeToolName === "Agent"
-    || item.nativeToolName?.trim().toLowerCase() === "mcp__subagents__create_subagent";
+    || item.semanticKind === "subagent";
 }

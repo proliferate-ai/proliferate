@@ -300,7 +300,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                 "properties": {
                     "coworkWorkspaceId": { "type": "string" },
                     "workspaceId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["coworkWorkspaceId"] },
+                    { "required": ["workspaceId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -319,8 +323,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
                         "additionalProperties": true,
                         "properties": {
                             "modelId": { "type": "string" },
-                            "modeId": { "type": "string" },
-                            "effort": { "type": "string" }
+                            "modeId": { "type": "string" }
                         }
                     },
                     "agentKind": { "type": "string", "description": "Deprecated alias for harnessId." },
@@ -328,7 +331,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "modeId": { "type": "string", "description": "Deprecated alias for initialConfig.modeId." },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["prompt"]
+                "required": ["prompt"],
+                "anyOf": [
+                    { "required": ["coworkWorkspaceId"] },
+                    { "required": ["workspaceId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -342,7 +349,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["prompt"]
+                "required": ["prompt"],
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -353,7 +364,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                 "properties": {
                     "coworkAgentId": { "type": "string" },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -364,7 +379,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                 "properties": {
                     "coworkAgentId": { "type": "string" },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -377,7 +396,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "sinceSeq": { "type": "integer" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
-                }
+                },
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -389,7 +412,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "coworkAgentId": { "type": "string" },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
-                }
+                },
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -403,7 +430,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
-                "required": ["query"]
+                "required": ["query"],
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -414,7 +445,11 @@ fn delegation_tool_definitions() -> Vec<Value> {
                 "properties": {
                     "coworkAgentId": { "type": "string" },
                     "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
-                }
+                },
+                "anyOf": [
+                    { "required": ["coworkAgentId"] },
+                    { "required": ["codingSessionId"] }
+                ]
             }),
         ),
         tool_definition(

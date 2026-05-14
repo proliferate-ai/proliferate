@@ -95,6 +95,15 @@ impl CoworkService {
         self.store.mark_managed_workspace_closed(id, closed_at)
     }
 
+    pub fn mark_cowork_managed_workspaces_closed_by_parent(
+        &self,
+        parent_session_id: &str,
+        closed_at: &str,
+    ) -> anyhow::Result<usize> {
+        self.store
+            .mark_managed_workspaces_closed_by_parent(parent_session_id, closed_at)
+    }
+
     pub fn insert_coding_session_link_with_workspace_limit(
         &self,
         record: &SessionLinkRecord,

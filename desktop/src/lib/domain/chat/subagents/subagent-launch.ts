@@ -78,7 +78,11 @@ export function resolveSubagentLaunchDisplay(
   item: ToolCallItem,
 ): SubagentLaunchDisplay {
   const rawInput = isRecord(item.rawInput) ? item.rawInput : {};
-  const label = readStringField(rawInput, "label");
+  const rawOutput: Record<string, unknown> = isRecord(item.rawOutput)
+    ? item.rawOutput
+    : (parseToolResultJsonObject(item) ?? {});
+  const label = readStringField(rawInput, "label")
+    ?? readStringField(rawOutput, "label");
   const prompt = readStringField(rawInput, "prompt") ?? extractToolInputText(item);
   const title = label
     ?? (isAnyHarnessSubagentTool(item) ? "Subagent" : item.title)

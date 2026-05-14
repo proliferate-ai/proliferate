@@ -228,15 +228,7 @@ fn get_coding_workspace_launch_options(
             "maxCodingSessionsPerManagedWorkspace": MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE
         },
         "sourceWorkspaces": workspaces,
-        "notes": [
-            "create_coding_workspace creates only a standard worktree workspace. Use create_coding_session to start agent work inside it.",
-            "sourceWorkspaceId selects the repo/source context; the new worktree branches from baseBranch, usually the repo default branch.",
-            "Pass workspaceName for a concise workspace/path slug, or branchName for an explicit full Git branch name.",
-            "create_coding_session adds another linked coding session to an owned managed coding workspace.",
-            "For fast autonomous coding sessions, use the recommended modeId. Claude uses bypassPermissions when no explicit modeId is provided.",
-            "When workspaceName and branchName are omitted, the runtime derives a readable workspace name from label or falls back to a short default with numeric suffixes.",
-            "Cowork-created coding sessions cannot create their own subagents in this version."
-        ]
+        "notes": ["create_cowork_workspace provisions a standard worktree workspace; create_cowork_agent starts agent work inside it."]
     }))
 }
 
@@ -436,6 +428,7 @@ async fn send_coding_message(
         args.cowork_agent_id.as_deref(),
         args.coding_session_id.as_deref(),
     )?;
+    let workspace_id = coding_session_workspace_id(cowork_runtime, &link.child_session_id)?;
     let outcome = cowork_runtime
         .send_coding_message(
             parent_session_id,
@@ -449,6 +442,8 @@ async fn send_coding_message(
     Ok(json!({
         "coworkAgentId": link.public_id,
         "codingSessionId": outcome.coding_session_id,
+        "workspaceId": workspace_id,
+        "label": link.label,
         "status": prompt_outcome_label(&outcome.outcome),
         "wake": {
             "scheduled": outcome.wake_scheduled,
@@ -471,10 +466,13 @@ fn schedule_coding_wake(
         args.cowork_agent_id.as_deref(),
         args.coding_session_id.as_deref(),
     )?;
+    let workspace_id = coding_session_workspace_id(cowork_runtime, &link.child_session_id)?;
     Ok(json!({
         "coworkAgentId": link.public_id,
         "codingSessionId": link.child_session_id,
         "sessionLinkId": link.id,
+        "workspaceId": workspace_id,
+        "label": link.label,
         "wakeScheduleCreated": created,
         "wakeScheduled": true,
         "wakeScope": "next_completion",
@@ -497,6 +495,8 @@ async fn get_coding_status(
         "coworkAgentId": status.session_link.public_id,
         "codingSessionId": status.session.id,
         "sessionLinkId": status.session_link.id,
+        "workspaceId": status.session.workspace_id,
+        "label": status.session_link.label,
         "status": status.session.status,
         "agentKind": status.session.agent_kind,
         "modelId": status.session.current_model_id.or(status.session.requested_model_id),
@@ -580,8 +580,19 @@ async fn close_cowork_agent(
         "coworkAgentId": link.public_id,
         "codingSessionId": link.child_session_id,
         "sessionLinkId": link.id,
+        "workspaceId": coding_session_workspace_id(cowork_runtime, &link.child_session_id)?,
+        "label": link.label,
         "closed": true,
         "alreadyClosed": already_closed,
         "closedAt": link.closed_at.unwrap_or(closed_at),
     }))
+}
+
+fn coding_session_workspace_id(
+    cowork_runtime: &CoworkRuntime,
+    coding_session_id: &str,
+) -> anyhow::Result<Option<String>> {
+    Ok(cowork_runtime
+        .session_record(coding_session_id)?
+        .map(|session| session.workspace_id))
 }

@@ -68,7 +68,7 @@ pub async fn call_tool(
         }
         "read_subagent_latest_turns" => {
             let args: ReadSubagentLatestTurnsArgs = deserialize_args(arguments)?;
-            let link = service.authorize_target(
+            let link = service.resolve_target_including_closed(
                 &ctx.parent_session_id,
                 args.subagent_id.as_deref(),
                 args.child_session_id.as_deref(),
@@ -423,6 +423,7 @@ async fn send_subagent_message(
     Ok(json!({
         "subagentId": link.public_id,
         "childSessionId": link.child_session_id,
+        "label": link.label,
         "wake": {
             "scheduled": args.wake_on_completion,
             "created": wake_scheduled,
@@ -449,6 +450,7 @@ fn schedule_subagent_wake(
         "subagentId": link.public_id,
         "sessionLinkId": link.id,
         "childSessionId": link.child_session_id,
+        "label": link.label,
         "scheduled": true,
         "alreadyScheduled": !inserted,
         "wakeScope": "next_completion",
@@ -461,7 +463,7 @@ async fn get_subagent_status(
     parent_session_id: &str,
     args: ChildSessionArgs,
 ) -> anyhow::Result<Value> {
-    let link = service.authorize_target(
+    let link = service.resolve_target_including_closed(
         parent_session_id,
         args.subagent_id.as_deref(),
         args.child_session_id.as_deref(),
@@ -475,6 +477,7 @@ async fn get_subagent_status(
         "subagentId": link.public_id,
         "sessionLinkId": link.id,
         "childSessionId": session.id,
+        "label": link.label,
         "status": session.status,
         "agentKind": session.agent_kind,
         "modelId": session.current_model_id.or(session.requested_model_id),
@@ -511,6 +514,7 @@ async fn close_subagent(
         "subagentId": link.public_id,
         "sessionLinkId": link.id,
         "childSessionId": link.child_session_id,
+        "label": link.label,
         "closed": true,
         "alreadyClosed": already_closed,
         "closedAt": link.closed_at.unwrap_or(now),

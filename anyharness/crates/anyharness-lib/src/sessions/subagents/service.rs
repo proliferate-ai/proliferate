@@ -144,7 +144,7 @@ impl SubagentService {
         label: Option<String>,
         created_by_turn_id: Option<String>,
         created_by_tool_call_id: Option<String>,
-    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+    ) -> Result<SessionLinkRecord, SubagentError> {
         let parent = self
             .session_store
             .find_by_id(parent_session_id)?
@@ -177,7 +177,7 @@ impl SubagentService {
         &self,
         parent_session_id: &str,
         child_session_id: &str,
-    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+    ) -> Result<SessionLinkRecord, SubagentError> {
         self.link_service
             .find_subagent_link(parent_session_id, child_session_id)?
             .ok_or(SubagentError::NotOwned)
@@ -188,7 +188,7 @@ impl SubagentService {
         parent_session_id: &str,
         subagent_id: Option<&str>,
         child_session_id: Option<&str>,
-    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+    ) -> Result<SessionLinkRecord, SubagentError> {
         let link = self.resolve_target(parent_session_id, subagent_id, child_session_id, false)?;
         if link.closed_at.is_some() {
             return Err(SubagentError::Closed);
@@ -201,7 +201,7 @@ impl SubagentService {
         parent_session_id: &str,
         subagent_id: Option<&str>,
         child_session_id: Option<&str>,
-    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+    ) -> Result<SessionLinkRecord, SubagentError> {
         self.resolve_target(parent_session_id, subagent_id, child_session_id, true)
     }
 
@@ -211,7 +211,7 @@ impl SubagentService {
         subagent_id: Option<&str>,
         child_session_id: Option<&str>,
         include_closed: bool,
-    ) -> Result<crate::sessions::links::model::SessionLinkRecord, SubagentError> {
+    ) -> Result<SessionLinkRecord, SubagentError> {
         let subagent_id = subagent_id.map(str::trim).filter(|value| !value.is_empty());
         let child_session_id = child_session_id
             .map(str::trim)
@@ -348,7 +348,7 @@ impl SubagentService {
     pub fn find_subagent_parent(
         &self,
         child_session_id: &str,
-    ) -> anyhow::Result<Option<crate::sessions::links::model::SessionLinkRecord>> {
+    ) -> anyhow::Result<Option<SessionLinkRecord>> {
         self.link_service.find_subagent_parent(child_session_id)
     }
 
@@ -377,11 +377,8 @@ impl SubagentService {
         &self,
         parent_session_id: &str,
         child_session_id: &str,
-    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), SubagentError> {
+    ) -> Result<(SessionLinkRecord, bool), SubagentError> {
         let link = self.authorize_child(parent_session_id, child_session_id)?;
-        if link.closed_at.is_some() {
-            return Err(SubagentError::Closed);
-        }
         let child = self
             .session_store
             .find_by_id(child_session_id)?
@@ -398,7 +395,7 @@ impl SubagentService {
         parent_session_id: &str,
         subagent_id: Option<&str>,
         child_session_id: Option<&str>,
-    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), SubagentError> {
+    ) -> Result<(SessionLinkRecord, bool), SubagentError> {
         let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
         let child = self
             .session_store
@@ -411,11 +408,7 @@ impl SubagentService {
         Ok((link, inserted))
     }
 
-    pub fn close_link(
-        &self,
-        link: &crate::sessions::links::model::SessionLinkRecord,
-        closed_at: &str,
-    ) -> anyhow::Result<bool> {
+    pub fn close_link(&self, link: &SessionLinkRecord, closed_at: &str) -> anyhow::Result<bool> {
         self.link_service.close_link(&link.id, closed_at)
     }
 
@@ -436,7 +429,8 @@ impl SubagentService {
         since_seq: Option<i64>,
         limit: Option<usize>,
     ) -> Result<SubagentEventSlice, SubagentError> {
-        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
+        let link =
+            self.resolve_target_including_closed(parent_session_id, subagent_id, child_session_id)?;
         let slice = read_child_events(
             &self.session_store,
             &self.link_service,
@@ -461,7 +455,8 @@ impl SubagentService {
         child_session_id: Option<&str>,
         limit: Option<usize>,
     ) -> Result<Vec<SubagentLatestTurn>, SubagentError> {
-        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
+        let link =
+            self.resolve_target_including_closed(parent_session_id, subagent_id, child_session_id)?;
         let limit = limit
             .unwrap_or(READ_LATEST_TURNS_DEFAULT_LIMIT)
             .clamp(1, READ_LATEST_TURNS_MAX_LIMIT);

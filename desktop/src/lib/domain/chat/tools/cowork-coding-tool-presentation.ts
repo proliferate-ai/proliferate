@@ -67,6 +67,7 @@ export function deriveCoworkCodingToolPresentation(
   const input = isRecord(item.rawInput) ? item.rawInput : {};
   const output = isRecord(item.rawOutput) ? item.rawOutput : parseToolResultJsonObject(item);
   const initialConfig = readRecord(input, "initialConfig");
+  const appliedInitialConfig = readRecord(output, "appliedInitialConfig");
   const wake = readRecord(output, "wake");
   const label = readString(input, "label")
     ?? readString(output, "label")
@@ -75,8 +76,11 @@ export function deriveCoworkCodingToolPresentation(
     ?? readString(input, "branchName")
     ?? readString(output, "branchName");
   const promptStatus = readString(output, "promptStatus") ?? readString(output, "status");
-  const agentKind = readString(input, "harnessId") ?? readString(input, "agentKind");
-  const modelId = readString(initialConfig, "modelId")
+  const agentKind = readString(appliedInitialConfig, "harnessId")
+    ?? readString(input, "harnessId")
+    ?? readString(input, "agentKind");
+  const modelId = readString(appliedInitialConfig, "modelId")
+    ?? readString(initialConfig, "modelId")
     ?? readString(initialConfig, "model")
     ?? readString(input, "modelId");
   const eventCount = Array.isArray(output?.events) ? output.events.length : null;
