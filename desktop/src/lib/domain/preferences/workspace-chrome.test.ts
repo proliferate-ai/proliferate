@@ -23,7 +23,7 @@ describe("workspace chrome classes", () => {
     })).toEqual({
       root: "bg-sidebar",
       contentShell: "bg-background rounded-tl-[22px] border-l border-t border-sidebar-border",
-      header: "flex h-10 shrink-0 items-center",
+      header: "flex h-10 shrink-0 items-center border-b border-border/70 bg-background",
     });
 
     expect(resolveStandardWorkspaceChromeClasses({

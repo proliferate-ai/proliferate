@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
 import {
   Calendar,
   CircleQuestion,
   Grid,
   Home,
 } from "@/components/ui/icons";
-import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
+import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
+import { SHORTCUTS } from "@/config/shortcuts";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
@@ -31,25 +31,26 @@ export function SidebarPrimaryNavigation({
   return (
     <div className="px-2">
       <div className="flex flex-col gap-px">
-        <SidebarPrimaryNavigationRow
+        <SidebarNavRow
           active={homeActive}
           icon={<Home className="size-3" />}
           label="Home"
+          shortcutLabel={SHORTCUTS.goHome.label}
           onPress={onGoHome}
         />
-        <SidebarPrimaryNavigationRow
+        <SidebarNavRow
           active={pluginsActive}
           icon={<Grid className="size-4" />}
           label="Plugins"
           onPress={onGoPlugins}
         />
-        <SidebarPrimaryNavigationRow
+        <SidebarNavRow
           active={automationsActive}
           icon={<Calendar className="size-4" />}
           label="Automations"
           onPress={onGoAutomations}
         />
-        <SidebarPrimaryNavigationRow
+        <SidebarNavRow
           active={supportActive}
           icon={<CircleQuestion className="size-4" />}
           label="Support"
@@ -57,32 +58,5 @@ export function SidebarPrimaryNavigation({
         />
       </div>
     </div>
-  );
-}
-
-function SidebarPrimaryNavigationRow({
-  active,
-  icon,
-  label,
-  onPress,
-}: {
-  active: boolean;
-  icon: ReactNode;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <SidebarRowSurface
-      active={active}
-      onPress={onPress}
-      className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
-    >
-      <div className="flex w-4 shrink-0 items-center justify-center">
-        {icon}
-      </div>
-      <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-        <span className="truncate">{label}</span>
-      </div>
-    </SidebarRowSurface>
   );
 }

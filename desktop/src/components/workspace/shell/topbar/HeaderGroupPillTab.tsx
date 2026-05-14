@@ -39,7 +39,7 @@ export function HeaderGroupPillTab({
   return (
     <div
       {...(rowDragProps ?? {})}
-      className={`absolute bottom-0 flex h-9 items-end pb-2 app-region-no-drag ${
+      className={`absolute bottom-0 flex h-7 items-center app-region-no-drag ${
         isDragging
           ? "z-[20] cursor-grabbing opacity-80"
           : `z-[3] transition-transform duration-150 hover:z-[4] ${

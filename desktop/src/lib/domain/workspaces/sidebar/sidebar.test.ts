@@ -327,6 +327,23 @@ describe("sidebar workspace filters", () => {
     ]);
   });
 
+  it("falls back to record recency when a workspace has no interaction timestamp", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "new-worktree",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          updatedAt: "2026-04-13T12:00:00.000Z",
+        }),
+      ],
+      workspaceLastInteracted: {},
+    });
+
+    expect(groups[0]?.items[0]?.lastInteracted).toBe("2026-04-13T12:00:00.000Z");
+  });
+
   it("orders repo groups by their latest visible work activity", () => {
     const groups = buildGroups({
       logicalWorkspaces: [

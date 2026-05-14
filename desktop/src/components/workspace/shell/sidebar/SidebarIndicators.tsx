@@ -2,12 +2,10 @@ import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 import {
   ArrowRight,
+  BrailleSweepBadge,
   CircleAlert,
-  CircleQuestion,
-  ClipboardList,
   Clock,
   GitMerge,
-  MessageSquare,
   Spinner,
 } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/IconButton";
@@ -43,15 +41,16 @@ export function SidebarStatusGlyph({
     case "error":
       return <CircleAlert className="size-3 text-destructive" />;
     case "waiting_input":
-      return <CircleQuestion className="size-3 text-info" />;
     case "waiting_plan":
-      return <ClipboardList className="size-3 text-info" />;
-    case "iterating":
-      return <Spinner className="size-3 text-sidebar-muted-foreground opacity-60" />;
-    case "queued_prompt":
-      return <MessageSquare className="size-3 text-info" />;
     case "needs_review":
-      return <div className="size-1.5 rounded-full bg-unread" />;
+      return (
+        <BrailleSweepBadge
+          className="h-3 text-[11px] text-info [line-height:0.75rem]"
+        />
+      );
+    case "iterating":
+    case "queued_prompt":
+      return <Spinner className="size-3.5 text-sidebar-foreground" />;
   }
 }
 

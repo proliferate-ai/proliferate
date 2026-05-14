@@ -66,8 +66,6 @@ export function StandardWorkspaceShell() {
     selectedWorkspaceId,
     selectedWorkspace,
     selectedCloudWorkspace,
-    gitStatus,
-    existingPr,
   } = data;
   const {
     sidebarOpen,
@@ -267,23 +265,15 @@ export function StandardWorkspaceShell() {
                       )}
                       {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
                         <GlobalHeader
-                          existingPr={existingPr}
                           selectedWorkspace={selectedWorkspace}
                           workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
                           rightPanelOpen={rightPanelOpen}
-                          disableGitActions={!hasRuntimeReadyWorkspace}
                           runDisabled={!runCommand.canRun}
                           runLoading={runCommand.isLaunching}
                           runLabel={runCommand.runLabel}
                           runTitle={runCommand.runTitle}
                           onRun={runCommand.onRun}
                           onTogglePanel={actions.toggleRightPanel}
-                          onCommit={actions.handleCommitOpen}
-                          onPush={actions.handlePushOpen}
-                          onCreatePr={actions.handlePrOpen}
-                          onViewPr={actions.handleViewPr}
-                          onRenameBranch={hasRuntimeReadyWorkspace ? actions.renameBranch : undefined}
-                          gitStatus={gitStatus ?? null}
                         />
                       )}
                     </>

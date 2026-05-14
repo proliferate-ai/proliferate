@@ -147,7 +147,8 @@ export function buildSidebarGroupStates(args: {
         const active = entry.id === args.selectedLogicalWorkspaceId;
         const archived = args.archivedSet.has(entry.id);
         const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
-        const lastInteracted = recency.displayAt;
+        const activityLastInteracted = recency.displayAt;
+        const lastInteracted = activityLastInteracted ?? recency.recordUpdatedAt;
         const preferredLocalWorkspace = entry.localWorkspace;
         const preferredCloudWorkspace = entry.cloudWorkspace;
         const variant = sidebarWorkspaceVariantForLogicalWorkspace(entry);
@@ -171,7 +172,7 @@ export function buildSidebarGroupStates(args: {
             : entry.displayName;
         const needsReview = isWorkspaceNeedsReview({
           isArchived: archived,
-          lastInteracted,
+          lastInteracted: activityLastInteracted,
           lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
         });
         const activity = activeWorkspaceActivity(entry, args.workspaceActivities);

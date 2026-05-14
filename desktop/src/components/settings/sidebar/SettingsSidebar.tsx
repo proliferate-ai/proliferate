@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/Button";
 import { ArrowLeft } from "@/components/ui/icons";
+import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import type { SettingsSection } from "@/config/settings";
@@ -30,11 +30,6 @@ interface SettingsSidebarProps {
   };
 }
 
-const NAV_ITEM_BASE =
-  "h-auto w-full justify-start gap-3 rounded-md px-2 py-1.5 text-left text-sm transition-all hover:bg-sidebar-accent focus:outline-none";
-const NAV_ITEM_ACTIVE = `${NAV_ITEM_BASE} bg-sidebar-accent font-medium text-sidebar-foreground`;
-const NAV_ITEM_INACTIVE = `${NAV_ITEM_BASE} text-sidebar-muted-foreground`;
-const NAV_STATUS_CLASS = "ml-auto shrink-0 text-xs text-sidebar-muted-foreground";
 const NAV_GROUP_CLASS = "flex flex-col gap-0.5";
 const NAV_GROUP_SPACING_CLASS = "mt-3";
 
@@ -101,10 +96,8 @@ export function SettingsSidebar({
             : "Available";
 
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => {
+      <SidebarNavRow
+        onPress={() => {
           if (disabled) {
             return;
           }
@@ -114,13 +107,10 @@ export function SettingsSidebar({
           }
           onDownloadUpdate();
         }}
-        className={`${NAV_ITEM_INACTIVE} ${disabled ? "cursor-not-allowed opacity-60 hover:bg-transparent" : ""}`}
-        aria-disabled={disabled || undefined}
         disabled={disabled}
-      >
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className={NAV_STATUS_CLASS}>{status}</span>
-      </Button>
+        label={label}
+        status={status}
+      />
     );
   }
 
@@ -138,24 +128,22 @@ export function SettingsSidebar({
       )}
       <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onNavigateHome}
-        className="mx-1.5 mb-4 h-auto w-fit justify-start gap-2 bg-transparent px-2 py-1.5 text-sm text-sidebar-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        <span>{SETTINGS_COPY.back}</span>
-      </Button>
+      <div className="mb-4 px-2">
+        <SidebarNavRow
+          icon={<ArrowLeft className="size-4" />}
+          label={SETTINGS_COPY.back}
+          onPress={onNavigateHome}
+        />
+      </div>
 
-      <nav className="flex-1 overflow-y-auto px-1.5 pb-4">
+      <nav className="flex-1 overflow-y-auto px-2 pb-4">
         <div className="flex flex-col">
           {SETTINGS_NAV_GROUPS.map((group, index) => (
             <Fragment key={group.id}>
               <div
                 className={`${NAV_GROUP_CLASS} ${index > 0 ? NAV_GROUP_SPACING_CLASS : ""}`}
               >
-                <div className="px-2 py-1.5 text-sm text-sidebar-muted-foreground">
+                <div className="px-2 py-1.5 text-xs font-medium uppercase tracking-[0.08em] text-sidebar-muted-foreground/80">
                   {group.heading}
                 </div>
                 {group.items.map((item) => {
@@ -168,33 +156,26 @@ export function SettingsSidebar({
                     && item.id === "checkForUpdates"
                     && !updateActionState.updatesSupported;
                   const disabled = sectionDisabled || actionDisabled;
+                  const status = item.kind === "action" && item.id === "checkForUpdates"
+                    ? !updateActionState.updatesSupported
+                      ? "Packaged only"
+                      : updateActionState.isChecking
+                        ? "Checking..."
+                        : updateActionState.hasAvailableUpdate
+                          ? "Available"
+                          : ""
+                    : null;
                   return (
                     <Fragment key={item.id}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => handleItemClick(item)}
-                        className={`${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE} ${
-                          disabled ? "cursor-not-allowed opacity-60 hover:bg-transparent" : ""
-                        }`}
-                        aria-current={active ? "page" : undefined}
-                        aria-disabled={disabled || undefined}
+                      <SidebarNavRow
+                        icon={<Icon className="size-4" />}
+                        label={item.label}
+                        status={status}
+                        onPress={() => handleItemClick(item)}
+                        active={active}
                         disabled={disabled}
-                      >
-                        <Icon className="size-4 shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                        {item.kind === "action" && item.id === "checkForUpdates" && (
-                          <span className={NAV_STATUS_CLASS}>
-                            {!updateActionState.updatesSupported
-                              ? "Packaged only"
-                              : updateActionState.isChecking
-                                ? "Checking..."
-                                : updateActionState.hasAvailableUpdate
-                                  ? "Available"
-                                  : ""}
-                          </span>
-                        )}
-                      </Button>
+                        aria-current={active ? "page" : undefined}
+                      />
                       {item.kind === "action" && item.id === "checkForUpdates"
                         ? renderUpdateCommand()
                         : null}

@@ -4,8 +4,7 @@ import { act, isValidElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import {
-  CircleQuestion,
-  ClipboardList,
+  BrailleSweepBadge,
   Spinner,
 } from "@/components/ui/icons";
 import type {
@@ -21,7 +20,7 @@ import {
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
-type GlyphTestKind = "waiting_input" | "waiting_plan" | "iterating";
+type GlyphTestKind = "waiting_input" | "waiting_plan" | "iterating" | "queued_prompt";
 
 function countElementsByType(node: ReactNode, targetType: unknown): number {
   if (Array.isArray(node)) {
@@ -52,19 +51,25 @@ describe("SidebarStatusGlyph", () => {
   it("keeps user-input blockers visually distinct from progress", () => {
     const glyph = renderGlyph("waiting_input");
 
-    expect(countElementsByType(glyph, CircleQuestion)).toBe(1);
+    expect(countElementsByType(glyph, BrailleSweepBadge)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
   });
 
   it("keeps plan-approval blockers visually distinct from progress", () => {
     const glyph = renderGlyph("waiting_plan");
 
-    expect(countElementsByType(glyph, ClipboardList)).toBe(1);
+    expect(countElementsByType(glyph, BrailleSweepBadge)).toBe(1);
     expect(countElementsByType(glyph, Spinner)).toBe(0);
   });
 
-  it("keeps iteration as the only progress glyph in active sidebar statuses", () => {
+  it("uses a progress glyph for active work", () => {
     const glyph = renderGlyph("iterating");
+
+    expect(countElementsByType(glyph, Spinner)).toBe(1);
+  });
+
+  it("uses a progress glyph for queued prompts", () => {
+    const glyph = renderGlyph("queued_prompt");
 
     expect(countElementsByType(glyph, Spinner)).toBe(1);
   });

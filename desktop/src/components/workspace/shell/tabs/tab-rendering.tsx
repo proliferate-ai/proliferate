@@ -5,6 +5,7 @@ import {
   BrailleSweepBadge,
   CircleAlert,
   MessageSquare,
+  Spinner,
 } from "@/components/ui/icons";
 import { ProviderIcon } from "@/components/ui/provider-icons";
 import type {
@@ -17,7 +18,11 @@ export function renderChatTabIcon(
   tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "agentKind" | "viewState">,
 ): ReactNode {
   if (tab.viewState === "working") {
-    return renderChatTabActivityIcon("text-info");
+    return (
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <Spinner className="size-3.5 text-foreground" />
+      </span>
+    );
   }
 
   if (tab.viewState === "needs_input") {

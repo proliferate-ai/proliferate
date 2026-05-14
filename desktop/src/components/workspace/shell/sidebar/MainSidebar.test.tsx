@@ -33,7 +33,7 @@ vi.mock("./SidebarFooter", () => ({
   SidebarFooter: () => <div data-testid="sidebar-footer" />,
 }));
 
-vi.mock("./SidebarRowSurface", () => ({
+vi.mock("@/components/ui/SidebarRowSurface", () => ({
   SidebarRowSurface: ({
     active,
     children,

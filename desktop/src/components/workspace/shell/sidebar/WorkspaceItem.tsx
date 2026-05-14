@@ -23,7 +23,7 @@ import {
   SidebarStatusIndicatorView,
 } from "./SidebarIndicators";
 import { SidebarActionButton } from "./SidebarActionButton";
-import { SidebarRowSurface } from "./SidebarRowSurface";
+import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 
 interface WorkspaceItemProps {
@@ -94,6 +94,9 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
+  const timestampLabel = lastInteracted
+    ? formatSidebarRelativeTime(lastInteracted)
+    : null;
   const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
     archived,
@@ -114,25 +117,8 @@ export function WorkspaceItem({
       onPointerEnter={onHover}
       data-sidebar-workspace-item={workspaceId ?? ""}
       data-sidebar-workspace-variant={variant}
-      className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+      className="h-[30px] gap-1.5 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px]"
     >
-      {/* Archive button — absolutely positioned right edge, visible on hover */}
-      {(onArchive || onUnarchive) && (
-        <div className="flex items-center gap-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 absolute right-0 top-0 z-10 h-full justify-center mr-px pr-0.5">
-          <SidebarActionButton
-            onClick={(e) => {
-              e.stopPropagation();
-              archived ? onUnarchive?.() : onArchive?.();
-            }}
-            title={archived ? "Unarchive workspace" : "Archive workspace"}
-            className="size-5 rounded-sm"
-            alwaysVisible
-          >
-            <Archive className="size-3" />
-          </SidebarActionButton>
-        </div>
-      )}
-
       {/* Leading status slot. Idle variants render with the right-side metadata
           instead so the icon sits next to the relative-time / git summary. */}
       <div className="flex w-4 shrink-0 items-center justify-center">
@@ -145,7 +131,7 @@ export function WorkspaceItem({
       {/* Title */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <div className={`flex flex-1 items-center gap-2 truncate text-base leading-5 ${
-          archived ? "text-foreground/30" : "text-foreground"
+          archived ? "text-sidebar-foreground/30" : "text-sidebar-foreground"
         }`}>
           <span className="truncate select-none" draggable={false}>{name}</span>
         </div>
@@ -159,31 +145,44 @@ export function WorkspaceItem({
       </div>
 
       {/* Right-side info — timestamp and workspace variant */}
-      <div className="flex shrink-0 items-stretch justify-end gap-1 min-w-[24px]">
-        {!active && lastInteracted && (
-          <div
-            className={`overflow-hidden whitespace-nowrap text-foreground/40 text-sm leading-4 tabular-nums truncate text-right transition-[max-width,opacity,margin] duration-150 ease-out ${
-              hasArchiveAction
-                ? "max-w-10 opacity-100 group-hover:max-w-0 group-hover:opacity-0 group-focus-within:max-w-0 group-focus-within:opacity-0"
-                : ""
-            }`}
-          >
-            {formatSidebarRelativeTime(lastInteracted)}
-          </div>
-        )}
-        <div
-          className={`flex items-center justify-end gap-1 text-sidebar-muted-foreground transition-transform duration-150 ease-out ${
-            hasArchiveAction
-              ? "group-hover:-translate-x-4 group-focus-within:-translate-x-4"
-              : ""
-          }`}
-        >
+      <div className="flex shrink-0 items-center justify-end gap-1 text-sidebar-muted-foreground">
+        <div className="flex min-w-0 items-center justify-end gap-1">
           <SidebarDetailIndicatorsView
             indicators={detailIndicators}
             archived={archived}
             onAction={onIndicatorAction}
           />
         </div>
+        {(timestampLabel || hasArchiveAction) && (
+          <div className="relative h-5 w-10 shrink-0">
+            {timestampLabel && (
+              <div
+                className={`absolute inset-y-0 right-0 flex items-center justify-end whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground/70 transition-opacity duration-150 ${
+                  hasArchiveAction
+                    ? "group-hover:opacity-0 group-focus-within:opacity-0"
+                    : ""
+                }`}
+              >
+                {timestampLabel}
+              </div>
+            )}
+            {hasArchiveAction && (
+              <div className="absolute inset-y-0 right-0 flex items-center justify-end opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+                <SidebarActionButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    archived ? onUnarchive?.() : onArchive?.();
+                  }}
+                  title={archived ? "Unarchive workspace" : "Archive workspace"}
+                  className="size-5 rounded-sm"
+                  alwaysVisible
+                >
+                  <Archive className="size-3" />
+                </SidebarActionButton>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </SidebarRowSurface>
   );
@@ -238,43 +237,43 @@ export function WorkspaceItem({
             </>
           ) : (
             <>
-          {onRename && (
-            <PopoverMenuItem
-              icon={<Pencil className="size-3.5 shrink-0 text-muted-foreground" />}
-              label="Rename"
-              variant="sidebar"
-              onClick={() => {
-                close();
-                handleRenameCommand();
-              }}
-            />
-          )}
-          {onMarkDone && (
-            <PopoverMenuItem
-              icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
-              label="Delete workspace..."
-              variant="sidebar"
-              onClick={() => {
-                handleMarkDoneCommand();
-              }}
-            />
-          )}
-          {onArchive && !archived && (
-            <PopoverMenuItem
-              icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
-              label="Archive"
-              variant="sidebar"
-              onClick={() => { close(); handleArchiveCommand(); }}
-            />
-          )}
-          {onUnarchive && archived && (
-            <PopoverMenuItem
-              icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
-              label="Unarchive"
-              variant="sidebar"
-              onClick={() => { close(); handleUnarchiveCommand(); }}
-            />
-          )}
+              {onRename && (
+                <PopoverMenuItem
+                  icon={<Pencil className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label="Rename"
+                  variant="sidebar"
+                  onClick={() => {
+                    close();
+                    handleRenameCommand();
+                  }}
+                />
+              )}
+              {onMarkDone && (
+                <PopoverMenuItem
+                  icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label="Delete workspace..."
+                  variant="sidebar"
+                  onClick={() => {
+                    handleMarkDoneCommand();
+                  }}
+                />
+              )}
+              {onArchive && !archived && (
+                <PopoverMenuItem
+                  icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label="Archive"
+                  variant="sidebar"
+                  onClick={() => { close(); handleArchiveCommand(); }}
+                />
+              )}
+              {onUnarchive && archived && (
+                <PopoverMenuItem
+                  icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
+                  label="Unarchive"
+                  variant="sidebar"
+                  onClick={() => { close(); handleUnarchiveCommand(); }}
+                />
+              )}
             </>
           )}
         </>

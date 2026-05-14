@@ -5,6 +5,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Button } from "@/components/ui/Button";
 import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/lib/domain/workspaces/sidebar/repo-context-menu";
 import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { SidebarActionButton } from "./SidebarActionButton";
+import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 
 interface RepoGroupProps {
   name: string;
@@ -68,18 +70,10 @@ export function RepoGroup({
   });
 
   const headerRow = (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onToggleCollapsed}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onToggleCollapsed();
-        }
-      }}
+    <SidebarRowSurface
+      onPress={onToggleCollapsed}
       onContextMenuCapture={onContextMenuCapture}
-      className="group/folder-row flex cursor-pointer select-none items-center justify-between overflow-x-hidden text-sm rounded-lg hover:bg-sidebar-accent py-0.5 h-[30px] focus-visible:outline focus-visible:outline-offset-2"
+      className="group/folder-row h-[30px] justify-between overflow-x-hidden py-0.5 text-sm focus-visible:outline-offset-[-2px]"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
         <span className="relative flex h-6 w-6 items-center justify-center">
@@ -94,7 +88,7 @@ export function RepoGroup({
             />
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+        <span className="min-w-0 flex-1 truncate text-sm text-sidebar-foreground">
           {name}
         </span>
 
@@ -127,7 +121,10 @@ export function RepoGroup({
                 >
                   <Folder className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate text-left">New local workspace</span>
-                  <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{SHORTCUTS.newLocal.label}</span>
+                  <ShortcutBadge
+                    label={SHORTCUTS.newLocal.label}
+                    className="shrink-0 text-muted-foreground/70"
+                  />
                 </Button>
                 <Button
                   type="button"
@@ -138,7 +135,10 @@ export function RepoGroup({
                 >
                   <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate text-left">New worktree</span>
-                  <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{SHORTCUTS.newWorktree.label}</span>
+                  <ShortcutBadge
+                    label={SHORTCUTS.newWorktree.label}
+                    className="shrink-0 text-muted-foreground/70"
+                  />
                 </Button>
                 {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                   cloudWorkspaceEnabled ? (
@@ -151,7 +151,10 @@ export function RepoGroup({
                     >
                       <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                      <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
+                      <ShortcutBadge
+                        label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
+                        className="shrink-0 text-muted-foreground/70"
+                      />
                     </Button>
                   ) : (
                     <Tooltip
@@ -168,7 +171,10 @@ export function RepoGroup({
                       >
                         <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                        <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
+                        <ShortcutBadge
+                          label={getShortcutDisplayLabel(SHORTCUTS.newCloud)}
+                          className="shrink-0 text-muted-foreground/70"
+                        />
                       </Button>
                     </Tooltip>
                   )
@@ -178,7 +184,7 @@ export function RepoGroup({
           </PopoverButton>
         </div>
       </div>
-    </div>
+    </SidebarRowSurface>
   );
 
   return (
