@@ -1819,12 +1819,39 @@ body {
   color: inherit;
 }
 
+/* ---- Workspace shell tab density ---- */
+:root {
+  --workspace-shell-tab-height: 1.75rem; /* 28px */
+  --workspace-shell-tab-font-size: var(--text-base);
+  --workspace-shell-tab-line-height: var(--text-base--line-height);
+  --workspace-shell-tab-font-weight: 500;
+  --workspace-shell-tab-icon-size: 1rem;
+  --workspace-shell-tab-content-gap: 0.5rem;
+}
+
+.workspace-shell-tab {
+  height: var(--workspace-shell-tab-height);
+}
+
+.workspace-shell-tab__button,
+.workspace-shell-tab__label {
+  font-size: var(--workspace-shell-tab-font-size);
+  line-height: var(--workspace-shell-tab-line-height);
+  font-weight: var(--workspace-shell-tab-font-weight);
+  letter-spacing: 0;
+}
+
+.workspace-shell-tab__icon {
+  width: var(--workspace-shell-tab-icon-size);
+  height: var(--workspace-shell-tab-icon-size);
+}
+
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
   --tab-system-height: 46px;
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
-  --tab-height: 28px;
+  --tab-height: var(--workspace-shell-tab-height);
   --tab-container-padding: 9px;
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;
@@ -1848,11 +1875,11 @@ body {
   --right-panel-tab-text-tertiary: var(--color-sidebar-muted-foreground);
   --right-panel-tab-border: color-mix(in oklab, var(--color-sidebar-border) 80%, transparent);
   --right-panel-tab-focus: var(--color-sidebar-ring);
-  --right-panel-tab-font-size: 12px;
-  --right-panel-tab-line-height: calc(1.25 / .875);
-  --right-panel-tab-font-weight: 400;
-  --right-panel-tab-icon-size: 16px;
-  --right-panel-tab-content-gap: 8px;
+  --right-panel-tab-font-size: var(--workspace-shell-tab-font-size);
+  --right-panel-tab-line-height: var(--workspace-shell-tab-line-height);
+  --right-panel-tab-font-weight: var(--workspace-shell-tab-font-weight);
+  --right-panel-tab-icon-size: var(--workspace-shell-tab-icon-size);
+  --right-panel-tab-content-gap: var(--workspace-shell-tab-content-gap);
   --right-panel-tab-dot-size: 5px;
   --right-panel-tab-dot-gap: 2px;
   display: flex;

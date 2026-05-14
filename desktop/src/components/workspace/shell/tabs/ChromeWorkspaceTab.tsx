@@ -63,7 +63,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         ref={ref}
         role="presentation"
         data-telemetry-mask="true"
-        className={`group/tab relative h-7 min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
+        className={`workspace-shell-tab group/tab relative h-7 min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
           ...style,
@@ -98,7 +98,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               }}
               title="Close tab"
               aria-label="Close tab"
-              className="pointer-events-none absolute top-1.5 z-20 size-4 shrink-0 rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:pointer-events-auto group-hover/tab:opacity-90 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-90 focus-visible:pointer-events-auto focus-visible:opacity-100"
+              className="workspace-shell-tab__close pointer-events-none absolute top-1.5 z-20 size-4 shrink-0 rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:pointer-events-auto group-hover/tab:opacity-90 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-90 focus-visible:pointer-events-auto focus-visible:opacity-100"
               style={{ left: isMini ? 4 : 8 }}
             >
               <X className="size-2.5" />
@@ -112,7 +112,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             size="sm"
             onClick={onSelect}
             onPointerDownCapture={onSelectPointerDownCapture}
-            className={`relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 text-sm leading-4 hover:bg-transparent ${
+            className={`workspace-shell-tab__button relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 text-sm leading-4 hover:bg-transparent ${
               isActive
                 ? "font-medium text-foreground"
                 : isMultiSelected
@@ -121,7 +121,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             } ${isSmall ? "gap-1" : "gap-2"}`}
           >
             <span
-              className={`flex size-4 shrink-0 items-center justify-center transition-opacity ${
+              className={`workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center transition-opacity ${
                 showCloseButton
                   ? "group-hover/tab:opacity-0 group-focus-within/tab:opacity-0"
                   : ""
@@ -131,7 +131,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             </span>
             {showTitle && (
               <span
-                className="min-w-0 font-foreground flex-1 text-base overflow-hidden whitespace-nowrap text-left"
+                className="workspace-shell-tab__label min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left text-base"
                 style={{
                   WebkitMaskImage: titleMask,
                   maskImage: titleMask,
