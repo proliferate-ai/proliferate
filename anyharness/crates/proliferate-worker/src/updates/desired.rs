@@ -25,10 +25,12 @@ pub async fn reconcile(
     installed: &InstalledVersions,
 ) -> Result<(), WorkerError> {
     if !desired.should_update {
+        clear_stale_request(config)?;
         return Ok(());
     }
     let stale = stale_desired_versions(desired, installed);
     if !stale.should_update {
+        clear_stale_request(config)?;
         return Ok(());
     }
     observability::update_requested(&stale);
@@ -54,6 +56,13 @@ pub async fn reconcile(
             Err(error)
         }
     }
+}
+
+fn clear_stale_request(config: &WorkerConfig) -> Result<(), WorkerError> {
+    if supervisor::clear_update_request(config)? {
+        info!("cleared stale supervisor update request");
+    }
+    Ok(())
 }
 
 fn stale_desired_versions(

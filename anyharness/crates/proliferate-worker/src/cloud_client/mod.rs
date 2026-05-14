@@ -55,49 +55,21 @@ pub struct HeartbeatRequest {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DesiredVersions {
-    #[serde(default)]
     pub should_update: bool,
-    #[serde(default = "default_update_channel")]
     pub update_channel: String,
-    #[serde(default)]
     pub update_generation: i64,
-    #[serde(default)]
     pub anyharness_version: Option<String>,
-    #[serde(default)]
     pub worker_version: Option<String>,
-    #[serde(default)]
     pub supervisor_version: Option<String>,
 }
 
-impl Default for DesiredVersions {
-    fn default() -> Self {
-        Self {
-            should_update: false,
-            update_channel: default_update_channel(),
-            update_generation: 0,
-            anyharness_version: None,
-            worker_version: None,
-            supervisor_version: None,
-        }
-    }
-}
-
-fn default_update_channel() -> String {
-    "stable".to_string()
-}
-
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct HeartbeatResponse {
-    #[serde(default)]
     pub target_id: String,
-    #[serde(default)]
     pub worker_id: String,
-    #[serde(default)]
     pub status: String,
-    #[serde(default)]
     pub server_time: String,
-    #[serde(default)]
     pub desired_versions: DesiredVersions,
 }
 
@@ -163,7 +135,7 @@ impl CloudClient {
             .json(request)
             .send()
             .await?;
-        parse_json_or_default_response(response).await
+        parse_json_response(response).await
     }
 
     pub async fn upload_inventory(
@@ -196,21 +168,6 @@ async fn parse_json_response<T: DeserializeOwned>(
     Ok(response.json().await?)
 }
 
-async fn parse_json_or_default_response<T: DeserializeOwned + Default>(
-    response: reqwest::Response,
-) -> Result<T, WorkerError> {
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        return Err(WorkerError::Cloud { status, body });
-    }
-    let body = response.bytes().await?;
-    if body.is_empty() {
-        return Ok(T::default());
-    }
-    Ok(serde_json::from_slice(&body)?)
-}
-
 async fn parse_empty_response(response: reqwest::Response) -> Result<(), WorkerError> {
     let status = response.status();
     if !status.is_success() {
@@ -218,4 +175,29 @@ async fn parse_empty_response(response: reqwest::Response) -> Result<(), WorkerE
         return Err(WorkerError::Cloud { status, body });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HeartbeatResponse;
+
+    #[test]
+    fn heartbeat_response_rejects_missing_required_fields() {
+        let error = serde_json::from_slice::<HeartbeatResponse>(b"{}")
+            .expect_err("missing desiredVersions should fail");
+        assert!(error.to_string().contains("targetId"));
+    }
+
+    #[test]
+    fn heartbeat_response_rejects_missing_desired_versions() {
+        let payload = br#"{
+            "targetId": "target",
+            "workerId": "worker",
+            "status": "online",
+            "serverTime": "2026-05-14T00:00:00Z"
+        }"#;
+        let error = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect_err("missing desiredVersions should fail");
+        assert!(error.to_string().contains("desiredVersions"));
+    }
 }

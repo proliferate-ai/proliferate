@@ -5,15 +5,6 @@ from __future__ import annotations
 from proliferate.constants.cloud import CloudTargetStatus
 from proliferate.server.cloud.compute.domain.types import ComputeRuleError, SafeStopVerdict
 
-TERMINAL_SESSION_STATUSES: tuple[str, ...] = (
-    "closed",
-    "completed",
-    "complete",
-    "ended",
-    "idle",
-    "failed",
-    "error",
-)
 ACTIVE_UPDATE_STATUSES: tuple[str, ...] = ("staging", "staged", "applying")
 
 _UPDATE_CHANNEL_MAX_LENGTH = 32

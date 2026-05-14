@@ -49,6 +49,13 @@ from proliferate.server.cloud.worker.domain.rules import (
     validate_worker_status,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+from proliferate.server.cloud.worker.domain.updates import (
+    ACTIVE_TARGET_UPDATE_STATUSES,
+    DesiredVersions,
+    desired_versions_match,
+    has_desired_versions,
+    require_expected_update_version,
+)
 from proliferate.server.cloud.worker.models import (
     WorkerCommandDeliveryRequest,
     WorkerCommandEnvelope,
@@ -68,14 +75,6 @@ from proliferate.server.cloud.worker.models import (
     WorkerUpdateStatusResponse,
 )
 from proliferate.utils.time import utcnow
-
-_ACTIVE_TARGET_UPDATE_STATUSES = frozenset(
-    {
-        CloudTargetUpdateStatus.staging.value,
-        CloudTargetUpdateStatus.staged.value,
-        CloudTargetUpdateStatus.applying.value,
-    }
-)
 
 
 def _hash_token(*, domain: str, token: str) -> str:
@@ -145,20 +144,49 @@ def _command_envelope(
     )
 
 
+def _target_desired_versions(target: targets_store.CloudTargetSnapshot) -> DesiredVersions:
+    return DesiredVersions(
+        anyharness_version=target.desired_anyharness_version,
+        worker_version=target.desired_worker_version,
+        supervisor_version=target.desired_supervisor_version,
+    )
+
+
+def _worker_current_versions(worker: worker_auth_store.CloudWorkerSnapshot) -> DesiredVersions:
+    return DesiredVersions(
+        anyharness_version=worker.anyharness_version,
+        worker_version=worker.worker_version,
+        supervisor_version=worker.supervisor_version,
+    )
+
+
+def _target_current_versions(
+    target: targets_store.CloudTargetSnapshot,
+) -> DesiredVersions | None:
+    current_versions = target.current_versions
+    if current_versions is None:
+        return None
+    return DesiredVersions(
+        anyharness_version=current_versions.anyharness_version,
+        worker_version=current_versions.worker_version,
+        supervisor_version=current_versions.supervisor_version,
+    )
+
+
+def _target_has_desired_versions(target: targets_store.CloudTargetSnapshot) -> bool:
+    return has_desired_versions(_target_desired_versions(target))
+
+
 def _desired_versions_response(
     *,
     target: targets_store.CloudTargetSnapshot,
     worker: worker_auth_store.CloudWorkerSnapshot,
 ) -> WorkerDesiredVersionsResponse:
-    should_update = any(
-        (
-            target.desired_anyharness_version is not None
-            and target.desired_anyharness_version != worker.anyharness_version,
-            target.desired_worker_version is not None
-            and target.desired_worker_version != worker.worker_version,
-            target.desired_supervisor_version is not None
-            and target.desired_supervisor_version != worker.supervisor_version,
-        )
+    desired = _target_desired_versions(target)
+    current = _worker_current_versions(worker)
+    should_update = has_desired_versions(desired) and not desired_versions_match(
+        desired=desired,
+        current=current,
     )
     return WorkerDesiredVersionsResponse(
         should_update=should_update,
@@ -168,94 +196,6 @@ def _desired_versions_response(
         worker_version=target.desired_worker_version,
         supervisor_version=target.desired_supervisor_version,
     )
-
-
-def _desired_versions_match_worker(
-    *,
-    target: targets_store.CloudTargetSnapshot,
-    worker: worker_auth_store.CloudWorkerSnapshot,
-) -> bool:
-    desired_and_current = (
-        (target.desired_anyharness_version, worker.anyharness_version),
-        (target.desired_worker_version, worker.worker_version),
-        (target.desired_supervisor_version, worker.supervisor_version),
-    )
-    has_desired_version = any(desired is not None for desired, _current in desired_and_current)
-    if not has_desired_version:
-        return False
-    return all(desired is None or desired == current for desired, current in desired_and_current)
-
-
-def _desired_versions_match_target_current_versions(
-    *,
-    target: targets_store.CloudTargetSnapshot,
-) -> bool:
-    current_versions = target.current_versions
-    if current_versions is None:
-        return False
-    desired_and_current = (
-        (target.desired_anyharness_version, current_versions.anyharness_version),
-        (target.desired_worker_version, current_versions.worker_version),
-        (target.desired_supervisor_version, current_versions.supervisor_version),
-    )
-    has_desired_version = any(desired is not None for desired, _current in desired_and_current)
-    if not has_desired_version:
-        return False
-    return all(desired is None or desired == current for desired, current in desired_and_current)
-
-
-def _desired_version_for_component(
-    target: targets_store.CloudTargetSnapshot,
-    component: str,
-) -> str | None:
-    if component == "anyharness":
-        return target.desired_anyharness_version
-    if component == "worker":
-        return target.desired_worker_version
-    if component == "supervisor":
-        return target.desired_supervisor_version
-    return None
-
-
-def _require_expected_update_version(
-    *,
-    target: targets_store.CloudTargetSnapshot,
-    update_generation: int | None,
-    status_value: str,
-    component: str | None,
-    version: str | None,
-) -> None:
-    if update_generation is None:
-        raise CloudApiError(
-            "cloud_worker_update_generation_required",
-            "Worker update generation is required for update status reports.",
-            status_code=400,
-        )
-    if update_generation != target.update_generation:
-        raise CloudApiError(
-            "cloud_worker_update_generation_stale",
-            "Worker update generation does not match the target desired versions.",
-            status_code=409,
-        )
-    if status_value not in {
-        "staged",
-        "applying",
-        "applied",
-    }:
-        return
-    if component is None or version is None:
-        raise CloudApiError(
-            "cloud_worker_update_component_required",
-            "Worker update component and version are required for this update status.",
-            status_code=400,
-        )
-    desired_version = _desired_version_for_component(target, component)
-    if desired_version != version:
-        raise CloudApiError(
-            "cloud_worker_update_version_stale",
-            "Worker update version does not match the target desired version.",
-            status_code=409,
-        )
 
 
 async def enroll_worker(
@@ -407,21 +347,21 @@ async def record_heartbeat(
             status_code=401,
         )
     desired_versions = _desired_versions_response(target=target, worker=worker)
-    if target.update_status in _ACTIVE_TARGET_UPDATE_STATUSES and _desired_versions_match_worker(
-        target=target, worker=worker
+    if target.update_status in ACTIVE_TARGET_UPDATE_STATUSES and desired_versions_match(
+        desired=_target_desired_versions(target),
+        current=_worker_current_versions(worker),
     ):
-        target = (
-            await targets_store.record_target_update_status(
-                db,
-                target_id=auth.target_id,
-                status_value=CloudTargetUpdateStatus.applied.value,
-                status_detail="Desired versions reported by worker.",
-                component=None,
-                version=None,
-                reported_at=now,
-            )
-            or target
+        result = await targets_store.record_target_update_status_for_generation(
+            db,
+            target_id=auth.target_id,
+            expected_update_generation=target.update_generation,
+            status_value=CloudTargetUpdateStatus.applied.value,
+            status_detail="Desired versions reported by worker.",
+            component=None,
+            version=None,
+            reported_at=now,
         )
+        target = result.target or target
     await publish_target_patch_after_commit(db, target)
     return WorkerHeartbeatResponse(
         target_id=str(auth.target_id),
@@ -478,15 +418,25 @@ async def record_update_status(
             "Worker target no longer exists.",
             status_code=401,
         )
-    _require_expected_update_version(
-        target=current_target,
+    if not _target_has_desired_versions(current_target):
+        raise CloudApiError(
+            "cloud_worker_update_not_requested",
+            "Worker update status cannot be reported before desired versions are set.",
+            status_code=409,
+        )
+    require_expected_update_version(
+        desired=_target_desired_versions(current_target),
+        current_update_generation=current_target.update_generation,
         update_generation=body.update_generation,
         status_value=status_value,
         component=component,
         version=version,
     )
     if status_value == CloudTargetUpdateStatus.applied.value and not (
-        _desired_versions_match_target_current_versions(target=current_target)
+        desired_versions_match(
+            desired=_target_desired_versions(current_target),
+            current=_target_current_versions(current_target),
+        )
     ):
         raise CloudApiError(
             "cloud_worker_update_versions_not_current",
@@ -494,21 +444,29 @@ async def record_update_status(
             "match desired versions.",
             status_code=409,
         )
-    target = await targets_store.record_target_update_status(
+    result = await targets_store.record_target_update_status_for_generation(
         db,
         target_id=auth.target_id,
+        expected_update_generation=current_target.update_generation,
         status_value=status_value,
         status_detail=detail,
         component=component,
         version=version,
         reported_at=utcnow(),
     )
-    if target is None:
+    if not result.generation_matched:
+        raise CloudApiError(
+            "cloud_worker_update_generation_stale",
+            "Worker update generation does not match the target desired versions.",
+            status_code=409,
+        )
+    if result.target is None:
         raise CloudApiError(
             "cloud_worker_target_missing",
             "Worker target no longer exists.",
             status_code=401,
         )
+    target = result.target
     log_worker_update_status(
         target_id=auth.target_id,
         worker_id=auth.worker_id,

@@ -40,16 +40,13 @@ pub fn stage_update_request(
     desired: &DesiredVersions,
 ) -> Result<StagedUpdateRequest, WorkerError> {
     let request = build_request(desired)?;
-    let request_dir = config
-        .supervisor_update_request_dir
-        .clone()
-        .unwrap_or_else(|| default_request_dir(config));
+    let request_dir = request_dir(config);
     fs::create_dir_all(&request_dir).map_err(|source| WorkerError::CreateParent {
         path: request_dir.clone(),
         source,
     })?;
     set_private_dir_permissions(&request_dir)?;
-    let path = request_dir.join("desired-update.json");
+    let path = request_path(config);
     let bytes = serde_json::to_vec_pretty(&request)?;
     let wrote_request = write_private_file_if_changed(&path, &bytes)?;
     let first = request.components.first();
@@ -59,6 +56,20 @@ pub fn stage_update_request(
         path,
         wrote_request,
     })
+}
+
+pub fn clear_update_request(config: &WorkerConfig) -> Result<bool, WorkerError> {
+    let path = request_path(config);
+    match fs::remove_file(&path) {
+        Ok(()) => {
+            if let Some(parent) = path.parent() {
+                sync_parent_dir(parent);
+            }
+            Ok(true)
+        }
+        Err(source) if source.kind() == ErrorKind::NotFound => Ok(false),
+        Err(source) => Err(WorkerError::WriteConfig { path, source }),
+    }
 }
 
 fn build_request(desired: &DesiredVersions) -> Result<SupervisorUpdateRequest, WorkerError> {
@@ -97,6 +108,17 @@ fn push_component(
         version: version.to_string(),
     });
     Ok(())
+}
+
+fn request_path(config: &WorkerConfig) -> PathBuf {
+    request_dir(config).join("desired-update.json")
+}
+
+fn request_dir(config: &WorkerConfig) -> PathBuf {
+    config
+        .supervisor_update_request_dir
+        .clone()
+        .unwrap_or_else(|| default_request_dir(config))
 }
 
 fn default_request_dir(config: &WorkerConfig) -> PathBuf {
@@ -237,7 +259,7 @@ mod tests {
 
     use crate::{cloud_client::DesiredVersions, config::WorkerConfig};
 
-    use super::stage_update_request;
+    use super::{clear_update_request, stage_update_request};
 
     #[test]
     fn stage_update_request_writes_supervisor_mailbox_file() {
@@ -330,6 +352,45 @@ mod tests {
         let second = stage_update_request(&config, &desired).expect("stage update again");
         assert!(!second.wrote_request);
         assert_eq!(first.path, second.path);
+        let _ = fs::remove_dir_all(PathBuf::from(root));
+    }
+
+    #[test]
+    fn clear_update_request_removes_stale_mailbox_file() {
+        let root = std::env::temp_dir().join(format!(
+            "proliferate-worker-update-clear-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("create root");
+        let config = WorkerConfig {
+            cloud_base_url: "http://127.0.0.1:8000".to_string(),
+            enrollment_token: None,
+            anyharness_base_url: None,
+            anyharness_bearer_token: None,
+            worker_db_path: root.join("worker.sqlite"),
+            materialization_root: None,
+            supervisor_update_request_dir: Some(root.join("updates")),
+            supervisor_version: None,
+            heartbeat_interval_seconds: 60,
+            config_path: None,
+        };
+        let staged = stage_update_request(
+            &config,
+            &DesiredVersions {
+                should_update: true,
+                update_channel: "stable".to_string(),
+                update_generation: 9,
+                anyharness_version: None,
+                worker_version: Some("0.2.0".to_string()),
+                supervisor_version: None,
+            },
+        )
+        .expect("stage update");
+        assert!(staged.path.exists());
+        assert!(clear_update_request(&config).expect("clear update"));
+        assert!(!staged.path.exists());
+        assert!(!clear_update_request(&config).expect("clear missing update"));
         let _ = fs::remove_dir_all(PathBuf::from(root));
     }
 }

@@ -939,7 +939,7 @@ anyharness/crates/proliferate-worker/
     updates/
       mod.rs
       desired.rs             # desired version reconcile
-      staging.rs             # download/stage signed artifacts
+      staging.rs             # download/stage update artifacts
       supervisor.rs          # ask supervisor/platform manager to restart
 
     store/
@@ -1165,44 +1165,44 @@ upload logic into AnyHarness.
 Client/admin endpoints:
 
 ```text
-POST /api/cloud/targets/enrollments
+POST /v1/cloud/targets/enrollments
   create enrollment token for SSH/self-hosted/desktop dispatch.
 
-GET /api/cloud/targets
+GET /v1/cloud/targets
   list targets visible to actor.
 
-GET /api/cloud/targets/{target_id}
+GET /v1/cloud/targets/{target_id}
   target snapshot.
 
-POST /api/cloud/targets/{target_id}/archive
+POST /v1/cloud/targets/{target_id}/archive
   archive target, revoke active worker tokens after safe shutdown if possible.
 
-POST /api/cloud/commands
+POST /v1/cloud/commands
   enqueue command.
 
-GET /api/cloud/commands/{command_id}
+GET /v1/cloud/commands/{command_id}
   command status.
 
-GET /api/cloud/workspaces
-GET /api/cloud/workspaces/{workspace_id}
-GET /api/cloud/sessions/{session_id}
-GET /api/cloud/sessions/{session_id}/transcript
-GET /api/cloud/sessions/{session_id}/events?cursor=...
+GET /v1/cloud/workspaces
+GET /v1/cloud/workspaces/{workspace_id}
+GET /v1/cloud/sessions/{session_id}
+GET /v1/cloud/sessions/{session_id}/transcript
+GET /v1/cloud/sessions/{session_id}/events?cursor=...
 
-GET /api/cloud/workspaces/{workspace_id}/stream
-GET /api/cloud/sessions/{session_id}/stream
-GET /api/cloud/targets/{target_id}/stream
+GET /v1/cloud/workspaces/{workspace_id}/stream
+GET /v1/cloud/sessions/{session_id}/stream
+GET /v1/cloud/targets/{target_id}/stream
 
-POST /api/cloud/compute/targets/{target_id}/desired-versions
+POST /v1/cloud/compute/targets/{target_id}/desired-versions
   set desired AnyHarness / Worker / Supervisor versions and increment the
   target update generation.
 
-POST /api/cloud/compute/targets/{target_id}/safe-stop-check
+POST /v1/cloud/compute/targets/{target_id}/safe-stop-check
   return whether the target can safely stop based on active cloud-visible
   sessions, active commands, active update state, and worker-reported safe-stop
   state when available.
 
-POST /api/cloud/compute/targets/{target_id}/revoke-workers
+POST /v1/cloud/compute/targets/{target_id}/revoke-workers
   revoke active worker credentials for a target. This rejects archived targets
   and targets with active cloud-visible sessions or commands.
 ```
@@ -1210,10 +1210,10 @@ POST /api/cloud/compute/targets/{target_id}/revoke-workers
 Worker-only endpoints:
 
 ```text
-POST /api/cloud/worker/enroll
+POST /v1/cloud/worker/enroll
   enrollment token + inventory -> worker credentials.
 
-POST /api/cloud/worker/heartbeat
+POST /v1/cloud/worker/heartbeat
   status + activity + current component versions. The response includes
   desiredVersions:
     shouldUpdate
@@ -1223,25 +1223,25 @@ POST /api/cloud/worker/heartbeat
     workerVersion
     supervisorVersion
 
-POST /api/cloud/worker/inventory
+POST /v1/cloud/worker/inventory
   full inventory/readiness report.
 
-POST /api/cloud/worker/commands/lease
+POST /v1/cloud/worker/commands/lease
   long-poll/lease commands for target.
 
-POST /api/cloud/worker/commands/{command_id}/delivery
+POST /v1/cloud/worker/commands/{command_id}/delivery
   delivered/failed_delivery status.
 
-POST /api/cloud/worker/commands/{command_id}/result
+POST /v1/cloud/worker/commands/{command_id}/result
   local AnyHarness accepted/rejected/queued result when available.
 
-POST /api/cloud/worker/events/batches
+POST /v1/cloud/worker/events/batches
   upload normalized durable event batch.
 
-POST /api/cloud/worker/sync/backfill-status
+POST /v1/cloud/worker/sync/backfill-status
   report backfill progress for a workspace/session.
 
-POST /api/cloud/worker/update-status
+POST /v1/cloud/worker/update-status
   report update state for the desired update generation. Requests must include
   updateGeneration; staged/applying/applied component reports must also include
   component + version matching the target's current desired versions.
@@ -1257,8 +1257,8 @@ Current rollout boundary:
 - The Worker reconciles desired versions by writing a supervisor-owned
   `desired-update.json` mailbox containing `updateChannel`, `updateGeneration`,
   and stale components only.
-- The full supervisor applier loop that consumes that mailbox, downloads
-  signed artifacts, swaps binaries, rolls back, and reports staged/applying/
+- The full supervisor applier loop that consumes that mailbox, verifies
+  artifact authenticity, swaps binaries, rolls back, and reports staged/applying/
   applied is intentionally a separate implementation step.
 - Until that applier exists, the Worker may report a failed staging attempt,
   but it should not claim staged/applying/applied merely because it wrote the
@@ -1285,7 +1285,7 @@ Safe-stop boundary:
 2. cloud/runtime provisions sandbox through integrations/sandbox.
 3. Sandbox image starts AnyHarness and Proliferate Worker.
 4. Worker uses one-time bootstrap token from sandbox metadata/env.
-5. Worker calls /api/cloud/worker/enroll.
+5. Worker calls /v1/cloud/worker/enroll.
 6. Cloud creates target + worker records or attaches to pre-created target.
 7. Worker reports inventory/readiness.
 8. Cloud marks target online.
@@ -1308,7 +1308,7 @@ Managed cloud should preinstall:
 1. User/admin creates enrollment token in Cloud.
 2. UI shows install command.
 3. User runs install command on SSH host.
-4. Installer downloads signed AnyHarness + Worker artifacts.
+4. Installer downloads verified AnyHarness + Worker artifacts.
 5. Installer writes worker config with Cloud base URL and enrollment token.
 6. Worker starts and enrolls outbound.
 7. Worker reports inventory/readiness.
@@ -1337,7 +1337,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 ## Command Flow: Web Sends Prompt
 
 ```text
-1. Web calls POST /api/cloud/commands:
+1. Web calls POST /v1/cloud/commands:
    kind = send_prompt
    session_id = S
    idempotency_key = K
@@ -1356,7 +1356,7 @@ Desktop dispatch should be opt-in per machine and preferably per workspace.
 
 5. live.service publishes optimistic CommandStatus patch.
 
-6. Worker lease loop long-polls /api/cloud/worker/commands/lease.
+6. Worker lease loop long-polls /v1/cloud/worker/commands/lease.
 
 7. Cloud leases command to worker:
    status = leased
@@ -1420,7 +1420,7 @@ Duplicates:
 Client live streams subscribe to Cloud, not to targets.
 
 ```text
-GET /api/cloud/sessions/{session_id}/stream?cursor=C
+GET /v1/cloud/sessions/{session_id}/stream?cursor=C
   -> authorize actor
   -> send current snapshot if requested
   -> replay projection patches/events after C
@@ -1596,7 +1596,7 @@ Runtime binary updates are separate from product configuration updates.
 ```text
 Cloud desired version
   -> worker reports installed version
-  -> worker stages signed artifact
+  -> worker stages verified artifact
   -> worker asks supervisor/platform manager for safe restart
   -> update applies only at safe boundary
   -> worker reports success/failure
@@ -1617,7 +1617,7 @@ Rules:
 
 - do not hot-swap AnyHarness underneath an active turn
 - do not update worker without preserving identity and outbox
-- updates are signed and versioned
+- production updates must use signed, versioned artifacts
 - worker reports installed/staged/desired versions
 - Cloud can pin org/target update channels
 - failed update rolls back or marks target degraded
@@ -1797,7 +1797,7 @@ Phase 7: Updates and hardening
 
 - version reporting
 - desired version reconciliation
-- signed artifact staging
+- artifact staging with authenticity verification
 - token rotation/revocation
 - payload caps and blob references
 - audit/billing hooks

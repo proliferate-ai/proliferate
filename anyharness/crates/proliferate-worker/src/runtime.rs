@@ -113,7 +113,7 @@ async fn send_heartbeat(
 ) -> Result<(), WorkerError> {
     let anyharness_version = anyharness_version(config).await;
     let worker_version = versions::worker_version();
-    let supervisor_version = versions::supervisor_version();
+    let supervisor_version = versions::supervisor_version_or_configured(&config.supervisor_version);
     let request = heartbeat::online(
         worker_version.clone(),
         anyharness_version.clone(),

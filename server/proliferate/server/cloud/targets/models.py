@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from proliferate.constants.cloud import CloudTargetUpdateChannel, CloudTargetUpdateStatus
 from proliferate.db.store.cloud_sync.targets import (
     CloudTargetCurrentVersionsSnapshot,
     CloudTargetInventorySnapshot,
@@ -78,7 +79,7 @@ class CloudTargetCurrentVersionsModel(BaseModel):
 
 
 class CloudTargetUpdateModel(BaseModel):
-    channel: str
+    channel: CloudTargetUpdateChannel
     generation: int
     desired_versions: CloudTargetDesiredVersionsModel = Field(
         serialization_alias="desiredVersions",
@@ -87,9 +88,9 @@ class CloudTargetUpdateModel(BaseModel):
         default=None,
         serialization_alias="currentVersions",
     )
-    status: str | None = None
+    status: CloudTargetUpdateStatus | None = None
     status_detail: str | None = Field(default=None, serialization_alias="statusDetail")
-    component: str | None = None
+    component: Literal["anyharness", "worker", "supervisor"] | None = None
     version: str | None = None
     reported_at: str | None = Field(default=None, serialization_alias="reportedAt")
 

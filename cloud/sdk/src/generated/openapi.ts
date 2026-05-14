@@ -3136,25 +3136,33 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        /**
+         * CloudTargetUpdateChannel
+         * @enum {string}
+         */
+        CloudTargetUpdateChannel: "stable" | "beta" | "pinned";
         /** CloudTargetUpdateModel */
         CloudTargetUpdateModel: {
-            /** Channel */
-            channel: string;
+            channel: components["schemas"]["CloudTargetUpdateChannel"];
             /** Generation */
             generation: number;
             desiredVersions: components["schemas"]["CloudTargetDesiredVersionsModel"];
             currentVersions?: components["schemas"]["CloudTargetCurrentVersionsModel"] | null;
-            /** Status */
-            status?: string | null;
+            status?: components["schemas"]["CloudTargetUpdateStatus"] | null;
             /** Statusdetail */
             statusDetail?: string | null;
             /** Component */
-            component?: string | null;
+            component?: ("anyharness" | "worker" | "supervisor") | null;
             /** Version */
             version?: string | null;
             /** Reportedat */
             reportedAt?: string | null;
         };
+        /**
+         * CloudTargetUpdateStatus
+         * @enum {string}
+         */
+        CloudTargetUpdateStatus: "idle" | "staging" | "staged" | "applying" | "applied" | "failed" | "rolled_back";
         /** CloudTranscriptItemResponse */
         CloudTranscriptItemResponse: {
             /** Itemid */
@@ -5130,8 +5138,7 @@ export interface components {
         WorkerDesiredVersionsResponse: {
             /** Shouldupdate */
             shouldUpdate: boolean;
-            /** Updatechannel */
-            updateChannel: string;
+            updateChannel: components["schemas"]["CloudTargetUpdateChannel"];
             /** Updategeneration */
             updateGeneration: number;
             /** Anyharnessversion */
@@ -5367,7 +5374,7 @@ export interface components {
             /** Status */
             status: string;
             /** Updategeneration */
-            updateGeneration?: number | null;
+            updateGeneration: number;
             /** Component */
             component?: string | null;
             /** Version */

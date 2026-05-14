@@ -307,18 +307,18 @@ async def get_session_event_usage(
     return int(count_value or 0), int(bytes_value or 0)
 
 
-async def count_sessions_for_target_excluding_statuses(
+async def count_active_sessions_for_target(
     db: AsyncSession,
     *,
     target_id: UUID,
-    excluded_statuses: tuple[str, ...],
 ) -> int:
-    query = select(func.count(CloudSessionProjection.id)).where(
-        CloudSessionProjection.target_id == target_id
-    )
-    if excluded_statuses:
-        query = query.where(CloudSessionProjection.status.not_in(excluded_statuses))
-    count_value = (await db.execute(query)).scalar_one()
+    count_value = (
+        await db.execute(
+            select(func.count(CloudSessionProjection.id))
+            .where(CloudSessionProjection.target_id == target_id)
+            .where(CloudSessionProjection.ended_at.is_(None))
+        )
+    ).scalar_one()
     return int(count_value or 0)
 
 
