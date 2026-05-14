@@ -80,6 +80,12 @@ async fn ensure_identity(
     cloud: &CloudClient,
 ) -> Result<WorkerIdentity, WorkerError> {
     if let Some(identity) = WorkerIdentity::load(store)? {
+        if let Err(error) = config.clear_enrollment_token() {
+            warn!(
+                ?error,
+                "failed to clear enrollment token from worker config"
+            );
+        }
         return Ok(identity);
     }
     let local_inventory = inventory::collect();
