@@ -13,6 +13,7 @@ if [ -z "${PROLIFERATE_ENROLLMENT_TOKEN:-}" ]; then
 fi
 
 PROLIFERATE_HOME="${PROLIFERATE_HOME:-$HOME/.proliferate}"
+PROLIFERATE_ANYHARNESS_BASE_URL="${PROLIFERATE_ANYHARNESS_BASE_URL:-http://127.0.0.1:8457}"
 BIN_DIR="$PROLIFERATE_HOME/bin"
 WORKER_DIR="$PROLIFERATE_HOME/worker"
 SUPERVISOR_DIR="$PROLIFERATE_HOME/supervisor"
@@ -53,9 +54,15 @@ download_binary proliferate-supervisor
 cat > "$WORKER_DIR/config.toml" <<EOF
 cloud_base_url = "$PROLIFERATE_CLOUD_URL"
 enrollment_token = "$PROLIFERATE_ENROLLMENT_TOKEN"
+anyharness_base_url = "$PROLIFERATE_ANYHARNESS_BASE_URL"
 worker_db_path = "$WORKER_DIR/worker.sqlite3"
 heartbeat_interval_seconds = 60
 EOF
+if [ -n "${PROLIFERATE_ANYHARNESS_BEARER_TOKEN:-}" ]; then
+  cat >> "$WORKER_DIR/config.toml" <<EOF
+anyharness_bearer_token = "$PROLIFERATE_ANYHARNESS_BEARER_TOKEN"
+EOF
+fi
 chmod 600 "$WORKER_DIR/config.toml"
 
 cat > "$SUPERVISOR_DIR/config.toml" <<EOF

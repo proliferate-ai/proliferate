@@ -19,6 +19,12 @@ If the binaries are already on `PATH`, the installer copies them into
 `~/.proliferate/bin`. Otherwise it downloads platform-specific artifacts from
 `PROLIFERATE_ARTIFACT_BASE_URL/<target>/<binary>`.
 
+The worker talks to the local AnyHarness runtime through
+`PROLIFERATE_ANYHARNESS_BASE_URL`, defaulting to `http://127.0.0.1:8457`, which
+is the default `anyharness serve` bind address used by the supervisor. Set
+`PROLIFERATE_ANYHARNESS_BEARER_TOKEN` only when the target runtime is configured
+to require bearer auth.
+
 The installer writes:
 
 - `~/.proliferate/worker/config.toml`
