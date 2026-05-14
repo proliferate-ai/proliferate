@@ -3,14 +3,15 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
+  AppShellTabCloseIcon,
+  AppShellTerminalIcon,
   Check,
   Pencil,
-  Terminal as TerminalIcon,
   X,
 } from "@/components/ui/icons";
 
@@ -93,7 +94,7 @@ export function TerminalHeaderIcon({
           data-label-editing="true"
         >
           <div className="ui-tab-system-tab__content">
-            <TerminalIcon className="ui-tab-system-tab__icon" />
+            <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
             <span className="ui-tab-system-tab__label-edit-slot">
               <Input
                 value={renameDraft}
@@ -159,7 +160,7 @@ export function TerminalHeaderIcon({
       className={HEADER_TERMINAL_TAB_CLASS}
     >
       <span className="ui-tab-system-tab__content">
-        <TerminalIcon className="ui-tab-system-tab__icon" />
+        <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
         <span className="ui-tab-system-tab__label">
           <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>
         </span>
@@ -179,7 +180,7 @@ export function TerminalHeaderIcon({
           triggerMode="contextMenu"
           side="bottom"
           align="start"
-          className={`w-56 ${POPOVER_SURFACE_CLASS}`}
+          className="w-56 rounded-md border border-border bg-popover p-1 shadow-floating"
           trigger={trigger}
         >
           {(close) => (
@@ -220,7 +221,7 @@ export function TerminalHeaderIcon({
               onClose();
             }}
           >
-            <X className="ui-icon" />
+            <AppShellTabCloseIcon className="ui-icon" />
           </IconButton>
         </div>
       </div>

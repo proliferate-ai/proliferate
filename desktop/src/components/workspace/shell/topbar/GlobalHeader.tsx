@@ -122,16 +122,18 @@ export const GlobalHeader = memo(function GlobalHeader({
                 preferredTarget={preferredTarget}
               />
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onTogglePanel}
-              aria-label={rightPanelOpen ? "Hide side panel" : "Show side panel"}
-              title={rightPanelOpen ? "Hide side panel" : "Show side panel"}
-              className={HEADER_ICON_BUTTON_CLASS}
-            >
-              <SplitPanel className="size-3.5" />
-            </Button>
+            {!rightPanelOpen && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onTogglePanel}
+                aria-label="Show side panel"
+                title="Show side panel"
+                className={HEADER_ICON_BUTTON_CLASS}
+              >
+                <SplitPanel className="size-3.5" />
+              </Button>
+            )}
           </div>
         </DebugProfiler>
       </div>

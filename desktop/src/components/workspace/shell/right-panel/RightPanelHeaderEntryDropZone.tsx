@@ -48,6 +48,11 @@ export function RightPanelHeaderEntryDropZone({
       onLostPointerCapture={onPointerCancel}
     >
       {children}
+      <div
+        className="right-panel-header-entry-separator"
+        data-app-shell-tab-separator="true"
+        aria-hidden="true"
+      />
     </div>
   );
 }

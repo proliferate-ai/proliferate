@@ -95,6 +95,10 @@ export function useWorkspaceHeaderTabsViewModelContext(): WorkspaceHeaderTabsVie
   return viewModel;
 }
 
+export function useOptionalWorkspaceHeaderTabsViewModelContext(): WorkspaceHeaderTabsViewModel | null {
+  return useContext(WorkspaceHeaderTabsViewModelContext);
+}
+
 export function useWorkspaceContentTabsViewModelContext(): WorkspaceContentTabsViewModel {
   const viewModel = useContext(WorkspaceContentTabsViewModelContext);
   if (!viewModel) {

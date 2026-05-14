@@ -1,7 +1,6 @@
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { HeaderChatTab } from "@/components/workspace/shell/topbar/HeaderChatTab";
 import { HeaderGroupPillTab } from "@/components/workspace/shell/topbar/HeaderGroupPillTab";
-import { HeaderViewerTab } from "@/components/workspace/shell/topbar/HeaderViewerTab";
 import type {
   HeaderWorkspaceShellStripRow,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
@@ -10,18 +9,6 @@ import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { WorkspaceShellTab } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import type {
-  FileViewerMode,
-  ViewerTarget,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import {
-  viewerTargetDisplayPath,
-  viewerTargetEditablePath,
-  viewerTargetKey,
-  viewerTargetLabel,
-} from "@/lib/domain/workspaces/viewer/viewer-target";
-import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
 
 interface HeaderTabsDragControls {
   getRowDragProps: (rowId: string) => { "data-tab-drag-row-id": string };
@@ -36,17 +23,10 @@ interface HeaderTabsStripRowsProps {
   positions: number[];
   shellDrag: HeaderTabsDragControls;
   renamingSessionId: string | null;
-  activeShellTab: WorkspaceShellTab | null;
   urgentHighlightedChatSessionId: string | null;
-  buffersByPath: Record<string, WorkspaceFileBuffer>;
-  tabModes: Record<string, FileViewerMode>;
   multiSelectedSessionIds: ReadonlySet<string>;
   selectedTopLevelSessionIds: readonly string[];
   onHeaderTabHover: () => void;
-  onSelectViewerTarget: (target: ViewerTarget) => void;
-  onCloseViewerTarget: (target: ViewerTarget) => void;
-  onCloseOtherViewerTargets: (target: ViewerTarget) => void;
-  onCloseViewerTargetsToRight: (target: ViewerTarget) => void;
   onToggleGroup: (groupId: string) => void;
   onRenameManualGroup: (
     groupId: ManualChatGroupId,
@@ -85,17 +65,10 @@ export function HeaderTabsStripRows({
   positions,
   shellDrag,
   renamingSessionId,
-  activeShellTab,
   urgentHighlightedChatSessionId,
-  buffersByPath,
-  tabModes,
   multiSelectedSessionIds,
   selectedTopLevelSessionIds,
   onHeaderTabHover,
-  onSelectViewerTarget,
-  onCloseViewerTarget,
-  onCloseOtherViewerTargets,
-  onCloseViewerTargetsToRight,
   onToggleGroup,
   onRenameManualGroup,
   onChangeManualGroupColor,
@@ -130,40 +103,7 @@ export function HeaderTabsStripRows({
         const shouldSuppressClick = () => shellDrag.shouldSuppressClick(rowId);
 
         if (shellRow.kind === "viewer") {
-          const target = shellRow.target;
-          const targetKey = viewerTargetKey(target);
-          const displayPath = viewerTargetDisplayPath(target);
-          const isActive = !urgentHighlightedChatSessionId
-            && activeShellTab?.kind === "viewer"
-            && viewerTargetKey(activeShellTab.target) === targetKey;
-          const bufferPath = viewerTargetEditablePath(target);
-          const buf = bufferPath ? buffersByPath[bufferPath] : null;
-          const isAllChanges = target.kind === "allChanges";
-
-          return (
-            <HeaderViewerTab
-              key={targetKey}
-              rowDragProps={shellDrag.getRowDragProps(rowId)}
-              width={width}
-              position={position}
-              dragOffset={dragOffset}
-              isDragging={isDragging}
-              path={displayPath ?? viewerTargetLabel(target)}
-              label={viewerTargetLabel(target)}
-              isActive={isActive}
-              isDirty={buf?.isDirty ?? false}
-              isDiff={!isAllChanges && tabModes[targetKey] === "diff"}
-              isAllChanges={isAllChanges}
-              hideLeftDivider={index === 0}
-              hideRightDivider={index === shellRows.length - 1}
-              onPointerEnter={onHeaderTabHover}
-              shouldSuppressClick={shouldSuppressClick}
-              onSelect={() => onSelectViewerTarget(target)}
-              onClose={() => onCloseViewerTarget(target)}
-              onCloseOthers={() => onCloseOtherViewerTargets(target)}
-              onCloseRight={() => onCloseViewerTargetsToRight(target)}
-            />
-          );
+          return null;
         }
 
         const row = shellRow.row;

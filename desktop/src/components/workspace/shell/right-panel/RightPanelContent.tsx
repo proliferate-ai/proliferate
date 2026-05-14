@@ -1,5 +1,7 @@
 import { WorkspaceBrowserPanel } from "@/components/workspace/browser/WorkspaceBrowserPanel";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
+import { AllChangesFrame } from "@/components/workspace/changes/AllChangesFrame";
+import { FileEditorView } from "@/components/workspace/files/FileEditorView";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
@@ -10,6 +12,10 @@ import type {
   RightPanelBrowserTab,
   RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
+import {
+  viewerTargetKey,
+  type ViewerTarget,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 
 interface RightPanelContentProps {
   workspaceId: string | null;
@@ -17,6 +23,8 @@ interface RightPanelContentProps {
   activeTool: RightPanelTool | null;
   activeBrowserId: string | null;
   activeTerminalId: string | null;
+  activeViewerTarget: ViewerTarget | null;
+  activeAllChangesTarget: Extract<ViewerTarget, { kind: "allChanges" }> | null;
   browserTabs: readonly RightPanelBrowserTab[];
   orderedTerminals: readonly TerminalRecord[];
   shouldRenderContent: boolean;
@@ -43,6 +51,8 @@ export function RightPanelContent({
   activeTool,
   activeBrowserId,
   activeTerminalId,
+  activeViewerTarget,
+  activeAllChangesTarget,
   browserTabs,
   orderedTerminals,
   shouldRenderContent,
@@ -87,6 +97,29 @@ export function RightPanelContent({
               <GitPanel />
             </div>
           )}
+          {activeTool === "allChanges" && activeAllChangesTarget && (
+            <div className="absolute inset-0">
+              <AllChangesFrame target={activeAllChangesTarget} />
+            </div>
+          )}
+          {activeViewerTarget && (
+            <div className="absolute inset-0">
+              {activeViewerTarget.kind === "file" ? (
+                <FileEditorView
+                  filePath={activeViewerTarget.path}
+                  targetKey={viewerTargetKey(activeViewerTarget)}
+                />
+              ) : activeViewerTarget.kind === "fileDiff" ? (
+                <FileEditorView
+                  filePath={activeViewerTarget.path}
+                  targetKey={viewerTargetKey(activeViewerTarget)}
+                  diffTarget={activeViewerTarget}
+                />
+              ) : (
+                <AllChangesFrame target={activeViewerTarget} />
+              )}
+            </div>
+          )}
           {shouldMountBrowserPanel && (
             <div className={activeBrowserId ? "absolute inset-0" : "hidden"}>
               <WorkspaceBrowserPanel
@@ -116,6 +149,7 @@ export function RightPanelContent({
                 onSelectTerminal={onSelectTerminal}
                 onCloseTerminal={onCloseTerminal}
                 onRenameTerminal={onRenameTerminal}
+                showHeader={false}
               />
             </div>
           )}

@@ -28,19 +28,34 @@ import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-ta
 import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-actions";
 import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
 import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
-import { useWorkspaceHeaderTabsViewModelContext } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
+import {
+  useOptionalWorkspaceHeaderTabsViewModelContext,
+} from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
 import { useHeaderTabsUrgentHighlight } from "@/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 
+type HeaderTabsViewModel = NonNullable<
+  ReturnType<typeof useOptionalWorkspaceHeaderTabsViewModelContext>
+>;
+
 export const HeaderTabs = memo(function HeaderTabs() {
+  const viewModel = useOptionalWorkspaceHeaderTabsViewModelContext();
+  if (!viewModel) {
+    return null;
+  }
+  return <HeaderTabsInner viewModel={viewModel} />;
+});
+
+const HeaderTabsInner = memo(function HeaderTabsInner({
+  viewModel,
+}: {
+  viewModel: HeaderTabsViewModel;
+}) {
   useDebugRenderCount("header-tabs");
-  const viewModel = useWorkspaceHeaderTabsViewModelContext();
   const chatVisibilityActions = useChatTabVisibilityActions({
     workspaceUiKey: viewModel.workspaceUiKey,
     materializedWorkspaceId: viewModel.materializedWorkspaceId,
@@ -59,7 +74,6 @@ export const HeaderTabs = memo(function HeaderTabs() {
   } = useManualChatGroupActions();
 
   const closeTarget = useWorkspaceViewerTabsStore((state) => state.closeTarget);
-  const { activateViewerTarget } = useWorkspaceShellActivation();
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
@@ -121,7 +135,6 @@ export const HeaderTabs = memo(function HeaderTabs() {
   ]);
 
   const {
-    closeWorkspaceTabs,
     closeOtherWorkspaceTabs,
     closeWorkspaceTabsToRight,
   } = useHeaderTabsCloseActions({
@@ -165,32 +178,6 @@ export const HeaderTabs = memo(function HeaderTabs() {
     activeShellTab: viewModel.activeShellTab,
     onActivateChatSession: activateChatSessionFromHeader,
   });
-  const handleSelectViewerTarget = useCallback((target: ViewerTarget) => {
-    if (!viewModel.selectedWorkspaceId) {
-      return;
-    }
-    clearUrgentChatHighlight();
-    activateViewerTarget({
-      workspaceId: viewModel.selectedWorkspaceId,
-      shellWorkspaceId: viewModel.workspaceUiKey,
-      target,
-      mode: "focus-existing",
-    });
-  }, [
-    activateViewerTarget,
-    clearUrgentChatHighlight,
-    viewModel.selectedWorkspaceId,
-    viewModel.workspaceUiKey,
-  ]);
-  const handleCloseViewerTarget = useCallback((target: ViewerTarget) => {
-    closeWorkspaceTabs([{ kind: "viewer", target }]);
-  }, [closeWorkspaceTabs]);
-  const handleCloseOtherViewerTargets = useCallback((target: ViewerTarget) => {
-    closeOtherWorkspaceTabs({ kind: "viewer", target });
-  }, [closeOtherWorkspaceTabs]);
-  const handleCloseViewerTargetsToRight = useCallback((target: ViewerTarget) => {
-    closeWorkspaceTabsToRight({ kind: "viewer", target });
-  }, [closeWorkspaceTabsToRight]);
   const handleRenameManualGroup = useCallback((
     groupId: ManualChatGroupId,
     anchorRect: ManualChatGroupEditorAnchorRect,
@@ -286,17 +273,10 @@ export const HeaderTabs = memo(function HeaderTabs() {
             positions={layout.positions}
             shellDrag={shellDrag}
             renamingSessionId={renamingSessionId}
-            activeShellTab={viewModel.activeShellTab}
             urgentHighlightedChatSessionId={urgentHighlightedChatSessionId}
-            buffersByPath={viewModel.buffersByPath}
-            tabModes={viewModel.tabModes}
             multiSelectedSessionIds={multiSelect.multiSelectedSessionIds}
             selectedTopLevelSessionIds={multiSelect.selectedTopLevelSessionIds}
             onHeaderTabHover={handleHeaderTabHover}
-            onSelectViewerTarget={handleSelectViewerTarget}
-            onCloseViewerTarget={handleCloseViewerTarget}
-            onCloseOtherViewerTargets={handleCloseOtherViewerTargets}
-            onCloseViewerTargetsToRight={handleCloseViewerTargetsToRight}
             onToggleGroup={tabGroupActions.toggleGroupCollapsed}
             onRenameManualGroup={handleRenameManualGroup}
             onChangeManualGroupColor={handleChangeManualGroupColor}

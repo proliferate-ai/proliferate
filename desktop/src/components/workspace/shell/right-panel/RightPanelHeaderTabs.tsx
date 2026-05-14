@@ -4,6 +4,7 @@ import {
 } from "react";
 import { RightPanelHeaderActions } from "@/components/workspace/shell/right-panel/RightPanelHeaderActions";
 import { RightPanelHeaderEntryList } from "@/components/workspace/shell/right-panel/RightPanelHeaderEntryList";
+import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
 import { useRightPanelHeaderDrag } from "@/hooks/workspaces/ui/use-right-panel-header-drag";
 import {
   type RightPanelHeaderEntryKey,
@@ -11,11 +12,15 @@ import {
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
+import type { FileViewerMode } from "@/lib/domain/workspaces/viewer/viewer-target";
+import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
 
 interface RightPanelHeaderTabsProps {
   entries: readonly RightPanelHeaderEntry[];
   activeEntryKey: RightPanelHeaderEntryKey;
   unreadByTerminal: Record<string, boolean>;
+  buffersByPath: Record<string, WorkspaceFileBuffer>;
+  tabModes: Record<string, FileViewerMode>;
   isWorkspaceReady: boolean;
   canCreateBrowserTab: boolean;
   newTabMenuRequestToken: number;
@@ -23,12 +28,15 @@ interface RightPanelHeaderTabsProps {
   onActivateTool: (tool: RightPanelTool) => void;
   onSelectTerminal: (terminalId: string) => void;
   onSelectBrowser: (browserId: string) => void;
+  onSelectViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onCloseTerminal: (terminalId: string) => void;
   onCloseBrowser: (browserId: string) => void;
+  onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
   onOpenRepoSettings: () => void;
+  onTogglePanel: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
@@ -39,6 +47,8 @@ export function RightPanelHeaderTabs({
   entries,
   activeEntryKey,
   unreadByTerminal,
+  buffersByPath,
+  tabModes,
   isWorkspaceReady,
   canCreateBrowserTab,
   newTabMenuRequestToken,
@@ -46,12 +56,15 @@ export function RightPanelHeaderTabs({
   onActivateTool,
   onSelectTerminal,
   onSelectBrowser,
+  onSelectViewerTarget,
   onCloseTerminal,
   onCloseBrowser,
+  onCloseViewerTarget,
   onRenameTerminal,
   onCreateTerminal,
   onCreateBrowser,
   onOpenRepoSettings,
+  onTogglePanel,
   onReorderHeaderEntry,
 }: RightPanelHeaderTabsProps) {
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
@@ -64,7 +77,7 @@ export function RightPanelHeaderTabs({
   }, [newTabMenuRequestToken]);
 
   return (
-    <div className="right-panel-tab-system ui-tab-system editor-panel-tab-root editor-panel-tab-root--simple-tabs border-b border-sidebar-border/70">
+    <div className="right-panel-tab-system ui-tab-system editor-panel-tab-root editor-panel-tab-root--simple-tabs">
       <div className="ui-tab-system-bar">
         <div className="editor-panel-tab-bar-tab-cluster">
           <output
@@ -77,6 +90,8 @@ export function RightPanelHeaderTabs({
             className="ui-tab-system-tabs__scrollable ui-tab-system-tabs__scrollable--sections"
             data-has-stable="true"
           >
+            <div className="ui-tab-system-tabs__edge ui-tab-system-tabs__edge--start" aria-hidden="true" />
+            <span aria-hidden="true" />
             <div
               className="ui-tab-system-tabs__viewport"
               role="tablist"
@@ -88,13 +103,17 @@ export function RightPanelHeaderTabs({
                   entries={entries}
                   activeEntryKey={activeEntryKey}
                   unreadByTerminal={unreadByTerminal}
+                  buffersByPath={buffersByPath}
+                  tabModes={tabModes}
                   isWorkspaceReady={isWorkspaceReady}
                   drag={drag}
                   onActivateTool={onActivateTool}
                   onSelectTerminal={onSelectTerminal}
                   onSelectBrowser={onSelectBrowser}
+                  onSelectViewerTarget={onSelectViewerTarget}
                   onCloseTerminal={onCloseTerminal}
                   onCloseBrowser={onCloseBrowser}
+                  onCloseViewerTarget={onCloseViewerTarget}
                   onRenameTerminal={onRenameTerminal}
                 />
                 <div
@@ -103,19 +122,26 @@ export function RightPanelHeaderTabs({
                 />
               </div>
             </div>
+            <span aria-hidden="true" />
             <div className="ui-tab-system-tabs__spacer" aria-hidden="true" />
+            <div className="ui-tab-system-tabs__edge ui-tab-system-tabs__edge--end" aria-hidden="true" />
+            <div className="ui-tab-system-new-tab-sticky">
+              <RightPanelNewTabMenu
+                open={newTabMenuOpen}
+                defaultKind={newTabMenuDefaultKind}
+                isWorkspaceReady={isWorkspaceReady}
+                canCreateBrowserTab={canCreateBrowserTab}
+                onOpenChange={setNewTabMenuOpen}
+                onCreateTerminal={onCreateTerminal}
+                onCreateBrowser={onCreateBrowser}
+              />
+            </div>
           </div>
         </div>
 
         <RightPanelHeaderActions
-          newTabMenuOpen={newTabMenuOpen}
-          newTabMenuDefaultKind={newTabMenuDefaultKind}
-          isWorkspaceReady={isWorkspaceReady}
-          canCreateBrowserTab={canCreateBrowserTab}
-          onNewTabMenuOpenChange={setNewTabMenuOpen}
-          onCreateTerminal={onCreateTerminal}
-          onCreateBrowser={onCreateBrowser}
           onOpenRepoSettings={onOpenRepoSettings}
+          onTogglePanel={onTogglePanel}
         />
       </div>
     </div>

@@ -140,7 +140,7 @@ export function useFileTreeEntryActions({
       );
       renamePathReferences(entry.path, result.entry.path);
       renameBufferPathPrefix(entry.path, result.entry.path);
-      applyRenamedShellKeys(workspaceUiKey, renamePlan.keyMap);
+      applyRenamedViewerKeys(workspaceUiKey, materializedWorkspaceId, renamePlan.keyMap);
       const nextActiveTarget = previousViewerState.activeTargetKey
         ? renamePlan.targetByOldKey.get(previousViewerState.activeTargetKey)
         : null;
@@ -200,7 +200,7 @@ export function useFileTreeEntryActions({
       await deleteMutation.mutateAsync({ path: entry.path });
       closePathReferences(entry.path);
       clearBufferPathPrefix(entry.path);
-      removeShellKeys(workspaceUiKey, closingTargetKeys);
+      removeViewerKeys(workspaceUiKey, materializedWorkspaceId, closingTargetKeys);
       if (previousViewerState.activeTargetKey && closingTargetKeys.has(previousViewerState.activeTargetKey)) {
         const nextViewerState = useWorkspaceViewerTabsStore.getState();
         const nextActiveTarget = nextViewerState.activeTargetKey
@@ -315,41 +315,78 @@ function buildRenameViewerTargetPlan(
   return { keyMap, targetByOldKey };
 }
 
-function applyRenamedShellKeys(
+function applyRenamedViewerKeys(
   workspaceUiKey: string | null,
+  materializedWorkspaceId: string | null,
   keyMap: ReadonlyMap<ViewerTargetKey, ViewerTargetKey>,
 ): void {
-  if (!workspaceUiKey || keyMap.size === 0) {
+  if (keyMap.size === 0) {
     return;
   }
   const ui = useWorkspaceUiStore.getState();
-  const currentOrder = ui.shellTabOrderByWorkspace[workspaceUiKey];
-  if (currentOrder) {
-    ui.setShellTabOrderForWorkspace(
-      workspaceUiKey,
-      currentOrder.map((key) => keyMap.get(key as ViewerTargetKey) ?? key),
-    );
+  if (workspaceUiKey) {
+    const currentOrder = ui.shellTabOrderByWorkspace[workspaceUiKey];
+    if (currentOrder) {
+      ui.setShellTabOrderForWorkspace(
+        workspaceUiKey,
+        currentOrder.map((key) => keyMap.get(key as ViewerTargetKey) ?? key),
+      );
+    }
+    const activeKey = ui.activeShellTabKeyByWorkspace[workspaceUiKey];
+    const nextActiveKey = activeKey ? keyMap.get(activeKey as ViewerTargetKey) : null;
+    if (nextActiveKey) {
+      ui.setActiveShellTabKeyForWorkspace(workspaceUiKey, nextActiveKey);
+    }
   }
-  const activeKey = ui.activeShellTabKeyByWorkspace[workspaceUiKey];
-  const nextActiveKey = activeKey ? keyMap.get(activeKey as ViewerTargetKey) : null;
-  if (nextActiveKey) {
-    ui.setActiveShellTabKeyForWorkspace(workspaceUiKey, nextActiveKey);
+  if (materializedWorkspaceId) {
+    const currentPanel = ui.rightPanelMaterializedByWorkspace[materializedWorkspaceId];
+    if (!currentPanel) {
+      return;
+    }
+    const nextActiveEntryKey = keyMap.get(currentPanel.activeEntryKey as ViewerTargetKey)
+      ?? currentPanel.activeEntryKey;
+    ui.setRightPanelMaterializedForWorkspace(materializedWorkspaceId, {
+      ...currentPanel,
+      activeEntryKey: nextActiveEntryKey,
+      headerOrder: currentPanel.headerOrder.map((key) =>
+        keyMap.get(key as ViewerTargetKey) ?? key
+      ),
+    });
   }
 }
 
-function removeShellKeys(
+function removeViewerKeys(
   workspaceUiKey: string | null,
+  materializedWorkspaceId: string | null,
   keys: ReadonlySet<ViewerTargetKey>,
 ): void {
-  if (!workspaceUiKey || keys.size === 0) {
+  if (keys.size === 0) {
     return;
   }
   const ui = useWorkspaceUiStore.getState();
-  const currentOrder = ui.shellTabOrderByWorkspace[workspaceUiKey];
-  if (currentOrder) {
-    ui.setShellTabOrderForWorkspace(
-      workspaceUiKey,
-      currentOrder.filter((key) => !keys.has(key as ViewerTargetKey)),
+  if (workspaceUiKey) {
+    const currentOrder = ui.shellTabOrderByWorkspace[workspaceUiKey];
+    if (currentOrder) {
+      ui.setShellTabOrderForWorkspace(
+        workspaceUiKey,
+        currentOrder.filter((key) => !keys.has(key as ViewerTargetKey)),
+      );
+    }
+  }
+  if (materializedWorkspaceId) {
+    const currentPanel = ui.rightPanelMaterializedByWorkspace[materializedWorkspaceId];
+    if (!currentPanel) {
+      return;
+    }
+    const headerOrder = currentPanel.headerOrder.filter((key) =>
+      !keys.has(key as ViewerTargetKey)
     );
+    ui.setRightPanelMaterializedForWorkspace(materializedWorkspaceId, {
+      ...currentPanel,
+      activeEntryKey: keys.has(currentPanel.activeEntryKey as ViewerTargetKey)
+        ? "tool:files"
+        : currentPanel.activeEntryKey,
+      headerOrder,
+    });
   }
 }

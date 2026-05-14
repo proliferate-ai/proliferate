@@ -8,11 +8,16 @@ import { useTerminalsQuery } from "@anyharness/sdk-react";
 import {
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   rightPanelBrowserHeaderKey,
+  rightPanelViewerHeaderKey,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
+import {
+  fileViewerTarget,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 import { isApplePlatform } from "@/lib/domain/shortcuts/matching";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { requestRightPanelNewTabMenu } from "@/lib/infra/right-panel-new-tab-menu";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 const terminalActionsMocks = vi.hoisted(() => ({
   closeTab: vi.fn(async () => "closed"),
@@ -78,15 +83,30 @@ vi.mock("@/components/workspace/git/GitPanel", () => ({
   GitPanel: () => <div data-testid="git-panel" />,
 }));
 
+vi.mock("@/components/workspace/files/FileEditorView", () => ({
+  FileEditorView: ({ filePath }: { filePath: string }) => (
+    <div data-testid="file-editor-view" data-file-path={filePath} />
+  ),
+}));
+
+vi.mock("@/components/workspace/changes/AllChangesFrame", () => ({
+  AllChangesFrame: ({ target }: { target: { scope?: string | null } }) => (
+    <div data-testid="all-changes-frame" data-scope={target.scope ?? ""} />
+  ),
+}));
+
 vi.mock("@/components/workspace/terminals/TerminalPanel", () => ({
   TerminalPanel: ({
     activeTerminalId,
+    showHeader,
   }: {
     activeTerminalId: string | null;
+    showHeader?: boolean;
   }) => (
     <div
       data-testid="terminal-panel"
       data-active-terminal-id={activeTerminalId ?? ""}
+      data-show-header={String(showHeader ?? true)}
     />
   ),
 }));
@@ -110,6 +130,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  useWorkspaceViewerTabsStore.getState().reset();
   vi.clearAllMocks();
 });
 
@@ -179,6 +200,7 @@ describe("RightPanel terminal activation", () => {
         "terminal-1",
       );
     });
+    expect(screen.getByTestId("terminal-panel").dataset.showHeader).toBe("false");
   });
 
   it("does not replay deferred activation for a different workspace", () => {
@@ -290,6 +312,62 @@ describe("RightPanel browser visibility", () => {
   });
 });
 
+describe("RightPanel viewer routing", () => {
+  it("renders canonical file viewer targets from the right-panel tab strip", () => {
+    const target = fileViewerTarget("src/app.ts");
+    const targetKey = rightPanelViewerHeaderKey(target);
+    useWorkspaceViewerTabsStore.getState().prepareWorkspace({
+      workspaceUiKey: "workspace-1",
+      materializedWorkspaceId: "workspace-1",
+      initialOpenTargets: [target],
+      initialActiveTargetKey: targetKey,
+    });
+
+    render(
+      <RightPanelHarness
+        isWorkspaceReady
+        initialState={{
+          ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+          activeEntryKey: targetKey,
+          headerOrder: [
+            ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder,
+            targetKey,
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("file-editor-view").dataset.filePath).toBe("src/app.ts");
+  });
+
+  it("activates the Review tool with a canonical all-changes target", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Review" }));
+
+    await waitFor(() => expect(screen.getByTestId("all-changes-frame")).toBeTruthy());
+    expect(useWorkspaceViewerTabsStore.getState().openTargets).toEqual([
+      expect.objectContaining({ kind: "allChanges", scope: "working_tree_composite" }),
+    ]);
+  });
+
+  it("renders Review with a default target when restored without viewer store state", () => {
+    render(
+      <RightPanelHarness
+        isWorkspaceReady
+        initialState={{
+          ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+          activeEntryKey: "tool:allChanges",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("all-changes-frame").dataset.scope).toBe(
+      "working_tree_composite",
+    );
+  });
+});
+
 describe("RightPanel tab shortcuts", () => {
   it("uses primary-number shortcuts after clicking non-focusable panel content", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
@@ -380,6 +458,7 @@ function RightPanelHarness({
       onStateChange={setState as Dispatch<SetStateAction<RightPanelWorkspaceState>>}
       focusRequestToken={focusRequestToken}
       nativeOverlaysHidden={nativeOverlaysHidden}
+      onTogglePanel={() => undefined}
       terminalActivationRequest={terminalActivationRequestToken
         ? {
             token: terminalActivationRequestToken,
@@ -419,6 +498,7 @@ function RemountingRightPanelHarness({
       repoSettingsHref="/settings"
       onStateChange={setState as Dispatch<SetStateAction<RightPanelWorkspaceState>>}
       terminalActivationRequest={terminalActivationRequest}
+      onTogglePanel={() => undefined}
       onTerminalActivationRequestHandled={(request) => {
         setTerminalActivationRequest((current) =>
           current?.workspaceId === request.workspaceId && current.token === request.token

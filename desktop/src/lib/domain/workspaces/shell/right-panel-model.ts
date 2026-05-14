@@ -1,8 +1,16 @@
-export type RightPanelTool = "files" | "git" | "settings";
+import {
+  parseViewerTargetKey,
+  viewerTargetKey,
+  type ViewerTarget,
+  type ViewerTargetKey,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
+
+export type RightPanelTool = "files" | "git" | "allChanges" | "settings";
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelTool}`
   | `terminal:${string}`
-  | `browser:${string}`;
+  | `browser:${string}`
+  | ViewerTargetKey;
 export type RightPanelActiveEntryKey = RightPanelHeaderEntryKey;
 
 export interface RightPanelBrowserTab {
@@ -38,6 +46,7 @@ export const RIGHT_PANEL_BROWSER_TAB_LIMIT = 5;
 export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
   "files",
   "git",
+  "allChanges",
   "settings",
 ];
 export const DEFAULT_RIGHT_PANEL_HEADER_ORDER: RightPanelHeaderEntryKey[] =
@@ -69,12 +78,17 @@ export function rightPanelBrowserHeaderKey(browserId: string): RightPanelHeaderE
   return `browser:${browserId}`;
 }
 
+export function rightPanelViewerHeaderKey(target: ViewerTarget): ViewerTargetKey {
+  return viewerTargetKey(target);
+}
+
 export function parseRightPanelHeaderEntryKey(
   value: unknown,
 ):
   | { kind: "tool"; tool: RightPanelTool }
   | { kind: "terminal"; terminalId: string }
   | { kind: "browser"; browserId: string }
+  | { kind: "viewer"; target: ViewerTarget; targetKey: ViewerTargetKey }
   | null {
   if (typeof value !== "string") {
     return null;
@@ -98,6 +112,10 @@ export function parseRightPanelHeaderEntryKey(
     if (isValidRightPanelBrowserTabId(browserId)) {
       return { kind: "browser", browserId };
     }
+  }
+  const viewerTarget = parseViewerTargetKey(value);
+  if (viewerTarget) {
+    return { kind: "viewer", target: viewerTarget, targetKey: viewerTargetKey(viewerTarget) };
   }
   return null;
 }
@@ -160,6 +178,19 @@ export function browserIdsFromHeaderOrder(
     }
   }
   return browserIds;
+}
+
+export function viewerTargetKeysFromHeaderOrder(
+  headerOrder: readonly RightPanelHeaderEntryKey[] | undefined,
+): ViewerTargetKey[] {
+  const targetKeys: ViewerTargetKey[] = [];
+  for (const key of headerOrder ?? []) {
+    const entry = parseRightPanelHeaderEntryKey(key);
+    if (entry?.kind === "viewer" && !targetKeys.includes(entry.targetKey)) {
+      targetKeys.push(entry.targetKey);
+    }
+  }
+  return targetKeys;
 }
 
 export function isValidRightPanelBrowserTabId(value: unknown): value is string {

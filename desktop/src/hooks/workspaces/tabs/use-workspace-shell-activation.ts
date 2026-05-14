@@ -14,6 +14,10 @@ import {
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
 import { fileViewerTarget, type ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
+import {
+  rightPanelToolHeaderKey,
+  rightPanelViewerHeaderKey,
+} from "@/lib/domain/workspaces/shell/right-panel-model";
 import { resolveWorkspaceShellStateKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -103,21 +107,20 @@ export function useWorkspaceShellActivation() {
     invalidateSessionActivationIntent(workspaceId);
     const targetKey = viewerWorkspaceShellTabKey(target);
     setActiveViewerTarget(targetKey);
-    const write = writeShellIntent({
-      workspaceId: shellStateKey,
-      intent: targetKey,
+    openViewerTargetInRightPanel({
+      materializedWorkspaceId: workspaceId,
+      durableWorkspaceId: shellStateKey,
+      target,
     });
     cancelPendingDeferredChatActivation(shellStateKey, "intent-replaced");
     clearCurrentPendingForWorkspace(shellStateKey);
     return {
       result: "completed",
       surface: "viewer",
-      shellActivationEpoch: write.epoch,
+      shellActivationEpoch:
+        useWorkspaceUiStore.getState().shellActivationEpochByWorkspace[shellStateKey] ?? 0,
     };
-  }, [
-    setActiveViewerTarget,
-    writeShellIntent,
-  ]);
+  }, [setActiveViewerTarget]);
 
   const activateFileTab = useCallback(({
     workspaceId,
@@ -302,6 +305,30 @@ function clearCurrentPendingForWorkspace(workspaceId: string): void {
     attemptId: pending.attemptId,
     bumpIfCurrent: false,
   });
+}
+
+function openViewerTargetInRightPanel({
+  materializedWorkspaceId,
+  durableWorkspaceId,
+  target,
+}: {
+  materializedWorkspaceId: string;
+  durableWorkspaceId: string;
+  target: ViewerTarget;
+}): void {
+  const activeEntryKey = target.kind === "allChanges"
+    ? rightPanelToolHeaderKey("allChanges")
+    : rightPanelViewerHeaderKey(target);
+  const store = useWorkspaceUiStore.getState();
+
+  store.setRightPanelMaterializedForWorkspace(materializedWorkspaceId, (previous) => ({
+    ...previous,
+    activeEntryKey,
+    headerOrder: previous.headerOrder.includes(activeEntryKey)
+      ? previous.headerOrder
+      : [...previous.headerOrder, activeEntryKey],
+  }));
+  store.setRightPanelOpenForWorkspace(durableWorkspaceId, true);
 }
 
 type WorkspaceUiStoreState = ReturnType<typeof useWorkspaceUiStore.getState>;

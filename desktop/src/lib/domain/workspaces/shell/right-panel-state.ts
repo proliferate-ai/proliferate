@@ -20,18 +20,24 @@ import {
   pickBrowserTabsInHeader,
   sanitizeBrowserTabsById,
 } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
+import {
+  viewerTargetKey,
+  type ViewerTarget,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export function normalizeRightPanelMaterializedState(
   input: Partial<RightPanelMaterializedState> | undefined,
   options: {
     isCloudWorkspaceSelected: boolean;
     liveTerminals?: readonly RightPanelTerminalRecord[];
+    liveViewerTargets?: readonly ViewerTarget[];
   },
 ): RightPanelMaterializedState {
   const browserTabsById = sanitizeBrowserTabsById(input?.browserTabsById, input?.headerOrder);
   const headerOrder = normalizeRightPanelHeaderOrder(input?.headerOrder, {
     isCloudWorkspaceSelected: options.isCloudWorkspaceSelected,
     liveTerminals: options.liveTerminals,
+    liveViewerTargets: options.liveViewerTargets,
     browserTabsById,
   });
   const activeEntryKey = resolveRightPanelActiveEntryKey(input?.activeEntryKey, headerOrder);
@@ -48,6 +54,7 @@ export function reconcileRightPanelWorkspaceState(
   options: {
     isCloudWorkspaceSelected: boolean;
     liveTerminals?: readonly RightPanelTerminalRecord[];
+    liveViewerTargets?: readonly ViewerTarget[];
   },
 ): RightPanelWorkspaceState {
   // Runtime callers rely on reconciliation converging after one pass; keep
@@ -199,6 +206,7 @@ function normalizeRightPanelHeaderOrder(
   options: {
     isCloudWorkspaceSelected: boolean;
     liveTerminals?: readonly RightPanelTerminalRecord[];
+    liveViewerTargets?: readonly ViewerTarget[];
     browserTabsById: RightPanelBrowserTabsById;
   },
 ): RightPanelHeaderEntryKey[] {
@@ -217,6 +225,7 @@ function normalizeRightPanelHeaderOrder(
       .filter((browserId) => Boolean(options.browserTabsById[browserId]))
       .map((browserId) => rightPanelBrowserHeaderKey(browserId)),
   );
+  const validViewerKeys = resolveValidViewerKeys(source, options.liveViewerTargets);
   const next: RightPanelHeaderEntryKey[] = [];
 
   for (const key of source) {
@@ -233,10 +242,18 @@ function normalizeRightPanelHeaderOrder(
     if (entry.kind === "browser" && validBrowserKeys.has(key)) {
       next.push(key);
     }
+    if (entry.kind === "viewer" && validViewerKeys.has(entry.targetKey)) {
+      next.push(entry.targetKey);
+    }
   }
 
   for (const tool of availableTools) {
     const key = rightPanelToolHeaderKey(tool);
+    if (!next.includes(key)) {
+      next.push(key);
+    }
+  }
+  for (const key of validViewerKeys) {
     if (!next.includes(key)) {
       next.push(key);
     }
@@ -249,6 +266,41 @@ function normalizeRightPanelHeaderOrder(
   }
 
   return next;
+}
+
+function resolveValidViewerKeys(
+  source: readonly RightPanelHeaderEntryKey[],
+  liveViewerTargets: readonly ViewerTarget[] | undefined,
+): Set<RightPanelHeaderEntryKey> {
+  const sourceViewerKeys = source
+    .map((key) => parseRightPanelHeaderEntryKey(key))
+    .filter((entry): entry is Extract<
+      NonNullable<ReturnType<typeof parseRightPanelHeaderEntryKey>>,
+      { kind: "viewer" }
+    > => entry?.kind === "viewer")
+    .filter((entry) => entry.target.kind !== "allChanges")
+    .map((entry) => entry.targetKey);
+
+  if (!liveViewerTargets) {
+    return new Set(sourceViewerKeys);
+  }
+
+  const keys = new Set<RightPanelHeaderEntryKey>();
+  const liveViewerKeys = liveViewerTargets
+    .filter((target) => target.kind !== "allChanges")
+    .map((target) => viewerTargetKey(target));
+  const liveViewerKeySet = new Set(liveViewerKeys);
+
+  for (const key of sourceViewerKeys) {
+    if (liveViewerKeySet.has(key)) {
+      keys.add(key);
+    }
+  }
+  for (const key of liveViewerKeys) {
+    keys.add(key);
+  }
+
+  return keys;
 }
 
 function resolveValidTerminalIds(

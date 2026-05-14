@@ -5,6 +5,7 @@ import {
   type RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import { browserTabTitle } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
+import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export type RightPanelHeaderEntry =
   | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }
@@ -14,7 +15,8 @@ export type RightPanelHeaderEntry =
     terminalId: string;
     terminal: TerminalRecord | null;
   }
-  | { kind: "browser"; key: RightPanelHeaderEntryKey; tab: RightPanelBrowserTab };
+  | { kind: "browser"; key: RightPanelHeaderEntryKey; tab: RightPanelBrowserTab }
+  | { kind: "viewer"; key: RightPanelHeaderEntryKey; target: ViewerTarget };
 
 export function terminalHeaderDisplayTitle(
   entries: readonly RightPanelHeaderEntry[],

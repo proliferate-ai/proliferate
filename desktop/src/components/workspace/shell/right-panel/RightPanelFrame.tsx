@@ -13,6 +13,11 @@ import type {
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
+import type {
+  FileViewerMode,
+  ViewerTarget,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
+import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
 
 interface RightPanelFrameProps {
   rootRef: RefObject<HTMLDivElement | null>;
@@ -22,8 +27,12 @@ interface RightPanelFrameProps {
   activeTool: RightPanelTool | null;
   activeBrowserId: string | null;
   activeTerminalId: string | null;
+  activeViewerTarget: ViewerTarget | null;
+  activeAllChangesTarget: Extract<ViewerTarget, { kind: "allChanges" }> | null;
   entries: readonly RightPanelHeaderEntry[];
   unreadByTerminal: Record<string, boolean>;
+  buffersByPath: Record<string, WorkspaceFileBuffer>;
+  tabModes: Record<string, FileViewerMode>;
   browserTabs: readonly RightPanelBrowserTab[];
   orderedTerminals: readonly TerminalRecord[];
   isOpen: boolean;
@@ -42,12 +51,15 @@ interface RightPanelFrameProps {
   onActivateTool: (tool: RightPanelTool) => void;
   onSelectTerminal: (terminalId: string) => void;
   onSelectBrowser: (browserId: string) => void;
+  onSelectViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onCloseTerminal: (terminalId: string) => void;
   onCloseBrowser: (browserId: string) => void;
+  onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
   onCreateBrowser: () => void;
   onOpenRepoSettings: () => void;
+  onTogglePanel: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
@@ -63,8 +75,12 @@ export function RightPanelFrame({
   activeTool,
   activeBrowserId,
   activeTerminalId,
+  activeViewerTarget,
+  activeAllChangesTarget,
   entries,
   unreadByTerminal,
+  buffersByPath,
+  tabModes,
   browserTabs,
   orderedTerminals,
   isOpen,
@@ -83,12 +99,15 @@ export function RightPanelFrame({
   onActivateTool,
   onSelectTerminal,
   onSelectBrowser,
+  onSelectViewerTarget,
   onCloseTerminal,
   onCloseBrowser,
+  onCloseViewerTarget,
   onRenameTerminal,
   onCreateTerminal,
   onCreateBrowser,
   onOpenRepoSettings,
+  onTogglePanel,
   onReorderHeaderEntry,
   onUpdateBrowserUrl,
 }: RightPanelFrameProps) {
@@ -99,12 +118,14 @@ export function RightPanelFrame({
       data-group="true"
       tabIndex={-1}
       onPointerDownCapture={onPointerDownCapture}
-      className="relative flex h-full flex-col overflow-hidden rounded-tl-lg border-l border-t border-sidebar-border bg-sidebar-background outline-none"
+      className="relative flex h-full flex-col overflow-hidden border-l border-sidebar-border text-sidebar-foreground outline-none"
     >
       <RightPanelHeaderTabs
         entries={entries}
         activeEntryKey={activeEntryKey}
         unreadByTerminal={unreadByTerminal}
+        buffersByPath={buffersByPath}
+        tabModes={tabModes}
         isWorkspaceReady={isWorkspaceReady}
         canCreateBrowserTab={canCreateBrowserTab}
         newTabMenuRequestToken={newTabMenuRequestToken}
@@ -112,13 +133,16 @@ export function RightPanelFrame({
         onActivateTool={onActivateTool}
         onSelectTerminal={onSelectTerminal}
         onSelectBrowser={onSelectBrowser}
+        onSelectViewerTarget={onSelectViewerTarget}
         onCloseTerminal={onCloseTerminal}
         onCloseBrowser={onCloseBrowser}
+        onCloseViewerTarget={onCloseViewerTarget}
         onRenameTerminal={onRenameTerminal}
         onCreateTerminal={onCreateTerminal}
         onCreateBrowser={onCreateBrowser}
         onReorderHeaderEntry={onReorderHeaderEntry}
         onOpenRepoSettings={onOpenRepoSettings}
+        onTogglePanel={onTogglePanel}
       />
 
       <RightPanelContent
@@ -127,6 +151,8 @@ export function RightPanelFrame({
         activeTool={activeTool}
         activeBrowserId={activeBrowserId}
         activeTerminalId={activeTerminalId}
+        activeViewerTarget={activeViewerTarget}
+        activeAllChangesTarget={activeAllChangesTarget}
         browserTabs={browserTabs}
         orderedTerminals={orderedTerminals}
         shouldRenderContent={shouldRenderContent}

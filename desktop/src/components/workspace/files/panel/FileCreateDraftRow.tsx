@@ -84,7 +84,7 @@ export function FileCreateDraftRow() {
             }
           }}
           placeholder={draft.kind === "file" ? "filename.ext" : "folder name"}
-          className="h-7 min-w-0 border-sidebar-border bg-sidebar-background px-2 text-xs"
+          className="h-6 min-w-0 border-sidebar-border bg-sidebar-background px-2 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground"
         />
         <Button
           type="button"
@@ -93,7 +93,7 @@ export function FileCreateDraftRow() {
           loading={loading}
           disabled={!name.trim()}
           onClick={() => void submit()}
-          className="h-7 px-2 text-xs"
+          className="h-6 border-sidebar-border bg-sidebar-accent px-2 text-xs text-sidebar-foreground hover:bg-sidebar-accent"
         >
           Create
         </Button>
@@ -102,7 +102,7 @@ export function FileCreateDraftRow() {
           variant="ghost"
           size="sm"
           onClick={clearDraft}
-          className="h-7 px-2 text-xs text-sidebar-muted-foreground hover:bg-sidebar-background"
+          className="h-6 px-2 text-xs text-sidebar-muted-foreground hover:bg-sidebar-background hover:text-sidebar-foreground"
         >
           Cancel
         </Button>

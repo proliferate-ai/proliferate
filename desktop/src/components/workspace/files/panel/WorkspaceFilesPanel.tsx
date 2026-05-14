@@ -55,10 +55,10 @@ export function WorkspaceFilesPanel({ showHeader = true }: WorkspaceFilesPanelPr
   const showChangedFiles = scopeFilter !== "all";
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col text-sidebar-foreground">
       {showHeader && (
-        <div className="flex items-center justify-between px-3 h-10 min-h-10 bg-sidebar border-b border-border shrink-0">
-          <span className="text-xs font-medium text-foreground">Files</span>
+        <div className="flex h-8 min-h-8 shrink-0 items-center justify-between border-b border-sidebar-border bg-sidebar-background px-2">
+          <span className="text-sm font-[450] text-sidebar-foreground">Files</span>
         </div>
       )}
       <FileBrowserToolbar

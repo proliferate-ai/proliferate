@@ -1,5 +1,9 @@
 import { HomeNextScreen } from "@/components/home/screen/HomeNextScreen";
-import { useCallback, useEffect, useMemo } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+} from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
 import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
 import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
@@ -237,137 +241,144 @@ export function StandardWorkspaceShell() {
               )}
 
               <div
-                className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
+                className="flex min-w-0 flex-1 overflow-hidden bg-background"
               >
                 <div
-                  className={chromeClasses.header}
-                  data-tauri-drag-region="true"
+                  className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
                 >
-                  <DebugProfiler id="workspace-header-frame">
-                    <>
-                      {!sidebarOpen && (
-                        <div className="flex items-center gap-2 pl-[82px] pr-2">
-                          <IconButton
-                            size="sm"
-                            onClick={actions.onToggleSidebar}
-                            title="Show sidebar"
-                            className="rounded-md"
-                          >
-                            <SplitPanel className="size-4" />
-                          </IconButton>
-                          <SidebarUpdatePill
-                            phase={updaterPhase}
-                            downloadProgress={downloadProgress}
-                            onDownloadUpdate={downloadUpdate}
-                            onOpenRestartPrompt={openRestartPrompt}
-                          />
-                        </div>
-                      )}
-                      {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
-                        <GlobalHeader
-                          selectedWorkspace={selectedWorkspace}
-                          workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
-                          rightPanelOpen={rightPanelOpen}
-                          runDisabled={!runCommand.canRun}
-                          runLoading={runCommand.isLaunching}
-                          runLabel={runCommand.runLabel}
-                          runTitle={runCommand.runTitle}
-                          onRun={runCommand.onRun}
-                          onTogglePanel={actions.toggleRightPanel}
-                        />
-                      )}
-                    </>
-                  </DebugProfiler>
-                </div>
-
-                <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
-                  {hasLaunchIntentOnlyShell ? (
-                    <DebugProfiler id="workspace-content-frame">
-                      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                        <ChatView shellRenderSurface={CHAT_SHELL_RENDER_SURFACE} />
-                      </div>
-                    </DebugProfiler>
-                  ) : hasWorkspaceShell ? (
-                    <>
-                      <DebugProfiler id="workspace-content-frame">
-                        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                          <WorkspaceContentView />
-                        </div>
-                      </DebugProfiler>
-
-                      {rightPanelOpen && (
-                        <div
-                          role="separator"
-                          aria-orientation="vertical"
-                          onMouseDown={onRightSeparatorDown}
-                          className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
-                        />
-                      )}
-                      <div
-                        className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
-                        style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
-                      >
-                        <DebugProfiler id="workspace-right-panel">
-                          <div className="h-full" style={{ minWidth: 260 }}>
-                            <RightPanel
-                              workspaceId={selectedWorkspaceId}
-                              isWorkspaceReady={hasRuntimeReadyWorkspace}
-                              isOpen={rightPanelOpen}
-                              shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
-                              isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                              state={rightPanelState}
-                              repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
-                                section: "repo",
-                                repo: null,
-                              })}
-                              onStateChange={layout.setRightPanelState}
-                              terminalActivationRequest={terminalActivationRequest}
-                              focusRequestToken={rightPanelFocusRequestToken}
-                              nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                              onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
+                  <div
+                    className={chromeClasses.header}
+                    data-tauri-drag-region="true"
+                  >
+                    <DebugProfiler id="workspace-header-frame">
+                      <>
+                        {!sidebarOpen && (
+                          <div className="flex items-center gap-2 pl-[82px] pr-2">
+                            <IconButton
+                              size="sm"
+                              onClick={actions.onToggleSidebar}
+                              title="Show sidebar"
+                              className="rounded-md"
+                            >
+                              <SplitPanel className="size-4" />
+                            </IconButton>
+                            <SidebarUpdatePill
+                              phase={updaterPhase}
+                              downloadProgress={downloadProgress}
+                              onDownloadUpdate={downloadUpdate}
+                              onOpenRestartPrompt={openRestartPrompt}
                             />
                           </div>
-                        </DebugProfiler>
-                      </div>
-
-                      <DebugProfiler id="workspace-command-palette">
-                        <WorkspaceCommandPalette
-                          open={commandPaletteOpen}
-                          onClose={actions.onCommandPaletteClose}
-                          hasWorkspaceShell={hasWorkspaceShell}
-                          selectedWorkspaceId={selectedWorkspaceId}
-                          hasRuntimeReadyWorkspace={hasRuntimeReadyWorkspace}
-                          runtimeBlockedReason={runtimeBlockedReason}
-                          repoSettingsHref={repoSettingsHref}
-                          canOpenRepositorySettings={canOpenRepositorySettings}
-                          repositorySettingsDisabledReason={repositorySettingsDisabledReason}
-                          runCommand={runCommand}
-                          openTerminalPanel={actions.openTerminalPanel}
-                          onToggleLeftSidebar={actions.onToggleSidebar}
-                          onToggleRightPanel={actions.toggleRightPanel}
-                        />
-                      </DebugProfiler>
-
-                      {hasRuntimeReadyWorkspace && (
-                        <>
-                          <PublishDialog
-                            open={publishDialog.open}
-                            workspaceId={publishDialog.workspaceId}
-                            initialIntent={publishDialog.initialIntent}
-                            runtimeBlockedReason={runtimeBlockedReason}
-                            repoDefaultBranch={publishRepoDefaultBranch}
-                            onClose={actions.closePublishDialog}
-                            onViewPr={actions.handlePublishDialogViewPr}
+                        )}
+                        {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
+                          <GlobalHeader
+                            selectedWorkspace={selectedWorkspace}
+                            workspacePath={selectedWorkspace?.path ?? pendingWorkspacePath}
+                            rightPanelOpen={rightPanelOpen}
+                            runDisabled={!runCommand.canRun}
+                            runLoading={runCommand.isLaunching}
+                            runLabel={runCommand.runLabel}
+                            runTitle={runCommand.runTitle}
+                            onRun={runCommand.onRun}
+                            onTogglePanel={actions.toggleRightPanel}
                           />
-                          <ConnectedReviewSetupDialog />
-                          <ConnectedReviewCritiqueDialog />
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <HomeNextScreen />
-                  )}
+                        )}
+                      </>
+                    </DebugProfiler>
+                  </div>
+
+                  <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+                    {hasLaunchIntentOnlyShell ? (
+                      <DebugProfiler id="workspace-content-frame">
+                        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                          <ChatView shellRenderSurface={CHAT_SHELL_RENDER_SURFACE} />
+                        </div>
+                      </DebugProfiler>
+                    ) : hasWorkspaceShell ? (
+                      <>
+                        <DebugProfiler id="workspace-content-frame">
+                          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                            <WorkspaceContentView />
+                          </div>
+                        </DebugProfiler>
+
+                        <DebugProfiler id="workspace-command-palette">
+                          <WorkspaceCommandPalette
+                            open={commandPaletteOpen}
+                            onClose={actions.onCommandPaletteClose}
+                            hasWorkspaceShell={hasWorkspaceShell}
+                            selectedWorkspaceId={selectedWorkspaceId}
+                            hasRuntimeReadyWorkspace={hasRuntimeReadyWorkspace}
+                            runtimeBlockedReason={runtimeBlockedReason}
+                            repoSettingsHref={repoSettingsHref}
+                            canOpenRepositorySettings={canOpenRepositorySettings}
+                            repositorySettingsDisabledReason={repositorySettingsDisabledReason}
+                            runCommand={runCommand}
+                            openTerminalPanel={actions.openTerminalPanel}
+                            onToggleLeftSidebar={actions.onToggleSidebar}
+                            onToggleRightPanel={actions.toggleRightPanel}
+                          />
+                        </DebugProfiler>
+
+                        {hasRuntimeReadyWorkspace && (
+                          <>
+                            <PublishDialog
+                              open={publishDialog.open}
+                              workspaceId={publishDialog.workspaceId}
+                              initialIntent={publishDialog.initialIntent}
+                              runtimeBlockedReason={runtimeBlockedReason}
+                              repoDefaultBranch={publishRepoDefaultBranch}
+                              onClose={actions.closePublishDialog}
+                              onViewPr={actions.handlePublishDialogViewPr}
+                            />
+                            <ConnectedReviewSetupDialog />
+                            <ConnectedReviewCritiqueDialog />
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <HomeNextScreen />
+                    )}
+                  </div>
                 </div>
+
+                {hasWorkspaceShell && !hasLaunchIntentOnlyShell && rightPanelOpen && (
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    onMouseDown={onRightSeparatorDown}
+                    className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                  />
+                )}
+                {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
+                  <div
+                    className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
+                    style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
+                  >
+                    <DebugProfiler id="workspace-right-panel">
+                      <div className="h-full" style={{ minWidth: 260 }}>
+                        <RightPanel
+                          workspaceId={selectedWorkspaceId}
+                          isWorkspaceReady={hasRuntimeReadyWorkspace}
+                          isOpen={rightPanelOpen}
+                          shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
+                          isCloudWorkspaceSelected={isCloudWorkspaceSelected}
+                          state={rightPanelState}
+                          repoSettingsHref={repoSettingsHref ?? buildSettingsHref({
+                            section: "repo",
+                            repo: null,
+                          })}
+                          onStateChange={layout.setRightPanelState}
+                          terminalActivationRequest={terminalActivationRequest}
+                          focusRequestToken={rightPanelFocusRequestToken}
+                          nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
+                          onTogglePanel={actions.toggleRightPanel}
+                          onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
+                        />
+                      </div>
+                    </DebugProfiler>
+                  </div>
+                )}
               </div>
             </div>
           </WorkspaceHeaderTabsViewModelProvider>

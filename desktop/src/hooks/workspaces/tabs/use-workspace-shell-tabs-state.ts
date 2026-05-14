@@ -28,6 +28,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
+const EMPTY_VIEWER_TARGETS: ViewerTarget[] = [];
 
 export function useWorkspaceActiveChatTabId({
   workspaceUiKey,
@@ -67,7 +68,6 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   materializedWorkspaceId,
   activeSessionId,
   shellChatSessionIds,
-  openTargets,
   stripRows,
   displayManualGroups,
   subagentChildIdsByParentId,
@@ -76,7 +76,6 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   materializedWorkspaceId: string | null;
   activeSessionId: string | null;
   shellChatSessionIds: readonly string[];
-  openTargets: ViewerTarget[];
   stripRows: HeaderStripRow<TTab>[];
   displayManualGroups: readonly DisplayManualChatGroup[];
   subagentChildIdsByParentId: ReadonlyMap<string, readonly string[]>;
@@ -164,11 +163,10 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
         ]),
       ),
       visibleChatSessionIds: [...shellChatSessionIds],
-      openTargets,
+      openTargets: EMPTY_VIEWER_TARGETS,
       orderKeys: persistedShellOrderKeys,
     }),
     [
-      openTargets,
       persistedShellOrderKeys,
       sessionWorkspaceId,
       shellChatSessionIds,
@@ -185,7 +183,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     activeSessionId,
     activeViewerTargetKey: activeTargetKey,
     liveChatSessionIds: new Set(shellChatSessionIds),
-    openViewerTargetKeys: new Set(openTargets.map(viewerTargetKey)),
+    openViewerTargetKeys: new Set<string>(),
     pendingChatActivation,
     currentShellActivationEpoch: shellActivationEpoch,
     currentSessionActivationEpoch: sessionActivationEpoch,
@@ -193,7 +191,6 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   }), [
     activeTargetKey,
     activeSessionId,
-    openTargets,
     orderedShellTabKeys,
     pendingChatActivation,
     sessionWorkspaceId,
@@ -211,7 +208,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
         return { kind: "chat", sessionId: activation.renderSurface.sessionId };
       case "viewer": {
         const targetKey = activation.renderSurface.targetKey;
-        const target = openTargets.find((candidate) =>
+        const target = EMPTY_VIEWER_TARGETS.find((candidate) =>
           viewerTargetKey(candidate) === targetKey
         );
         return target ? { kind: "viewer", target } : null;
@@ -219,17 +216,17 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
       case "chat-shell":
         return null;
     }
-  }, [activation.renderSurface, openTargets]);
+  }, [activation.renderSurface]);
   const activeShellTabKey = activeShellTab ? getWorkspaceShellTabKey(activeShellTab) : null;
   const shellRows = useMemo<HeaderShellStripRow<TTab>[]>(
     () => buildHeaderShellRows({
       stripRows,
-      openTargets,
+      openTargets: EMPTY_VIEWER_TARGETS,
       orderedTabs,
       manualGroups: displayManualGroups,
       subagentChildIdsByParentId,
     }),
-    [displayManualGroups, openTargets, orderedTabs, stripRows, subagentChildIdsByParentId],
+    [displayManualGroups, orderedTabs, stripRows, subagentChildIdsByParentId],
   );
 
   useEffect(() => {
@@ -251,16 +248,24 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     if (!sameStringArray(persistedShellOrderKeys, orderedShellTabKeys)) {
       setShellTabOrder(workspaceUiKey, orderedShellTabKeys);
     }
+    if (
+      storedActiveShellTabKey
+      && parseWorkspaceShellTabKey(storedActiveShellTabKey)?.kind === "viewer"
+    ) {
+      setActiveShellTabKey(workspaceUiKey, activeShellTabKey);
+    }
   }, [
     activeShellTabFallback.shouldWriteBack,
     activeShellTabFallback.value,
     viewerRestoreReady,
     orderedShellTabKeys,
+    activeShellTabKey,
     persistedShellOrderKeys,
     setActiveShellTabKey,
     setShellTabOrder,
     shellOrderFallback.shouldWriteBack,
     shellOrderFallback.value,
+    storedActiveShellTabKey,
     workspaceUiKey,
   ]);
 

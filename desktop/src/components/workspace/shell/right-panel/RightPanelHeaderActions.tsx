@@ -1,32 +1,18 @@
 import { IconButton } from "@/components/ui/IconButton";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { Settings } from "@/components/ui/icons";
-import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
-import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
+import { AppShellPanelToggleIcon, Settings } from "@/components/ui/icons";
 
 interface RightPanelHeaderActionsProps {
-  newTabMenuOpen: boolean;
-  newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
-  isWorkspaceReady: boolean;
-  canCreateBrowserTab: boolean;
-  onNewTabMenuOpenChange: (isOpen: boolean) => void;
-  onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
   onOpenRepoSettings: () => void;
+  onTogglePanel: () => void;
 }
 
 export function RightPanelHeaderActions({
-  newTabMenuOpen,
-  newTabMenuDefaultKind,
-  isWorkspaceReady,
-  canCreateBrowserTab,
-  onNewTabMenuOpenChange,
-  onCreateTerminal,
-  onCreateBrowser,
   onOpenRepoSettings,
+  onTogglePanel,
 }: RightPanelHeaderActionsProps) {
   return (
-    <div className="ui-tab-system-section ui-tab-system-section__trailing">
+    <div className="ui-tab-system-section ui-tab-system-section__trailing" role="presentation">
       <div className="editor-panel-overflow-action">
         <Tooltip
           content="Repo's settings"
@@ -45,15 +31,21 @@ export function RightPanelHeaderActions({
         </Tooltip>
       </div>
       <div className="editor-panel-overflow-action">
-        <RightPanelNewTabMenu
-          open={newTabMenuOpen}
-          defaultKind={newTabMenuDefaultKind}
-          isWorkspaceReady={isWorkspaceReady}
-          canCreateBrowserTab={canCreateBrowserTab}
-          onOpenChange={onNewTabMenuOpenChange}
-          onCreateTerminal={onCreateTerminal}
-          onCreateBrowser={onCreateBrowser}
-        />
+        <Tooltip
+          content="Hide side panel"
+          className="right-panel-hide-panel-tooltip"
+          singleLine
+        >
+          <IconButton
+            size="xs"
+            tone="sidebar"
+            title="Hide side panel"
+            className="ui-icon-button glass-editor-panel-new-tab-menu-trigger"
+            onClick={onTogglePanel}
+          >
+            <AppShellPanelToggleIcon className="ui-icon" />
+          </IconButton>
+        </Tooltip>
       </div>
     </div>
   );

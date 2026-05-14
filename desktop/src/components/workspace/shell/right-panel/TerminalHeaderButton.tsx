@@ -1,7 +1,7 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { Terminal as TerminalIcon } from "@/components/ui/icons";
+import { AppShellTerminalIcon } from "@/components/ui/icons";
 import { TerminalHeaderIcon } from "@/components/workspace/shell/right-panel/TerminalHeaderIcon";
 
 const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
@@ -74,7 +74,7 @@ export function TerminalHeaderButton({
         className={HEADER_TERMINAL_TAB_CLASS}
       >
         <span className="ui-tab-system-tab__content">
-          <TerminalIcon className="ui-tab-system-tab__icon" />
+          <AppShellTerminalIcon className="ui-tab-system-tab__icon" />
           <span className="ui-tab-system-tab__label">
             <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>
           </span>

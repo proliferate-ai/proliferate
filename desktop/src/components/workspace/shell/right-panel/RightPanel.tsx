@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -16,9 +17,11 @@ import { useRightPanelRootFocus } from "@/hooks/workspaces/ui/use-right-panel-ro
 import { useRightPanelStateUpdater } from "@/hooks/workspaces/ui/use-right-panel-state-updater";
 import {
   RIGHT_PANEL_BROWSER_TAB_LIMIT,
+  parseRightPanelHeaderEntryKey,
   rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
+  viewerTargetKeysFromHeaderOrder,
   terminalIdsFromHeaderOrder,
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
@@ -44,6 +47,15 @@ import {
   type RightPanelNewTabMenuDefault,
 } from "@/lib/infra/right-panel-new-tab-menu";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
+import {
+  allChangesViewerTarget,
+  viewerTargetEditablePath,
+  viewerTargetKey,
+  type ViewerTarget,
+  type ViewerTargetKey,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
+import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
+import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
 
 const EMPTY_TERMINALS: never[] = [];
 
@@ -64,6 +76,7 @@ interface RightPanelProps {
   terminalActivationRequest: TerminalActivationRequest | null;
   focusRequestToken?: number;
   nativeOverlaysHidden?: boolean;
+  onTogglePanel: () => void;
   onTerminalActivationRequestHandled: (request: TerminalActivationRequest) => void;
 }
 
@@ -79,6 +92,7 @@ export const RightPanel = memo(function RightPanel({
   terminalActivationRequest,
   focusRequestToken = 0,
   nativeOverlaysHidden = false,
+  onTogglePanel,
   onTerminalActivationRequestHandled,
 }: RightPanelProps) {
   const { createTab, closeTab, renameTab } = useTerminalActions();
@@ -88,6 +102,15 @@ export const RightPanel = memo(function RightPanel({
   );
   const unreadByTerminal = useTerminalStore((store) => store.unreadByTerminal);
   const showToast = useToastStore((store) => store.show);
+  const openViewerTargets = useWorkspaceViewerTabsStore((store) => store.openTargets);
+  const activeViewerTargetKey = useWorkspaceViewerTabsStore((store) => store.activeTargetKey);
+  const openViewerTarget = useWorkspaceViewerTabsStore((store) => store.openTarget);
+  const closeViewerTarget = useWorkspaceViewerTabsStore((store) => store.closeTarget);
+  const reorderViewerTargets = useWorkspaceViewerTabsStore((store) => store.reorderOpenTargets);
+  const setActiveViewerTarget = useWorkspaceViewerTabsStore((store) => store.setActiveTarget);
+  const tabModes = useWorkspaceViewerTabsStore((store) => store.modeByTargetKey);
+  const buffersByPath = useWorkspaceFileBuffersStore((store) => store.buffersByPath);
+  const clearBuffer = useWorkspaceFileBuffersStore((store) => store.clearBuffer);
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
   const [newTabMenuRequest, setNewTabMenuRequest] = useState<{
     token: number;
@@ -108,6 +131,7 @@ export const RightPanel = memo(function RightPanel({
     activeTool,
     activeTerminalId,
     activeBrowserId,
+    activeViewerTarget,
     visibleTerminals,
     orderedTerminals,
     browserTabs,
@@ -116,13 +140,25 @@ export const RightPanel = memo(function RightPanel({
   } = useRightPanelHeaderEntries({
     state,
     terminals,
+    openViewerTargets,
     isCloudWorkspaceSelected,
   });
   const terminalActivationRequestToken = terminalActivationRequest?.workspaceId === workspaceId
     ? terminalActivationRequest.token
     : 0;
+  const activeAllChangesTarget = useMemo(
+    () => {
+      const target = resolveActiveAllChangesTarget(openViewerTargets, activeViewerTargetKey);
+      if (target || activeTool !== "allChanges") {
+        return target;
+      }
+      return defaultAllChangesViewerTarget();
+    },
+    [activeTool, activeViewerTargetKey, openViewerTargets],
+  );
   const updateState = useRightPanelStateUpdater({
     isCloudWorkspaceSelected,
+    liveViewerTargets: openViewerTargets,
     onStateChange,
   });
 
@@ -130,6 +166,7 @@ export const RightPanel = memo(function RightPanel({
     const next = reconcileRightPanelWorkspaceState(state, {
       isCloudWorkspaceSelected,
       liveTerminals: terminalsQuery.isSuccess ? terminals : undefined,
+      liveViewerTargets: openViewerTargets,
     });
     if (rightPanelStateEqual(state, next)) {
       return;
@@ -137,6 +174,7 @@ export const RightPanel = memo(function RightPanel({
     updateState(next);
   }, [
     isCloudWorkspaceSelected,
+    openViewerTargets,
     state,
     terminals,
     terminalsQuery.isSuccess,
@@ -305,15 +343,39 @@ export const RightPanel = memo(function RightPanel({
 
   const activateTool = useCallback(
     (tool: RightPanelTool) => {
+      if (tool === "allChanges") {
+        const target = activeAllChangesTarget ?? allChangesViewerTarget({
+          scope: "working_tree_composite",
+        });
+        const targetKey = openViewerTarget(target);
+        setActiveViewerTarget(targetKey);
+      }
       updateState((previous) => ({ ...previous, activeEntryKey: rightPanelToolHeaderKey(tool) }));
     },
-    [updateState],
+    [activeAllChangesTarget, openViewerTarget, setActiveViewerTarget, updateState],
   );
 
   const selectBrowser = useCallback((browserId: string) => {
     const browserKey = rightPanelBrowserHeaderKey(browserId);
     updateState((previous) => ({ ...previous, activeEntryKey: browserKey }));
   }, [updateState]);
+
+  const selectViewer = useCallback((targetKey: RightPanelHeaderEntryKey) => {
+    const target = openViewerTargets.find((candidate) =>
+      viewerTargetKey(candidate) === targetKey
+    );
+    if (!target || target.kind === "allChanges") {
+      return;
+    }
+    setActiveViewerTarget(targetKey as ViewerTargetKey);
+    updateState((previous) => ({
+      ...previous,
+      activeEntryKey: targetKey,
+      headerOrder: previous.headerOrder.includes(targetKey)
+        ? previous.headerOrder
+        : [...previous.headerOrder, targetKey],
+    }));
+  }, [openViewerTargets, setActiveViewerTarget, updateState]);
 
   const activateHeaderEntry = useCallback(
     (entry: RightPanelHeaderEntry) => {
@@ -325,9 +387,13 @@ export const RightPanel = memo(function RightPanel({
         selectTerminal(entry.terminalId);
         return;
       }
+      if (entry.kind === "viewer") {
+        selectViewer(entry.key);
+        return;
+      }
       selectBrowser(entry.tab.id);
     },
-    [activateTool, selectBrowser, selectTerminal],
+    [activateTool, selectBrowser, selectTerminal, selectViewer],
   );
 
   const handleRootPointerDownCapture = useRightPanelRootFocus({
@@ -403,6 +469,65 @@ export const RightPanel = memo(function RightPanel({
     );
   }, [isCloudWorkspaceSelected, updateState]);
 
+  const handleCloseViewer = useCallback((targetKey: RightPanelHeaderEntryKey) => {
+    const target = openViewerTargets.find((candidate) =>
+      viewerTargetKey(candidate) === targetKey
+    );
+    if (!target || target.kind === "allChanges") {
+      return;
+    }
+
+    const editablePath = viewerTargetEditablePath(target);
+    const isLastTargetForPath = editablePath
+      ? !openViewerTargets.some((candidate) =>
+        viewerTargetKey(candidate) !== targetKey
+        && viewerTargetEditablePath(candidate) === editablePath
+      )
+      : false;
+    const isDirty = editablePath && isLastTargetForPath
+      ? buffersByPath[editablePath]?.isDirty ?? false
+      : false;
+    if (isDirty && !window.confirm("Discard unsaved changes?")) {
+      return;
+    }
+
+    closeViewerTarget(targetKey as ViewerTargetKey);
+    if (editablePath && isLastTargetForPath) {
+      clearBuffer(editablePath);
+    }
+    const removedIndex = state.headerOrder.indexOf(targetKey);
+    const nextHeaderOrder = state.headerOrder.filter((key) => key !== targetKey);
+    const nextFallbackEntryKey = removedIndex > 0
+      ? nextHeaderOrder[removedIndex - 1]
+      : nextHeaderOrder[removedIndex] ?? null;
+    const nextFallbackEntry = parseRightPanelHeaderEntryKey(nextFallbackEntryKey);
+    if (nextFallbackEntry?.kind === "viewer") {
+      setActiveViewerTarget(nextFallbackEntry.targetKey);
+    }
+    updateState((previous) => {
+      const removedIndex = previous.headerOrder.indexOf(targetKey);
+      const headerOrder = previous.headerOrder.filter((key) => key !== targetKey);
+      const fallbackEntryKey = removedIndex > 0
+        ? headerOrder[removedIndex - 1]
+        : headerOrder[removedIndex] ?? "tool:files";
+      return {
+        ...previous,
+        headerOrder,
+        activeEntryKey: previous.activeEntryKey === targetKey
+          ? fallbackEntryKey ?? "tool:files"
+          : previous.activeEntryKey,
+      };
+    });
+  }, [
+    buffersByPath,
+    clearBuffer,
+    closeViewerTarget,
+    openViewerTargets,
+    setActiveViewerTarget,
+    state.headerOrder,
+    updateState,
+  ]);
+
   const handleUpdateBrowserUrl = useCallback((browserId: string, url: string) => {
     updateState((previous) =>
       updateBrowserTabUrlInRightPanelState(previous, browserId, url, isCloudWorkspaceSelected)
@@ -414,16 +539,16 @@ export const RightPanel = memo(function RightPanel({
       entryKey: RightPanelHeaderEntryKey,
       beforeEntryKey: RightPanelHeaderEntryKey | null,
     ) => {
-      updateState((previous) =>
-        reorderHeaderEntryInRightPanelState(
-          previous,
-          entryKey,
-          beforeEntryKey,
-          isCloudWorkspaceSelected,
-        ),
+      const next = reorderHeaderEntryInRightPanelState(
+        state,
+        entryKey,
+        beforeEntryKey,
+        isCloudWorkspaceSelected,
       );
+      updateState(next);
+      reorderViewerTargets(viewerTargetKeysFromHeaderOrder(next.headerOrder));
     },
-    [isCloudWorkspaceSelected, updateState],
+    [isCloudWorkspaceSelected, reorderViewerTargets, state, updateState],
   );
 
   const shouldMountTerminalPanel = shouldRenderContent
@@ -439,8 +564,12 @@ export const RightPanel = memo(function RightPanel({
       activeTool={activeTool}
       activeBrowserId={activeBrowserId}
       activeTerminalId={activeTerminalId}
+      activeViewerTarget={activeViewerTarget}
+      activeAllChangesTarget={activeAllChangesTarget}
       entries={headerEntries}
       unreadByTerminal={unreadByTerminal}
+      buffersByPath={buffersByPath}
+      tabModes={tabModes}
       browserTabs={browserTabs}
       orderedTerminals={orderedTerminals}
       isOpen={isOpen}
@@ -459,8 +588,10 @@ export const RightPanel = memo(function RightPanel({
       onActivateTool={activateTool}
       onSelectTerminal={selectTerminal}
       onSelectBrowser={selectBrowser}
+      onSelectViewerTarget={selectViewer}
       onCloseTerminal={handleCloseTerminal}
       onCloseBrowser={handleCloseBrowser}
+      onCloseViewerTarget={handleCloseViewer}
       onRenameTerminal={handleRenameTerminal}
       onCreateTerminal={() => {
         void createTerminal({ activate: true });
@@ -469,6 +600,32 @@ export const RightPanel = memo(function RightPanel({
       onOpenRepoSettings={() => navigate(repoSettingsHref)}
       onReorderHeaderEntry={handleReorderHeaderEntry}
       onUpdateBrowserUrl={handleUpdateBrowserUrl}
+      onTogglePanel={onTogglePanel}
     />
   );
 });
+
+function resolveActiveAllChangesTarget(
+  targets: readonly ViewerTarget[],
+  activeTargetKey: ViewerTargetKey | null,
+): Extract<ViewerTarget, { kind: "allChanges" }> | null {
+  if (activeTargetKey) {
+    const activeTarget = targets.find((target) => viewerTargetKey(target) === activeTargetKey);
+    if (activeTarget?.kind === "allChanges") {
+      return activeTarget;
+    }
+  }
+
+  const allChangesTargets = targets
+    .filter((target): target is Extract<ViewerTarget, { kind: "allChanges" }> =>
+      target.kind === "allChanges"
+    );
+  return allChangesTargets[allChangesTargets.length - 1] ?? null;
+}
+
+function defaultAllChangesViewerTarget(): Extract<ViewerTarget, { kind: "allChanges" }> {
+  return allChangesViewerTarget({ scope: "working_tree_composite" }) as Extract<
+    ViewerTarget,
+    { kind: "allChanges" }
+  >;
+}

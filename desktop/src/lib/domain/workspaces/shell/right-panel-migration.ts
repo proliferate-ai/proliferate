@@ -7,6 +7,7 @@ import {
   rightPanelBrowserHeaderKey,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
+  rightPanelViewerHeaderKey,
   type RightPanelActiveEntryKey,
   type RightPanelBrowserTabsById,
   type RightPanelDurableState,
@@ -104,7 +105,9 @@ function uniqueLegacyHeaderEntries(value: readonly unknown[]): RightPanelHeaderE
       ? rightPanelToolHeaderKey(entry.tool)
       : entry.kind === "terminal"
         ? rightPanelTerminalHeaderKey(entry.terminalId)
-        : rightPanelBrowserHeaderKey(entry.browserId);
+        : entry.kind === "browser"
+          ? rightPanelBrowserHeaderKey(entry.browserId)
+          : rightPanelViewerHeaderKey(entry.target);
     if (!next.includes(key)) {
       next.push(key);
     }

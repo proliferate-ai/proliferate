@@ -16,6 +16,7 @@ interface TerminalPanelProps {
   isLoading?: boolean;
   errorMessage?: string | null;
   focusRequestToken?: number;
+  showHeader?: boolean;
   unreadByTerminal: Record<string, boolean>;
   onNewTerminal: () => void;
   onSelectTerminal: (terminalId: string) => void;
@@ -33,6 +34,7 @@ export function TerminalPanel({
   isLoading = false,
   errorMessage = null,
   focusRequestToken = 0,
+  showHeader = true,
   unreadByTerminal,
   onNewTerminal,
   onSelectTerminal,
@@ -43,16 +45,18 @@ export function TerminalPanel({
 
   return (
     <div className="flex h-full flex-col" data-telemetry-block data-focus-zone="terminal">
-      <TerminalTopBar
-        terminals={terminals}
-        activeTerminalId={activeTerminalId}
-        unreadByTerminal={unreadByTerminal}
-        isRuntimeReady={isRuntimeReady}
-        onSelectTerminal={onSelectTerminal}
-        onCloseTerminal={onCloseTerminal}
-        onRenameTerminal={onRenameTerminal}
-        onNewTerminal={onNewTerminal}
-      />
+      {showHeader && (
+        <TerminalTopBar
+          terminals={terminals}
+          activeTerminalId={activeTerminalId}
+          unreadByTerminal={unreadByTerminal}
+          isRuntimeReady={isRuntimeReady}
+          onSelectTerminal={onSelectTerminal}
+          onCloseTerminal={onCloseTerminal}
+          onRenameTerminal={onRenameTerminal}
+          onNewTerminal={onNewTerminal}
+        />
+      )}
       <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-background">
         {isLoading ? (
           <TerminalEmptyState label="Loading terminals" />

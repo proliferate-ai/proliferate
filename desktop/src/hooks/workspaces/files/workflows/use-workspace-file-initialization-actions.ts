@@ -111,9 +111,16 @@ export function useWorkspaceFileInitializationActions(fileContext: WorkspaceFile
       input.workspaceUiKey,
       input.materializedWorkspaceId,
     ).value ?? null;
+    const rightPanelMaterialized = resolveWithWorkspaceFallback(
+      workspaceUi.rightPanelMaterializedByWorkspace,
+      input.materializedWorkspaceId,
+      input.workspaceUiKey,
+    ).value;
     const fileTabSeed = deriveWorkspaceFileTabSeed({
       shellOrderKeys: shellOrder,
       activeShellTabKey,
+      rightPanelHeaderOrderKeys: rightPanelMaterialized?.headerOrder,
+      rightPanelActiveEntryKey: rightPanelMaterialized?.activeEntryKey,
     });
     resetFileBuffersForConnection(workspaceFileBufferConnectionFingerprint(input));
 

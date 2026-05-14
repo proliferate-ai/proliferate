@@ -47,7 +47,7 @@ export const FileTreeEntryRow = forwardRef<HTMLDivElement, {
             className="size-3.5 shrink-0 group-hover:invisible"
           />
           <ChevronRight
-            className={`size-3.5 absolute inset-0 text-muted-foreground invisible group-hover:visible transition-transform duration-150 ${
+            className={`size-3.5 absolute inset-0 text-sidebar-muted-foreground invisible group-hover:visible transition-transform duration-150 ${
               isExpanded ? "rotate-90" : ""
             }`}
           />

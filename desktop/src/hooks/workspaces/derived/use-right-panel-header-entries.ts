@@ -13,6 +13,10 @@ import {
   orderTerminals,
 } from "@/lib/domain/workspaces/shell/right-panel-view";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
+import {
+  viewerTargetKey,
+  type ViewerTarget,
+} from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export interface RightPanelHeaderEntriesState {
   activeEntry: ReturnType<typeof parseRightPanelHeaderEntryKey>;
@@ -20,6 +24,7 @@ export interface RightPanelHeaderEntriesState {
     | null;
   activeTerminalId: string | null;
   activeBrowserId: string | null;
+  activeViewerTarget: ViewerTarget | null;
   visibleTerminals: TerminalRecord[];
   orderedTerminals: TerminalRecord[];
   browserTabs: ReturnType<typeof orderBrowserTabs>;
@@ -30,10 +35,12 @@ export interface RightPanelHeaderEntriesState {
 export function useRightPanelHeaderEntries({
   state,
   terminals,
+  openViewerTargets,
   isCloudWorkspaceSelected,
 }: {
   state: RightPanelWorkspaceState;
   terminals: readonly TerminalRecord[];
+  openViewerTargets: readonly ViewerTarget[];
   isCloudWorkspaceSelected: boolean;
 }): RightPanelHeaderEntriesState {
   const terminalIdsInHeader = useMemo(
@@ -61,6 +68,10 @@ export function useRightPanelHeaderEntries({
   const browserTabs = useMemo(
     () => orderBrowserTabs(state.browserTabsById, state.headerOrder),
     [state.browserTabsById, state.headerOrder],
+  );
+  const viewerTargetByKey = useMemo(
+    () => new Map(openViewerTargets.map((target) => [viewerTargetKey(target), target])),
+    [openViewerTargets],
   );
   const headerEntries = useMemo<RightPanelHeaderEntry[]>(() => {
     const entries: RightPanelHeaderEntry[] = [];
@@ -92,20 +103,37 @@ export function useRightPanelHeaderEntries({
           seenKeys.add(key);
         }
       }
+      if (entry.kind === "viewer") {
+        const target = viewerTargetByKey.get(entry.targetKey);
+        if (target && target.kind !== "allChanges") {
+          entries.push({ kind: "viewer", key: entry.targetKey, target });
+          seenKeys.add(entry.targetKey);
+        }
+      }
     }
 
     return entries;
-  }, [isCloudWorkspaceSelected, state.browserTabsById, state.headerOrder, terminalById]);
+  }, [
+    isCloudWorkspaceSelected,
+    state.browserTabsById,
+    state.headerOrder,
+    terminalById,
+    viewerTargetByKey,
+  ]);
 
   const activeTool = activeEntry?.kind === "tool" ? activeEntry.tool : null;
   const activeTerminalId = activeEntry?.kind === "terminal" ? activeEntry.terminalId : null;
   const activeBrowserId = activeEntry?.kind === "browser" ? activeEntry.browserId : null;
+  const activeViewerTarget = activeEntry?.kind === "viewer"
+    ? viewerTargetByKey.get(activeEntry.targetKey) ?? null
+    : null;
 
   return {
     activeEntry,
     activeTool,
     activeTerminalId,
     activeBrowserId,
+    activeViewerTarget,
     visibleTerminals,
     orderedTerminals,
     browserTabs,

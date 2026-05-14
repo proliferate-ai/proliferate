@@ -35,12 +35,15 @@ export function sanitizeWorkspaceShellTabKeys(
 export function deriveWorkspaceFileTabSeed(args: {
   shellOrderKeys: readonly WorkspaceShellTabKey[] | null | undefined;
   activeShellTabKey: WorkspaceShellTabKey | null | undefined;
+  rightPanelHeaderOrderKeys?: readonly WorkspaceShellTabKey[] | null | undefined;
+  rightPanelActiveEntryKey?: WorkspaceShellTabKey | null | undefined;
 }): WorkspaceFileTabSeed {
   const shellOrderKeys = sanitizeWorkspaceShellTabKeys(args.shellOrderKeys);
+  const rightPanelHeaderOrderKeys = sanitizeWorkspaceShellTabKeys(args.rightPanelHeaderOrderKeys);
   const initialOpenTargets: ViewerTarget[] = [];
   const seenTargetKeys = new Set<string>();
 
-  for (const key of shellOrderKeys) {
+  for (const key of [...shellOrderKeys, ...rightPanelHeaderOrderKeys]) {
     const parsed = parseWorkspaceShellTabKey(key);
     if (parsed?.kind !== "viewer") {
       continue;
@@ -56,10 +59,16 @@ export function deriveWorkspaceFileTabSeed(args: {
   const activeParsed = args.activeShellTabKey
     ? parseWorkspaceShellTabKey(args.activeShellTabKey)
     : null;
+  const rightPanelActiveParsed = args.rightPanelActiveEntryKey
+    ? parseWorkspaceShellTabKey(args.rightPanelActiveEntryKey)
+    : null;
   const initialActiveTargetKey = activeParsed?.kind === "viewer"
     && seenTargetKeys.has(viewerTargetKey(activeParsed.target))
     ? viewerTargetKey(activeParsed.target)
-    : null;
+    : rightPanelActiveParsed?.kind === "viewer"
+      && seenTargetKeys.has(viewerTargetKey(rightPanelActiveParsed.target))
+      ? viewerTargetKey(rightPanelActiveParsed.target)
+      : null;
 
   return {
     shellOrderKeys,

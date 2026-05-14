@@ -50,7 +50,7 @@ export function FileBrowserToolbar({
     FILE_BROWSER_FILTER_OPTIONS.find((option) => option.id === scopeFilter)?.label ?? "All files";
 
   return (
-    <div className="shrink-0 border-b border-sidebar-border bg-sidebar-background px-2 py-2">
+    <div className="shrink-0 border-b border-sidebar-border bg-sidebar-background px-2 py-2 text-sidebar-foreground">
       <div className="flex items-center gap-2">
         <PopoverButton
           trigger={
@@ -58,7 +58,7 @@ export function FileBrowserToolbar({
               type="button"
               variant="secondary"
               size="sm"
-              className="h-7 min-w-0 flex-1 justify-between gap-2 rounded-md border-sidebar-border/70 bg-sidebar-accent px-2 text-xs text-sidebar-foreground hover:bg-sidebar-accent"
+              className="h-6 min-w-0 flex-1 justify-between gap-1.5 rounded-md border-sidebar-border bg-sidebar-accent px-1.5 text-xs text-sidebar-foreground hover:bg-sidebar-accent"
             >
               <span className="flex min-w-0 items-center gap-1.5">
                 <ListFilter className="size-3 shrink-0" />
@@ -93,7 +93,7 @@ export function FileBrowserToolbar({
             </div>
           )}
         </PopoverButton>
-        <span className="shrink-0 text-[10px] tabular-nums text-sidebar-muted-foreground">
+        <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
           {changedFileCount} changed
         </span>
         <Tooltip singleLine content="Collapse all">
@@ -104,9 +104,9 @@ export function FileBrowserToolbar({
             disabled={!treeStateKey}
             onClick={() => treeStateKey && collapseAllDirectories(treeStateKey)}
             aria-label="Collapse all folders"
-            className="size-7 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="size-6 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
-            <CollapseAll className="size-3.5" />
+            <CollapseAll className="size-3" />
           </Button>
         </Tooltip>
         <Tooltip content="Refresh">
@@ -116,9 +116,9 @@ export function FileBrowserToolbar({
             size="icon-sm"
             onClick={onRefresh}
             aria-label="Refresh files"
-            className="size-7 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="size-6 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className="size-3" />
           </Button>
         </Tooltip>
       </div>
@@ -128,7 +128,7 @@ export function FileBrowserToolbar({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search files"
-          className="h-7 rounded-md border-sidebar-border bg-sidebar-accent/40 pl-7 pr-2 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground"
+          className="h-6 rounded-md border-sidebar-border bg-sidebar-accent/70 pl-7 pr-2 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground"
         />
       </div>
     </div>

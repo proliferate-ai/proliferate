@@ -71,7 +71,7 @@ export function ChangedFilesList({
       )}
       {!isLoading && !errorMessage && !runtimeBlockedReason && sections.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="px-1 text-[10px] text-sidebar-muted-foreground">
+          <p className="px-1 text-xs text-sidebar-muted-foreground">
             {changedFileCount} changed file{changedFileCount === 1 ? "" : "s"}
           </p>
           {sections.map((section) => {
@@ -79,7 +79,7 @@ export function ChangedFilesList({
             return (
               <div key={section.scope} className="flex flex-col gap-1">
                 {sections.length > 1 && (
-                  <div className="px-1 pt-1 text-[10px] font-medium uppercase tracking-wide text-sidebar-muted-foreground">
+                  <div className="px-1 pt-1 text-xs font-[450] uppercase tracking-wide text-sidebar-muted-foreground">
                     {section.label}
                   </div>
                 )}

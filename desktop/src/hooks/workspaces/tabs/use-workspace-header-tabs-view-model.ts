@@ -353,7 +353,6 @@ export function useWorkspaceHeaderTabsViewModel() {
     materializedWorkspaceId,
     activeSessionId,
     shellChatSessionIds: stripVisibleChatSessionIds,
-    openTargets,
     stripRows,
     displayManualGroups,
     subagentChildIdsByParentId: hierarchyChildren.childIdsByParentSessionId,

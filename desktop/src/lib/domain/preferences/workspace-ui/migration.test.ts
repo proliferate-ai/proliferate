@@ -307,7 +307,14 @@ describe("workspace UI state migration", () => {
     expect(state.rightPanelMaterializedByWorkspace).toEqual({
       w1: {
         activeEntryKey: "tool:git",
-        headerOrder: ["tool:files", "tool:git", "tool:settings", "terminal:t1", "terminal:t2"],
+        headerOrder: [
+          "tool:files",
+          "tool:git",
+          "tool:allChanges",
+          "tool:settings",
+          "terminal:t1",
+          "terminal:t2",
+        ],
         browserTabsById: {},
       },
     });
@@ -339,7 +346,14 @@ describe("workspace UI state migration", () => {
     });
     expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "terminal:terminal-b",
-      headerOrder: ["tool:git", "terminal:terminal-b", "tool:files", "terminal:terminal-a", "tool:settings"],
+      headerOrder: [
+        "tool:git",
+        "terminal:terminal-b",
+        "tool:files",
+        "terminal:terminal-a",
+        "tool:allChanges",
+        "tool:settings",
+      ],
       browserTabsById: {},
     });
   });
@@ -372,7 +386,13 @@ describe("workspace UI state migration", () => {
     });
     expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
       activeEntryKey: "terminal:t1",
-      headerOrder: ["terminal:t1", "tool:git", "tool:files", "tool:settings"],
+      headerOrder: [
+        "terminal:t1",
+        "tool:git",
+        "tool:files",
+        "tool:allChanges",
+        "tool:settings",
+      ],
       browserTabsById: {},
     });
     expect(state.rightPanelDurableByWorkspace.w1).not.toHaveProperty("toolOrder");

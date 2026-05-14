@@ -1,12 +1,12 @@
 import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { IconButton } from "@/components/ui/IconButton";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
-  Globe,
-  Plus,
-  Terminal as TerminalIcon,
+  AppShellBrowserIcon,
+  AppShellPlusIcon,
+  AppShellTerminalIcon,
 } from "@/components/ui/icons";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
 
@@ -46,10 +46,10 @@ export function RightPanelNewTabMenu({
             title="Open new tab menu"
             className="ui-icon-button glass-editor-panel-new-tab-menu-trigger"
           >
-            <Plus className="ui-icon" />
+            <AppShellPlusIcon className="ui-icon" />
           </IconButton>
         }
-        className={`w-40 ${POPOVER_SURFACE_CLASS}`}
+        className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
       >
         {(close) => (
           <NewTabMenuContent
@@ -113,7 +113,7 @@ function NewTabMenuContent({
       <PopoverMenuItem
         label="Terminal"
         variant="sidebar"
-        icon={<TerminalIcon className="size-4" />}
+        icon={<AppShellTerminalIcon className="size-4" />}
         disabled={!isWorkspaceReady}
         autoFocus={defaultKind === "terminal"}
         onClick={onCreateTerminal}
@@ -121,7 +121,7 @@ function NewTabMenuContent({
       <PopoverMenuItem
         label="Browser"
         variant="sidebar"
-        icon={<Globe className="size-4" />}
+        icon={<AppShellBrowserIcon className="size-4" />}
         disabled={!isWorkspaceReady || !canCreateBrowserTab}
         autoFocus={defaultKind === "browser"}
         onClick={onCreateBrowser}
