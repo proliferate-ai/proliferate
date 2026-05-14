@@ -481,7 +481,6 @@ anyharness/crates/anyharness-lib/src/domains/reviews/
   runtime.rs
   runtime_artifacts.rs
   runtime_helpers.rs
-  prompts.rs
   store.rs
   store_feedback.rs
   store_iteration.rs

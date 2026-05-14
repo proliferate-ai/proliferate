@@ -66,6 +66,12 @@ The old `codingSessionId` concept should collapse into `coworkAgentId` for the
 normal agent-facing API. Compatibility aliases may exist during migration, but
 new tool contracts should use cowork workspace/agent language.
 
+During the migration window, MCP responses may still include legacy
+`codingSessionId` and `sessionLinkId` fields so older transcript parsers, SDKs,
+and in-flight agent sessions keep working. New callers should treat those
+fields as compatibility aliases only. All examples and new code should prefer
+`coworkWorkspaceId`/`coworkAgentId` plus `label`.
+
 ## MCP Identity
 
 ```text
@@ -103,6 +109,31 @@ Workspace and agent access is checked by the cowork domain on every call:
 
 All cowork tools accept and return JSON objects. Workspace tools own workspace
 lifecycle. Agent tools mirror the subagent lifecycle with a workspace scope.
+
+Compatibility rule:
+
+- accept `codingSessionId` during migration when a caller does not yet know
+  `coworkAgentId`
+- if both `coworkAgentId` and `codingSessionId` are supplied, they must resolve
+  to the same linked cowork agent or the call returns a validation error
+- return legacy ids only as compatibility fields; do not require new callers
+  to store or echo them
+
+Current migration response shape:
+
+- create/send/status/wake/close responses include `coworkAgentId` and `label`,
+  and may also include `codingSessionId` and `sessionLinkId`
+- `read_cowork_agent_latest_turns` currently returns completion metadata
+  (`childTurnId`, `outcome`, `createdAt`, `childLastEventSeq`,
+  `parentEventSeq`, `parentPromptSeq`) rather than the full summarized
+  assistant-result target shape
+- `search_cowork_agent_transcript` returns `query`, `seq`, `timestamp`,
+  `turnId`, `itemId`, and `snippet`
+- `read_cowork_agent_events` is a debug escape hatch and may return only raw
+  event cursors plus legacy child routing fields
+
+These compatibility fields are not the agent-facing handle. The agent-facing
+handle remains `coworkAgentId`.
 
 ### Workspace Tools
 
@@ -574,6 +605,10 @@ Returns:
 }
 ```
 
+During migration, this response may also include `codingSessionId` and
+`sessionLinkId` as legacy routing aliases. The stable fields remain
+`coworkAgentId` and `label`.
+
 #### `search_cowork_agent_transcript`
 
 Grep path for one cowork agent transcript.
@@ -587,6 +622,26 @@ Args:
   "limit": 10
 }
 ```
+
+Returns:
+
+```json
+{
+  "coworkAgentId": "cowork_agent_123",
+  "label": "Auth Implementation",
+  "query": "middleware",
+  "matches": [
+    {
+      "turnId": "turn_123",
+      "eventSeq": 42,
+      "snippet": "Updated the auth middleware integration path..."
+    }
+  ]
+}
+```
+
+During migration, this response may also include `codingSessionId` and
+`sessionLinkId`.
 
 #### `read_cowork_agent_events`
 
@@ -624,6 +679,12 @@ Returns:
   "activeWorkEnded": true
 }
 ```
+
+Close ordering is intentionally retryable: the runtime closes the child session
+graph first, including any delegated descendants and product close hooks, then
+marks the cowork-agent link closed. If closing the live session fails, the
+active link remains discoverable so a later close call can retry rather than
+orphaning hidden work.
 
 ## Artifact Tools
 
@@ -707,7 +768,6 @@ anyharness/crates/anyharness-lib/src/domains/cowork/
   runtime.rs
   manifest.rs
   artifacts.rs
-  prompts.rs
   delegation/
     mod.rs
     model.rs
@@ -718,7 +778,10 @@ anyharness/crates/anyharness-lib/src/domains/cowork/
     auth.rs
     context.rs
     tools.rs
+    tools_tests.rs
     calls.rs
+    calls_helpers.rs
+    calls_tests.rs
 ```
 
 Shared delegated-session primitives:
@@ -747,6 +810,7 @@ anyharness/crates/anyharness-lib/src/persistence/sql/0020_cowork_tables.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0029_session_links_prompt_provenance.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0030_subagent_links_and_completions.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0032_cowork_managed_workspaces.sql
+anyharness/crates/anyharness-lib/src/persistence/sql/0045_delegated_work_handles_and_closure.sql
 ```
 
 Frontend:
@@ -788,6 +852,9 @@ Done when:
 - top-level `modelId`/`modeId` are replaced by harness `initialConfig`
 - `wakeOnCompletion` is advertised on cowork agent create/send
 - latest-turn reads and transcript search exist before raw event reads
-- raw session/link ids are hidden from normal tool results
+- common tool responses include `coworkAgentId` and `label`; raw session/link
+  ids are compatibility/debug fields only
+- close cascades through delegated descendants and only marks links closed
+  after session close succeeds
 - tool-call UI names and links created workspaces/agents
 - cowork appears in delegated-work UI as workspace rows with child agents

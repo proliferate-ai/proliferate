@@ -24,6 +24,12 @@ The agent-facing API must hide transport and storage details. `sessionLinkId`
 and `childSessionId` are internal/debug identifiers. The normal handle is
 `subagentId`.
 
+During the migration window, MCP responses may still include legacy
+`sessionLinkId` and `childSessionId` fields so older transcript parsers, SDKs,
+and in-flight agent sessions keep working. New callers should treat those
+fields as compatibility aliases only. All examples and new code should prefer
+`subagentId` plus `label`.
+
 ## Product Model
 
 ```text
@@ -102,9 +108,32 @@ anyharness/crates/anyharness-lib/src/sessions/subagents/mcp/auth.rs
 
 All tools accept and return JSON objects. Tool results should be short enough
 that the parent agent can understand the next action without inspecting raw
-runtime state. Every child-targeting result must include both `subagentId` and
-`label`, so the parent agent always knows the stable handle and the human name
-for the child it is managing.
+runtime state. Target-state child-targeting results include both `subagentId`
+and `label`, so the parent agent always knows the stable handle and the human
+name for the child it is managing.
+
+Compatibility rule:
+
+- accept `childSessionId` during migration when a caller does not yet know
+  `subagentId`
+- if both `subagentId` and `childSessionId` are supplied, they must resolve to
+  the same linked child or the call returns a validation error
+- return legacy ids only as compatibility fields; do not require new callers
+  to store or echo them
+
+Current migration response shape:
+
+- create/send/status/wake/close responses include `subagentId` and `label`, and
+  may also include `sessionLinkId` and `childSessionId`
+- `read_subagent_latest_turns` returns `childTurnId`, `outcome`, `createdAt`,
+  `childLastEventSeq`, `assistantText`, `toolErrors`, and `eventCount`
+- `search_subagent_transcript` returns `query`, `seq`, `timestamp`, `turnId`,
+  `itemId`, and `snippet`
+- `read_subagent_events` is a debug escape hatch and may return only raw event
+  cursors plus legacy child routing fields
+
+These compatibility fields are not the agent-facing handle. The agent-facing
+handle remains `subagentId`.
 
 ## Tool Call Presentation
 
@@ -139,9 +168,9 @@ Close presentation:
 API Surface Check agent deleted
 ```
 
-The visible link should open the child agent session. The model-visible tool
-result does not need raw `childSessionId` or `sessionLinkId`; UI can resolve the
-open-session target from product state using `subagentId`.
+The visible link should open the child agent session. UI should resolve the
+open-session target from product state using `subagentId`; raw session/link ids
+must stay hidden unless the user opens explicit debug/details UI.
 
 ### `get_subagent_launch_options`
 
@@ -256,8 +285,9 @@ Returns:
 }
 ```
 
-Do not return `childSessionId` or `sessionLinkId` in the normal response. They
-may be available through explicit debug/details surfaces.
+Target-state normal responses do not need `childSessionId` or `sessionLinkId`.
+During compatibility migration, responses may include them alongside
+`subagentId`; consumers must use `subagentId` as the primary handle.
 
 ### `list_subagents`
 
@@ -440,6 +470,10 @@ Returns:
 The result may include concise assistant output, outcome, timestamps, and
 important tool errors. It should not stream raw low-level events.
 
+During migration, this response may also include `sessionLinkId` and
+`childSessionId` as legacy routing aliases. The stable fields remain
+`subagentId` and `label`.
+
 ### `search_subagent_transcript`
 
 Grep path for finding where a child mentioned something.
@@ -474,6 +508,9 @@ Returns:
   ]
 }
 ```
+
+During migration, this response may also include `sessionLinkId`,
+`childSessionId`, and the echoed `query`.
 
 ### `read_subagent_events`
 
@@ -540,6 +577,12 @@ Returns:
 
 Closing is not transcript deletion. The child session and historical artifacts
 remain available through history/debug surfaces according to retention policy.
+
+Close ordering is intentionally retryable: the runtime closes the child session
+graph first, including any delegated descendants and product close hooks, then
+marks the parent-child link closed. If closing the live session fails, the
+active link remains discoverable so a later close call can retry rather than
+orphaning hidden work.
 
 ## Prompt And Skill Contract
 
@@ -679,7 +722,8 @@ anyharness/crates/anyharness-lib/src/sessions/subagents/
   service.rs
   store.rs
   hooks.rs
-  prompts.rs
+  summary.rs
+  transcript.rs
   mcp/
     mod.rs
     definition.rs
@@ -687,6 +731,7 @@ anyharness/crates/anyharness-lib/src/sessions/subagents/
     context.rs
     tools.rs
     calls.rs
+    calls_helpers.rs
 
 anyharness/crates/anyharness-lib/src/sessions/delegation.rs
 anyharness/crates/anyharness-lib/src/domains/cowork/delegation/**
@@ -710,6 +755,7 @@ Persistence:
 anyharness/crates/anyharness-lib/src/persistence/sql/0029_session_links_prompt_provenance.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0030_subagent_links_and_completions.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0031_session_subagents_policy.sql
+anyharness/crates/anyharness-lib/src/persistence/sql/0045_delegated_work_handles_and_closure.sql
 ```
 
 Skills:
@@ -740,12 +786,15 @@ desktop/src/lib/access/anyharness/sessions.ts
 Done when:
 
 - parent agents use `subagentId` for all common follow-up calls
-- tool responses hide raw child/session link ids by default
+- common tool responses include `subagentId` and `label`; raw child/session
+  link ids are compatibility/debug fields only
 - launch config is carried through `initialConfig`
 - `wakeOnCompletion` is advertised and works on create/send
 - `read_subagent_latest_turns` is the normal result path
 - transcript search and raw event reads are separate tools
 - closing a subagent removes it from active delegated-work state
+- close cascades through delegated descendants and only marks links closed
+  after session close succeeds
 - subagent workflow guidance is delivered as a skill, not parent system text
 - parent-to-child prompt text is preserved after non-empty validation
 - UI uses title/label as the serious name and avatar names as hover-only
