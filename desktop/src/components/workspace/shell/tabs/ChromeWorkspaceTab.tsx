@@ -123,7 +123,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             <span
               className={`workspace-shell-tab__icon flex size-4 shrink-0 items-center justify-center transition-opacity ${
                 showCloseButton
-                  ? "group-hover/tab:opacity-0 group-focus-within/tab:opacity-0"
+                  ? "group-hover/tab:invisible group-hover/tab:opacity-0 group-focus-within/tab:invisible group-focus-within/tab:opacity-0"
                   : ""
               }`}
             >
