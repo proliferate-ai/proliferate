@@ -161,3 +161,63 @@ DEFAULT_WORKTREE_POLICY_UPDATED_AT = "1970-01-01T00:00:00+00:00"
 # ---------------------------------------------------------------------------
 
 SUPPORTED_GIT_PROVIDER: str = "github"
+
+
+# ---------------------------------------------------------------------------
+# Cloud compute targets and Proliferate Worker lifecycle
+# ---------------------------------------------------------------------------
+
+
+class CloudTargetKind(StrEnum):
+    managed_cloud = "managed_cloud"
+    ssh = "ssh"
+    desktop_dispatch = "desktop_dispatch"
+    local_direct = "local_direct"
+    self_hosted_cloud = "self_hosted_cloud"
+
+
+class CloudTargetStatus(StrEnum):
+    enrolling = "enrolling"
+    online = "online"
+    offline = "offline"
+    degraded = "degraded"
+    archived = "archived"
+
+
+class CloudWorkerStatus(StrEnum):
+    enrolling = "enrolling"
+    online = "online"
+    offline = "offline"
+    degraded = "degraded"
+    archived = "archived"
+
+
+class CloudTargetEnrollmentStatus(StrEnum):
+    pending = "pending"
+    consumed = "consumed"
+    expired = "expired"
+    revoked = "revoked"
+
+
+SUPPORTED_CLOUD_TARGET_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudTargetKind)
+SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS: tuple[str, ...] = (
+    CloudTargetKind.managed_cloud.value,
+    CloudTargetKind.ssh.value,
+    CloudTargetKind.desktop_dispatch.value,
+    CloudTargetKind.self_hosted_cloud.value,
+)
+SUPPORTED_CLOUD_TARGET_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in CloudTargetStatus
+)
+SUPPORTED_CLOUD_WORKER_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in CloudWorkerStatus
+)
+SUPPORTED_CLOUD_TARGET_ENROLLMENT_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in CloudTargetEnrollmentStatus
+)
+
+CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN: Final = "cloud-target-enrollment"
+CLOUD_WORKER_TOKEN_DOMAIN: Final = "cloud-worker"
+CLOUD_TARGET_DEFAULT_ENROLLMENT_TTL_SECONDS: Final = 3600
+CLOUD_TARGET_MAX_ENROLLMENT_TTL_SECONDS: Final = 86_400
+CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180

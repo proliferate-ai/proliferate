@@ -13,6 +13,8 @@ export {
   cloudRepoConfigKey,
   cloudWorkspaceRepoConfigStatusKey,
   cloudWorkspaceConnectionKey,
+  cloudTargetKey,
+  cloudTargetsKey,
   isCloudWorkspaceConnectionQueryKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "@proliferate/cloud-sdk-react/lib/query-keys";

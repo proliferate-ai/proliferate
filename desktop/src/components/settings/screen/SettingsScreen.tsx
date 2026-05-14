@@ -15,6 +15,7 @@ import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthU
 import { CloudPane } from "@/components/settings/panes/CloudPane";
 import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
+import { ComputePane } from "@/components/settings/panes/ComputePane";
 import { EnvironmentsPane } from "@/components/settings/panes/EnvironmentsPane";
 import { WorktreesPane } from "@/components/settings/panes/WorktreesPane";
 import {
@@ -89,6 +90,21 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
+  if (activeSection === "compute") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <ComputePane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   return (
     <EnvironmentsPane
       repositories={repositories}
@@ -131,7 +147,7 @@ export function SettingsScreen({
         activeSection={activeSection}
         onNavigateHome={onNavigateHome}
         onSelectSection={onSelectSection}
-        disabledSections={{ cloud: !cloudEnabled }}
+        disabledSections={{ cloud: !cloudEnabled, compute: !cloudEnabled }}
         onCheckForUpdates={() => { void checkNow(); }}
         updateActionState={{
           availableVersion,

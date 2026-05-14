@@ -1,3 +1,5 @@
+import type { components } from "../generated/openapi.js";
+
 export type CloudTargetKind =
   | "managed_cloud"
   | "ssh"
@@ -5,62 +7,46 @@ export type CloudTargetKind =
   | "local_direct"
   | "self_hosted_cloud";
 
-export type CloudTargetStatus = "online" | "offline" | "degraded" | "enrolling";
+export type CloudTargetStatus = "online" | "offline" | "degraded" | "enrolling" | "archived";
 
-export interface CloudTargetCapability {
-  key: string;
-  available: boolean;
-  detail?: string | null;
-}
+export type CloudTargetInventory = components["schemas"]["CloudTargetInventoryModel"];
 
-export interface CloudTargetInventory {
-  os?: string | null;
-  arch?: string | null;
-  distro?: string | null;
-  shell?: string | null;
-  git?: CloudTargetCapability | null;
-  node?: CloudTargetCapability | null;
-  python?: CloudTargetCapability | null;
-  browser?: CloudTargetCapability | null;
-  capabilities?: CloudTargetCapability[];
-}
+export type CloudTargetStatusDetail = Omit<
+  components["schemas"]["CloudTargetStatusModel"],
+  "status"
+> & {
+  status: CloudTargetStatus;
+};
 
-export interface CloudTargetSummary {
-  id: string;
-  displayName: string;
+export type CloudTargetSummary = Omit<
+  components["schemas"]["CloudTargetSummary"],
+  "kind" | "status" | "ownerScope" | "statusDetail"
+> & {
   kind: CloudTargetKind;
   status: CloudTargetStatus;
   ownerScope: "personal" | "organization";
-  organizationId?: string | null;
-  lastSeenAt?: string | null;
-  anyharnessVersion?: string | null;
-  workerVersion?: string | null;
-  inventory?: CloudTargetInventory | null;
-}
+  statusDetail?: CloudTargetStatusDetail | null;
+};
 
-export interface CloudTargetDetail extends CloudTargetSummary {
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  access?: {
-    canUse: boolean;
-    canOpenDirectly: boolean;
-    reason?: string | null;
-  } | null;
-}
+export type CloudTargetDetail = Omit<
+  components["schemas"]["CloudTargetDetail"],
+  "kind" | "status" | "ownerScope" | "statusDetail"
+> & {
+  kind: CloudTargetKind;
+  status: CloudTargetStatus;
+  ownerScope: "personal" | "organization";
+  statusDetail?: CloudTargetStatusDetail | null;
+};
 
-export interface CloudTargetEnrollmentRequest {
-  displayName: string;
+export type CloudTargetEnrollmentRequest = Omit<
+  components["schemas"]["CloudTargetEnrollmentRequest"],
+  "kind"
+> & {
   kind: Exclude<CloudTargetKind, "local_direct">;
-  ownerScope?: "personal" | "organization";
-  organizationId?: string | null;
-  expiresInSeconds?: number | null;
-}
+};
 
-export interface CloudTargetEnrollmentResponse {
-  enrollmentId: string;
-  targetId: string;
-  token: string;
-  installCommand?: string | null;
-  expiresAt: string;
-}
+export type CloudTargetEnrollmentResponse =
+  components["schemas"]["CloudTargetEnrollmentResponse"];
 
+export type ArchiveCloudTargetResponse =
+  components["schemas"]["ArchiveCloudTargetResponse"];

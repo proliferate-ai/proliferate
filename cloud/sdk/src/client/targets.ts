@@ -1,5 +1,6 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
+  ArchiveCloudTargetResponse,
   CloudTargetDetail,
   CloudTargetEnrollmentRequest,
   CloudTargetEnrollmentResponse,
@@ -33,6 +34,17 @@ export async function getTarget(
   return client.requestJson<CloudTargetDetail>({
     method: "GET",
     path: "/v1/cloud/targets/{target_id}",
+    pathParams: { target_id: targetId },
+  });
+}
+
+export async function archiveTarget(
+  targetId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<ArchiveCloudTargetResponse> {
+  return client.requestJson<ArchiveCloudTargetResponse>({
+    method: "POST",
+    path: "/v1/cloud/targets/{target_id}/archive",
     pathParams: { target_id: targetId },
   });
 }

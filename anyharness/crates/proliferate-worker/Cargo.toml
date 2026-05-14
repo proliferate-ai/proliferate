@@ -1,0 +1,26 @@
+[package]
+name = "proliferate-worker"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Target-side Proliferate cloud bridge"
+
+[[bin]]
+name = "proliferate-worker"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+dirs.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

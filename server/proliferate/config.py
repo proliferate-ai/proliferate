@@ -129,6 +129,11 @@ class Settings(BaseSettings):
     daytona_api_key: str = ""
     daytona_server_url: str = "https://app.daytona.io/api"
     daytona_target: str = "us"
+    proliferate_target_installer_url: str = (
+        "https://raw.githubusercontent.com/proliferate-ai/proliferate/main/"
+        "install/proliferate-target-install.sh"
+    )
+    proliferate_target_artifact_base_url: str = ""
 
     @model_validator(mode="after")
     def validate_secrets_in_production(self) -> "Settings":

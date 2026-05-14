@@ -10,7 +10,9 @@ from proliferate.server.cloud.mcp_oauth.api import router as mcp_oauth_router
 from proliferate.server.cloud.mobility.api import router as mobility_router
 from proliferate.server.cloud.repo_config.api import router as repo_config_router
 from proliferate.server.cloud.repos.api import router as repos_router
+from proliferate.server.cloud.targets.api import router as targets_router
 from proliferate.server.cloud.webhooks.api import router as webhooks_router
+from proliferate.server.cloud.worker.api import router as worker_router
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
 from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
 
@@ -26,3 +28,5 @@ router.include_router(mcp_connections_router)
 router.include_router(mcp_materialization_router)
 router.include_router(mcp_oauth_router)
 router.include_router(webhooks_router)
+router.include_router(targets_router)
+router.include_router(worker_router)

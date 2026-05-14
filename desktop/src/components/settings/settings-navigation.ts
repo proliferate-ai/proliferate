@@ -51,6 +51,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       { kind: "section", id: "repo", label: "Environments", icon: FolderList },
       { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
+      { kind: "section", id: "compute", label: "Compute", icon: CloudIcon },
       { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
     ],
   },

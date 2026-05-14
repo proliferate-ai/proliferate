@@ -937,6 +937,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/targets/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Target Enrollment Endpoint */
+        post: operations["create_target_enrollment_endpoint_v1_cloud_targets_enrollments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Targets Endpoint */
+        get: operations["list_targets_endpoint_v1_cloud_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Target Endpoint */
+        get: operations["get_target_endpoint_v1_cloud_targets__target_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/targets/{target_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Target Endpoint */
+        post: operations["archive_target_endpoint_v1_cloud_targets__target_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enroll Worker Endpoint */
+        post: operations["enroll_worker_endpoint_v1_cloud_worker_enroll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Heartbeat Endpoint */
+        post: operations["worker_heartbeat_endpoint_v1_cloud_worker_heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Inventory Endpoint */
+        post: operations["worker_inventory_endpoint_v1_cloud_worker_inventory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/catalogs/agents": {
         parameters: {
             query?: never;
@@ -1793,6 +1912,10 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ArchiveCloudTargetResponse */
+        ArchiveCloudTargetResponse: {
+            target: components["schemas"]["CloudTargetDetail"];
+        };
         /**
          * AuthCodeCreated
          * @description Returned when the server has created an auth code (internal use / testing).
@@ -2250,6 +2373,146 @@ export interface components {
             updatedAt: string;
             /** Lastsyncedat */
             lastSyncedAt: string;
+        };
+        /** CloudTargetDetail */
+        CloudTargetDetail: {
+            /** Id */
+            id: string;
+            /** Displayname */
+            displayName: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Defaultworkspaceroot */
+            defaultWorkspaceRoot?: string | null;
+            inventory?: components["schemas"]["CloudTargetInventoryModel"] | null;
+            statusDetail?: components["schemas"]["CloudTargetStatusModel"] | null;
+            /** Archivedat */
+            archivedAt?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Createdbyuserid */
+            createdByUserId: string;
+        };
+        /** CloudTargetEnrollmentRequest */
+        CloudTargetEnrollmentRequest: {
+            /** Displayname */
+            displayName: string;
+            /**
+             * Kind
+             * @default ssh
+             */
+            kind: string;
+            /**
+             * Ownerscope
+             * @default personal
+             * @enum {string}
+             */
+            ownerScope: "personal" | "organization";
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Defaultworkspaceroot */
+            defaultWorkspaceRoot?: string | null;
+            /** Ttlseconds */
+            ttlSeconds?: number | null;
+        };
+        /** CloudTargetEnrollmentResponse */
+        CloudTargetEnrollmentResponse: {
+            target: components["schemas"]["CloudTargetDetail"];
+            /** Enrollmenttoken */
+            enrollmentToken: string;
+            /** Installcommand */
+            installCommand: string;
+            /** Expiresat */
+            expiresAt: string;
+        };
+        /** CloudTargetInventoryModel */
+        CloudTargetInventoryModel: {
+            /** Os */
+            os?: string | null;
+            /** Arch */
+            arch?: string | null;
+            /** Distro */
+            distro?: string | null;
+            /** Shell */
+            shell?: string | null;
+            /** Git */
+            git?: {
+                [key: string]: unknown;
+            } | null;
+            /** Node */
+            node?: {
+                [key: string]: unknown;
+            } | null;
+            /** Python */
+            python?: {
+                [key: string]: unknown;
+            } | null;
+            /** Browser */
+            browser?: {
+                [key: string]: unknown;
+            } | null;
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            } | null;
+            /** Providers */
+            providers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Mcp */
+            mcp?: {
+                [key: string]: unknown;
+            } | null;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** CloudTargetStatusModel */
+        CloudTargetStatusModel: {
+            /** Status */
+            status: string;
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Lastseenat */
+            lastSeenAt?: string | null;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
+        /** CloudTargetSummary */
+        CloudTargetSummary: {
+            /** Id */
+            id: string;
+            /** Displayname */
+            displayName: string;
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Ownerscope */
+            ownerScope: string;
+            /** Organizationid */
+            organizationId?: string | null;
+            /** Defaultworkspaceroot */
+            defaultWorkspaceRoot?: string | null;
+            inventory?: components["schemas"]["CloudTargetInventoryModel"] | null;
+            statusDetail?: components["schemas"]["CloudTargetStatusModel"] | null;
+            /** Archivedat */
+            archivedAt?: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
         };
         /** CloudWorkspaceRepoConfigStatusResponse */
         CloudWorkspaceRepoConfigStatusResponse: {
@@ -3788,6 +4051,154 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WorkerEnrollRequest */
+        WorkerEnrollRequest: {
+            /** Enrollmenttoken */
+            enrollmentToken: string;
+            /** Machinefingerprint */
+            machineFingerprint?: string | null;
+            /** Hostname */
+            hostname?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
+            /** Supervisorversion */
+            supervisorVersion?: string | null;
+            inventory?: components["schemas"]["WorkerInventoryPayload"] | null;
+        };
+        /** WorkerEnrollResponse */
+        WorkerEnrollResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Workerid */
+            workerId: string;
+            /** Workertoken */
+            workerToken: string;
+            /** Heartbeatintervalseconds */
+            heartbeatIntervalSeconds: number;
+        };
+        /** WorkerHeartbeatRequest */
+        WorkerHeartbeatRequest: {
+            /**
+             * Status
+             * @default online
+             */
+            status: string;
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
+            /** Supervisorversion */
+            supervisorVersion?: string | null;
+        };
+        /** WorkerHeartbeatResponse */
+        WorkerHeartbeatResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Workerid */
+            workerId: string;
+            /** Status */
+            status: string;
+            /** Servertime */
+            serverTime: string;
+        };
+        /** WorkerInventoryPayload */
+        WorkerInventoryPayload: {
+            /** Os */
+            os?: string | null;
+            /** Arch */
+            arch?: string | null;
+            /** Distro */
+            distro?: string | null;
+            /** Shell */
+            shell?: string | null;
+            /** Git */
+            git?: {
+                [key: string]: unknown;
+            } | null;
+            /** Node */
+            node?: {
+                [key: string]: unknown;
+            } | null;
+            /** Python */
+            python?: {
+                [key: string]: unknown;
+            } | null;
+            /** Browser */
+            browser?: {
+                [key: string]: unknown;
+            } | null;
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            } | null;
+            /** Providers */
+            providers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Mcp */
+            mcp?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkerInventoryRequest */
+        WorkerInventoryRequest: {
+            /** Os */
+            os?: string | null;
+            /** Arch */
+            arch?: string | null;
+            /** Distro */
+            distro?: string | null;
+            /** Shell */
+            shell?: string | null;
+            /** Git */
+            git?: {
+                [key: string]: unknown;
+            } | null;
+            /** Node */
+            node?: {
+                [key: string]: unknown;
+            } | null;
+            /** Python */
+            python?: {
+                [key: string]: unknown;
+            } | null;
+            /** Browser */
+            browser?: {
+                [key: string]: unknown;
+            } | null;
+            /** Capabilities */
+            capabilities?: {
+                [key: string]: unknown;
+            } | null;
+            /** Providers */
+            providers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Mcp */
+            mcp?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @default online
+             */
+            status: string;
+            /** Statusdetail */
+            statusDetail?: string | null;
+        };
+        /** WorkerInventoryResponse */
+        WorkerInventoryResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Workerid */
+            workerId: string;
+            /** Updated */
+            updated: boolean;
         };
         /** WorkspaceConnection */
         WorkspaceConnection: {
@@ -6065,6 +6476,224 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["E2BWebhookReceipt"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_target_enrollment_endpoint_v1_cloud_targets_enrollments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudTargetEnrollmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTargetEnrollmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_targets_endpoint_v1_cloud_targets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTargetSummary"][];
+                };
+            };
+        };
+    };
+    get_target_endpoint_v1_cloud_targets__target_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudTargetDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_target_endpoint_v1_cloud_targets__target_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveCloudTargetResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_worker_endpoint_v1_cloud_worker_enroll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerEnrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerEnrollResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_heartbeat_endpoint_v1_cloud_worker_heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerHeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerHeartbeatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_inventory_endpoint_v1_cloud_worker_inventory_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerInventoryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerInventoryResponse"];
                 };
             };
             /** @description Validation Error */
