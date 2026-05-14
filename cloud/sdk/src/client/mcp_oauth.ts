@@ -1,8 +1,8 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   CloudMcpOAuthFlowStatusResponse,
   StartCloudMcpOAuthFlowResponse,
-} from "../types";
+} from "../types/index.js";
 
 export async function startCloudMcpOAuthFlow(
   connectionId: string,

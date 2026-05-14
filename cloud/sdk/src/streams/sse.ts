@@ -1,13 +1,17 @@
 export interface CloudSseSubscription<TEvent> {
   close: () => void;
   readonly closed: boolean;
-  readonly source: EventSource;
 }
 
 export interface SubscribeCloudSseOptions<TEvent> {
   url: string;
   eventName?: string;
   signal?: AbortSignal;
+  fetchResponse?: (input: {
+    url: string;
+    headers: HeadersInit;
+    signal: AbortSignal;
+  }) => Promise<Response>;
   onEvent: (event: TEvent) => void;
   onError?: (error: Event) => void;
 }
@@ -15,32 +19,105 @@ export interface SubscribeCloudSseOptions<TEvent> {
 export function subscribeCloudSse<TEvent>(
   options: SubscribeCloudSseOptions<TEvent>,
 ): CloudSseSubscription<TEvent> {
-  const source = new EventSource(options.url);
+  const controller = new AbortController();
   let closed = false;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   const close = () => {
     if (!closed) {
       closed = true;
-      source.close();
+      controller.abort();
+      void reader?.cancel().catch(() => undefined);
     }
   };
 
-  const messageHandler = (event: MessageEvent<string>) => {
-    options.onEvent(JSON.parse(event.data) as TEvent);
-  };
-
-  source.addEventListener(options.eventName ?? "message", messageHandler);
-  source.addEventListener("error", (event) => {
-    options.onError?.(event);
-  });
   options.signal?.addEventListener("abort", close, { once: true });
+  void pumpCloudSse(options, controller.signal, (nextReader) => {
+    reader = nextReader;
+  }).catch((error) => {
+    if (!closed && !controller.signal.aborted) {
+      options.onError?.(error instanceof Event ? error : new Event("error"));
+    }
+  });
 
   return {
     close,
     get closed() {
       return closed;
     },
-    source,
   };
 }
 
+async function pumpCloudSse<TEvent>(
+  options: SubscribeCloudSseOptions<TEvent>,
+  signal: AbortSignal,
+  setReader: (reader: ReadableStreamDefaultReader<Uint8Array>) => void,
+): Promise<void> {
+  const response = await (options.fetchResponse ?? defaultFetchResponse)({
+    url: options.url,
+    headers: { accept: "text/event-stream" },
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Cloud stream failed with HTTP ${response.status}`);
+  }
+  if (!response.body) {
+    throw new Error("Cloud stream response did not include a body.");
+  }
+
+  const reader = response.body.getReader();
+  setReader(reader);
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (!signal.aborted) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split(/\r?\n\r?\n/);
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) {
+      dispatchCloudSseFrame(frame, options);
+    }
+  }
+}
+
+async function defaultFetchResponse(input: {
+  url: string;
+  headers: HeadersInit;
+  signal: AbortSignal;
+}): Promise<Response> {
+  return fetch(input.url, {
+    headers: input.headers,
+    signal: input.signal,
+  });
+}
+
+function dispatchCloudSseFrame<TEvent>(
+  frame: string,
+  options: SubscribeCloudSseOptions<TEvent>,
+): void {
+  let eventName = "message";
+  const dataLines: string[] = [];
+
+  for (const rawLine of frame.split(/\r?\n/)) {
+    if (!rawLine || rawLine.startsWith(":")) continue;
+    const separatorIndex = rawLine.indexOf(":");
+    const field = separatorIndex === -1 ? rawLine : rawLine.slice(0, separatorIndex);
+    const rawValue = separatorIndex === -1 ? "" : rawLine.slice(separatorIndex + 1);
+    const value = rawValue.startsWith(" ") ? rawValue.slice(1) : rawValue;
+    if (field === "event") {
+      eventName = value || "message";
+    } else if (field === "data") {
+      dataLines.push(value);
+    }
+  }
+
+  if (options.eventName && options.eventName !== eventName) {
+    return;
+  }
+  if (dataLines.length === 0) {
+    return;
+  }
+  options.onEvent(JSON.parse(dataLines.join("\n")) as TEvent);
+}

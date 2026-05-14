@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 
 export interface CloudSessionEvent {
   id: string;
@@ -19,8 +19,9 @@ export interface CloudSessionEventsResponse {
 export async function listSessionEvents(
   sessionId: string,
   input?: { cursor?: string | null; limit?: number | null; signal?: AbortSignal },
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudSessionEventsResponse> {
-  return getProliferateClient().requestJson<CloudSessionEventsResponse>({
+  return client.requestJson<CloudSessionEventsResponse>({
     method: "GET",
     path: "/v1/cloud/sessions/{session_id}/events",
     pathParams: { session_id: sessionId },
@@ -31,4 +32,3 @@ export async function listSessionEvents(
     signal: input?.signal,
   });
 }
-

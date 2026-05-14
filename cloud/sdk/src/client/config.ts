@@ -1,5 +1,5 @@
-import type { CloudSessionConfigState } from "../types";
-import { enqueueCommand } from "./commands";
+import type { CloudSessionConfigState } from "../types/index.js";
+import { enqueueCommand } from "./commands.js";
 
 export interface UpdateSessionConfigPayload {
   configVersion?: number | null;

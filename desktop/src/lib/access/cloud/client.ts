@@ -6,6 +6,7 @@ import {
   ProliferateClientError,
   setProliferateClientFactory,
   type Middleware,
+  type ProliferateStreamRequestInput,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 import {
@@ -56,27 +57,7 @@ async function refreshSessionOrThrow(
 
 const authMiddleware: Middleware = {
   async onRequest({ request }) {
-    if (isDevAuthBypassed()) {
-      throw new ProliferateClientError(
-        "Cloud workspaces require real sign-in. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
-        401,
-        "dev_auth_bypass",
-      );
-    }
-    const session = await loadValidSession();
-    if (!session) {
-      throw new ProliferateClientError(
-        "You must sign in to use cloud workspaces.",
-        401,
-        "unauthorized",
-      );
-    }
-    request.headers.set("accept", "application/json");
-    request.headers.set("authorization", `Bearer ${session.access_token}`);
-    if (request.body && !request.headers.has("content-type")) {
-      request.headers.set("content-type", "application/json");
-    }
-    return request;
+    return prepareDesktopCloudRequest(request);
   },
 
   async onResponse({ response, request }) {
@@ -108,6 +89,72 @@ const authMiddleware: Middleware = {
   },
 };
 
+async function prepareDesktopCloudRequest(request: Request): Promise<Request> {
+  if (isDevAuthBypassed()) {
+    throw new ProliferateClientError(
+      "Cloud workspaces require real sign-in. Set VITE_DEV_DISABLE_AUTH=false and sign in.",
+      401,
+      "dev_auth_bypass",
+    );
+  }
+  const session = await loadValidSession();
+  if (!session) {
+    throw new ProliferateClientError(
+      "You must sign in to use cloud workspaces.",
+      401,
+      "unauthorized",
+    );
+  }
+  if (!request.headers.has("accept")) {
+    request.headers.set("accept", "application/json");
+  }
+  request.headers.set("authorization", `Bearer ${session.access_token}`);
+  if (request.body && !request.headers.has("content-type")) {
+    request.headers.set("content-type", "application/json");
+  }
+  return request;
+}
+
+async function fetchDesktopCloudStream(
+  input: ProliferateStreamRequestInput,
+): Promise<Response> {
+  const request = await prepareDesktopCloudRequest(new Request(input.url, {
+    headers: input.headers,
+    signal: input.signal,
+  }));
+  const response = await fetch(request);
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const stored = await getStoredAuthSession();
+  if (!stored) {
+    await clearStoredAuthSession();
+    throw new ProliferateClientError(
+      "Session expired. Please sign in again.",
+      401,
+      "unauthorized",
+    );
+  }
+
+  try {
+    const refreshed = await refreshSessionOrThrow(stored);
+    const retryHeaders = new Headers(request.headers);
+    retryHeaders.set("authorization", `Bearer ${refreshed.access_token}`);
+    return fetch(new Request(input.url, {
+      headers: retryHeaders,
+      signal: input.signal,
+    }));
+  } catch {
+    await clearStoredAuthSession();
+    throw new ProliferateClientError(
+      "Session expired. Please sign in again.",
+      401,
+      "unauthorized",
+    );
+  }
+}
+
 configureCloudRequestMeasurement({
   isEnabled: isAnyHarnessTimingEnabled,
   record: (measurement) => {
@@ -127,6 +174,7 @@ function createDesktopProliferateClient(): ProliferateCloudClient {
   return createSdkProliferateClient({
     baseUrl: getProliferateApiBaseUrl(),
     middleware: [authMiddleware],
+    streamRequest: fetchDesktopCloudStream,
   });
 }
 

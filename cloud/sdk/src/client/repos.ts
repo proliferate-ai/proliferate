@@ -1,5 +1,5 @@
-import { getProliferateClient } from "./core";
-import type { CloudRepoBranchesResponse } from "../types";
+import { getProliferateClient } from "./core.js";
+import type { CloudRepoBranchesResponse } from "../types/index.js";
 
 export async function listCloudRepoBranches(
   gitOwner: string,

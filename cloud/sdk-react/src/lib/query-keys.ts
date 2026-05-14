@@ -101,10 +101,6 @@ export function isCloudWorkspaceRepoConfigStatusQueryKey(
     && queryKey[3] === "repo-config-status";
 }
 
-export function cloudAgentCatalogKey() {
-  return [...cloudRootKey(), "catalogs", "agents", "v1"] as const;
-}
-
 export function automationsRootKey() {
   return ["automations"] as const;
 }
@@ -160,4 +156,3 @@ export function cloudSessionSnapshotKey(sessionId: string | null) {
 export function cloudTranscriptSnapshotKey(sessionId: string | null) {
   return [...cloudRootKey(), "transcript-snapshots", sessionId] as const;
 }
-

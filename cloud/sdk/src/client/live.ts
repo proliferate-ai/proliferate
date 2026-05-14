@@ -1,6 +1,6 @@
-import { getProliferateClient } from "./core";
-import { subscribeCloudSse, type CloudSseSubscription } from "../streams/sse";
-import type { CloudLivePatch, CloudLiveSubscriptionOptions } from "../types";
+import { getProliferateClient } from "./core.js";
+import { subscribeCloudSse, type CloudSseSubscription } from "../streams/sse.js";
+import type { CloudLivePatch, CloudLiveSubscriptionOptions } from "../types/index.js";
 
 export interface SubscribeCloudLiveOptions<TPatch> extends CloudLiveSubscriptionOptions {
   onPatch: (patch: TPatch) => void;
@@ -17,6 +17,8 @@ export function subscribeSession<TPayload = unknown>(
       afterSeq: options.afterSeq ?? undefined,
     }),
     signal: options.signal,
+    fetchResponse: ({ url, headers, signal }) =>
+      client.streamRequest({ url, headers, signal }),
     onEvent: options.onPatch,
     onError: options.onError,
   });
@@ -32,8 +34,9 @@ export function subscribeWorkspace<TPayload = unknown>(
       afterSeq: options.afterSeq ?? undefined,
     }),
     signal: options.signal,
+    fetchResponse: ({ url, headers, signal }) =>
+      client.streamRequest({ url, headers, signal }),
     onEvent: options.onPatch,
     onError: options.onError,
   });
 }
-

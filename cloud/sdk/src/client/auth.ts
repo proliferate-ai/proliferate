@@ -1,4 +1,4 @@
-import type { Middleware } from "./core";
+import type { Middleware } from "./core.js";
 
 export function createBearerTokenMiddleware(getToken: () => string | Promise<string>): Middleware {
   return {

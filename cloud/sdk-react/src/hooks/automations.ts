@@ -11,7 +11,8 @@ import {
   automationDetailKey,
   automationRunsKey,
   automationsListKey,
-} from "../lib/query-keys";
+} from "../lib/query-keys.js";
+import { useCloudClient } from "../context/CloudClientProvider.js";
 
 const ACTIVE_RUN_STATUSES = new Set([
   "queued",
@@ -29,25 +30,28 @@ function hasActiveAutomationRun(
 }
 
 export function useAutomations(enabled = true) {
+  const client = useCloudClient();
   return useQuery<AutomationListResponse>({
     queryKey: automationsListKey(),
-    queryFn: listAutomations,
+    queryFn: () => listAutomations(client),
     enabled,
   });
 }
 
 export function useAutomationDetail(automationId: string | null, enabled = true) {
+  const client = useCloudClient();
   return useQuery<AutomationResponse>({
     queryKey: automationDetailKey(automationId),
-    queryFn: () => getAutomation(automationId!),
+    queryFn: () => getAutomation(automationId!, client),
     enabled: enabled && automationId !== null,
   });
 }
 
 export function useAutomationRuns(automationId: string | null, enabled = true) {
+  const client = useCloudClient();
   return useQuery<AutomationRunListResponse>({
     queryKey: automationRunsKey(automationId),
-    queryFn: () => listAutomationRuns(automationId!),
+    queryFn: () => listAutomationRuns(automationId!, 50, client),
     enabled: enabled && automationId !== null,
     refetchInterval: (query) =>
       enabled && automationId !== null && hasActiveAutomationRun(query.state.data)
@@ -56,4 +60,3 @@ export function useAutomationRuns(automationId: string | null, enabled = true) {
     refetchIntervalInBackground: false,
   });
 }
-

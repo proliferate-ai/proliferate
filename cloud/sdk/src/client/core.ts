@@ -1,5 +1,5 @@
 import createClient, { type Middleware } from "openapi-fetch";
-import type { paths } from "../generated/openapi";
+import type { paths } from "../generated/openapi.js";
 
 export type { Middleware };
 
@@ -14,9 +14,16 @@ export interface ProliferateRequestJsonInput {
   signal?: AbortSignal;
 }
 
+export interface ProliferateStreamRequestInput {
+  url: string;
+  headers?: HeadersInit;
+  signal?: AbortSignal;
+}
+
 export interface ProliferateCloudClient extends ProliferateOpenApiClient {
   readonly baseUrl: string;
   requestJson<TResponse>(input: ProliferateRequestJsonInput): Promise<TResponse>;
+  streamRequest(input: ProliferateStreamRequestInput): Promise<Response>;
   buildUrl(
     path: string,
     query?: Record<string, string | number | boolean | null | undefined>,
@@ -26,6 +33,7 @@ export interface ProliferateCloudClient extends ProliferateOpenApiClient {
 export interface CreateProliferateClientOptions {
   baseUrl: string;
   middleware?: Middleware[];
+  streamRequest?: (input: ProliferateStreamRequestInput) => Promise<Response>;
 }
 
 export class ProliferateClientError extends Error {
@@ -43,7 +51,7 @@ export class ProliferateClientError extends Error {
 export function createProliferateErrorMiddleware(): Middleware {
   return {
     async onResponse({ response }) {
-      if (!response.ok && response.status !== 401) {
+      if (!response.ok) {
         let payload:
           | { detail?: { code?: string; message?: string } | string }
           | undefined;
@@ -79,10 +87,10 @@ export function createProliferateClient(
 ): ProliferateCloudClient {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const client = createClient<paths>({ baseUrl });
+  client.use(createProliferateErrorMiddleware());
   for (const middleware of options.middleware ?? []) {
     client.use(middleware);
   }
-  client.use(createProliferateErrorMiddleware());
 
   const extended = client as ProliferateCloudClient;
   Object.defineProperty(extended, "baseUrl", {
@@ -90,6 +98,11 @@ export function createProliferateClient(
     enumerable: true,
   });
   extended.buildUrl = (path, query) => buildProliferateUrl(baseUrl, path, query);
+  extended.streamRequest = options.streamRequest ?? ((input) =>
+    fetch(input.url, {
+      headers: input.headers,
+      signal: input.signal,
+    }));
   extended.requestJson = async function requestJson<TResponse>(
     input: ProliferateRequestJsonInput,
   ): Promise<TResponse> {

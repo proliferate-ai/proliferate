@@ -1,1 +1,5 @@
-export { cloudAgentCatalogKey } from "@proliferate/cloud-sdk-react/lib/query-keys";
+import { cloudRootKey } from "@/hooks/access/cloud/query-keys";
+
+export function cloudAgentCatalogKey() {
+  return [...cloudRootKey(), "desktop-launch-catalog", "agents", "v1"] as const;
+}

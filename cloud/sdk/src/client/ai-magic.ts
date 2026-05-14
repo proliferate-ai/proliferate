@@ -1,8 +1,8 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   GenerateSessionTitleRequest,
   GenerateSessionTitleResponse,
-} from "../types";
+} from "../types/index.js";
 
 export async function generateSessionTitle(
   promptText: string,

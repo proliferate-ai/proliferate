@@ -1,10 +1,10 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   CloudAgentKind,
   CloudCredentialMutationResponse,
   CloudCredentialStatus,
-} from "../types";
-import type { components } from "../generated/openapi";
+} from "../types/index.js";
+import type { components } from "../generated/openapi.js";
 
 export interface SyncCloudCredentialBodyByProvider {
   claude:
@@ -16,8 +16,10 @@ export interface SyncCloudCredentialBodyByProvider {
     | components["schemas"]["SyncGeminiFileCredentialRequest"];
 }
 
-export async function listCloudCredentialStatuses(): Promise<CloudCredentialStatus[]> {
-  return (await getProliferateClient().GET("/v1/cloud/credentials")).data!;
+export async function listCloudCredentialStatuses(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudCredentialStatus[]> {
+  return (await client.GET("/v1/cloud/credentials")).data!;
 }
 
 export async function syncCloudCredential<P extends CloudAgentKind>(

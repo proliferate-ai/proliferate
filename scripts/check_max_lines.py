@@ -13,6 +13,8 @@ CHECK_ROOTS = [
     "anyharness/crates",
     "anyharness/sdk/src",
     "anyharness/sdk-react/src",
+    "cloud/sdk/src",
+    "cloud/sdk-react/src",
     "desktop/src",
     "desktop/src-tauri/src",
     "desktop/src-tauri/build.rs",
@@ -22,7 +24,7 @@ CHECK_ROOTS = [
 EXTENSIONS = {".py", ".rs", ".ts", ".tsx"}
 EXCLUDED_PATH_PREFIXES = {
     "anyharness/sdk/src/generated/",
-    "desktop/src/lib/access/cloud/generated/",
+    "cloud/sdk/src/generated/",
 }
 
 

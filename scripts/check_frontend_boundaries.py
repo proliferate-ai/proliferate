@@ -12,9 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_SRC = REPO_ROOT / "desktop" / "src"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
-GENERATED_PREFIXES = {
-    "desktop/src/lib/access/cloud/generated/",
-}
+GENERATED_PREFIXES: set[str] = set()
 
 QUERY_CACHE_METHODS = {
     "cancelQueries",
