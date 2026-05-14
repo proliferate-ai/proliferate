@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHeaderChatTabs,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-derivation";
+  buildHeaderClosedChatTabs,
+} from "./workspace-header-tabs-view-model-derivation";
 import type {
   HeaderHierarchyChildRow,
   KnownHeaderSession,
-} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-model-helpers";
+} from "./workspace-header-tabs-model-helpers";
 
 describe("workspace header tab view model derivation", () => {
   it("sorts delegated indicators by attention priority", () => {
@@ -20,16 +21,16 @@ describe("workspace header tab view model derivation", () => {
       childrenByParentSessionId: new Map([[
         "parent",
         [
-          childRow("done", "Done", false),
-          childRow("failed", "Failed", false),
-          childRow("working", "Working", false),
-          childRow("wake", "Idle", true),
+          delegatedChildRow("done", "Done", false),
+          delegatedChildRow("failed", "Failed", false),
+          delegatedChildRow("working", "Working", false),
+          delegatedChildRow("wake", "Idle", true),
         ],
       ]]),
       resolvedSessionIds: new Set(["parent"]),
       knownSessions: new Map<string, KnownHeaderSession>([[
         "parent",
-        { kind: "placeholder", sessionId: "parent" },
+        placeholder("parent"),
       ]]),
       manualGroupByTopLevelSessionId: new Map(),
     });
@@ -49,7 +50,7 @@ describe("workspace header tab view model derivation", () => {
       rowsBySessionId: new Map([[
         "cowork-child",
         {
-          ...childRow("cowork-child", "Working", false),
+          ...delegatedChildRow("cowork-child", "Working", false),
           sessionLinkId: "link-cowork",
           workspaceId: "managed-workspace",
           source: "cowork",
@@ -71,7 +72,41 @@ describe("workspace header tab view model derivation", () => {
   });
 });
 
-function childRow(
+describe("buildHeaderClosedChatTabs", () => {
+  it("returns hidden live sessions in recent order", () => {
+    const rows = buildHeaderClosedChatTabs({
+      highlightedChatSessionId: "b",
+      rowsBySessionId: new Map([["child", closedChildRow("child", "a")]]),
+      knownSessions: [
+        placeholder("a"),
+        placeholder("b"),
+        placeholder("child"),
+        placeholder("visible"),
+      ],
+      visibleChatSessionIds: ["visible"],
+      recentlyHiddenIds: ["missing", "child", "b", "a", "b", "visible"],
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["child", "b", "a"]);
+    expect(rows[0]).toMatchObject({
+      id: "child",
+      title: "Child child",
+      viewState: "working",
+      isVisible: false,
+    });
+    expect(rows[1]).toMatchObject({
+      id: "b",
+      isActive: true,
+      isVisible: false,
+    });
+  });
+});
+
+function placeholder(sessionId: string): KnownHeaderSession {
+  return { kind: "placeholder", sessionId };
+}
+
+function delegatedChildRow(
   sessionId: string,
   statusLabel: string,
   wakeScheduled: boolean,
@@ -87,6 +122,22 @@ function childRow(
     meta: "Cowork",
     statusLabel,
     wakeScheduled,
+    isActive: false,
+  };
+}
+
+function closedChildRow(sessionId: string, parentSessionId: string): HeaderHierarchyChildRow {
+  return {
+    sessionLinkId: `link-${sessionId}`,
+    sessionId,
+    parentSessionId,
+    workspaceId: "workspace",
+    title: `Child ${sessionId}`,
+    agentKind: "claude",
+    source: "subagent",
+    meta: null,
+    statusLabel: "Working",
+    wakeScheduled: false,
     isActive: false,
   };
 }

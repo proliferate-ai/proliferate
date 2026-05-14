@@ -39,22 +39,22 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     rightAccessory,
     groupColor: _groupColor,
     isChild: _isChild = false,
-    hideLeftDivider = false,
-    hideRightDivider = false,
+    hideLeftDivider: _hideLeftDivider = false,
+    hideRightDivider: _hideRightDivider = false,
     className = "",
     style,
     ...props
   }, ref) {
-    const contentWidth = Math.max(0, width - 18);
+    const contentWidth = Math.max(0, width);
     const isMini = contentWidth < 48;
     const isSmaller = contentWidth < 60;
     const isSmall = contentWidth < 84;
     const showTitle = !isMini && !isSmaller;
     const showBadge = !isSmall;
-    const showCloseButton = isActive || !isMini;
-    const activeFill = "var(--color-card)";
-    const selectedFill = "color-mix(in oklab, var(--color-foreground) 10%, var(--color-card))";
-    const inactiveFill = "color-mix(in oklab, var(--color-foreground) 5%, transparent)";
+    const showCloseButton = !isMini || isActive;
+    const activeFill = "color-mix(in oklab, var(--color-foreground) 6%, var(--color-background))";
+    const selectedFill = "color-mix(in oklab, var(--color-foreground) 8%, var(--color-background))";
+    const inactiveFill = "color-mix(in oklab, var(--color-foreground) 2%, var(--color-background))";
     const tabFill = isActive ? activeFill : isMultiSelected ? selectedFill : inactiveFill;
     const titleMask = "linear-gradient(90deg, #000 0%, #000 calc(100% - 20px), transparent)";
 
@@ -63,42 +63,27 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
         ref={ref}
         role="presentation"
         data-telemetry-mask="true"
-        className={`group/tab relative h-9 min-w-0 shrink-0 app-region-no-drag select-none border-0 ${className}`}
+        className={`group/tab relative h-7 min-w-0 shrink-0 app-region-no-drag select-none ${className}`}
         style={{
           width,
           ...style,
         }}
         {...props}
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-[7px] top-[7px] left-[9px] right-[9px]"
-        >
-          <span
-            className={`absolute inset-y-0 left-0 w-px bg-border/70 transition-opacity ${
-              hideLeftDivider || isActive ? "opacity-0" : ""
-            } group-hover/tab:opacity-0`}
-          />
-          <span
-            className={`absolute inset-y-0 right-0 w-px bg-border/70 transition-opacity ${
-              hideRightDivider || isActive ? "opacity-0" : ""
-            } group-hover/tab:opacity-0`}
-          />
-        </div>
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-y-0 left-[9px] right-[9px] rounded-t-lg transition-opacity ${
+          className={`pointer-events-none absolute inset-0 rounded-lg border transition-[background-color,border-color,opacity] duration-150 ${
             isActive
-              ? "opacity-100"
+              ? "border-border/70 opacity-100"
               : isMultiSelected
-                ? "opacity-100 group-hover/tab:opacity-100"
-                : "opacity-0 group-hover/tab:opacity-100"
+                ? "border-border/60 opacity-100 group-hover/tab:opacity-100"
+                : "border-border/15 opacity-100 group-hover/tab:border-border/35"
           }`}
           style={{ backgroundColor: tabFill }}
         />
         <div
-          className={`absolute inset-y-0 left-[9px] right-[9px] flex items-center overflow-hidden rounded-t-lg py-[9px] ${
-            isMini ? "px-0.5" : "px-2"
+          className={`absolute inset-0 flex items-center overflow-hidden rounded-lg py-1 ${
+            isMini ? "px-1" : "px-2"
           }`}
         >
           {showCloseButton && (
@@ -113,13 +98,10 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
               }}
               title="Close tab"
               aria-label="Close tab"
-              className={`mr-1 size-4 shrink-0 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground ${
-                isActive
-                  ? "opacity-80 hover:opacity-100"
-                  : "opacity-0 group-hover/tab:opacity-80 hover:!opacity-100 focus-visible:opacity-100"
-              }`}
+              className="pointer-events-none absolute top-1.5 z-20 size-4 shrink-0 rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:pointer-events-auto group-hover/tab:opacity-90 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-90 focus-visible:pointer-events-auto focus-visible:opacity-100"
+              style={{ left: isMini ? 4 : 8 }}
             >
-              <X className="size-2" />
+              <X className="size-2.5" />
             </Button>
           )}
           <Button
@@ -130,7 +112,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             size="sm"
             onClick={onSelect}
             onPointerDownCapture={onSelectPointerDownCapture}
-            className={`h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 text-xs hover:bg-transparent ${
+            className={`relative z-10 h-full min-w-0 flex-1 justify-start rounded-none bg-transparent p-0 text-sm leading-4 hover:bg-transparent ${
               isActive
                 ? "font-normal text-foreground"
                 : isMultiSelected
@@ -138,7 +120,13 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
                 : "font-normal text-muted-foreground group-hover/tab:text-foreground"
             } ${isSmall ? "gap-1" : "gap-2"}`}
           >
-            <span className="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4">
+            <span
+              className={`flex size-4 shrink-0 items-center justify-center transition-opacity ${
+                showCloseButton
+                  ? "group-hover/tab:opacity-0 group-focus-within/tab:opacity-0"
+                  : ""
+              }`}
+            >
               {icon}
             </span>
             {showTitle && (

@@ -14,7 +14,7 @@ describe("computeChromeTabWidths", () => {
       containerWidth: 503,
       reservedWidth: 20,
       tabCount: 4,
-    })).toEqual([135, 135, 135, 135]);
+    })).toEqual([119, 119, 118, 118]);
   });
 
   it("clamps tabs between Chrome-like min and max widths", () => {
@@ -31,8 +31,8 @@ describe("computeChromeTabWidths", () => {
     })).toEqual([CHROME_TAB_MIN_WIDTH, CHROME_TAB_MIN_WIDTH, CHROME_TAB_MIN_WIDTH, CHROME_TAB_MIN_WIDTH]);
   });
 
-  it("positions tabs with Chrome-style visual overlap", () => {
-    expect(computeChromeTabPositions([184, 184, 184])).toEqual([0, 165, 330]);
+  it("positions compact tabs without visual overlap", () => {
+    expect(computeChromeTabPositions([184, 184, 184])).toEqual([0, 187, 374]);
   });
 });
 
@@ -43,8 +43,8 @@ describe("computeHeaderStripLayout", () => {
       rows: [{ kind: "pill" }, { kind: "tab" }, { kind: "tab" }],
     });
 
-    expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, 184, 183]);
-    expect(layout.positions).toEqual([0, 52, 217]);
+    expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, 173, 172]);
+    expect(layout.positions).toEqual([0, 52, 228]);
   });
 
   it("does not overlap pills with adjacent tabs", () => {
@@ -63,7 +63,7 @@ describe("computeHeaderStripLayout", () => {
       rows: [{ kind: "pill" }, { kind: "tab" }, { kind: "tab" }],
     });
 
-    expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, 54, 53]);
-    expect(layout.positions).toEqual([0, 52, 87]);
+    expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, 48, 48]);
+    expect(layout.positions).toEqual([0, 52, 103]);
   });
 });

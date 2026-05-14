@@ -12,7 +12,7 @@ import { AgentGlyph } from "@/components/ui/provider-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
-import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
+import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/ui/use-cowork-session-native-context-menu";
 import { useCoworkSessionActions } from "@/hooks/cowork/workflows/use-cowork-session-actions";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagents/subagent-braille-color";

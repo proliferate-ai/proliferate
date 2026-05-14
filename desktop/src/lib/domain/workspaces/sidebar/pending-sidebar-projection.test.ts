@@ -54,6 +54,7 @@ describe("pending sidebar projection", () => {
       variant: "worktree",
       localWorkspaceId: null,
       renameSupported: false,
+      lastInteracted: new Date(pendingWorkspaceEntry.createdAt).toISOString(),
     });
   });
 

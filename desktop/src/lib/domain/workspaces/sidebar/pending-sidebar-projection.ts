@@ -83,7 +83,7 @@ export function buildPendingSidebarProjection(args: {
       statusIndicator: null,
       detailIndicators,
       cloudStatus: null,
-      lastInteracted: active ? null : createdAt,
+      lastInteracted: createdAt,
       needsReview: false,
     },
     sortRecency: {

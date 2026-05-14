@@ -260,12 +260,12 @@ export const HeaderTabs = memo(function HeaderTabs() {
 
   return (
     <DebugProfiler id="header-tabs">
-      <div className="flex h-full min-w-0 flex-1 items-end gap-1 overflow-hidden px-1">
+      <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-hidden px-1">
       <DebugProfiler id="header-tabs-strip">
         <WorkspaceTabStrip
           label="Workspace tabs"
           stripRef={shellStrip.ref}
-          className="h-9 min-w-0 flex-1"
+          className="h-7 min-w-0 flex-1"
           {...shellDrag.stripDragProps}
         >
           {chatGroupUnderlines.map((range) => (
@@ -324,14 +324,13 @@ export const HeaderTabs = memo(function HeaderTabs() {
 
       <DebugProfiler id="header-tabs-actions">
         <HeaderTabsActions
-          workspaceId={viewModel.selectedWorkspaceId}
-          menuChatTabs={viewModel.menuChatTabs}
-          childrenByParentSessionId={viewModel.childrenByParentSessionId}
+          closedChatTabs={viewModel.closedChatTabs}
           canOpenNewSessionTab={tabActions.canOpenNewSessionTab}
           newSessionDisabledReason={tabActions.newSessionDisabledReason}
-          onOpenSession={(sessionId) => {
+          onRestoreSession={(sessionId) => {
             chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
           }}
+          onDeleteSession={dismissChatSession}
           onOpenNewSessionTab={() => tabActions.openNewSessionTab()}
         />
       </DebugProfiler>

@@ -137,25 +137,55 @@ export function resolveHighlightedChatSessionId(
   return highlighted?.kind === "chat" ? highlighted.sessionId : null;
 }
 
-export function buildHeaderMenuChatTabs(args: {
+export function buildHeaderClosedChatTabs(args: {
   highlightedChatSessionId: string | null;
-  childToParent: ReadonlyMap<string, string>;
+  rowsBySessionId: ReadonlyMap<string, HeaderHierarchyChildRow>;
   knownSessions: Iterable<KnownHeaderSession>;
   visibleChatSessionIds: readonly string[];
+  recentlyHiddenIds: readonly string[];
 }): HeaderChatMenuEntry[] {
-  return Array.from(args.knownSessions)
-    .filter((known) => !args.childToParent.has(getKnownSessionId(known)))
-    .map((known) => {
-      const id = getKnownSessionId(known);
-      return {
+  const knownById = new Map<string, KnownHeaderSession>();
+  for (const known of args.knownSessions) {
+    knownById.set(getKnownSessionId(known), known);
+  }
+
+  const visibleSet = new Set(args.visibleChatSessionIds);
+  const seen = new Set<string>();
+  const rows: HeaderChatMenuEntry[] = [];
+  for (const id of args.recentlyHiddenIds) {
+    if (
+      seen.has(id)
+      || visibleSet.has(id)
+    ) {
+      continue;
+    }
+    seen.add(id);
+    const hierarchyChild = args.rowsBySessionId.get(id);
+    if (hierarchyChild) {
+      rows.push({
         id,
-        title: getKnownSessionTitle(known),
-        agentKind: getKnownSessionAgentKind(known),
-        viewState: getKnownSessionViewState(known),
+        title: hierarchyChild.title,
+        agentKind: hierarchyChild.agentKind,
+        viewState: getLinkedChildViewState(hierarchyChild),
         isActive: id === args.highlightedChatSessionId,
-        isVisible: args.visibleChatSessionIds.includes(id),
-      };
+        isVisible: false,
+      });
+      continue;
+    }
+    const known = knownById.get(id);
+    if (!known) {
+      continue;
+    }
+    rows.push({
+      id,
+      title: getKnownSessionTitle(known),
+      agentKind: getKnownSessionAgentKind(known),
+      viewState: getKnownSessionViewState(known),
+      isActive: id === args.highlightedChatSessionId,
+      isVisible: false,
     });
+  }
+  return rows;
 }
 
 export function buildHeaderDisplayShellRows(args: {

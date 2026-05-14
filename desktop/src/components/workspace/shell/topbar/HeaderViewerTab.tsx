@@ -47,7 +47,7 @@ export function HeaderViewerTab({
     <div
       {...rowDragProps}
       onPointerEnter={onPointerEnter}
-      className={`absolute bottom-0 h-9 app-region-no-drag ${
+      className={`absolute bottom-0 h-7 app-region-no-drag ${
         isDragging
           ? "z-[20] cursor-grabbing opacity-80"
           : `${isActive ? "z-[5]" : "z-[1] hover:z-[2]"} cursor-grab transition-transform duration-150`

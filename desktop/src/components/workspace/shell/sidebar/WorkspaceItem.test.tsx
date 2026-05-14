@@ -59,4 +59,17 @@ describe("WorkspaceItem", () => {
     expect(onMarkDone).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it("shows the timestamp on active workspace rows", () => {
+    render(
+      <WorkspaceItem
+        name="Fresh worktree"
+        variant="worktree"
+        active
+        lastInteracted={new Date().toISOString()}
+      />,
+    );
+
+    expect(screen.getByText("now")).toBeTruthy();
+  });
 });

@@ -4,7 +4,7 @@ import {
   ChevronRight,
 } from "@/components/ui/icons";
 import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
-import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
+import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";

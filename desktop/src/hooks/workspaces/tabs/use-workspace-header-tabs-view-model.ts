@@ -10,7 +10,7 @@ import {
 import {
   buildHeaderDisplayShellRows,
   buildHeaderChatTabs,
-  buildHeaderMenuChatTabs,
+  buildHeaderClosedChatTabs,
   buildManualGroupByTopLevelSessionId,
   resolveHighlightedChatSessionId,
   selectHeaderStripChatSessionIds,
@@ -394,22 +394,30 @@ export function useWorkspaceHeaderTabsViewModel() {
     resolvedHierarchySessionIds: hierarchy.resolvedSessionIds,
   });
 
-  const menuChatTabs = useMemo<HeaderChatMenuEntry[]>(
+  const closedChatTabs = useMemo<HeaderChatMenuEntry[]>(
     () => measureDebugComputation({
       category: "header_tabs.derive",
-      label: "menu_chat_tabs",
-      keys: ["highlightedChatSessionId", "hierarchy.childToParent", "knownSessions", "visibleChatSessionIds"],
+      label: "closed_chat_tabs",
+      keys: [
+        "highlightedChatSessionId",
+        "hierarchyChildren.rowsBySessionId",
+        "knownSessions",
+        "recentlyHiddenIds",
+        "visibleChatSessionIds",
+      ],
       count: (tabs) => tabs.length,
-    }, () => buildHeaderMenuChatTabs({
+    }, () => buildHeaderClosedChatTabs({
       highlightedChatSessionId,
-      childToParent: hierarchy.childToParent,
+      rowsBySessionId: hierarchyChildren.rowsBySessionId,
       knownSessions: knownSessions.values(),
+      recentlyHiddenIds,
       visibleChatSessionIds,
     })),
     [
       highlightedChatSessionId,
-      hierarchy.childToParent,
+      hierarchyChildren.rowsBySessionId,
       knownSessions,
+      recentlyHiddenIds,
       visibleChatSessionIds,
     ],
   );
@@ -436,7 +444,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       orderedShellTabKeys,
       activeShellTabKey,
       shellRowsCount: displayShellRows.length,
-      menuChatTabsCount: menuChatTabs.length,
+      closedChatTabsCount: closedChatTabs.length,
       workspaceSessionsLoaded,
       activationRenderSurface: activation.renderSurface,
       storedActiveShellTabKey:
@@ -454,10 +462,10 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeSessionWorkspaceId,
     activation.renderSurface,
     displayShellRows.length,
+    closedChatTabs.length,
     knownSessionIds,
     liveSlots,
     materializedWorkspaceId,
-    menuChatTabs.length,
     orderedShellTabKeys,
     pendingWorkspaceEntry,
     pendingWorkspaceUiKey,
@@ -488,7 +496,7 @@ export function useWorkspaceHeaderTabsViewModel() {
     orderedTabs,
     orderedShellTabKeys,
     stripChatSessionIds,
-    menuChatTabs,
+    closedChatTabs,
     visibleChatSessionIds,
     liveChatSessionIds,
     childToParent: hierarchy.childToParent,
@@ -502,13 +510,13 @@ export function useWorkspaceHeaderTabsViewModel() {
     activation,
     buffersByPath,
     chatTabs,
+    closedChatTabs,
     displayManualGroups,
     hierarchy.childToParent,
     hierarchy.childrenByParentSessionId,
     hierarchy.resolvedSessionIds,
     liveChatSessionIds,
     materializedWorkspaceId,
-    menuChatTabs,
     openTargets,
     orderedShellTabKeys,
     orderedTabs,

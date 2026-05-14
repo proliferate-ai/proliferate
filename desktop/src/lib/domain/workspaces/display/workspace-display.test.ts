@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   automationWorkspaceDefaultDisplayNameFromBranch,
   workspaceDefaultDisplayName,
+  workspaceHeaderTitle,
 } from "./workspace-display";
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -64,5 +65,12 @@ describe("workspace display names", () => {
         currentBranch: "automation/issue-triage",
       })),
     ).toBe("Issue triage");
+  });
+
+  it("uses workspace display names for shell header titles", () => {
+    expect(workspaceHeaderTitle(workspace({ displayName: "Renamed workspace" }))).toBe(
+      "Renamed workspace",
+    );
+    expect(workspaceHeaderTitle(null, "/Users/pablo/proliferate")).toBe("proliferate");
   });
 });

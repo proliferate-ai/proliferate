@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/icons";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import { SidebarActionButton } from "./SidebarActionButton";
-import { SidebarRowSurface } from "./SidebarRowSurface";
+import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
 
 interface WorkspaceCleanupAttentionSectionProps {
   workspaces: Workspace[];

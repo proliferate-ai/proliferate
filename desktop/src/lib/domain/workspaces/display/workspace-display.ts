@@ -74,6 +74,20 @@ export function workspaceDisplayName(workspace: Workspace): string {
   return workspaceDefaultDisplayName(workspace);
 }
 
+export function workspaceHeaderTitle(
+  workspace: Workspace | null | undefined,
+  fallbackPath?: string | null,
+): string {
+  if (workspace) {
+    return workspaceDisplayName(workspace);
+  }
+  const trimmedPath = fallbackPath?.trim();
+  if (!trimmedPath) {
+    return "Workspace";
+  }
+  return trimmedPath.split("/").filter(Boolean).pop() ?? trimmedPath;
+}
+
 /**
  * The label we would show if no user override were set. Useful as the
  * placeholder/preview text in the rename UI so the user knows what clearing
