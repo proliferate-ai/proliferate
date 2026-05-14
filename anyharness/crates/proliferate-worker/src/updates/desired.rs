@@ -32,23 +32,24 @@ pub async fn reconcile(
         return Ok(());
     }
     observability::update_requested(&stale);
-    cloud
-        .report_update_status(&identity.worker_token, &status::staging())
-        .await?;
     match supervisor::stage_update_request(config, &stale) {
         Ok(staged) => {
             info!(
                 component = staged.component.as_deref(),
                 version = staged.version.as_deref(),
                 path = %staged.path.display(),
-                "supervisor update request written"
+                wrote_request = staged.wrote_request,
+                "supervisor update request staged"
             );
             Ok(())
         }
         Err(error) => {
             warn!(?error, "failed to stage supervisor update request");
             let _ = cloud
-                .report_update_status(&identity.worker_token, &status::failed(error.to_string()))
+                .report_update_status(
+                    &identity.worker_token,
+                    &status::failed(stale.update_generation, error.to_string()),
+                )
                 .await;
             Err(error)
         }
@@ -69,6 +70,7 @@ fn stale_desired_versions(
             || worker_version.is_some()
             || supervisor_version.is_some(),
         update_channel: desired.update_channel.clone(),
+        update_generation: desired.update_generation,
         anyharness_version,
         worker_version,
         supervisor_version,
@@ -94,6 +96,7 @@ mod tests {
         let desired = DesiredVersions {
             should_update: true,
             update_channel: "stable".to_string(),
+            update_generation: 4,
             anyharness_version: Some("0.2.0".to_string()),
             worker_version: Some("0.2.0".to_string()),
             supervisor_version: Some("0.2.0".to_string()),
@@ -105,6 +108,7 @@ mod tests {
         };
         let stale = stale_desired_versions(&desired, &installed);
         assert!(stale.should_update);
+        assert_eq!(stale.update_generation, 4);
         assert_eq!(stale.anyharness_version, None);
         assert_eq!(stale.worker_version.as_deref(), Some("0.2.0"));
         assert_eq!(stale.supervisor_version, None);
@@ -115,6 +119,7 @@ mod tests {
         let desired = DesiredVersions {
             should_update: true,
             update_channel: "stable".to_string(),
+            update_generation: 5,
             anyharness_version: None,
             worker_version: Some("0.2.0".to_string()),
             supervisor_version: None,

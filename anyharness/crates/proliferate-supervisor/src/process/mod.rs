@@ -26,9 +26,11 @@ pub async fn run(config: SupervisorConfig) -> Result<(), SupervisorError> {
                 "--config".to_string(),
                 config.worker_config.to_string_lossy().to_string(),
             ];
-            let mut worker = match child::spawn(
+            let supervisor_version = env!("CARGO_PKG_VERSION");
+            let mut worker = match child::spawn_with_env(
                 config.worker_binary.to_string_lossy().as_ref(),
                 &worker_args,
+                &[("PROLIFERATE_SUPERVISOR_VERSION", supervisor_version)],
             ) {
                 Ok(child) => child,
                 Err(error) => {

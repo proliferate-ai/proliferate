@@ -10,6 +10,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_CLOUD_TARGET_ENROLLMENT_STATUSES,
     SUPPORTED_CLOUD_TARGET_KINDS,
     SUPPORTED_CLOUD_TARGET_STATUSES,
+    SUPPORTED_CLOUD_TARGET_UPDATE_CHANNELS,
     SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES,
     SUPPORTED_CLOUD_WORKER_STATUSES,
 )
@@ -35,6 +36,10 @@ class CloudTarget(Base):
             f"update_status IS NULL OR update_status IN {SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES}",
             name="ck_cloud_targets_update_status",
         ),
+        CheckConstraint(
+            f"update_channel IN {SUPPORTED_CLOUD_TARGET_UPDATE_CHANNELS}",
+            name="ck_cloud_targets_update_channel",
+        ),
         Index("ix_cloud_targets_owner_user_status", "owner_user_id", "status"),
         Index("ix_cloud_targets_organization_status", "organization_id", "status"),
     )
@@ -59,6 +64,7 @@ class CloudTarget(Base):
     )
     default_workspace_root: Mapped[str | None] = mapped_column(Text, nullable=True)
     update_channel: Mapped[str] = mapped_column(String(32), default="stable")
+    update_generation: Mapped[int] = mapped_column(default=0)
     desired_anyharness_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
     desired_worker_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
     desired_supervisor_version: Mapped[str | None] = mapped_column(String(128), nullable=True)

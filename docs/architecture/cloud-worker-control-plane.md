@@ -1192,6 +1192,19 @@ GET /api/cloud/sessions/{session_id}/events?cursor=...
 GET /api/cloud/workspaces/{workspace_id}/stream
 GET /api/cloud/sessions/{session_id}/stream
 GET /api/cloud/targets/{target_id}/stream
+
+POST /api/cloud/compute/targets/{target_id}/desired-versions
+  set desired AnyHarness / Worker / Supervisor versions and increment the
+  target update generation.
+
+POST /api/cloud/compute/targets/{target_id}/safe-stop-check
+  return whether the target can safely stop based on active cloud-visible
+  sessions, active commands, active update state, and worker-reported safe-stop
+  state when available.
+
+POST /api/cloud/compute/targets/{target_id}/revoke-workers
+  revoke active worker credentials for a target. This rejects archived targets
+  and targets with active cloud-visible sessions or commands.
 ```
 
 Worker-only endpoints:
@@ -1201,7 +1214,14 @@ POST /api/cloud/worker/enroll
   enrollment token + inventory -> worker credentials.
 
 POST /api/cloud/worker/heartbeat
-  status + activity + safe-stop summary.
+  status + activity + current component versions. The response includes
+  desiredVersions:
+    shouldUpdate
+    updateChannel
+    updateGeneration
+    anyharnessVersion
+    workerVersion
+    supervisorVersion
 
 POST /api/cloud/worker/inventory
   full inventory/readiness report.
@@ -1222,11 +1242,39 @@ POST /api/cloud/worker/sync/backfill-status
   report backfill progress for a workspace/session.
 
 POST /api/cloud/worker/update-status
-  report staged/applied/failed update state.
+  report update state for the desired update generation. Requests must include
+  updateGeneration; staged/applying/applied component reports must also include
+  component + version matching the target's current desired versions.
 ```
 
 Worker endpoints authenticate with worker credentials. Client endpoints
 authenticate with user/session/API-key auth. Do not share auth mechanisms.
+
+Current rollout boundary:
+
+- Cloud desired-version APIs are live control-plane state and are safe to expose
+  to operator/admin clients.
+- The Worker reconciles desired versions by writing a supervisor-owned
+  `desired-update.json` mailbox containing `updateChannel`, `updateGeneration`,
+  and stale components only.
+- The full supervisor applier loop that consumes that mailbox, downloads
+  signed artifacts, swaps binaries, rolls back, and reports staged/applying/
+  applied is intentionally a separate implementation step.
+- Until that applier exists, the Worker may report a failed staging attempt,
+  but it should not claim staged/applying/applied merely because it wrote the
+  mailbox.
+- Cloud treats `updateGeneration` as the freshness fence: stale update status
+  reports cannot mutate a newer desired-version rollout.
+
+Safe-stop boundary:
+
+- In this phase, Cloud derives active session and command counts from synced
+  projections. Worker-reported target-safe-stop state is not persisted yet, so
+  `safe-stop-check` returns `safe_stop_state_unknown` when no stronger allow
+  signal exists.
+- `revoke-workers` is not a force-stop primitive. It revokes credentials only
+  when the target is not archived and has no active cloud-visible sessions or
+  commands.
 
 ## Enrollment Flows
 

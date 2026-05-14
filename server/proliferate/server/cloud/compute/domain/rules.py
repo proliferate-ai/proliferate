@@ -86,8 +86,7 @@ def _is_update_identifier(value: str) -> bool:
         or "\\" in value
         or not value
         or not all(
-            character.isascii()
-            and (character.isalnum() or character in {".", "_", "-", "+"})
+            character.isascii() and (character.isalnum() or character in {".", "_", "-", "+"})
             for character in value
         )
     )

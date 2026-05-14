@@ -209,6 +209,12 @@ class CloudTargetUpdateStatus(StrEnum):
     rolled_back = "rolled_back"
 
 
+class CloudTargetUpdateChannel(StrEnum):
+    stable = "stable"
+    beta = "beta"
+    pinned = "pinned"
+
+
 SUPPORTED_CLOUD_TARGET_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudTargetKind)
 SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS: tuple[str, ...] = (
     CloudTargetKind.managed_cloud.value,
@@ -227,6 +233,9 @@ SUPPORTED_CLOUD_TARGET_ENROLLMENT_STATUSES: tuple[str, ...] = tuple(
 )
 SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES: tuple[str, ...] = tuple(
     status.value for status in CloudTargetUpdateStatus
+)
+SUPPORTED_CLOUD_TARGET_UPDATE_CHANNELS: tuple[str, ...] = tuple(
+    channel.value for channel in CloudTargetUpdateChannel
 )
 
 CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN: Final = "cloud-target-enrollment"

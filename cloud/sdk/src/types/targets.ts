@@ -8,6 +8,7 @@ export type CloudTargetKind =
   | "self_hosted_cloud";
 
 export type CloudTargetStatus = "online" | "offline" | "degraded" | "enrolling" | "archived";
+export type CloudTargetUpdateChannel = "stable" | "beta" | "pinned";
 
 export type CloudTargetInventory = components["schemas"]["CloudTargetInventoryModel"];
 
@@ -50,3 +51,19 @@ export type CloudTargetEnrollmentResponse =
 
 export type ArchiveCloudTargetResponse =
   components["schemas"]["ArchiveCloudTargetResponse"];
+
+export type SetDesiredVersionsRequest = Omit<
+  components["schemas"]["SetDesiredVersionsRequest"],
+  "updateChannel"
+> & {
+  updateChannel?: CloudTargetUpdateChannel | null;
+};
+
+export type SetDesiredVersionsResponse =
+  components["schemas"]["SetDesiredVersionsResponse"];
+
+export type SafeStopCheckResponse =
+  components["schemas"]["SafeStopCheckResponse"];
+
+export type RevokeWorkersResponse =
+  components["schemas"]["RevokeWorkersResponse"];

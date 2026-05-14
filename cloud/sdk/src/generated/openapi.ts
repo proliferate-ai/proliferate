@@ -3140,6 +3140,8 @@ export interface components {
         CloudTargetUpdateModel: {
             /** Channel */
             channel: string;
+            /** Generation */
+            generation: number;
             desiredVersions: components["schemas"]["CloudTargetDesiredVersionsModel"];
             currentVersions?: components["schemas"]["CloudTargetCurrentVersionsModel"] | null;
             /** Status */
@@ -5130,6 +5132,8 @@ export interface components {
             shouldUpdate: boolean;
             /** Updatechannel */
             updateChannel: string;
+            /** Updategeneration */
+            updateGeneration: number;
             /** Anyharnessversion */
             anyharnessVersion?: string | null;
             /** Workerversion */
@@ -5362,6 +5366,8 @@ export interface components {
         WorkerUpdateStatusRequest: {
             /** Status */
             status: string;
+            /** Updategeneration */
+            updateGeneration?: number | null;
             /** Component */
             component?: string | null;
             /** Version */

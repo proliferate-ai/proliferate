@@ -79,6 +79,7 @@ class CloudTargetCurrentVersionsModel(BaseModel):
 
 class CloudTargetUpdateModel(BaseModel):
     channel: str
+    generation: int
     desired_versions: CloudTargetDesiredVersionsModel = Field(
         serialization_alias="desiredVersions",
     )
@@ -195,6 +196,7 @@ def current_versions_payload(
 def update_payload(value: CloudTargetSnapshot) -> CloudTargetUpdateModel:
     return CloudTargetUpdateModel(
         channel=value.update_channel,
+        generation=value.update_generation,
         desired_versions=CloudTargetDesiredVersionsModel(
             anyharness_version=value.desired_anyharness_version,
             worker_version=value.desired_worker_version,

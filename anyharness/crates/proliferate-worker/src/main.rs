@@ -12,6 +12,7 @@ mod runtime;
 mod store;
 mod sync;
 mod updates;
+mod versions;
 
 use std::path::PathBuf;
 

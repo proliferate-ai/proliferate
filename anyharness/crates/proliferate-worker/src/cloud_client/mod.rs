@@ -60,6 +60,8 @@ pub struct DesiredVersions {
     #[serde(default = "default_update_channel")]
     pub update_channel: String,
     #[serde(default)]
+    pub update_generation: i64,
+    #[serde(default)]
     pub anyharness_version: Option<String>,
     #[serde(default)]
     pub worker_version: Option<String>,
@@ -72,6 +74,7 @@ impl Default for DesiredVersions {
         Self {
             should_update: false,
             update_channel: default_update_channel(),
+            update_generation: 0,
             anyharness_version: None,
             worker_version: None,
             supervisor_version: None,
