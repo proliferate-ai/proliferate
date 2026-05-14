@@ -1,0 +1,31 @@
+mod anyharness_client;
+mod cloud_client;
+mod config;
+mod error;
+mod identity;
+mod inventory;
+mod logging;
+mod runtime;
+mod store;
+
+use std::path::PathBuf;
+
+use clap::Parser;
+
+#[derive(Debug, Parser)]
+#[command(name = "proliferate-worker")]
+struct Args {
+    #[arg(long)]
+    config: Option<PathBuf>,
+    #[arg(long)]
+    once: bool,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    logging::init();
+    let args = Args::parse();
+    let config = config::WorkerConfig::load(args.config)?;
+    runtime::run(config, args.once).await?;
+    Ok(())
+}

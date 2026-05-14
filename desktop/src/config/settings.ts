@@ -11,6 +11,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "organization",
   "repo",
   "worktrees",
+  "compute",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
