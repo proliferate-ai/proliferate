@@ -25,7 +25,9 @@ use crate::live::sessions::actor::command::SessionCommand;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
-use crate::sessions::extensions::{SessionExtension, SessionTurnFinishedContext};
+use crate::sessions::extensions::{
+    SessionClosingActions, SessionClosingContext, SessionExtension, SessionTurnFinishedContext,
+};
 use crate::sessions::links::completions::LinkCompletionRecord;
 use crate::sessions::links::model::SessionLinkRelation;
 use crate::sessions::mcp_bindings::model::SessionMcpServer;
@@ -207,6 +209,15 @@ impl CoworkSessionHooks {
 }
 
 impl SessionExtension for CoworkSessionHooks {
+    fn on_session_closing(
+        &self,
+        ctx: SessionClosingContext,
+    ) -> anyhow::Result<SessionClosingActions> {
+        self.delegation_service
+            .mark_managed_workspaces_closed_by_parent(&ctx.session_id, &ctx.closed_at)?;
+        Ok(SessionClosingActions::default())
+    }
+
     fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
         self.notify_turn_finished(&ctx.workspace, &ctx.session_id);
         let service = self.delegation_service.clone();
@@ -947,6 +958,22 @@ impl CoworkRuntime {
             Err(error) => {
                 if input.wake_on_completion {
                     let _ = self.delegation_service.delete_wake_schedule(&link.id);
+                }
+                if let Err(close_error) = self.session_runtime.close_live_session(&started.id).await
+                {
+                    tracing::warn!(
+                        session_id = %started.id,
+                        error = ?close_error,
+                        "failed to close cowork agent after initial prompt dispatch failure"
+                    );
+                }
+                if let Err(delete_error) = self.session_service.store().delete_session(&started.id)
+                {
+                    tracing::warn!(
+                        session_id = %started.id,
+                        error = ?delete_error,
+                        "failed to delete cowork agent after initial prompt dispatch failure"
+                    );
                 }
                 return Err(error);
             }

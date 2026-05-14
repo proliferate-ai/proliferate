@@ -235,6 +235,15 @@ impl CoworkDelegationService {
             .list_managed_workspaces(parent_session_id)?)
     }
 
+    pub fn mark_managed_workspaces_closed_by_parent(
+        &self,
+        parent_session_id: &str,
+        closed_at: &str,
+    ) -> anyhow::Result<usize> {
+        self.cowork_service
+            .mark_cowork_managed_workspaces_closed_by_parent(parent_session_id, closed_at)
+    }
+
     pub fn create_coding_session_link(
         &self,
         parent_session_id: &str,

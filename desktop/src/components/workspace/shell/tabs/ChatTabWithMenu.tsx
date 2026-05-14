@@ -6,11 +6,11 @@ import type {
 } from "react";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
+import { ChatTabDelegatedIndicators } from "@/components/workspace/shell/tabs/ChatTabDelegatedIndicators";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
 import {
-  renderChatTabDelegatedIndicators,
   renderChatTabIcon,
   renderChatTabStatusBadge,
 } from "@/components/workspace/shell/tabs/tab-rendering";
@@ -127,9 +127,12 @@ export function ChatTabWithMenu({
       onSelectPointerDownCapture={onSelectPointerDownCapture}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
-      rightAccessory={renderChatTabDelegatedIndicators(tab.delegatedIndicators, {
-        onOpenSession: onOpenDelegatedSession,
-      })}
+      rightAccessory={(
+        <ChatTabDelegatedIndicators
+          indicators={tab.delegatedIndicators}
+          onOpenSession={onOpenDelegatedSession}
+        />
+      )}
       data-chat-tab
       data-chat-tab-id={tab.id}
       data-chat-tab-active={tab.isActive ? "true" : "false"}

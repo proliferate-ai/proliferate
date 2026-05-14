@@ -226,7 +226,10 @@ impl AppState {
             SessionStore::new(db.clone()),
         ));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
-        let review_session_hooks = Arc::new(ReviewSessionHooks::new(review_hook_event_tx));
+        let review_session_hooks = Arc::new(ReviewSessionHooks::new(
+            review_hook_event_tx,
+            review_service.clone(),
+        ));
         let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
         let plugin_bundle_registry = PluginBundleRegistry::default();
         let skills_mcp_auth = Arc::new(SkillsMcpAuth::new(runtime_home.clone()));
@@ -265,8 +268,6 @@ impl AppState {
             plugin_bundle_registry.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
-            review_service.clone(),
-            cowork_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),

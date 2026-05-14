@@ -287,6 +287,24 @@ describe("parseSubagentProvisioningStatus", () => {
     });
   });
 
+  it("treats subagentId-only output as a launch result", () => {
+    const item = toolCallItem({
+      nativeToolName: "mcp__subagents__create_subagent",
+      semanticKind: "subagent",
+      rawOutput: {
+        subagentId: "subagent-4",
+        label: "API Surface Check",
+        status: "running",
+      },
+    });
+
+    expect(parseSubagentLaunchResult(item)).toEqual({
+      subagentId: "subagent-4",
+      childSessionId: null,
+      sessionLinkId: null,
+    });
+  });
+
   it("does not treat arbitrary result text as provisioning output", () => {
     expect(parseSubagentProvisioningStatus(toolCallItem({
       nativeToolName: "mcp__subagents__create_subagent",

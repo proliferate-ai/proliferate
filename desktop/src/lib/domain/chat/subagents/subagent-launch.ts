@@ -127,7 +127,14 @@ export function parseSubagentLaunchResult(
   item: ToolCallItem,
 ): SubagentLaunchResult | null {
   const provisioningStatus = parseSubagentProvisioningStatus(item);
-  if (!provisioningStatus || (!provisioningStatus.sessionLinkId && !provisioningStatus.childSessionId)) {
+  if (
+    !provisioningStatus
+    || (
+      !provisioningStatus.subagentId
+      && !provisioningStatus.sessionLinkId
+      && !provisioningStatus.childSessionId
+    )
+  ) {
     return null;
   }
 

@@ -31,6 +31,10 @@ import {
   isSubagentWorkComplete,
 } from "@/lib/domain/chat/subagents/subagent-launch";
 import {
+  formatSubagentHeaderVerb,
+  isSubagentProvisioningAction,
+} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+import {
   buildTranscriptDisplayBlocks,
 } from "@/lib/domain/chat/transcript/transcript-presentation";
 import {
@@ -124,7 +128,7 @@ export function TranscriptAgentGroupBlock({
       renderItem={renderChild}
     />
   );
-  const headerVerb = formatSubagentHeaderVerb(item, executionState, isRunning);
+  const headerVerb = formatSubagentHeaderVerb({ item, executionState, isRunning });
   const collapsedSummary =
     workSummary
     || (executionState === "background"
@@ -210,49 +214,6 @@ export function TranscriptAgentGroupBlock({
       </div>}
     </div>
   );
-}
-
-function formatSubagentHeaderVerb(
-  item: ToolCallItem,
-  executionState: ReturnType<typeof resolveSubagentExecutionState>,
-  isRunning: boolean,
-): string {
-  const toolName = item.nativeToolName?.trim().toLowerCase();
-  if (toolName === "mcp__subagents__send_subagent_message") {
-    return isRunning ? "Sending message to subagent" : "Message sent to subagent";
-  }
-  if (toolName === "mcp__subagents__schedule_subagent_wake") {
-    return isRunning ? "Scheduling subagent wake" : "Subagent wake scheduled";
-  }
-  if (toolName === "mcp__subagents__get_subagent_status") {
-    return isRunning ? "Checking subagent status" : "Subagent status checked";
-  }
-  if (toolName === "mcp__subagents__read_subagent_events") {
-    return isRunning ? "Reading subagent events" : "Subagent events read";
-  }
-  if (toolName === "mcp__subagents__read_subagent_latest_turns") {
-    return isRunning ? "Reading subagent turns" : "Subagent turns read";
-  }
-  if (toolName === "mcp__subagents__search_subagent_transcript") {
-    return isRunning ? "Searching subagent transcript" : "Subagent transcript searched";
-  }
-  if (toolName === "mcp__subagents__close_subagent") {
-    return isRunning ? "Closing subagent" : "Subagent closed";
-  }
-  if (executionState === "failed") {
-    return "Subagent launch failed";
-  }
-  return isRunning ? "Creating subagent" : "Subagent created";
-}
-
-function isSubagentProvisioningAction(item: ToolCallItem): boolean {
-  const toolName = item.nativeToolName?.trim().toLowerCase();
-  return toolName === "agent"
-    || toolName === "mcp__subagents__create_subagent"
-    || toolName === "mcp__subagents__send_subagent_message"
-    || toolName === "mcp__subagents__schedule_subagent_wake"
-    || toolName === "mcp__subagents__get_subagent_status"
-    || toolName === "mcp__subagents__close_subagent";
 }
 
 const AGENT_RESULT_COLLAPSED_HEIGHT = 200;

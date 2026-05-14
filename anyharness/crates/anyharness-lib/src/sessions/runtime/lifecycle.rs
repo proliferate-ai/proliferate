@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::sessions::extensions::SessionClosingContext;
 use crate::sessions::links::model::SessionLinkRelation;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
@@ -72,18 +73,13 @@ impl SessionRuntime {
         &self,
         parent_session_id: &str,
     ) -> Result<(), SessionLifecycleError> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let extension_close_session_ids =
+            self.run_session_closing_extensions(parent_session_id, &now)?;
         let links = self
             .session_link_service
             .list_by_parent(parent_session_id)
             .map_err(SessionLifecycleError::Internal)?;
-        let now = chrono::Utc::now().to_rfc3339();
-        self.cowork_service
-            .mark_cowork_managed_workspaces_closed_by_parent(parent_session_id, &now)
-            .map_err(SessionLifecycleError::Internal)?;
-        let review_session_ids = self
-            .review_service
-            .stop_active_run_for_parent(parent_session_id)
-            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let mut closed_child_session_ids = std::collections::HashSet::new();
         for link in links {
             if !matches!(
@@ -100,12 +96,30 @@ impl SessionRuntime {
             self.close_session_if_open(&link.child_session_id).await?;
             closed_child_session_ids.insert(link.child_session_id);
         }
-        for session_id in review_session_ids {
+        for session_id in extension_close_session_ids {
             if closed_child_session_ids.insert(session_id.clone()) {
                 self.close_session_if_open(&session_id).await?;
             }
         }
         Ok(())
+    }
+
+    fn run_session_closing_extensions(
+        &self,
+        session_id: &str,
+        closed_at: &str,
+    ) -> Result<Vec<String>, SessionLifecycleError> {
+        let mut close_session_ids = Vec::new();
+        for extension in &self.session_extensions {
+            let actions = extension
+                .on_session_closing(SessionClosingContext {
+                    session_id: session_id.to_string(),
+                    closed_at: closed_at.to_string(),
+                })
+                .map_err(SessionLifecycleError::Internal)?;
+            close_session_ids.extend(actions.close_session_ids);
+        }
+        Ok(close_session_ids)
     }
 
     fn close_inbound_delegated_links(
