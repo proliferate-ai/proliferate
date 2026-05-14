@@ -44,11 +44,43 @@ class WorkerHeartbeatRequest(BaseModel):
     supervisor_version: str | None = Field(default=None, alias="supervisorVersion")
 
 
+class WorkerDesiredVersionsResponse(BaseModel):
+    should_update: bool = Field(serialization_alias="shouldUpdate")
+    update_channel: str = Field(serialization_alias="updateChannel")
+    anyharness_version: str | None = Field(
+        default=None,
+        serialization_alias="anyharnessVersion",
+    )
+    worker_version: str | None = Field(default=None, serialization_alias="workerVersion")
+    supervisor_version: str | None = Field(
+        default=None,
+        serialization_alias="supervisorVersion",
+    )
+
+
 class WorkerHeartbeatResponse(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
     worker_id: str = Field(serialization_alias="workerId")
     status: str
     server_time: str = Field(serialization_alias="serverTime")
+    desired_versions: WorkerDesiredVersionsResponse = Field(
+        serialization_alias="desiredVersions",
+    )
+
+
+class WorkerUpdateStatusRequest(BaseModel):
+    status: str
+    component: str | None = None
+    version: str | None = None
+    detail: str | None = None
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
+
+
+class WorkerUpdateStatusResponse(BaseModel):
+    target_id: str = Field(serialization_alias="targetId")
+    worker_id: str = Field(serialization_alias="workerId")
+    updated: bool
 
 
 class WorkerInventoryRequest(WorkerInventoryPayload):

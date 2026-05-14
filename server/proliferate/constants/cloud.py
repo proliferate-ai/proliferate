@@ -199,6 +199,16 @@ class CloudTargetEnrollmentStatus(StrEnum):
     revoked = "revoked"
 
 
+class CloudTargetUpdateStatus(StrEnum):
+    idle = "idle"
+    staging = "staging"
+    staged = "staged"
+    applying = "applying"
+    applied = "applied"
+    failed = "failed"
+    rolled_back = "rolled_back"
+
+
 SUPPORTED_CLOUD_TARGET_KINDS: tuple[str, ...] = tuple(kind.value for kind in CloudTargetKind)
 SUPPORTED_ENROLLABLE_CLOUD_TARGET_KINDS: tuple[str, ...] = (
     CloudTargetKind.managed_cloud.value,
@@ -214,6 +224,9 @@ SUPPORTED_CLOUD_WORKER_STATUSES: tuple[str, ...] = tuple(
 )
 SUPPORTED_CLOUD_TARGET_ENROLLMENT_STATUSES: tuple[str, ...] = tuple(
     status.value for status in CloudTargetEnrollmentStatus
+)
+SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in CloudTargetUpdateStatus
 )
 
 CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN: Final = "cloud-target-enrollment"

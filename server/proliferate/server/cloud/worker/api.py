@@ -25,6 +25,8 @@ from proliferate.server.cloud.worker.models import (
     WorkerHeartbeatResponse,
     WorkerInventoryRequest,
     WorkerInventoryResponse,
+    WorkerUpdateStatusRequest,
+    WorkerUpdateStatusResponse,
 )
 from proliferate.server.cloud.worker.service import (
     authenticate_worker,
@@ -35,6 +37,7 @@ from proliferate.server.cloud.worker.service import (
     record_event_batch,
     record_heartbeat,
     record_inventory,
+    record_update_status,
 )
 
 router = APIRouter(prefix="/worker", tags=["cloud-worker"])
@@ -73,6 +76,19 @@ async def worker_inventory_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await record_inventory(db, auth=auth, body=body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/update-status", response_model=WorkerUpdateStatusResponse)
+async def worker_update_status_endpoint(
+    body: WorkerUpdateStatusRequest,
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkerUpdateStatusResponse:
+    try:
+        auth = await authenticate_worker(db, authorization=authorization)
+        return await record_update_status(db, auth=auth, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)
 

@@ -7,9 +7,11 @@ mod identity;
 mod inventory;
 mod logging;
 mod materialization;
+mod observability;
 mod runtime;
 mod store;
 mod sync;
+mod updates;
 
 use std::path::PathBuf;
 

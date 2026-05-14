@@ -10,7 +10,7 @@ use crate::{
     identity::{credentials::WorkerIdentity, enrollment},
     inventory,
     store::WorkerStore,
-    sync,
+    sync, updates,
 };
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
@@ -30,7 +30,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     if let Err(error) = upload_inventory(&cloud, &identity).await {
         warn!(?error, "worker inventory upload failed");
     }
-    if let Err(error) = send_heartbeat(&cloud, &identity).await {
+    if let Err(error) = send_heartbeat(&config, &cloud, &identity).await {
         warn!(?error, "worker heartbeat failed");
     }
     if once {
@@ -68,7 +68,7 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             config.heartbeat_interval_seconds.max(10),
         ))
         .await;
-        if let Err(error) = send_heartbeat(&cloud, &identity).await {
+        if let Err(error) = send_heartbeat(&config, &cloud, &identity).await {
             warn!(?error, "worker heartbeat failed");
         }
     }
@@ -106,7 +106,29 @@ async fn upload_inventory(
         .await
 }
 
-async fn send_heartbeat(cloud: &CloudClient, identity: &WorkerIdentity) -> Result<(), WorkerError> {
-    let request = heartbeat::online(Some(env!("CARGO_PKG_VERSION").to_string()), None, None);
-    cloud.heartbeat(&identity.worker_token, &request).await
+async fn send_heartbeat(
+    config: &WorkerConfig,
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+) -> Result<(), WorkerError> {
+    let anyharness_version = anyharness_version(config).await;
+    let request = heartbeat::online(
+        Some(env!("CARGO_PKG_VERSION").to_string()),
+        anyharness_version,
+        config.supervisor_version.clone(),
+    );
+    let response = cloud.heartbeat(&identity.worker_token, &request).await?;
+    crate::observability::heartbeat_ack(&response);
+    if let Err(error) =
+        updates::desired::reconcile(config, cloud, identity, &response.desired_versions).await
+    {
+        warn!(?error, "worker update reconciliation failed");
+    }
+    Ok(())
+}
+
+async fn anyharness_version(config: &WorkerConfig) -> Option<String> {
+    let base_url = config.anyharness_base_url.clone()?;
+    let client = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone()).ok()?;
+    anyharness_health::version(&client).await
 }

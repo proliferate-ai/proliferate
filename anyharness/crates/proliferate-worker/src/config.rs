@@ -19,6 +19,10 @@ pub struct WorkerConfig {
     pub worker_db_path: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub materialization_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_update_request_dir: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supervisor_version: Option<String>,
     #[serde(default = "default_heartbeat_interval_seconds")]
     pub heartbeat_interval_seconds: u64,
     #[serde(skip)]

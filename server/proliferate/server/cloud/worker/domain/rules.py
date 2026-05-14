@@ -9,13 +9,18 @@ from proliferate.constants.cloud import (
     CLOUD_COMMAND_DEFAULT_LEASE_SECONDS,
     CLOUD_COMMAND_MAX_LEASE_SECONDS,
     PHASE3_CLOUD_COMMAND_KINDS,
+    SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES,
     SUPPORTED_CLOUD_WORKER_STATUSES,
     CloudCommandStatus,
+    CloudTargetUpdateStatus,
     CloudWorkerStatus,
 )
 from proliferate.server.cloud.errors import CloudApiError
 
 _JSON_FIELD_MAX_BYTES = 256 * 1024
+_UPDATE_COMPONENT_MAX_LENGTH = 64
+_UPDATE_VERSION_MAX_LENGTH = 128
+_SUPPORTED_UPDATE_COMPONENTS = frozenset({"anyharness", "worker", "supervisor"})
 
 
 def validate_worker_status(status: str) -> str:
@@ -32,6 +37,58 @@ def validate_worker_status(status: str) -> str:
             status_code=400,
         )
     return status
+
+
+def validate_update_status(status: str) -> str:
+    if status not in SUPPORTED_CLOUD_TARGET_UPDATE_STATUSES:
+        raise CloudApiError(
+            "cloud_worker_update_status_invalid",
+            "Worker update status is invalid.",
+            status_code=400,
+        )
+    if status == CloudTargetUpdateStatus.idle.value:
+        raise CloudApiError(
+            "cloud_worker_update_status_reserved",
+            "Worker idle update status is controlled by the cloud service.",
+            status_code=400,
+        )
+    return status
+
+
+def validate_update_component(component: str | None) -> str | None:
+    if component is None:
+        return None
+    normalized = component.strip()
+    if not normalized:
+        return None
+    if len(normalized) > _UPDATE_COMPONENT_MAX_LENGTH:
+        raise CloudApiError(
+            "cloud_worker_update_component_too_long",
+            "Worker update component is too long.",
+            status_code=400,
+        )
+    if normalized not in _SUPPORTED_UPDATE_COMPONENTS:
+        raise CloudApiError(
+            "cloud_worker_update_component_invalid",
+            "Worker update component is invalid.",
+            status_code=400,
+        )
+    return normalized
+
+
+def validate_update_version(version: str | None) -> str | None:
+    if version is None:
+        return None
+    normalized = version.strip()
+    if not normalized:
+        return None
+    if len(normalized) > _UPDATE_VERSION_MAX_LENGTH:
+        raise CloudApiError(
+            "cloud_worker_update_version_too_long",
+            "Worker update version is too long.",
+            status_code=400,
+        )
+    return normalized
 
 
 def compact_json(value: dict[str, object] | None) -> str | None:

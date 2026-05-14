@@ -1005,6 +1005,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/compute/targets/{target_id}/desired-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Target Desired Versions Endpoint */
+        post: operations["set_target_desired_versions_endpoint_v1_cloud_compute_targets__target_id__desired_versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/compute/targets/{target_id}/safe-stop-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Safe Stop Check Endpoint */
+        post: operations["safe_stop_check_endpoint_v1_cloud_compute_targets__target_id__safe_stop_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/compute/targets/{target_id}/revoke-workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Workers Endpoint */
+        post: operations["revoke_workers_endpoint_v1_cloud_compute_targets__target_id__revoke_workers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/targets/{target_id}/configs": {
         parameters: {
             query?: never;
@@ -1339,6 +1390,23 @@ export interface paths {
         put?: never;
         /** Worker Inventory Endpoint */
         post: operations["worker_inventory_endpoint_v1_cloud_worker_inventory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/update-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Update Status Endpoint */
+        post: operations["worker_update_status_endpoint_v1_cloud_worker_update_status_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2904,6 +2972,28 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        /** CloudTargetCurrentVersionsModel */
+        CloudTargetCurrentVersionsModel: {
+            /** Workerid */
+            workerId: string;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Supervisorversion */
+            supervisorVersion?: string | null;
+            /** Reportedat */
+            reportedAt?: string | null;
+        };
+        /** CloudTargetDesiredVersionsModel */
+        CloudTargetDesiredVersionsModel: {
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Supervisorversion */
+            supervisorVersion?: string | null;
+        };
         /** CloudTargetDetail */
         CloudTargetDetail: {
             /** Id */
@@ -2922,6 +3012,7 @@ export interface components {
             defaultWorkspaceRoot?: string | null;
             inventory?: components["schemas"]["CloudTargetInventoryModel"] | null;
             statusDetail?: components["schemas"]["CloudTargetStatusModel"] | null;
+            update: components["schemas"]["CloudTargetUpdateModel"];
             /** Archivedat */
             archivedAt?: string | null;
             /** Createdat */
@@ -3037,12 +3128,30 @@ export interface components {
             defaultWorkspaceRoot?: string | null;
             inventory?: components["schemas"]["CloudTargetInventoryModel"] | null;
             statusDetail?: components["schemas"]["CloudTargetStatusModel"] | null;
+            update: components["schemas"]["CloudTargetUpdateModel"];
             /** Archivedat */
             archivedAt?: string | null;
             /** Createdat */
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+        };
+        /** CloudTargetUpdateModel */
+        CloudTargetUpdateModel: {
+            /** Channel */
+            channel: string;
+            desiredVersions: components["schemas"]["CloudTargetDesiredVersionsModel"];
+            currentVersions?: components["schemas"]["CloudTargetCurrentVersionsModel"] | null;
+            /** Status */
+            status?: string | null;
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Component */
+            component?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Reportedat */
+            reportedAt?: string | null;
         };
         /** CloudTranscriptItemResponse */
         CloudTranscriptItemResponse: {
@@ -4253,6 +4362,13 @@ export interface components {
             /** Workspaceid */
             workspaceId: string;
         };
+        /** RevokeWorkersResponse */
+        RevokeWorkersResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Revoked */
+            revoked: boolean;
+        };
         /** RunCloudWorkspaceSetupResponse */
         RunCloudWorkspaceSetupResponse: {
             /** Workspaceid */
@@ -4265,6 +4381,19 @@ export interface components {
             commandRunId?: string | null;
             /** Status */
             status: string;
+        };
+        /** SafeStopCheckResponse */
+        SafeStopCheckResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Allowed */
+            allowed: boolean;
+            /** Reasons */
+            reasons: string[];
+            /** Activesessioncount */
+            activeSessionCount: number;
+            /** Activecommandcount */
+            activeCommandCount: number;
         };
         /** SaveCloudRepoConfigFile */
         SaveCloudRepoConfigFile: {
@@ -4370,6 +4499,21 @@ export interface components {
             args?: string[];
             /** Env */
             env?: components["schemas"]["SessionMcpEnvVarModel"][];
+        };
+        /** SetDesiredVersionsRequest */
+        SetDesiredVersionsRequest: {
+            /** Updatechannel */
+            updateChannel?: string | null;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Supervisorversion */
+            supervisorVersion?: string | null;
+        };
+        /** SetDesiredVersionsResponse */
+        SetDesiredVersionsResponse: {
+            target: components["schemas"]["CloudTargetDetail"];
         };
         /** StartCloudMcpOAuthFlowResponse */
         StartCloudMcpOAuthFlowResponse: {
@@ -4980,6 +5124,19 @@ export interface components {
             /** Updated */
             updated: boolean;
         };
+        /** WorkerDesiredVersionsResponse */
+        WorkerDesiredVersionsResponse: {
+            /** Shouldupdate */
+            shouldUpdate: boolean;
+            /** Updatechannel */
+            updateChannel: string;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Supervisorversion */
+            supervisorVersion?: string | null;
+        };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
             /** Enrollmenttoken */
@@ -5056,6 +5213,7 @@ export interface components {
             status: string;
             /** Servertime */
             serverTime: string;
+            desiredVersions: components["schemas"]["WorkerDesiredVersionsResponse"];
         };
         /** WorkerInventoryPayload */
         WorkerInventoryPayload: {
@@ -5197,6 +5355,30 @@ export interface components {
             targetConfigId: string;
             /** Status */
             status: string;
+            /** Updated */
+            updated: boolean;
+        };
+        /** WorkerUpdateStatusRequest */
+        WorkerUpdateStatusRequest: {
+            /** Status */
+            status: string;
+            /** Component */
+            component?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Detail */
+            detail?: string | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+        };
+        /** WorkerUpdateStatusResponse */
+        WorkerUpdateStatusResponse: {
+            /** Targetid */
+            targetId: string;
+            /** Workerid */
+            workerId: string;
             /** Updated */
             updated: boolean;
         };
@@ -7604,6 +7786,103 @@ export interface operations {
             };
         };
     };
+    set_target_desired_versions_endpoint_v1_cloud_compute_targets__target_id__desired_versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDesiredVersionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetDesiredVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    safe_stop_check_endpoint_v1_cloud_compute_targets__target_id__safe_stop_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafeStopCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_workers_endpoint_v1_cloud_compute_targets__target_id__revoke_workers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeWorkersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_target_configs_endpoint_v1_cloud_targets__target_id__configs_get: {
         parameters: {
             query?: never;
@@ -8264,6 +8543,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerInventoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_update_status_endpoint_v1_cloud_worker_update_status_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerUpdateStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerUpdateStatusResponse"];
                 };
             };
             /** @description Validation Error */

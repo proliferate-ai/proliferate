@@ -1,0 +1,1 @@
+"""Cloud compute operational domain."""
