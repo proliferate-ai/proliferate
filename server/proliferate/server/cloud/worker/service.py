@@ -18,6 +18,7 @@ from proliferate.constants.cloud import (
     CLOUD_WORKER_TOKEN_DOMAIN,
     CloudCommandStatus,
     CloudTargetStatus,
+    CloudTargetUpdateStatus,
     CloudWorkerStatus,
 )
 from proliferate.db.store.cloud_sync import commands as commands_store
@@ -67,6 +68,14 @@ from proliferate.server.cloud.worker.models import (
     WorkerUpdateStatusResponse,
 )
 from proliferate.utils.time import utcnow
+
+_ACTIVE_TARGET_UPDATE_STATUSES = frozenset(
+    {
+        CloudTargetUpdateStatus.staging.value,
+        CloudTargetUpdateStatus.staged.value,
+        CloudTargetUpdateStatus.applying.value,
+    }
+)
 
 
 def _hash_token(*, domain: str, token: str) -> str:
@@ -157,6 +166,24 @@ def _desired_versions_response(
         anyharness_version=target.desired_anyharness_version,
         worker_version=target.desired_worker_version,
         supervisor_version=target.desired_supervisor_version,
+    )
+
+
+def _desired_versions_match_worker(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    worker: worker_auth_store.CloudWorkerSnapshot,
+) -> bool:
+    desired_and_current = (
+        (target.desired_anyharness_version, worker.anyharness_version),
+        (target.desired_worker_version, worker.worker_version),
+        (target.desired_supervisor_version, worker.supervisor_version),
+    )
+    has_desired_version = any(desired is not None for desired, _current in desired_and_current)
+    if not has_desired_version:
+        return False
+    return all(
+        desired is None or desired == current for desired, current in desired_and_current
     )
 
 
@@ -342,7 +369,6 @@ async def record_heartbeat(
         status_detail=body.status_detail,
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
-    await _publish_current_target_patch(db, target_id=auth.target_id)
     target = await targets_store.get_target_by_id(db, auth.target_id)
     if target is None:
         raise CloudApiError(
@@ -350,12 +376,30 @@ async def record_heartbeat(
             "Worker target no longer exists.",
             status_code=401,
         )
+    desired_versions = _desired_versions_response(target=target, worker=worker)
+    if (
+        target.update_status in _ACTIVE_TARGET_UPDATE_STATUSES
+        and _desired_versions_match_worker(target=target, worker=worker)
+    ):
+        target = (
+            await targets_store.record_target_update_status(
+                db,
+                target_id=auth.target_id,
+                status_value=CloudTargetUpdateStatus.applied.value,
+                status_detail="Desired versions reported by worker.",
+                component=None,
+                version=None,
+                reported_at=now,
+            )
+            or target
+        )
+    await publish_target_patch_after_commit(db, target)
     return WorkerHeartbeatResponse(
         target_id=str(auth.target_id),
         worker_id=str(auth.worker_id),
         status=status_value,
         server_time=now.isoformat(),
-        desired_versions=_desired_versions_response(target=target, worker=worker),
+        desired_versions=desired_versions,
     )
 
 

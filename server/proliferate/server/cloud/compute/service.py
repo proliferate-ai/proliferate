@@ -15,7 +15,7 @@ from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.compute.domain.policy import (
-    require_compute_target_admin_membership,
+    decide_compute_target_admin_membership,
 )
 from proliferate.server.cloud.compute.domain.rules import (
     TERMINAL_SESSION_STATUSES,
@@ -23,6 +23,7 @@ from proliferate.server.cloud.compute.domain.rules import (
     normalize_optional_version,
     normalize_update_channel,
 )
+from proliferate.server.cloud.compute.domain.types import ComputeRuleError
 from proliferate.server.cloud.compute.models import (
     RevokeWorkersResponse,
     SafeStopCheckResponse,
@@ -33,6 +34,10 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_target_patch_after_commit
 from proliferate.server.cloud.targets.models import target_detail_payload
 from proliferate.utils.time import utcnow
+
+
+def _cloud_compute_rule_error(error: ComputeRuleError) -> CloudApiError:
+    return CloudApiError(error.code, error.message, status_code=400)
 
 
 async def _require_admin_target(
@@ -58,7 +63,21 @@ async def _require_admin_target(
             organization_id=target.organization_id,
             user_id=user.id,
         )
-        require_compute_target_admin_membership(membership)
+        verdict = decide_compute_target_admin_membership(
+            membership_role=membership.role if membership is not None else None,
+        )
+        if verdict.denial == "organization_not_found":
+            raise CloudApiError(
+                "cloud_compute_organization_not_found",
+                "Organization not found.",
+                status_code=404,
+            )
+        if verdict.denial == "permission_denied":
+            raise CloudApiError(
+                "cloud_compute_organization_permission_denied",
+                "You do not have permission to manage this compute target.",
+                status_code=403,
+            )
     return target
 
 
@@ -76,13 +95,20 @@ async def set_desired_versions(
             "Target is archived.",
             status_code=409,
         )
+    try:
+        update_channel = normalize_update_channel(body.update_channel)
+        desired_anyharness_version = normalize_optional_version(body.anyharness_version)
+        desired_worker_version = normalize_optional_version(body.worker_version)
+        desired_supervisor_version = normalize_optional_version(body.supervisor_version)
+    except ComputeRuleError as error:
+        raise _cloud_compute_rule_error(error) from error
     updated = await targets_store.set_target_desired_versions(
         db,
         target_id=target.id,
-        update_channel=normalize_update_channel(body.update_channel),
-        desired_anyharness_version=normalize_optional_version(body.anyharness_version),
-        desired_worker_version=normalize_optional_version(body.worker_version),
-        desired_supervisor_version=normalize_optional_version(body.supervisor_version),
+        update_channel=update_channel,
+        desired_anyharness_version=desired_anyharness_version,
+        desired_worker_version=desired_worker_version,
+        desired_supervisor_version=desired_supervisor_version,
     )
     if updated is None:
         raise CloudApiError(
@@ -113,6 +139,7 @@ async def check_safe_stop(
     verdict = decide_safe_stop(
         target_status=target.status,
         update_status=target.update_status,
+        has_target_safe_stop_state=False,
         active_session_count=active_session_count,
         active_command_count=active_command_count,
     )

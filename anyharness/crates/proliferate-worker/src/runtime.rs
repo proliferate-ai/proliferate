@@ -112,15 +112,28 @@ async fn send_heartbeat(
     identity: &WorkerIdentity,
 ) -> Result<(), WorkerError> {
     let anyharness_version = anyharness_version(config).await;
+    let worker_version = Some(env!("CARGO_PKG_VERSION").to_string());
+    let supervisor_version = config.supervisor_version.clone();
     let request = heartbeat::online(
-        Some(env!("CARGO_PKG_VERSION").to_string()),
-        anyharness_version,
-        config.supervisor_version.clone(),
+        worker_version.clone(),
+        anyharness_version.clone(),
+        supervisor_version.clone(),
     );
     let response = cloud.heartbeat(&identity.worker_token, &request).await?;
     crate::observability::heartbeat_ack(&response);
-    if let Err(error) =
-        updates::desired::reconcile(config, cloud, identity, &response.desired_versions).await
+    let installed = updates::desired::InstalledVersions {
+        anyharness_version,
+        worker_version,
+        supervisor_version,
+    };
+    if let Err(error) = updates::desired::reconcile(
+        config,
+        cloud,
+        identity,
+        &response.desired_versions,
+        &installed,
+    )
+    .await
     {
         warn!(?error, "worker update reconciliation failed");
     }

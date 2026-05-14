@@ -71,6 +71,16 @@ class TestCloudWorkerUpdatesApi:
         assert desired.status_code == 200
         assert desired.json()["target"]["update"]["desiredVersions"]["workerVersion"] == "0.2.0"
 
+        invalid_channel = await client.post(
+            f"/v1/cloud/compute/targets/{target_id}/desired-versions",
+            headers=auth.headers,
+            json={
+                "updateChannel": "nightly/../prod",
+                "workerVersion": "0.2.0",
+            },
+        )
+        assert invalid_channel.status_code == 422
+
         heartbeat = await client.post(
             "/v1/cloud/worker/heartbeat",
             headers=worker_headers,
@@ -125,6 +135,42 @@ class TestCloudWorkerUpdatesApi:
         assert reset_update["component"] is None
         assert reset_update["version"] is None
 
+        staging_status = await client.post(
+            "/v1/cloud/worker/update-status",
+            headers=worker_headers,
+            json={
+                "status": "staging",
+                "detail": "Update request received.",
+            },
+        )
+        assert staging_status.status_code == 200
+
+        complete_heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers=worker_headers,
+            json={
+                "status": "online",
+                "workerVersion": "0.3.0",
+                "anyharnessVersion": "0.3.0",
+                "supervisorVersion": "0.3.0",
+            },
+        )
+        assert complete_heartbeat.status_code == 200
+        assert complete_heartbeat.json()["desiredVersions"]["shouldUpdate"] is False
+
+        complete_detail = await client.get(f"/v1/cloud/targets/{target_id}", headers=auth.headers)
+        assert complete_detail.status_code == 200
+        complete_update = complete_detail.json()["update"]
+        assert complete_update["status"] == "applied"
+        assert complete_update["statusDetail"] == "Desired versions reported by worker."
+
+        safe_after_applied = await client.post(
+            f"/v1/cloud/compute/targets/{target_id}/safe-stop-check",
+            headers=auth.headers,
+        )
+        assert safe_after_applied.status_code == 200
+        assert "update_in_progress" not in safe_after_applied.json()["reasons"]
+
         stale_status = await client.post(
             "/v1/cloud/worker/update-status",
             headers=worker_headers,
@@ -174,7 +220,8 @@ class TestCloudWorkerUpdatesApi:
             headers=auth.headers,
         )
         assert idle.status_code == 200
-        assert idle.json()["allowed"] is True
+        assert idle.json()["allowed"] is False
+        assert "safe_stop_state_unknown" in idle.json()["reasons"]
 
         update_status = await client.post(
             "/v1/cloud/worker/update-status",
