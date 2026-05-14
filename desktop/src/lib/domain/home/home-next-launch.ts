@@ -73,6 +73,9 @@ export function resolveHomeModelAvailabilityState(input: {
   hasLoadError: boolean;
   hasLaunchableModel: boolean;
 }): ModelAvailabilityState {
+  if (input.hasLaunchableModel) {
+    return "launchable";
+  }
   if (input.isLoading) {
     return "loading";
   }

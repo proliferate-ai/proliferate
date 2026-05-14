@@ -115,7 +115,7 @@ describe("useHomeNextModelSelection", () => {
     cleanup();
   });
 
-  it("uses loading precedence before errors and launchability", () => {
+  it("keeps launchable catalog models usable while runtime details refresh", () => {
     selectionMocks.agentCatalog.readyAgents = [agent("codex")];
     selectionMocks.agentCatalog.isLoading = true;
     selectionMocks.modelRegistriesQuery.isError = true;
@@ -125,7 +125,7 @@ describe("useHomeNextModelSelection", () => {
       modelSelectionOverride: null,
     }));
 
-    expect(result.current.modelAvailabilityState).toBe("loading");
+    expect(result.current.modelAvailabilityState).toBe("launchable");
   });
 
   it("treats agent and registry errors as load errors", () => {
@@ -163,6 +163,23 @@ describe("useHomeNextModelSelection", () => {
     }));
 
     expect(result.current.modelAvailabilityState).toBe("launchable");
+  });
+
+  it("does not block launchable catalog models on runtime launch option errors", () => {
+    selectionMocks.agentCatalog.readyAgents = [agent("codex")];
+    selectionMocks.modelRegistriesQuery.data = [registry("codex")];
+    selectionMocks.runtimeLaunchOptions.isError = true;
+    selectionMocks.runtimeLaunchOptions.error = new Error("runtime refresh failed");
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+    }));
+
+    expect(result.current.modelAvailabilityState).toBe("launchable");
+    expect(result.current.effectiveModelSelection).toEqual({
+      kind: "codex",
+      modelId: "default-model",
+    });
   });
 
   it("uses visible model preferences for the home default launch selection", () => {

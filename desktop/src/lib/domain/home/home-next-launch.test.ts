@@ -230,17 +230,17 @@ describe("home-next agent helpers", () => {
 });
 
 describe("home-next model helpers", () => {
-  it("resolves model availability with loading and error precedence", () => {
+  it("resolves model availability with launchable data before pending or failed refreshes", () => {
     expect(resolveHomeModelAvailabilityState({
       isLoading: true,
       hasLoadError: true,
       hasLaunchableModel: true,
-    })).toBe("loading");
+    })).toBe("launchable");
     expect(resolveHomeModelAvailabilityState({
       isLoading: false,
       hasLoadError: true,
       hasLaunchableModel: true,
-    })).toBe("load_error");
+    })).toBe("launchable");
     expect(resolveHomeModelAvailabilityState({
       isLoading: false,
       hasLoadError: false,
