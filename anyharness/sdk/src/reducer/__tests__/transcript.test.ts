@@ -1253,6 +1253,52 @@ describe("transcript reducer", () => {
     expect(item.nativeToolName).toBe("mcp__subagents__schedule_subagent_wake");
   });
 
+  it("classifies AnyHarness create_cowork_agent MCP calls as cowork coding activity", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-cowork-agent-create",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              title: "mcp__cowork__create_cowork_agent",
+              toolCallId: "tool-cowork-agent-create",
+              nativeToolName: "mcp__cowork__create_cowork_agent",
+              rawInput: {
+                coworkWorkspaceId: "cowork_workspace_1",
+                label: "api-surface-check",
+                prompt: "Review the API surface.",
+              },
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-cowork-agent-create",
+                  title: "mcp__cowork__create_cowork_agent",
+                  toolKind: "other",
+                  nativeToolName: "mcp__cowork__create_cowork_agent",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-cowork-agent-create"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("cowork_coding");
+    expect(item.nativeToolName).toBe("mcp__cowork__create_cowork_agent");
+  });
+
   it("classifies Claude cowork artifact update tool calls from captured MCP names", () => {
     const state = reduceEvents(
       [

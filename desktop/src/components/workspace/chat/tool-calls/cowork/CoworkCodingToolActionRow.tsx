@@ -1,4 +1,4 @@
-import type { ToolCallItem } from "@anyharness/sdk";
+import type { ToolCallItem, ToolResultTextContentPart } from "@anyharness/sdk";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
@@ -18,6 +18,7 @@ import {
   type CoworkCodingAction,
 } from "@/lib/domain/chat/tools/cowork-coding-tool-presentation";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tools/tool-call-layout";
+import { normalizeToolResultText } from "@/lib/domain/chat/tools/tool-result-text";
 
 interface CoworkCodingToolActionRowProps {
   item: ToolCallItem;
@@ -45,6 +46,9 @@ export function CoworkCodingToolActionRow({
     return null;
   }
 
+  const resultText = shouldShowLedger(presentation.action)
+    ? ""
+    : extractNormalizedResultText(item);
   const canOpenCodingSession =
     !!presentation.workspaceId
     && !!presentation.codingSessionId
@@ -63,6 +67,7 @@ export function CoworkCodingToolActionRow({
       ? () => onOpenWorkspace(presentation.workspaceId!)
       : undefined;
   const showLedger = shouldShowLedger(presentation.action);
+  const expandable = showLedger || resultText.length > 0;
 
   return (
     <div data-telemetry-mask="true">
@@ -84,7 +89,7 @@ export function CoworkCodingToolActionRow({
             onOpen={openCodingSession ?? openWorkspace}
           />
         )}
-        expandable={showLedger}
+        expandable={expandable}
         defaultExpanded={showLedger && item.status !== "in_progress"}
       >
         {showLedger && (
@@ -98,6 +103,9 @@ export function CoworkCodingToolActionRow({
             onOpenWorkspace={openWorkspace}
             failed={item.status === "failed"}
           />
+        )}
+        {!showLedger && resultText && (
+          <CoworkCodingResultDetails content={resultText} />
         )}
       </ToolActionRow>
     </div>
@@ -378,6 +386,29 @@ function PlainCoworkCodingActionRow({
       {label}
     </div>
   );
+}
+
+function CoworkCodingResultDetails({ content }: { content: string }) {
+  return (
+    <ToolActionDetailsPanel>
+      <AutoHideScrollArea
+        className="w-full"
+        viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+      >
+        <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
+          {content}
+        </pre>
+      </AutoHideScrollArea>
+    </ToolActionDetailsPanel>
+  );
+}
+
+function extractNormalizedResultText(item: ToolCallItem): string {
+  const text = item.contentParts
+    .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
+    .map((part) => part.text)
+    .join("\n\n");
+  return normalizeToolResultText(text);
 }
 
 function formatPromptStatus(

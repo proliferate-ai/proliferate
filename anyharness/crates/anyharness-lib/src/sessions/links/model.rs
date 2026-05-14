@@ -27,6 +27,15 @@ impl SessionLinkRelation {
             other => Err(SessionLinkParseError::UnknownRelation(other.to_string())),
         }
     }
+
+    pub fn public_id_prefix(self) -> &'static str {
+        match self {
+            Self::Subagent => "subagent",
+            Self::CoworkCodingSession => "cowork_agent",
+            Self::ReviewAgent => "reviewer",
+            Self::Fork => "session_link",
+        }
+    }
 }
 
 impl fmt::Display for SessionLinkRelation {
@@ -69,6 +78,7 @@ impl fmt::Display for SessionLinkWorkspaceRelation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionLinkRecord {
     pub id: String,
+    pub public_id: Option<String>,
     pub relation: SessionLinkRelation,
     pub parent_session_id: String,
     pub child_session_id: String,
@@ -77,6 +87,7 @@ pub struct SessionLinkRecord {
     pub created_by_turn_id: Option<String>,
     pub created_by_tool_call_id: Option<String>,
     pub created_at: String,
+    pub closed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

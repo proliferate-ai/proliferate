@@ -26,6 +26,7 @@ export interface SubagentLaunchDisplay {
 }
 
 export interface SubagentLaunchResult {
+  subagentId: string | null;
   sessionLinkId: string | null;
   childSessionId: string | null;
 }
@@ -77,7 +78,11 @@ export function resolveSubagentLaunchDisplay(
   item: ToolCallItem,
 ): SubagentLaunchDisplay {
   const rawInput = isRecord(item.rawInput) ? item.rawInput : {};
-  const label = readStringField(rawInput, "label");
+  const rawOutput: Record<string, unknown> = isRecord(item.rawOutput)
+    ? item.rawOutput
+    : (parseToolResultJsonObject(item) ?? {});
+  const label = readStringField(rawInput, "label")
+    ?? readStringField(rawOutput, "label");
   const prompt = readStringField(rawInput, "prompt") ?? extractToolInputText(item);
   const title = label
     ?? (isAnyHarnessSubagentTool(item) ? "Subagent" : item.title)
@@ -122,11 +127,19 @@ export function parseSubagentLaunchResult(
   item: ToolCallItem,
 ): SubagentLaunchResult | null {
   const provisioningStatus = parseSubagentProvisioningStatus(item);
-  if (!provisioningStatus || (!provisioningStatus.sessionLinkId && !provisioningStatus.childSessionId)) {
+  if (
+    !provisioningStatus
+    || (
+      !provisioningStatus.subagentId
+      && !provisioningStatus.sessionLinkId
+      && !provisioningStatus.childSessionId
+    )
+  ) {
     return null;
   }
 
   return {
+    subagentId: provisioningStatus.subagentId,
     sessionLinkId: provisioningStatus.sessionLinkId,
     childSessionId: provisioningStatus.childSessionId,
   };
@@ -146,12 +159,22 @@ export function parseSubagentProvisioningStatus(
     return null;
   }
 
+  const wake = isRecord(output.wake) ? output.wake : null;
   return {
+    subagentId: readStringField(output, "subagentId"),
     sessionLinkId: readStringField(output, "sessionLinkId"),
     childSessionId: readStringField(output, "childSessionId"),
-    promptStatus: readStringField(output, "promptStatus"),
-    wakeScheduled: readOptionalBooleanField(output, "wakeScheduled"),
-    wakeScheduleCreated: readOptionalBooleanField(output, "wakeScheduleCreated"),
+    promptStatus:
+      readStringField(output, "promptStatus")
+      ?? readStringField(output, "status"),
+    wakeScheduled:
+      readOptionalBooleanField(output, "wakeScheduled")
+      ?? readOptionalBooleanField(output, "scheduled")
+      ?? (wake ? readOptionalBooleanField(wake, "scheduled") : null),
+    wakeScheduleCreated:
+      readOptionalBooleanField(output, "wakeScheduleCreated")
+      ?? readOptionalBooleanField(output, "created")
+      ?? (wake ? readOptionalBooleanField(wake, "created") : null),
   };
 }
 

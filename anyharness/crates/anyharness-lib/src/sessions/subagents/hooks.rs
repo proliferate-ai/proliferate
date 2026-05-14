@@ -10,7 +10,7 @@ use crate::live::sessions::actor::command::SessionCommand;
 use crate::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
-use crate::sessions::prompt::PromptPayload;
+use crate::sessions::prompt::{PromptPayload, PromptProvenance};
 use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::sessions::store::SessionStore;
 
@@ -77,17 +77,15 @@ async fn deliver_subagent_completion(
     };
     let prompt = wake_prompt_text(
         link.label.as_deref(),
-        &link.child_session_id,
-        &link.id,
+        link.public_id.as_deref(),
         ctx.outcome,
-        ctx.last_event_seq,
     );
     let prompt_payload =
-        PromptPayload::text(prompt).with_provenance(SubagentService::wake_prompt_provenance(
-            &link.id,
-            &completion.completion_id,
-            link.label.clone(),
-        ));
+        PromptPayload::text(prompt).with_provenance(PromptProvenance::SubagentWake {
+            session_link_id: link.id.clone(),
+            completion_id: completion.completion_id.clone(),
+            label: link.label.clone(),
+        });
     let Some(inserted) = service.insert_completion_and_consume_schedule(
         &completion,
         &link.parent_session_id,
@@ -159,14 +157,13 @@ fn to_contract_outcome(outcome: SessionTurnOutcome) -> SubagentTurnOutcome {
 
 fn wake_prompt_text(
     label: Option<&str>,
-    child_session_id: &str,
-    session_link_id: &str,
+    subagent_id: Option<&str>,
     outcome: SessionTurnOutcome,
-    child_last_event_seq: i64,
 ) -> String {
     let label = label.unwrap_or("subagent");
+    let subagent_id = subagent_id.unwrap_or("unknown");
     format!(
-        "Subagent \"{label}\" completed a turn.\n\nChild session: {child_session_id}\nSession link: {session_link_id}\nOutcome: {}\nLast child event seq: {child_last_event_seq}\n\nUse the subagent tools to inspect the child session before continuing.",
+        "Subagent \"{label}\" completed a turn.\n\nsubagentId: {subagent_id}\nOutcome: {}\n\nUse read_subagent_latest_turns or search_subagent_transcript with this subagentId before relying on the result.",
         outcome.as_str()
     )
 }

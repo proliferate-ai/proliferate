@@ -4,6 +4,7 @@ import type {
 } from "react";
 import { ChatTabWithMenu } from "@/components/workspace/shell/tabs/ChatTabWithMenu";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import {
   isPrimaryMultiSelectClick,
   isPrimaryMultiSelectPointer,
@@ -80,10 +81,25 @@ export function HeaderChatTab({
   suppressNextSelectClick,
   consumeSuppressedSelectClick,
 }: HeaderChatTabProps) {
+  const openCoworkCodingSession = useOpenCoworkCodingSession();
   const canMultiSelect = !tab.isChild;
   const canCreateGroup = canMultiSelect
     && multiSelectedSessionIds.has(tab.id)
     && selectedTopLevelSessionIds.length >= 2;
+
+  const activateTab = () => {
+    clearSelection();
+    if (tab.source === "cowork" && tab.workspaceId) {
+      void openCoworkCodingSession({
+        workspaceId: tab.workspaceId,
+        sessionId: tab.id,
+        parentSessionId: tab.parentSessionId,
+        sessionLinkId: tab.sessionLinkId,
+      });
+      return;
+    }
+    onActivate(tab.id);
+  };
 
   const handleSelectPointerDownCapture = (event: PointerEvent<HTMLButtonElement>) => {
     if (!canMultiSelect || !isPrimaryMultiSelectPointer(event)) {
@@ -112,8 +128,7 @@ export function HeaderChatTab({
       toggleSelection(tab.id);
       return;
     }
-    clearSelection();
-    onActivate(tab.id);
+    activateTab();
   };
 
   return (
@@ -152,6 +167,19 @@ export function HeaderChatTab({
         onCloseOthers={() => onCloseOthers(tab.id)}
         onCloseRight={() => onCloseRight(tab.id)}
         onDismiss={() => onDismiss(tab.id)}
+        onOpenDelegatedSession={(indicator) => {
+          clearSelection();
+          if (indicator.source === "cowork" && indicator.workspaceId) {
+            void openCoworkCodingSession({
+              workspaceId: indicator.workspaceId,
+              sessionId: indicator.sessionId,
+              parentSessionId: indicator.parentSessionId,
+              sessionLinkId: indicator.sessionLinkId,
+            });
+            return;
+          }
+          onActivate(indicator.sessionId);
+        }}
       />
     </div>
   );

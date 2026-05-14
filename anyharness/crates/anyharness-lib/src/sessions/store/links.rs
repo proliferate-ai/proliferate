@@ -59,6 +59,7 @@ impl SessionStore {
                 "SELECT EXISTS(
                     SELECT 1 FROM session_links
                     WHERE child_session_id = ?1 AND relation = ?2
+                      AND closed_at IS NULL
                 )",
                 params![session_id, relation.as_str()],
                 |row| row.get(0),
@@ -79,6 +80,7 @@ impl SessionStore {
                  JOIN sessions ON sessions.id = session_links.parent_session_id
                  WHERE session_links.child_session_id = ?1
                    AND session_links.relation = ?2
+                   AND session_links.closed_at IS NULL
                  ORDER BY session_links.created_at ASC, session_links.id ASC
                  LIMIT 1",
                 params![session_id, relation.as_str()],
@@ -96,11 +98,13 @@ fn insert_session_link_row(
 ) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO session_links (
-            id, relation, parent_session_id, child_session_id, workspace_relation,
-            label, created_by_turn_id, created_by_tool_call_id, created_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            id, public_id, relation, parent_session_id, child_session_id,
+            workspace_relation, label, created_by_turn_id, created_by_tool_call_id,
+            created_at, closed_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             record.id,
+            record.public_id,
             record.relation.as_str(),
             record.parent_session_id,
             record.child_session_id,
@@ -109,6 +113,7 @@ fn insert_session_link_row(
             record.created_by_turn_id,
             record.created_by_tool_call_id,
             record.created_at,
+            record.closed_at,
         ],
     )?;
     Ok(())

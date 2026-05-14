@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
+use anyharness_contract::v1::SessionPluginBundle;
+
 use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, definition};
 use crate::domains::plugins::registry::PluginBundleRegistry;
 use crate::domains::plugins::skills::{
-    bundle_has_skills, render_skill_index, SKILLS_MCP_CONNECTION_ID, SKILLS_MCP_SERVER_NAME,
+    bundle_has_skills, effective_bundle_with_product_skills, product_skills_for_session,
+    render_skill_index, SKILLS_MCP_CONNECTION_ID, SKILLS_MCP_SERVER_NAME,
 };
 use crate::integrations::mcp::product_server::PRODUCT_MCP_TOKEN_HEADER_NAME;
 use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
@@ -12,6 +15,7 @@ use crate::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
 use crate::sessions::model::SessionMcpBindingPolicy;
+use crate::sessions::subagents::service::SubagentService;
 
 #[derive(Clone)]
 pub struct PluginSessionLaunchExtension {
@@ -19,6 +23,7 @@ pub struct PluginSessionLaunchExtension {
     runtime_base_url: String,
     runtime_bearer_token: Option<String>,
     skills_auth: Arc<SkillsMcpAuth>,
+    subagent_service: Option<Arc<SubagentService>>,
 }
 
 impl PluginSessionLaunchExtension {
@@ -27,12 +32,14 @@ impl PluginSessionLaunchExtension {
         runtime_base_url: String,
         runtime_bearer_token: Option<String>,
         skills_auth: Arc<SkillsMcpAuth>,
+        subagent_service: Option<Arc<SubagentService>>,
     ) -> Self {
         Self {
             registry,
             runtime_base_url,
             runtime_bearer_token,
             skills_auth,
+            subagent_service,
         }
     }
 }
@@ -131,12 +138,41 @@ mod tests {
         assert!(extras.system_prompt_append.is_empty());
     }
 
+    #[test]
+    fn product_subagent_skill_requires_standard_subagents_session() {
+        let extension = extension(PluginBundleRegistry::default());
+        let mut workspace = workspace_record();
+        workspace.surface = "standard".to_string();
+        let mut session = session_record();
+        session.subagents_enabled = true;
+
+        let extras = extension
+            .resolve_launch_extras(&SessionLaunchContext {
+                workspace: &workspace,
+                session: &session,
+            })
+            .expect("launch extras should resolve");
+        assert_eq!(extras.mcp_servers.len(), 1);
+        assert!(extras.system_prompt_append[0].contains("proliferate.subagents.workflow"));
+
+        workspace.surface = "cowork".to_string();
+        let extras = extension
+            .resolve_launch_extras(&SessionLaunchContext {
+                workspace: &workspace,
+                session: &session,
+            })
+            .expect("launch extras should resolve");
+        assert!(extras.mcp_servers.is_empty());
+        assert!(extras.system_prompt_append.is_empty());
+    }
+
     fn extension(registry: PluginBundleRegistry) -> PluginSessionLaunchExtension {
         PluginSessionLaunchExtension::new(
             registry,
             "http://127.0.0.1:1234".to_string(),
             None,
             Arc::new(SkillsMcpAuth::new(temp_runtime_home())),
+            None,
         )
     }
 
@@ -274,9 +310,22 @@ impl SessionExtension for PluginSessionLaunchExtension {
         if ctx.session.mcp_binding_policy == SessionMcpBindingPolicy::InternalOnly {
             return Ok(SessionLaunchExtras::default());
         }
-        let Some(bundle) = self.registry.get_session_bundle(&ctx.session.id) else {
+        let stored_bundle = self
+            .registry
+            .get_session_bundle(&ctx.session.id)
+            .unwrap_or_else(|| SessionPluginBundle {
+                plugins: Vec::new(),
+            });
+        let product_skills = product_skills_for_session(self.subagents_workflow_available(ctx)?);
+        let bundle = effective_bundle_with_product_skills(stored_bundle, product_skills);
+        if bundle.plugins.is_empty() {
+            self.registry.clear_session_bundle(&ctx.session.id);
             return Ok(SessionLaunchExtras::default());
-        };
+        }
+        if bundle_has_skills(&bundle) {
+            self.registry
+                .set_session_bundle(ctx.session.id.clone(), bundle.clone());
+        }
 
         let mut extras = SessionLaunchExtras::default();
         for plugin in &bundle.plugins {
@@ -300,6 +349,18 @@ impl SessionExtension for PluginSessionLaunchExtension {
 }
 
 impl PluginSessionLaunchExtension {
+    fn subagents_workflow_available(&self, ctx: &SessionLaunchContext<'_>) -> anyhow::Result<bool> {
+        if !ctx.session.subagents_enabled || ctx.workspace.surface != "standard" {
+            return Ok(false);
+        }
+        let Some(subagent_service) = self.subagent_service.as_ref() else {
+            return Ok(true);
+        };
+        Ok(subagent_service
+            .find_subagent_parent(&ctx.session.id)?
+            .is_none())
+    }
+
     fn build_skills_mcp_server(
         &self,
         ctx: &SessionLaunchContext<'_>,

@@ -14,12 +14,14 @@ import {
 } from "@/lib/domain/workspaces/tabs/manual-groups";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type {
+  HeaderDelegatedWorkIndicator,
   HeaderChatMenuEntry,
   HeaderChatStripRow,
   HeaderChatTabEntry,
   HeaderWorkspaceShellStripRow,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import type { GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
+import { delegatedWorkVisualIdentity } from "@/lib/domain/delegated-work/identity";
 
 export function buildManualGroupByTopLevelSessionId(
   displayManualGroups: readonly DisplayManualChatGroup[],
@@ -66,14 +68,57 @@ export function buildHeaderChatTabs(args: {
           : getLinkedChildViewState(hierarchyChild!),
         canFork: known ? getKnownSessionCanFork(known) : false,
         isReviewAgentChild: hierarchyChild?.source === "review",
+        source: hierarchyChild?.source ?? null,
+        sessionLinkId: hierarchyChild?.sessionLinkId ?? null,
+        workspaceId: hierarchyChild?.workspaceId ?? null,
         isActive: false as boolean,
         groupColor,
         visualGroupId: manualGroup?.id ?? (isSubagentGrouped ? grouped.groupRootSessionId : null),
         manualGroupId: manualGroup?.id ?? null,
         isHierarchyResolved: args.resolvedSessionIds.has(grouped.sessionId),
+        delegatedIndicators: grouped.isChild
+          ? []
+          : buildDelegatedIndicators(args.childrenByParentSessionId.get(grouped.sessionId) ?? []),
       } satisfies HeaderChatTabEntry;
     })
     .filter((tab): tab is HeaderChatTabEntry => !!tab);
+}
+
+function buildDelegatedIndicators(
+  children: readonly HeaderHierarchyChildRow[],
+): HeaderDelegatedWorkIndicator[] {
+  return [...children].sort(compareDelegatedChildrenForBubbles).map((child) => {
+    const identity = delegatedWorkVisualIdentity(child.sessionLinkId || child.sessionId);
+    return {
+      id: child.sessionLinkId || child.sessionId,
+      sessionId: child.sessionId,
+      parentSessionId: child.parentSessionId,
+      sessionLinkId: child.sessionLinkId,
+      workspaceId: child.workspaceId ?? null,
+      title: child.title,
+      avatarName: identity.avatarName,
+      initial: identity.initial,
+      colorClassName: identity.colorClassName,
+      statusLabel: child.statusLabel,
+      source: child.source,
+    };
+  });
+}
+
+function compareDelegatedChildrenForBubbles(
+  left: HeaderHierarchyChildRow,
+  right: HeaderHierarchyChildRow,
+): number {
+  return delegatedBubblePriority(left) - delegatedBubblePriority(right);
+}
+
+function delegatedBubblePriority(child: HeaderHierarchyChildRow): number {
+  if (child.statusLabel === "Failed") return 0;
+  if (child.statusLabel === "Working" || child.statusLabel === "Starting") return 1;
+  if (child.wakeScheduled) return 2;
+  if (child.statusLabel === "Done" || child.statusLabel === "Idle") return 3;
+  if (child.statusLabel === "Closed") return 4;
+  return 5;
 }
 
 export function selectHeaderStripChatSessionIds(

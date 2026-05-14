@@ -723,6 +723,7 @@ impl MobilityService {
             resolve_safe_path(repo_root, &file.relative_path)
                 .map_err(|error| MobilityError::Invalid(error.to_string()))?;
         }
+        validate_delegated_archive_graph(archive)?;
         for bundle in &archive.sessions {
             if self
                 .session_service
@@ -838,6 +839,58 @@ fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
             MobilityError::Invalid(format!("workspace {workspace_id} is retired"))
         }
     }
+}
+
+fn validate_delegated_archive_graph(
+    archive: &WorkspaceMobilityArchiveData,
+) -> Result<(), MobilityError> {
+    let session_ids = archive
+        .sessions
+        .iter()
+        .map(|bundle| bundle.session.id.as_str())
+        .collect::<HashSet<_>>();
+    let mut link_ids = HashSet::new();
+
+    for link in &archive.session_links {
+        if !session_ids.contains(link.parent_session_id.as_str()) {
+            return Err(MobilityError::Invalid(format!(
+                "archive session link {} references missing parent session {}",
+                link.id, link.parent_session_id
+            )));
+        }
+        if !session_ids.contains(link.child_session_id.as_str()) {
+            return Err(MobilityError::Invalid(format!(
+                "archive session link {} references missing child session {}",
+                link.id, link.child_session_id
+            )));
+        }
+        if !link_ids.insert(link.id.as_str()) {
+            return Err(MobilityError::Invalid(format!(
+                "archive contains duplicate session link {}",
+                link.id
+            )));
+        }
+    }
+
+    for completion in &archive.session_link_completions {
+        if !link_ids.contains(completion.session_link_id.as_str()) {
+            return Err(MobilityError::Invalid(format!(
+                "archive completion {} references missing session link {}",
+                completion.completion_id, completion.session_link_id
+            )));
+        }
+    }
+
+    for schedule in &archive.session_link_wake_schedules {
+        if !link_ids.contains(schedule.session_link_id.as_str()) {
+            return Err(MobilityError::Invalid(format!(
+                "archive wake schedule references missing session link {}",
+                schedule.session_link_id
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_archive_size(archive: &WorkspaceMobilityArchiveData) -> Result<(), MobilityError> {

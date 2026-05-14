@@ -66,6 +66,7 @@ fn fork_link_record(
 ) -> SessionLinkRecord {
     SessionLinkRecord {
         id: id.to_string(),
+        public_id: Some(format!("session_link_{}", id.replace('-', ""))),
         relation: SessionLinkRelation::Fork,
         parent_session_id: parent_session_id.to_string(),
         child_session_id: child_session_id.to_string(),
@@ -74,6 +75,7 @@ fn fork_link_record(
         created_by_turn_id: None,
         created_by_tool_call_id: None,
         created_at: "2026-03-25T00:00:00Z".to_string(),
+        closed_at: None,
     }
 }
 

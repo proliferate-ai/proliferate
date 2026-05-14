@@ -18,6 +18,7 @@ interface ChromeWorkspaceTabProps extends Omit<HTMLAttributes<HTMLDivElement>, "
   onSelectPointerDownCapture?: (event: PointerEvent<HTMLButtonElement>) => void;
   onClose: () => void;
   badge?: ReactNode;
+  rightAccessory?: ReactNode;
   groupColor?: string | null;
   isChild?: boolean;
   hideLeftDivider?: boolean;
@@ -35,6 +36,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     onSelectPointerDownCapture,
     onClose,
     badge,
+    rightAccessory,
     groupColor: _groupColor,
     isChild: _isChild = false,
     hideLeftDivider = false,
@@ -54,7 +56,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
     const selectedFill = "color-mix(in oklab, var(--color-foreground) 10%, var(--color-card))";
     const inactiveFill = "color-mix(in oklab, var(--color-foreground) 5%, transparent)";
     const tabFill = isActive ? activeFill : isMultiSelected ? selectedFill : inactiveFill;
-    const titleMask = "linear-gradient(90deg, #000 0%, #000 calc(100% - 24px), transparent)";
+    const titleMask = "linear-gradient(90deg, #000 0%, #000 calc(100% - 20px), transparent)";
 
     return (
       <div
@@ -99,6 +101,27 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             isMini ? "px-0.5" : "px-2"
           }`}
         >
+          {showCloseButton && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              data-tab-drag-ignore="true"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClose();
+              }}
+              title="Close tab"
+              aria-label="Close tab"
+              className={`mr-1 size-4 shrink-0 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground ${
+                isActive
+                  ? "opacity-80 hover:opacity-100"
+                  : "opacity-0 group-hover/tab:opacity-80 hover:!opacity-100 focus-visible:opacity-100"
+              }`}
+            >
+              <X className="size-2" />
+            </Button>
+          )}
           <Button
             type="button"
             role="tab"
@@ -131,27 +154,7 @@ export const ChromeWorkspaceTab = forwardRef<HTMLDivElement, ChromeWorkspaceTabP
             )}
             {showBadge && badge}
           </Button>
-          {showCloseButton && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              data-tab-drag-ignore="true"
-              onClick={(event) => {
-                event.stopPropagation();
-                onClose();
-              }}
-              title="Close tab"
-              aria-label="Close tab"
-              className={`size-4 shrink-0 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground ${
-                isActive
-                  ? "opacity-80 hover:opacity-100"
-                  : "opacity-0 group-hover/tab:opacity-80 hover:!opacity-100 focus-visible:opacity-100"
-              }`}
-            >
-              <X className="size-2" />
-            </Button>
-          )}
+          {!isMini && rightAccessory}
         </div>
       </div>
     );

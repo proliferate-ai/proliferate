@@ -102,6 +102,37 @@ fn visible_session_lists_exclude_dismissed_and_closed_sessions() {
 }
 
 #[test]
+fn live_state_updates_do_not_reopen_closed_sessions() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let record = session_record();
+    store.insert(&record).expect("insert session");
+    store
+        .mark_closed("session-1", "2026-03-25T03:00:00Z")
+        .expect("close session");
+    store
+        .update_native_session_id("session-1", "native-2", "2026-03-25T04:00:00Z")
+        .expect("ignore native update");
+    store
+        .update_status("session-1", "idle", "2026-03-25T04:00:00Z")
+        .expect("ignore status update");
+    store
+        .mark_closed("session-1", "2026-03-25T05:00:00Z")
+        .expect("repeat close");
+
+    let stored = store
+        .find_by_id("session-1")
+        .expect("find session")
+        .expect("session record");
+    assert_eq!(stored.status, "closed");
+    assert_eq!(stored.native_session_id.as_deref(), Some("native-1"));
+    assert_eq!(stored.closed_at.as_deref(), Some("2026-03-25T03:00:00Z"));
+    assert_eq!(stored.updated_at, "2026-03-25T03:00:00Z");
+}
+
+#[test]
 fn mark_dismissed_is_idempotent_and_restore_uses_latest_timestamp() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

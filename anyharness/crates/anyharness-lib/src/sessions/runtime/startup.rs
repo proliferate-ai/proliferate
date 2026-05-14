@@ -172,6 +172,7 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
+                StartSessionError::Closed => EnsureLiveSessionError::SessionClosed,
                 StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
@@ -196,6 +197,9 @@ impl SessionRuntime {
         self.access_gate
             .assert_can_start_live_session(&record.id)
             .map_err(|error| StartSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
+        if record.closed_at.is_some() || record.status == "closed" {
+            return Err(StartSessionError::Closed);
+        }
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
         if let Some(handle) = self.acp_manager.get_handle(&record.id).await {
@@ -460,6 +464,7 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             anyhow::anyhow!("agent descriptor not found: {agent_kind}")
         }
+        StartSessionError::Closed => anyhow::anyhow!("session is closed"),
         StartSessionError::MissingDataKey => {
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
         }
@@ -505,6 +510,9 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
             CreateAndStartSessionError::Internal(anyhow::anyhow!(
                 "agent descriptor not found: {agent_kind}"
             ))
+        }
+        StartSessionError::Closed => {
+            CreateAndStartSessionError::Internal(anyhow::anyhow!("session is closed"))
         }
         StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => {

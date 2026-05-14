@@ -198,9 +198,12 @@ desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 Product prompts:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/subagents/prompts.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/prompts.rs
-anyharness/crates/anyharness-lib/src/domains/cowork/prompts.rs
+anyharness/crates/anyharness-lib/src/sessions/subagents/hooks.rs
+anyharness/crates/anyharness-lib/src/sessions/subagents/mcp/definition.rs
+anyharness/crates/anyharness-lib/src/domains/reviews/runtime_helpers.rs
+anyharness/crates/anyharness-lib/src/domains/reviews/service_detail.rs
+anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs
+anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs
 ```
 
 Prompt provenance and delegated child-session metadata:

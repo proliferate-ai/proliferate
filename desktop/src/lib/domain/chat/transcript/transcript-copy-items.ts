@@ -125,7 +125,9 @@ function serializeToolCall(
       cowork.promptStatus,
       cowork.sourceWorkspaceId,
       cowork.workspaceId,
+      cowork.coworkWorkspaceId,
       cowork.codingSessionId,
+      cowork.coworkAgentId,
     ]));
   }
 

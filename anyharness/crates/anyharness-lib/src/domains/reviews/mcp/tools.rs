@@ -16,9 +16,21 @@ pub struct SubmitReviewResultArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkReviewRevisionReadyArgs {
-    pub review_run_id: String,
+    #[serde(default)]
+    pub review_id: Option<String>,
+    #[serde(default)]
+    pub review_run_id: Option<String>,
     #[serde(default)]
     pub revised_plan_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetReviewStatusArgs {
+    #[serde(default)]
+    pub review_id: Option<String>,
+    #[serde(default)]
+    pub review_run_id: Option<String>,
 }
 
 pub fn reviewer_tool_list() -> Vec<Value> {
@@ -42,21 +54,31 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     if can_signal_revision {
         tools.push(tool_definition(
             "mark_review_revision_ready",
-            "Signal that the reviewed plan or implementation has been revised and is ready for the next review round. reviewRunId is required.",
+            "Signal that the reviewed plan or implementation has been revised and is ready for the next review round. reviewId is required unless using the deprecated reviewRunId alias.",
             json!({
                 "type": "object",
                 "properties": {
-                    "reviewRunId": { "type": "string" },
+                    "reviewId": { "type": "string" },
+                    "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." },
                     "revisedPlanId": { "type": "string" }
                 },
-                "required": ["reviewRunId"]
+                "anyOf": [
+                    { "required": ["reviewId"] },
+                    { "required": ["reviewRunId"] }
+                ]
             }),
         ));
     }
     tools.push(tool_definition(
         "get_review_status",
-        "Get active review status for this parent session.",
-        json!({ "type": "object", "properties": {} }),
+        "Get active review status for this parent session. Optionally filter by reviewId; reviewRunId is a deprecated alias.",
+        json!({
+            "type": "object",
+            "properties": {
+                "reviewId": { "type": "string" },
+                "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." }
+            }
+        }),
     ));
     tools
 }

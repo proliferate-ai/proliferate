@@ -5,6 +5,9 @@ import {
   parseMcpToolName,
 } from "@/lib/domain/chat/tools/mcp-tool-presentation";
 import { resolveSubagentLaunchDisplay } from "@/lib/domain/chat/subagents/subagent-launch";
+import {
+  formatSubagentMcpActionLabel,
+} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
 
 export type ToolDisplayIconKey =
   | "terminal"
@@ -35,9 +38,11 @@ export function describeToolCallDisplay(
 
   switch (item.semanticKind) {
     case "subagent": {
-      if (normalizedNativeName === "mcp__subagents__schedule_subagent_wake") {
+      const subagentActionLabel =
+        formatSubagentMcpActionLabel(normalizedNativeName || normalizedToolName);
+      if (subagentActionLabel) {
         return {
-          label: "Schedule wake",
+          label: subagentActionLabel,
           hint: "Subagent",
           iconKey: "clipboard-list",
         };

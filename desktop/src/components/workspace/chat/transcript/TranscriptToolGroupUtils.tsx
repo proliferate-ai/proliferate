@@ -70,5 +70,6 @@ export function buildCollapsedSummaryIcons(summary: {
 }
 
 export function isSubagentItem(item: ToolCallItem): boolean {
-  return item.nativeToolName === "Agent" || item.semanticKind === "subagent";
+  return item.nativeToolName === "Agent"
+    || item.semanticKind === "subagent";
 }

@@ -1,15 +1,21 @@
 use serde_json::{json, Value};
 
 use super::super::service::SubagentService;
+use super::calls_helpers::{
+    default_model_for_agent, initial_config_string, launch_agents_to_json, mode_options_to_json,
+    prompt_outcome_label, resolve_preferred_string, summaries_to_json,
+};
 use super::context::SubagentMcpContext;
 use super::tools::{
-    ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, SendSubagentMessageArgs,
+    ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, ReadSubagentLatestTurnsArgs,
+    SearchSubagentTranscriptArgs, SendSubagentMessageArgs,
 };
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
-use crate::sessions::delegation::{READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT};
-use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};
+use crate::sessions::delegation::{
+    parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
+};
+use crate::sessions::runtime::SessionRuntime;
 
 pub async fn call_tool(
     service: &SubagentService,
@@ -45,7 +51,8 @@ pub async fn call_tool(
             service
                 .read_subagent_events(
                     &ctx.parent_session_id,
-                    &args.child_session_id,
+                    args.subagent_id.as_deref(),
+                    args.child_session_id.as_deref(),
                     args.since_seq,
                     args.limit,
                 )
@@ -58,6 +65,76 @@ pub async fn call_tool(
                     })
                 })
                 .map_err(anyhow::Error::from)
+        }
+        "read_subagent_latest_turns" => {
+            let args: ReadSubagentLatestTurnsArgs = deserialize_args(arguments)?;
+            let link = service.resolve_target_including_closed(
+                &ctx.parent_session_id,
+                args.subagent_id.as_deref(),
+                args.child_session_id.as_deref(),
+            )?;
+            service
+                .read_latest_turns(
+                    &ctx.parent_session_id,
+                    link.public_id.as_deref(),
+                    Some(&link.child_session_id),
+                    args.limit,
+                )
+                .map(|turns| {
+                    json!({
+                        "sessionLinkId": link.id,
+                        "subagentId": link.public_id,
+                        "childSessionId": link.child_session_id,
+                        "label": link.label,
+                        "turns": turns.into_iter().map(|turn| json!({
+                            "childTurnId": turn.child_turn_id,
+                            "outcome": turn.outcome,
+                            "createdAt": turn.created_at,
+                            "childLastEventSeq": turn.child_last_event_seq,
+                            "assistantText": turn.assistant_text,
+                            "toolErrors": turn.tool_errors,
+                            "eventCount": turn.event_count,
+                        })).collect::<Vec<_>>()
+                    })
+                })
+                .map_err(anyhow::Error::from)
+        }
+        "search_subagent_transcript" => {
+            let args: SearchSubagentTranscriptArgs = deserialize_args(arguments)?;
+            let link = service.resolve_target_including_closed(
+                &ctx.parent_session_id,
+                args.subagent_id.as_deref(),
+                args.child_session_id.as_deref(),
+            )?;
+            service
+                .search_transcript(
+                    &ctx.parent_session_id,
+                    link.public_id.as_deref(),
+                    Some(&link.child_session_id),
+                    &args.query,
+                    args.limit,
+                )
+                .map(|matches| {
+                    json!({
+                        "sessionLinkId": link.id,
+                        "subagentId": link.public_id,
+                        "childSessionId": link.child_session_id,
+                        "label": link.label,
+                        "query": args.query,
+                        "matches": matches.into_iter().map(|entry| json!({
+                            "seq": entry.seq,
+                            "timestamp": entry.timestamp,
+                            "turnId": entry.turn_id,
+                            "itemId": entry.item_id,
+                            "snippet": entry.snippet,
+                        })).collect::<Vec<_>>()
+                    })
+                })
+                .map_err(anyhow::Error::from)
+        }
+        "close_subagent" => {
+            let args: ChildSessionArgs = deserialize_args(arguments)?;
+            close_subagent(service, session_runtime, &ctx.parent_session_id, args).await
         }
         _ => Err(anyhow::anyhow!("unknown tool: {name}")),
     }
@@ -98,6 +175,7 @@ fn get_subagent_launch_options(
         "canCreate": ctx.can_create,
         "createBlockReason": ctx.create_block_reason,
         "defaults": {
+            "harnessId": default_agent_kind,
             "agentKind": default_agent_kind,
             "modelId": default_model_id,
             "modeId": default_mode_id,
@@ -114,8 +192,11 @@ fn get_subagent_launch_options(
         "capabilities": {
             "workspaceRelation": "same_workspace",
             "canSpecifyAgentKind": true,
+            "canSpecifyHarnessId": true,
             "canSpecifyModelId": true,
             "canSpecifyModeId": true,
+            "createWakeOnCompletion": true,
+            "sendWakeOnCompletion": true,
             "childCanSpawnSubagents": false,
             "childMcpInheritance": "none"
         },
@@ -126,11 +207,11 @@ fn get_subagent_launch_options(
             "options": mode_options_to_json(live_mode_control),
         },
         "notes": [
-            "If agentKind, modelId, or modeId are omitted, create_subagent inherits the current parent session values when available.",
-            "agentKind and modelId are validated against the launch catalog before the child session is created.",
-            "modeId is currently a launch hint stored on the child session; available mode options can only be inferred from the parent session's live config snapshot.",
+            "If harnessId or initialConfig.modelId/modeId are omitted, create_subagent inherits the current parent session values when available.",
+            "harnessId and initialConfig.modelId are validated against the launch catalog before the child session is created.",
+            "initialConfig.modeId is currently a launch hint stored on the child session; available mode options can only be inferred from the parent session's live config snapshot.",
             "Subagents are same-workspace normal sessions. They cannot create grandchildren and do not inherit the parent's MCP bindings in this PR.",
-            "Completions are passive by default. Call schedule_subagent_wake after create_subagent or send_subagent_message when you want to be prompted after the child's next completed turn."
+            "Completions are passive by default. Pass wakeOnCompletion or call schedule_subagent_wake when you want to be prompted after the child's next completed turn."
         ]
     }))
 }
@@ -151,25 +232,36 @@ async fn create_subagent(
         );
     }
     let parent = service.validate_parent_can_spawn(parent_session_id)?;
-    let prompt = args.prompt.trim().to_string();
-    if prompt.is_empty() {
+    let prompt = args.prompt;
+    if prompt.trim().is_empty() {
         anyhow::bail!("prompt is required");
     }
-    let agent_kind = args
-        .agent_kind
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(&parent.agent_kind)
-        .to_string();
-    let model_id = args
-        .model_id
-        .or(parent.current_model_id.clone())
-        .or(parent.requested_model_id.clone());
-    let mode_id = args
-        .mode_id
-        .or(parent.current_mode_id.clone())
-        .or(parent.requested_mode_id.clone());
+    let harness_id = resolve_preferred_string(
+        args.harness_id.as_deref(),
+        args.agent_kind.as_deref(),
+        "harnessId",
+        "agentKind",
+    )?;
+    let agent_kind = harness_id.unwrap_or_else(|| parent.agent_kind.clone());
+    let config_model_id =
+        initial_config_string(args.initial_config.as_ref(), &["modelId", "model"]);
+    let config_mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"]);
+    let model_id = resolve_preferred_string(
+        config_model_id.as_deref(),
+        args.model_id.as_deref(),
+        "initialConfig.modelId",
+        "modelId",
+    )?
+    .or(parent.current_model_id.clone())
+    .or(parent.requested_model_id.clone());
+    let mode_id = resolve_preferred_string(
+        config_mode_id.as_deref(),
+        args.mode_id.as_deref(),
+        "initialConfig.modeId",
+        "modeId",
+    )?
+    .or(parent.current_mode_id.clone())
+    .or(parent.requested_mode_id.clone());
     let label = args
         .label
         .map(|value| value.trim().to_string())
@@ -197,7 +289,7 @@ async fn create_subagent(
         }
     };
     let wake_scheduled = if args.wake_on_completion {
-        match service.schedule_wake_for_child(parent_session_id, &child.id) {
+        match service.schedule_wake_for_target(parent_session_id, None, Some(&child.id)) {
             Ok((_, inserted)) => inserted,
             Err(error) => {
                 cleanup_child_session_after_failed_launch(service, &child.id, "schedule wake");
@@ -222,7 +314,7 @@ async fn create_subagent(
         .send_text_prompt_with_provenance(
             &started.id,
             prompt,
-            SubagentService::parent_to_child_provenance(parent_session_id, &link.id, label.clone()),
+            parent_to_child_provenance(parent_session_id, &link.id, label.clone()),
         )
         .await
     {
@@ -241,11 +333,24 @@ async fn create_subagent(
     };
     Ok(json!({
         "sessionLinkId": link.id,
+        "subagentId": link.public_id,
         "childSessionId": started.id,
         "label": label,
+        "appliedInitialConfig": {
+            "harnessId": agent_kind,
+            "modelId": model_id,
+            "modeId": mode_id,
+        },
+        "wake": {
+            "scheduled": args.wake_on_completion,
+            "created": wake_scheduled,
+            "scope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
+        },
         "wakeScheduled": args.wake_on_completion,
         "wakeScheduleCreated": wake_scheduled,
+        "wakeScope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
         "promptStatus": prompt_outcome_label(&outcome),
+        "readCursor": { "sinceSeq": 0 },
     }))
 }
 
@@ -279,90 +384,37 @@ fn cleanup_child_session_after_failed_launch(
     }
 }
 
-fn default_model_for_agent(
-    catalog: &ResolvedWorkspaceLaunchOptions,
-    agent_kind: &str,
-) -> Option<String> {
-    catalog
-        .agents
-        .iter()
-        .find(|agent| agent.kind == agent_kind)
-        .and_then(|agent| agent.default_model_id.clone())
-}
-
-fn launch_agents_to_json(
-    catalog: ResolvedWorkspaceLaunchOptions,
-    parent_agent_kind: &str,
-) -> Vec<Value> {
-    catalog
-        .agents
-        .into_iter()
-        .map(|agent| {
-            json!({
-                "agentKind": agent.kind,
-                "displayName": agent.display_name,
-                "defaultModelId": agent.default_model_id,
-                "isParentAgent": agent.kind == parent_agent_kind,
-                "models": agent.models.into_iter().map(|model| {
-                    json!({
-                        "modelId": model.id,
-                        "displayName": model.display_name,
-                        "isDefault": model.is_default,
-                    })
-                }).collect::<Vec<_>>(),
-            })
-        })
-        .collect()
-}
-
-fn mode_options_to_json(
-    mode_control: Option<&anyharness_contract::v1::NormalizedSessionControl>,
-) -> Vec<Value> {
-    mode_control
-        .map(|control| {
-            control
-                .values
-                .iter()
-                .map(|value| {
-                    json!({
-                        "modeId": value.value,
-                        "label": value.label,
-                        "description": value.description,
-                        "isCurrent": control.current_value.as_deref() == Some(value.value.as_str()),
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 async fn send_subagent_message(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
     parent_session_id: &str,
     args: SendSubagentMessageArgs,
 ) -> anyhow::Result<Value> {
-    let prompt = args.prompt.trim().to_string();
-    if prompt.is_empty() {
+    let prompt = args.prompt;
+    if prompt.trim().is_empty() {
         anyhow::bail!("prompt is required");
     }
-    let link = service.authorize_child(parent_session_id, &args.child_session_id)?;
+    let link = service.authorize_target(
+        parent_session_id,
+        args.subagent_id.as_deref(),
+        args.child_session_id.as_deref(),
+    )?;
     let wake_scheduled = if args.wake_on_completion {
         service
-            .schedule_wake_for_child(parent_session_id, &args.child_session_id)?
+            .schedule_wake_for_target(
+                parent_session_id,
+                args.subagent_id.as_deref(),
+                args.child_session_id.as_deref(),
+            )?
             .1
     } else {
         false
     };
     let outcome = match session_runtime
         .send_text_prompt_with_provenance(
-            &args.child_session_id,
+            &link.child_session_id,
             prompt,
-            SubagentService::parent_to_child_provenance(
-                parent_session_id,
-                &link.id,
-                link.label.clone(),
-            ),
+            parent_to_child_provenance(parent_session_id, &link.id, link.label.clone()),
         )
         .await
     {
@@ -379,9 +431,17 @@ async fn send_subagent_message(
         }
     };
     Ok(json!({
-        "childSessionId": args.child_session_id,
+        "subagentId": link.public_id,
+        "childSessionId": link.child_session_id,
+        "label": link.label,
+        "wake": {
+            "scheduled": args.wake_on_completion,
+            "created": wake_scheduled,
+            "scope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
+        },
         "wakeScheduled": args.wake_on_completion,
         "wakeScheduleCreated": wake_scheduled,
+        "wakeScope": if args.wake_on_completion { Some("next_completion") } else { None::<&str> },
         "status": prompt_outcome_label(&outcome),
     }))
 }
@@ -391,13 +451,19 @@ fn schedule_subagent_wake(
     parent_session_id: &str,
     args: ChildSessionArgs,
 ) -> anyhow::Result<Value> {
-    let (link, inserted) =
-        service.schedule_wake_for_child(parent_session_id, &args.child_session_id)?;
+    let (link, inserted) = service.schedule_wake_for_target(
+        parent_session_id,
+        args.subagent_id.as_deref(),
+        args.child_session_id.as_deref(),
+    )?;
     Ok(json!({
+        "subagentId": link.public_id,
         "sessionLinkId": link.id,
-        "childSessionId": args.child_session_id,
+        "childSessionId": link.child_session_id,
+        "label": link.label,
         "scheduled": true,
         "alreadyScheduled": !inserted,
+        "wakeScope": "next_completion",
     }))
 }
 
@@ -407,14 +473,21 @@ async fn get_subagent_status(
     parent_session_id: &str,
     args: ChildSessionArgs,
 ) -> anyhow::Result<Value> {
-    service.authorize_child(parent_session_id, &args.child_session_id)?;
+    let link = service.resolve_target_including_closed(
+        parent_session_id,
+        args.subagent_id.as_deref(),
+        args.child_session_id.as_deref(),
+    )?;
     let session = service
         .session_store()
-        .find_by_id(&args.child_session_id)?
+        .find_by_id(&link.child_session_id)?
         .ok_or_else(|| anyhow::anyhow!("child session not found"))?;
     let execution = session_runtime.session_execution_summary(&session).await;
     Ok(json!({
+        "subagentId": link.public_id,
+        "sessionLinkId": link.id,
         "childSessionId": session.id,
+        "label": link.label,
         "status": session.status,
         "agentKind": session.agent_kind,
         "modelId": session.current_model_id.or(session.requested_model_id),
@@ -423,27 +496,42 @@ async fn get_subagent_status(
     }))
 }
 
-fn summaries_to_json(summaries: Vec<super::super::model::SubagentSummary>) -> Vec<Value> {
-    summaries
-        .into_iter()
-        .map(|summary| {
-            json!({
-                "sessionLinkId": summary.link_id,
-                "childSessionId": summary.child_session_id,
-                "label": summary.label,
-                "status": summary.status,
-                "agentKind": summary.agent_kind,
-                "modelId": summary.model_id,
-                "modeId": summary.mode_id,
-                "createdAt": summary.created_at,
-            })
-        })
-        .collect()
-}
-
-fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
-    match outcome {
-        SendPromptOutcome::Running { .. } => "running",
-        SendPromptOutcome::Queued { .. } => "queued",
+async fn close_subagent(
+    service: &SubagentService,
+    session_runtime: &SessionRuntime,
+    parent_session_id: &str,
+    args: ChildSessionArgs,
+) -> anyhow::Result<Value> {
+    let link = service.resolve_target_including_closed(
+        parent_session_id,
+        args.subagent_id.as_deref(),
+        args.child_session_id.as_deref(),
+    )?;
+    let already_closed = link.closed_at.is_some();
+    let now = chrono::Utc::now().to_rfc3339();
+    if let Some(child) = service.session_store().find_by_id(&link.child_session_id)? {
+        if child.closed_at.is_none() {
+            session_runtime
+                .close_live_session(&link.child_session_id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        }
     }
+    if !already_closed {
+        service.close_link(&link, &now)?;
+    }
+    let refreshed = service.resolve_target_including_closed(
+        parent_session_id,
+        args.subagent_id.as_deref(),
+        args.child_session_id.as_deref(),
+    )?;
+    Ok(json!({
+        "subagentId": refreshed.public_id,
+        "sessionLinkId": refreshed.id,
+        "childSessionId": refreshed.child_session_id,
+        "label": refreshed.label,
+        "closed": true,
+        "alreadyClosed": already_closed,
+        "closedAt": refreshed.closed_at.unwrap_or(now),
+    }))
 }

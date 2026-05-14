@@ -31,6 +31,10 @@ import {
   isSubagentWorkComplete,
 } from "@/lib/domain/chat/subagents/subagent-launch";
 import {
+  formatSubagentHeaderVerb,
+  isSubagentProvisioningAction,
+} from "@/lib/domain/chat/subagents/subagent-tool-presentation";
+import {
   buildTranscriptDisplayBlocks,
 } from "@/lib/domain/chat/transcript/transcript-presentation";
 import {
@@ -90,7 +94,8 @@ export function TranscriptAgentGroupBlock({
     .filter((p): p is ToolResultTextContentPart => p.type === "tool_result_text")
     .map((p) => p.text)
     .join("\n\n");
-  const normalizedAgentResult = provisioningStatus
+  const hasProvisioningLedger = isSubagentProvisioningAction(item) && !!provisioningStatus;
+  const normalizedAgentResult = hasProvisioningLedger
     ? ""
     : normalizeToolResultText(agentResultText);
 
@@ -111,7 +116,7 @@ export function TranscriptAgentGroupBlock({
   const shouldShowDescription = description.length > 0
     && description.toLowerCase() !== "subagent";
   const hasWork = childIds.length > 0;
-  const hasLaunchLedger = !!normalizedPrompt || !!provisioningStatus;
+  const hasLaunchLedger = !!normalizedPrompt || hasProvisioningLedger;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
   const renderScopedWork = (
     forceExpandedCollapsedActionBlockId: string | null,
@@ -123,11 +128,7 @@ export function TranscriptAgentGroupBlock({
       renderItem={renderChild}
     />
   );
-  const headerVerb = executionState === "failed"
-    ? "Subagent launch failed"
-    : isRunning
-      ? "Creating subagent"
-      : "Subagent created";
+  const headerVerb = formatSubagentHeaderVerb({ item, executionState, isRunning });
   const collapsedSummary =
     workSummary
     || (executionState === "background"

@@ -1760,11 +1760,13 @@ export interface components {
             childSessionId: string;
             label?: string | null;
             latestCompletion?: null | components["schemas"]["SubagentCompletionSummary"];
+            linkClosedAt?: string | null;
             linkCreatedAt: string;
             modeId?: string | null;
             modelId?: string | null;
             sessionLinkId: string;
             status: components["schemas"]["SessionStatus"];
+            subagentId?: string | null;
             title?: string | null;
             wakeScheduled: boolean;
         };
@@ -1978,8 +1980,10 @@ export interface components {
         CoworkCodingSessionSummary: {
             agentKind: string;
             codingSessionId: string;
+            coworkAgentId?: string | null;
             label?: string | null;
             latestCompletion?: null | components["schemas"]["CoworkCodingCompletionSummary"];
+            linkClosedAt?: string | null;
             linkCreatedAt: string;
             modeId?: string | null;
             modelId?: string | null;
@@ -1990,6 +1994,8 @@ export interface components {
             wakeScheduled: boolean;
         };
         CoworkManagedWorkspaceSummary: {
+            closedAt?: string | null;
+            coworkWorkspaceId?: string | null;
             createdAt: string;
             label?: string | null;
             ownershipId: string;
@@ -2600,12 +2606,14 @@ export interface components {
         };
         MobilitySessionLinkRecord: {
             childSessionId: string;
+            closedAt?: string | null;
             createdAt: string;
             createdByToolCallId?: string | null;
             createdByTurnId?: string | null;
             id: string;
             label?: string | null;
             parentSessionId: string;
+            publicId?: string | null;
             relation: string;
             workspaceRelation: string;
         };
@@ -2727,12 +2735,14 @@ export interface components {
         OriginKind: "human" | "cowork" | "api" | "system";
         ParentSubagentLinkSummary: {
             label?: string | null;
+            linkClosedAt?: string | null;
             linkCreatedAt: string;
             parentAgentKind: string;
             parentModelId?: string | null;
             parentSessionId: string;
             parentTitle?: string | null;
             sessionLinkId: string;
+            subagentId?: string | null;
         };
         PendingInteractionPayloadSummary: {
             context?: null | components["schemas"]["PermissionInteractionContext"];
@@ -3300,6 +3310,7 @@ export interface components {
             childSessionId: string;
             parentSessionId: string;
             sessionLinkId: string;
+            subagentId?: string | null;
             wakeScheduled: boolean;
         };
         SearchWorkspaceFilesResponse: {
@@ -3432,10 +3443,12 @@ export interface components {
         };
         SessionLinkSummary: {
             childSessionId: string;
+            closedAt?: string | null;
             createdAt: string;
             id: string;
             label?: string | null;
             parentSessionId: string;
+            publicId?: string | null;
             relation: string;
             workspaceRelation: string;
         };

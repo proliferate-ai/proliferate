@@ -32,6 +32,7 @@ impl From<CoworkCanonicalThreadError> for ProductMcpContextError {
                 ProductMcpContextError::not_found(error.to_string())
             }
             CoworkCanonicalThreadError::SessionWorkspaceMismatch
+            | CoworkCanonicalThreadError::SessionClosed
             | CoworkCanonicalThreadError::NotCoworkWorkspace
             | CoworkCanonicalThreadError::NotCanonicalCoworkSession
             | CoworkCanonicalThreadError::ThreadWorkspaceMismatch => {
@@ -57,6 +58,7 @@ mod tests {
     fn context_mapping_preserves_conflict_errors() {
         for error in [
             CoworkCanonicalThreadError::SessionWorkspaceMismatch,
+            CoworkCanonicalThreadError::SessionClosed,
             CoworkCanonicalThreadError::NotCoworkWorkspace,
             CoworkCanonicalThreadError::NotCanonicalCoworkSession,
             CoworkCanonicalThreadError::ThreadWorkspaceMismatch,

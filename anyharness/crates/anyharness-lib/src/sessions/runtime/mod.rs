@@ -72,6 +72,7 @@ pub enum CreateAndStartSessionError {
 #[derive(Debug)]
 pub enum EnsureLiveSessionError {
     SessionNotFound(String),
+    SessionClosed,
     RestartRequired(String),
     Invalid(String),
     MissingDataKey,
@@ -94,6 +95,7 @@ pub enum SetSessionConfigOptionError {
 #[derive(Debug)]
 pub enum SendPromptError {
     SessionNotFound(String),
+    SessionClosed,
     EmptyPrompt,
     InvalidPrompt(crate::sessions::prompt::PromptValidationError),
     Internal(anyhow::Error),
@@ -220,6 +222,7 @@ pub enum ResolveInteractionError {
 pub(super) enum StartSessionError {
     WorkspaceNotFound,
     AgentDescriptorNotFound(String),
+    Closed,
     MissingDataKey,
     RestartRequired(String),
     Internal(anyhow::Error),

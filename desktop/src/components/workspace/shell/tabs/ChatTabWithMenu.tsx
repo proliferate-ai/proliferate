@@ -6,6 +6,7 @@ import type {
 } from "react";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
+import { ChatTabDelegatedIndicators } from "@/components/workspace/shell/tabs/ChatTabDelegatedIndicators";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
@@ -14,7 +15,10 @@ import {
   renderChatTabStatusBadge,
 } from "@/components/workspace/shell/tabs/tab-rendering";
 import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
-import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import type {
+  HeaderChatTabEntry,
+  HeaderDelegatedWorkIndicator,
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import {
   buildChatTabContextMenuItems,
   type WorkspaceTabContextMenuCommand,
@@ -40,6 +44,7 @@ export function ChatTabWithMenu({
   onCloseOthers,
   onCloseRight,
   onDismiss,
+  onOpenDelegatedSession,
 }: {
   tab: HeaderChatTabEntry;
   width: number;
@@ -60,6 +65,7 @@ export function ChatTabWithMenu({
   onCloseOthers: () => void;
   onCloseRight: () => void;
   onDismiss: () => void;
+  onOpenDelegatedSession?: (indicator: HeaderDelegatedWorkIndicator) => void;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({
@@ -121,6 +127,12 @@ export function ChatTabWithMenu({
       onSelectPointerDownCapture={onSelectPointerDownCapture}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
+      rightAccessory={(
+        <ChatTabDelegatedIndicators
+          indicators={tab.delegatedIndicators}
+          onOpenSession={onOpenDelegatedSession}
+        />
+      )}
       data-chat-tab
       data-chat-tab-id={tab.id}
       data-chat-tab-active={tab.isActive ? "true" : "false"}

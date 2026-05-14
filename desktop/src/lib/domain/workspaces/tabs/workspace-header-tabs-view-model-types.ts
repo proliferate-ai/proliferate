@@ -11,11 +11,29 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
   viewState: SessionViewState;
   canFork: boolean;
   isReviewAgentChild: boolean;
+  source: "subagent" | "review" | "cowork" | null;
+  sessionLinkId: string | null;
+  workspaceId: string | null;
   isActive: boolean;
   groupColor: string | null;
   visualGroupId: string | null;
   manualGroupId: ManualChatGroupId | null;
   isHierarchyResolved: boolean;
+  delegatedIndicators: HeaderDelegatedWorkIndicator[];
+}
+
+export interface HeaderDelegatedWorkIndicator {
+  id: string;
+  sessionId: string;
+  parentSessionId: string;
+  sessionLinkId: string;
+  workspaceId: string | null;
+  title: string;
+  avatarName: string;
+  initial: string;
+  colorClassName: string;
+  statusLabel: string;
+  source: "subagent" | "review" | "cowork";
 }
 
 export interface HeaderChatMenuEntry {

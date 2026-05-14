@@ -81,6 +81,8 @@ pub enum ReviewError {
     RetryNotAllowed,
     #[error("review {0} is too large")]
     ReviewSubmissionTooLarge(&'static str),
+    #[error("review {0} is required")]
+    ReviewSubmissionEmpty(&'static str),
     #[error("session link failed: {0}")]
     Link(String),
     #[error(transparent)]
@@ -114,6 +116,13 @@ impl ReviewService {
 
     pub fn store(&self) -> &ReviewStore {
         &self.store
+    }
+
+    pub fn session_is_closed(&self, session_id: &str) -> anyhow::Result<bool> {
+        Ok(self
+            .session_store
+            .find_by_id(session_id)?
+            .is_some_and(|session| session.closed_at.is_some() || session.status == "closed"))
     }
 
     pub fn get_plan(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
@@ -442,6 +451,20 @@ impl ReviewService {
 
     pub fn stop_run(&self, run_id: &str) -> Result<Vec<String>, ReviewError> {
         self.store.stop_run(run_id).map_err(ReviewError::Internal)
+    }
+
+    pub fn stop_active_run_for_parent(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<Vec<String>, ReviewError> {
+        let Some(run) = self
+            .store
+            .find_active_run_for_parent(parent_session_id)
+            .map_err(ReviewError::Internal)?
+        else {
+            return Ok(Vec::new());
+        };
+        self.stop_run(&run.id)
     }
 
     pub(crate) fn delete_unlaunched_reviewer_session(

@@ -226,7 +226,10 @@ impl AppState {
             SessionStore::new(db.clone()),
         ));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
-        let review_session_hooks = Arc::new(ReviewSessionHooks::new(review_hook_event_tx));
+        let review_session_hooks = Arc::new(ReviewSessionHooks::new(
+            review_hook_event_tx,
+            review_service.clone(),
+        ));
         let workspace_naming_mcp_auth = Arc::new(WorkspaceNamingMcpAuth::new(runtime_home.clone()));
         let plugin_bundle_registry = PluginBundleRegistry::default();
         let skills_mcp_auth = Arc::new(SkillsMcpAuth::new(runtime_home.clone()));
@@ -235,6 +238,7 @@ impl AppState {
             runtime_base_url.clone(),
             bearer_token.clone(),
             skills_mcp_auth.clone(),
+            Some(subagent_service.clone()),
         ));
         let product_mcp_launch_catalog = ProductMcpLaunchCatalog::new(
             runtime_base_url.clone(),

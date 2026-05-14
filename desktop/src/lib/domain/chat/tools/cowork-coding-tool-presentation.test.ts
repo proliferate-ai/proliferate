@@ -59,6 +59,45 @@ describe("deriveCoworkCodingToolPresentation", () => {
       wakeScheduled: true,
     });
   });
+
+  it("reads product cowork handles from cowork agent creation", () => {
+    const presentation = deriveCoworkCodingToolPresentation(toolCallItem({
+      nativeToolName: "mcp__cowork__create_cowork_agent",
+      rawInput: {
+        coworkWorkspaceId: "cowork_workspace_1",
+        workspaceId: "workspace-1",
+        prompt: "Investigate the runtime.",
+        label: "runtime sweep",
+        harnessId: "claude",
+        initialConfig: {
+          modelId: "sonnet",
+        },
+      },
+      rawOutput: {
+        coworkWorkspaceId: "cowork_workspace_1",
+        coworkAgentId: "cowork_agent_1",
+        workspaceId: "workspace-1",
+        codingSessionId: "session-1",
+        promptStatus: "running",
+        wake: {
+          scheduled: true,
+          scope: "next_completion",
+        },
+      },
+    }));
+
+    expect(presentation).toMatchObject({
+      action: "create_session",
+      displayName: "runtime sweep",
+      meta: "Claude · sonnet",
+      workspaceId: "workspace-1",
+      coworkWorkspaceId: "cowork_workspace_1",
+      codingSessionId: "session-1",
+      coworkAgentId: "cowork_agent_1",
+      promptStatus: "running",
+      wakeScheduled: true,
+    });
+  });
 });
 
 function toolCallItem(overrides: Partial<ToolCallItem>): ToolCallItem {

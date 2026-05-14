@@ -22,7 +22,7 @@ pub struct CreateCodingSessionInput {
     pub workspace_id: String,
     pub prompt: String,
     pub label: Option<String>,
-    pub agent_kind: Option<String>,
+    pub harness_id: Option<String>,
     pub model_id: Option<String>,
     pub mode_id: Option<String>,
     pub wake_on_completion: bool,

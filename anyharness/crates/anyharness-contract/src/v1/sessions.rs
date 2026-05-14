@@ -226,6 +226,8 @@ pub enum ForkChildStartStatus {
 #[serde(rename_all = "camelCase")]
 pub struct SessionLinkSummary {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_id: Option<String>,
     pub relation: String,
     pub parent_session_id: String,
     pub child_session_id: String,
@@ -233,6 +235,8 @@ pub struct SessionLinkSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<String>,
 }
 
 impl fmt::Debug for CreateSessionRequest {
@@ -282,6 +286,8 @@ pub struct ScheduleSubagentWakeRequest {}
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleSubagentWakeResponse {
     pub parent_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_id: Option<String>,
     pub child_session_id: String,
     pub session_link_id: String,
     pub wake_scheduled: bool,
@@ -291,6 +297,8 @@ pub struct ScheduleSubagentWakeResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ParentSubagentLinkSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_id: Option<String>,
     pub session_link_id: String,
     pub parent_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -301,11 +309,15 @@ pub struct ParentSubagentLinkSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     pub link_created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_closed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChildSubagentSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagent_id: Option<String>,
     pub session_link_id: String,
     pub child_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -319,6 +331,8 @@ pub struct ChildSubagentSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
     pub link_created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_closed_at: Option<String>,
     pub child_created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_completion: Option<SubagentCompletionSummary>,

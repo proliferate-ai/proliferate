@@ -50,7 +50,9 @@ pub fn read_child_events(
     since_seq: Option<i64>,
     limit: Option<usize>,
 ) -> anyhow::Result<DelegatedEventSlice> {
-    authorize_child(link_service, relation, parent_session_id, child_session_id)?;
+    link_service
+        .find_link_by_relation_including_closed(relation, parent_session_id, child_session_id)?
+        .ok_or_else(|| anyhow::anyhow!("child session is not owned by parent"))?;
     let limit = limit
         .unwrap_or(READ_EVENTS_DEFAULT_LIMIT)
         .min(READ_EVENTS_MAX_LIMIT);

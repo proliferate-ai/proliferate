@@ -492,6 +492,7 @@ fn to_contract_session_record(record: SessionRecord) -> MobilitySessionRecord {
 fn to_contract_session_link(record: SessionLinkRecord) -> MobilitySessionLinkRecord {
     MobilitySessionLinkRecord {
         id: record.id,
+        public_id: record.public_id,
         relation: record.relation.as_str().to_string(),
         parent_session_id: record.parent_session_id,
         child_session_id: record.child_session_id,
@@ -500,6 +501,7 @@ fn to_contract_session_link(record: SessionLinkRecord) -> MobilitySessionLinkRec
         created_by_turn_id: record.created_by_turn_id,
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
+        closed_at: record.closed_at,
     }
 }
 
@@ -767,6 +769,7 @@ fn from_contract_session_link(
 ) -> Result<SessionLinkRecord, ApiError> {
     Ok(SessionLinkRecord {
         id: record.id,
+        public_id: record.public_id,
         relation: SessionLinkRelation::parse(&record.relation).map_err(|error| {
             ApiError::bad_request(error.to_string(), "MOBILITY_INVALID_ARCHIVE")
         })?,
@@ -780,6 +783,7 @@ fn from_contract_session_link(
         created_by_turn_id: record.created_by_turn_id,
         created_by_tool_call_id: record.created_by_tool_call_id,
         created_at: record.created_at,
+        closed_at: record.closed_at,
     })
 }
 

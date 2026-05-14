@@ -47,6 +47,17 @@ pub struct SessionTurnFinishedContext {
     pub error_details: Option<ErrorEventDetails>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionClosingContext {
+    pub session_id: String,
+    pub closed_at: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionClosingActions {
+    pub close_session_ids: Vec<String>,
+}
+
 pub trait SessionExtension: Send + Sync {
     fn resolve_launch_extras(
         &self,
@@ -56,4 +67,11 @@ pub trait SessionExtension: Send + Sync {
     }
 
     fn on_turn_finished(&self, _ctx: SessionTurnFinishedContext) {}
+
+    fn on_session_closing(
+        &self,
+        _ctx: SessionClosingContext,
+    ) -> anyhow::Result<SessionClosingActions> {
+        Ok(SessionClosingActions::default())
+    }
 }

@@ -167,8 +167,7 @@ pub(super) fn build_feedback_prompt(
         "Review feedback is ready.\n\n"
     });
     text.push_str(&format!(
-        "Review run: {}\nRound: {}\nTarget: {}\n\n",
-        run.id,
+        "Round: {}\nTarget: {}\nFeedback artifacts: reviewer critique files listed below.\n\n",
         round.round_number,
         match run.kind {
             ReviewKind::Plan => "plan",
@@ -196,11 +195,11 @@ pub(super) fn build_feedback_prompt(
     } else if run.auto_iterate {
         text.push_str("Address the feedback you agree with, ignore feedback you can justify ignoring, and finish the revised target normally. Auto iterate is enabled, so AnyHarness will detect the completed revision and start the next review round when it is safe.\n\n");
     } else {
-        text.push_str("Address the feedback you agree with, ignore feedback you can justify ignoring, then signal the revised target with `mark_review_revision_ready` if that tool is available. If the tool is not available, present the revised plan or implementation and wait for the user to start the next review round from the review card.\n\n");
+        text.push_str("Address the feedback you agree with, ignore feedback you can justify ignoring, then signal the revised target with `mark_review_revision_ready` if that tool is available. Call `get_review_status` if you need the active review handle. If the tool is not available, present the revised plan or implementation and wait for the user to start the next review round from the review card.\n\n");
     }
     for assignment in assignments {
         text.push_str(&format!(
-            "## {}\n\nStatus: {}\nPass: {}\n\nSummary:\n{}\n\nCritique:\n{}\n\nArtifact: {}\n\n",
+            "## {}\n\nStatus: {}\nPass: {}\n\nSummary:\n{}\n\nCritique artifact: {}\n\n",
             assignment.persona_label,
             assignment.status.as_str(),
             assignment.pass.unwrap_or(false),
@@ -208,10 +207,6 @@ pub(super) fn build_feedback_prompt(
                 .summary
                 .as_deref()
                 .unwrap_or("No summary provided."),
-            assignment
-                .critique_markdown
-                .as_deref()
-                .unwrap_or("No critique body provided."),
             assignment
                 .critique_artifact_path
                 .as_deref()
@@ -234,6 +229,12 @@ pub(super) fn validate_review_submission(
     summary: &str,
     critique_markdown: &str,
 ) -> Result<(), ReviewError> {
+    if summary.trim().is_empty() {
+        return Err(ReviewError::ReviewSubmissionEmpty("summary"));
+    }
+    if critique_markdown.trim().is_empty() {
+        return Err(ReviewError::ReviewSubmissionEmpty("critiqueMarkdown"));
+    }
     if summary.len() > MAX_REVIEW_SUMMARY_BYTES {
         return Err(ReviewError::ReviewSubmissionTooLarge("summary"));
     }
@@ -275,6 +276,24 @@ fn round_to_contract(
             .collect(),
         created_at: round.created_at,
         updated_at: round.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_review_submission;
+    use crate::domains::reviews::service::ReviewError;
+
+    #[test]
+    fn review_submission_rejects_empty_summary_or_critique() {
+        assert!(matches!(
+            validate_review_submission("   ", "Concrete critique"),
+            Err(ReviewError::ReviewSubmissionEmpty("summary"))
+        ));
+        assert!(matches!(
+            validate_review_submission("Summary", "\n\t"),
+            Err(ReviewError::ReviewSubmissionEmpty("critiqueMarkdown"))
+        ));
     }
 }
 

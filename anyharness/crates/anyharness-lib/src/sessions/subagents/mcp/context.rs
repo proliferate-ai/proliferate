@@ -26,6 +26,9 @@ pub fn resolve_context(
             "parent session does not belong to workspace",
         ));
     }
+    if parent.closed_at.is_some() || parent.status == "closed" {
+        return Err(ProductMcpContextError::conflict("parent session is closed"));
+    }
     let workspace = workspace_runtime
         .get_workspace(&request.workspace_id)?
         .ok_or_else(|| ProductMcpContextError::not_found("workspace not found"))?;
@@ -66,7 +69,10 @@ fn resolve_create_block_reason(error: SubagentError) -> Result<String, ProductMc
         }
         conflict @ (SubagentError::IneligibleWorkspace
         | SubagentError::CrossWorkspace
-        | SubagentError::NotOwned) => Err(ProductMcpContextError::conflict(conflict.to_string())),
+        | SubagentError::NotOwned
+        | SubagentError::TargetRequired
+        | SubagentError::ConflictingTarget
+        | SubagentError::Closed) => Err(ProductMcpContextError::conflict(conflict.to_string())),
         SubagentError::Link(error) => Err(ProductMcpContextError::Internal(error.into())),
         SubagentError::Internal(error) => Err(ProductMcpContextError::Internal(error)),
     }

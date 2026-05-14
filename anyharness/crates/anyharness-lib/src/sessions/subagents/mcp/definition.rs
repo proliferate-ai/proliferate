@@ -11,9 +11,7 @@ pub const ID: &str = "subagents";
 pub const ROUTE_SLUG: &str = "subagents";
 pub const ACP_SERVER_NAME: &str = "subagents";
 
-pub const INSTRUCTIONS: &str = "Use get_subagent_launch_options to inspect defaults, limits, and supported agent/model choices. Use subagent tools to create and manage same-workspace child agent sessions. Child completions are passive by default. After creating or messaging a child, call schedule_subagent_wake if you want AnyHarness to prompt you after the child's next completed turn. Inspect child output with read_subagent_events before continuing.";
-
-pub const SYSTEM_PROMPT_APPEND: &str = "You can use the subagents MCP tools to delegate bounded work to same-workspace child sessions. Call get_subagent_launch_options before choosing a non-default agentKind, modelId, or modeId. Child sessions are normal agent sessions linked back to you. Child completions are passive by default: after creating or messaging a child, call schedule_subagent_wake when you want AnyHarness to prompt you after that child's next completed turn. Use read_subagent_events before relying on a child result.";
+pub const INSTRUCTIONS: &str = "Use subagent tools to create, message, inspect, search, and close same-workspace child agent sessions. Detailed workflow guidance is provided by the proliferate.subagents.workflow skill when this MCP is mounted.";
 
 pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
     id: ID,
@@ -30,7 +28,7 @@ pub const DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
 };
 
 pub fn system_prompt_append() -> Vec<String> {
-    vec![SYSTEM_PROMPT_APPEND.to_string()]
+    Vec::new()
 }
 
 pub fn binding_summary() -> SessionMcpBindingSummary {

@@ -9,6 +9,7 @@ pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "create_subagent",
     "send_subagent_message",
     "schedule_subagent_wake",
+    "close_subagent",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -17,6 +18,10 @@ pub struct CreateSubagentArgs {
     pub prompt: String,
     #[serde(default)]
     pub label: Option<String>,
+    #[serde(default)]
+    pub harness_id: Option<String>,
+    #[serde(default)]
+    pub initial_config: Option<Value>,
     #[serde(default)]
     pub agent_kind: Option<String>,
     #[serde(default)]
@@ -30,13 +35,19 @@ pub struct CreateSubagentArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChildSessionArgs {
-    pub child_session_id: String,
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub child_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SendSubagentMessageArgs {
-    pub child_session_id: String,
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub child_session_id: Option<String>,
     pub prompt: String,
     #[serde(default)]
     pub wake_on_completion: bool,
@@ -45,9 +56,35 @@ pub struct SendSubagentMessageArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadSubagentEventsArgs {
-    pub child_session_id: String,
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub child_session_id: Option<String>,
     #[serde(default)]
     pub since_seq: Option<i64>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadSubagentLatestTurnsArgs {
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub child_session_id: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchSubagentTranscriptArgs {
+    #[serde(default)]
+    pub subagent_id: Option<String>,
+    #[serde(default)]
+    pub child_session_id: Option<String>,
+    pub query: String,
     #[serde(default)]
     pub limit: Option<usize>,
 }
@@ -70,15 +107,25 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
         tools.push(
             tool_definition(
                 "create_subagent",
-                "Create a same-workspace child agent session and send it an initial prompt. Call get_subagent_launch_options first when choosing agentKind, modelId, or modeId. To be prompted after the child's next completed turn, call schedule_subagent_wake after creating the child.",
+                "Create a same-workspace child agent session and send it an initial prompt. Call get_subagent_launch_options first when choosing harnessId or initialConfig. wakeOnCompletion arms a one-shot next-completion wake before sending the prompt.",
                 json!({
                     "type": "object",
                     "properties": {
                         "prompt": { "type": "string" },
                         "label": { "type": "string" },
-                        "agentKind": { "type": "string" },
-                        "modelId": { "type": "string" },
-                        "modeId": { "type": "string" }
+                        "harnessId": { "type": "string" },
+                        "initialConfig": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "properties": {
+                                "modelId": { "type": "string" },
+                                "modeId": { "type": "string" }
+                            }
+                        },
+                        "wakeOnCompletion": { "type": "boolean" },
+                        "agentKind": { "type": "string", "description": "Deprecated alias for harnessId." },
+                        "modelId": { "type": "string", "description": "Deprecated alias for initialConfig.modelId." },
+                        "modeId": { "type": "string", "description": "Deprecated alias for initialConfig.modeId." }
                     },
                     "required": ["prompt"]
                 }),
@@ -90,14 +137,20 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
         tools.extend([
         tool_definition(
             "send_subagent_message",
-            "Send another prompt to an owned child session. To be prompted after the child's next completed turn, call schedule_subagent_wake after sending the message.",
+            "Send another prompt to an owned subagent. Messages automatically run or queue. wakeOnCompletion arms a one-shot next-completion wake before the prompt is sent.",
             json!({
                 "type": "object",
                 "properties": {
-                    "childSessionId": { "type": "string" },
-                    "prompt": { "type": "string" }
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "prompt": { "type": "string" },
+                    "wakeOnCompletion": { "type": "boolean" }
                 },
-                "required": ["childSessionId", "prompt"]
+                "required": ["prompt"],
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -106,9 +159,13 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "childSessionId": { "type": "string" }
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
                 },
-                "required": ["childSessionId"]
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -117,9 +174,47 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "childSessionId": { "type": "string" }
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
                 },
-                "required": ["childSessionId"]
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
+            }),
+        ),
+        tool_definition(
+            "read_subagent_latest_turns",
+            "Read concise summaries for the latest completed turns from an owned subagent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
+            }),
+        ),
+        tool_definition(
+            "search_subagent_transcript",
+            "Search bounded sanitized transcript text for an owned subagent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "query": { "type": "string" },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
+                },
+                "required": ["query"],
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         tool_definition(
@@ -128,7 +223,8 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "childSessionId": { "type": "string" },
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
                     "sinceSeq": { "type": "integer" },
                     "limit": {
                         "type": "integer",
@@ -136,7 +232,25 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                         "maximum": READ_EVENTS_MAX_LIMIT
                     }
                 },
-                "required": ["childSessionId"]
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
+            }),
+        ),
+        tool_definition(
+            "close_subagent",
+            "Close an owned subagent and stop future prompts/wakes while preserving history.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "subagentId": { "type": "string" },
+                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                },
+                "anyOf": [
+                    { "required": ["subagentId"] },
+                    { "required": ["childSessionId"] }
+                ]
             }),
         ),
         ]);
@@ -181,11 +295,11 @@ mod tests {
     }
 
     #[test]
-    fn tool_list_does_not_advertise_inline_wake_on_completion() {
+    fn tool_list_advertises_inline_wake_on_completion() {
         let tools = build_tool_list(&context(true, 1));
         let serialized = serde_json::to_string(&tools).expect("serialize tool list");
 
-        assert!(!serialized.contains("wakeOnCompletion"));
+        assert!(serialized.contains("wakeOnCompletion"));
         assert!(serialized.contains("schedule_subagent_wake"));
     }
 

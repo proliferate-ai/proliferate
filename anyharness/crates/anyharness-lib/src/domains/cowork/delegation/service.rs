@@ -15,7 +15,7 @@ use crate::sessions::links::completions::{
 use crate::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
-use crate::sessions::links::service::SessionLinkService;
+use crate::sessions::links::service::{new_public_id, SessionLinkService};
 use crate::sessions::model::SessionRecord;
 use crate::sessions::prompt::PromptProvenance;
 use crate::sessions::store::SessionStore;
@@ -41,6 +41,12 @@ pub enum CoworkDelegationError {
     WorkspaceNotOwned,
     #[error("coding session is not owned by this cowork session")]
     CodingSessionNotOwned,
+    #[error("delegated cowork target is required")]
+    TargetRequired,
+    #[error("new and legacy cowork target ids refer to different records")]
+    ConflictingTarget,
+    #[error("delegated cowork item is closed")]
+    Closed,
     #[error("workspace mutation blocked: {0}")]
     MutationBlocked(String),
     #[error("invalid coding workspace request: {0}")]
@@ -98,6 +104,13 @@ impl CoworkDelegationService {
         parent_session_id: &str,
     ) -> Result<CoworkThreadRecord, CoworkDelegationError> {
         let thread = self.validate_parent_thread(parent_session_id)?;
+        let parent = self
+            .session_store
+            .find_by_id(parent_session_id)?
+            .ok_or_else(|| CoworkDelegationError::CoworkThreadNotFound(parent_session_id.into()))?;
+        if parent.closed_at.is_some() || parent.status == "closed" {
+            return Err(CoworkDelegationError::Closed);
+        }
         if !thread.workspace_delegation_enabled {
             return Err(CoworkDelegationError::Disabled);
         }
@@ -178,6 +191,40 @@ impl CoworkDelegationService {
             .ok_or(CoworkDelegationError::WorkspaceNotOwned)
     }
 
+    pub fn resolve_managed_workspace_target(
+        &self,
+        parent_session_id: &str,
+        cowork_workspace_id: Option<&str>,
+        workspace_id: Option<&str>,
+    ) -> Result<CoworkManagedWorkspaceRecord, CoworkDelegationError> {
+        let cowork_workspace_id = cowork_workspace_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let workspace_id = workspace_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if cowork_workspace_id.is_none() && workspace_id.is_none() {
+            return Err(CoworkDelegationError::TargetRequired);
+        }
+        let managed = if let Some(public_id) = cowork_workspace_id {
+            self.cowork_service
+                .find_managed_workspace_by_public_id(public_id)?
+                .filter(|managed| managed.parent_session_id == parent_session_id)
+                .ok_or(CoworkDelegationError::WorkspaceNotOwned)?
+        } else {
+            self.find_managed_workspace(parent_session_id, workspace_id.expect("checked above"))?
+        };
+        if let Some(workspace_id) = workspace_id {
+            if managed.workspace_id != workspace_id {
+                return Err(CoworkDelegationError::ConflictingTarget);
+            }
+        }
+        if managed.closed_at.is_some() {
+            return Err(CoworkDelegationError::Closed);
+        }
+        Ok(managed)
+    }
+
     pub fn list_managed_workspaces(
         &self,
         parent_session_id: &str,
@@ -186,6 +233,15 @@ impl CoworkDelegationService {
         Ok(self
             .cowork_service
             .list_managed_workspaces(parent_session_id)?)
+    }
+
+    pub fn mark_managed_workspaces_closed_by_parent(
+        &self,
+        parent_session_id: &str,
+        closed_at: &str,
+    ) -> anyhow::Result<usize> {
+        self.cowork_service
+            .mark_cowork_managed_workspaces_closed_by_parent(parent_session_id, closed_at)
     }
 
     pub fn create_coding_session_link(
@@ -205,6 +261,7 @@ impl CoworkDelegationService {
         }
         let record = SessionLinkRecord {
             id: Uuid::new_v4().to_string(),
+            public_id: Some(new_public_id(SessionLinkRelation::CoworkCodingSession)),
             relation: SessionLinkRelation::CoworkCodingSession,
             parent_session_id: parent_session_id.to_string(),
             child_session_id: child_session_id.to_string(),
@@ -213,6 +270,7 @@ impl CoworkDelegationService {
             created_by_turn_id: None,
             created_by_tool_call_id: None,
             created_at: chrono::Utc::now().to_rfc3339(),
+            closed_at: None,
         };
         let inserted = self
             .cowork_service
@@ -243,6 +301,55 @@ impl CoworkDelegationService {
         .map_err(|_| CoworkDelegationError::CodingSessionNotOwned)
     }
 
+    pub fn resolve_coding_session_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+        include_closed: bool,
+    ) -> Result<SessionLinkRecord, CoworkDelegationError> {
+        let cowork_agent_id = cowork_agent_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let coding_session_id = coding_session_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if cowork_agent_id.is_none() && coding_session_id.is_none() {
+            return Err(CoworkDelegationError::TargetRequired);
+        }
+        let link = if let Some(public_id) = cowork_agent_id {
+            self.link_service
+                .find_by_public_id(public_id)?
+                .filter(|link| {
+                    link.relation == SessionLinkRelation::CoworkCodingSession
+                        && link.parent_session_id == parent_session_id
+                })
+                .ok_or(CoworkDelegationError::CodingSessionNotOwned)?
+        } else {
+            let child_id = coding_session_id.expect("checked above");
+            if include_closed {
+                self.link_service
+                    .find_link_by_relation_including_closed(
+                        SessionLinkRelation::CoworkCodingSession,
+                        parent_session_id,
+                        child_id,
+                    )?
+                    .ok_or(CoworkDelegationError::CodingSessionNotOwned)?
+            } else {
+                self.authorize_coding_session(parent_session_id, child_id)?
+            }
+        };
+        if let Some(child_id) = coding_session_id {
+            if link.child_session_id != child_id {
+                return Err(CoworkDelegationError::ConflictingTarget);
+            }
+        }
+        if !include_closed && link.closed_at.is_some() {
+            return Err(CoworkDelegationError::Closed);
+        }
+        Ok(link)
+    }
+
     pub fn find_coding_parent_for_child(
         &self,
         coding_session_id: &str,
@@ -261,8 +368,32 @@ impl CoworkDelegationService {
         Ok((link, inserted))
     }
 
+    pub fn schedule_coding_wake_for_target(
+        &self,
+        parent_session_id: &str,
+        cowork_agent_id: Option<&str>,
+        coding_session_id: Option<&str>,
+    ) -> Result<(SessionLinkRecord, bool), CoworkDelegationError> {
+        let link = self.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            false,
+        )?;
+        let inserted = self.completion_store.schedule_wake(&link.id)?;
+        Ok((link, inserted))
+    }
+
     pub fn delete_wake_schedule(&self, session_link_id: &str) -> anyhow::Result<bool> {
         self.completion_store.delete_wake_schedule(session_link_id)
+    }
+
+    pub fn close_coding_link(
+        &self,
+        link: &SessionLinkRecord,
+        closed_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.link_service.close_link(&link.id, closed_at)
     }
 
     pub fn insert_completion_and_consume_schedule(
@@ -286,6 +417,14 @@ impl CoworkDelegationService {
     ) -> anyhow::Result<Option<LinkCompletionRecord>> {
         self.completion_store
             .latest_completion_for_link(session_link_id)
+    }
+
+    pub fn list_completions_for_link(
+        &self,
+        session_link_id: &str,
+    ) -> anyhow::Result<Vec<LinkCompletionRecord>> {
+        self.completion_store
+            .list_completions_for_links(&[session_link_id.to_string()])
     }
 
     pub fn list_wake_schedules(

@@ -242,6 +242,7 @@ fn map_review_error(error: ReviewError) -> ApiError {
         | ReviewError::RevisedPlanRequired
         | ReviewError::AmbiguousRevisedPlan
         | ReviewError::AssignmentTerminal
+        | ReviewError::ReviewSubmissionEmpty(_)
         | ReviewError::ReviewSubmissionTooLarge(_)
         | ReviewError::PlanParentMismatch => {
             ApiError::bad_request(error.to_string(), "REVIEW_INVALID")

@@ -135,6 +135,32 @@ describe("buildHeaderShellRows", () => {
       ],
     });
   });
+
+  it("keeps parent-anchored delegated tab runs atomic when ordered by a child key", () => {
+    const rows = buildHeaderShellRows({
+      stripRows: [
+        { kind: "tab", tab: chatTab("parent", null) },
+        { kind: "tab", tab: childChatTab("child", "parent") },
+        { kind: "tab", tab: chatTab("other", null) },
+      ],
+      openTargets: [fileViewerTarget("src/a.ts")],
+      orderedTabs: [
+        { kind: "chat", sessionId: "child" },
+        { kind: "viewer", target: fileViewerTarget("src/a.ts") },
+        { kind: "chat", sessionId: "parent" },
+        { kind: "chat", sessionId: "other" },
+      ],
+      manualGroups: [],
+      subagentChildIdsByParentId: new Map([["parent", ["child"]]]),
+    });
+
+    expect(rows.map(rowKey)).toEqual([
+      chatWorkspaceShellTabKey("parent"),
+      chatWorkspaceShellTabKey("child"),
+      fileWorkspaceShellTabKey("src/a.ts"),
+      chatWorkspaceShellTabKey("other"),
+    ]);
+  });
 });
 
 function chatTab(sessionId: string, visualGroupId: string | null): ShellChatTab {
@@ -145,6 +171,17 @@ function chatTab(sessionId: string, visualGroupId: string | null): ShellChatTab 
     groupRootSessionId: sessionId,
     isChild: false,
     visualGroupId,
+  };
+}
+
+function childChatTab(sessionId: string, parentSessionId: string): ShellChatTab {
+  return {
+    id: sessionId,
+    sessionId,
+    parentSessionId,
+    groupRootSessionId: parentSessionId,
+    isChild: true,
+    visualGroupId: null,
   };
 }
 

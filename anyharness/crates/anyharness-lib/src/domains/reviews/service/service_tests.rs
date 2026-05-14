@@ -195,6 +195,58 @@ fn link_reviewer_session_makes_reviewer_role_visible_immediately() {
 }
 
 #[test]
+fn stop_active_run_for_parent_stops_review_and_returns_reviewer_sessions() {
+    let (service, _session_store) = service_fixture();
+    let run = service
+        .start_review(StartReviewInput {
+            workspace_id: "workspace-1".to_string(),
+            parent_session_id: "parent-1".to_string(),
+            kind: ReviewKind::Code,
+            title: "Review current changes".to_string(),
+            target_plan: None,
+            target_code_manifest: None,
+            max_rounds: 2,
+            auto_iterate: true,
+            reviewers: vec![reviewer()],
+        })
+        .expect("start review");
+    let assignment = service
+        .store()
+        .list_assignments_for_run(&run.id)
+        .expect("list assignments")
+        .pop()
+        .expect("assignment");
+    service
+        .link_reviewer_session(
+            &run.id,
+            &assignment.id,
+            "parent-1",
+            "child-1",
+            Some("Plan skeptic".to_string()),
+            None,
+            ReviewModeVerificationStatus::Pending,
+        )
+        .expect("link reviewer");
+
+    let reviewer_ids = service
+        .stop_active_run_for_parent("parent-1")
+        .expect("stop active run");
+
+    assert_eq!(reviewer_ids, vec!["child-1".to_string()]);
+    assert!(service
+        .store()
+        .find_active_run_for_parent("parent-1")
+        .expect("active run lookup")
+        .is_none());
+    let stopped = service
+        .store()
+        .find_run(&run.id)
+        .expect("find run")
+        .expect("stopped run");
+    assert_eq!(stopped.status, ReviewRunStatus::Stopped);
+}
+
+#[test]
 fn parent_review_mcp_detection_uses_internal_review_binding_summary() {
     let (service, session_store) = service_fixture();
     let mut parent = session_record("parent-with-review-mcp");

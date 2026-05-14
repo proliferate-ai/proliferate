@@ -162,6 +162,9 @@ Rules:
   in MCP results.
 - The link target may be resolved from product state; raw session ids do not
   need to be visible in the formatted row.
+- Status, close, read, and search tool calls are not launch/provisioning
+  ledgers. They should render their own concise result rows/details instead of
+  showing misleading "agent started" affordances.
 
 ## Tab Strip
 
@@ -219,6 +222,10 @@ Rules:
   delegated-agent run.
 - The delegated-agent pill/cluster remains attached to the parent tab even when
   one or more child tabs are open.
+- Cowork child tabs must carry their managed `workspaceId`, relationship
+  source, and link handle through the tab view model. Selecting a cowork child
+  tab opens that session in the managed cowork workspace, not in the parent's
+  current workspace.
 - Existing tab grouping can remain, but the child-agent group is a sibling
   attached to the parent, not a group that contains the parent.
 - Reordering normal tabs must not separate open delegated-agent tabs from their
@@ -454,9 +461,13 @@ Components:
 ```text
 desktop/src/components/workspace/shell/tabs/
   WorkspaceTabStrip.tsx
+  ChatTabDelegatedIndicators.tsx
   ChatTabWithMenu.tsx
   tab-rendering.tsx
   TabContextMenu.tsx
+
+desktop/src/components/workspace/shell/topbar/
+  HeaderChatTab.tsx
 
 desktop/src/components/workspace/chat/input/delegated-work/
   DelegatedWorkComposerControl.tsx
@@ -493,6 +504,7 @@ desktop/src/lib/domain/delegated-work/
   identity.ts
 
 desktop/src/lib/domain/chat/subagents/**
+desktop/src/lib/domain/chat/tools/**
 desktop/src/lib/domain/reviews/**
 desktop/src/lib/domain/plans/**
 desktop/src/lib/domain/workspaces/tabs/**
@@ -502,6 +514,7 @@ Access:
 
 ```text
 desktop/src/lib/access/anyharness/sessions.ts
+desktop/src/lib/access/anyharness/cowork.ts
 desktop/src/lib/access/anyharness/reviews.ts
 desktop/src/lib/access/anyharness/plans.ts
 ```

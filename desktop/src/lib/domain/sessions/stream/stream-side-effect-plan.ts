@@ -198,28 +198,30 @@ export function planBatchedStreamSideEffects(input: {
     if (event.type === "item_completed" && envelope.itemId) {
       const item = input.transcript.itemsById[envelope.itemId];
       if (item?.kind === "tool_call" && isSubagentMcpMutation(item)) {
-        const launchResult = parseSubagentLaunchResult(item);
-        const display = resolveSubagentLaunchDisplay(item);
-        if (launchResult?.childSessionId) {
-          eventEffects.push({
-            kind: "record_session_relationship_hint",
-            sessionId: launchResult.childSessionId,
-            relationship: {
-              kind: "subagent_child",
+        if (isSubagentMcpCreateMutation(item)) {
+          const launchResult = parseSubagentLaunchResult(item);
+          const display = resolveSubagentLaunchDisplay(item);
+          if (launchResult?.childSessionId) {
+            eventEffects.push({
+              kind: "record_session_relationship_hint",
+              sessionId: launchResult.childSessionId,
+              relationship: {
+                kind: "subagent_child",
+                parentSessionId: input.sessionId,
+                sessionLinkId: launchResult.sessionLinkId,
+                relation: "subagent",
+                workspaceId: input.workspaceId,
+              },
+            });
+            eventEffects.push({
+              kind: "mount_subagent_child_session",
+              childSessionId: launchResult.childSessionId,
+              label: display.title,
+              workspaceId: input.workspaceId,
               parentSessionId: input.sessionId,
               sessionLinkId: launchResult.sessionLinkId,
-              relation: "subagent",
-              workspaceId: input.workspaceId,
-            },
-          });
-          eventEffects.push({
-            kind: "mount_subagent_child_session",
-            childSessionId: launchResult.childSessionId,
-            label: display.title,
-            workspaceId: input.workspaceId,
-            parentSessionId: input.sessionId,
-            sessionLinkId: launchResult.sessionLinkId,
-          });
+            });
+          }
         }
         invalidateSessionSubagents = true;
       }
@@ -273,15 +275,25 @@ function isSubagentMcpMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
   return nativeToolName === "mcp__subagents__create_subagent"
     || nativeToolName === "mcp__subagents__send_subagent_message"
-    || nativeToolName === "mcp__subagents__schedule_subagent_wake";
+    || nativeToolName === "mcp__subagents__schedule_subagent_wake"
+    || nativeToolName === "mcp__subagents__close_subagent";
+}
+
+function isSubagentMcpCreateMutation(item: ToolCallItem): boolean {
+  return item.nativeToolName?.trim().toLowerCase() === "mcp__subagents__create_subagent";
 }
 
 function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {
   const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__cowork__create_coding_workspace"
+  return nativeToolName === "mcp__cowork__create_cowork_workspace"
+    || nativeToolName === "mcp__cowork__create_coding_workspace"
+    || nativeToolName === "mcp__cowork__create_cowork_agent"
     || nativeToolName === "mcp__cowork__create_coding_session"
+    || nativeToolName === "mcp__cowork__send_cowork_agent_message"
     || nativeToolName === "mcp__cowork__send_coding_message"
-    || nativeToolName === "mcp__cowork__schedule_coding_wake";
+    || nativeToolName === "mcp__cowork__schedule_cowork_agent_wake"
+    || nativeToolName === "mcp__cowork__schedule_coding_wake"
+    || nativeToolName === "mcp__cowork__close_cowork_agent";
 }
 
 function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {

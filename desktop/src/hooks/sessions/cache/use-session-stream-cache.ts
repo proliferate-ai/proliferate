@@ -1,5 +1,6 @@
 import {
   anyHarnessCoworkManagedWorkspacesKey,
+  anyHarnessRuntimeKey,
   anyHarnessGitStatusKey,
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
@@ -49,6 +50,9 @@ export function useSessionStreamCache(): SessionStreamCache {
     invalidateCoworkManagedWorkspaces({ runtimeUrl, sessionId }) {
       void queryClient.invalidateQueries({
         queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, sessionId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "sessions"],
       });
     },
     invalidateSessionReviews({ runtimeUrl, workspaceId, parentSessionId }) {

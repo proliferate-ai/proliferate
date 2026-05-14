@@ -18,6 +18,13 @@ pub fn resolve_context(
     runtime: &ReviewRuntime,
     request: &ProductMcpRequestContext,
 ) -> Result<ReviewMcpContext, ProductMcpContextError> {
+    if runtime
+        .service()
+        .session_is_closed(&request.session_id)
+        .map_err(ProductMcpContextError::Internal)?
+    {
+        return Err(ProductMcpContextError::conflict("review session is closed"));
+    }
     let role = if runtime
         .service()
         .store()

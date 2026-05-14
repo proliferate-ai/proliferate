@@ -211,6 +211,8 @@ pub struct MobilitySessionRecord {
 #[serde(rename_all = "camelCase")]
 pub struct MobilitySessionLinkRecord {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_id: Option<String>,
     pub relation: String,
     pub parent_session_id: String,
     pub child_session_id: String,
@@ -222,6 +224,8 @@ pub struct MobilitySessionLinkRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by_tool_call_id: Option<String>,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
