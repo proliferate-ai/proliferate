@@ -82,6 +82,10 @@ impl SessionRuntime {
             ) {
                 continue;
             }
+            let now = chrono::Utc::now().to_rfc3339();
+            self.session_link_service
+                .mark_closed(&link.id, &now)
+                .map_err(SessionLifecycleError::Internal)?;
             if let Some(child) = self
                 .session_service
                 .store()
@@ -93,10 +97,6 @@ impl SessionRuntime {
                         .await?;
                 }
             }
-            let now = chrono::Utc::now().to_rfc3339();
-            self.session_link_service
-                .mark_closed(&link.id, &now)
-                .map_err(SessionLifecycleError::Internal)?;
         }
         Ok(())
     }

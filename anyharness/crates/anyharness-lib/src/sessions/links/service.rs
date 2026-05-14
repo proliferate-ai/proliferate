@@ -200,8 +200,23 @@ impl SessionLinkService {
         self.store.list_by_parent(parent_session_id)
     }
 
+    pub fn list_by_parent_including_closed(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store
+            .list_by_parent_including_closed(parent_session_id)
+    }
+
     pub fn list_by_child(&self, child_session_id: &str) -> anyhow::Result<Vec<SessionLinkRecord>> {
         self.store.list_by_child(child_session_id)
+    }
+
+    pub fn list_by_child_including_closed(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.store.list_by_child_including_closed(child_session_id)
     }
 
     pub fn list_subagent_children(
@@ -281,7 +296,11 @@ impl SessionLinkService {
     }
 
     pub fn import_link(&self, record: &SessionLinkRecord) -> anyhow::Result<()> {
-        self.store.import_link(record)
+        let mut record = record.clone();
+        if record.public_id.is_none() {
+            record.public_id = Some(new_public_id(record.relation));
+        }
+        self.store.import_link(&record)
     }
 }
 
@@ -471,6 +490,63 @@ mod tests {
             .find_subagent_link("parent-1", "child-2")
             .expect("find second child link")
             .is_none());
+    }
+
+    #[test]
+    fn closed_links_are_hidden_from_normal_lists_but_available_to_history() {
+        let (_db, _session_store, service) = service_fixture();
+        let link = service
+            .create_link(create_input("parent-1", "child-1"))
+            .expect("create link");
+
+        service
+            .mark_closed(&link.id, "2026-03-25T00:02:00Z")
+            .expect("mark closed");
+
+        assert!(service
+            .list_by_parent("parent-1")
+            .expect("list open by parent")
+            .is_empty());
+        assert!(service
+            .list_by_child("child-1")
+            .expect("list open by child")
+            .is_empty());
+        let historical = service
+            .list_by_parent_including_closed("parent-1")
+            .expect("list historical by parent");
+        assert_eq!(historical.len(), 1);
+        assert_eq!(historical[0].id, link.id);
+        assert_eq!(
+            historical[0].closed_at.as_deref(),
+            Some("2026-03-25T00:02:00Z"),
+        );
+    }
+
+    #[test]
+    fn import_link_backfills_missing_public_id() {
+        let (_db, session_store, service) = service_fixture();
+        session_store
+            .insert(&session_record("child-2"))
+            .expect("insert imported child");
+        let mut record = service
+            .create_link(create_input("parent-1", "child-1"))
+            .expect("create template link");
+        record.id = "imported-link".to_string();
+        record.public_id = None;
+        record.child_session_id = "child-2".to_string();
+
+        service.import_link(&record).expect("import link");
+
+        let imported = service
+            .list_by_child("child-2")
+            .expect("list imported child")
+            .pop()
+            .expect("imported link");
+        assert_eq!(imported.id, "imported-link");
+        assert!(imported
+            .public_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("subagent_")));
     }
 
     #[test]

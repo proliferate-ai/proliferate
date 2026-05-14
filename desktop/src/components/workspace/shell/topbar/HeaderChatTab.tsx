@@ -152,6 +152,10 @@ export function HeaderChatTab({
         onCloseOthers={() => onCloseOthers(tab.id)}
         onCloseRight={() => onCloseRight(tab.id)}
         onDismiss={() => onDismiss(tab.id)}
+        onOpenDelegatedSession={(sessionId) => {
+          clearSelection();
+          onActivate(sessionId);
+        }}
       />
     </div>
   );

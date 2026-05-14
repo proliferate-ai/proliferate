@@ -65,6 +65,7 @@ describe("deriveCoworkCodingToolPresentation", () => {
       nativeToolName: "mcp__cowork__create_cowork_agent",
       rawInput: {
         coworkWorkspaceId: "cowork_workspace_1",
+        workspaceId: "workspace-1",
         prompt: "Investigate the runtime.",
         label: "runtime sweep",
         harnessId: "claude",
@@ -75,7 +76,8 @@ describe("deriveCoworkCodingToolPresentation", () => {
       rawOutput: {
         coworkWorkspaceId: "cowork_workspace_1",
         coworkAgentId: "cowork_agent_1",
-        codingSessionId: "legacy-session-1",
+        workspaceId: "workspace-1",
+        codingSessionId: "session-1",
         promptStatus: "running",
         wake: {
           scheduled: true,
@@ -88,8 +90,10 @@ describe("deriveCoworkCodingToolPresentation", () => {
       action: "create_session",
       displayName: "runtime sweep",
       meta: "Claude · sonnet",
-      workspaceId: "cowork_workspace_1",
-      codingSessionId: "cowork_agent_1",
+      workspaceId: "workspace-1",
+      coworkWorkspaceId: "cowork_workspace_1",
+      codingSessionId: "session-1",
+      coworkAgentId: "cowork_agent_1",
       promptStatus: "running",
       wakeScheduled: true,
     });

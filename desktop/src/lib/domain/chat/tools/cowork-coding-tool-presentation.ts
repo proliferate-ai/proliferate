@@ -27,7 +27,9 @@ export interface CoworkCodingToolPresentation {
   promptStatus: string | null;
   sourceWorkspaceId: string | null;
   workspaceId: string | null;
+  coworkWorkspaceId: string | null;
   codingSessionId: string | null;
+  coworkAgentId: string | null;
   sessionLinkId: string | null;
   parentSessionId: string | null;
   eventCount: number | null;
@@ -93,15 +95,17 @@ export function deriveCoworkCodingToolPresentation(
     promptStatus,
     sourceWorkspaceId: readString(input, "sourceWorkspaceId"),
     workspaceId:
-      readString(output, "coworkWorkspaceId")
-      ?? readString(input, "coworkWorkspaceId")
-      ?? readString(output, "workspaceId")
+      readString(output, "workspaceId")
       ?? readString(input, "workspaceId"),
+    coworkWorkspaceId:
+      readString(output, "coworkWorkspaceId")
+      ?? readString(input, "coworkWorkspaceId"),
     codingSessionId:
-      readString(output, "coworkAgentId")
-      ?? readString(input, "coworkAgentId")
-      ?? readString(output, "codingSessionId")
+      readString(output, "codingSessionId")
       ?? readString(input, "codingSessionId"),
+    coworkAgentId:
+      readString(output, "coworkAgentId")
+      ?? readString(input, "coworkAgentId"),
     sessionLinkId: readString(output, "sessionLinkId") ?? readString(input, "sessionLinkId"),
     parentSessionId: readString(output, "parentSessionId") ?? readString(input, "parentSessionId"),
     eventCount,

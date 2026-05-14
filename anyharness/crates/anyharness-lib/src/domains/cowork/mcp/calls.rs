@@ -1,5 +1,9 @@
 use serde_json::{json, Value};
 
+use super::calls_helpers::{
+    launch_agents_to_json, mode_options_to_json, non_empty, prompt_outcome_label,
+    recommended_modes_by_agent_kind_json,
+};
 use super::context::CoworkMcpContext;
 use super::tools::{
     self, CodingSessionArgs, CodingWorkspaceArgs, CreateArtifactArgs, CreateCodingSessionArgs,
@@ -7,7 +11,6 @@ use super::tools::{
     ReadCodingLatestTurnsArgs, SearchCodingTranscriptArgs, SendCodingMessageArgs,
     UpdateArtifactArgs,
 };
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::cowork::artifacts::{
     CoworkArtifactRuntime, CreateCoworkArtifactInput, UpdateCoworkArtifactInput,
 };
@@ -17,7 +20,6 @@ use crate::domains::cowork::delegation::model::{
 };
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
 use crate::integrations::mcp::json_rpc::deserialize_args;
-use crate::sessions::runtime::SendPromptOutcome;
 use crate::workspaces::model::WorkspaceRecord;
 
 pub async fn call_tool(
@@ -43,14 +45,14 @@ pub async fn call_tool(
     }
 }
 
-fn ensure_tool_available(name: &str, ctx: &CoworkMcpContext) -> anyhow::Result<()> {
+pub(super) fn ensure_tool_available(name: &str, ctx: &CoworkMcpContext) -> anyhow::Result<()> {
     if tools::is_delegation_tool(name) && !ctx.workspace_delegation_enabled {
         anyhow::bail!("cowork workspace delegation is disabled for this thread");
     }
     Ok(())
 }
 
-async fn call_artifact_tool(
+pub(super) async fn call_artifact_tool(
     artifact_runtime: &CoworkArtifactRuntime,
     workspace: &WorkspaceRecord,
     name: &str,
@@ -544,182 +546,4 @@ async fn close_cowork_agent(
         "alreadyClosed": already_closed,
         "closedAt": link.closed_at.unwrap_or(closed_at),
     }))
-}
-
-fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> Vec<Value> {
-    catalog
-        .agents
-        .into_iter()
-        .map(|agent| {
-            json!({
-                "agentKind": agent.kind,
-                "displayName": agent.display_name,
-                "defaultModelId": agent.default_model_id,
-                "models": agent.models.into_iter().map(|model| {
-                    json!({
-                        "modelId": model.id,
-                        "displayName": model.display_name,
-                        "isDefault": model.is_default,
-                    })
-                }).collect::<Vec<_>>(),
-                "recommendedModeId": default_cowork_coding_mode_for_agent(&agent.kind),
-            })
-        })
-        .collect()
-}
-
-fn mode_options_to_json(
-    mode_control: Option<&anyharness_contract::v1::NormalizedSessionControl>,
-) -> Vec<Value> {
-    mode_control
-        .map(|control| {
-            control
-                .values
-                .iter()
-                .map(|value| {
-                    json!({
-                        "modeId": value.value,
-                        "label": value.label,
-                        "description": value.description,
-                        "isCurrent": control.current_value.as_deref() == Some(value.value.as_str()),
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn recommended_modes_by_agent_kind_json() -> Value {
-    json!({
-        "claude": "bypassPermissions",
-        "codex": "full-access",
-        "gemini": "yolo",
-    })
-}
-
-fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
-    match outcome {
-        SendPromptOutcome::Running { .. } => "running",
-        SendPromptOutcome::Queued { .. } => "queued",
-    }
-}
-
-impl From<SendCodingMessageArgs> for SendCodingMessageInput {
-    fn from(value: SendCodingMessageArgs) -> Self {
-        Self {
-            coding_session_id: value.coding_session_id.unwrap_or_default(),
-            prompt: value.prompt,
-            wake_on_completion: value.wake_on_completion,
-        }
-    }
-}
-
-fn non_empty(value: String) -> Option<String> {
-    let value = value.trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::{Path, PathBuf};
-
-    use crate::origin::OriginContext;
-    use crate::workspaces::model::WorkspaceRecord;
-
-    use super::*;
-
-    struct TempDirGuard {
-        path: PathBuf,
-    }
-
-    impl TempDirGuard {
-        fn new(prefix: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "anyharness-cowork-mcp-calls-{prefix}-{}",
-                uuid::Uuid::new_v4()
-            ));
-            fs::create_dir_all(&path).expect("create temp dir");
-            Self { path }
-        }
-    }
-
-    impl Drop for TempDirGuard {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
-
-    fn workspace(path: &Path) -> WorkspaceRecord {
-        WorkspaceRecord {
-            id: "workspace-1".to_string(),
-            kind: "local".to_string(),
-            repo_root_id: None,
-            path: path.display().to_string(),
-            surface: "cowork".to_string(),
-            source_repo_root_path: path.display().to_string(),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
-            original_branch: Some("main".to_string()),
-            current_branch: Some("main".to_string()),
-            display_name: None,
-            origin: Some(OriginContext::cowork()),
-            creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
-            cleanup_operation: None,
-            cleanup_error_message: None,
-            cleanup_failed_at: None,
-            cleanup_attempted_at: None,
-            created_at: "2026-01-01T00:00:00Z".to_string(),
-            updated_at: "2026-01-01T00:00:00Z".to_string(),
-        }
-    }
-
-    #[test]
-    fn delegation_disabled_call_is_rejected_before_runtime_work() {
-        let temp = TempDirGuard::new("delegation-disabled");
-        let ctx = CoworkMcpContext {
-            session_id: "session-1".to_string(),
-            workspace: workspace(&temp.path),
-            workspace_delegation_enabled: false,
-        };
-        let error = ensure_tool_available("create_coding_workspace", &ctx)
-            .expect_err("delegation tool should be rejected when disabled");
-        assert_eq!(
-            error.to_string(),
-            "cowork workspace delegation is disabled for this thread"
-        );
-    }
-
-    #[tokio::test]
-    async fn create_artifact_tool_delegates_to_artifact_runtime() {
-        let temp = TempDirGuard::new("create-artifact");
-        let artifact_runtime = CoworkArtifactRuntime::new();
-        let workspace = workspace(&temp.path);
-
-        let result = call_artifact_tool(
-            &artifact_runtime,
-            &workspace,
-            "create_artifact",
-            Some(json!({
-                "path": "notes/brief.md",
-                "content": "# Brief",
-                "title": "Brief",
-            })),
-        )
-        .await
-        .expect("call artifact tool")
-        .expect("artifact tool handled");
-
-        assert_eq!(result["path"], "notes/brief.md");
-        assert_eq!(result["title"], "Brief");
-        assert!(temp.path.join("notes/brief.md").exists());
-    }
 }

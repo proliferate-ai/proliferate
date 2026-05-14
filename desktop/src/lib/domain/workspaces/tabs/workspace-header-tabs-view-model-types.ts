@@ -21,11 +21,14 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
 
 export interface HeaderDelegatedWorkIndicator {
   id: string;
+  sessionId: string;
+  sessionLinkId: string;
   title: string;
   avatarName: string;
   initial: string;
   colorClassName: string;
   statusLabel: string;
+  source: "subagent" | "review";
 }
 
 export interface HeaderChatMenuEntry {

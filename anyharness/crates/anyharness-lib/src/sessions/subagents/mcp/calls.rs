@@ -1,16 +1,21 @@
 use serde_json::{json, Value};
 
 use super::super::service::SubagentService;
+use super::calls_helpers::{
+    default_model_for_agent, initial_config_string, launch_agents_to_json, mode_options_to_json,
+    prompt_outcome_label, resolve_preferred_string, summaries_to_json,
+};
 use super::context::SubagentMcpContext;
 use super::tools::{
     ChildSessionArgs, CreateSubagentArgs, ReadSubagentEventsArgs, ReadSubagentLatestTurnsArgs,
     SearchSubagentTranscriptArgs, SendSubagentMessageArgs,
 };
-use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
-use crate::sessions::delegation::{READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT};
-use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};
+use crate::sessions::delegation::{
+    parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
+};
+use crate::sessions::runtime::SessionRuntime;
 
 pub async fn call_tool(
     service: &SubagentService,
@@ -293,7 +298,7 @@ async fn create_subagent(
         .send_text_prompt_with_provenance(
             &started.id,
             prompt,
-            SubagentService::parent_to_child_provenance(parent_session_id, &link.id, label.clone()),
+            parent_to_child_provenance(parent_session_id, &link.id, label.clone()),
         )
         .await
     {
@@ -363,63 +368,6 @@ fn cleanup_child_session_after_failed_launch(
     }
 }
 
-fn default_model_for_agent(
-    catalog: &ResolvedWorkspaceLaunchOptions,
-    agent_kind: &str,
-) -> Option<String> {
-    catalog
-        .agents
-        .iter()
-        .find(|agent| agent.kind == agent_kind)
-        .and_then(|agent| agent.default_model_id.clone())
-}
-
-fn launch_agents_to_json(
-    catalog: ResolvedWorkspaceLaunchOptions,
-    parent_agent_kind: &str,
-) -> Vec<Value> {
-    catalog
-        .agents
-        .into_iter()
-        .map(|agent| {
-            json!({
-                "agentKind": agent.kind,
-                "displayName": agent.display_name,
-                "defaultModelId": agent.default_model_id,
-                "isParentAgent": agent.kind == parent_agent_kind,
-                "models": agent.models.into_iter().map(|model| {
-                    json!({
-                        "modelId": model.id,
-                        "displayName": model.display_name,
-                        "isDefault": model.is_default,
-                    })
-                }).collect::<Vec<_>>(),
-            })
-        })
-        .collect()
-}
-
-fn mode_options_to_json(
-    mode_control: Option<&anyharness_contract::v1::NormalizedSessionControl>,
-) -> Vec<Value> {
-    mode_control
-        .map(|control| {
-            control
-                .values
-                .iter()
-                .map(|value| {
-                    json!({
-                        "modeId": value.value,
-                        "label": value.label,
-                        "description": value.description,
-                        "isCurrent": control.current_value.as_deref() == Some(value.value.as_str()),
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 async fn send_subagent_message(
     service: &SubagentService,
     session_runtime: &SessionRuntime,
@@ -450,11 +398,7 @@ async fn send_subagent_message(
         .send_text_prompt_with_provenance(
             &link.child_session_id,
             prompt,
-            SubagentService::parent_to_child_provenance(
-                parent_session_id,
-                &link.id,
-                link.label.clone(),
-            ),
+            parent_to_child_provenance(parent_session_id, &link.id, link.label.clone()),
         )
         .await
     {
@@ -547,6 +491,7 @@ async fn close_subagent(
     let already_closed = link.closed_at.is_some();
     let now = chrono::Utc::now().to_rfc3339();
     if !already_closed {
+        service.close_link(&link, &now)?;
         if let Some(child) = service.session_store().find_by_id(&link.child_session_id)? {
             if child.closed_at.is_none() {
                 session_runtime
@@ -555,7 +500,6 @@ async fn close_subagent(
                     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             }
         }
-        service.close_link(&link, &now)?;
     }
     Ok(json!({
         "subagentId": link.public_id,
@@ -565,59 +509,4 @@ async fn close_subagent(
         "alreadyClosed": already_closed,
         "closedAt": link.closed_at.unwrap_or(now),
     }))
-}
-
-fn summaries_to_json(summaries: Vec<super::super::model::SubagentSummary>) -> Vec<Value> {
-    summaries
-        .into_iter()
-        .map(|summary| {
-            json!({
-                "sessionLinkId": summary.link_id,
-                "subagentId": summary.subagent_id,
-                "childSessionId": summary.child_session_id,
-                "label": summary.label,
-                "status": summary.status,
-                "agentKind": summary.agent_kind,
-                "modelId": summary.model_id,
-                "modeId": summary.mode_id,
-                "createdAt": summary.created_at,
-                "closedAt": summary.closed_at,
-            })
-        })
-        .collect()
-}
-
-fn initial_config_string(config: Option<&Value>, keys: &[&str]) -> Option<String> {
-    let config = config?;
-    keys.iter().find_map(|key| {
-        config
-            .get(*key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToString::to_string)
-    })
-}
-
-fn resolve_preferred_string(
-    preferred: Option<&str>,
-    legacy: Option<&str>,
-    preferred_name: &str,
-    legacy_name: &str,
-) -> anyhow::Result<Option<String>> {
-    let preferred = preferred.map(str::trim).filter(|value| !value.is_empty());
-    let legacy = legacy.map(str::trim).filter(|value| !value.is_empty());
-    if let (Some(left), Some(right)) = (preferred, legacy) {
-        if left != right {
-            anyhow::bail!("{preferred_name} conflicts with deprecated {legacy_name}");
-        }
-    }
-    Ok(preferred.or(legacy).map(ToString::to_string))
-}
-
-fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
-    match outcome {
-        SendPromptOutcome::Running { .. } => "running",
-        SendPromptOutcome::Queued { .. } => "queued",
-    }
 }

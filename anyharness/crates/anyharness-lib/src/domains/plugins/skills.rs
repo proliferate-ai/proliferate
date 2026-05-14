@@ -50,6 +50,9 @@ pub fn effective_bundle_with_product_skills(
     mut bundle: SessionPluginBundle,
     product_skills: Vec<SessionPluginSkill>,
 ) -> SessionPluginBundle {
+    bundle
+        .plugins
+        .retain(|plugin| plugin.plugin_id != PRODUCT_SKILLS_PLUGIN_ID);
     if !product_skills.is_empty() {
         bundle.plugins.push(SessionPlugin {
             plugin_id: PRODUCT_SKILLS_PLUGIN_ID.to_string(),
@@ -197,7 +200,11 @@ mod tests {
         SessionPlugin, SessionPluginBundle, SessionPluginSkill, SessionPluginSkillResource,
     };
 
-    use super::{activate_skill, get_skill_resource, list_available_skills, render_skill_index};
+    use super::{
+        activate_skill, effective_bundle_with_product_skills, get_skill_resource,
+        list_available_skills, product_skills_for_session, render_skill_index,
+        PRODUCT_SKILLS_PLUGIN_ID,
+    };
 
     #[test]
     fn renders_skill_index_and_lists_skills() {
@@ -235,6 +242,22 @@ mod tests {
     fn fails_closed_for_unknown_skill_or_resource() {
         assert!(activate_skill(&bundle(), "missing").is_err());
         assert!(get_skill_resource(&bundle(), "connector.conn_github.triage", "missing").is_err());
+    }
+
+    #[test]
+    fn product_skills_replace_previous_product_skill_bundle() {
+        let first =
+            effective_bundle_with_product_skills(bundle(), product_skills_for_session(true));
+        let second = effective_bundle_with_product_skills(first, product_skills_for_session(true));
+
+        assert_eq!(
+            second
+                .plugins
+                .iter()
+                .filter(|plugin| plugin.plugin_id == PRODUCT_SKILLS_PLUGIN_ID)
+                .count(),
+            1,
+        );
     }
 
     fn bundle() -> SessionPluginBundle {

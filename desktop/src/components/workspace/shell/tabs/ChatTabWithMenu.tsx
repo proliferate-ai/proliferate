@@ -41,6 +41,7 @@ export function ChatTabWithMenu({
   onCloseOthers,
   onCloseRight,
   onDismiss,
+  onOpenDelegatedSession,
 }: {
   tab: HeaderChatTabEntry;
   width: number;
@@ -61,6 +62,7 @@ export function ChatTabWithMenu({
   onCloseOthers: () => void;
   onCloseRight: () => void;
   onDismiss: () => void;
+  onOpenDelegatedSession?: (sessionId: string) => void;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({
@@ -122,7 +124,9 @@ export function ChatTabWithMenu({
       onSelectPointerDownCapture={onSelectPointerDownCapture}
       onClose={onClose}
       badge={renderChatTabStatusBadge(tab)}
-      rightAccessory={renderChatTabDelegatedIndicators(tab.delegatedIndicators)}
+      rightAccessory={renderChatTabDelegatedIndicators(tab.delegatedIndicators, {
+        onOpenSession: onOpenDelegatedSession,
+      })}
       data-chat-tab
       data-chat-tab-id={tab.id}
       data-chat-tab-active={tab.isActive ? "true" : "false"}

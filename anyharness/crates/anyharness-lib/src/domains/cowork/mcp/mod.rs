@@ -1,8 +1,13 @@
 pub mod auth;
 pub mod calls;
+mod calls_helpers;
+#[cfg(test)]
+mod calls_tests;
 pub mod context;
 pub mod definition;
 pub mod tools;
+#[cfg(test)]
+mod tools_tests;
 
 use std::sync::Arc;
 

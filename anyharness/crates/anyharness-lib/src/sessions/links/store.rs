@@ -63,7 +63,7 @@ impl SessionLinkStore {
                  WHERE (
                     SELECT COUNT(*)
                     FROM session_links
-                    WHERE relation = 'subagent' AND parent_session_id = ?3
+                    WHERE relation = 'subagent' AND parent_session_id = ?4
                       AND closed_at IS NULL
                  ) < ?12",
                 params![
@@ -237,12 +237,42 @@ impl SessionLinkStore {
         })
     }
 
+    pub fn list_by_parent_including_closed(
+        &self,
+        parent_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_links
+                 WHERE parent_session_id = ?1
+                 ORDER BY created_at ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([parent_session_id], map_session_link)?;
+            rows.collect()
+        })
+    }
+
     pub fn list_by_child(&self, child_session_id: &str) -> anyhow::Result<Vec<SessionLinkRecord>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT * FROM session_links
                  WHERE child_session_id = ?1
                    AND closed_at IS NULL
+                 ORDER BY created_at ASC, id ASC",
+            )?;
+            let rows = stmt.query_map([child_session_id], map_session_link)?;
+            rows.collect()
+        })
+    }
+
+    pub fn list_by_child_including_closed(
+        &self,
+        child_session_id: &str,
+    ) -> anyhow::Result<Vec<SessionLinkRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_links
+                 WHERE child_session_id = ?1
                  ORDER BY created_at ASC, id ASC",
             )?;
             let rows = stmt.query_map([child_session_id], map_session_link)?;

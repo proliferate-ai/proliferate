@@ -6,9 +6,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    CoworkCodingCompletionSummary, CoworkCodingSessionSummary, CoworkManagedWorkspaceSummary,
-    CoworkManagedWorkspacesResponse, SessionLinkTurnCompletedPayload, SessionMcpBindingSummary,
-    SubagentTurnOutcome,
+    ContentPart, CoworkCodingCompletionSummary, CoworkCodingSessionSummary,
+    CoworkManagedWorkspaceSummary, CoworkManagedWorkspacesResponse, SessionEvent,
+    SessionLinkTurnCompletedPayload, SessionMcpBindingSummary, SubagentTurnOutcome,
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -1116,6 +1116,7 @@ impl CoworkRuntime {
         let already_closed = link.closed_at.is_some();
         let now = chrono::Utc::now().to_rfc3339();
         if !already_closed {
+            self.delegation_service.close_coding_link(&link, &now)?;
             if let Some(session) = self
                 .delegation_service
                 .session_store()
@@ -1130,7 +1131,6 @@ impl CoworkRuntime {
                         })?;
                 }
             }
-            self.delegation_service.close_coding_link(&link, &now)?;
         }
         Ok((link, already_closed, now))
     }
@@ -1238,16 +1238,16 @@ impl CoworkRuntime {
             if matches.len() >= limit {
                 break;
             }
-            let text = record.payload_json.replace('\n', " ");
-            if !text.to_lowercase().contains(&needle) {
+            let text = cowork_transcript_search_text(&record);
+            let Some(index) = text.to_lowercase().find(&needle) else {
                 continue;
-            }
+            };
             matches.push(json!({
                 "seq": record.seq,
                 "timestamp": record.timestamp,
                 "turnId": record.turn_id,
                 "itemId": record.item_id,
-                "snippet": trim_snippet(&text, 240),
+                "snippet": cowork_search_snippet(&text, index, query.len()),
             }));
         }
         Ok(matches)
@@ -1459,6 +1459,77 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 
 fn normalize_optional_ref(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn cowork_transcript_search_text(record: &crate::sessions::model::SessionEventRecord) -> String {
+    let Ok(event) = serde_json::from_str::<SessionEvent>(&record.payload_json) else {
+        return String::new();
+    };
+    match event {
+        SessionEvent::ItemCompleted(item_event) => {
+            let mut text = String::new();
+            if let Some(title) = item_event.item.title {
+                text.push_str(&title);
+                text.push('\n');
+            }
+            if let Some(tool) = item_event.item.native_tool_name {
+                text.push_str(&tool);
+                text.push('\n');
+            }
+            append_content_text(&mut text, &item_event.item.content_parts);
+            text
+        }
+        SessionEvent::ItemStarted(item_event) => {
+            let mut text = String::new();
+            if let Some(title) = item_event.item.title {
+                text.push_str(&title);
+                text.push('\n');
+            }
+            if let Some(tool) = item_event.item.native_tool_name {
+                text.push_str(&tool);
+                text.push('\n');
+            }
+            append_content_text(&mut text, &item_event.item.content_parts);
+            text
+        }
+        SessionEvent::Error(error) => format!("{:?}", error.details),
+        _ => String::new(),
+    }
+}
+
+fn append_content_text(target: &mut String, parts: &[ContentPart]) {
+    for part in parts {
+        if let ContentPart::Text { text } = part {
+            if !target.is_empty() {
+                target.push('\n');
+            }
+            target.push_str(text);
+        }
+    }
+}
+
+fn cowork_search_snippet(text: &str, index: usize, needle_len: usize) -> String {
+    const CONTEXT_CHARS: usize = 120;
+    let start = text[..index]
+        .char_indices()
+        .rev()
+        .nth(CONTEXT_CHARS)
+        .map(|(idx, _)| idx)
+        .unwrap_or(0);
+    let raw_end = index.saturating_add(needle_len);
+    let end = text[raw_end.min(text.len())..]
+        .char_indices()
+        .nth(CONTEXT_CHARS)
+        .map(|(idx, _)| raw_end.min(text.len()) + idx)
+        .unwrap_or(text.len());
+    let mut snippet = text[start..end].replace('\n', " ");
+    if start > 0 {
+        snippet.insert_str(0, "...");
+    }
+    if end < text.len() {
+        snippet.push_str("...");
+    }
+    trim_snippet(&snippet, 260)
 }
 
 fn trim_snippet(text: &str, max_chars: usize) -> String {
@@ -1701,10 +1772,11 @@ fn git_branch_exists(repo_root_path: &str, branch_name: &str) -> bool {
 mod tests {
     use super::{
         coding_workspace_label, coding_workspace_name_from_branch, coding_workspace_slug,
-        materialize_cowork_workspace_path, workspace_name_with_suffix,
-        COWORK_WORKSPACE_PATH_PLACEHOLDER,
+        cowork_transcript_search_text, materialize_cowork_workspace_path,
+        workspace_name_with_suffix, COWORK_WORKSPACE_PATH_PLACEHOLDER,
     };
     use crate::sessions::mcp_bindings::model::{SessionMcpServer, SessionMcpStdioServer};
+    use crate::sessions::model::SessionEventRecord;
 
     #[test]
     fn materializes_cowork_workspace_path_in_stdio_args() {
@@ -1746,5 +1818,41 @@ mod tests {
 
         assert_eq!(suffixed.len(), super::MAX_CODING_WORKSPACE_NAME_LEN);
         assert!(suffixed.ends_with("-2"));
+    }
+
+    #[test]
+    fn cowork_transcript_search_uses_sanitized_text_not_raw_tool_payloads() {
+        let record = SessionEventRecord {
+            id: 0,
+            session_id: "child-1".to_string(),
+            seq: 1,
+            timestamp: "2026-03-25T00:01:00Z".to_string(),
+            event_type: "item_completed".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            item_id: Some("item-1".to_string()),
+            payload_json: r#"{
+                "type": "item_completed",
+                "item": {
+                    "kind": "tool_invocation",
+                    "status": "completed",
+                    "sourceAgentKind": "claude",
+                    "title": "Visible tool title",
+                    "nativeToolName": "visible_tool",
+                    "rawInput": { "token": "secret-token" },
+                    "rawOutput": { "result": "secret-output" },
+                    "contentParts": [
+                        { "type": "text", "text": "safe transcript text" }
+                    ]
+                }
+            }"#
+            .to_string(),
+        };
+
+        let text = cowork_transcript_search_text(&record);
+
+        assert!(text.contains("Visible tool title"));
+        assert!(text.contains("safe transcript text"));
+        assert!(!text.contains("secret-token"));
+        assert!(!text.contains("secret-output"));
     }
 }

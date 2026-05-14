@@ -88,11 +88,14 @@ function buildDelegatedIndicators(
     const identity = delegatedWorkVisualIdentity(child.sessionLinkId || child.sessionId);
     return {
       id: child.sessionLinkId || child.sessionId,
+      sessionId: child.sessionId,
+      sessionLinkId: child.sessionLinkId,
       title: child.title,
       avatarName: identity.avatarName,
       initial: identity.initial,
       colorClassName: identity.colorClassName,
       statusLabel: child.statusLabel,
+      source: child.source,
     };
   });
 }
