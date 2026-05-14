@@ -182,9 +182,9 @@ function ComposerActionRow({
         label={label}
         disabled={disabled}
         onClick={onClick}
-        className="min-w-0 flex-1 items-start [&>span:first-child]:mt-0.5"
+        className="min-w-0 flex-1"
       >
-        <span className="mt-0.5 block whitespace-normal text-xs leading-4 text-muted-foreground">
+        <span className="block whitespace-normal text-sm leading-4 text-muted-foreground">
           {detail}
         </span>
       </PopoverMenuItem>

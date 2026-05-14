@@ -9,7 +9,7 @@ import {
   Spinner,
 } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/IconButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type {
@@ -200,7 +200,7 @@ function FinishSuggestionIndicator({
       <PopoverButton
         trigger={trigger}
         stopPropagation
-        className="w-64 rounded-xl border border-border bg-popover p-1 shadow-floating"
+        className={`w-64 ${POPOVER_SURFACE_CLASS}`}
         onOpenChange={(isOpen) => {
           if (!isOpen) setConfirming(false);
         }}

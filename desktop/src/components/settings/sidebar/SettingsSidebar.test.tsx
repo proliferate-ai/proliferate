@@ -24,10 +24,6 @@ vi.mock("@/components/support/SupportDialog", () => ({
   },
 }));
 
-vi.mock("@/hooks/access/tauri/app/use-app-version", () => ({
-  useAppVersion: () => ({ data: "0.0.0" }),
-}));
-
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

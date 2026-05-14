@@ -128,7 +128,7 @@ export function AppearancePane() {
             <SettingsMenu
               label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
               className="w-40"
-              menuClassName="w-52"
+              menuClassName="w-60"
               groups={[{
                 id: "ui-font-size",
                 options: UI_FONT_SIZE_OPTIONS.map((option) => ({
@@ -149,7 +149,7 @@ export function AppearancePane() {
             <SettingsMenu
               label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
               className="w-40"
-              menuClassName="w-56"
+              menuClassName="w-60"
               groups={[{
                 id: "readable-code-font-size",
                 options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({

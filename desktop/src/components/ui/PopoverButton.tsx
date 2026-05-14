@@ -20,6 +20,10 @@ type PopoverTriggerMode = "click" | "doubleClick" | "contextMenu";
 
 const DEFAULT_AUTO_VERTICAL_SPACE = 320;
 
+export const POPOVER_FRAME_CLASS =
+  "m-px rounded-xl bg-popover/90 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm";
+export const POPOVER_SURFACE_CLASS = `${POPOVER_FRAME_CLASS} flex select-none flex-col overflow-y-auto p-1`;
+
 interface PopoverButtonProps {
   /** The trigger element — receives onClick and ref. */
   trigger: ReactElement<{
@@ -54,7 +58,7 @@ export function PopoverButton({
   align = "start",
   side = "auto",
   offset = 4,
-  className = "w-56 rounded-xl border border-border bg-popover p-1 shadow-floating",
+  className = `w-56 ${POPOVER_SURFACE_CLASS}`,
   stopPropagation = false,
   triggerMode = "click",
   externalOpen,

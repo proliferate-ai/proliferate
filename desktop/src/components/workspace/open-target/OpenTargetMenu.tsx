@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Copy } from "@/components/ui/icons";
+import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
 import { OpenTargetIcon } from "./OpenTargetIcon";
 import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
 
@@ -22,21 +23,24 @@ function DropdownItem({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       role="menuitem"
-      tabIndex={-1}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
-      className="relative flex cursor-default select-none items-center rounded-md px-2 py-1.5 text-sm outline-none hover:bg-accent/40 focus:bg-accent/40 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+      className="group/menu-item flex w-full cursor-default select-none items-center rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none hover:bg-popover-accent focus:bg-popover-accent"
     >
-      {icon}
-      <span className="ml-2">{label}</span>
+      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+        {icon}
+      </span>
+      <span className="ml-1.5 min-w-0 flex-1 truncate text-left">{label}</span>
       {shortcut && (
-        <span className="inline-flex items-center ml-auto pl-1">
-          <span className="text-xs text-muted-foreground">{shortcut}</span>
+        <span className="ml-2 inline-flex shrink-0 items-center pl-1">
+          <span className="text-xs leading-4 text-muted-foreground/80 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground">
+            {shortcut}
+          </span>
         </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -105,7 +109,7 @@ export function OpenTargetMenu({ targets, onTargetClick, trigger, align = "left"
         <div
           ref={menuRef}
           role="menu"
-          className={`absolute top-full z-50 mt-1 min-w-[10rem] overflow-auto rounded-lg border border-border bg-popover p-1 text-foreground shadow-floating transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          className={`absolute top-full z-50 mt-1 max-h-80 w-[220px] overflow-y-auto ${POPOVER_SURFACE_CLASS} transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
             align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left"
           } ${
             phase === "open"

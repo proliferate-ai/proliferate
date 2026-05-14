@@ -3,7 +3,7 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
@@ -179,7 +179,7 @@ export function TerminalHeaderIcon({
           triggerMode="contextMenu"
           side="bottom"
           align="start"
-          className="w-56 rounded-md border border-border bg-popover p-1 shadow-floating"
+          className={`w-56 ${POPOVER_SURFACE_CLASS}`}
           trigger={trigger}
         >
           {(close) => (

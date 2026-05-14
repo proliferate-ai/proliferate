@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Check, ChevronUpDown } from "@/components/ui/icons";
+import { Check, ChevronDown } from "@/components/ui/icons";
 
 export interface SettingsMenuOption {
   id: string;
@@ -33,7 +33,7 @@ export function SettingsMenu({
   leading,
   groups,
   className = "w-44",
-  menuClassName = "w-56",
+  menuClassName = "w-60",
 }: SettingsMenuProps) {
   return (
     <PopoverButton
@@ -43,15 +43,15 @@ export function SettingsMenu({
         <Button
           type="button"
           variant="outline"
-          size="md"
-          className={`justify-between bg-background px-3 text-foreground shadow-none hover:bg-accent/50 ${className}`}
+          size="sm"
+          className={`h-8 justify-between rounded-xl border-transparent bg-accent px-3 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-accent/80 data-[state=open]:bg-accent/80 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-          <ChevronUpDown className="size-3 shrink-0 text-muted-foreground" />
+          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         </Button>
       )}
-      className={`${menuClassName} rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating`}
+      className={`${menuClassName} ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <div className="max-h-80 overflow-y-auto">
@@ -59,7 +59,7 @@ export function SettingsMenu({
             <div key={group.id}>
               {groupIndex > 0 && <div className="my-1 border-t border-border/40" />}
               {group.label && (
-                <div className="px-2 pb-1 pt-1.5 text-sm text-muted-foreground">
+                <div className="min-h-6 truncate px-2 py-1 text-sm leading-4 text-muted-foreground">
                   {group.label}
                 </div>
               )}
@@ -69,7 +69,6 @@ export function SettingsMenu({
                   label={option.label}
                   icon={option.icon}
                   disabled={option.disabled}
-                  className={option.selected ? "text-foreground" : "text-muted-foreground"}
                   trailing={option.selected ? <Check className="size-3.5" /> : undefined}
                   onClick={() => {
                     option.onSelect();
@@ -77,7 +76,7 @@ export function SettingsMenu({
                   }}
                 >
                   {option.detail && (
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-sm leading-4 text-muted-foreground">
                       {option.detail}
                     </span>
                   )}

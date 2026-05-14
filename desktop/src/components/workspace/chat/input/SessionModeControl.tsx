@@ -5,7 +5,7 @@ import {
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ChevronDown } from "@/components/ui/icons";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ComposerControlButton } from "./ComposerControlButton";
@@ -64,7 +64,7 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
         />
       }
       side="top"
-      className="w-56 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      className={`w-56 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <>

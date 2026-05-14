@@ -7,7 +7,7 @@ import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-con
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { Brain, Check, ChevronDown, Zap } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
@@ -144,7 +144,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
         />
       }
       side="top"
-      className="w-56 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      className={`w-56 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <>

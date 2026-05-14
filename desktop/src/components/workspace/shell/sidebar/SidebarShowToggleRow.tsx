@@ -14,7 +14,7 @@ export function SidebarShowToggleRow({
         variant="unstyled"
         size="unstyled"
         onClick={onClick}
-        className="rounded-full border border-transparent px-2 py-0.5 text-sm leading-[18px] text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-offset-2"
+        className="rounded-full border border-transparent px-2 py-0.5 text-sm leading-[18px] text-sidebar-muted-foreground hover:text-sidebar-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring focus-visible:outline-offset-2"
       >
         {label}
       </Button>

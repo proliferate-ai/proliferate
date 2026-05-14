@@ -1,6 +1,6 @@
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { StackedFiles } from "@/components/ui/icons";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import { TabContextMenu } from "@/components/workspace/shell/tabs/TabContextMenu";
 import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
@@ -72,7 +72,7 @@ export function FileTabWithMenu({
     <PopoverButton
       triggerMode="contextMenu"
       stopPropagation
-      className="w-52 rounded-lg border border-border bg-popover p-1 shadow-floating"
+      className={`w-52 ${POPOVER_SURFACE_CLASS}`}
       trigger={(
         <span
           className="inline-flex min-w-0 shrink-0 app-region-no-drag"

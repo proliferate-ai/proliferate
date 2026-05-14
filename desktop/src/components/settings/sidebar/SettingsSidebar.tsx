@@ -9,7 +9,6 @@ import {
   SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
 } from "@/components/settings/settings-navigation";
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
@@ -30,8 +29,51 @@ interface SettingsSidebarProps {
   };
 }
 
-const NAV_GROUP_CLASS = "flex flex-col gap-0.5";
-const NAV_GROUP_SPACING_CLASS = "mt-3";
+const SETTINGS_SIDEBAR_ROOT_CLASS =
+  "flex h-full w-64 shrink-0 select-none flex-col bg-sidebar-background text-sidebar-foreground";
+const SETTINGS_NAV_CLASS = "flex min-h-0 flex-1 flex-col px-2 pb-2";
+const SETTINGS_GROUPS_CLASS = "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2";
+const SETTINGS_GROUP_CLASS = "flex flex-col gap-1";
+const SETTINGS_GROUP_HEADING_CLASS =
+  "px-2 pb-0.5 pt-1 text-base leading-5 text-sidebar-muted-foreground opacity-75";
+const SETTINGS_ROW_STACK_CLASS = "flex flex-col gap-px";
+
+function isSettingsItemActive(item: SettingsNavItem, activeSection: SettingsSection) {
+  return item.kind === "section" && activeSection === item.id;
+}
+
+function isSettingsItemDisabled(
+  item: SettingsNavItem,
+  disabledSections: Partial<Record<SettingsSection, boolean>> | undefined,
+  updateActionState: SettingsSidebarProps["updateActionState"],
+) {
+  return (
+    (item.kind === "section" && !!disabledSections?.[item.id])
+    || (item.kind === "action"
+      && item.id === "checkForUpdates"
+      && !updateActionState.updatesSupported)
+  );
+}
+
+function settingsItemStatus(
+  item: SettingsNavItem,
+  updateActionState: SettingsSidebarProps["updateActionState"],
+) {
+  if (item.kind !== "action" || item.id !== "checkForUpdates") {
+    return null;
+  }
+
+  if (!updateActionState.updatesSupported) {
+    return "Packaged only";
+  }
+  if (updateActionState.isChecking) {
+    return "Checking...";
+  }
+  if (updateActionState.hasAvailableUpdate) {
+    return "Available";
+  }
+  return null;
+}
 
 export function SettingsSidebar({
   activeSection,
@@ -45,7 +87,6 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
   const location = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
-  const appVersion = useAppVersion().data?.trim();
 
   function handleItemClick(item: SettingsNavItem) {
     if (item.kind === "action") {
@@ -64,10 +105,6 @@ export function SettingsSidebar({
     }
 
     onSelectSection(item.id);
-  }
-
-  function isItemActive(item: SettingsNavItem) {
-    return item.kind === "section" && activeSection === item.id;
   }
 
   function renderUpdateCommand() {
@@ -115,7 +152,7 @@ export function SettingsSidebar({
   }
 
   return (
-    <div className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
+    <div className={SETTINGS_SIDEBAR_ROOT_CLASS}>
       {supportOpen && (
         <SupportDialog
           onClose={() => setSupportOpen(false)}
@@ -126,51 +163,37 @@ export function SettingsSidebar({
           }}
         />
       )}
-      <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
+      <div className="h-[46px] pl-[82px]" data-tauri-drag-region="true" />
 
-      <div className="mb-4 px-2">
+      <nav className={SETTINGS_NAV_CLASS} aria-label="Settings">
         <SidebarNavRow
           icon={<ArrowLeft className="size-4" />}
           label={SETTINGS_COPY.back}
           onPress={onNavigateHome}
+          className="mb-2"
         />
-      </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-4">
-        <div className="flex flex-col">
-          {SETTINGS_NAV_GROUPS.map((group, index) => (
-            <Fragment key={group.id}>
-              <div
-                className={`${NAV_GROUP_CLASS} ${index > 0 ? NAV_GROUP_SPACING_CLASS : ""}`}
-              >
-                <div className="px-2 py-1.5 text-xs font-medium uppercase tracking-[0.08em] text-sidebar-muted-foreground/80">
-                  {group.heading}
-                </div>
+        <div className={SETTINGS_GROUPS_CLASS}>
+          {SETTINGS_NAV_GROUPS.map((group) => (
+            <div key={group.id} className={SETTINGS_GROUP_CLASS}>
+              <div className={SETTINGS_GROUP_HEADING_CLASS}>
+                {group.heading}
+              </div>
+              <div className={SETTINGS_ROW_STACK_CLASS}>
                 {group.items.map((item) => {
-                  const active = isItemActive(item);
-                  const sectionDisabled =
-                    item.kind === "section" && !!disabledSections?.[item.id];
+                  const active = isSettingsItemActive(item, activeSection);
+                  const disabled = isSettingsItemDisabled(
+                    item,
+                    disabledSections,
+                    updateActionState,
+                  );
                   const Icon = item.icon;
-                  const actionDisabled =
-                    item.kind === "action"
-                    && item.id === "checkForUpdates"
-                    && !updateActionState.updatesSupported;
-                  const disabled = sectionDisabled || actionDisabled;
-                  const status = item.kind === "action" && item.id === "checkForUpdates"
-                    ? !updateActionState.updatesSupported
-                      ? "Packaged only"
-                      : updateActionState.isChecking
-                        ? "Checking..."
-                        : updateActionState.hasAvailableUpdate
-                          ? "Available"
-                          : ""
-                    : null;
                   return (
                     <Fragment key={item.id}>
                       <SidebarNavRow
                         icon={<Icon className="size-4" />}
                         label={item.label}
-                        status={status}
+                        status={settingsItemStatus(item, updateActionState)}
                         onPress={() => handleItemClick(item)}
                         active={active}
                         disabled={disabled}
@@ -183,15 +206,10 @@ export function SettingsSidebar({
                   );
                 })}
               </div>
-            </Fragment>
+            </div>
           ))}
         </div>
       </nav>
-      {appVersion ? (
-        <div className="shrink-0 border-t border-sidebar-border px-3 py-2 text-xs text-sidebar-muted-foreground">
-          Proliferate v{appVersion}
-        </div>
-      ) : null}
     </div>
   );
 }

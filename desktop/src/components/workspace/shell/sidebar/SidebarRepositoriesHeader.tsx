@@ -45,7 +45,7 @@ export function SidebarRepositoriesHeader({
   onAddRepo,
 }: SidebarRepositoriesHeaderProps) {
   return (
-    <div className="text-foreground/50 text-base opacity-75 pl-2 pt-3 pb-1">
+    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground opacity-75">
       <div className="flex items-center justify-between gap-2">
         <span>Repositories</span>
         <div className="flex shrink-0 items-center gap-1">

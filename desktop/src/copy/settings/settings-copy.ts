@@ -1,5 +1,5 @@
 export const SETTINGS_COPY = {
-  back: "Back",
+  back: "Back to app",
   errorTitle: "Settings couldn't be displayed",
   errorDescription:
     "This section hit an unexpected error. You can retry it or switch to another section without leaving Settings.",

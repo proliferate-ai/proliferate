@@ -57,6 +57,7 @@
   --shadow-keystone: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-floating: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-floating-dark: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+  --shadow-popover: 0 0 0 0.5px var(--color-popover-ring), 0 8px 16px -4px rgb(0 0 0 / 0.12);
 
   /* -- Font sizes (aligned to Codex density) -- */
   --text-xs: 0.5rem;                  /* 8px  — badges, counters */
@@ -1152,13 +1153,13 @@
 
   --color-sidebar: #f5f5f5;
   --color-sidebar-background: #f5f5f5;
-  --color-sidebar-foreground: rgba(13, 13, 13, 0.7);
-  --color-sidebar-primary: #0d0d0d;
-  --color-sidebar-primary-foreground: #0d0d0d;
-  --color-sidebar-muted-foreground: rgba(13, 13, 13, 0.5);
-  --color-sidebar-accent: rgba(13, 13, 13, 0.05);
-  --color-sidebar-accent-foreground: #0d0d0d;
-  --color-sidebar-border: rgba(13, 13, 13, 0.08);
+  --color-sidebar-foreground: #1a1c1f;
+  --color-sidebar-primary: #1a1c1f;
+  --color-sidebar-primary-foreground: #1a1c1f;
+  --color-sidebar-muted-foreground: color-mix(in oklab, #1a1c1f 50%, transparent);
+  --color-sidebar-accent: color-mix(in oklab, #1a1c1f 5%, transparent);
+  --color-sidebar-accent-foreground: #1a1c1f;
+  --color-sidebar-border: color-mix(in oklab, #1a1c1f 8%, transparent);
   --color-sidebar-ring: #0169cc;
   --color-sidebar-blue: #0169cc;
 
@@ -1338,6 +1339,7 @@ body {
   background: transparent;
   color: var(--color-foreground);
   font-family: var(--font-sans);
+  font-weight: 430;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

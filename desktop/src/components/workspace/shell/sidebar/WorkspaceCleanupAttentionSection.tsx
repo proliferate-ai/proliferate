@@ -22,7 +22,7 @@ export function WorkspaceCleanupAttentionSection({
 
   return (
     <div className="flex flex-col gap-px pb-2">
-      <div className="pl-2 pt-3 pb-1 text-base text-foreground/50 opacity-75">
+      <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground opacity-75">
         Cleanup
       </div>
       {workspaces.map((workspace) => (
@@ -34,7 +34,7 @@ export function WorkspaceCleanupAttentionSection({
             <CircleAlert className="size-3 text-destructive" />
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-base leading-5 text-foreground">
+            <span className="truncate text-base leading-5 text-current">
               {workspaceDisplayName(workspace)}
             </span>
             <span className="truncate text-xs leading-4 text-sidebar-muted-foreground">

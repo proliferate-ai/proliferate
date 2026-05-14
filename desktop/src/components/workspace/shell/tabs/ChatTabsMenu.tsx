@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
 import { ChevronRight } from "@/components/ui/icons";
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 import type { HeaderChatMenuEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
@@ -151,7 +152,7 @@ export function ChatTabsMenu({
                 onClick={() => onOpenSession(row.id)}
               >
                 {!row.isVisible && (
-                  <span className="block truncate text-xs text-muted-foreground">
+                  <span className="block truncate text-sm leading-4 text-muted-foreground">
                     Hidden
                   </span>
                 )}
@@ -193,7 +194,7 @@ function SubagentFlyout({
   return (
     <div
       data-telemetry-mask="true"
-      className="fixed z-[70] max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-floating"
+      className={`fixed z-[70] max-h-[70vh] overflow-y-auto ${POPOVER_SURFACE_CLASS}`}
       style={{
         top: position.top,
         left: position.left,
@@ -224,7 +225,7 @@ function SubagentFlyout({
           }}
         >
           {child.meta && (
-            <span className="block truncate text-xs text-muted-foreground">
+            <span className="block truncate text-sm leading-4 text-muted-foreground">
               {child.meta}
             </span>
           )}
@@ -264,5 +265,5 @@ function renderSubagentTrailing(child: HeaderSubagentChildRow): ReactNode {
   if (child.isActive) {
     return <span className="size-1.5 rounded-full bg-foreground/70" />;
   }
-  return <span className="text-xs text-muted-foreground">{child.statusLabel}</span>;
+  return <span className="text-xs leading-4 text-muted-foreground">{child.statusLabel}</span>;
 }

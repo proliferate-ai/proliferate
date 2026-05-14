@@ -36,7 +36,7 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
         onClick={onClick}
         disabled={disabled}
         className={`size-6 rounded-md border border-transparent transition-all ${
-          active ? "bg-sidebar-accent/60 text-sidebar-foreground" : ""
+          active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
         } ${
           isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         } ${

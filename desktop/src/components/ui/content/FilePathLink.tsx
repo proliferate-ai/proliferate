@@ -1,6 +1,6 @@
 import { useCallback, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Copy, ExternalLink } from "@/components/ui/icons";
 import { useFilePathNativeContextMenu } from "@/hooks/editor/ui/use-file-path-native-context-menu";
@@ -69,7 +69,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
       trigger={trigger}
       triggerMode="contextMenu"
       stopPropagation
-      className="w-52 rounded-lg border border-border bg-popover p-1 shadow-floating"
+      className={`w-52 ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <div className="flex flex-col gap-px">
