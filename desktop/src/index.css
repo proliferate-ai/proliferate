@@ -1821,6 +1821,7 @@ body {
 
 /* ---- Workspace shell tab density ---- */
 :root {
+  --workspace-shell-header-height: 3rem; /* 48px */
   --workspace-shell-tab-height: 1.75rem; /* 28px */
   --workspace-shell-tab-font-size: var(--text-base);
   --workspace-shell-tab-line-height: var(--text-base--line-height);
@@ -1889,11 +1890,11 @@ body {
 
 /* ---- Right panel tabs ---- */
 .right-panel-tab-system {
-  --tab-system-height: 46px;
+  --tab-system-height: var(--workspace-shell-header-height);
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: var(--workspace-shell-action-size);
-  --tab-container-padding: 9px;
+  --tab-container-padding: calc((var(--tab-system-height) - var(--tab-height) - 1px) / 2);
   --tab-stable-end-margin: 0px;
   --tab-gap: 3px;
   --tab-bar-mask-size: 28px;
@@ -1926,6 +1927,7 @@ body {
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: var(--tab-system-height);
   flex-shrink: 0;
   min-width: 0;
   background-color: var(--right-panel-tab-surface);
@@ -1940,7 +1942,7 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 0;
-  height: var(--tab-system-height);
+  height: 100%;
   width: 100%;
   min-width: 0;
   padding: 0 8px;
