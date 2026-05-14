@@ -104,6 +104,22 @@ class CloudSessionEventResponse(BaseModel):
     payload: dict[str, object] | None = None
 
 
+class CloudSessionPatchResponse(BaseModel):
+    target_id: str = Field(serialization_alias="targetId")
+    session_id: str = Field(serialization_alias="sessionId")
+    seq: int
+    event_type: str = Field(serialization_alias="eventType")
+    session: CloudSessionProjectionResponse
+    transcript_item: CloudTranscriptItemResponse | None = Field(
+        default=None,
+        serialization_alias="transcriptItem",
+    )
+    pending_interaction: CloudPendingInteractionResponse | None = Field(
+        default=None,
+        serialization_alias="pendingInteraction",
+    )
+
+
 def session_projection_response(
     value: events_store.CloudSessionProjectionSnapshot,
 ) -> CloudSessionProjectionResponse:
@@ -175,6 +191,33 @@ def session_event_response(
         item_id=value.item_id,
         occurred_at=value.occurred_at,
         payload=_json_dict(value.payload_json),
+    )
+
+
+def session_patch_response(
+    *,
+    target_id: UUID,
+    session_id: str,
+    seq: int,
+    event_type: str,
+    session: events_store.CloudSessionProjectionSnapshot,
+    transcript_item: events_store.CloudTranscriptItemSnapshot | None = None,
+    pending_interaction: events_store.CloudPendingInteractionSnapshot | None = None,
+) -> CloudSessionPatchResponse:
+    return CloudSessionPatchResponse(
+        target_id=str(target_id),
+        session_id=session_id,
+        seq=seq,
+        event_type=event_type,
+        session=session_projection_response(session),
+        transcript_item=(
+            transcript_item_response(transcript_item) if transcript_item is not None else None
+        ),
+        pending_interaction=(
+            pending_interaction_response(pending_interaction)
+            if pending_interaction is not None
+            else None
+        ),
     )
 
 

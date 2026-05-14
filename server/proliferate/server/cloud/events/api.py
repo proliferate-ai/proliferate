@@ -16,8 +16,8 @@ from proliferate.server.cloud.events.models import CloudSessionSnapshotResponse
 from proliferate.server.cloud.events.service import (
     ensure_visible_session_target,
     get_session_snapshot,
-    stream_session_events,
 )
+from proliferate.server.cloud.live.service import stream_session_events
 
 router = APIRouter(prefix="/sessions", tags=["cloud-sessions"])
 
