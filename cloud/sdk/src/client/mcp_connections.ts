@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   CloudMcpConnection,
   CloudMcpConnectionsResponse,
@@ -7,7 +7,7 @@ import type {
   PatchCloudMcpConnectionRequest,
   PutCloudMcpSecretAuthRequest,
   SyncCloudMcpConnectionRequest,
-} from "../types";
+} from "../types/index.js";
 
 export async function listCloudMcpConnections(): Promise<CloudMcpConnectionsResponse> {
   return (await getProliferateClient().GET("/v1/cloud/mcp/connections")).data!;

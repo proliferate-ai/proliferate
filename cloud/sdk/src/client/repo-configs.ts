@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   CloudRepoConfigResponse,
   CloudRepoConfigsListResponse,
@@ -7,7 +7,7 @@ import type {
   RunCloudWorkspaceSetupResponse,
   SaveCloudRepoConfigRequest,
   ResyncCloudWorkspaceFilesResponse,
-} from "../types";
+} from "../types/index.js";
 
 export async function listCloudRepoConfigs(): Promise<CloudRepoConfigsListResponse> {
   return (await getProliferateClient().GET("/v1/cloud/repos/configs")).data!;

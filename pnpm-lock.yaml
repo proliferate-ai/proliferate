@@ -87,6 +87,9 @@ importers:
         specifier: ^0.14.0
         version: 0.14.1
     devDependencies:
+      openapi-typescript:
+        specifier: ^7.13.0
+        version: 7.13.0(typescript@5.9.3)
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -245,9 +248,6 @@ importers:
       jsdom:
         specifier: ^29.1.0
         version: 29.1.0
-      openapi-typescript:
-        specifier: ^7.13.0
-        version: 7.13.0(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.2.2

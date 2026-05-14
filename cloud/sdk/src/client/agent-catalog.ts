@@ -1,5 +1,5 @@
-import { getProliferateClient } from "./core";
-import type { CloudAgentCatalogResponse } from "../types";
+import { getProliferateClient } from "./core.js";
+import type { CloudAgentCatalogResponse } from "../types/index.js";
 
 const AGENT_CATALOG_SCHEMA_VERSION = 1;
 

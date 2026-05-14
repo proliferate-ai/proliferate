@@ -1,16 +1,16 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import {
   measureCloudRequest,
   type CloudMeasurementOptions,
-} from "./timing";
+} from "./timing.js";
 import type {
   CloudConnectionInfo,
   CloudWorkspaceDetail,
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
   CreateCloudWorkspaceRequest,
-} from "../types";
-import type { CloudOwnerSelection } from "./billing";
+} from "../types/index.js";
+import type { CloudOwnerSelection } from "./billing.js";
 
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;

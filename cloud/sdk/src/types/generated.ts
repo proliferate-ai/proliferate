@@ -1,4 +1,4 @@
-import type { components } from "../generated/openapi";
+import type { components } from "../generated/openapi.js";
 
 // Narrow string unions — kept hand-written because the server declares these as `str`
 // and the generated types would be too loose (`string`) for UI switch/display logic.

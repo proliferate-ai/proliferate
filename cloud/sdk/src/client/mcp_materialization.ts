@@ -1,5 +1,5 @@
-import { getProliferateClient } from "./core";
-import type { MaterializeCloudMcpRequest, MaterializeCloudMcpResponse } from "../types";
+import { getProliferateClient } from "./core.js";
+import type { MaterializeCloudMcpRequest, MaterializeCloudMcpResponse } from "../types/index.js";
 
 export async function materializeCloudMcpServers(
   body: MaterializeCloudMcpRequest,

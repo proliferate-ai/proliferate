@@ -1,9 +1,9 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   BillingPlanInfo,
   BillingUrlResponse,
   OverageSettingsResponse,
-} from "../types";
+} from "../types/index.js";
 
 export interface CloudOwnerSelection {
   ownerScope: "personal" | "organization";

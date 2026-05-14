@@ -1,5 +1,5 @@
-import { getProliferateClient } from "./core";
-import type { SendSupportMessageRequest, SupportMessageContext } from "../types";
+import { getProliferateClient } from "./core.js";
+import type { SendSupportMessageRequest, SupportMessageContext } from "../types/index.js";
 
 export type { SupportMessageContext, SendSupportMessageRequest };
 

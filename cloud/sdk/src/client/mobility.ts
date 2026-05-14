@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   CloudMobilityHandoffSummary,
   CloudMobilityWorkspaceDetail,
@@ -10,7 +10,7 @@ import type {
   FinalizeCloudWorkspaceMobilityHandoffRequest,
   StartCloudWorkspaceMobilityHandoffRequest,
   UpdateCloudWorkspaceMobilityHandoffPhaseRequest,
-} from "../types";
+} from "../types/index.js";
 
 export async function listCloudMobilityWorkspaces(): Promise<CloudMobilityWorkspaceSummary[]> {
   return (await getProliferateClient().GET("/v1/cloud/mobility/workspaces")).data!;

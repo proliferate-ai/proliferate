@@ -1,8 +1,8 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient } from "./core.js";
 import type {
   CloudWorktreeRetentionPolicyRequest,
   CloudWorktreeRetentionPolicyResponse,
-} from "../types";
+} from "../types/index.js";
 
 export async function getCloudWorktreeRetentionPolicy(): Promise<CloudWorktreeRetentionPolicyResponse> {
   return (

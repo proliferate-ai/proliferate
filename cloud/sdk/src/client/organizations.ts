@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   OrganizationInvitationAcceptRequest,
   OrganizationInvitationAcceptResponse,
@@ -11,10 +11,12 @@ import type {
   OrganizationMembershipUpdateRequest,
   OrganizationResponse,
   OrganizationUpdateRequest,
-} from "../types";
+} from "../types/index.js";
 
-export async function listOrganizations(): Promise<OrganizationListResponse> {
-  return (await getProliferateClient().GET("/v1/organizations")).data!;
+export async function listOrganizations(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<OrganizationListResponse> {
+  return (await client.GET("/v1/organizations")).data!;
 }
 
 export async function updateOrganization(
@@ -31,9 +33,10 @@ export async function updateOrganization(
 
 export async function listOrganizationMembers(
   organizationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationMembersResponse> {
   return (
-    await getProliferateClient().GET("/v1/organizations/{organization_id}/members", {
+    await client.GET("/v1/organizations/{organization_id}/members", {
       params: { path: { organization_id: organizationId } },
     })
   ).data!;
@@ -71,9 +74,10 @@ export async function removeOrganizationMembership(
 
 export async function listOrganizationInvitations(
   organizationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<OrganizationInvitationsResponse> {
   return (
-    await getProliferateClient().GET("/v1/organizations/{organization_id}/invitations", {
+    await client.GET("/v1/organizations/{organization_id}/invitations", {
       params: { path: { organization_id: organizationId } },
     })
   ).data!;

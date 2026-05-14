@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   AutomationListResponse,
   AutomationResponse,
@@ -13,10 +13,12 @@ import type {
   LocalAutomationFailRequest,
   LocalAutomationMutationResponse,
   UpdateAutomationRequest,
-} from "../types";
+} from "../types/index.js";
 
-export async function listAutomations(): Promise<AutomationListResponse> {
-  return (await getProliferateClient().GET("/v1/automations")).data!;
+export async function listAutomations(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AutomationListResponse> {
+  return (await client.GET("/v1/automations")).data!;
 }
 
 export async function createAutomation(
@@ -25,9 +27,12 @@ export async function createAutomation(
   return (await getProliferateClient().POST("/v1/automations", { body })).data!;
 }
 
-export async function getAutomation(automationId: string): Promise<AutomationResponse> {
+export async function getAutomation(
+  automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AutomationResponse> {
   return (
-    await getProliferateClient().GET("/v1/automations/{automation_id}", {
+    await client.GET("/v1/automations/{automation_id}", {
       params: { path: { automation_id: automationId } },
     })
   ).data!;
@@ -74,9 +79,10 @@ export async function runAutomationNow(
 export async function listAutomationRuns(
   automationId: string,
   limit = 50,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AutomationRunListResponse> {
   return (
-    await getProliferateClient().GET("/v1/automations/{automation_id}/runs", {
+    await client.GET("/v1/automations/{automation_id}/runs", {
       params: { path: { automation_id: automationId }, query: { limit } },
     })
   ).data!;

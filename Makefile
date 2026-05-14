@@ -54,7 +54,7 @@ endif
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
-        sdk-generate sdk-build sdk-react-build runtime-build desktop-build rebuild \
+        sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build runtime-build desktop-build rebuild \
         release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
@@ -539,10 +539,10 @@ cloud-openapi:
 	  > openapi.json
 
 cloud-client-generate: cloud-openapi
-	mkdir -p desktop/src/lib/access/cloud/generated
-	cd desktop && npx openapi-typescript \
-	  ../server/openapi.json \
-	  -o src/lib/access/cloud/generated/openapi.ts
+	mkdir -p cloud/sdk/src/generated
+	cd cloud/sdk && npx openapi-typescript \
+	  ../../server/openapi.json \
+	  -o src/generated/openapi.ts
 
 # --- TypeScript SDK ---
 
@@ -559,10 +559,16 @@ sdk-build: sdk-generate
 sdk-react-build:
 	cd anyharness/sdk-react && pnpm run build
 
+cloud-sdk-build: cloud-client-generate
+	cd cloud/sdk && pnpm run build
+
+cloud-sdk-react-build: cloud-sdk-build
+	cd cloud/sdk-react && pnpm run build
+
 runtime-build:
 	$(CARGO) build --workspace
 
-desktop-build: cloud-client-generate sdk-build sdk-react-build
+desktop-build: cloud-sdk-build cloud-sdk-react-build sdk-build sdk-react-build
 	cd desktop && pnpm exec tsc && pnpm exec vite build
 
 test-agent-runtime-cloud-e2b: sdk-generate
