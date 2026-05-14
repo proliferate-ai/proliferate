@@ -25,10 +25,16 @@ describe("subagent tool presentation", () => {
     })).toBe("Searching subagent transcript");
   });
 
-  it("keeps read/search actions out of provisioning ledgers", () => {
+  it("keeps status, close, read, and search actions out of provisioning ledgers", () => {
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__send_subagent_message",
+    })).toBe(true);
     expect(isSubagentProvisioningAction({
       nativeToolName: "mcp__subagents__get_subagent_status",
-    })).toBe(true);
+    })).toBe(false);
+    expect(isSubagentProvisioningAction({
+      nativeToolName: "mcp__subagents__close_subagent",
+    })).toBe(false);
     expect(isSubagentProvisioningAction({
       nativeToolName: "mcp__subagents__read_subagent_latest_turns",
     })).toBe(false);

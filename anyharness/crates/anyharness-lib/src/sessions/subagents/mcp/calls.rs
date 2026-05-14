@@ -85,6 +85,7 @@ pub async fn call_tool(
                         "sessionLinkId": link.id,
                         "subagentId": link.public_id,
                         "childSessionId": link.child_session_id,
+                        "label": link.label,
                         "turns": turns.into_iter().map(|turn| json!({
                             "childTurnId": turn.child_turn_id,
                             "outcome": turn.outcome,
@@ -100,16 +101,25 @@ pub async fn call_tool(
         }
         "search_subagent_transcript" => {
             let args: SearchSubagentTranscriptArgs = deserialize_args(arguments)?;
+            let link = service.resolve_target_including_closed(
+                &ctx.parent_session_id,
+                args.subagent_id.as_deref(),
+                args.child_session_id.as_deref(),
+            )?;
             service
                 .search_transcript(
                     &ctx.parent_session_id,
-                    args.subagent_id.as_deref(),
-                    args.child_session_id.as_deref(),
+                    link.public_id.as_deref(),
+                    Some(&link.child_session_id),
                     &args.query,
                     args.limit,
                 )
                 .map(|matches| {
                     json!({
+                        "sessionLinkId": link.id,
+                        "subagentId": link.public_id,
+                        "childSessionId": link.child_session_id,
+                        "label": link.label,
                         "query": args.query,
                         "matches": matches.into_iter().map(|entry| json!({
                             "seq": entry.seq,
@@ -499,24 +509,29 @@ async fn close_subagent(
     )?;
     let already_closed = link.closed_at.is_some();
     let now = chrono::Utc::now().to_rfc3339();
-    if !already_closed {
-        service.close_link(&link, &now)?;
-        if let Some(child) = service.session_store().find_by_id(&link.child_session_id)? {
-            if child.closed_at.is_none() {
-                session_runtime
-                    .close_live_session(&link.child_session_id)
-                    .await
-                    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-            }
+    if let Some(child) = service.session_store().find_by_id(&link.child_session_id)? {
+        if child.closed_at.is_none() {
+            session_runtime
+                .close_live_session(&link.child_session_id)
+                .await
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         }
     }
+    if !already_closed {
+        service.close_link(&link, &now)?;
+    }
+    let refreshed = service.resolve_target_including_closed(
+        parent_session_id,
+        args.subagent_id.as_deref(),
+        args.child_session_id.as_deref(),
+    )?;
     Ok(json!({
-        "subagentId": link.public_id,
-        "sessionLinkId": link.id,
-        "childSessionId": link.child_session_id,
-        "label": link.label,
+        "subagentId": refreshed.public_id,
+        "sessionLinkId": refreshed.id,
+        "childSessionId": refreshed.child_session_id,
+        "label": refreshed.label,
         "closed": true,
         "alreadyClosed": already_closed,
-        "closedAt": link.closed_at.unwrap_or(now),
+        "closedAt": refreshed.closed_at.unwrap_or(now),
     }))
 }

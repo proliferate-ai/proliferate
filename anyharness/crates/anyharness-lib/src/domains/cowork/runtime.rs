@@ -29,7 +29,7 @@ use crate::sessions::extensions::{
     SessionClosingActions, SessionClosingContext, SessionExtension, SessionTurnFinishedContext,
 };
 use crate::sessions::links::completions::LinkCompletionRecord;
-use crate::sessions::links::model::SessionLinkRelation;
+use crate::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::prompt::{PromptPayload, PromptProvenance};
@@ -1147,24 +1147,30 @@ impl CoworkRuntime {
         )?;
         let already_closed = link.closed_at.is_some();
         let now = chrono::Utc::now().to_rfc3339();
-        if !already_closed {
-            self.delegation_service.close_coding_link(&link, &now)?;
-            if let Some(session) = self
-                .delegation_service
-                .session_store()
-                .find_by_id(&link.child_session_id)?
-            {
-                if session.closed_at.is_none() {
-                    self.session_runtime
-                        .close_live_session(&link.child_session_id)
-                        .await
-                        .map_err(|error| {
-                            CoworkDelegationError::Internal(anyhow::anyhow!("{error:?}"))
-                        })?;
-                }
+        if let Some(session) = self
+            .delegation_service
+            .session_store()
+            .find_by_id(&link.child_session_id)?
+        {
+            if session.closed_at.is_none() {
+                self.session_runtime
+                    .close_live_session(&link.child_session_id)
+                    .await
+                    .map_err(|error| {
+                        CoworkDelegationError::Internal(anyhow::anyhow!("{error:?}"))
+                    })?;
             }
         }
-        Ok((link, already_closed, now))
+        if !already_closed {
+            self.delegation_service.close_coding_link(&link, &now)?;
+        }
+        let refreshed = self.delegation_service.resolve_coding_session_target(
+            parent_session_id,
+            cowork_agent_id,
+            coding_session_id,
+            true,
+        )?;
+        Ok((refreshed, already_closed, now))
     }
 
     pub fn read_coding_events(
@@ -1205,7 +1211,7 @@ impl CoworkRuntime {
         cowork_agent_id: Option<&str>,
         coding_session_id: Option<&str>,
         limit: Option<usize>,
-    ) -> Result<Vec<Value>, CoworkDelegationError> {
+    ) -> Result<(SessionLinkRecord, Vec<Value>), CoworkDelegationError> {
         let link = self.delegation_service.resolve_coding_session_target(
             parent_session_id,
             cowork_agent_id,
@@ -1224,7 +1230,7 @@ impl CoworkRuntime {
         });
         completions.truncate(limit);
         completions.reverse();
-        Ok(completions
+        let turns = completions
             .into_iter()
             .map(|completion| {
                 json!({
@@ -1236,7 +1242,8 @@ impl CoworkRuntime {
                     "parentPromptSeq": completion.parent_prompt_seq,
                 })
             })
-            .collect())
+            .collect();
+        Ok((link, turns))
     }
 
     pub fn search_coding_transcript_for_target(
@@ -1246,7 +1253,7 @@ impl CoworkRuntime {
         coding_session_id: Option<&str>,
         query: &str,
         limit: Option<usize>,
-    ) -> Result<Vec<Value>, CoworkDelegationError> {
+    ) -> Result<(SessionLinkRecord, Vec<Value>), CoworkDelegationError> {
         let link = self.delegation_service.resolve_coding_session_target(
             parent_session_id,
             cowork_agent_id,
@@ -1282,7 +1289,7 @@ impl CoworkRuntime {
                 "snippet": cowork_search_snippet(&text, index, query.len()),
             }));
         }
-        Ok(matches)
+        Ok((link, matches))
     }
 
     pub async fn managed_workspaces_context(

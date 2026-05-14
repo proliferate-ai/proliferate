@@ -1,7 +1,8 @@
 use serde_json::{json, Value};
 
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
-use crate::domains::cowork::runtime::default_cowork_coding_mode_for_agent;
+use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::sessions::links::model::SessionLinkRecord;
 use crate::sessions::runtime::SendPromptOutcome;
 
 pub(super) fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> Vec<Value> {
@@ -97,4 +98,41 @@ pub(super) fn non_empty(value: String) -> Option<String> {
     } else {
         Some(value)
     }
+}
+
+pub(super) fn coding_session_workspace_id(
+    cowork_runtime: &CoworkRuntime,
+    coding_session_id: &str,
+) -> anyhow::Result<Option<String>> {
+    Ok(cowork_runtime
+        .session_record(coding_session_id)?
+        .map(|session| session.workspace_id))
+}
+
+pub(super) fn cowork_agent_turns_response_json(
+    link: &SessionLinkRecord,
+    turns: Vec<Value>,
+) -> Value {
+    json!({
+        "coworkAgentId": link.public_id,
+        "codingSessionId": link.child_session_id,
+        "sessionLinkId": link.id,
+        "label": link.label,
+        "turns": turns,
+    })
+}
+
+pub(super) fn cowork_agent_search_response_json(
+    link: &SessionLinkRecord,
+    query: String,
+    matches: Vec<Value>,
+) -> Value {
+    json!({
+        "coworkAgentId": link.public_id,
+        "codingSessionId": link.child_session_id,
+        "sessionLinkId": link.id,
+        "label": link.label,
+        "query": query,
+        "matches": matches,
+    })
 }

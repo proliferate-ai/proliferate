@@ -1,8 +1,10 @@
 use serde_json::{json, Value};
 
 use super::calls_helpers::{
-    initial_config_string, launch_agents_to_json, mode_options_to_json, non_empty,
-    prompt_outcome_label, recommended_modes_by_agent_kind_json, resolve_preferred_string,
+    coding_session_workspace_id, cowork_agent_search_response_json,
+    cowork_agent_turns_response_json, initial_config_string, launch_agents_to_json,
+    mode_options_to_json, non_empty, prompt_outcome_label, recommended_modes_by_agent_kind_json,
+    resolve_preferred_string,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -540,13 +542,13 @@ fn read_cowork_agent_latest_turns(
     parent_session_id: &str,
     args: ReadCodingLatestTurnsArgs,
 ) -> anyhow::Result<Value> {
-    let turns = cowork_runtime.read_coding_latest_turns_for_target(
+    let (link, turns) = cowork_runtime.read_coding_latest_turns_for_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
         args.coding_session_id.as_deref(),
         args.limit,
     )?;
-    Ok(json!({ "turns": turns }))
+    Ok(cowork_agent_turns_response_json(&link, turns))
 }
 
 fn search_cowork_agent_transcript(
@@ -554,14 +556,16 @@ fn search_cowork_agent_transcript(
     parent_session_id: &str,
     args: SearchCodingTranscriptArgs,
 ) -> anyhow::Result<Value> {
-    let matches = cowork_runtime.search_coding_transcript_for_target(
+    let (link, matches) = cowork_runtime.search_coding_transcript_for_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
         args.coding_session_id.as_deref(),
         &args.query,
         args.limit,
     )?;
-    Ok(json!({ "query": args.query, "matches": matches }))
+    Ok(cowork_agent_search_response_json(
+        &link, args.query, matches,
+    ))
 }
 
 async fn close_cowork_agent(
@@ -586,13 +590,4 @@ async fn close_cowork_agent(
         "alreadyClosed": already_closed,
         "closedAt": link.closed_at.unwrap_or(closed_at),
     }))
-}
-
-fn coding_session_workspace_id(
-    cowork_runtime: &CoworkRuntime,
-    coding_session_id: &str,
-) -> anyhow::Result<Option<String>> {
-    Ok(cowork_runtime
-        .session_record(coding_session_id)?
-        .map(|session| session.workspace_id))
 }

@@ -37,6 +37,38 @@ describe("workspace header tab view model derivation", () => {
     expect(tabs[0]?.delegatedIndicators.map((indicator) => indicator.sessionId))
       .toEqual(["failed", "working", "wake", "done"]);
   });
+
+  it("carries cowork child routing metadata onto child tabs", () => {
+    const tabs = buildHeaderChatTabs({
+      groupedTabs: [{
+        sessionId: "cowork-child",
+        parentSessionId: "parent",
+        groupRootSessionId: "parent",
+        isChild: true,
+      }],
+      rowsBySessionId: new Map([[
+        "cowork-child",
+        {
+          ...childRow("cowork-child", "Working", false),
+          sessionLinkId: "link-cowork",
+          workspaceId: "managed-workspace",
+          source: "cowork",
+        },
+      ]]),
+      childrenByParentSessionId: new Map(),
+      resolvedSessionIds: new Set(["cowork-child"]),
+      knownSessions: new Map(),
+      manualGroupByTopLevelSessionId: new Map(),
+    });
+
+    expect(tabs[0]).toMatchObject({
+      id: "cowork-child",
+      source: "cowork",
+      sessionLinkId: "link-cowork",
+      workspaceId: "managed-workspace",
+      parentSessionId: "parent",
+    });
+  });
 });
 
 function childRow(

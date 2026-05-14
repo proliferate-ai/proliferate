@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::future::Future;
+use std::pin::Pin;
 use std::time::Instant;
 
 use crate::live::sessions::actor::command::SessionCommand;
@@ -38,9 +41,8 @@ impl SessionRuntime {
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let _record = self.get_session_or_not_found(session_id)?;
-        self.close_delegated_children(session_id).await?;
-        self.close_inbound_delegated_links(session_id)?;
-        self.close_session_actor_and_mark_closed(session_id).await?;
+        let mut visited = HashSet::new();
+        self.close_session_tree(session_id, &mut visited).await?;
 
         self.session_service
             .get_session(session_id)
@@ -69,9 +71,35 @@ impl SessionRuntime {
             .map_err(SessionLifecycleError::Internal)
     }
 
+    fn close_session_tree<'a>(
+        &'a self,
+        session_id: &'a str,
+        visited: &'a mut HashSet<String>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SessionLifecycleError>> + Send + 'a>> {
+        Box::pin(async move {
+            if !visited.insert(session_id.to_string()) {
+                return Ok(());
+            }
+            if self
+                .session_service
+                .store()
+                .find_by_id(session_id)
+                .map_err(SessionLifecycleError::Internal)?
+                .is_none()
+            {
+                return Ok(());
+            }
+            self.close_delegated_children(session_id, visited).await?;
+            self.close_session_actor_and_mark_closed(session_id).await?;
+            self.close_inbound_delegated_links(session_id)?;
+            Ok(())
+        })
+    }
+
     async fn close_delegated_children(
         &self,
         parent_session_id: &str,
+        visited: &mut HashSet<String>,
     ) -> Result<(), SessionLifecycleError> {
         let now = chrono::Utc::now().to_rfc3339();
         let extension_close_session_ids =
@@ -90,15 +118,16 @@ impl SessionRuntime {
             ) {
                 continue;
             }
+            self.close_session_tree(&link.child_session_id, visited)
+                .await?;
             self.session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
-            self.close_session_if_open(&link.child_session_id).await?;
             closed_child_session_ids.insert(link.child_session_id);
         }
         for session_id in extension_close_session_ids {
             if closed_child_session_ids.insert(session_id.clone()) {
-                self.close_session_if_open(&session_id).await?;
+                self.close_session_tree(&session_id, visited).await?;
             }
         }
         Ok(())
@@ -143,20 +172,6 @@ impl SessionRuntime {
             self.session_link_service
                 .close_link(&link.id, &now)
                 .map_err(SessionLifecycleError::Internal)?;
-        }
-        Ok(())
-    }
-
-    async fn close_session_if_open(&self, session_id: &str) -> Result<(), SessionLifecycleError> {
-        if let Some(child) = self
-            .session_service
-            .store()
-            .find_by_id(session_id)
-            .map_err(SessionLifecycleError::Internal)?
-        {
-            if child.closed_at.is_none() {
-                self.close_session_actor_and_mark_closed(session_id).await?;
-            }
         }
         Ok(())
     }

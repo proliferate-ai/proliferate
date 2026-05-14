@@ -67,8 +67,6 @@ export function isSubagentProvisioningAction(item: ToolNameOwner): boolean {
     case "mcp__subagents__create_subagent":
     case "mcp__subagents__send_subagent_message":
     case "mcp__subagents__schedule_subagent_wake":
-    case "mcp__subagents__get_subagent_status":
-    case "mcp__subagents__close_subagent":
       return true;
     default:
       return false;

@@ -87,6 +87,20 @@ export function HeaderChatTab({
     && multiSelectedSessionIds.has(tab.id)
     && selectedTopLevelSessionIds.length >= 2;
 
+  const activateTab = () => {
+    clearSelection();
+    if (tab.source === "cowork" && tab.workspaceId) {
+      void openCoworkCodingSession({
+        workspaceId: tab.workspaceId,
+        sessionId: tab.id,
+        parentSessionId: tab.parentSessionId,
+        sessionLinkId: tab.sessionLinkId,
+      });
+      return;
+    }
+    onActivate(tab.id);
+  };
+
   const handleSelectPointerDownCapture = (event: PointerEvent<HTMLButtonElement>) => {
     if (!canMultiSelect || !isPrimaryMultiSelectPointer(event)) {
       if (event.isPrimary && event.button === 0) {
@@ -114,8 +128,7 @@ export function HeaderChatTab({
       toggleSelection(tab.id);
       return;
     }
-    clearSelection();
-    onActivate(tab.id);
+    activateTab();
   };
 
   return (
