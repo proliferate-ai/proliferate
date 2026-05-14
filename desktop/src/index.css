@@ -2420,6 +2420,11 @@ body {
   flex-shrink: 0;
 }
 
+.right-panel-tab-system .workspace-shell-icon-button .ui-icon {
+  width: var(--workspace-shell-action-icon-size);
+  height: var(--workspace-shell-action-icon-size);
+}
+
 .right-panel-tab-system .right-panel-tab-drop-target {
   position: relative;
   width: var(--tab-gap);
