@@ -8,6 +8,7 @@ import {
   PlanningIcon,
   ReadModeFilled,
   ShieldCheckFilled,
+  Sparkles,
   Zap,
 } from "@/components/ui/icons";
 
@@ -23,6 +24,7 @@ const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<{ class
   plan: PlanningIcon,
   read: ReadModeFilled,
   shieldCheck: ShieldCheckFilled,
+  sparkles: Sparkles,
   zap: Zap,
 };
 

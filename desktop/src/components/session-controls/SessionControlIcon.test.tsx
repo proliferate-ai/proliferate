@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SESSION_CONTROL_PRESENTATIONS } from "@/lib/domain/chat/session-controls/presentation";
 import type { SessionControlIconKey } from "@/lib/domain/chat/session-controls/presentation";
+import { resolveConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/session-mode-control";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 
 describe("SessionControlIcon", () => {
@@ -22,5 +23,20 @@ describe("SessionControlIcon", () => {
       );
       expect(html).toContain("<svg");
     }
+  });
+
+  it("uses Claude-specific default and auto mode icons", () => {
+    expect(resolveConfiguredSessionControlValue("claude", "mode", "default")).toMatchObject({
+      icon: "chat",
+      shortLabel: "Default",
+    });
+    expect(resolveConfiguredSessionControlValue("claude", "mode", "acceptEdits")).toMatchObject({
+      icon: "sparkles",
+      shortLabel: "Auto",
+    });
+    expect(resolveConfiguredSessionControlValue("claude", "mode", "auto")).toMatchObject({
+      icon: "sparkles",
+      shortLabel: "Auto",
+    });
   });
 });

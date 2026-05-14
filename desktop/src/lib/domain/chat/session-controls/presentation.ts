@@ -18,6 +18,7 @@ export type SessionControlIconKey =
   | "plan"
   | "read"
   | "shieldCheck"
+  | "sparkles"
   | "zap";
 
 export interface ConfiguredSessionControlValue {
@@ -51,16 +52,24 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Ask before each action.",
         tone: "info",
-        icon: "read",
+        icon: "chat",
         isDefault: true,
       },
       {
         value: "acceptEdits",
         label: "Accept Edits",
-        shortLabel: "Accept Edits",
+        shortLabel: "Auto",
         description: "Auto-approve file edits.",
         tone: "success",
-        icon: "edit",
+        icon: "sparkles",
+      },
+      {
+        value: "auto",
+        label: "Auto",
+        shortLabel: "Auto",
+        description: "Auto-approve file edits.",
+        tone: "success",
+        icon: "sparkles",
       },
       {
         value: "plan",
