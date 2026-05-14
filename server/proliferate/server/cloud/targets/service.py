@@ -17,6 +17,7 @@ from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_target_patch_after_commit
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 from proliferate.server.cloud.targets.domain.rules import (
     build_install_command,
@@ -173,4 +174,5 @@ async def archive_target(
         target_id=target.id,
         now=utcnow(),
     )
+    await publish_target_patch_after_commit(db, archived)
     return archived

@@ -1,24 +1,21 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
+import type { components } from "../generated/openapi.js";
 
-export interface CloudSessionEvent {
-  id: string;
+export type CloudSessionEvent =
+  components["schemas"]["CloudSessionEventResponse"];
+export type CloudSessionEventsResponse =
+  components["schemas"]["CloudSessionEventsResponse"];
+
+export interface ListSessionEventsInput {
   targetId: string;
-  workspaceId: string;
-  sessionId: string;
-  anyharnessSeq: number;
-  type: string;
-  payload: Record<string, unknown>;
-  createdAt?: string | null;
-}
-
-export interface CloudSessionEventsResponse {
-  events: CloudSessionEvent[];
-  nextCursor?: string | null;
+  afterSeq?: number | null;
+  limit?: number | null;
+  signal?: AbortSignal;
 }
 
 export async function listSessionEvents(
   sessionId: string,
-  input?: { cursor?: string | null; limit?: number | null; signal?: AbortSignal },
+  input: ListSessionEventsInput,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudSessionEventsResponse> {
   return client.requestJson<CloudSessionEventsResponse>({
@@ -26,9 +23,10 @@ export async function listSessionEvents(
     path: "/v1/cloud/sessions/{session_id}/events",
     pathParams: { session_id: sessionId },
     query: {
-      cursor: input?.cursor ?? undefined,
-      limit: input?.limit ?? undefined,
+      targetId: input.targetId,
+      afterSeq: input.afterSeq ?? undefined,
+      limit: input.limit ?? undefined,
     },
-    signal: input?.signal,
+    signal: input.signal,
   });
 }

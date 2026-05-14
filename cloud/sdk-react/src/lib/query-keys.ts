@@ -149,10 +149,10 @@ export function cloudWorkspaceSnapshotKey(workspaceId: string | null) {
   return [...cloudRootKey(), "workspace-snapshots", workspaceId] as const;
 }
 
-export function cloudSessionSnapshotKey(sessionId: string | null) {
-  return [...cloudRootKey(), "session-snapshots", sessionId] as const;
+export function cloudSessionSnapshotKey(targetId: string | null, sessionId: string | null) {
+  return [...cloudRootKey(), "session-snapshots", targetId, sessionId] as const;
 }
 
-export function cloudTranscriptSnapshotKey(sessionId: string | null) {
-  return [...cloudRootKey(), "transcript-snapshots", sessionId] as const;
+export function cloudTranscriptSnapshotKey(targetId: string | null, sessionId: string | null) {
+  return [...cloudRootKey(), "transcript-snapshots", targetId, sessionId] as const;
 }

@@ -7,3 +7,11 @@ from uuid import UUID
 
 def session_channel(*, target_id: UUID, session_id: str) -> str:
     return f"session:{target_id}:{session_id}"
+
+
+def workspace_channel(*, workspace_id: UUID) -> str:
+    return f"workspace:{workspace_id}"
+
+
+def target_channel(*, target_id: UUID) -> str:
+    return f"target:{target_id}"

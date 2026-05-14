@@ -1,34 +1,59 @@
 import { getProliferateClient } from "./core.js";
 import { subscribeCloudSse, type CloudSseSubscription } from "../streams/sse.js";
-import type { CloudLivePatch, CloudLiveSubscriptionOptions } from "../types/index.js";
+import type {
+  CloudCommandStatusPatch,
+  CloudLiveSubscriptionOptions,
+  CloudSessionLiveEvent,
+  CloudSessionProjectionPatch,
+  CloudTargetLiveEvent,
+  CloudTargetPatch,
+  CloudWorkspaceProjectionPatch,
+  CloudWorkspaceLiveEvent,
+} from "../types/index.js";
 
-export interface SubscribeCloudLiveOptions<TPatch> extends CloudLiveSubscriptionOptions {
-  onPatch: (patch: TPatch) => void;
+export interface SubscribeCloudLiveOptions<TEvent, TPatch = TEvent>
+  extends CloudLiveSubscriptionOptions {
+  onEvent?: (event: TEvent) => void;
+  onPatch?: (patch: TPatch) => void;
   onError?: (error: Event) => void;
 }
 
-export function subscribeSession<TPayload = unknown>(
+export interface SubscribeCloudSessionOptions
+  extends SubscribeCloudLiveOptions<
+    CloudSessionLiveEvent,
+    CloudSessionProjectionPatch | CloudCommandStatusPatch
+  > {
+  targetId: string;
+}
+
+export function subscribeSession(
   sessionId: string,
-  options: SubscribeCloudLiveOptions<CloudLivePatch<TPayload>>,
-): CloudSseSubscription<CloudLivePatch<TPayload>> {
+  options: SubscribeCloudSessionOptions,
+): CloudSseSubscription<CloudSessionLiveEvent> {
   const client = getProliferateClient();
+  const onEvent = liveEventHandler(options);
   return subscribeCloudSse({
     url: client.buildUrl(`/v1/cloud/sessions/${encodeURIComponent(sessionId)}/stream`, {
+      targetId: options.targetId,
       afterSeq: options.afterSeq ?? undefined,
     }),
     signal: options.signal,
     fetchResponse: ({ url, headers, signal }) =>
       client.streamRequest({ url, headers, signal }),
-    onEvent: options.onPatch,
+    onEvent,
     onError: options.onError,
   });
 }
 
-export function subscribeWorkspace<TPayload = unknown>(
+export function subscribeWorkspace(
   workspaceId: string,
-  options: SubscribeCloudLiveOptions<CloudLivePatch<TPayload>>,
-): CloudSseSubscription<CloudLivePatch<TPayload>> {
+  options: SubscribeCloudLiveOptions<
+    CloudWorkspaceLiveEvent,
+    CloudWorkspaceProjectionPatch
+  >,
+): CloudSseSubscription<CloudWorkspaceLiveEvent> {
   const client = getProliferateClient();
+  const onEvent = liveEventHandler(options);
   return subscribeCloudSse({
     url: client.buildUrl(`/v1/cloud/workspaces/${encodeURIComponent(workspaceId)}/stream`, {
       afterSeq: options.afterSeq ?? undefined,
@@ -36,7 +61,55 @@ export function subscribeWorkspace<TPayload = unknown>(
     signal: options.signal,
     fetchResponse: ({ url, headers, signal }) =>
       client.streamRequest({ url, headers, signal }),
-    onEvent: options.onPatch,
+    onEvent,
     onError: options.onError,
   });
+}
+
+export function subscribeTarget(
+  targetId: string,
+  options: SubscribeCloudLiveOptions<
+    CloudTargetLiveEvent,
+    CloudTargetPatch | CloudCommandStatusPatch
+  >,
+): CloudSseSubscription<CloudTargetLiveEvent> {
+  const client = getProliferateClient();
+  const onEvent = liveEventHandler(options);
+  return subscribeCloudSse({
+    url: client.buildUrl(`/v1/cloud/targets/${encodeURIComponent(targetId)}/stream`, {
+      afterSeq: options.afterSeq ?? undefined,
+    }),
+    signal: options.signal,
+    fetchResponse: ({ url, headers, signal }) =>
+      client.streamRequest({ url, headers, signal }),
+    onEvent,
+    onError: options.onError,
+  });
+}
+
+function liveEventHandler<TEvent, TPatch>(
+  options: SubscribeCloudLiveOptions<TEvent, TPatch>,
+): (event: TEvent) => void {
+  if (options.onEvent === undefined && options.onPatch === undefined) {
+    throw new Error("Cloud live subscription requires onEvent or onPatch.");
+  }
+  return (event) => {
+    options.onEvent?.(event);
+    if (options.onPatch !== undefined && isCloudPatchEvent(event)) {
+      options.onPatch(event as unknown as TPatch);
+    }
+  };
+}
+
+function isCloudPatchEvent(event: unknown): boolean {
+  if (typeof event !== "object" || event === null) {
+    return false;
+  }
+  const kind = (event as { kind?: unknown }).kind;
+  return (
+    kind === "projection_patch" ||
+    kind === "workspace_projection_patch" ||
+    kind === "target_projection_patch" ||
+    kind === "command_status"
+  );
 }

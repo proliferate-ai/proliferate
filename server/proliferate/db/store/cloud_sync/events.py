@@ -691,6 +691,26 @@ async def list_session_projections(
     return tuple(_session_snapshot(row) for row in rows)
 
 
+async def list_session_projections_for_workspace(
+    db: AsyncSession,
+    *,
+    cloud_workspace_id: UUID,
+    limit: int = 100,
+) -> tuple[CloudSessionProjectionSnapshot, ...]:
+    rows = (
+        await db.execute(
+            select(CloudSessionProjection)
+            .where(CloudSessionProjection.cloud_workspace_id == cloud_workspace_id)
+            .order_by(
+                CloudSessionProjection.updated_at.desc(),
+                CloudSessionProjection.last_event_seq.desc(),
+            )
+            .limit(limit)
+        )
+    ).scalars()
+    return tuple(_session_snapshot(row) for row in rows)
+
+
 async def list_transcript_items(
     db: AsyncSession,
     *,

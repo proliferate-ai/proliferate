@@ -6,6 +6,7 @@ from proliferate.server.cloud.backfill.api import router as backfill_router
 from proliferate.server.cloud.commands.api import router as commands_router
 from proliferate.server.cloud.credentials.api import router as credentials_router
 from proliferate.server.cloud.events.api import router as events_router
+from proliferate.server.cloud.live.api import router as live_router
 from proliferate.server.cloud.mcp_catalog.api import router as mcp_catalog_router
 from proliferate.server.cloud.mcp_connections.api import router as mcp_connections_router
 from proliferate.server.cloud.mcp_materialization.api import router as mcp_materialization_router
@@ -34,5 +35,6 @@ router.include_router(webhooks_router)
 router.include_router(targets_router)
 router.include_router(commands_router)
 router.include_router(events_router)
+router.include_router(live_router)
 router.include_router(backfill_router)
 router.include_router(worker_router)
