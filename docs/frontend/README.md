@@ -59,6 +59,9 @@ edge cases, and focused verification for a specific product surface.
 
 Specs:
 
+- [specs/delegated-work.md](specs/delegated-work.md) for subagents, cowork
+  agents, plan review agents, code review agents, tab indicators, delegated
+  work popovers, and delegated-work delete semantics.
 - [specs/chat-composer.md](specs/chat-composer.md) for the chat composer area.
 - [specs/chat-transcript.md](specs/chat-transcript.md) for transcript
   streaming, replay, row models, or long-history rendering.

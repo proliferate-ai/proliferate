@@ -19,6 +19,10 @@ Scope:
 
 Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below was chosen to mirror Codex's reference (`references/codex_todo.html`, `references/codex_plan.html`) and is load-bearing for several visual decisions that are not obvious from the code alone.
 
+For delegated work semantics across subagents, cowork sessions, plan review
+agents, code review agents, tab indicators, and delegated-work delete behavior,
+also read [delegated-work.md](delegated-work.md).
+
 ## 1. Layout
 
 Three layers, top to bottom:

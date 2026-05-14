@@ -19,10 +19,14 @@ calls
 UI exposure
 ```
 
+Cross-cutting standards:
+
+- [prompt-and-skill-policy.md](prompt-and-skill-policy.md)
+
 Current definitions:
 
 - [subagents.md](subagents.md)
+- [cowork.md](cowork.md)
 - [artifacts.md](artifacts.md)
 - [reviews.md](reviews.md)
 - [workspace-naming.md](workspace-naming.md)
-
