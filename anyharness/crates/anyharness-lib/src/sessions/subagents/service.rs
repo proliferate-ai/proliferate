@@ -1,9 +1,3 @@
-use std::collections::HashSet;
-
-use anyharness_contract::v1::{
-    ChildSubagentSummary, ParentSubagentLinkSummary, SessionSubagentsResponse,
-};
-
 use super::model::{
     SubagentCompletionRecord, SubagentEventSlice, SubagentLatestTurn, SubagentSummary,
     SubagentTranscriptSearchMatch, SubagentWakeScheduleRecord,
@@ -27,6 +21,10 @@ use crate::sessions::prompt::PromptPayload;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::runtime::WorkspaceRuntime;
+use anyharness_contract::v1::{
+    ChildSubagentSummary, ParentSubagentLinkSummary, SessionSubagentsResponse,
+};
+use std::collections::HashSet;
 
 pub const MAX_SUBAGENTS_PER_PARENT: usize = 8;
 
@@ -98,6 +96,9 @@ impl SubagentService {
             .session_store
             .find_by_id(parent_session_id)?
             .ok_or_else(|| SubagentError::ParentNotFound(parent_session_id.to_string()))?;
+        if parent.closed_at.is_some() || parent.status == "closed" {
+            return Err(SubagentError::Closed);
+        }
         let workspace = self
             .workspace_runtime
             .get_workspace(&parent.workspace_id)?

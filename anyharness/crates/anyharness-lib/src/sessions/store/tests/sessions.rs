@@ -165,10 +165,7 @@ fn marks_cowork_managed_workspaces_closed_by_parent() {
     .expect("insert managed workspace");
 
     let updated = store
-        .mark_cowork_managed_workspaces_closed_by_parent(
-            "session-1",
-            "2026-03-25T04:00:00Z",
-        )
+        .mark_cowork_managed_workspaces_closed_by_parent("session-1", "2026-03-25T04:00:00Z")
         .expect("close managed workspaces");
     let closed_at: Option<String> = db
         .with_conn(|conn| {

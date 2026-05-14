@@ -104,6 +104,13 @@ impl CoworkDelegationService {
         parent_session_id: &str,
     ) -> Result<CoworkThreadRecord, CoworkDelegationError> {
         let thread = self.validate_parent_thread(parent_session_id)?;
+        let parent = self
+            .session_store
+            .find_by_id(parent_session_id)?
+            .ok_or_else(|| CoworkDelegationError::CoworkThreadNotFound(parent_session_id.into()))?;
+        if parent.closed_at.is_some() || parent.status == "closed" {
+            return Err(CoworkDelegationError::Closed);
+        }
         if !thread.workspace_delegation_enabled {
             return Err(CoworkDelegationError::Disabled);
         }

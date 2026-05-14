@@ -15,7 +15,10 @@ import {
   renderChatTabStatusBadge,
 } from "@/components/workspace/shell/tabs/tab-rendering";
 import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
-import type { HeaderChatTabEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
+import type {
+  HeaderChatTabEntry,
+  HeaderDelegatedWorkIndicator,
+} from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import {
   buildChatTabContextMenuItems,
   type WorkspaceTabContextMenuCommand,
@@ -62,7 +65,7 @@ export function ChatTabWithMenu({
   onCloseOthers: () => void;
   onCloseRight: () => void;
   onDismiss: () => void;
-  onOpenDelegatedSession?: (sessionId: string) => void;
+  onOpenDelegatedSession?: (indicator: HeaderDelegatedWorkIndicator) => void;
 }) {
   const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({

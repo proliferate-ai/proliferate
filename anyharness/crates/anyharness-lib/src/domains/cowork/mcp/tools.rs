@@ -98,6 +98,10 @@ pub(super) struct CreateCodingSessionArgs {
     #[serde(default)]
     pub label: Option<String>,
     #[serde(default)]
+    pub harness_id: Option<String>,
+    #[serde(default)]
+    pub initial_config: Option<Value>,
+    #[serde(default)]
     pub agent_kind: Option<String>,
     #[serde(default)]
     pub model_id: Option<String>,
@@ -309,9 +313,19 @@ fn delegation_tool_definitions() -> Vec<Value> {
                     "workspaceId": { "type": "string", "description": "Deprecated legacy target." },
                     "prompt": { "type": "string" },
                     "label": { "type": "string" },
-                    "agentKind": { "type": "string" },
-                    "modelId": { "type": "string" },
-                    "modeId": { "type": "string" },
+                    "harnessId": { "type": "string" },
+                    "initialConfig": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                            "modelId": { "type": "string" },
+                            "modeId": { "type": "string" },
+                            "effort": { "type": "string" }
+                        }
+                    },
+                    "agentKind": { "type": "string", "description": "Deprecated alias for harnessId." },
+                    "modelId": { "type": "string", "description": "Deprecated alias for initialConfig.modelId." },
+                    "modeId": { "type": "string", "description": "Deprecated alias for initialConfig.modeId." },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
                 "required": ["prompt"]

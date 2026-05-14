@@ -177,6 +177,30 @@ describe("planBatchedStreamSideEffects", () => {
     ]);
   });
 
+  it("invalidates subagent state for non-create MCP mutations without mounting", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById["tool-1"] = toolCallItem({
+      itemId: "tool-1",
+      nativeToolName: "mcp__subagents__schedule_subagent_wake",
+      status: "completed",
+      title: "schedule_subagent_wake",
+      rawOutput: {
+        childSessionId: "child-session",
+        sessionLinkId: "link-1",
+      },
+    });
+
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput({ transcript }),
+      envelopes: [
+        itemCompleted(2, "tool-1"),
+      ],
+    });
+
+    expect(plan.invalidateSessionSubagents).toBe(true);
+    expect(plan.eventEffects).toEqual([]);
+  });
+
   it("plans cowork invalidation from completed MCP tool calls", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById["tool-1"] = toolCallItem({

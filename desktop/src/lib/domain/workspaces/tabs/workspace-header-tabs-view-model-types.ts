@@ -22,7 +22,9 @@ export interface HeaderChatTabEntry extends GroupedChatTab {
 export interface HeaderDelegatedWorkIndicator {
   id: string;
   sessionId: string;
+  parentSessionId: string;
   sessionLinkId: string;
+  workspaceId: string | null;
   title: string;
   avatarName: string;
   initial: string;

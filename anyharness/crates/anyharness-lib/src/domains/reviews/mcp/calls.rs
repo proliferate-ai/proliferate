@@ -16,6 +16,14 @@ pub async fn call_tool(
     match (ctx.role, name) {
         (ReviewMcpRole::Reviewer, "submit_review_result") => {
             let args: SubmitReviewResultArgs = deserialize_args(arguments)?;
+            let assignment = runtime
+                .service()
+                .store()
+                .find_assignment_for_reviewer_session(&ctx.session_id)
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?
+                .ok_or_else(|| anyhow::anyhow!("review assignment not found"))?;
+            let review_id = assignment.review_run_id.clone();
+            let reviewer_id = assignment.id.clone();
             runtime
                 .submit_review_result(
                     &ctx.session_id,
@@ -24,7 +32,16 @@ pub async fn call_tool(
                     args.critique_markdown,
                 )
                 .await
-                .map(|job| json!({ "submitted": true, "feedbackJobCreated": job.is_some() }))
+                .map(|job| {
+                    json!({
+                        "submitted": true,
+                        "reviewId": review_id.clone(),
+                        "reviewRunId": review_id,
+                        "reviewerId": reviewer_id,
+                        "status": "submitted",
+                        "feedbackJobCreated": job.is_some(),
+                    })
+                })
                 .map_err(|error| anyhow::anyhow!(error.to_string()))
         }
         (
@@ -34,10 +51,11 @@ pub async fn call_tool(
             "mark_review_revision_ready",
         ) => {
             let args: MarkReviewRevisionReadyArgs = deserialize_args(arguments)?;
+            let review_id = resolve_review_id(args.review_id, args.review_run_id)?;
             runtime
                 .mark_revision_ready_from_parent_tool(
                     &ctx.session_id,
-                    &args.review_run_id,
+                    &review_id,
                     anyharness_contract::v1::MarkReviewRevisionReadyRequest {
                         revised_plan_id: args.revised_plan_id,
                     },
@@ -53,6 +71,26 @@ pub async fn call_tool(
             .map_err(|error| anyhow::anyhow!(error.to_string())),
         (_, tool_name) => Err(anyhow::anyhow!("unknown tool for review role: {tool_name}")),
     }
+}
+
+fn resolve_review_id(
+    review_id: Option<String>,
+    review_run_id: Option<String>,
+) -> anyhow::Result<String> {
+    let review_id = review_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let review_run_id = review_run_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    if let (Some(current), Some(legacy)) = (review_id.as_deref(), review_run_id.as_deref()) {
+        if current != legacy {
+            anyhow::bail!("reviewId conflicts with deprecated reviewRunId");
+        }
+    }
+    review_id
+        .or(review_run_id)
+        .ok_or_else(|| anyhow::anyhow!("reviewId is required"))
 }
 
 fn validate_tool_for_role(role: ReviewMcpRole, tool_name: &str) -> anyhow::Result<()> {

@@ -127,6 +127,27 @@ function buildChatShellSlices<TTab extends ShellChatTab>(
   while (index < stripRows.length) {
     const row = stripRows[index];
     if (row.kind === "tab") {
+      if (!row.tab.isChild) {
+        const childIds = new Set(subagentChildIdsByParentId.get(row.tab.sessionId) ?? []);
+        if (childIds.size > 0) {
+          const rows: HeaderStripRow<TTab>[] = [row];
+          const shellKeys: WorkspaceShellTabKey[] = [
+            chatWorkspaceShellTabKey(row.tab.sessionId),
+          ];
+          index += 1;
+          while (index < stripRows.length) {
+            const candidate = stripRows[index];
+            if (candidate.kind !== "tab" || !childIds.has(candidate.tab.sessionId)) {
+              break;
+            }
+            rows.push(candidate);
+            shellKeys.push(chatWorkspaceShellTabKey(candidate.tab.sessionId));
+            index += 1;
+          }
+          slices.push({ shellKeys, rows });
+          continue;
+        }
+      }
       slices.push({
         shellKeys: [chatWorkspaceShellTabKey(row.tab.sessionId)],
         rows: [row],

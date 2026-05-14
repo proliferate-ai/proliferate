@@ -45,6 +45,7 @@ export function buildCoworkChildRows(
       sessionLinkId: session.sessionLinkId,
       sessionId: resolveClientSessionId(session.codingSessionId),
       parentSessionId,
+      workspaceId: workspace.workspaceId,
       title: session.label?.trim()
         || session.title?.trim()
         || `Cowork agent ${workspaceIndex + 1}.${sessionIndex + 1}`,

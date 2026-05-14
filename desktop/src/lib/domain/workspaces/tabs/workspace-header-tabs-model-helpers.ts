@@ -17,6 +17,7 @@ export interface HeaderHierarchyChildRow {
   sessionLinkId: string;
   sessionId: string;
   parentSessionId: string;
+  workspaceId?: string | null;
   title: string;
   agentKind: string;
   source: "subagent" | "review" | "cowork";

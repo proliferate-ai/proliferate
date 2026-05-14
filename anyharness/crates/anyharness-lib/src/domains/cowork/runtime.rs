@@ -61,6 +61,8 @@ pub enum CoworkCanonicalThreadError {
     SessionNotFound,
     #[error("session does not belong to workspace")]
     SessionWorkspaceMismatch,
+    #[error("cowork session is closed")]
+    SessionClosed,
     #[error("workspace is not a cowork workspace")]
     NotCoworkWorkspace,
     #[error("session is not the canonical cowork session")]
@@ -694,6 +696,9 @@ impl CoworkRuntime {
         if session.workspace_id != workspace_id {
             return Err(CoworkCanonicalThreadError::SessionWorkspaceMismatch);
         }
+        if session.closed_at.is_some() || session.status == "closed" {
+            return Err(CoworkCanonicalThreadError::SessionClosed);
+        }
         if workspace.surface != "cowork" {
             return Err(CoworkCanonicalThreadError::NotCoworkWorkspace);
         }
@@ -882,7 +887,7 @@ impl CoworkRuntime {
             .create_durable_coding_session(
                 &managed.workspace_id,
                 &parent_thread,
-                input.agent_kind.as_deref(),
+                input.harness_id.as_deref(),
                 input.model_id.as_deref(),
                 input.mode_id.as_deref(),
             )

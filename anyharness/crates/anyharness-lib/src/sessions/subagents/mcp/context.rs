@@ -26,6 +26,9 @@ pub fn resolve_context(
             "parent session does not belong to workspace",
         ));
     }
+    if parent.closed_at.is_some() || parent.status == "closed" {
+        return Err(ProductMcpContextError::conflict("parent session is closed"));
+    }
     let workspace = workspace_runtime
         .get_workspace(&request.workspace_id)?
         .ok_or_else(|| ProductMcpContextError::not_found("workspace not found"))?;

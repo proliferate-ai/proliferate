@@ -116,6 +116,13 @@ impl ReviewService {
         &self.store
     }
 
+    pub fn session_is_closed(&self, session_id: &str) -> anyhow::Result<bool> {
+        Ok(self
+            .session_store
+            .find_by_id(session_id)?
+            .is_some_and(|session| session.closed_at.is_some() || session.status == "closed"))
+    }
+
     pub fn get_plan(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
         self.plan_service.get(plan_id)
     }

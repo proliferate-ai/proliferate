@@ -89,7 +89,9 @@ function buildDelegatedIndicators(
     return {
       id: child.sessionLinkId || child.sessionId,
       sessionId: child.sessionId,
+      parentSessionId: child.parentSessionId,
       sessionLinkId: child.sessionLinkId,
+      workspaceId: child.workspaceId ?? null,
       title: child.title,
       avatarName: identity.avatarName,
       initial: identity.initial,

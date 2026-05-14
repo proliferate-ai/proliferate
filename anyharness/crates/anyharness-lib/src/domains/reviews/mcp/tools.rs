@@ -16,7 +16,10 @@ pub struct SubmitReviewResultArgs {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkReviewRevisionReadyArgs {
-    pub review_run_id: String,
+    #[serde(default)]
+    pub review_id: Option<String>,
+    #[serde(default)]
+    pub review_run_id: Option<String>,
     #[serde(default)]
     pub revised_plan_id: Option<String>,
 }
@@ -42,14 +45,14 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     if can_signal_revision {
         tools.push(tool_definition(
             "mark_review_revision_ready",
-            "Signal that the reviewed plan or implementation has been revised and is ready for the next review round. reviewRunId is required.",
+            "Signal that the reviewed plan or implementation has been revised and is ready for the next review round. reviewId is required unless using the deprecated reviewRunId alias.",
             json!({
                 "type": "object",
                 "properties": {
-                    "reviewRunId": { "type": "string" },
+                    "reviewId": { "type": "string" },
+                    "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." },
                     "revisedPlanId": { "type": "string" }
-                },
-                "required": ["reviewRunId"]
+                }
             }),
         ));
     }

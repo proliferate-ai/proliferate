@@ -4,6 +4,7 @@ import type {
 } from "react";
 import { ChatTabWithMenu } from "@/components/workspace/shell/tabs/ChatTabWithMenu";
 import type { ManualChatGroupEditorAnchorRect } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
 import {
   isPrimaryMultiSelectClick,
   isPrimaryMultiSelectPointer,
@@ -80,6 +81,7 @@ export function HeaderChatTab({
   suppressNextSelectClick,
   consumeSuppressedSelectClick,
 }: HeaderChatTabProps) {
+  const openCoworkCodingSession = useOpenCoworkCodingSession();
   const canMultiSelect = !tab.isChild;
   const canCreateGroup = canMultiSelect
     && multiSelectedSessionIds.has(tab.id)
@@ -152,9 +154,18 @@ export function HeaderChatTab({
         onCloseOthers={() => onCloseOthers(tab.id)}
         onCloseRight={() => onCloseRight(tab.id)}
         onDismiss={() => onDismiss(tab.id)}
-        onOpenDelegatedSession={(sessionId) => {
+        onOpenDelegatedSession={(indicator) => {
           clearSelection();
-          onActivate(sessionId);
+          if (indicator.source === "cowork" && indicator.workspaceId) {
+            void openCoworkCodingSession({
+              workspaceId: indicator.workspaceId,
+              sessionId: indicator.sessionId,
+              parentSessionId: indicator.parentSessionId,
+              sessionLinkId: indicator.sessionLinkId,
+            });
+            return;
+          }
+          onActivate(indicator.sessionId);
         }}
       />
     </div>

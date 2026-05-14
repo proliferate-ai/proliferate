@@ -235,6 +235,7 @@ impl AppState {
             runtime_base_url.clone(),
             bearer_token.clone(),
             skills_mcp_auth.clone(),
+            Some(subagent_service.clone()),
         ));
         let product_mcp_launch_catalog = ProductMcpLaunchCatalog::new(
             runtime_base_url.clone(),

@@ -56,7 +56,7 @@ export function renderChatTabStatusBadge(
 export function renderChatTabDelegatedIndicators(
   indicators: readonly HeaderDelegatedWorkIndicator[],
   options?: {
-    onOpenSession?: (sessionId: string) => void;
+    onOpenSession?: (indicator: HeaderDelegatedWorkIndicator) => void;
   },
 ): ReactNode {
   if (indicators.length === 0) {
@@ -123,7 +123,7 @@ export function renderChatTabDelegatedIndicators(
               trailing={renderDelegatedIndicatorTrailing(indicator)}
               onClick={() => {
                 close();
-                options.onOpenSession?.(indicator.sessionId);
+                options.onOpenSession?.(indicator);
               }}
             >
               <span className="block truncate text-xs text-muted-foreground">

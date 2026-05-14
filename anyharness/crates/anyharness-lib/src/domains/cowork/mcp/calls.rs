@@ -1,8 +1,8 @@
 use serde_json::{json, Value};
 
 use super::calls_helpers::{
-    launch_agents_to_json, mode_options_to_json, non_empty, prompt_outcome_label,
-    recommended_modes_by_agent_kind_json,
+    initial_config_string, launch_agents_to_json, mode_options_to_json, non_empty,
+    prompt_outcome_label, recommended_modes_by_agent_kind_json, resolve_preferred_string,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -354,6 +354,27 @@ async fn create_coding_session(
     )?;
     let workspace_id = managed.workspace_id.clone();
     let cowork_workspace_id = managed.public_id.clone();
+    let harness_id = resolve_preferred_string(
+        args.harness_id.as_deref(),
+        args.agent_kind.as_deref(),
+        "harnessId",
+        "agentKind",
+    )?;
+    let config_model_id =
+        initial_config_string(args.initial_config.as_ref(), &["modelId", "model"]);
+    let config_mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"]);
+    let model_id = resolve_preferred_string(
+        config_model_id.as_deref(),
+        args.model_id.as_deref(),
+        "initialConfig.modelId",
+        "modelId",
+    )?;
+    let mode_id = resolve_preferred_string(
+        config_mode_id.as_deref(),
+        args.mode_id.as_deref(),
+        "initialConfig.modeId",
+        "modeId",
+    )?;
     let result = cowork_runtime
         .create_coding_session(
             parent_session_id,
@@ -361,20 +382,37 @@ async fn create_coding_session(
                 workspace_id: managed.workspace_id,
                 prompt: args.prompt,
                 label: args.label,
-                agent_kind: args.agent_kind,
-                model_id: args.model_id,
-                mode_id: args.mode_id,
+                harness_id,
+                model_id,
+                mode_id,
                 wake_on_completion: args.wake_on_completion,
             },
         )
         .await?;
+    let coding_session_id = result.session.id.clone();
+    let applied_harness_id = result.session.agent_kind.clone();
+    let applied_model_id = result
+        .session
+        .current_model_id
+        .clone()
+        .or(result.session.requested_model_id.clone());
+    let applied_mode_id = result
+        .session
+        .current_mode_id
+        .clone()
+        .or(result.session.requested_mode_id.clone());
     Ok(json!({
         "coworkWorkspaceId": cowork_workspace_id,
         "workspaceId": workspace_id,
         "coworkAgentId": result.session_link.public_id,
-        "codingSessionId": result.session.id,
+        "codingSessionId": coding_session_id,
         "sessionLinkId": result.session_link.id,
         "label": result.session_link.label,
+        "appliedInitialConfig": {
+            "harnessId": applied_harness_id,
+            "modelId": applied_model_id,
+            "modeId": applied_mode_id,
+        },
         "promptStatus": result.prompt_status,
         "wake": {
             "scheduled": result.wake_scheduled,
