@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import type { SupportMessageContext } from "@/lib/access/cloud/support";
+import type { SupportMessageContext } from "@proliferate/cloud-sdk/client/support";
 
 const supportDialogRender = vi.hoisted(() => vi.fn());
 

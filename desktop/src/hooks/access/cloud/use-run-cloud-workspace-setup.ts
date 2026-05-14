@@ -1,7 +1,7 @@
 import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { RunCloudWorkspaceSetupResponse } from "@/lib/access/cloud/client";
-import { runCloudWorkspaceSetup } from "@/lib/access/cloud/repo-configs";
+import { runCloudWorkspaceSetup } from "@proliferate/cloud-sdk/client/repo-configs";
 import {
   captureTelemetryException,
   trackProductEvent,

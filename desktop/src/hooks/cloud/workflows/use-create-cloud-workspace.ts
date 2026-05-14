@@ -4,7 +4,7 @@ import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
 } from "@/lib/access/cloud/client";
-import { createCloudWorkspace } from "@/lib/access/cloud/workspaces";
+import { createCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   buildNextCloudWorkspaceAttempt,

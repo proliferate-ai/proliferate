@@ -14,11 +14,11 @@ const mocks = vi.hoisted(() => ({
   getGoogleWorkspaceMcpCredentialStatusMock: vi.fn(),
 }));
 
-vi.mock("@/lib/access/cloud/mcp_catalog", () => ({
+vi.mock("@proliferate/cloud-sdk/client/mcp_catalog", () => ({
   getCloudMcpCatalog: mocks.getCloudMcpCatalogMock,
 }));
 
-vi.mock("@/lib/access/cloud/mcp_connections", () => ({
+vi.mock("@proliferate/cloud-sdk/client/mcp_connections", () => ({
   listCloudMcpConnections: mocks.listCloudMcpConnectionsMock,
   createCloudMcpConnection: mocks.createCloudMcpConnectionMock,
   patchCloudMcpConnection: mocks.patchCloudMcpConnectionMock,
@@ -26,7 +26,7 @@ vi.mock("@/lib/access/cloud/mcp_connections", () => ({
   deleteCloudMcpConnectionV2: mocks.deleteCloudMcpConnectionV2Mock,
 }));
 
-vi.mock("@/lib/access/cloud/mcp_oauth", () => ({
+vi.mock("@proliferate/cloud-sdk/client/mcp_oauth", () => ({
   cancelCloudMcpOAuthFlow: vi.fn(),
   getCloudMcpOAuthFlowStatus: vi.fn(),
   startCloudMcpOAuthFlow: vi.fn(),

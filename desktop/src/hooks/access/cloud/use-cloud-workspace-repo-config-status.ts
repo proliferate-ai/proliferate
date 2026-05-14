@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CloudWorkspaceRepoConfigStatusResponse } from "@/lib/access/cloud/client";
-import { getCloudWorkspaceRepoConfigStatus } from "@/lib/access/cloud/repo-configs";
+import { getCloudWorkspaceRepoConfigStatus } from "@proliferate/cloud-sdk/client/repo-configs";
 import { cloudWorkspaceRepoConfigStatusKey } from "@/hooks/access/cloud/query-keys";
 
 export function useCloudWorkspaceRepoConfigStatus(

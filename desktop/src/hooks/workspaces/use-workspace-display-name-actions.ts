@@ -8,7 +8,7 @@ import { findLogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-work
 import {
   getCloudWorkspaceConnection,
   updateCloudWorkspaceDisplayName,
-} from "@/lib/access/cloud/workspaces";
+} from "@proliferate/cloud-sdk/client/workspaces";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

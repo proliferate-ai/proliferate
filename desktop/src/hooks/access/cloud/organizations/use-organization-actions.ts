@@ -7,7 +7,7 @@ import {
   revokeOrganizationInvitation,
   updateOrganization,
   updateOrganizationMembership,
-} from "@/lib/access/cloud/organizations";
+} from "@proliferate/cloud-sdk/client/organizations";
 import type {
   OrganizationInviteRequest,
   OrganizationMembershipUpdateRequest,

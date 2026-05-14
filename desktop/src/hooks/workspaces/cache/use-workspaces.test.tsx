@@ -31,7 +31,7 @@ vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   }),
 }));
 
-vi.mock("@/lib/access/cloud/workspaces", () => ({
+vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
   listCloudWorkspaces: mocks.listCloudWorkspaces,
 }));
 

@@ -11,7 +11,7 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
-import { startCloudWorkspace } from "@/lib/access/cloud/workspaces";
+import { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { runWorkspaceSelection } from "./run-workspace-selection";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
@@ -26,7 +26,7 @@ vi.mock("./connection", () => ({
   resolveSelectionConnection: vi.fn(),
 }));
 
-vi.mock("@/lib/access/cloud/workspaces", () => ({
+vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
   startCloudWorkspace: vi.fn(),
 }));
 

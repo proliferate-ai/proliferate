@@ -4,7 +4,7 @@ import type {
   CloudAgentKind,
   CloudCredentialMutationResponse,
 } from "@/lib/access/cloud/client";
-import { deleteCloudCredential } from "@/lib/access/cloud/credentials";
+import { deleteCloudCredential } from "@proliferate/cloud-sdk/client/credentials";
 import { syncLocalCloudCredentialToCloud } from "@/lib/access/cloud/credential-sync";
 import {
   captureTelemetryException,

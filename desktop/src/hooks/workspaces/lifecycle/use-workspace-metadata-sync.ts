@@ -6,7 +6,7 @@ import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import {
   updateCloudWorkspaceBranch,
   updateCloudWorkspaceDisplayName,
-} from "@/lib/access/cloud/workspaces";
+} from "@proliferate/cloud-sdk/client/workspaces";
 import type {
   CloudWorkspaceDetail,
 } from "@/lib/access/cloud/client";

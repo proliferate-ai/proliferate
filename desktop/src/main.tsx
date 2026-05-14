@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
 import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
 import { getAnonymousTelemetryEndpoint } from "./lib/integrations/telemetry/config";

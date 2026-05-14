@@ -3,7 +3,7 @@ import type {
   CloudMobilityHandoffSummary,
   FailCloudWorkspaceMobilityHandoffRequest,
 } from "@/lib/access/cloud/client";
-import { failCloudWorkspaceHandoff } from "@/lib/access/cloud/mobility";
+import { failCloudWorkspaceHandoff } from "@proliferate/cloud-sdk/client/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
 import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 

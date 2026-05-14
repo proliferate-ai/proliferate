@@ -7,7 +7,7 @@ import {
   getCloudWorkspace,
   startCloudWorkspace,
   updateCloudWorkspaceBranch,
-} from "@/lib/access/cloud/workspaces";
+} from "@proliferate/cloud-sdk/client/workspaces";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/access/cloud/credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useCloudWorkspaceConnectionCache } from "@/hooks/access/cloud/use-cloud-workspace-connection-cache";

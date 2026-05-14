@@ -1,5 +1,5 @@
 import type { CloudWorkspaceDetail } from "@/lib/access/cloud/client";
-import { getCloudWorkspace } from "@/lib/access/cloud/workspaces";
+import { getCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   elapsedMs,

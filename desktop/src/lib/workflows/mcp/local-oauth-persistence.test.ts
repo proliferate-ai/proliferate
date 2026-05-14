@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   getGoogleWorkspaceMcpCredentialStatus: vi.fn(),
 }));
 
-vi.mock("@/lib/access/cloud/mcp_connections", () => ({
+vi.mock("@proliferate/cloud-sdk/client/mcp_connections", () => ({
   createCloudMcpConnection: mocks.createCloudMcpConnection,
   deleteCloudMcpConnectionV2: mocks.deleteCloudMcpConnectionV2,
 }));

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ResyncCloudWorkspaceFilesResponse } from "@/lib/access/cloud/client";
-import { resyncCloudWorkspaceFiles } from "@/lib/access/cloud/repo-configs";
+import { resyncCloudWorkspaceFiles } from "@proliferate/cloud-sdk/client/repo-configs";
 import {
   captureTelemetryException,
   trackProductEvent,

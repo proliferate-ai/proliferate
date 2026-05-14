@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import type { CloudMobilityHandoffSummary } from "@/lib/access/cloud/client";
-import { heartbeatCloudWorkspaceHandoff } from "@/lib/access/cloud/mobility";
+import { heartbeatCloudWorkspaceHandoff } from "@proliferate/cloud-sdk/client/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
 import { useQueryClient } from "@tanstack/react-query";
 

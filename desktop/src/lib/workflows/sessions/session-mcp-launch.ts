@@ -7,7 +7,7 @@ import { buildSessionPluginBundle } from "@/lib/domain/plugins/session-plugin-bu
 import { cloudPluginPackageToLocal } from "@/lib/domain/plugins/cloud-plugin-package";
 import { finalizeLocalStdioCandidates } from "@/lib/workflows/mcp/finalize-local-stdio-candidates";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
-import { materializeCloudMcpServers } from "@/lib/access/cloud/mcp_materialization";
+import { materializeCloudMcpServers } from "@proliferate/cloud-sdk/client/mcp_materialization";
 import {
   releaseGoogleWorkspaceMcpRuntimeEnv,
   resolveGoogleWorkspaceMcpRuntimeEnv,

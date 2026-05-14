@@ -3,7 +3,7 @@ import type {
   CloudWorkspaceMobilityPreflightRequest,
   CloudWorkspaceMobilityPreflightResponse,
 } from "@/lib/access/cloud/client";
-import { preflightCloudWorkspaceHandoff } from "@/lib/access/cloud/mobility";
+import { preflightCloudWorkspaceHandoff } from "@proliferate/cloud-sdk/client/mobility";
 
 export function useCloudWorkspaceHandoffPreflight() {
   return useMutation<

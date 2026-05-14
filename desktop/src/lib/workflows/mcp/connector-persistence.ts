@@ -20,13 +20,13 @@ import {
   listCloudMcpConnections,
   patchCloudMcpConnection,
   putCloudMcpSecretAuth,
-} from "@/lib/access/cloud/mcp_connections";
+} from "@proliferate/cloud-sdk/client/mcp_connections";
 import {
   cancelCloudMcpOAuthFlow,
   getCloudMcpOAuthFlowStatus,
   startCloudMcpOAuthFlow,
-} from "@/lib/access/cloud/mcp_oauth";
-import { getCloudMcpCatalog } from "@/lib/access/cloud/mcp_catalog";
+} from "@proliferate/cloud-sdk/client/mcp_oauth";
+import { getCloudMcpCatalog } from "@proliferate/cloud-sdk/client/mcp_catalog";
 import type {
   CloudMcpCatalogEntry,
   CloudMcpConnection,

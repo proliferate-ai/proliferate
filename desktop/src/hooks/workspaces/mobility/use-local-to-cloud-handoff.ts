@@ -7,7 +7,7 @@ import {
 } from "@anyharness/sdk-react";
 import { useCallback, useMemo, useState } from "react";
 import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
-import { getCloudMobilityWorkspaceDetail } from "@/lib/access/cloud/mobility";
+import { getCloudMobilityWorkspaceDetail } from "@proliferate/cloud-sdk/client/mobility";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkspaceMobilityCache } from "@/hooks/workspaces/cache/use-workspace-mobility-cache";
 import { useCloudWorkspaceHandoffPreflight } from "@/hooks/access/cloud/use-cloud-workspace-handoff-preflight";

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SupportMessageContext } from "@/lib/access/cloud/support";
+import type { SupportMessageContext } from "@proliferate/cloud-sdk/client/support";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
 
@@ -34,9 +34,8 @@ afterEach(() => {
 function renderSettingsSidebar() {
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: {
-        retry: false,
-      },
+      queries: { retry: false },
+      mutations: { retry: false },
     },
   });
 

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { getCloudAgentCatalog } from "@/lib/access/cloud/agent-catalog";
+import { getCloudAgentCatalog } from "@proliferate/cloud-sdk/client/agent-catalog";
 import {
   buildDesktopLaunchModelRegistries,
   projectCloudAgentCatalogToDesktopLaunchCatalog,
