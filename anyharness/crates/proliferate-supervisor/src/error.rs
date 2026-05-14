@@ -17,6 +17,8 @@ pub enum SupervisorError {
     ReadUpdateArtifact { path: PathBuf, source: io::Error },
     #[error("failed to write staged update artifact at {path}")]
     WriteUpdateArtifact { path: PathBuf, source: io::Error },
+    #[error("failed to set private permissions on {path}")]
+    SetPrivatePermissions { path: PathBuf, source: io::Error },
     #[error("failed to create update staging directory at {path}")]
     CreateUpdateStagingDir { path: PathBuf, source: io::Error },
     #[error("failed to parse update manifest")]

@@ -3,6 +3,7 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::{credentials::WorkerIdentity, fingerprint},
+    versions,
 };
 
 pub fn build_enroll_request(
@@ -17,9 +18,9 @@ pub fn build_enroll_request(
         enrollment_token,
         machine_fingerprint: fingerprint::machine_fingerprint(),
         hostname: fingerprint::hostname(),
-        worker_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        worker_version: versions::worker_version(),
         anyharness_version: None,
-        supervisor_version: None,
+        supervisor_version: versions::supervisor_version(),
         inventory,
     })
 }

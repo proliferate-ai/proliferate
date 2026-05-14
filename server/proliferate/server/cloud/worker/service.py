@@ -163,6 +163,7 @@ def _desired_versions_response(
     return WorkerDesiredVersionsResponse(
         should_update=should_update,
         update_channel=target.update_channel,
+        update_generation=target.update_generation,
         anyharness_version=target.desired_anyharness_version,
         worker_version=target.desired_worker_version,
         supervisor_version=target.desired_supervisor_version,
@@ -182,9 +183,25 @@ def _desired_versions_match_worker(
     has_desired_version = any(desired is not None for desired, _current in desired_and_current)
     if not has_desired_version:
         return False
-    return all(
-        desired is None or desired == current for desired, current in desired_and_current
+    return all(desired is None or desired == current for desired, current in desired_and_current)
+
+
+def _desired_versions_match_target_current_versions(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+) -> bool:
+    current_versions = target.current_versions
+    if current_versions is None:
+        return False
+    desired_and_current = (
+        (target.desired_anyharness_version, current_versions.anyharness_version),
+        (target.desired_worker_version, current_versions.worker_version),
+        (target.desired_supervisor_version, current_versions.supervisor_version),
     )
+    has_desired_version = any(desired is not None for desired, _current in desired_and_current)
+    if not has_desired_version:
+        return False
+    return all(desired is None or desired == current for desired, current in desired_and_current)
 
 
 def _desired_version_for_component(
@@ -203,10 +220,23 @@ def _desired_version_for_component(
 def _require_expected_update_version(
     *,
     target: targets_store.CloudTargetSnapshot,
+    update_generation: int | None,
     status_value: str,
     component: str | None,
     version: str | None,
 ) -> None:
+    if update_generation is None:
+        raise CloudApiError(
+            "cloud_worker_update_generation_required",
+            "Worker update generation is required for update status reports.",
+            status_code=400,
+        )
+    if update_generation != target.update_generation:
+        raise CloudApiError(
+            "cloud_worker_update_generation_stale",
+            "Worker update generation does not match the target desired versions.",
+            status_code=409,
+        )
     if status_value not in {
         "staged",
         "applying",
@@ -377,9 +407,8 @@ async def record_heartbeat(
             status_code=401,
         )
     desired_versions = _desired_versions_response(target=target, worker=worker)
-    if (
-        target.update_status in _ACTIVE_TARGET_UPDATE_STATUSES
-        and _desired_versions_match_worker(target=target, worker=worker)
+    if target.update_status in _ACTIVE_TARGET_UPDATE_STATUSES and _desired_versions_match_worker(
+        target=target, worker=worker
     ):
         target = (
             await targets_store.record_target_update_status(
@@ -451,10 +480,20 @@ async def record_update_status(
         )
     _require_expected_update_version(
         target=current_target,
+        update_generation=body.update_generation,
         status_value=status_value,
         component=component,
         version=version,
     )
+    if status_value == CloudTargetUpdateStatus.applied.value and not (
+        _desired_versions_match_target_current_versions(target=current_target)
+    ):
+        raise CloudApiError(
+            "cloud_worker_update_versions_not_current",
+            "Worker update cannot be marked applied until current versions "
+            "match desired versions.",
+            status_code=409,
+        )
     target = await targets_store.record_target_update_status(
         db,
         target_id=auth.target_id,

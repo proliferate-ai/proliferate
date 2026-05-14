@@ -47,6 +47,7 @@ class WorkerHeartbeatRequest(BaseModel):
 class WorkerDesiredVersionsResponse(BaseModel):
     should_update: bool = Field(serialization_alias="shouldUpdate")
     update_channel: str = Field(serialization_alias="updateChannel")
+    update_generation: int = Field(serialization_alias="updateGeneration")
     anyharness_version: str | None = Field(
         default=None,
         serialization_alias="anyharnessVersion",
@@ -70,6 +71,7 @@ class WorkerHeartbeatResponse(BaseModel):
 
 class WorkerUpdateStatusRequest(BaseModel):
     status: str
+    update_generation: int | None = Field(default=None, alias="updateGeneration")
     component: str | None = None
     version: str | None = None
     detail: str | None = None

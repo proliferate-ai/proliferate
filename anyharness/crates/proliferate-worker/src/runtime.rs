@@ -10,7 +10,7 @@ use crate::{
     identity::{credentials::WorkerIdentity, enrollment},
     inventory,
     store::WorkerStore,
-    sync, updates,
+    sync, updates, versions,
 };
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
@@ -112,8 +112,8 @@ async fn send_heartbeat(
     identity: &WorkerIdentity,
 ) -> Result<(), WorkerError> {
     let anyharness_version = anyharness_version(config).await;
-    let worker_version = Some(env!("CARGO_PKG_VERSION").to_string());
-    let supervisor_version = config.supervisor_version.clone();
+    let worker_version = versions::worker_version();
+    let supervisor_version = versions::supervisor_version();
     let request = heartbeat::online(
         worker_version.clone(),
         anyharness_version.clone(),

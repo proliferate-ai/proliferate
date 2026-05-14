@@ -5,6 +5,7 @@ export * from "./client/ai-magic.js";
 export * from "./client/automations.js";
 export * from "./client/billing.js";
 export * from "./client/commands.js";
+export * from "./client/compute.js";
 export * from "./client/config.js";
 export * from "./client/credentials.js";
 export * from "./client/events.js";

@@ -106,6 +106,17 @@ class TestCloudTargetsApi:
         assert archived.status_code == 200
         assert archived.json()["target"]["status"] == "archived"
 
+        revoke_archived = await client.post(
+            f"/v1/cloud/compute/targets/{target_id}/revoke-workers",
+            headers=auth.headers,
+        )
+        assert revoke_archived.status_code == 409
+        assert revoke_archived.json()["detail"]["code"] == "cloud_compute_target_archived"
+
+        listed_after_archive = await client.get("/v1/cloud/targets", headers=auth.headers)
+        assert listed_after_archive.status_code == 200
+        assert listed_after_archive.json() == []
+
         stale_heartbeat = await client.post(
             "/v1/cloud/worker/heartbeat",
             headers=worker_headers,

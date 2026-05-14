@@ -8,6 +8,7 @@ use super::{auth, parse_empty_response, CloudClient};
 #[serde(rename_all = "camelCase")]
 pub struct UpdateStatusRequest {
     pub status: String,
+    pub update_generation: i64,
     pub component: Option<String>,
     pub version: Option<String>,
     pub detail: Option<String>,

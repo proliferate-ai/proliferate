@@ -1,19 +1,9 @@
 use crate::cloud_client::updates::UpdateStatusRequest;
 
-pub fn staging() -> UpdateStatusRequest {
-    UpdateStatusRequest {
-        status: "staging".to_string(),
-        component: None,
-        version: None,
-        detail: Some("Desired runtime versions received; staging update request.".to_string()),
-        error_code: None,
-        error_message: None,
-    }
-}
-
-pub fn failed(error_message: String) -> UpdateStatusRequest {
+pub fn failed(update_generation: i64, error_message: String) -> UpdateStatusRequest {
     UpdateStatusRequest {
         status: "failed".to_string(),
+        update_generation,
         component: None,
         version: None,
         detail: None,

@@ -27,6 +27,7 @@ _TARGET_UPDATE_STATUSES = (
     "failed",
     "rolled_back",
 )
+_TARGET_UPDATE_CHANNELS = ("stable", "beta", "pinned")
 
 
 def _has_column(table_name: str, column_name: str) -> bool:
@@ -66,6 +67,10 @@ def upgrade() -> None:
     )
     _add_column_once(
         "cloud_targets",
+        sa.Column("update_generation", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add_column_once(
+        "cloud_targets",
         sa.Column("desired_anyharness_version", sa.String(length=128), nullable=True),
     )
     _add_column_once(
@@ -102,10 +107,18 @@ def upgrade() -> None:
             "cloud_targets",
             f"update_status IS NULL OR update_status IN {_TARGET_UPDATE_STATUSES}",
         )
+    if not _has_check_constraint("cloud_targets", "ck_cloud_targets_update_channel"):
+        op.create_check_constraint(
+            "ck_cloud_targets_update_channel",
+            "cloud_targets",
+            f"update_channel IN {_TARGET_UPDATE_CHANNELS}",
+        )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    if _has_check_constraint("cloud_targets", "ck_cloud_targets_update_channel"):
+        op.drop_constraint("ck_cloud_targets_update_channel", "cloud_targets", type_="check")
     if _has_check_constraint("cloud_targets", "ck_cloud_targets_update_status"):
         op.drop_constraint("ck_cloud_targets_update_status", "cloud_targets", type_="check")
     _drop_column_once("cloud_targets", "update_reported_at")
@@ -116,4 +129,5 @@ def downgrade() -> None:
     _drop_column_once("cloud_targets", "desired_supervisor_version")
     _drop_column_once("cloud_targets", "desired_worker_version")
     _drop_column_once("cloud_targets", "desired_anyharness_version")
+    _drop_column_once("cloud_targets", "update_generation")
     _drop_column_once("cloud_targets", "update_channel")

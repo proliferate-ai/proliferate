@@ -75,6 +75,7 @@ class CloudTargetSnapshot:
     created_by_user_id: UUID
     default_workspace_root: str | None
     update_channel: str
+    update_generation: int
     desired_anyharness_version: str | None
     desired_worker_version: str | None
     desired_supervisor_version: str | None
@@ -158,6 +159,7 @@ def _target_snapshot(
         created_by_user_id=target.created_by_user_id,
         default_workspace_root=target.default_workspace_root,
         update_channel=target.update_channel,
+        update_generation=target.update_generation,
         desired_anyharness_version=target.desired_anyharness_version,
         desired_worker_version=target.desired_worker_version,
         desired_supervisor_version=target.desired_supervisor_version,
@@ -219,6 +221,7 @@ async def create_target(
         created_by_user_id=created_by_user_id,
         default_workspace_root=default_workspace_root,
         update_channel="stable",
+        update_generation=0,
         archived_at=None,
         created_at=now,
         updated_at=now,
@@ -348,6 +351,7 @@ async def set_target_desired_versions(
     target.desired_worker_version = desired_worker_version
     target.desired_supervisor_version = desired_supervisor_version
     if desired_versions_changed:
+        target.update_generation += 1
         target.update_status = CloudTargetUpdateStatus.idle.value
         target.update_status_detail = "Desired versions changed."
         target.update_component = None

@@ -159,6 +159,27 @@ async def revoke_workers_for_target(
     user: User,
 ) -> RevokeWorkersResponse:
     target = await _require_admin_target(db, target_id=target_id, user=user)
+    if target.status == CloudTargetStatus.archived.value:
+        raise CloudApiError(
+            "cloud_compute_target_archived",
+            "Target is archived.",
+            status_code=409,
+        )
+    active_session_count = await events_store.count_sessions_for_target_excluding_statuses(
+        db,
+        target_id=target.id,
+        excluded_statuses=TERMINAL_SESSION_STATUSES,
+    )
+    active_command_count = await commands_store.count_active_commands_for_target(
+        db,
+        target_id=target.id,
+    )
+    if active_session_count > 0 or active_command_count > 0:
+        raise CloudApiError(
+            "cloud_compute_target_active_work",
+            "Target has active sessions or commands.",
+            status_code=409,
+        )
     await worker_auth_store.archive_workers_for_target(db, target_id=target.id, now=utcnow())
     await inventory_store.upsert_target_status(
         db,

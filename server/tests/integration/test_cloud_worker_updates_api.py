@@ -69,7 +69,9 @@ class TestCloudWorkerUpdatesApi:
             },
         )
         assert desired.status_code == 200
-        assert desired.json()["target"]["update"]["desiredVersions"]["workerVersion"] == "0.2.0"
+        desired_update = desired.json()["target"]["update"]
+        generation = desired_update["generation"]
+        assert desired_update["desiredVersions"]["workerVersion"] == "0.2.0"
 
         invalid_channel = await client.post(
             f"/v1/cloud/compute/targets/{target_id}/desired-versions",
@@ -94,6 +96,7 @@ class TestCloudWorkerUpdatesApi:
         assert heartbeat.status_code == 200
         desired_versions = heartbeat.json()["desiredVersions"]
         assert desired_versions["shouldUpdate"] is True
+        assert desired_versions["updateGeneration"] == generation
         assert desired_versions["workerVersion"] == "0.2.0"
 
         update_status = await client.post(
@@ -101,6 +104,7 @@ class TestCloudWorkerUpdatesApi:
             headers=worker_headers,
             json={
                 "status": "staged",
+                "updateGeneration": generation,
                 "component": "worker",
                 "version": "0.2.0",
                 "detail": "Artifacts staged.",
@@ -131,15 +135,50 @@ class TestCloudWorkerUpdatesApi:
         )
         assert reset.status_code == 200
         reset_update = reset.json()["target"]["update"]
+        reset_generation = reset_update["generation"]
+        assert reset_generation == generation + 1
         assert reset_update["status"] == "idle"
         assert reset_update["component"] is None
         assert reset_update["version"] is None
+
+        stale_generation_status = await client.post(
+            "/v1/cloud/worker/update-status",
+            headers=worker_headers,
+            json={
+                "status": "staged",
+                "updateGeneration": generation,
+                "component": "worker",
+                "version": "0.3.0",
+            },
+        )
+        assert stale_generation_status.status_code == 409
+        assert (
+            stale_generation_status.json()["detail"]["code"]
+            == "cloud_worker_update_generation_stale"
+        )
+
+        premature_applied_status = await client.post(
+            "/v1/cloud/worker/update-status",
+            headers=worker_headers,
+            json={
+                "status": "applied",
+                "updateGeneration": reset_generation,
+                "component": "worker",
+                "version": "0.3.0",
+            },
+        )
+        assert premature_applied_status.status_code == 409
+        assert (
+            premature_applied_status.json()["detail"]["code"]
+            == "cloud_worker_update_versions_not_current"
+        )
 
         staging_status = await client.post(
             "/v1/cloud/worker/update-status",
             headers=worker_headers,
             json={
                 "status": "staging",
+                "updateGeneration": reset_generation,
                 "detail": "Update request received.",
             },
         )
@@ -176,6 +215,7 @@ class TestCloudWorkerUpdatesApi:
             headers=worker_headers,
             json={
                 "status": "applied",
+                "updateGeneration": reset_generation,
                 "component": "worker",
                 "version": "0.2.0",
             },
@@ -188,14 +228,14 @@ class TestCloudWorkerUpdatesApi:
             headers=worker_headers,
             json={
                 "status": "staging",
+                "updateGeneration": reset_generation,
                 "component": "worker/../supervisor",
                 "version": "0.3.0",
             },
         )
         assert invalid_component.status_code == 400
         assert (
-            invalid_component.json()["detail"]["code"]
-            == "cloud_worker_update_component_invalid"
+            invalid_component.json()["detail"]["code"] == "cloud_worker_update_component_invalid"
         )
 
     @pytest.mark.asyncio
@@ -228,6 +268,7 @@ class TestCloudWorkerUpdatesApi:
             headers=worker_headers,
             json={
                 "status": "staging",
+                "updateGeneration": 0,
                 "detail": "Update request received.",
             },
         )
@@ -281,15 +322,27 @@ class TestCloudWorkerUpdatesApi:
         assert active_command.status_code == 200
         assert "active_commands" in active_command.json()["reasons"]
 
-        revoked = await client.post(
+        unsafe_revoke = await client.post(
             f"/v1/cloud/compute/targets/{target_id}/revoke-workers",
+            headers=auth.headers,
+        )
+        assert unsafe_revoke.status_code == 409
+        assert unsafe_revoke.json()["detail"]["code"] == "cloud_compute_target_active_work"
+
+        revoke_target_id, revoke_worker_headers = await _create_enrolled_target(
+            client,
+            auth,
+            suffix="revoke",
+        )
+        revoked = await client.post(
+            f"/v1/cloud/compute/targets/{revoke_target_id}/revoke-workers",
             headers=auth.headers,
         )
         assert revoked.status_code == 200
         assert revoked.json()["revoked"] is True
 
         target_after_revoke = await client.get(
-            f"/v1/cloud/targets/{target_id}",
+            f"/v1/cloud/targets/{revoke_target_id}",
             headers=auth.headers,
         )
         assert target_after_revoke.status_code == 200
@@ -298,7 +351,7 @@ class TestCloudWorkerUpdatesApi:
 
         lease = await client.post(
             "/v1/cloud/worker/commands/lease",
-            headers=worker_headers,
+            headers=revoke_worker_headers,
             json={"supportedKinds": ["cancel_turn"], "leaseTimeoutSeconds": 30},
         )
         assert lease.status_code == 401
