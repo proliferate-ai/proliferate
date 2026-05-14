@@ -1,0 +1,433 @@
+"""Application service for worker event ingest and cloud session projections."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections import defaultdict
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.db import engine as db_engine
+from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.events.domain.cursors import advance_contiguous_cursor
+from proliferate.server.cloud.events.domain.payload_policy import retained_payload
+from proliferate.server.cloud.events.domain.projection import (
+    event_type,
+    source_kind_for_event,
+    transcript_item_id,
+    transcript_item_payload,
+    transcript_item_text,
+)
+from proliferate.server.cloud.events.models import (
+    CloudSessionSnapshotResponse,
+    WorkerEventBatchRequest,
+    WorkerEventBatchResponse,
+    WorkerEventSessionAck,
+    pending_interaction_response,
+    session_event_response,
+    session_projection_response,
+    transcript_item_response,
+)
+from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+
+SESSION_DURABLE_EVENT_HARD_CAP = 10_000
+SESSION_PAYLOAD_BYTES_HARD_CAP = 25 * 1024 * 1024
+STREAM_POLL_SECONDS = 0.5
+STREAM_EVENT_LIMIT = 100
+
+
+@dataclass(frozen=True)
+class SessionProjectionPatch:
+    status: str | None = None
+    phase: str | None = None
+    native_session_id: str | None = None
+    source_agent_kind: str | None = None
+    title: str | None = None
+    live_config_json: str | None = None
+    started_at: str | None = None
+    ended_at: str | None = None
+
+
+async def ingest_worker_event_batch(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerEventBatchRequest,
+) -> WorkerEventBatchResponse:
+    accepted_events = 0
+    duplicate_events = 0
+    live_only_events = 0
+    received_by_session: dict[str, list[int]] = defaultdict(list)
+    workspace_by_session: dict[str, str | None] = {}
+    cloud_workspace_by_session: dict[str, UUID | None] = {}
+
+    for event in body.events:
+        if event.seq <= 0:
+            raise CloudApiError(
+                "cloud_event_invalid_sequence",
+                "Event sequence must be positive.",
+                status_code=400,
+            )
+        envelope = event.model_dump(by_alias=True)
+        current_event_type = event_type(envelope)
+        current_workspace_id = event.workspace_id
+        workspace_by_session.setdefault(event.session_id, current_workspace_id)
+        cloud_workspace_id = cloud_workspace_by_session.get(event.session_id)
+        if event.session_id not in cloud_workspace_by_session:
+            cloud_workspace_id = await events_store.resolve_cloud_workspace_id(
+                db,
+                target_id=auth.target_id,
+                workspace_id=current_workspace_id,
+            )
+            cloud_workspace_by_session[event.session_id] = cloud_workspace_id
+
+        received_by_session[event.session_id].append(event.seq)
+        payload_decision = retained_payload(current_event_type, envelope)
+        if not payload_decision.durable:
+            live_only_events += 1
+            continue
+        event_count, payload_bytes = await events_store.get_session_event_usage(
+            db,
+            target_id=auth.target_id,
+            session_id=event.session_id,
+        )
+        if event_count >= SESSION_DURABLE_EVENT_HARD_CAP:
+            raise CloudApiError(
+                "cloud_event_session_cap_exceeded",
+                "Session cloud event retention cap exceeded.",
+                status_code=413,
+            )
+        if payload_bytes + payload_decision.payload_size_bytes > SESSION_PAYLOAD_BYTES_HARD_CAP:
+            raise CloudApiError(
+                "cloud_event_session_payload_cap_exceeded",
+                "Session cloud payload retention cap exceeded.",
+                status_code=413,
+            )
+        inserted, is_new, duplicate_matches = await events_store.insert_event_if_new(
+            db,
+            events_store.InsertSessionEvent(
+                target_id=auth.target_id,
+                worker_id=auth.worker_id,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=current_workspace_id,
+                session_id=event.session_id,
+                seq=event.seq,
+                event_type=current_event_type,
+                source_kind=source_kind_for_event(event.event),
+                turn_id=event.turn_id,
+                item_id=event.item_id,
+                occurred_at=event.timestamp,
+                payload_json=payload_decision.payload_json,
+                payload_hash=payload_decision.payload_hash,
+                payload_size_bytes=payload_decision.payload_size_bytes,
+                payload_truncated_at_bytes=payload_decision.payload_truncated_at_bytes,
+            ),
+        )
+        if not duplicate_matches:
+            raise CloudApiError(
+                "cloud_event_duplicate_mismatch",
+                "Duplicate event sequence has a different payload hash.",
+                status_code=409,
+            )
+        if inserted is None or not is_new:
+            duplicate_events += 1
+            continue
+        accepted_events += 1
+        await _apply_projection(
+            db,
+            auth=auth,
+            cloud_workspace_id=cloud_workspace_id,
+            workspace_id=current_workspace_id,
+            envelope=envelope,
+            payload_json=payload_decision.payload_json,
+        )
+
+    session_acks: list[WorkerEventSessionAck] = []
+    for session_id, seqs in received_by_session.items():
+        current = await events_store.get_ingest_cursor(
+            db,
+            target_id=auth.target_id,
+            session_id=session_id,
+        )
+        last_contiguous_seq = advance_contiguous_cursor(current, seqs)
+        cursor = await events_store.upsert_ingest_cursor(
+            db,
+            target_id=auth.target_id,
+            session_id=session_id,
+            worker_id=auth.worker_id,
+            cloud_workspace_id=cloud_workspace_by_session.get(session_id),
+            workspace_id=workspace_by_session.get(session_id),
+            last_contiguous_seq=last_contiguous_seq,
+        )
+        session_acks.append(
+            WorkerEventSessionAck(
+                session_id=session_id,
+                last_contiguous_seq=cursor,
+            )
+        )
+
+    return WorkerEventBatchResponse(
+        accepted_events=accepted_events,
+        duplicate_events=duplicate_events,
+        live_only_events=live_only_events,
+        session_acks=session_acks,
+    )
+
+
+async def get_session_snapshot(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+) -> CloudSessionSnapshotResponse:
+    projection = await events_store.get_session_projection(
+        db,
+        target_id=target_id,
+        session_id=session_id,
+    )
+    if projection is None:
+        raise CloudApiError(
+            "cloud_session_not_found",
+            "Synced session not found.",
+            status_code=404,
+        )
+    transcript_items = await events_store.list_transcript_items(
+        db,
+        target_id=target_id,
+        session_id=session_id,
+    )
+    pending_interactions = await events_store.list_pending_interactions(
+        db,
+        target_id=target_id,
+        session_id=session_id,
+    )
+    return CloudSessionSnapshotResponse(
+        session=session_projection_response(projection),
+        transcript_items=[transcript_item_response(item) for item in transcript_items],
+        pending_interactions=[
+            pending_interaction_response(interaction) for interaction in pending_interactions
+        ],
+    )
+
+
+async def ensure_visible_session_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+    user_id: UUID,
+) -> UUID:
+    target = await targets_store.get_visible_target_by_id(
+        db,
+        target_id=target_id,
+        user_id=user_id,
+    )
+    if target is None:
+        raise CloudApiError(
+            "cloud_session_not_found",
+            "Synced session not found.",
+            status_code=404,
+        )
+    projection = await events_store.get_session_projection(
+        db,
+        target_id=target_id,
+        session_id=session_id,
+    )
+    if projection is None:
+        raise CloudApiError(
+            "cloud_session_not_found",
+            "Synced session not found.",
+            status_code=404,
+        )
+    return target_id
+
+
+async def list_session_events_after(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+    after_seq: int,
+    limit: int = 200,
+) -> list[dict[str, object]]:
+    events = await events_store.list_events_after(
+        db,
+        target_id=target_id,
+        session_id=session_id,
+        after_seq=after_seq,
+        limit=limit,
+    )
+    return [session_event_response(event).model_dump(by_alias=True) for event in events]
+
+
+async def stream_session_events(
+    *,
+    target_id: UUID,
+    session_id: str,
+    after_seq: int,
+) -> AsyncIterator[str]:
+    cursor = max(0, after_seq)
+    while True:
+        async with db_engine.async_session_factory() as stream_db:
+            events = await list_session_events_after(
+                stream_db,
+                target_id=target_id,
+                session_id=session_id,
+                after_seq=cursor,
+                limit=STREAM_EVENT_LIMIT,
+            )
+        for event in events:
+            seq = _int_value(event["seq"])
+            cursor = max(cursor, seq)
+            yield _sse_event(
+                event="session_event",
+                event_id=str(seq),
+                data=event,
+            )
+        if not events:
+            yield ": keepalive\n\n"
+            await asyncio.sleep(STREAM_POLL_SECONDS)
+
+
+async def _apply_projection(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    cloud_workspace_id: UUID | None,
+    workspace_id: str | None,
+    envelope: dict[str, object],
+    payload_json: str | None,
+) -> None:
+    session_id = str(envelope["sessionId"])
+    seq = _int_value(envelope["seq"])
+    occurred_at = envelope.get("timestamp")
+    timestamp = occurred_at if isinstance(occurred_at, str) else None
+    event = envelope.get("event")
+    event_payload = event if isinstance(event, dict) else {}
+    current_event_type = event_type(envelope)
+    patch = _session_projection_patch(current_event_type, event_payload, timestamp)
+    await events_store.upsert_session_projection(
+        db,
+        target_id=auth.target_id,
+        cloud_workspace_id=cloud_workspace_id,
+        workspace_id=workspace_id,
+        session_id=session_id,
+        seq=seq,
+        occurred_at=timestamp,
+        status=patch.status,
+        phase=patch.phase,
+        native_session_id=patch.native_session_id,
+        source_agent_kind=patch.source_agent_kind,
+        title=patch.title,
+        live_config_json=patch.live_config_json,
+        started_at=patch.started_at,
+        ended_at=patch.ended_at,
+    )
+
+    if current_event_type in {"item_started", "item_completed"}:
+        item_id = transcript_item_id(envelope)
+        if item_id is not None:
+            item = transcript_item_payload(event_payload)
+            await events_store.upsert_transcript_item(
+                db,
+                target_id=auth.target_id,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=workspace_id,
+                session_id=session_id,
+                item_id=item_id,
+                turn_id=_str_or_none(envelope.get("turnId")),
+                seq=seq,
+                occurred_at=timestamp,
+                kind=_str_or_none(item.get("kind")),
+                status=_str_or_none(item.get("status")),
+                source_agent_kind=_str_or_none(item.get("sourceAgentKind")),
+                title=_str_or_none(item.get("title")),
+                text=transcript_item_text(item),
+                payload_json=payload_json,
+                completed=current_event_type == "item_completed",
+            )
+    elif current_event_type == "interaction_requested":
+        request_id = _str_or_none(event_payload.get("requestId"))
+        if request_id:
+            await events_store.upsert_pending_interaction(
+                db,
+                target_id=auth.target_id,
+                cloud_workspace_id=cloud_workspace_id,
+                workspace_id=workspace_id,
+                session_id=session_id,
+                request_id=request_id,
+                seq=seq,
+                occurred_at=timestamp,
+                kind=_str_or_none(event_payload.get("kind")),
+                title=_str_or_none(event_payload.get("title")),
+                description=_str_or_none(event_payload.get("description")),
+                payload_json=payload_json,
+            )
+    elif current_event_type == "interaction_resolved":
+        request_id = _str_or_none(event_payload.get("requestId"))
+        if request_id:
+            await events_store.resolve_pending_interaction(
+                db,
+                target_id=auth.target_id,
+                session_id=session_id,
+                request_id=request_id,
+                seq=seq,
+                occurred_at=timestamp,
+                payload_json=payload_json,
+            )
+
+
+def _session_projection_patch(
+    event_type_value: str,
+    event: dict[str, object],
+    timestamp: str | None,
+) -> SessionProjectionPatch:
+    if event_type_value == "session_started":
+        return SessionProjectionPatch(
+            status="running",
+            phase="running",
+            native_session_id=_str_or_none(event.get("nativeSessionId")),
+            source_agent_kind=_str_or_none(event.get("sourceAgentKind")),
+            started_at=timestamp,
+        )
+    if event_type_value == "session_ended":
+        return SessionProjectionPatch(status="ended", phase="ended", ended_at=timestamp)
+    if event_type_value == "turn_started":
+        return SessionProjectionPatch(status="running", phase="turn_running")
+    if event_type_value == "turn_ended":
+        return SessionProjectionPatch(status="idle", phase="idle")
+    if event_type_value == "session_info_update":
+        return SessionProjectionPatch(title=_str_or_none(event.get("title")))
+    if event_type_value == "config_option_update":
+        live_config = event.get("liveConfig")
+        return SessionProjectionPatch(
+            live_config_json=json.dumps(
+                live_config if isinstance(live_config, dict) else event,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+    return SessionProjectionPatch()
+
+
+def _str_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _int_value(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value)
+    raise TypeError(f"Expected integer-compatible value, got {type(value).__name__}.")
+
+
+def _sse_event(*, event: str, event_id: str, data: object) -> str:
+    encoded = json.dumps(data, separators=(",", ":"), sort_keys=True)
+    return f"id: {event_id}\nevent: {event}\ndata: {encoded}\n\n"

@@ -8,6 +8,7 @@ mod inventory;
 mod logging;
 mod runtime;
 mod store;
+mod sync;
 
 use std::path::PathBuf;
 

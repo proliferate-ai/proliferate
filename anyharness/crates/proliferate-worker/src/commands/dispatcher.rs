@@ -17,6 +17,7 @@ use crate::{
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
+    store::WorkerStore,
 };
 
 const EMPTY_LEASE_SLEEP: Duration = Duration::from_secs(2);
@@ -26,6 +27,7 @@ pub async fn run_loop(
     config: WorkerConfig,
     cloud: CloudClient,
     identity: WorkerIdentity,
+    store: WorkerStore,
 ) -> Result<(), WorkerError> {
     let Some(base_url) = config.anyharness_base_url.clone() else {
         warn!("worker command loop disabled because anyharness_base_url is not configured");
@@ -50,7 +52,7 @@ pub async fn run_loop(
             Ok(response) => {
                 if let Some(command) = response.command {
                     if let Err(error) =
-                        process_command(&cloud, &identity, &anyharness, command).await
+                        process_command(&cloud, &identity, &anyharness, &store, command).await
                     {
                         warn!(?error, "worker command processing failed");
                         sleep(ERROR_LEASE_SLEEP).await;
@@ -72,6 +74,7 @@ async fn process_command(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
     anyharness: &AnyHarnessClient,
+    store: &WorkerStore,
     command: CloudCommandEnvelope,
 ) -> Result<(), WorkerError> {
     info!(
@@ -117,6 +120,13 @@ async fn process_command(
         .await?;
 
     let response = dispatch_anyharness(anyharness, &mapped).await;
+    if let Ok(response) = &response {
+        if response.is_success() {
+            if let Err(error) = register_session_for_sync(store, &command, &mapped, response) {
+                warn!(?error, "failed to register session for cloud event sync");
+            }
+        }
+    }
     let result = command_result(&command, &mapped, response);
     cloud
         .report_command_result(&identity.worker_token, &command.command_id, &result)
@@ -222,4 +232,33 @@ fn accepted_status(
         return "accepted_but_queued";
     }
     "accepted"
+}
+
+fn register_session_for_sync(
+    store: &WorkerStore,
+    command: &CloudCommandEnvelope,
+    mapped: &AnyHarnessCommand,
+    response: &AnyHarnessCommandResponse,
+) -> Result<(), WorkerError> {
+    let session_id = match mapped {
+        AnyHarnessCommand::StartSession { .. } => response
+            .body
+            .get("id")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        AnyHarnessCommand::SendPrompt { session_id, .. }
+        | AnyHarnessCommand::ResolveInteraction { session_id, .. }
+        | AnyHarnessCommand::UpdateSessionConfig { session_id, .. }
+        | AnyHarnessCommand::UpdateNormalizedSessionConfig { session_id, .. }
+        | AnyHarnessCommand::CancelTurn { session_id }
+        | AnyHarnessCommand::CloseSession { session_id } => Some(session_id.clone()),
+    };
+    let Some(session_id) = session_id else {
+        return Ok(());
+    };
+    let workspace_id = command
+        .workspace_id
+        .as_deref()
+        .or_else(|| response.body.get("workspaceId").and_then(Value::as_str));
+    store.upsert_sync_session(&session_id, workspace_id)
 }

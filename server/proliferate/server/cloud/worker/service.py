@@ -25,6 +25,11 @@ from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.events.models import (
+    WorkerEventBatchRequest,
+    WorkerEventBatchResponse,
+)
+from proliferate.server.cloud.events.service import ingest_worker_event_batch
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,
     compact_json,
@@ -109,9 +114,7 @@ def _command_envelope(
         observed_event_seq=command.observed_event_seq,
         preconditions=_parse_json_dict(command.preconditions_json),
         lease_id=command.lease_id or "",
-        lease_expires_at=command.lease_expires_at.isoformat()
-        if command.lease_expires_at
-        else "",
+        lease_expires_at=command.lease_expires_at.isoformat() if command.lease_expires_at else "",
     )
 
 
@@ -385,3 +388,12 @@ async def record_command_result(
         status=command.status,
         updated=True,
     )
+
+
+async def record_event_batch(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    body: WorkerEventBatchRequest,
+) -> WorkerEventBatchResponse:
+    return await ingest_worker_event_batch(db, auth=auth, body=body)
