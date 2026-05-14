@@ -508,7 +508,8 @@ impl SubagentService {
         query: &str,
         limit: Option<usize>,
     ) -> Result<Vec<SubagentTranscriptSearchMatch>, SubagentError> {
-        let link = self.authorize_target(parent_session_id, subagent_id, child_session_id)?;
+        let link =
+            self.resolve_target_including_closed(parent_session_id, subagent_id, child_session_id)?;
         let query = query.trim();
         if query.is_empty() {
             return Err(SubagentError::Internal(anyhow::anyhow!(

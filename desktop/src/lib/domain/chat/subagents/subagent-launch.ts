@@ -152,13 +152,22 @@ export function parseSubagentProvisioningStatus(
     return null;
   }
 
+  const wake = isRecord(output.wake) ? output.wake : null;
   return {
     subagentId: readStringField(output, "subagentId"),
     sessionLinkId: readStringField(output, "sessionLinkId"),
     childSessionId: readStringField(output, "childSessionId"),
-    promptStatus: readStringField(output, "promptStatus"),
-    wakeScheduled: readOptionalBooleanField(output, "wakeScheduled"),
-    wakeScheduleCreated: readOptionalBooleanField(output, "wakeScheduleCreated"),
+    promptStatus:
+      readStringField(output, "promptStatus")
+      ?? readStringField(output, "status"),
+    wakeScheduled:
+      readOptionalBooleanField(output, "wakeScheduled")
+      ?? readOptionalBooleanField(output, "scheduled")
+      ?? (wake ? readOptionalBooleanField(wake, "scheduled") : null),
+    wakeScheduleCreated:
+      readOptionalBooleanField(output, "wakeScheduleCreated")
+      ?? readOptionalBooleanField(output, "created")
+      ?? (wake ? readOptionalBooleanField(wake, "created") : null),
   };
 }
 

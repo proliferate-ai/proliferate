@@ -90,7 +90,8 @@ export function TranscriptAgentGroupBlock({
     .filter((p): p is ToolResultTextContentPart => p.type === "tool_result_text")
     .map((p) => p.text)
     .join("\n\n");
-  const normalizedAgentResult = provisioningStatus
+  const hasProvisioningLedger = isSubagentProvisioningAction(item) && !!provisioningStatus;
+  const normalizedAgentResult = hasProvisioningLedger
     ? ""
     : normalizeToolResultText(agentResultText);
 
@@ -111,7 +112,7 @@ export function TranscriptAgentGroupBlock({
   const shouldShowDescription = description.length > 0
     && description.toLowerCase() !== "subagent";
   const hasWork = childIds.length > 0;
-  const hasLaunchLedger = !!normalizedPrompt || !!provisioningStatus;
+  const hasLaunchLedger = !!normalizedPrompt || hasProvisioningLedger;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
   const renderScopedWork = (
     forceExpandedCollapsedActionBlockId: string | null,
@@ -242,6 +243,16 @@ function formatSubagentHeaderVerb(
     return "Subagent launch failed";
   }
   return isRunning ? "Creating subagent" : "Subagent created";
+}
+
+function isSubagentProvisioningAction(item: ToolCallItem): boolean {
+  const toolName = item.nativeToolName?.trim().toLowerCase();
+  return toolName === "agent"
+    || toolName === "mcp__subagents__create_subagent"
+    || toolName === "mcp__subagents__send_subagent_message"
+    || toolName === "mcp__subagents__schedule_subagent_wake"
+    || toolName === "mcp__subagents__get_subagent_status"
+    || toolName === "mcp__subagents__close_subagent";
 }
 
 const AGENT_RESULT_COLLAPSED_HEIGHT = 200;

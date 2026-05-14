@@ -262,6 +262,31 @@ describe("parseSubagentProvisioningStatus", () => {
     });
   });
 
+  it("parses follow-up status and wake fields from subagent tools", () => {
+    const item = toolCallItem({
+      nativeToolName: "mcp__subagents__schedule_subagent_wake",
+      semanticKind: "subagent",
+      rawOutput: {
+        subagentId: "subagent-3",
+        childSessionId: "child-3",
+        status: "queued",
+        scheduled: true,
+        wake: {
+          created: false,
+        },
+      },
+    });
+
+    expect(parseSubagentProvisioningStatus(item)).toEqual({
+      subagentId: "subagent-3",
+      childSessionId: "child-3",
+      sessionLinkId: null,
+      promptStatus: "queued",
+      wakeScheduleCreated: false,
+      wakeScheduled: true,
+    });
+  });
+
   it("does not treat arbitrary result text as provisioning output", () => {
     expect(parseSubagentProvisioningStatus(toolCallItem({
       nativeToolName: "mcp__subagents__create_subagent",

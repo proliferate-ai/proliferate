@@ -301,33 +301,32 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
       if (row.subagentSuccess) {
         resolvedSessionIds.add(sessionId);
       }
-      if (!data) {
-        continue;
-      }
 
-      if (data.parent) {
-        const parentSessionId = resolveClientSessionId(data.parent.parentSessionId);
-        childToParent.set(sessionId, parentSessionId);
-        parentRowsBySessionId.set(
-          parentSessionId,
-          buildParentRow(data.parent, parentSessionId),
-        );
-      }
+      if (data) {
+        if (data.parent) {
+          const parentSessionId = resolveClientSessionId(data.parent.parentSessionId);
+          childToParent.set(sessionId, parentSessionId);
+          parentRowsBySessionId.set(
+            parentSessionId,
+            buildParentRow(data.parent, parentSessionId),
+          );
+        }
 
-      if (data.children.length > 0) {
-        childrenByParentSessionId.set(
-          sessionId,
-          data.children.map((child, childIndex) =>
-            buildChildRow({
-              child,
-              parentSessionId: sessionId,
-              childSessionId: resolveClientSessionId(child.childSessionId),
-              ordinal: childIndex + 1,
-            })
-          ),
-        );
-        for (const child of data.children) {
-          childToParent.set(resolveClientSessionId(child.childSessionId), sessionId);
+        if (data.children.length > 0) {
+          childrenByParentSessionId.set(
+            sessionId,
+            data.children.map((child, childIndex) =>
+              buildChildRow({
+                child,
+                parentSessionId: sessionId,
+                childSessionId: resolveClientSessionId(child.childSessionId),
+                ordinal: childIndex + 1,
+              })
+            ),
+          );
+          for (const child of data.children) {
+            childToParent.set(resolveClientSessionId(child.childSessionId), sessionId);
+          }
         }
       }
 

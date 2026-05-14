@@ -229,6 +229,12 @@ pub(super) fn validate_review_submission(
     summary: &str,
     critique_markdown: &str,
 ) -> Result<(), ReviewError> {
+    if summary.trim().is_empty() {
+        return Err(ReviewError::ReviewSubmissionEmpty("summary"));
+    }
+    if critique_markdown.trim().is_empty() {
+        return Err(ReviewError::ReviewSubmissionEmpty("critiqueMarkdown"));
+    }
     if summary.len() > MAX_REVIEW_SUMMARY_BYTES {
         return Err(ReviewError::ReviewSubmissionTooLarge("summary"));
     }
@@ -270,6 +276,24 @@ fn round_to_contract(
             .collect(),
         created_at: round.created_at,
         updated_at: round.updated_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_review_submission;
+    use crate::domains::reviews::service::ReviewError;
+
+    #[test]
+    fn review_submission_rejects_empty_summary_or_critique() {
+        assert!(matches!(
+            validate_review_submission("   ", "Concrete critique"),
+            Err(ReviewError::ReviewSubmissionEmpty("summary"))
+        ));
+        assert!(matches!(
+            validate_review_submission("Summary", "\n\t"),
+            Err(ReviewError::ReviewSubmissionEmpty("critiqueMarkdown"))
+        ));
     }
 }
 

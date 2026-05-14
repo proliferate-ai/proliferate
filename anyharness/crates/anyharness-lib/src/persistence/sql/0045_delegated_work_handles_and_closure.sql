@@ -29,6 +29,11 @@ WHERE closed_at IS NULL
       )
   );
 
+DELETE FROM session_link_wake_schedules
+WHERE session_link_id IN (
+    SELECT id FROM session_links WHERE closed_at IS NOT NULL
+);
+
 CREATE UNIQUE INDEX idx_session_links_public_id
     ON session_links(public_id)
     WHERE public_id IS NOT NULL;

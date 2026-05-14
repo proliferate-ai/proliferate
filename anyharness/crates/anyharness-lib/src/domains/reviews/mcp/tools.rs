@@ -61,7 +61,11 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
                     "reviewId": { "type": "string" },
                     "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." },
                     "revisedPlanId": { "type": "string" }
-                }
+                },
+                "anyOf": [
+                    { "required": ["reviewId"] },
+                    { "required": ["reviewRunId"] }
+                ]
             }),
         ));
     }

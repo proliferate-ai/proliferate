@@ -81,6 +81,8 @@ pub enum ReviewError {
     RetryNotAllowed,
     #[error("review {0} is too large")]
     ReviewSubmissionTooLarge(&'static str),
+    #[error("review {0} is required")]
+    ReviewSubmissionEmpty(&'static str),
     #[error("session link failed: {0}")]
     Link(String),
     #[error(transparent)]
