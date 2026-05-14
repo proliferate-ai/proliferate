@@ -38,7 +38,7 @@ export function renderChatTabIcon(
   }
 
   return tab.agentKind ? (
-    <ProviderIcon kind={tab.agentKind} className="size-3.5 shrink-0" />
+    <ProviderIcon kind={tab.agentKind} className="size-3 shrink-0" />
   ) : (
     <MessageSquare className="size-3 shrink-0" />
   );

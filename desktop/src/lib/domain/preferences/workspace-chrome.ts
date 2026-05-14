@@ -1,7 +1,7 @@
 const WORKSPACE_GLASS_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
+  "flex h-16 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
 const WORKSPACE_SOLID_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-border/70 bg-background";
+  "flex h-12 shrink-0 items-center border-b border-border/70 bg-background";
 
 const EDITOR_GLASS_TABLIST_CLASS =
   "flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b border-foreground/10 bg-card/25 px-1 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20";
