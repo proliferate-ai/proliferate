@@ -8,6 +8,21 @@ pub struct WorkerStore {
     path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
+pub struct SyncSession {
+    pub session_id: String,
+    pub workspace_id: Option<String>,
+    pub last_uploaded_seq: i64,
+}
+
+impl Clone for WorkerStore {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+        }
+    }
+}
+
 impl WorkerStore {
     pub fn open(path: PathBuf) -> Result<Self, WorkerError> {
         if let Some(parent) = path.parent() {
@@ -36,6 +51,12 @@ impl WorkerStore {
                 target_id TEXT NOT NULL,
                 worker_id TEXT NOT NULL,
                 worker_token TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS sync_sessions (
+                session_id TEXT PRIMARY KEY,
+                workspace_id TEXT,
+                last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             "#,
@@ -78,6 +99,62 @@ impl WorkerStore {
                 identity.worker_id,
                 identity.worker_token
             ],
+        )?;
+        Ok(())
+    }
+
+    pub fn upsert_sync_session(
+        &self,
+        session_id: &str,
+        workspace_id: Option<&str>,
+    ) -> Result<(), WorkerError> {
+        let conn = self.connection()?;
+        conn.execute(
+            r#"
+            INSERT INTO sync_sessions (session_id, workspace_id, last_uploaded_seq, updated_at)
+            VALUES (?1, ?2, 0, CURRENT_TIMESTAMP)
+            ON CONFLICT(session_id) DO UPDATE SET
+                workspace_id = COALESCE(excluded.workspace_id, sync_sessions.workspace_id),
+                updated_at = CURRENT_TIMESTAMP
+            "#,
+            params![session_id, workspace_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_sync_sessions(&self) -> Result<Vec<SyncSession>, WorkerError> {
+        let conn = self.connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT session_id, workspace_id, last_uploaded_seq FROM sync_sessions ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(SyncSession {
+                session_id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                last_uploaded_seq: row.get(2)?,
+            })
+        })?;
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
+
+    pub fn update_sync_cursor(
+        &self,
+        session_id: &str,
+        last_uploaded_seq: i64,
+    ) -> Result<(), WorkerError> {
+        let conn = self.connection()?;
+        conn.execute(
+            r#"
+            UPDATE sync_sessions
+            SET last_uploaded_seq = MAX(last_uploaded_seq, ?2),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE session_id = ?1
+            "#,
+            params![session_id, last_uploaded_seq],
         )?;
         Ok(())
     }

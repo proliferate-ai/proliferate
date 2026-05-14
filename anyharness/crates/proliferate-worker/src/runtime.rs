@@ -10,6 +10,7 @@ use crate::{
     identity::{credentials::WorkerIdentity, enrollment},
     inventory,
     store::WorkerStore,
+    sync,
 };
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
@@ -38,11 +39,28 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     let command_config = config.clone();
     let command_cloud = cloud.clone();
     let command_identity = identity.clone();
+    let command_store = store.clone();
     tokio::spawn(async move {
-        if let Err(error) =
-            commands::dispatcher::run_loop(command_config, command_cloud, command_identity).await
+        if let Err(error) = commands::dispatcher::run_loop(
+            command_config,
+            command_cloud,
+            command_identity,
+            command_store,
+        )
+        .await
         {
             warn!(?error, "worker command loop exited");
+        }
+    });
+    let sync_config = config.clone();
+    let sync_cloud = cloud.clone();
+    let sync_identity = identity.clone();
+    let sync_store = store.clone();
+    tokio::spawn(async move {
+        if let Err(error) =
+            sync::tailer::run_loop(sync_config, sync_cloud, sync_identity, sync_store).await
+        {
+            warn!(?error, "worker event sync loop exited");
         }
     });
     loop {

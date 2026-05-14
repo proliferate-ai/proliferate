@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod commands;
+pub mod events;
 pub mod heartbeat;
 pub mod inventory;
 
